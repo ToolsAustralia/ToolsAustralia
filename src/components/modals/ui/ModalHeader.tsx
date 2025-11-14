@@ -15,6 +15,7 @@ export interface ModalHeaderProps {
   variant?: "auto" | "brand" | "metallic" | "metallic-red";
   accent?: "none" | "red";
   logoSize?: "sm" | "md" | "lg";
+  showCloseButton?: boolean; // Optional prop to control close button visibility (defaults to true for backward compatibility)
 }
 
 const ModalHeader: React.FC<ModalHeaderProps> = ({
@@ -28,6 +29,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   variant = "auto",
   accent = "red",
   logoSize = "md",
+  showCloseButton = true, // Default to true to maintain backward compatibility
 }) => {
   const resolvedVariant = variant === "auto" ? (showLogo ? "metallic" : "brand") : variant;
 
@@ -44,15 +46,17 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
 
   return (
     <div className={`${headerBaseClass} ${accentClass} p-4 text-white relative ${className}`}>
-      {/* Close Button */}
-      <button
-        onClick={onClose}
-        type="button"
-        className="absolute top-4 right-4 text-white hover:text-gray-200 transition-all duration-300 hover:scale-110 z-50 p-1 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20"
-        aria-label="Close modal"
-      >
-        <X size={20} />
-      </button>
+      {/* Close Button - Conditionally rendered based on showCloseButton prop */}
+      {showCloseButton && (
+        <button
+          onClick={onClose}
+          type="button"
+          className="absolute top-4 right-4 text-white hover:text-gray-200 transition-all duration-300 hover:scale-110 z-50 p-1 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20"
+          aria-label="Close modal"
+        >
+          <X size={20} />
+        </button>
+      )}
 
       {/* Logo */}
       {showLogo && (

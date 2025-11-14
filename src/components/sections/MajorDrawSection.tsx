@@ -21,6 +21,7 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useCurrentMajorDraw, useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
+import { Skeleton } from "@/components/loading/SkeletonLoader";
 
 interface MajorDrawSectionProps {
   className?: string;
@@ -45,7 +46,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   // The shared CTA hook keeps modal behaviour consistent with Promo pages.
 
   // Use React Query hooks for real-time data
-  const { data: currentMajorDraw, isLoading: majorDrawLoading, error: majorDrawError } = useCurrentMajorDraw();
+  const { data: currentMajorDraw, isLoading: majorDrawLoading } = useCurrentMajorDraw();
   const { data: currentUserStats, isLoading: userStatsLoading } = useUserMajorDrawStats(user?._id);
   const { prizes, activePrize, activeSlug, defaultSlug } = usePrizeCatalog({
     slug: selectedPrizeSlug ?? undefined,
@@ -106,10 +107,6 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const userHasEntries = (currentUserStats?.totalEntries ?? 0) + (pendingEntries > 0 ? pendingEntries : 0) > 0;
   const primaryCtaLabel = userHasEntries ? "Get More Entries" : "Enter Now";
 
-  // Combine loading states
-  const loading = majorDrawLoading || userStatsLoading;
-  const error = majorDrawError;
-
   // Note: We now use API data directly which already provides current draw specific entries
 
   // Use API data for current draw entries (which is already filtered to current major draw)
@@ -130,22 +127,6 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   //   displaying: enhancedUserStats,
   //   note: "Now showing only current major draw entries (not accumulated total)",
   // });
-
-  // Create majorDrawData object from React Query data
-  const majorDrawData = currentMajorDraw
-    ? {
-        majorDraw: currentMajorDraw,
-        userStats: enhancedUserStats, // Use enhanced stats with fallback
-        totalEntries: currentMajorDraw.totalEntries || 0,
-        daysRemaining: currentMajorDraw.drawDate
-          ? Math.max(
-              0,
-              Math.ceil((new Date(currentMajorDraw.drawDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-            )
-          : 0,
-        isActive: currentMajorDraw.isActive || false,
-      }
-    : null;
 
   // Update countdown timer
   useEffect(() => {
@@ -178,12 +159,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
   // Set the default plan when component mounts or when user/package data changes
   useEffect(() => {
-    if (membershipModal.selectedPlan === null && !loading && oneTimePackages.length > 0) {
+    if (membershipModal.selectedPlan === null && !majorDrawLoading && !userStatsLoading && oneTimePackages.length > 0) {
       const defaultPlan = getHeavyDutyPack();
       // console.log("🎯 Setting default plan:", defaultPlan);
       membershipModal.setSelectedPlan(defaultPlan);
     }
-  }, [membershipModal, getHeavyDutyPack, loading, oneTimePackages]);
+  }, [membershipModal, getHeavyDutyPack, majorDrawLoading, userStatsLoading, oneTimePackages]);
 
   // Listen for upsell modal requests
   useEffect(() => {
@@ -203,31 +184,15 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     };
   }, [membershipModal]);
 
-  if (loading) {
-    return (
-      <section className={`py-12 sm:py-16 lg:py-20  ${className}`}>
-        <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  if (error || !majorDrawData) {
-    return (
-      <section className={`py-12 sm:py-16 lg:py-20  ${className}`}>
-        <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
-          <div className="text-center">
-            <p className="text-red-600">Failed to load major draw data</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  const { majorDraw, userStats, daysRemaining } = majorDrawData;
+  // Use data if available, otherwise use defaults for static content
+  const majorDraw = currentMajorDraw;
+  const userStats = enhancedUserStats;
+  const daysRemaining = currentMajorDraw?.drawDate
+    ? Math.max(
+        0,
+        Math.ceil((new Date(currentMajorDraw.drawDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      )
+    : 0;
   const selectedPrize = activePrize;
 
   const prizeImages =
@@ -311,7 +276,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   );
 
   // Check if draw is completed
-  const isCompleted = majorDraw.status === "completed";
+  const isCompleted = majorDraw?.status === "completed";
 
   return (
     <>
@@ -428,7 +393,25 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             </div>
 
             {/* Mobile: Countdown Timer or Draw Ended */}
-            {!isCompleted && daysRemaining > 0 && (
+            {majorDrawLoading || !currentMajorDraw ? (
+              // Skeleton loader for countdown
+              <div className="rounded-3xl p-6 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-gray-200 to-gray-300">
+                <div className="grid grid-cols-4 gap-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-white/20 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/30"
+                    >
+                      <Skeleton height={24} className="w-full mb-2 bg-white/40" />
+                      <Skeleton height={12} className="w-12 mx-auto bg-white/40" />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 text-center">
+                  <Skeleton height={16} className="w-40 mx-auto bg-white/40" />
+                </div>
+              </div>
+            ) : !isCompleted && daysRemaining > 0 ? (
               <div
                 className={`rounded-3xl p-6 shadow-2xl border-2 border-white/20 ${
                   currentMajorDraw?.status === "frozen"
@@ -480,7 +463,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </a>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Mobile: Draw Ended Section */}
             {isCompleted && (
@@ -508,57 +491,70 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             )}
 
             {/* Mobile: User Stats */}
-            {user && userStats && (
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200">
-                <button
-                  onClick={() => setShowBreakdown(!showBreakdown)}
-                  className="w-full text-left hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
-                >
+            {user ? (
+              userStatsLoading ? (
+                // Skeleton loader for user entries
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-red-600" />
-                      <span className="text-[14px] font-semibold text-red-600">Your Entries</span>
+                      <Skeleton width={16} height={16} className="bg-gray-300" rounded />
+                      <Skeleton height={14} width={80} className="bg-gray-300" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-bold text-red-600">{userStats.totalEntries}</span>
-                      {Boolean(isProcessing) && pendingEntries > 0 && (
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span className="text-[10px] text-green-600 font-medium">+{String(pendingEntries)}</span>
-                        </div>
-                      )}
-                      <svg
-                        className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
-                          showBreakdown ? "rotate-180" : ""
-                        }`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
+                    <Skeleton height={14} width={40} className="bg-gray-300" />
                   </div>
-                </button>
+                </div>
+              ) : (
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200">
+                  <button
+                    onClick={() => setShowBreakdown(!showBreakdown)}
+                    className="w-full text-left hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-red-600" />
+                        <span className="text-[14px] font-semibold text-red-600">Your Entries</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-bold text-red-600">{userStats.totalEntries}</span>
+                        {Boolean(isProcessing) && pendingEntries > 0 && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="text-[10px] text-green-600 font-medium">+{String(pendingEntries)}</span>
+                          </div>
+                        )}
+                        <svg
+                          className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                            showBreakdown ? "rotate-180" : ""
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </button>
 
-                {showBreakdown && (
-                  <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[12px] text-gray-700">From Membership:</span>
-                      <span className="text-[12px] font-medium text-gray-600">
-                        {enhancedUserStats.membershipEntries || 0}
-                      </span>
+                  {showBreakdown && (
+                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[12px] text-gray-700">From Membership:</span>
+                        <span className="text-[12px] font-medium text-gray-600">
+                          {enhancedUserStats.membershipEntries || 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[12px] text-gray-700">From Packages:</span>
+                        <span className="text-[12px] font-medium text-gray-600">
+                          {enhancedUserStats.oneTimeEntries || 0}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[12px] text-gray-700">From Packages:</span>
-                      <span className="text-[12px] font-medium text-gray-600">
-                        {enhancedUserStats.oneTimeEntries || 0}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )
+            ) : null}
 
             {/* Mobile: Action Buttons */}
             <div className="flex flex-col gap-3">
@@ -677,7 +673,25 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               </div>
 
               {/* Countdown / Draw Ended Notice */}
-              {!isCompleted && daysRemaining > 0 ? (
+              {majorDrawLoading || !currentMajorDraw ? (
+                // Skeleton loader for countdown (desktop)
+                <div className="rounded-3xl p-6 shadow-2xl border border-white/10 bg-gradient-to-br from-gray-200 to-gray-300">
+                  <div className="grid grid-cols-4 gap-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/30"
+                      >
+                        <Skeleton height={36} className="w-full mb-2 bg-white/40" />
+                        <Skeleton height={14} className="w-16 mx-auto bg-white/40" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 text-center">
+                    <Skeleton height={16} className="w-48 mx-auto bg-white/40" />
+                  </div>
+                </div>
+              ) : !isCompleted && daysRemaining > 0 ? (
                 <div
                   className={`rounded-3xl p-6 shadow-2xl border border-white/10 bg-gradient-to-br ${
                     currentMajorDraw?.status === "frozen"
@@ -759,7 +773,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               <div className="space-y-4">
                 <div>
                   <h2 className="text-4xl font-bold text-gray-900 font-['Poppins'] leading-tight drop-shadow-sm">
-                    {majorDraw.name}
+                    {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
                   </h2>
                   {prizeLabel && (
                     <p className="text-sm uppercase tracking-[0.35em] text-red-600 font-semibold mt-1">{prizeLabel}</p>
@@ -773,53 +787,66 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 <p className="text-base text-gray-700 leading-relaxed font-['Inter']">{prizeDescription}</p>
               </div>
 
-              {user && userStats && (
-                <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner">
-                  <button
-                    onClick={() => setShowBreakdown(!showBreakdown)}
-                    className="w-full text-left hover:bg-red-50/40 rounded-lg px-3 py-2 transition-colors"
-                  >
+              {user ? (
+                userStatsLoading ? (
+                  // Skeleton loader for user entries (desktop)
+                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-red-600" />
-                        <span className="text-sm font-semibold text-red-600">Your Entries</span>
+                        <Skeleton width={16} height={16} className="bg-gray-300" rounded />
+                        <Skeleton height={14} width={100} className="bg-gray-300" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-red-600">{userStats.totalEntries}</span>
-                        {Boolean(isProcessing) && pendingEntries > 0 && (
-                          <div className="flex items-center gap-1">
-                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                            <span className="text-xs text-green-600 font-medium">+{String(pendingEntries)}</span>
-                          </div>
-                        )}
-                        <svg
-                          className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
-                            showBreakdown ? "rotate-180" : ""
-                          }`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
+                      <Skeleton height={18} width={50} className="bg-gray-300" />
                     </div>
-                  </button>
+                  </div>
+                ) : (
+                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner">
+                    <button
+                      onClick={() => setShowBreakdown(!showBreakdown)}
+                      className="w-full text-left hover:bg-red-50/40 rounded-lg px-3 py-2 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-red-600" />
+                          <span className="text-sm font-semibold text-red-600">Your Entries</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-red-600">{userStats.totalEntries}</span>
+                          {Boolean(isProcessing) && pendingEntries > 0 && (
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                              <span className="text-xs text-green-600 font-medium">+{String(pendingEntries)}</span>
+                            </div>
+                          )}
+                          <svg
+                            className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                              showBreakdown ? "rotate-180" : ""
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </button>
 
-                  {showBreakdown && (
-                    <div className="mt-3 space-y-2 text-sm text-gray-600">
-                      <div className="flex justify-between">
-                        <span>From Membership</span>
-                        <span className="font-semibold">{enhancedUserStats.membershipEntries}</span>
+                    {showBreakdown && (
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <div className="flex justify-between">
+                          <span>From Membership</span>
+                          <span className="font-semibold">{enhancedUserStats.membershipEntries}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>From Packages</span>
+                          <span className="font-semibold">{enhancedUserStats.oneTimeEntries}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>From Packages</span>
-                        <span className="font-semibold">{enhancedUserStats.oneTimeEntries}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )
+              ) : null}
 
               <div className="flex flex-col lg:flex-row gap-3 border-t border-gray-200 pt-4">
                 <Button

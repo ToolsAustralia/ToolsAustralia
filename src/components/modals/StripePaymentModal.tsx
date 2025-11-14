@@ -522,6 +522,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
                 },
                 terms: {
                   card: "never", // Hide the "By providing your card information..." terms text
+                  applePay: "never",
                 },
               }}
               id="payment-element"

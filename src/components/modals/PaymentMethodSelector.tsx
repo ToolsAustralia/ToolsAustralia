@@ -180,6 +180,7 @@ const StripeCardForm = React.forwardRef<
             },
             terms: {
               card: "never", // Hide the "By providing your card information..." terms text
+              applePay: "never",
             },
           }}
           onChange={(event) => {

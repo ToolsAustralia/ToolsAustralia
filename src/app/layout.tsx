@@ -6,6 +6,7 @@ import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/StructuredDa
 import PixelTracker from "@/components/PixelTracker";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   subsets: ["latin"],

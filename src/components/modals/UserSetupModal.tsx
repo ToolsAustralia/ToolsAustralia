@@ -597,6 +597,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         onClose={handleClose}
         showLogo={false}
         variant="auto"
+        showCloseButton={false}
       />
 
       <div className="flex flex-col justify-between flex-1 min-h-0">

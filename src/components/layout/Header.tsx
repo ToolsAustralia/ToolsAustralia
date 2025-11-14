@@ -48,6 +48,8 @@ export default function Header() {
 
   // Ref to store scroll position for proper restoration
   const scrollPositionRef = useRef<number>(0);
+  // Ref to track if we've completed at least one loading cycle (to ensure auth state is verified)
+  const hasCompletedLoadingCycle = useRef<boolean>(false);
 
   // Debug effect to track user menu state
   useEffect(() => {
@@ -60,6 +62,7 @@ export default function Header() {
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false);
   const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
   const [isTopBarHidden, setIsTopBarHidden] = useState(false);
+  const [authStateResolved, setAuthStateResolved] = useState(false); // Track if authentication state has been resolved
   // const [wasAuthenticated, // setWasAuthenticated] = useState<boolean | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isClosingMobileMenu, setIsClosingMobileMenu] = useState(false);
@@ -67,7 +70,7 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
   const { items: cartItems, summary, updateCartItem, removeFromCart } = useCart();
   const cartItemCount = summary?.totalItems || 0;
-  const { userData, isAuthenticated } = useUserContext();
+  const { userData, isAuthenticated, loading } = useUserContext();
   const { requestModal } = useModalPriorityStore();
   // Setup requirement check now handled through user data
   const checkSetupRequired = (userData: unknown) =>
@@ -248,6 +251,30 @@ export default function Header() {
     }
   }, []);
 
+  // Track when authentication state has been fully resolved
+  useEffect(() => {
+    // Mark that we've completed a loading cycle once loading becomes false
+    if (!loading) {
+      hasCompletedLoadingCycle.current = true;
+    }
+
+    // Auth state is resolved when:
+    // 1. We've completed at least one loading cycle (ensures we've actually checked)
+    // 2. Loading is complete
+    // 3. We have a definitive answer: userData exists (authenticated) OR confirmed not authenticated
+    if (!loading && hasCompletedLoadingCycle.current) {
+      // Only mark as resolved if we have userData (authenticated) OR we've confirmed no session exists
+      // This prevents showing the bar before we've actually verified the auth state
+      const isResolved = userData !== null || !isAuthenticated;
+      if (isResolved) {
+        setAuthStateResolved(true);
+      }
+    } else {
+      // Reset resolved state when loading starts (e.g., on page reload)
+      setAuthStateResolved(false);
+    }
+  }, [loading, userData, isAuthenticated]);
+
   // Update localStorage when authentication status changes (for UI hints only)
   useEffect(() => {
     if (isAuthenticated !== undefined) {
@@ -391,8 +418,9 @@ export default function Header() {
 
   return (
     <header className="bg-white fixed top-0 left-0 right-0 z-40 shadow-sm w-full overflow-visible">
-      {/* Top Bar - Promotional or Setup Reminder */}
-      {!isTopBarHidden && (
+      {/* Top Bar - Promotional or Setup Reminder - Only show when authentication state is fully resolved */}
+      {/* Hidden by default, only shows after auth state is confirmed (userData exists OR confirmed not authenticated) */}
+      {!isTopBarHidden && authStateResolved && (
         <div
           data-top-bar
           className={`h-[24px] sm:h-[28px] w-full flex items-center justify-center relative animate-slideDown ${
@@ -414,9 +442,9 @@ export default function Header() {
               </p>
             ) : (
               <p className="text-white text-[8px] sm:text-[10px] font-normal leading-tight text-center flex-1 animate-topbar-reappear">
-                <span className="font-normal">Sign up and get 20% off to your first order. </span>
+                <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
                 <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
-                  Sign Up Now
+                  Join Now
                 </Link>
               </p>
             )}

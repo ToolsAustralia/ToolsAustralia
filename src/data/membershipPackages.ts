@@ -6,6 +6,36 @@
  * with their complete configuration including Stripe integration details.
  */
 
+/**
+ * Helper function to get Stripe Product ID from environment variables
+ * Maps package ID to corresponding environment variable
+ * @param packageId - The package ID (e.g., "tradie-subscription")
+ * @returns Stripe Product ID from environment variable or undefined
+ */
+function getStripeProductId(packageId: string): string | undefined {
+  const envMap: Record<string, string | undefined> = {
+    "tradie-subscription": process.env.STRIPE_PRODUCT_ID_TRADIE,
+    "foreman-subscription": process.env.STRIPE_PRODUCT_ID_FOREMAN,
+    "boss-subscription": process.env.STRIPE_PRODUCT_ID_BOSS,
+  };
+  return envMap[packageId];
+}
+
+/**
+ * Helper function to get Stripe Price ID from environment variables
+ * Maps package ID to corresponding environment variable
+ * @param packageId - The package ID (e.g., "tradie-subscription")
+ * @returns Stripe Price ID from environment variable or undefined
+ */
+function getStripePriceId(packageId: string): string | undefined {
+  const envMap: Record<string, string | undefined> = {
+    "tradie-subscription": process.env.STRIPE_PRICE_ID_TRADIE,
+    "foreman-subscription": process.env.STRIPE_PRICE_ID_FOREMAN,
+    "boss-subscription": process.env.STRIPE_PRICE_ID_BOSS,
+  };
+  return envMap[packageId];
+}
+
 export interface StaticMembershipPackage {
   _id: string;
   name: string;
@@ -52,8 +82,8 @@ export const membershipPackages: StaticMembershipPackage[] = [
     partnerDiscountDays: 30,
     isMemberOnly: false,
     isActive: true,
-    stripeProductId: "prod_TE0vzyE4UytXFj",
-    stripePriceId: "price_1SHYu3QxMEki11tJh7jTlC6V",
+    stripeProductId: getStripeProductId("tradie-subscription"),
+    stripePriceId: getStripePriceId("tradie-subscription"),
     createdAt: "2025-09-23T00:13:59.515Z",
     updatedAt: "2025-10-12T00:00:00.000Z",
   },
@@ -74,8 +104,8 @@ export const membershipPackages: StaticMembershipPackage[] = [
     partnerDiscountDays: 30,
     isMemberOnly: false,
     isActive: true,
-    stripeProductId: "prod_TE0wgcnAM9MM1K",
-    stripePriceId: "price_1SHYuQQxMEki11tJV9bEYh1B",
+    stripeProductId: getStripeProductId("foreman-subscription"),
+    stripePriceId: getStripePriceId("foreman-subscription"),
     createdAt: "2025-09-23T00:13:59.620Z",
     updatedAt: "2025-10-12T00:00:00.000Z",
   },
@@ -96,8 +126,8 @@ export const membershipPackages: StaticMembershipPackage[] = [
     partnerDiscountDays: 30,
     isMemberOnly: false,
     isActive: true,
-    stripeProductId: "prod_TE0wxAcpcp6Tlv",
-    stripePriceId: "price_1SHYugQxMEki11tJ3XjLuZ4i",
+    stripeProductId: getStripeProductId("boss-subscription"),
+    stripePriceId: getStripePriceId("boss-subscription"),
     createdAt: "2025-09-23T00:13:59.721Z",
     updatedAt: "2025-10-12T00:00:00.000Z",
   },
