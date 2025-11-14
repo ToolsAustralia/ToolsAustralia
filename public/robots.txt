@@ -1,0 +1,23 @@
+# robots.txt for toolsaustralia.com.au
+
+User-agent: *
+Allow: /
+
+# Block non-public and sensitive areas
+Disallow: /admin
+Disallow: /api/
+Disallow: /rewards
+Disallow: /my-account
+Disallow: /checkout
+Disallow: /login
+Disallow: /_next/
+
+# Optional: Reduce crawl rate for non-Google bots (Google ignores this)
+Crawl-delay: 10
+
+# Sitemap location
+Sitemap: https://toolsaustralia.com.au/sitemap.xml
+
+
+
+
