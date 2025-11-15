@@ -597,69 +597,75 @@ export default function MyAccountPage() {
                   </div>
                 </div>
                 {/* Mobile Only - Manage Membership Buttons */}
-                <div className="lg:hidden flex flex-row gap-3 mt-6">
-                  <button
-                    onClick={() => setIsSubscriptionManagementModalOpen(true)}
-                    className="group relative bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-sm border border-white/30 text-white px-4 py-2 rounded-lg font-semibold hover:from-white/30 hover:to-white/20 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex-1"
-                  >
-                    <span className="relative z-10 flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                      </svg>
-                      Manage
-                    </span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  </button>
+                <div className="lg:hidden flex flex-col gap-3 mt-6">
+                  {/* First Row: Manage and Refer a Friend */}
+                  <div className="flex flex-row gap-3">
+                    <button
+                      onClick={() => setIsSubscriptionManagementModalOpen(true)}
+                      className="group relative bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-sm border border-white/30 text-white px-4 py-2 rounded-lg font-semibold hover:from-white/30 hover:to-white/20 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex-1"
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        Manage
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      // Clear session tracking for special packages modal so it can show
-                      const { clearModalFromSession } = useModalPriorityStore.getState();
-                      clearModalFromSession("special-packages");
-                      // Clear sessionStorage flag as well to bypass session check
-                      if (typeof window !== "undefined") {
-                        sessionStorage.removeItem("specialPackagesModalShown");
-                      }
-                      // Request special packages modal through priority system (force=true to bypass checks)
-                      requestModal("special-packages", true);
-                    }}
-                    className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-4 py-2 rounded-lg font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex-1"
-                  >
-                    <span className="relative z-10 flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13 10V3L4 14h7v7l9-11h-7z"
-                        />
-                      </svg>
-                      Get More Entries
-                    </span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-orange-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  </button>
+                    <button
+                      onClick={() => setIsReferFriendModalOpen(true)}
+                      className="group relative bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 text-black px-4 py-2 rounded-lg font-bold hover:from-yellow-400 hover:to-orange-500 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex-1"
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <Share2 className="w-4 h-4" />
+                        Refer a Friend
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-white/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </button>
+                  </div>
 
-                  <button
-                    onClick={() => setIsReferFriendModalOpen(true)}
-                    className="group relative bg-gradient-to-r from-yellow-300 via-amber-300 to-orange-400 text-black px-4 py-2 rounded-lg font-bold hover:from-yellow-400 hover:to-orange-500 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex-1"
-                  >
-                    <span className="relative z-10 flex items-center justify-center gap-2">
-                      <Share2 className="w-4 h-4" />
-                      Refer a Friend
-                    </span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-white/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  </button>
+                  {/* Second Row: Get More Entries (only for members) */}
+                  {hasActiveMembership && (
+                    <button
+                      onClick={() => {
+                        // Clear session tracking for special packages modal so it can show
+                        const { clearModalFromSession } = useModalPriorityStore.getState();
+                        clearModalFromSession("special-packages");
+                        // Clear sessionStorage flag as well to bypass session check
+                        if (typeof window !== "undefined") {
+                          sessionStorage.removeItem("specialPackagesModalShown");
+                        }
+                        // Request special packages modal through priority system (force=true to bypass checks)
+                        requestModal("special-packages", true);
+                      }}
+                      className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-4 py-2 rounded-lg font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl w-full"
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                        Get More Entries
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-orange-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -50,6 +50,9 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   // Refs for focusing on error fields
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
+  
+  // Ref to prevent multiple auto-completions of step 3
+  const hasAutoCompletedRef = useRef(false);
 
   // Password validation
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
@@ -201,7 +204,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setPassword(savedState.password || "");
         setConfirmPassword(savedState.confirmPassword || "");
         setSelectedState(savedState.selectedState || "");
-        setIsEmailVerified(savedState.isEmailVerified || false);
+        // Check userData.isEmailVerified as fallback (e.g., Gmail users who logged in after modal was opened)
+        setIsEmailVerified(savedState.isEmailVerified || userData?.isEmailVerified || false);
         setCurrentEmail(savedState.currentEmail || userData?.email || "");
         setShowEmailVerification(savedState.showEmailVerification || false);
         console.log("✅ Restored modal state from sessionStorage");
@@ -238,7 +242,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setPassword("");
         setConfirmPassword("");
         setSelectedState("");
-        setIsEmailVerified(false);
+        // Initialize isEmailVerified from userData (e.g., Gmail users already have verified emails)
+        setIsEmailVerified(userData?.isEmailVerified || false);
         setCurrentEmail(userData?.email || "");
         setShowEmailVerification(false);
         console.log("🆕 Starting fresh modal session");
@@ -274,6 +279,42 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     showEmailVerification,
     saveStateToStorage,
   ]);
+
+  // Auto-complete step 3 if email is already verified (e.g., Gmail users)
+  useEffect(() => {
+    if (
+      isOpen &&
+      currentStep === 3 &&
+      userData?.isEmailVerified &&
+      !isEmailVerified &&
+      !isLoading &&
+      !hasAutoCompletedRef.current
+    ) {
+      console.log("✅ Email already verified (e.g., Gmail login), auto-completing step 3...");
+      setIsEmailVerified(true);
+      hasAutoCompletedRef.current = true;
+      
+      // Auto-complete after a brief delay to show verified state
+      setTimeout(() => {
+        handleComplete(true); // bypassEmailCheck=true since email is already verified
+      }, 500);
+    }
+  }, [isOpen, currentStep, userData?.isEmailVerified, isEmailVerified, isLoading]);
+
+  // Sync isEmailVerified state when userData updates while modal is open at step 3
+  useEffect(() => {
+    if (isOpen && currentStep === 3 && userData?.isEmailVerified && !isEmailVerified && !hasAutoCompletedRef.current) {
+      console.log("🔄 Syncing email verification state from userData");
+      setIsEmailVerified(true);
+    }
+  }, [isOpen, currentStep, userData?.isEmailVerified, isEmailVerified]);
+
+  // Reset auto-completion ref when modal closes or step changes away from 3
+  useEffect(() => {
+    if (!isOpen || currentStep !== 3) {
+      hasAutoCompletedRef.current = false;
+    }
+  }, [isOpen, currentStep]);
 
   // Password validation
   const validatePassword = useCallback((pwd: string) => {
