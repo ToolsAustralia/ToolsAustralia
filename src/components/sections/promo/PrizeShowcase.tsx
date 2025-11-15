@@ -13,6 +13,7 @@ import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
+import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -52,22 +53,27 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const { openEntryFlow } = useMajorDrawEntryCta();
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug });
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
   const router = useRouter();
 
+  // Countdown timer logic - matches FloatingCountdownBanner and MajorDrawSection
   useEffect(() => {
-    if (!activePrize) return;
+    if (!currentMajorDraw?.drawDate) {
+      setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+      return;
+    }
 
     const updateTimer = () => {
-      const now = Date.now();
-      const midnightTonight = new Date().setHours(23, 59, 59, 999);
-      const difference = midnightTonight - now;
+      const now = new Date().getTime();
+      const endTime = new Date(currentMajorDraw.drawDate!).getTime();
+      const difference = endTime - now;
 
       if (difference > 0) {
         setTimeLeft({
           days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((difference / (1000 * 60)) % 60),
-          seconds: Math.floor((difference / 1000) % 60),
+          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((difference % (1000 * 60)) / 1000),
         });
       } else {
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -77,7 +83,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, [activePrize]);
+  }, [currentMajorDraw]);
 
   const handleEnterNow = () => openEntryFlow({ openLocalModal: false });
 

@@ -7,6 +7,8 @@ import PixelTracker from "@/components/PixelTracker";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
+// Import console log silencer for production - must be imported early
+import "@/utils/common/silence-logs";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -87,6 +89,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <Providers>{children}</Providers>
         <MajorDrawTestControls />
+        <Analytics />
       </body>
     </html>
   );

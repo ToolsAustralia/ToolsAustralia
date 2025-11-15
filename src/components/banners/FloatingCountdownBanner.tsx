@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
 interface FloatingCountdownBannerProps {
   className?: string;
@@ -81,9 +82,10 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
     setIsDismissed(true);
   };
 
-  // Navigate to giveaway page
+  // Navigate to giveaway page using the default prize slug
+  // This ensures we always navigate to an existing promotional page
   const handleViewDetails = () => {
-    router.push("/promotional/giveaway");
+    router.push(`/promotions/${DEFAULT_PRIZE_SLUG}`);
   };
 
   // Don't render if dismissed or not ready

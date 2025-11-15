@@ -155,11 +155,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   }
 
   // Fetch related products in parallel (no need to wait for product to complete)
-  const relatedProducts = await getRelatedProducts(
-    product._id.toString(),
-    product.brand,
-    product.category || ""
-  );
+  const relatedProducts = await getRelatedProducts(product._id.toString(), product.brand, product.category || "");
 
   // Serialize Mongoose documents to plain objects for client components
   const serializedProduct = JSON.parse(JSON.stringify(product));
