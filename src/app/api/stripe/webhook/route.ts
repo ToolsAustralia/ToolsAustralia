@@ -18,6 +18,8 @@ import {
   createSubscriptionStartedEvent,
   createSubscriptionCancelledEvent,
   createSubscriptionRenewalFailedEvent,
+  createSubscriptionPaymentFailedEvent,
+  createPaymentFailedEvent,
   createInvoiceGeneratedEvent,
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
@@ -325,16 +327,101 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
 }
 
 /**
- * Handle payment failure
+ * Handle payment failure - Track all payment failures to Klaviyo
  */
 async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
-  webhookLog("error", `Payment failed: ${paymentIntent.id}`);
+  try {
+    webhookLog("error", `Payment failed: ${paymentIntent.id}`);
 
-  // Update order status if it exists
-  const order = await Order.findOne({ paymentIntentId: paymentIntent.id });
-  if (order) {
-    order.status = "failed";
-    await order.save();
+    // Update order status if it exists
+    const order = await Order.findOne({ paymentIntentId: paymentIntent.id });
+    if (order) {
+      order.status = "failed";
+      await order.save();
+    }
+
+    // Find user by customer ID
+    let user;
+    if (paymentIntent.customer) {
+      const customerId =
+        typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer.id;
+      user = await User.findOne({ stripeCustomerId: customerId });
+    }
+
+    if (!user) {
+      webhookLog("error", `User not found for failed payment: ${paymentIntent.id}`);
+      return;
+    }
+
+    // Extract payment type and details from metadata
+    const paymentType = paymentIntent.metadata.type || paymentIntent.metadata.packageType || "unknown";
+    const packageId = paymentIntent.metadata.packageId || "unknown";
+    const packageName = paymentIntent.metadata.packageName || "Unknown Package";
+    const amount = (paymentIntent.amount || 0) / 100; // Convert from cents to dollars
+
+    // Get failure details from last payment error
+    const lastPaymentError = paymentIntent.last_payment_error;
+    const failureReason = lastPaymentError?.message || "Payment declined";
+    const failureCode = lastPaymentError?.code || "";
+    const failureMessage = lastPaymentError?.decline_code || "";
+
+    // Track to Klaviyo based on payment type
+    if (paymentType === "subscription") {
+      // For subscriptions, use specific subscription failure event
+      // Determine if this is initial payment or renewal
+      // Initial payments don't have invoice yet, renewals do
+      const isInitialPayment = !(paymentIntent as { invoice?: string | Stripe.Invoice }).invoice;
+
+      // Get package tier for subscription
+      const tier = packageId.toLowerCase().includes("boss")
+        ? "Boss"
+        : packageId.toLowerCase().includes("legend")
+        ? "Legend"
+        : packageId.toLowerCase().includes("foreman")
+        ? "Foreman"
+        : packageId.toLowerCase().includes("tradie")
+        ? "Tradie"
+        : "Mate";
+
+      klaviyo.trackEventBackground(
+        createSubscriptionPaymentFailedEvent(user as never, {
+          paymentIntentId: paymentIntent.id,
+          packageId,
+          packageName,
+          tier,
+          amount,
+          failureReason,
+          failureCode,
+          isInitialPayment,
+        })
+      );
+    } else {
+      // For other payment types (one-time, mini-draw, upsell), use generic payment failed event
+      const validPackageType =
+        paymentType === "one-time" || paymentType === "mini-draw" || paymentType === "upsell"
+          ? (paymentType as "one-time" | "upsell" | "mini-draw")
+          : "one-time"; // Default fallback
+
+      klaviyo.trackEventBackground(
+        createPaymentFailedEvent(user as never, {
+          paymentIntentId: paymentIntent.id,
+          packageType: validPackageType,
+          packageId,
+          packageName,
+          amount,
+          failureReason,
+          failureCode,
+          failureMessage,
+        })
+      );
+    }
+
+    // Update Klaviyo profile to reflect failed payment status
+    ensureUserProfileSynced(user);
+
+    webhookLog("info", `✅ Payment failure tracked to Klaviyo for: ${user.email}`);
+  } catch (error) {
+    webhookLog("error", `Error handling payment failure: ${error}`);
   }
 }
 
@@ -975,6 +1062,10 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
     // Get subscription details
     const subscriptionId = (invoice as Stripe.Invoice & { subscription?: string }).subscription;
+    const billingReason = invoice.billing_reason;
+    const isInitialPayment = billingReason === "subscription_create";
+    const isRenewal = billingReason === "subscription_cycle";
+
     if (subscriptionId) {
       // Update subscription status to reflect payment failure
       if (user.subscription) {
@@ -985,18 +1076,79 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
     await user.save();
 
-    // Track renewal failure in Klaviyo (non-blocking)
+    // Track failure in Klaviyo (for both initial and renewal failures)
     if (user.subscription && subscriptionId) {
-      klaviyo.trackEventBackground(
-        createSubscriptionRenewalFailedEvent(user as never, {
-          packageId: user.subscription.packageId || "unknown",
-          packageName: "Subscription",
-          tier: user.subscription.packageId || "unknown",
-          failureReason: "Payment declined",
-          paymentIntentId: invoice.id || "unknown",
-        })
-      );
+      // Extract payment intent ID from invoice
+      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
+      const paymentIntentId: string =
+        typeof invoiceWithPaymentIntent.payment_intent === "string"
+          ? invoiceWithPaymentIntent.payment_intent
+          : invoiceWithPaymentIntent.payment_intent?.id || invoice.id || "unknown";
+
+      // Get failure reason from invoice
+      const failureReason = invoice.last_finalization_error?.message || "Payment declined";
+      const failureCode = invoice.last_finalization_error?.code || "";
+      const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
+
+      // Get package tier for subscription
+      const packageId = user.subscription.packageId || "unknown";
+      const tier = packageId.toLowerCase().includes("boss")
+        ? "Boss"
+        : packageId.toLowerCase().includes("legend")
+        ? "Legend"
+        : packageId.toLowerCase().includes("foreman")
+        ? "Foreman"
+        : packageId.toLowerCase().includes("tradie")
+        ? "Tradie"
+        : "Mate";
+
+      if (isRenewal) {
+        // Use existing renewal failed event for subscription renewals
+        klaviyo.trackEventBackground(
+          createSubscriptionRenewalFailedEvent(user as never, {
+            packageId: packageId,
+            packageName: "Subscription",
+            tier,
+            failureReason,
+            paymentIntentId: paymentIntentId,
+          })
+        );
+      } else if (isInitialPayment) {
+        // Use new subscription payment failed event for initial payments
+        klaviyo.trackEventBackground(
+          createSubscriptionPaymentFailedEvent(user as never, {
+            paymentIntentId: paymentIntentId,
+            packageId: packageId,
+            packageName: "Subscription",
+            tier,
+            amount,
+            failureReason,
+            failureCode,
+            isInitialPayment: true,
+          })
+        );
+      } else {
+        // Fallback for other billing reasons (subscription_update, etc.)
+        // Use subscription payment failed event
+        klaviyo.trackEventBackground(
+          createSubscriptionPaymentFailedEvent(user as never, {
+            paymentIntentId: paymentIntentId,
+            packageId: packageId,
+            packageName: "Subscription",
+            tier,
+            amount,
+            failureReason,
+            failureCode,
+            isInitialPayment: false,
+          })
+        );
+      }
     }
+
+    // Update Klaviyo profile to reflect failed payment status
+    ensureUserProfileSynced(user);
+
+    webhookLog("info", `✅ Invoice payment failure tracked to Klaviyo`);
   } catch (error) {
     webhookLog("error", `Error handling invoice payment failed: ${error}`);
   }

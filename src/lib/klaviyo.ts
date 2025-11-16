@@ -108,17 +108,21 @@ class KlaviyoClient {
     return true;
   }
 
+  /**
+   * Format event name with [DEV] prefix in development mode
+   * Ensures all development events are clearly separated from production events in Klaviyo
+   */
   private formatEventName(eventName: string): string {
+    // Only add prefix in development mode and if event doesn't already have it
     if (this.mode === "development" && !eventName.startsWith("[DEV]")) {
       const devEventName = `[DEV] ${eventName}`;
-      if (this.mode === "development") {
-        console.log(`🎹 DEV Event Formatting: "${eventName}" → "${devEventName}"`);
-      }
+      console.log(`🎹 DEV Event Formatting: "${eventName}" → "${devEventName}"`);
       return devEventName;
     }
 
-    if (this.mode === "development") {
-      console.log(`🎹 Event Name (no change): "${eventName}" (mode: ${this.mode})`);
+    // In development mode, log if event already has prefix (for debugging)
+    if (this.mode === "development" && eventName.startsWith("[DEV]")) {
+      console.log(`🎹 Event already has [DEV] prefix: "${eventName}"`);
     }
 
     return eventName;

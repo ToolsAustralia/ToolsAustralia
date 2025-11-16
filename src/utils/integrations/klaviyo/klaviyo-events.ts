@@ -136,6 +136,78 @@ export function createSubscriptionRenewalFailedEvent(
   };
 }
 
+/**
+ * Payment Failed Event - Generic event for any payment failure
+ * Used for one-time packages, mini-draws, and upsells
+ */
+export function createPaymentFailedEvent(
+  user: IUser,
+  paymentData: {
+    paymentIntentId: string;
+    packageType: "one-time" | "upsell" | "mini-draw";
+    packageId?: string;
+    packageName?: string;
+    amount: number;
+    failureReason: string;
+    failureCode?: string;
+    failureMessage?: string;
+  }
+): KlaviyoEvent {
+  return {
+    event: "Payment Failed",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      user_id: user._id.toString(),
+      payment_intent_id: paymentData.paymentIntentId,
+      package_type: paymentData.packageType,
+      package_id: paymentData.packageId || "unknown",
+      package_name: paymentData.packageName || "Unknown Package",
+      amount: paymentData.amount.toFixed(2),
+      failure_reason: paymentData.failureReason,
+      failure_code: paymentData.failureCode || "",
+      failure_message: paymentData.failureMessage || "",
+      timestamp: formatTimestampForKlaviyo(),
+    },
+  };
+}
+
+/**
+ * Subscription Payment Failed Event - For initial subscription payments
+ * Distinct from renewal failures which use createSubscriptionRenewalFailedEvent
+ */
+export function createSubscriptionPaymentFailedEvent(
+  user: IUser,
+  paymentData: {
+    paymentIntentId: string;
+    packageId: string;
+    packageName: string;
+    tier: string;
+    amount: number;
+    failureReason: string;
+    failureCode?: string;
+    isInitialPayment: boolean;
+  }
+): KlaviyoEvent {
+  return {
+    event: "Subscription Payment Failed",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      user_id: user._id.toString(),
+      ...formatPackageDataForKlaviyo({
+        packageId: paymentData.packageId,
+        packageName: paymentData.packageName,
+        tier: paymentData.tier,
+        price: paymentData.amount,
+      }),
+      payment_intent_id: paymentData.paymentIntentId,
+      failure_reason: paymentData.failureReason,
+      failure_code: paymentData.failureCode || "",
+      is_initial_payment: paymentData.isInitialPayment,
+      timestamp: formatTimestampForKlaviyo(),
+    },
+  };
+}
+
 export function createSubscriptionUpgradedEvent(
   user: IUser,
   upgradeData: {
