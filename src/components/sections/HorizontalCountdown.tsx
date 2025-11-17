@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
 interface HorizontalCountdownProps {
   className?: string;
@@ -55,7 +56,7 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
   }, [currentMajorDraw]);
 
   const handleViewDetails = () => {
-    router.push(`/promotional/giveaway`);
+    router.push(`/promotions/${DEFAULT_PRIZE_SLUG}`);
   };
 
   // Don't show loading spinner - render with 0 values for better UX

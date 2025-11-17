@@ -5,8 +5,9 @@ import { z } from "zod";
 import { klaviyo } from "@/lib/klaviyo";
 import { createUserRegisteredEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
-import { trackFacebookEvent } from "@/components/FacebookPixel";
 import { trackTikTokEvent } from "@/components/TikTokPixel";
+import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
+import { generateEventID, prepareUserData, getEventSourceURL } from "@/utils/tracking/facebook-helpers";
 
 // Registration validation schema
 const registerSchema = z.object({
@@ -129,14 +130,48 @@ export async function POST(request: NextRequest) {
         currency: "AUD",
         user_id: newUser._id.toString(),
         user_email: newUser.email,
-        registration_method: "email"
+        registration_method: "email",
       };
 
-      // Track Facebook Pixel
-      trackFacebookEvent("CompleteRegistration", registrationParams);
-      console.log(`📘 Facebook Pixel: Registration tracked for ${newUser.email}`);
+      // Generate unique event ID for deduplication
+      const eventID = generateEventID("registration", newUser._id.toString());
+      const eventTime = Math.floor(Date.now() / 1000);
 
-      // Track TikTok Pixel
+      // 1. Track Browser Pixel (if in browser context - this is server-side, so skip)
+      // Browser pixel will be tracked client-side if needed
+
+      // 2. Track Conversions API (server-side)
+      try {
+        const userData = prepareUserData({
+          email: newUser.email,
+          phone: newUser.mobile,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+        });
+
+        // Note: fbc and fbp would need to be passed from client or extracted from request
+        // For server-side registration, these may not be available
+
+        const facebookEvent: FacebookEvent = {
+          event_name: "CompleteRegistration",
+          event_time: eventTime,
+          event_id: eventID,
+          action_source: "website",
+          user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
+          event_source_url: getEventSourceURL(),
+        };
+
+        const apiSuccess = await sendFacebookEvent(facebookEvent);
+        if (apiSuccess) {
+          console.log(`📘 Facebook Conversions API: Registration tracked for ${newUser.email} (EventID: ${eventID})`);
+        } else {
+          console.warn(`⚠️ Facebook Conversions API: Failed to send CompleteRegistration event (EventID: ${eventID})`);
+        }
+      } catch (apiError) {
+        console.error("❌ Error sending CompleteRegistration to Facebook Conversions API:", apiError);
+      }
+
+      // 3. Track TikTok Pixel
       trackTikTokEvent("CompleteRegistration", registrationParams);
       console.log(`📱 TikTok Pixel: Registration tracked for ${newUser.email}`);
     } catch (pixelError) {

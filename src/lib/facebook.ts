@@ -2,6 +2,7 @@
 export interface FacebookEvent {
   event_name: string;
   event_time: number;
+  event_id?: string; // Event ID for deduplication (required when using both browser pixel and Conversions API)
   user_data: {
     em?: string; // email hash
     ph?: string; // phone hash
@@ -27,7 +28,7 @@ export interface FacebookEvent {
     order_id?: string;
     search_string?: string;
   };
-  event_source_url?: string;
+  event_source_url?: string; // URL where the event occurred
   action_source: "website" | "app" | "phone_call" | "chat" | "physical_store" | "system_generated" | "other";
 }
 

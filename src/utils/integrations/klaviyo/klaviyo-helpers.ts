@@ -14,31 +14,31 @@ import { getStateByCode } from "@/data/australianStates";
 /**
  * Convert User model to Klaviyo profile
  * Transforms MongoDB user data to Klaviyo format
+ * Includes only strategic fields for segmentation and email automation
  */
 export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile> {
+  // Format phone number - ensure it starts with +61 for Australian numbers
   const phone = user.mobile
     ? user.mobile.startsWith("+")
       ? user.mobile
       : `+61${user.mobile.replace(/^0/, "")}`
     : undefined;
 
-  // ✅ OPTION 1: Calculate major draw entries from majordraws collection (single source of truth)
-  const { getUserTotalAccumulatedEntries } = await import("../../database/queries/major-draw-queries");
-  const totalMajorDrawEntries = await getUserTotalAccumulatedEntries(user._id);
+  // Calculate major draw entries from majordraws collection (single source of truth)
+  let totalMajorDrawEntries = 0;
+  try {
+    const { getUserTotalAccumulatedEntries } = await import("../../database/queries/major-draw-queries");
+    totalMajorDrawEntries = (await getUserTotalAccumulatedEntries(user._id)) || 0;
+  } catch (error) {
+    console.error(`Error calculating major draw entries for user ${user._id}:`, error);
+    // Default to 0 if calculation fails
+    totalMajorDrawEntries = 0;
+  }
 
-  // For Klaviyo, we'll use a simplified breakdown since we're moving to single source of truth
-  const majorDrawEntriesFromSubscription = user.subscription?.isActive ? (user.accumulatedEntries || 0) * 0.7 : 0; // Estimate 70% from subscription
-  const majorDrawEntriesFromOneTime = (user.accumulatedEntries || 0) * 0.3; // Estimate 30% from one-time
-  const majorDrawEntriesFromUpsell = 0; // Will be calculated from actual data when needed
-  const majorDrawEntriesFromMiniDraw = 0; // Will be calculated from actual data when needed
-
-  // No need to calculate days since registration (redundant with created_at)
-
-  // No need to calculate upsell entries total anymore
-
-  // Get current major draw info (from the most recent major draw entry)
-  // Note: This will be updated to use the new helper functions when needed
-  // For now, we'll use the majorDrawId and let the frontend handle the name lookup
+  // Calculate strategic metrics using helper functions
+  const lifetimeValue = calculateLifetimeValue(user);
+  const partnerDiscountStatus = calculatePartnerDiscountStatus(user);
+  const upsellMetrics = calculateUpsellMetrics(user);
 
   const klaviyoProfile = {
     email: user.email,
@@ -58,38 +58,58 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
       is_email_verified: user.isEmailVerified || false,
       is_mobile_verified: user.isMobileVerified || false,
 
+      // Profile completion
+      profile_setup_completed: user.profileSetupCompleted || false,
+
       // Subscription details
       has_active_subscription: user.subscription?.isActive || false,
       subscription_tier: user.subscription?.packageId,
       subscription_start_date: user.subscription?.startDate?.toISOString(),
       subscription_end_date: user.subscription?.endDate?.toISOString(),
-      subscription_auto_renew: user.subscription?.autoRenew,
+      subscription_auto_renew: user.subscription?.autoRenew ?? undefined,
       subscription_status: user.subscription?.status,
+
+      // Subscription lifecycle tracking
+      subscription_has_pending_upgrade: !!user.subscription?.pendingChange,
+      subscription_previous_tier: user.subscription?.previousSubscription?.packageId,
+      subscription_last_upgrade_date: user.subscription?.lastUpgradeDate?.toISOString(),
+      subscription_last_downgrade_date: user.subscription?.lastDowngradeDate?.toISOString(),
 
       // Entries and points
       accumulated_entries: user.accumulatedEntries || 0,
       rewards_points: user.rewardsPoints || 0,
 
-      // Major draw entries (detailed)
+      // Major draw entries (accurate from database - single source of truth)
       total_major_draw_entries: totalMajorDrawEntries,
-      major_draw_entries_from_subscription: majorDrawEntriesFromSubscription,
-      major_draw_entries_from_one_time: majorDrawEntriesFromOneTime,
-      major_draw_entries_from_upsell: majorDrawEntriesFromUpsell,
-      major_draw_entries_from_mini_draw: majorDrawEntriesFromMiniDraw,
 
-      // Purchase history (detailed)
+      // Purchase history
       total_one_time_packages: user.oneTimePackages?.length || 0,
       total_mini_draw_packages: user.miniDrawPackages?.length || 0,
       last_purchase_date: getLastPurchaseDate(user),
       first_purchase_date: getFirstPurchaseDate(user),
 
-      // Upsell data (simplified)
+      // Lifetime value & spending
+      lifetime_value: lifetimeValue,
+      total_spent: lifetimeValue, // Alias for clarity
+
+      // Upsell data
       total_upsells_purchased: user.upsellPurchases?.length || 0,
+      upsell_total_shown: upsellMetrics.totalShown,
+      upsell_total_accepted: upsellMetrics.totalAccepted,
+      upsell_total_declined: upsellMetrics.totalDeclined,
+      upsell_conversion_rate: upsellMetrics.conversionRate,
+      upsell_last_interaction: upsellMetrics.lastInteraction,
 
-      // Engagement metrics - removed days_since_registration (redundant with created_at)
+      // Referral program
+      referral_code: user.referral?.code,
+      referral_successful_conversions: user.referral?.successfulConversions || 0,
+      referral_total_entries_awarded: user.referral?.totalEntriesAwarded || 0,
 
-      // Major draw participation - simplified for single source of truth
-      major_draw_id: undefined, // Will be populated from majordraws collection when needed
+      // Partner discount status
+      partner_discount_active: partnerDiscountStatus.active,
+      partner_discount_queued_count: partnerDiscountStatus.queuedCount,
+      partner_discount_total_days: partnerDiscountStatus.totalDays,
+      partner_discount_next_activation_date: partnerDiscountStatus.nextActivationDate,
     },
   };
 
@@ -98,9 +118,11 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
     accumulated_entries: klaviyoProfile.properties.accumulated_entries,
     rewards_points: klaviyoProfile.properties.rewards_points,
     total_major_draw_entries: klaviyoProfile.properties.total_major_draw_entries,
-    major_draw_entries_from_subscription: klaviyoProfile.properties.major_draw_entries_from_subscription,
     has_active_subscription: klaviyoProfile.properties.has_active_subscription,
     subscription_status: klaviyoProfile.properties.subscription_status,
+    lifetime_value: klaviyoProfile.properties.lifetime_value,
+    referral_code: klaviyoProfile.properties.referral_code,
+    partner_discount_active: klaviyoProfile.properties.partner_discount_active,
   });
 
   return klaviyoProfile;
@@ -108,19 +130,102 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
 
 /**
  * Calculate user's lifetime value from purchases
+ * Includes subscriptions, one-time packages, mini-draws, and upsells
  */
 export function calculateLifetimeValue(user: IUser): number {
   let total = 0;
 
+  // Add mini-draw package prices
   user.miniDrawPackages?.forEach((pkg) => {
     total += pkg.price || 0;
   });
 
+  // Add upsell purchase amounts
   user.upsellPurchases?.forEach((purchase) => {
     total += purchase.amountPaid || 0;
   });
 
+  // Note: Subscription prices would need to be calculated from package data
+  // One-time packages don't store price in user model, would need package lookup
+  // For now, this covers mini-draws and upsells which are the main additional purchases
+
   return total;
+}
+
+/**
+ * Calculate partner discount status summary
+ * Returns active status, queued count, total days, and next activation date
+ */
+export function calculatePartnerDiscountStatus(user: IUser): {
+  active: boolean;
+  queuedCount: number;
+  totalDays: number;
+  nextActivationDate?: string;
+} {
+  const queue = user.partnerDiscountQueue || [];
+  
+  // Find active discount (status === "active")
+  const activeDiscount = queue.find((item) => item.status === "active");
+  const isActive = !!activeDiscount;
+
+  // Count queued discounts (status === "queued")
+  const queuedCount = queue.filter((item) => item.status === "queued").length;
+
+  // Calculate total days (active + queued)
+  let totalDays = 0;
+  queue.forEach((item) => {
+    if (item.status === "active" || item.status === "queued") {
+      totalDays += item.discountDays || 0;
+      // Add hours converted to days (24 hours = 1 day)
+      totalDays += (item.discountHours || 0) / 24;
+    }
+  });
+
+  // Find next activation date (earliest startDate from queued items)
+  const queuedItems = queue.filter((item) => item.status === "queued" && item.startDate);
+  let nextActivationDate: string | undefined;
+  if (queuedItems.length > 0) {
+    const sortedQueued = queuedItems.sort(
+      (a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime()
+    );
+    nextActivationDate = sortedQueued[0].startDate?.toISOString();
+  }
+
+  return {
+    active: isActive,
+    queuedCount,
+    totalDays: Math.round(totalDays * 100) / 100, // Round to 2 decimal places
+    nextActivationDate,
+  };
+}
+
+/**
+ * Extract upsell engagement metrics from user
+ * Returns upsell stats for Klaviyo segmentation
+ */
+export function calculateUpsellMetrics(user: IUser): {
+  totalShown: number;
+  totalAccepted: number;
+  totalDeclined: number;
+  conversionRate: number;
+  lastInteraction?: string;
+} {
+  const stats = user.upsellStats;
+
+  const totalShown = stats?.totalShown || 0;
+  const totalAccepted = stats?.totalAccepted || 0;
+  const totalDeclined = stats?.totalDeclined || 0;
+  
+  // Calculate conversion rate (accepted / shown, or 0 if no shows)
+  const conversionRate = totalShown > 0 ? (totalAccepted / totalShown) * 100 : 0;
+
+  return {
+    totalShown,
+    totalAccepted,
+    totalDeclined,
+    conversionRate: Math.round(conversionRate * 100) / 100, // Round to 2 decimal places
+    lastInteraction: stats?.lastInteraction?.toISOString(),
+  };
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   createInvoiceGeneratedEvent,
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
+import { trackPixelPaymentFailed, trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -418,6 +419,31 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
 
     // Update Klaviyo profile to reflect failed payment status
     ensureUserProfileSynced(user);
+
+    // Track payment failure to Facebook Pixel (server-side)
+    try {
+      await trackPixelPaymentFailed({
+        value: amount,
+        currency: paymentIntent.currency.toUpperCase() || "AUD",
+        paymentIntentId: paymentIntent.id,
+        orderId: order?.orderId,
+        packageId,
+        packageName,
+        packageType: paymentType as "subscription" | "one-time" | "mini-draw" | "upsell" | undefined,
+        userId: user._id.toString(),
+        userEmail: user.email,
+        userPhone: user.mobile,
+        userFirstName: user.firstName,
+        userLastName: user.lastName,
+        errorMessage: failureReason,
+        errorCode: failureCode,
+        failureReason: failureMessage || failureReason,
+      });
+      webhookLog("info", `✅ Payment failure tracked to Facebook Pixel for: ${user.email}`);
+    } catch (pixelError) {
+      webhookLog("error", `Error tracking payment failure to Facebook Pixel: ${pixelError}`);
+      // Don't throw - pixel tracking should not break webhook processing
+    }
 
     webhookLog("info", `✅ Payment failure tracked to Klaviyo for: ${user.email}`);
   } catch (error) {
@@ -1148,6 +1174,41 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     // Update Klaviyo profile to reflect failed payment status
     ensureUserProfileSynced(user);
 
+    // Track payment failure to Facebook Pixel (server-side)
+    try {
+      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
+      const paymentIntentId: string =
+        typeof invoiceWithPaymentIntent.payment_intent === "string"
+          ? invoiceWithPaymentIntent.payment_intent
+          : invoiceWithPaymentIntent.payment_intent?.id || invoice.id || "unknown";
+
+      const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
+      const packageId = user.subscription?.packageId || "unknown";
+      const failureReason = invoice.last_finalization_error?.message || "Payment declined";
+      const failureCode = invoice.last_finalization_error?.code || "";
+
+      await trackPixelPaymentFailed({
+        value: amount,
+        currency: invoice.currency.toUpperCase() || "AUD",
+        paymentIntentId,
+        packageId,
+        packageName: "Subscription",
+        packageType: "subscription",
+        userId: user._id.toString(),
+        userEmail: user.email,
+        userPhone: user.mobile,
+        userFirstName: user.firstName,
+        userLastName: user.lastName,
+        errorMessage: failureReason,
+        errorCode: failureCode,
+        failureReason: failureReason,
+      });
+      webhookLog("info", `✅ Invoice payment failure tracked to Facebook Pixel`);
+    } catch (pixelError) {
+      webhookLog("error", `Error tracking invoice payment failure to Facebook Pixel: ${pixelError}`);
+      // Don't throw - pixel tracking should not break webhook processing
+    }
+
     webhookLog("info", `✅ Invoice payment failure tracked to Klaviyo`);
   } catch (error) {
     webhookLog("error", `Error handling invoice payment failed: ${error}`);
@@ -1382,6 +1443,30 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           paymentIntentId: invoicePaymentId,
         })
       );
+
+      // Track subscription renewal to Facebook Pixel (if this is a renewal)
+      if (invoice.billing_reason === "subscription_cycle") {
+        try {
+          await trackPixelSubscriptionRenewal({
+            value: membershipPackage.price,
+            currency: invoice.currency.toUpperCase() || "AUD",
+            subscriptionId: subscriptionId,
+            invoiceId: invoice.id || `invoice_${Date.now()}`,
+            packageId: packageId,
+            packageName: membershipPackage.name,
+            userId: user._id.toString(),
+            userEmail: user.email,
+            userPhone: user.mobile,
+            userFirstName: user.firstName,
+            userLastName: user.lastName,
+            entriesPerMonth: entriesToGrant,
+          });
+          webhookLog("info", `✅ Subscription renewal tracked to Facebook Pixel for: ${user.email}`);
+        } catch (pixelError) {
+          webhookLog("error", `Error tracking subscription renewal to Facebook Pixel: ${pixelError}`);
+          // Don't throw - pixel tracking should not break webhook processing
+        }
+      }
 
       // Update Klaviyo profile
       ensureUserProfileSynced(user);

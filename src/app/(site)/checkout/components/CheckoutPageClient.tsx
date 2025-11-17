@@ -93,9 +93,10 @@ interface PaymentInfo {
 
 export default function CheckoutPageClient() {
   const router = useRouter();
-  const { trackInitiateCheckout } = usePixelTracking();
+  const { trackInitiateCheckout, trackAddPaymentInfo } = usePixelTracking();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasTrackedPaymentInfo, setHasTrackedPaymentInfo] = useState(false);
   const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
     firstName: "",
     lastName: "",
@@ -133,6 +134,28 @@ export default function CheckoutPageClient() {
       num_items: mockCartItems.reduce((sum, item) => sum + item.quantity, 0),
     });
   }, [trackInitiateCheckout, total]);
+
+  // Track AddPaymentInfo when payment information is entered
+  useEffect(() => {
+    // Check if payment info is complete (all required fields filled)
+    const isPaymentInfoComplete =
+      paymentInfo.method === "card" &&
+      paymentInfo.cardNumber?.trim() &&
+      paymentInfo.expiryDate?.trim() &&
+      paymentInfo.cvv?.trim() &&
+      paymentInfo.nameOnCard?.trim();
+
+    // Track only once when payment info becomes complete
+    if (isPaymentInfoComplete && !hasTrackedPaymentInfo && currentStep >= 2) {
+      trackAddPaymentInfo({
+        value: total,
+        currency: "AUD",
+        content_ids: mockCartItems.map((item) => item.id),
+        num_items: mockCartItems.reduce((sum, item) => sum + item.quantity, 0),
+      });
+      setHasTrackedPaymentInfo(true);
+    }
+  }, [paymentInfo, total, hasTrackedPaymentInfo, currentStep, trackAddPaymentInfo]);
 
   // Handle form validation
   const validateStep = (step: number): boolean => {

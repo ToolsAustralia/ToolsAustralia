@@ -3,6 +3,7 @@
 import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
+import { usePixelTracking } from "@/hooks/usePixelTracking";
 
 // Define CartItem type locally to match our needs
 interface CartItem {
@@ -127,6 +128,7 @@ const createDebouncedSync = (syncFn: () => Promise<void>, delay: number = 1000) 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const userId = session?.user?.id;
+  const { trackRemoveFromCart } = usePixelTracking();
 
   // Enhanced cart state
   const [cartState, setCartState] = useState<OptimisticCartState>({
@@ -489,6 +491,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Determine item type if not provided
       const type = itemType || (cartState.items.find((item) => item.productId === itemId) ? "product" : "ticket");
 
+      // Find the item being removed for tracking
+      const itemToRemove = cartState.items.find((cartItem) => {
+        if (type === "product") {
+          return cartItem.productId === itemId;
+        } else {
+          return cartItem.miniDrawId === itemId;
+        }
+      });
+
       // Create optimistic state
       const optimisticItems = cartState.items.filter((cartItem) => {
         if (type === "product") {
@@ -497,6 +508,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
           return cartItem.miniDrawId !== itemId;
         }
       });
+
+      // Track RemoveFromCart event
+      if (itemToRemove) {
+        try {
+          trackRemoveFromCart({
+            value: itemToRemove.price * itemToRemove.quantity,
+            currency: "AUD",
+            productId: type === "product" ? itemId : undefined,
+            contentName: type === "product" ? itemToRemove.product?.name : itemToRemove.miniDraw?.name,
+          });
+        } catch (error) {
+          console.error("Error tracking RemoveFromCart:", error);
+          // Don't throw - tracking should not break cart functionality
+        }
+      }
 
       // Prepare data for API call
       const apiData =
@@ -522,7 +548,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ],
       }));
     },
-    [cartState.items]
+    [cartState.items, trackRemoveFromCart]
   );
 
   const clearCart = useCallback(async () => {

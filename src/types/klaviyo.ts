@@ -40,12 +40,8 @@ export interface KlaviyoProfileProperties {
   accumulated_entries: number;
   rewards_points: number;
 
-  // Major draw entries (detailed - totals, not counts)
-  total_major_draw_entries: number; // Sum of all entryCount values
-  major_draw_entries_from_subscription: number; // Sum of entryCount from membership
-  major_draw_entries_from_one_time: number; // Sum of entryCount from one-time packages
-  major_draw_entries_from_upsell: number; // Sum of entryCount from upsell purchases
-  major_draw_entries_from_mini_draw: number; // Sum of entryCount from mini-draw packages
+  // Major draw entries (accurate from database - single source of truth)
+  total_major_draw_entries: number; // Sum of all entryCount values from majordraws collection
 
   // Purchase history (detailed)
   total_one_time_packages: number;
@@ -53,13 +49,37 @@ export interface KlaviyoProfileProperties {
   last_purchase_date?: string;
   first_purchase_date?: string;
 
-  // Upsell data (simplified)
+  // Upsell data
   total_upsells_purchased: number;
+  upsell_total_shown?: number;
+  upsell_total_accepted?: number;
+  upsell_total_declined?: number;
+  upsell_conversion_rate?: number;
+  upsell_last_interaction?: string;
 
-  // Engagement metrics - removed days_since_registration (redundant with created_at)
+  // Referral program
+  referral_code?: string;
+  referral_successful_conversions?: number;
+  referral_total_entries_awarded?: number;
 
-  // Major draw participation
-  major_draw_id?: string; // Current major draw ID user is participating in
+  // Lifetime value & spending
+  lifetime_value?: number;
+  total_spent?: number;
+
+  // Profile completion
+  profile_setup_completed?: boolean;
+
+  // Partner discount status
+  partner_discount_active?: boolean;
+  partner_discount_queued_count?: number;
+  partner_discount_total_days?: number;
+  partner_discount_next_activation_date?: string;
+
+  // Subscription lifecycle tracking
+  subscription_has_pending_upgrade?: boolean;
+  subscription_previous_tier?: string;
+  subscription_last_upgrade_date?: string;
+  subscription_last_downgrade_date?: string;
 }
 
 export interface KlaviyoProfile {

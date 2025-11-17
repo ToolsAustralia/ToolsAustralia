@@ -11,6 +11,8 @@ import {
   trackCompleteRegistration as fbTrackCompleteRegistration,
   trackLead as fbTrackLead,
   trackSubscribe as fbTrackSubscribe,
+  trackAddPaymentInfo as fbTrackAddPaymentInfo,
+  trackRemoveFromCart as fbTrackRemoveFromCart,
 } from "@/components/FacebookPixel";
 import {
   trackTikTokEvent,
@@ -32,6 +34,8 @@ export interface PixelEventParams {
   orderId?: string;
   numItems?: number;
   method?: string;
+  contentName?: string;
+  contentIds?: string[];
   [key: string]: unknown;
 }
 
@@ -173,6 +177,67 @@ export function usePixelTracking() {
     });
   }, []);
 
+  // Add payment info tracking
+  const trackAddPaymentInfo = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
+    const platformsToTrack = platforms || ["facebook", "tiktok"];
+
+    platformsToTrack.forEach((platform) => {
+      if (platform === "facebook") {
+        fbTrackAddPaymentInfo(params.value || 0, params.currency || "USD", params.contentIds, params.numItems);
+      } else if (platform === "tiktok") {
+        // TikTok doesn't have a specific AddPaymentInfo event, use custom event
+        trackTikTokEvent("AddPaymentInfo", {
+          value: params.value || 0,
+          currency: params.currency || "USD",
+          content_ids: params.contentIds,
+          num_items: params.numItems,
+        });
+      }
+    });
+  }, []);
+
+  // Remove from cart tracking
+  const trackRemoveFromCart = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
+    const platformsToTrack = platforms || ["facebook", "tiktok"];
+
+    platformsToTrack.forEach((platform) => {
+      if (platform === "facebook") {
+        fbTrackRemoveFromCart(params.value || 0, params.currency || "USD", params.productId, params.contentName);
+      } else if (platform === "tiktok") {
+        // TikTok doesn't have a specific RemoveFromCart event, use custom event
+        trackTikTokEvent("RemoveFromCart", {
+          value: params.value || 0,
+          currency: params.currency || "USD",
+          content_ids: params.productId ? [params.productId] : undefined,
+          content_name: params.contentName,
+        });
+      }
+    });
+  }, []);
+
+  // Payment failed tracking (server-side function, but exposed for client-side use if needed)
+  const trackPaymentFailed = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
+    const platformsToTrack = platforms || ["facebook", "tiktok"];
+
+    platformsToTrack.forEach((platform) => {
+      if (platform === "facebook") {
+        trackFacebookEvent("PaymentFailed", {
+          value: params.value || 0,
+          currency: params.currency || "USD",
+          order_id: params.orderId,
+          error_message: params.errorMessage as string | undefined,
+          error_code: params.errorCode as string | undefined,
+        });
+      } else if (platform === "tiktok") {
+        trackTikTokEvent("PaymentFailed", {
+          value: params.value || 0,
+          currency: params.currency || "USD",
+          order_id: params.orderId,
+        });
+      }
+    });
+  }, []);
+
   // Custom event tracking
   const trackCustomEvent = useCallback(
     (eventName: string, parameters?: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
@@ -200,6 +265,9 @@ export function usePixelTracking() {
     trackLead,
     trackSubscribe,
     trackContact,
+    trackAddPaymentInfo,
+    trackRemoveFromCart,
+    trackPaymentFailed,
     trackCustomEvent,
   };
 }
