@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Users, ArrowRight, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Users, ArrowRight, Zap, Check } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -28,6 +29,7 @@ interface MajorDrawSectionProps {
 }
 
 export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
+  const router = useRouter();
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -215,32 +217,73 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const prizeLabel = selectedPrize.label;
   const prizeSummary = selectedPrize.summary;
   const prizeDescription = selectedPrize.detailedDescription;
-  const prizeValueLabel = selectedPrize.prizeValueLabel;
 
   const detailsHref = `/promotions/${activeSlug ?? defaultSlug}`;
+
+  // Helper function to get shortened label for prize cards
+  const getShortLabel = (label: string): string => {
+    if (label.includes("Milwaukee")) return "Milwaukee + $5K";
+    if (label.includes("DeWalt")) return "DeWalt + $5K";
+    if (label.includes("Makita")) return "Makita + $5K";
+    if (label.includes("$10000")) return "$10K Cash";
+    return label;
+  };
 
   const renderPrizeToggle = (layout: "mobile" | "desktop" = "mobile") => {
     if (prizes.length <= 1) return null;
 
     return (
       <div className={layout === "desktop" ? "w-full" : ""}>
-        <p className="text-xs sm:text-sm text-gray-500 font-['Inter'] uppercase tracking-wide mb-2 text-center">
-          Pick Your Toolset
+        <p className="text-xs sm:text-sm text-gray-500 font-['Inter'] uppercase tracking-wide mb-2 sm:mb-3 text-center">
+          Pick Your Toolset
         </p>
-        <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2 sm:pb-0 sm:flex-wrap sm:justify-center [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="grid grid-cols-2 gap-2 sm:gap-4">
           {prizes.map((prizeOption) => {
             const isActive = prizeOption.slug === activeSlug;
+            const shortLabel = getShortLabel(prizeOption.label);
             return (
               <button
                 key={prizeOption.slug}
-                onClick={() => handlePrizeSelect(prizeOption.slug)}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 border whitespace-nowrap ${
+                onClick={() => {
+                  // On mobile, redirect to prize page; on desktop, use state toggle
+                  if (layout === "mobile") {
+                    router.push(`/promotions/${prizeOption.slug}`);
+                  } else {
+                    handlePrizeSelect(prizeOption.slug);
+                  }
+                }}
+                className={`relative p-2.5 sm:p-5 rounded-lg sm:rounded-xl border-2 transition-all duration-200 text-left hover:scale-[1.02] ${
                   isActive
-                    ? "bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
-                    : "bg-white/80 text-gray-700 border-slate-300 hover:border-red-400 hover:text-red-600"
+                    ? "bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
+                    : "bg-white text-gray-700 border-slate-300 hover:border-red-400 hover:text-red-600 hover:shadow-md"
                 }`}
               >
-                {prizeOption.label}
+                {/* Active checkmark badge */}
+                {isActive && (
+                  <div className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full flex items-center justify-center shadow-lg z-10">
+                    <Check className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+                  </div>
+                )}
+
+                {/* Card content */}
+                <div className="pr-5 sm:pr-6">
+                  <div
+                    className={`text-xs sm:text-base font-bold font-['Poppins'] mb-0.5 sm:mb-1 leading-tight ${
+                      isActive ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    {shortLabel}
+                  </div>
+                  {/* Full label as subtitle on desktop */}
+                  <div
+                    className={`text-[10px] sm:text-sm font-['Inter'] leading-tight ${
+                      isActive ? "text-white/80" : "text-gray-600"
+                    }`}
+                  >
+                    <span className="hidden sm:inline">{prizeOption.label}</span>
+                    <span className="sm:hidden line-clamp-1">{prizeOption.label.split(",")[0]}</span>
+                  </div>
+                </div>
               </button>
             );
           })}
@@ -256,16 +299,16 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         return (
           <div
             key={`${highlight.title}-${index}`}
-            className="relative flex items-start gap-3 sm:gap-4 p-3 sm:p-4 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+            className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
           >
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg">
-              <Icon className="w-5 h-5 text-white" />
+            <div className="absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg z-10">
+              <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div className="flex-1 relative z-10">
-              <h3 className="text-sm sm:text-lg font-bold text-white font-['Poppins'] mb-1 drop-shadow-md">
+            <div className="flex-1 relative z-10 pl-10 sm:pl-0">
+              <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">
                 {highlight.title}
               </h3>
-              <p className="text-xs sm:text-sm text-slate-200 font-['Inter'] leading-relaxed">
+              <p className="text-[10px] sm:text-sm text-slate-200 font-['Inter'] leading-tight sm:leading-relaxed">
                 {highlight.description}
               </p>
             </div>
@@ -297,9 +340,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 <h2 className="text-[24px] font-bold text-black font-['Poppins'] leading-tight">{prizeHeroHeading}</h2>
               </div>
               {prizeLabel && (
-                <p className="text-xs uppercase tracking-[0.35em] text-red-600 font-semibold">{prizeLabel}</p>
+                <p className="hidden sm:block text-xs uppercase tracking-[0.35em] text-red-600 font-semibold">
+                  {prizeLabel}
+                </p>
               )}
-              {prizeSubheading && <p className="text-xs text-gray-600 font-medium">{prizeSubheading}</p>}
+              {prizeSubheading && (
+                <p className="hidden sm:block text-xs text-gray-600 font-medium">{prizeSubheading}</p>
+              )}
             </div>
 
             {/* Mobile: Prize Gallery */}
@@ -307,12 +354,6 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               {renderPrizeToggle()}
               <div className="relative w-full max-w-sm mx-auto rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
-                <div className="absolute top-3 left-3 z-20">
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-lg border border-white/20 text-white">
-                    <span className="text-[9px] font-semibold uppercase tracking-wide">Prize Value</span>
-                    <span className="text-[11px] font-bold">{prizeValueLabel ?? "See Prize Options"}</span>
-                  </div>
-                </div>
                 <div className="absolute top-3 right-3 z-20">
                   <button
                     onClick={() => setIsSpecsModalOpen(true)}
@@ -383,10 +424,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 ))}
               </Swiper>
 
-              {resolvedHighlights.length > 0 && renderHighlights("grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4")}
+              {resolvedHighlights.length > 0 && renderHighlights("grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4")}
 
-              <div className="px-4">
-                <p className="text-sm sm:text-base text-gray-700 leading-relaxed font-['Inter'] text-center sm:text-left">
+              <div className="px-3 sm:px-4">
+                <p className="text-xs sm:text-base text-gray-700 leading-tight sm:leading-relaxed font-['Inter'] text-center sm:text-left">
                   {prizeSummary}
                 </p>
               </div>
@@ -413,7 +454,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               </div>
             ) : !isCompleted && daysRemaining > 0 ? (
               <div
-                className={`rounded-3xl p-6 shadow-2xl border-2 border-white/20 ${
+                className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 ${
                   currentMajorDraw?.status === "frozen"
                     ? "bg-gradient-to-br from-gray-600 to-gray-700"
                     : "bg-gradient-to-br from-red-600 to-red-700"
@@ -421,30 +462,40 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               >
                 {/* Frozen Draw Notice */}
                 {currentMajorDraw?.status === "frozen" && (
-                  <div className="mb-4 text-center">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20">
-                      <div className="text-white font-semibold text-sm">⏰ Entry Period Closed</div>
-                      <div className="text-white/80 text-xs mt-1">No new entries accepted for this draw</div>
+                  <div className="mb-3 text-center">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
+                      <div className="text-white font-semibold text-xs sm:text-sm">⏰ Entry Period Closed</div>
+                      <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                        No new entries accepted for this draw
+                      </div>
                     </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
-                    <div className="text-[24px] font-bold text-white">{timeLeft.days}</div>
-                    <div className="text-[12px] text-white/80 font-medium">Days</div>
+                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                    <div className="text-lg sm:text-2xl font-bold text-white">
+                      {String(timeLeft.days).padStart(2, "0")}
+                    </div>
+                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Days</div>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
-                    <div className="text-[24px] font-bold text-white">{timeLeft.hours}</div>
-                    <div className="text-[12px] text-white/80 font-medium">Hours</div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                    <div className="text-lg sm:text-2xl font-bold text-white">
+                      {String(timeLeft.hours).padStart(2, "0")}
+                    </div>
+                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Hours</div>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
-                    <div className="text-[24px] font-bold text-white">{timeLeft.minutes}</div>
-                    <div className="text-[12px] text-white/80 font-medium">Mins</div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                    <div className="text-lg sm:text-2xl font-bold text-white">
+                      {String(timeLeft.minutes).padStart(2, "0")}
+                    </div>
+                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Mins</div>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/20">
-                    <div className="text-[24px] font-bold text-white">{timeLeft.seconds}</div>
-                    <div className="text-[12px] text-white/80 font-medium">Secs</div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                    <div className="text-lg sm:text-2xl font-bold text-white">
+                      {String(timeLeft.seconds).padStart(2, "0")}
+                    </div>
+                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Secs</div>
                   </div>
                 </div>
 
@@ -588,12 +639,6 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="flex flex-col space-y-6">
               <div className="relative rounded-3xl shadow-[0_12px_48px_rgba(15,23,42,0.25)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
-                <div className="absolute top-4 left-4 z-20">
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-sm rounded-full px-3 py-1.5 sm:px-4 sm:py-2 shadow-lg border border-white/20 text-white">
-                    <span className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wide">Prize Value</span>
-                    <span className="text-[11px] sm:text-sm font-bold">{prizeValueLabel ?? "See Prize Options"}</span>
-                  </div>
-                </div>
                 <div className="absolute top-4 right-4 z-20">
                   <button
                     onClick={() => setIsSpecsModalOpen(true)}
@@ -693,38 +738,38 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </div>
               ) : !isCompleted && daysRemaining > 0 ? (
                 <div
-                  className={`rounded-3xl p-6 shadow-2xl border border-white/10 bg-gradient-to-br ${
-                    currentMajorDraw?.status === "frozen"
-                      ? "from-slate-600 to-slate-700"
-                      : "from-red-600 via-red-700 to-red-800"
+                  className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 bg-gradient-to-br ${
+                    currentMajorDraw?.status === "frozen" ? "from-slate-600 to-slate-700" : "from-red-600 to-red-700"
                   }`}
                 >
                   {currentMajorDraw?.status === "frozen" && (
-                    <div className="mb-6 text-center">
-                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                        <div className="text-white font-semibold text-base uppercase tracking-wide">
+                    <div className="mb-3 text-center">
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
+                        <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                           ⏰ Entry Period Closed
                         </div>
-                        <div className="text-white/80 text-sm mt-1">No new entries accepted for this draw</div>
+                        <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                          No new entries accepted for this draw
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                     {[
                       { label: "Days", value: timeLeft.days },
                       { label: "Hours", value: timeLeft.hours },
-                      { label: "Minutes", value: timeLeft.minutes },
-                      { label: "Seconds", value: timeLeft.seconds },
+                      { label: "Mins", value: timeLeft.minutes },
+                      { label: "Secs", value: timeLeft.seconds },
                     ].map((item) => (
                       <div
                         key={item.label}
-                        className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20 shadow-inner"
+                        className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
                       >
-                        <div className="text-3xl font-bold text-white font-['Poppins'] drop-shadow-sm">
-                          {item.value}
+                        <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
+                          {String(item.value).padStart(2, "0")}
                         </div>
-                        <div className="text-xs uppercase tracking-wide text-white/80 font-semibold">{item.label}</div>
+                        <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{item.label}</div>
                       </div>
                     ))}
                   </div>

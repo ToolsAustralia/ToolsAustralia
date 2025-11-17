@@ -559,7 +559,7 @@ export default function MembershipSection({
                               <div
                                 className={`${
                                   isTwoColumn ? "w-14 h-14 sm:w-16 sm:h-16" : "w-20 h-20 sm:w-24 sm:h-24"
-                                } relative`}
+                                } relative ${plan.id.includes("boss") ? "scale-110 sm:scale-110" : ""}`}
                               >
                                 <Image
                                   src={getPackageIcon(plan.id)!}
@@ -882,7 +882,7 @@ export default function MembershipSection({
                   {/* Package Icon - Centered at top */}
                   {getPackageIcon(plan.id) && (
                     <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 z-20">
-                      <div className="w-24 h-24 relative">
+                      <div className={`w-24 h-24 relative ${plan.id.includes("boss") ? "scale-110" : ""}`}>
                         <Image
                           src={getPackageIcon(plan.id)!}
                           alt={`${plan.name} icon`}

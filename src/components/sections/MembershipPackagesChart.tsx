@@ -364,7 +364,11 @@ export default function MembershipPackagesChart() {
                       {/* Y-Axis: Package Info (Left Side) */}
                       <div className="flex items-center gap-1.5 sm:gap-3 min-w-[100px] sm:min-w-[180px] lg:min-w-[220px] max-w-[100px] sm:max-w-[180px] lg:max-w-[220px]">
                         {/* Package Icon */}
-                        <div className="w-8 h-8 sm:w-12 sm:h-12 relative flex-shrink-0">
+                        <div
+                          className={`w-8 h-8 sm:w-12 sm:h-12 relative flex-shrink-0 ${
+                            pkg.id.includes("boss") ? "scale-110 sm:scale-110" : ""
+                          }`}
+                        >
                           <Image
                             src={pkg.icon}
                             alt={`${pkg.name} icon`}

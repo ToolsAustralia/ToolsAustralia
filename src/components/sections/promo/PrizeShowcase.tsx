@@ -8,6 +8,7 @@ import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
@@ -44,6 +45,15 @@ const resolveHighlightIcon = (iconName?: string): LucideIcon => {
   }
 
   return fallbackIcon;
+};
+
+// Helper function to get shortened label for prize cards
+const getShortLabel = (label: string): string => {
+  if (label.includes("Milwaukee")) return "Milwaukee + $5K";
+  if (label.includes("DeWalt")) return "DeWalt + $5K";
+  if (label.includes("Makita")) return "Makita + $5K";
+  if (label.includes("$10000")) return "$10K Cash";
+  return label;
 };
 
 export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
@@ -106,7 +116,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             {activePrize.heroHeading}
           </h2>
           {activePrize.heroSubheading && (
-            <p className="text-sm sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">
+            <p className="hidden sm:block text-sm sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">
               {activePrize.heroSubheading}
             </p>
           )}
@@ -118,23 +128,49 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
           {prizes.length > 1 && (
             <div className="mt-4 sm:mt-6">
-              <p className="text-xs sm:text-sm text-gray-500 font-['Inter'] uppercase tracking-wide mb-2">
-                Pick Your Toolset
+              <p className="text-xs sm:text-sm text-gray-500 font-['Inter'] uppercase tracking-wide mb-2 sm:mb-3 text-center">
+                Pick Your Toolset
               </p>
-              <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2 sm:pb-0 sm:flex-wrap sm:justify-center [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 {prizes.map((prizeOption) => {
                   const isActive = prizeOption.slug === activeSlug;
+                  const shortLabel = getShortLabel(prizeOption.label);
                   return (
                     <button
                       key={prizeOption.slug}
                       onClick={() => handleSelectPrize(prizeOption.slug)}
-                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 border whitespace-nowrap ${
+                      className={`relative p-2.5 sm:p-5 rounded-lg sm:rounded-xl border-2 transition-all duration-200 text-left hover:scale-[1.02] ${
                         isActive
-                          ? "bg-gradient-to-r from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
-                          : "bg-white/90 text-gray-700 border-slate-300 hover:border-red-400 hover:text-red-600"
+                          ? "bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
+                          : "bg-white text-gray-700 border-slate-300 hover:border-red-400 hover:text-red-600 hover:shadow-md"
                       }`}
                     >
-                      {prizeOption.label}
+                      {/* Active checkmark badge */}
+                      {isActive && (
+                        <div className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full flex items-center justify-center shadow-lg z-10">
+                          <Check className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+                        </div>
+                      )}
+
+                      {/* Card content */}
+                      <div className="pr-5 sm:pr-6">
+                        <div
+                          className={`text-xs sm:text-base font-bold font-['Poppins'] mb-0.5 sm:mb-1 leading-tight ${
+                            isActive ? "text-white" : "text-gray-900"
+                          }`}
+                        >
+                          {shortLabel}
+                        </div>
+                        {/* Full label as subtitle on desktop */}
+                        <div
+                          className={`text-[10px] sm:text-sm font-['Inter'] leading-tight ${
+                            isActive ? "text-white/80" : "text-gray-600"
+                          }`}
+                        >
+                          <span className="hidden sm:inline">{prizeOption.label}</span>
+                          <span className="sm:hidden line-clamp-1">{prizeOption.label.split(",")[0]}</span>
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
@@ -172,15 +208,6 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   </SwiperSlide>
                 ))}
               </Swiper>
-
-              <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20">
-                <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-sm rounded-full px-3 py-1.5 sm:px-4 sm:py-2 shadow-lg border border-white/20 text-white">
-                  <span className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wide">Prize Value</span>
-                  <span className="text-[11px] sm:text-sm font-bold">
-                    {activePrize.prizeValueLabel ?? "See Prize Options"}
-                  </span>
-                </div>
-              </div>
 
               <div className="absolute top-4 right-4 z-20">
                 <button
@@ -225,8 +252,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               ))}
             </Swiper>
 
-            <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-4 sm:p-6 shadow-2xl border-2 border-white/20">
-              <div className="grid grid-cols-4 gap-2 sm:gap-3">
+            <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20">
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                 {[
                   { label: "Days", value: timeLeft.days },
                   { label: "Hours", value: timeLeft.hours },
@@ -235,9 +262,9 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 ].map((unit) => (
                   <div
                     key={unit.label}
-                    className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-4 text-center border border-white/20"
+                    className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
                   >
-                    <div className="text-xl sm:text-[28px] font-bold text-white">
+                    <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(unit.value).padStart(2, "0")}
                     </div>
                     <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{unit.label}</div>
@@ -288,36 +315,38 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
           </div>
 
           <div className="space-y-3 sm:space-y-4 order-2 lg:order-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
               {highlights.map((highlight, index) => {
                 const Icon = resolveHighlightIcon(highlight.icon);
                 return (
                   <div
                     key={`${highlight.title}-${index}`}
-                    className="relative flex items-start gap-3 sm:gap-4 p-3 sm:p-4 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+                    className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-2xl pointer-events-none"></div>
-                    <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-xl"></div>
-                      <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white relative z-10" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
+                    <div className="absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg z-10">
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-lg sm:rounded-xl"></div>
+                      <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white relative z-10" />
                     </div>
-                    <div className="flex-1 relative z-10">
-                      <h3 className="text-base sm:text-lg font-bold text-white font-['Poppins'] mb-1 drop-shadow-md">
+                    <div className="flex-1 relative z-10 pl-10 sm:pl-0">
+                      <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">
                         {highlight.title}
                       </h3>
-                      <p className="text-sm sm:text-base text-slate-200 font-['Inter']">{highlight.description}</p>
+                      <p className="text-[10px] sm:text-base text-slate-200 font-['Inter'] leading-tight sm:leading-relaxed">
+                        {highlight.description}
+                      </p>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            <div className="relative bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-4 sm:p-6 border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-2xl pointer-events-none"></div>
-              <h3 className="text-base sm:text-lg font-bold text-white font-['Poppins'] mb-2 relative z-10 drop-shadow-md">
+            <div className="relative bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+              <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
+              <h3 className="text-sm sm:text-lg font-bold text-white font-['Poppins'] mb-1.5 sm:mb-2 relative z-10 drop-shadow-md">
                 Prize Details
               </h3>
-              <p className="text-sm sm:text-base text-slate-200 font-['Inter'] leading-relaxed relative z-10">
+              <p className="text-xs sm:text-base text-slate-200 font-['Inter'] leading-tight sm:leading-relaxed relative z-10">
                 {activePrize.detailedDescription}
               </p>
             </div>

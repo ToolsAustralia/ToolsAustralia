@@ -43,12 +43,12 @@ export interface PrizeCatalogEntry {
   specSections: PrizeSpecSection[];
 }
 
-export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome";
+export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "cash-prize";
 
 export const SIDCHROME_SCMT11402_TOOL_KIT: PrizeSpecItem = {
-  name: "Sidchrome SCMT11402 281 Piece Tool Kit & Storage",
+  name: "Sidchrome SCMT11402 356 Piece Tool Kit & Storage",
   description:
-    "Comprehensive Sidchrome 281-piece tool kit housed in a heavy-duty roller cabinet with full-extension drawers, foam inlays, and dedicated hand tools for every trade task.",
+    "Comprehensive Sidchrome 356-piece tool kit housed in a heavy-duty roller cabinet with full-extension drawers, foam inlays, and dedicated hand tools for every trade task.",
   specifications: [
     "Includes Sidchrome sockets, spanners, screwdrivers, pliers & precision accessories",
     "Lockable roller cabinet with side locker, peg board, and premium drawer liners",
@@ -612,6 +612,290 @@ export const DEWALT_SIDCHROME_STORAGE: PrizeSpecItem[] = [
   },
   SIDCHROME_SCMT11402_TOOL_KIT,
 ];
+
+export const MAKITA_SIDCHROME_POWER_TOOLS: PrizeSpecItem[] = [
+  {
+    name: "Makita DHP486Z - 18V Brushless Heavy Duty Hammer Driver Drill",
+    model: "DHP486Z",
+    description:
+      "Massive drilling capacity with 152mm hole saw & 50mm auger bit capacity. Compact overall length only 178mm for use in narrow work spaces. High powered Brushless Motor produces 141Nm peak torque. High durability aluminium gear housing. Mechanical 2 speed gearing with all metal gear construction.",
+    specifications: [
+      "Voltage: 18V",
+      "Chuck Type: 13mm",
+      "Peak Torque: 141 Nm",
+      "Length: 178mm",
+      "Drilling Capacity - Hole Saw: 152mm",
+      "Drilling Capacity - Auger Bit: 50mm",
+      "Mechanical 2 speed gearing",
+      "All metal gear construction",
+      "Aluminium gear housing for durability",
+    ],
+  },
+  {
+    name: "Makita DTD173Z - 18V Brushless 4-Stage Impact Driver",
+    model: "DTD173Z",
+    description:
+      "Optimised battery layout, moves center of gravity in line with the grip for enhanced control. Maximum fastening torque of 180Nm for heavy duty applications. 4 stage speed selection & 4 Assist mode variations for optimised speed control. Compact design at only 111mm in length for comfortable use in tight spaces. Quick switch button for single handed mode selection. Enhanced bit holder provides reduced bit wobble.",
+    specifications: [
+      "Voltage: 18V",
+      "Max Fastening Torque: 180 Nm",
+      "Length: 111mm",
+      "4 Stage speed selection",
+      "4 Assist mode variations",
+      "Quick switch button for single handed mode",
+      "Enhanced bit holder reduces wobble",
+      "Optimised battery layout for balance",
+    ],
+  },
+  {
+    name: "Makita DGA508Z - 18V Mobile Brushless 125mm Paddle Switch Angle Grinder",
+    model: "DGA508Z",
+    description:
+      "Electronic brake, kickback detection, anti-restart and soft start. Automatic Torque Drive increases torque to power through any cut. Extreme performance with 8,500rpm no load speed. XPT technology that protects against dust & moisture. Electronic current limiter.",
+    specifications: [
+      "Voltage: 18V",
+      "Disc Diameter: 125mm",
+      "No Load Speed: 8,500 rpm",
+      "Electronic brake",
+      "Kickback detection",
+      "Anti-restart protection",
+      "Soft start technology",
+      "Automatic Torque Drive",
+      "XPT technology (dust & moisture protection)",
+      "Electronic current limiter",
+    ],
+  },
+  {
+    name: "Makita DHR242Z - 18V Mobile Brushless 24mm SDS Plus Rotary Hammer",
+    model: "DHR242Z",
+    description:
+      "3 Mode operation: hammer only, rotation only, rotation & hammer. Unique rubber joint suppresses vibration to battery. 2.0j of impact energy. Compatible with DX06 optional dust extractor.",
+    specifications: [
+      "Voltage: 18V",
+      "Chuck Type: SDS Plus",
+      "Impact Energy: 2.0 J",
+      "3 Mode operation (hammer, rotation, rotation & hammer)",
+      "Unique rubber joint for vibration suppression",
+      "Compatible with DX06 dust extractor",
+    ],
+  },
+  {
+    name: "Makita DHS680Z - 18V Mobile Brushless 165mm Circular Saw",
+    model: "DHS680Z",
+    description:
+      "Max cut capacity of 57mm with up to 50° bevel capacity. Automatic Torque Drive increases torque to power through any cut. High cutting performance with up to 5,000rpm no load speed. Electric brake rapidly slows the blade for added safety. Blower function blows dust away from cut line for greater visibility.",
+    specifications: [
+      "Voltage: 18V",
+      "Blade Diameter: 165mm",
+      "Max Cut Capacity: 57mm",
+      "Bevel Capacity: Up to 50°",
+      "No Load Speed: 5,000 rpm",
+      "Automatic Torque Drive",
+      "Electric brake",
+      "Blower function for dust clearance",
+    ],
+  },
+  {
+    name: "Makita DJR187Z - 18V Mobile Brushless Recipro Saw",
+    model: "DJR187Z",
+    description:
+      "32mm stroke with a cutting capacity of 255mm in wood. Newly designed vertical crank mechanism reduces vibration. High performance 3,000spm no load speed. Rafter hanging hook for added convenience. XPT technology that protects against dust & moisture.",
+    specifications: [
+      "Voltage: 18V",
+      "Stroke: 32mm",
+      "Cutting Capacity - Wood: 255mm",
+      "No Load Speed: 3,000 spm",
+      "Vertical crank mechanism reduces vibration",
+      "Rafter hanging hook",
+      "XPT technology (dust & moisture protection)",
+    ],
+  },
+  {
+    name: "Makita DTM52ZX3 - 18V Brushless Multi-Tool",
+    model: "DTM52ZX3",
+    description:
+      "Starlock Max accessory mounting system designed for heavy duty applications. Anti-Vibration Technology (AVT) with a counterbalance system significantly reducing vibration. Increased cutting efficiency with improved oscillation angle of 3.6° for rapid cutting speeds. Variable speed control dial for adjusting the speed to suit the application. Tool-less lever lock system allows for quick install and removal of accessories.",
+    specifications: [
+      "Voltage: 18V",
+      "Mounting System: Starlock Max",
+      "Oscillation Angle: 3.6°",
+      "Anti-Vibration Technology (AVT)",
+      "Counterbalance system",
+      "Variable speed control dial",
+      "Tool-less lever lock system",
+    ],
+  },
+  {
+    name: 'Makita DTW700Z - 18V Brushless 1/2" Impact Wrench',
+    model: "DTW700Z",
+    description:
+      "Compact design for comfortable handling at only 170mm in length. 4 Stage power selection for optimum rpm and fastening torque. Maximum nut busting torque of 1,000Nm with 700Nm max. fastening. Unique rubber joint suppress vibration to battery terminals. Forward & reverse auto stop function, optimised for fastening applications.",
+    specifications: [
+      "Voltage: 18V",
+      'Anvil Size: 1/2"',
+      "Length: 170mm",
+      "Max Fastening Torque: 700 Nm",
+      "Max Nut Busting Torque: 1,000 Nm",
+      "4 Stage power selection",
+      "Unique rubber joint for vibration suppression",
+      "Forward & reverse auto stop function",
+    ],
+  },
+  {
+    name: "Makita DBO180Z - 18V Mobile Random Orbital Sander",
+    model: "DBO180Z",
+    description:
+      "Three speed settings (7,000/9,500/11,000 OPM) engineered for faster material removal. Large 2.8mm random orbit action engineered for fast sanding and swirl-free finish. Ergonomically designed body and grip for increased operator comfort. Uses quick-change 125mm hook-and-loop abrasive paper. Dust Box provides efficient through-the-pad dust collection for a cleaner work environment.",
+    specifications: [
+      "Voltage: 18V",
+      "Pad Size: 125mm",
+      "Speed Settings: 7,000 / 9,500 / 11,000 OPM",
+      "Orbit Size: 2.8mm",
+      "Quick-change 125mm hook-and-loop abrasive paper",
+      "Dust Box for through-the-pad dust collection",
+      "Ergonomically designed body and grip",
+    ],
+  },
+  {
+    name: "Makita DCL283ZBX1 - 18V Brushless Stick Vacuum",
+    model: "DCL283ZBX1",
+    description:
+      "Weighs only 1.6kg with battery for high efficiency and ease of use. HEPA filter provides high filtration rate of 99.97%. High performance 17.5kPa max sealed suction. Easy operation with trigger or slide lock on switch. 730mL Capsule collection capacity.",
+    specifications: [
+      "Voltage: 18V",
+      "Weight (with battery): 1.6kg",
+      "Max Sealed Suction: 17.5 kPa",
+      "Collection Capacity: 730mL",
+      "HEPA filter (99.97% filtration rate)",
+      "Trigger or slide lock on switch",
+    ],
+  },
+  {
+    name: "Makita DJV184Z - 18V Brushless Jigsaw",
+    model: "DJV184Z",
+    description:
+      "Constant speed control maintains cutting speed under load. Tool-less blade change for quick and convenient blade changes. 3 orbital settings plus straight cutting deliver faster and more accurate cuts in a variety of materials. Variable control dial enables user to match the speed to the application. Soft No Load feature automatically reduces SPM for more accurate cutting starts.",
+    specifications: [
+      "Voltage: 18V",
+      "Constant speed control",
+      "Tool-less blade change",
+      "3 orbital settings plus straight cutting",
+      "Variable control dial",
+      "Soft No Load feature",
+    ],
+  },
+  {
+    name: "Makita DKP181Z - 18V Brushless AWS* 82mm Planer",
+    model: "DKP181Z",
+    description:
+      "High powered motor allows maximum 3mm cutting depth. Auto-start Wireless System (AWS) for on demand dust extraction*. 12,000rpm no load speed with Automatic Torque Drive performance. Left or right side chip ejection. Electric brake & foot on base plate protect workpiece from damage.",
+    specifications: [
+      "Voltage: 18V",
+      "Planer Width: 82mm",
+      "Max Cutting Depth: 3mm",
+      "No Load Speed: 12,000 rpm",
+      "Auto-start Wireless System (AWS) for dust extraction",
+      "Automatic Torque Drive",
+      "Left or right side chip ejection",
+      "Electric brake",
+      "Foot on base plate protects workpiece",
+    ],
+  },
+  {
+    name: "Makita DUB185Z - 18V Blower",
+    model: "DUB185Z",
+    description:
+      "Increased air volume with 3.2m³/min. 3 stage air volume settings & variable speed trigger for maximum control. Wind speeds of up to 352km/h for higher blowing efficiency. Ultra-lightweight at just 2.1kg.",
+    specifications: [
+      "Voltage: 18V",
+      "Air Volume: 3.2 m³/min",
+      "Max Wind Speed: 352 km/h",
+      "Weight: 2.1kg",
+      "3 stage air volume settings",
+      "Variable speed trigger",
+    ],
+  },
+  {
+    name: "Makita MR002GZ - 40V Max Bluetooth Jobsite Radio",
+    model: "MR002GZ",
+    description:
+      "Audio Modes: Bluetooth, AM & FM radio frequencies. High quality sound with 2 large 89mm speakers. Durable design with an IP65 rating protection against dust and water. Powered by 40V Max, 18V, 12V Max or AC Power. Runtime up to 27.5 hours with an optional 40V Max 4.0Ah battery.",
+    specifications: [
+      "Voltage: 40V Max / 18V / 12V Max / AC",
+      "Audio Modes: Bluetooth, AM, FM",
+      "Speakers: 2 x 89mm",
+      "IP Rating: IP65",
+      "Runtime: Up to 27.5 hours (with 40V Max 4.0Ah battery)",
+    ],
+  },
+  {
+    name: "Makita DML812 - 18V LED Long Distance Flashlight",
+    model: "DML812",
+    description:
+      "Long beam distance lights up objects up to 640 metres away. 4 output modes; spot light, flood light, spot/flood and strobe. High brightness neutral white LED's provide a maximum 1,250lm. Continuous runtime up to 7 hours with a 5.0Ah in spotlight mode.",
+    specifications: [
+      "Voltage: 18V",
+      "Max Beam Distance: 640 metres",
+      "Max Brightness: 1,250 lm",
+      "Output Modes: Spot light, flood light, spot/flood, strobe",
+      "Runtime: Up to 7 hours (with 5.0Ah battery in spotlight mode)",
+    ],
+  },
+];
+
+export const MAKITA_SIDCHROME_POWER_SYSTEM: PrizeSpecItem[] = [
+  {
+    name: "Makita BL1850B - 4x 18V Li-Ion Battery 5.0Ah",
+    model: "BL1850B",
+    description:
+      "Fuel gauge indicator, displays charge remaining on battery in four stages. Built in memory chip communicates the usage history with the charger. Built in shock absorbers protect the cells from jobsite conditions. High energy cells pack more power per cell to reduce number of cells and overall weight. Large release button for easy removal from the tool. Built in air vents and wall cools the battery cells evenly whilst blocking damaging debris. 16 contact terminals provide consistent power and firm hold in any environment.",
+    specifications: [
+      "Capacity: 5.0Ah",
+      "Voltage: 18V",
+      "Quantity: 4 batteries",
+      "Fuel gauge indicator (4 stages)",
+      "Built in memory chip",
+      "Shock absorbers",
+      "High energy cells",
+      "Large release button",
+      "Built in air vents for cooling",
+      "16 contact terminals",
+    ],
+  },
+  {
+    name: "Makita DC18RD - Same Time Dual Port Rapid Charger",
+    model: "DC18RD",
+    description:
+      "Fast charging - charges 2 x 3.0Ah Lithium-Ion batteries at the same time in only 22 minutes. Built-in CPU - gathers information from the battery's memory chip to determine optimum charging method. Forced air cooling fan - cools the battery to minimise charging time. LED charging display. Full charge sound alert.",
+    specifications: [
+      "Charging Type: Dual Port Rapid",
+      "Charging Time: 22 minutes (for 2 x 3.0Ah batteries)",
+      "Built-in CPU for optimum charging",
+      "Forced air cooling fan",
+      "LED charging display",
+      "Full charge sound alert",
+    ],
+  },
+];
+
+export const MAKITA_SIDCHROME_STORAGE: PrizeSpecItem[] = [
+  {
+    name: "Makita 2x 199936-9 - LXT Tool Carry Bag - 600mm",
+    model: "199936-9",
+    description:
+      "Wide deep main pocket provides quick tool location and easy access. Adjustable heavy-duty shoulder belt makes lifting more comfortable. Metal hooks at the ends to unfasten the belt when not needed. 2 internal pocket + holster. 6 external pockets for quick access.",
+    specifications: [
+      "Bag Size: 600mm",
+      "Quantity: 2 bags",
+      "Main pocket design",
+      "Adjustable heavy-duty shoulder belt",
+      "Metal hooks for belt",
+      "2 internal pockets + holster",
+      "6 external pockets",
+    ],
+  },
+  SIDCHROME_SCMT11402_TOOL_KIT,
+];
 /**
  * Prize catalog entries are the single source of truth for prize imagery/copy.
  * Add new prize packs here – frontend components resolve everything dynamically.
@@ -619,23 +903,24 @@ export const DEWALT_SIDCHROME_STORAGE: PrizeSpecItem[] = [
 export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   {
     slug: "milwaukee-sidchrome",
-    label: "Milwaukee + Sidchrome SCMT11402",
-    heroHeading: "Milwaukee 18V FUEL™ Mega Pack + Sidchrome SCMT11402",
-    heroSubheading: "13-skin Milwaukee arsenal backed by the Sidchrome SCMT11402 281-piece workshop tower.",
+    label: "Sidchrome Toolbox, Milwaukee Power Tool Kit, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, Milwaukee Power Tool Kit, $5000 cash",
+    heroSubheading:
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, and the Sidchrome SCMT11402 281-piece storage cabinet in one trade-ready prize.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Sidchrome SCMT11402 281-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$35,000+ Value",
     gallery: [
       { src: "/images/majordraws/prize1/Milwaukee AI Giveaway Photo.png", alt: "Milwaukee tool collection overview" },
-      { src: "/images/majordraws/prize1/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
       { src: "/images/majordraws/prize1/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
+      { src: "/images/majordraws/prize1/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit and storage" },
+      { src: "/images/majordraws/prize1/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
       { src: "/images/majordraws/prize1/Milwaukee 18V Charging Station.webp", alt: "Milwaukee charging station" },
       { src: "/images/majordraws/prize1/Milwaukee 5_ Grinder.webp", alt: "Milwaukee grinder" },
       { src: "/images/majordraws/prize1/Milwaukee 5.0AH battery.webp", alt: "Milwaukee 5.0Ah battery" },
       { src: "/images/majordraws/prize1/Milwaukee 6.0AH battery.webp", alt: "Milwaukee 6.0Ah battery" },
-      { src: "/images/majordraws/prize1/Sidchrome SCMT11402.jpg", alt: "Sidchrome 281 piece tool kit and storage" },
       { src: "/images/majordraws/prize1/Milwaukee Blowgun.webp", alt: "Milwaukee blowgun" },
       { src: "/images/majordraws/prize1/Milwaukee Carry Bag.webp", alt: "Milwaukee carry bag" },
       { src: "/images/majordraws/prize1/Milwaukee Chainsaw.webp", alt: "Milwaukee pruning saw" },
@@ -653,7 +938,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
       {
         icon: "Package",
-        title: "Sidchrome 281pc Kit",
+        title: "Sidchrome 356pc Kit",
         description: "Complete hand-tool cabinet for workshop builds.",
       },
       {
@@ -683,21 +968,24 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       {
         id: "storage",
         label: "Workshop Storage & Hand Tools",
-        summary: "Sidchrome SCMT11402 roller cabinet loaded with 281 precision hand tools and foam inlays.",
+        summary: "Sidchrome SCMT11402 roller cabinet loaded with 356 precision hand tools and foam inlays.",
         items: MILWAUKEE_WORKSHOP_STORAGE,
       },
     ],
   },
   {
     slug: "dewalt-sidchrome",
-    label: "DeWalt FlexVolt + Sidchrome SCMT11402",
-    heroHeading: "DeWalt FlexVolt + Sidchrome SCMT11402",
-    heroSubheading: "Mix-and-match FlexVolt brute force with a 281pc Sidchrome arsenal.",
-    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, premium storage, and a 281-piece Sidchrome toolkit.",
+    label: "Sidchrome Toolbox, DeWalt Power Tool Kit, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, DeWalt Power Tool Kit, $5000 cash",
+    heroSubheading:
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with Sidchrome SCMT11402 356-piece toolkit plus $5000 cash.",
+    summary:
+      "Heavy-duty DeWalt FlexVolt cordless lineup, premium storage, and a 356-piece Sidchrome toolkit plus $5000 cash.",
     detailedDescription:
-      "Build your dream site setup with DeWalt’s FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using TSTAK storage, wheeled tool bags, and the Sidchrome 281-piece professional hand-tool kit.",
+      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using TSTAK storage, wheeled tool bags, and the Sidchrome 356-piece professional hand-tool kit.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
+      { src: "/images/majordraws/prize2/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
       { src: "/images/majordraws/prize2/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
       { src: "/images/majordraws/prize2/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },
       { src: "/images/majordraws/prize2/Dewalt Bag 2.jpeg", alt: "DeWalt wheeled tool bag interior" },
@@ -730,7 +1018,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { src: "/images/majordraws/prize2/Dewalt Stax Kit 2.jpeg", alt: "DeWalt TSTAK storage stack" },
       { src: "/images/majordraws/prize2/Dewalt Stax Kit 3.jpeg", alt: "Loaded DeWalt TSTAK storage" },
       { src: "/images/majordraws/prize2/Dewalt Vacuum.jpeg", alt: "DeWalt XR stick vacuum" },
-      { src: "/images/majordraws/prize2/Sidchrome SCMT11402.jpg", alt: "Sidchrome 281 piece tool kit" },
     ],
     highlights: [
       {
@@ -738,7 +1025,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "FlexVolt Muscle",
         description: "54V tools for circular, rotary, and reciprocating power.",
       },
-      { icon: "Package", title: "Sidchrome 281pc Kit", description: "Complete hand-tool cabinet for workshop builds." },
+      { icon: "Package", title: "Sidchrome 356pc Kit", description: "Complete hand-tool cabinet for workshop builds." },
       {
         icon: "Battery",
         title: "High-Capacity Power",
@@ -764,6 +1051,134 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         label: "Storage & Hand Tools",
         summary: "Heavy-duty transport, organisation, and comprehensive Sidchrome hand-tool coverage.",
         items: DEWALT_SIDCHROME_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "makita-sidchrome",
+    label: "Sidchrome Toolbox, Makita Power Tool Kit, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, Makita Power Tool Kit, $5000 cash",
+    heroSubheading:
+      "Complete Makita 18V LXT brushless professional toolkit with Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+    summary:
+      "Makita 18V LXT brushless power tools, advanced battery ecosystem, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+    detailedDescription:
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage. Plus, take home $5000 cold hard cash.",
+    prizeValueLabel: "$30,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/prize3/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
+      { src: "/images/majordraws/prize2/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
+      { src: "/images/majordraws/prize3/dhp486z-001.jpg", alt: "Makita DHP486Z hammer drill" },
+      { src: "/images/majordraws/prize3/dtd173z-001.jpg", alt: "Makita DTD173Z impact driver" },
+      { src: "/images/majordraws/prize3/dga508z-001.jpg", alt: "Makita DGA508Z angle grinder" },
+      { src: "/images/majordraws/prize3/dhr242z-001.jpg", alt: "Makita DHR242Z rotary hammer" },
+      { src: "/images/majordraws/prize3/dhs680z-001.jpg", alt: "Makita DHS680Z circular saw" },
+      { src: "/images/majordraws/prize3/djr187z-001.jpg", alt: "Makita DJR187Z reciprocating saw" },
+      { src: "/images/majordraws/prize3/dtm52zx3-001.jpg", alt: "Makita DTM52ZX3 multi-tool" },
+      { src: "/images/majordraws/prize3/dtw700z-001.jpg", alt: "Makita DTW700Z impact wrench" },
+      { src: "/images/majordraws/prize3/dbo180z-001.jpg", alt: "Makita DBO180Z orbital sander" },
+      { src: "/images/majordraws/prize3/dcl283zbx1-001.jpg", alt: "Makita DCL283ZBX1 stick vacuum" },
+      { src: "/images/majordraws/prize3/djv184z-001.jpg", alt: "Makita DJV184Z jigsaw" },
+      { src: "/images/majordraws/prize3/dkp181z-001.jpg", alt: "Makita DKP181Z planer" },
+      { src: "/images/majordraws/prize3/dub185z-001.jpg", alt: "Makita DUB185Z blower" },
+      { src: "/images/majordraws/prize3/mr002gz-001.jpg", alt: "Makita MR002GZ jobsite radio" },
+      { src: "/images/majordraws/prize3/dml812-002.jpg", alt: "Makita DML812 flashlight" },
+      { src: "/images/majordraws/prize3/bl1850b-001.jpg", alt: "Makita BL1850B batteries" },
+      { src: "/images/majordraws/prize3/dc18rd-001.jpg", alt: "Makita DC18RD charger" },
+      { src: "/images/majordraws/prize3/199936-9-001.jpg", alt: "Makita tool carry bags" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
+      {
+        icon: "Package",
+        title: "Sidchrome 356pc Kit",
+        description: "Complete hand-tool cabinet for workshop builds.",
+      },
+      {
+        icon: "Battery",
+        title: "LXT Power System",
+        description: "High-capacity 5.0Ah packs with rapid dual-port charging.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Jobsite Gear",
+        summary:
+          "Complete Makita 18V LXT brushless tool range covering drilling, fastening, cutting, sanding, dust control, and lighting.",
+        items: MAKITA_SIDCHROME_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "LXT 5.0Ah batteries and rapid dual-port charger keep every tool ready.",
+        items: MAKITA_SIDCHROME_POWER_SYSTEM,
+      },
+      {
+        id: "storage",
+        label: "Storage & Hand Tools",
+        summary: "Heavy-duty transport bags, organisation, and comprehensive Sidchrome hand-tool coverage.",
+        items: MAKITA_SIDCHROME_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "cash-prize",
+    label: "$10000 cold hard cash",
+    heroHeading: "$10000 cold hard cash",
+    heroSubheading: "Pure cash prize - no tools, no hassle, just $10,000 straight to your bank account.",
+    summary: "$10,000 cold hard cash prize - take the money and run.",
+    detailedDescription:
+      "Win $10,000 in cold hard cash! No tools, no equipment, no strings attached. Just a straight $10,000 cash prize deposited directly to your bank account. Use it however you want - pay bills, take a vacation, invest in your future, or buy whatever you need. The choice is yours.",
+    prizeValueLabel: "$10,000 Cash",
+    gallery: [{ src: "/images/grand-draw.jpg", alt: "$10,000 cash prize" }],
+    highlights: [
+      {
+        icon: "DollarSign",
+        title: "$10,000 Cash",
+        description: "Pure cash prize - no tools included.",
+      },
+      {
+        icon: "Banknote",
+        title: "Direct Deposit",
+        description: "Money goes straight to your bank account.",
+      },
+      {
+        icon: "Gift",
+        title: "Spend It Anywhere",
+        description: "Use the cash however you want.",
+      },
+      {
+        icon: "CreditCard",
+        title: "No Restrictions",
+        description: "Complete freedom to use as you please.",
+      },
+    ],
+    specSections: [
+      {
+        id: "cash-prize",
+        label: "Cash Prize Details",
+        summary: "Simple cash prize with no equipment or tools included.",
+        items: [
+          {
+            name: "$10,000 Cash Prize",
+            description:
+              "A straight $10,000 cash prize with no tools or equipment included. The money will be deposited directly to your bank account upon verification.",
+            specifications: [
+              "Prize Amount: $10,000 AUD",
+              "Payment Method: Direct bank transfer",
+              "Verification: Standard winner verification process required",
+              "Tax: Winner responsible for applicable taxes",
+              "No tools or equipment included",
+              "Pure cash prize only",
+            ],
+          },
+        ],
       },
     ],
   },

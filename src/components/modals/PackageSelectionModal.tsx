@@ -670,7 +670,11 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {/* Package Icon - Centered at top */}
                 {getPackageIcon(plan.id) && (
                   <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 z-20">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 relative">
+                    <div
+                      className={`w-12 h-12 sm:w-16 sm:h-16 relative ${
+                        plan.id.includes("boss") ? "scale-110 sm:scale-110" : ""
+                      }`}
+                    >
                       <Image
                         src={getPackageIcon(plan.id)!}
                         alt={`${plan.name} icon`}
