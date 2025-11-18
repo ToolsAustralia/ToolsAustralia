@@ -48,8 +48,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Tradie Plus Package",
     description: "Enhance your Tradie membership with bonus entries and extended benefits",
     category: "subscription-plus",
-    originalPrice: 15,
-    discountedPrice: 9.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 15
+    discountedPrice: 0.5, // TEST PRICE - Original: 9.99
     discountPercentage: 33,
     entriesCount: 30,
     shopDiscountPercent: 5,
@@ -79,8 +79,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Foreman Plus Package",
     description: "Supercharge your Foreman membership with extra entries and premium benefits",
     category: "subscription-plus",
-    originalPrice: 25,
-    discountedPrice: 19.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 25
+    discountedPrice: 0.5, // TEST PRICE - Original: 19.99
     discountPercentage: 20,
     entriesCount: 80,
     shopDiscountPercent: 10,
@@ -110,8 +110,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Boss Plus Package",
     description: "Ultimate Boss enhancement with maximum entries and exclusive benefits",
     category: "subscription-plus",
-    originalPrice: 50,
-    discountedPrice: 39.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 50
+    discountedPrice: 0.5, // TEST PRICE - Original: 39.99
     discountPercentage: 20,
     entriesCount: 200,
     shopDiscountPercent: 20,
@@ -143,8 +143,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Apprentice Plus Pack",
     description: "Boost your Apprentice Pack with additional entries and extended benefits",
     category: "one-time-plus",
-    originalPrice: 12.5,
-    discountedPrice: 12.5,
+    originalPrice: 0.5, // TEST PRICE - Original: 12.5
+    discountedPrice: 0.5, // TEST PRICE - Original: 12.5
     discountPercentage: 20,
     entriesCount: 6,
     shopDiscountPercent: 0,
@@ -173,8 +173,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Tradie Plus Pack",
     description: "Enhance your Tradie Pack with bonus entries and extended access",
     category: "one-time-plus",
-    originalPrice: 24.5,
-    discountedPrice: 24.5,
+    originalPrice: 0.5, // TEST PRICE - Original: 24.5
+    discountedPrice: 0.5, // TEST PRICE - Original: 24.5
     discountPercentage: 18,
     entriesCount: 30,
     shopDiscountPercent: 0,
@@ -203,8 +203,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Foreman Plus Pack",
     description: "Power up your Foreman Pack with maximum entries and premium benefits",
     category: "one-time-plus",
-    originalPrice: 49.99,
-    discountedPrice: 49.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 49.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 49.99
     discountPercentage: 0,
     entriesCount: 60,
     shopDiscountPercent: 0,
@@ -233,8 +233,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Boss Plus Pack",
     description: "Ultimate enhancement for your Boss Pack with massive entries",
     category: "one-time-plus",
-    originalPrice: 124.99,
-    discountedPrice: 124.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 124.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 124.99
     discountPercentage: 0,
     entriesCount: 300,
     shopDiscountPercent: 0,
@@ -263,8 +263,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Power Plus Pack",
     description: "Maximum power enhancement for your Power Pack with elite entries",
     category: "one-time-plus",
-    originalPrice: 249.99,
-    discountedPrice: 249.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 249.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 249.99
     discountPercentage: 0,
     entriesCount: 1200,
     shopDiscountPercent: 0,
@@ -295,8 +295,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Additional Apprentice Pack Upgrade",
     description: "Get additional entries with your Apprentice Pack purchase",
     category: "additional-upgrade",
-    originalPrice: 12.5,
-    discountedPrice: 12.5,
+    originalPrice: 0.5, // TEST PRICE - Original: 12.5
+    discountedPrice: 0.5, // TEST PRICE - Original: 12.5
     discountPercentage: 0,
     entriesCount: 20,
     shopDiscountPercent: 0,
@@ -325,8 +325,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Additional Tradie Pack Upgrade",
     description: "Enhance your Tradie Pack with additional entries",
     category: "additional-upgrade",
-    originalPrice: 24.99,
-    discountedPrice: 24.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 24.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 24.99
     discountPercentage: 0,
     entriesCount: 60,
     shopDiscountPercent: 0,
@@ -355,8 +355,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Additional Foreman Pack Upgrade",
     description: "Power up your Foreman Pack with bonus entries",
     category: "additional-upgrade",
-    originalPrice: 49.99,
-    discountedPrice: 49.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 49.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 49.99
     discountPercentage: 0,
     entriesCount: 200,
     shopDiscountPercent: 0,
@@ -385,8 +385,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Additional Boss Pack Upgrade",
     description: "Ultimate enhancement for your Boss Pack",
     category: "additional-upgrade",
-    originalPrice: 124.99,
-    discountedPrice: 124.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 124.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 124.99
     discountPercentage: 0,
     entriesCount: 800,
     shopDiscountPercent: 0,
@@ -415,8 +415,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Additional Power Pack Upgrade",
     description: "Maximum power enhancement for your Power Pack",
     category: "additional-upgrade",
-    originalPrice: 249.99,
-    discountedPrice: 249.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 249.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 249.99
     discountPercentage: 0,
     entriesCount: 2400,
     shopDiscountPercent: 0,
@@ -446,8 +446,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 1 Upgrade",
     description: "Get 10 Free Entries with 12 Hours Access to Partner Discounts!",
     category: "one-time-plus",
-    originalPrice: 2.99,
-    discountedPrice: 2.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 2.99
+    discountedPrice: 0.5, // TEST PRICE - Original: 2.99
     discountPercentage: 0,
     entriesCount: 10,
     shopDiscountPercent: 0,
@@ -476,8 +476,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 2 Upgrade",
     description: "Get 10 Free Entries with 6 Hours Access to Partner Discounts!",
     category: "one-time-plus",
-    originalPrice: 2.5,
-    discountedPrice: 2.5,
+    originalPrice: 0.5, // TEST PRICE - Original: 2.5
+    discountedPrice: 0.5, // TEST PRICE - Original: 2.5
     discountPercentage: 0,
     entriesCount: 10,
     shopDiscountPercent: 0,
@@ -506,8 +506,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 3 Upgrade",
     description: "Get 20 Free Entries with 12 Hours Access to Partner Discounts!",
     category: "one-time-plus",
-    originalPrice: 5.0,
-    discountedPrice: 4.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 5.0
+    discountedPrice: 0.5, // TEST PRICE - Original: 4.99
     discountPercentage: 0,
     entriesCount: 20,
     shopDiscountPercent: 0,
@@ -536,8 +536,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 4 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
-    originalPrice: 50,
-    discountedPrice: 9.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 50
+    discountedPrice: 0.5, // TEST PRICE - Original: 9.99
     discountPercentage: 80,
     entriesCount: 50,
     shopDiscountPercent: 5,
@@ -561,8 +561,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 5 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
-    originalPrice: 100,
-    discountedPrice: 19.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 100
+    discountedPrice: 0.5, // TEST PRICE - Original: 19.99
     discountPercentage: 80,
     entriesCount: 100,
     shopDiscountPercent: 5,
@@ -586,8 +586,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 6 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
-    originalPrice: 200,
-    discountedPrice: 49.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 200
+    discountedPrice: 0.5, // TEST PRICE - Original: 49.99
     discountPercentage: 75,
     entriesCount: 200,
     shopDiscountPercent: 10,
@@ -611,8 +611,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 7 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
-    originalPrice: 500,
-    discountedPrice: 124.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 500
+    discountedPrice: 0.5, // TEST PRICE - Original: 124.99
     discountPercentage: 75,
     entriesCount: 500,
     shopDiscountPercent: 10,
@@ -636,8 +636,8 @@ export const upsellPackages: StaticUpsellPackage[] = [
     name: "Mini Pack 8 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
-    originalPrice: 1000,
-    discountedPrice: 249.99,
+    originalPrice: 0.5, // TEST PRICE - Original: 1000
+    discountedPrice: 0.5, // TEST PRICE - Original: 249.99
     discountPercentage: 75,
     entriesCount: 1000,
     shopDiscountPercent: 20,

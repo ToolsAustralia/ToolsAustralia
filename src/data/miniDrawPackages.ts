@@ -43,7 +43,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-1",
     name: "Mini Pack 1",
-    price: 1,
+    price: 0.5, // TEST PRICE - Original: 1
     entries: 1,
     partnerDiscountHours: 1,
     partnerDiscountDays: 0.04, // 1 hour = 1/24 day
@@ -54,7 +54,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-1-upgrade",
       name: "Mini Pack 1 Upgrade",
-      price: 2.99,
+      price: 0.5, // TEST PRICE - Original: 2.99
       entries: 10,
       partnerDiscountHours: 12,
       partnerDiscountDays: 0.5,
@@ -67,7 +67,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-2",
     name: "Mini Pack 2",
-    price: 5,
+    price: 0.5, // TEST PRICE - Original: 5
     entries: 5,
     partnerDiscountHours: 6,
     partnerDiscountDays: 0.25, // 6 hours = 6/24 day
@@ -78,7 +78,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-2-upgrade",
       name: "Mini Pack 2 Upgrade",
-      price: 4.99,
+      price: 0.5, // TEST PRICE - Original: 4.99
       entries: 20,
       partnerDiscountHours: 24,
       partnerDiscountDays: 1,
@@ -91,7 +91,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-3",
     name: "Mini Pack 3",
-    price: 10,
+    price: 0.5, // TEST PRICE - Original: 10
     entries: 10,
     partnerDiscountHours: 12,
     partnerDiscountDays: 0.5, // 12 hours = 12/24 day
@@ -102,7 +102,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-3-upgrade",
       name: "Mini Pack 3 Upgrade",
-      price: 7.99,
+      price: 0.5, // TEST PRICE - Original: 7.99
       entries: 30,
       partnerDiscountHours: 48,
       partnerDiscountDays: 2,
@@ -115,7 +115,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-4",
     name: "Mini Pack 4",
-    price: 25,
+    price: 0.5, // TEST PRICE - Original: 25
     entries: 25,
     partnerDiscountHours: 24,
     partnerDiscountDays: 1,
@@ -126,7 +126,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-4-upgrade",
       name: "Mini Pack 4 Upgrade",
-      price: 9.99,
+      price: 0.5, // TEST PRICE - Original: 9.99
       entries: 50,
       partnerDiscountHours: 24,
       partnerDiscountDays: 1,
@@ -139,7 +139,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-5",
     name: "Mini Pack 5",
-    price: 50,
+    price: 0.5, // TEST PRICE - Original: 50
     entries: 50,
     partnerDiscountHours: 480,
     partnerDiscountDays: 20,
@@ -150,7 +150,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-5-upgrade",
       name: "Mini Pack 5 Upgrade",
-      price: 19.99,
+      price: 0.5, // TEST PRICE - Original: 19.99
       entries: 100,
       partnerDiscountHours: 480,
       partnerDiscountDays: 20,
@@ -163,7 +163,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-6",
     name: "Mini Pack 6",
-    price: 100,
+    price: 0.5, // TEST PRICE - Original: 100
     entries: 100,
     partnerDiscountHours: 96,
     partnerDiscountDays: 4,
@@ -174,7 +174,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-6-upgrade",
       name: "Mini Pack 6 Upgrade",
-      price: 49.99,
+      price: 0.5, // TEST PRICE - Original: 49.99
       entries: 200,
       partnerDiscountHours: 96,
       partnerDiscountDays: 4,
@@ -187,7 +187,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-7",
     name: "Mini Pack 7",
-    price: 250,
+    price: 0.5, // TEST PRICE - Original: 250
     entries: 250,
     partnerDiscountHours: 240,
     partnerDiscountDays: 10,
@@ -198,7 +198,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-7-upgrade",
       name: "Mini Pack 7 Upgrade",
-      price: 124.99,
+      price: 0.5, // TEST PRICE - Original: 124.99
       entries: 500,
       partnerDiscountHours: 240,
       partnerDiscountDays: 10,
@@ -211,7 +211,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
   {
     _id: "mini-pack-8",
     name: "Mini Pack 8",
-    price: 500,
+    price: 0.5, // TEST PRICE - Original: 500
     entries: 500,
     partnerDiscountHours: 480,
     partnerDiscountDays: 20,
@@ -222,7 +222,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-8-upgrade",
       name: "Mini Pack 8 Upgrade",
-      price: 249.99,
+      price: 0.5, // TEST PRICE - Original: 249.99
       entries: 1000,
       partnerDiscountHours: 480,
       partnerDiscountDays: 20,
