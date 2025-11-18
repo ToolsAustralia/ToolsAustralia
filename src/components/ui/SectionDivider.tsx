@@ -18,7 +18,7 @@ export default function SectionDivider({
       case "wave":
         return flip ? "M0,0 L0,100 Q50,50 100,100 L100,0 Z" : "M0,100 L0,0 Q50,50 100,0 L100,100 Z";
       case "curve":
-        return flip ? "M0,0 L0,100 Q50,10 100,100 L100,0 Z" : "M0,100 L0,0 Q50,90 100,0 L100,100 Z";
+        return flip ? "M0,0 L0,100 Q50,10 100,100 L100,0 Z" : "M0,100 L0,0 Q50,60 100,0 L100,100 Z";
       case "diagonal":
         return flip ? "M0,0 L100,100 L100,0 Z" : "M0,100 L100,0 L0,0 Z";
       case "zigzag":

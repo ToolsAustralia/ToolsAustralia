@@ -34,8 +34,11 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
       <PromoBanner />
 
       <main className="w-full overflow-hidden ">
-        <PromoHero />
-        <BrandsShowcase />
+        {/* Ensure hero + brands share the first mobile viewport for better context */}
+        <div className="flex flex-col  lg:min-h-0 w-full ">
+          <PromoHero />
+          <BrandsShowcase />
+        </div>
         <PrizeShowcase slug={prize.slug} />
         <PromoPackages />
         <GiveawayDetails />

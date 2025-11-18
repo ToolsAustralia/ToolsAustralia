@@ -136,6 +136,19 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
 
+    // Clear the timeout since we're closing
+    if (finalizationTimeoutIdRef.current) {
+      clearTimeout(finalizationTimeoutIdRef.current);
+      finalizationTimeoutIdRef.current = null;
+    }
+
+    // ✅ CRITICAL: Finalize invoice if not already finalized
+    // This ensures Klaviyo email is sent even if user closes modal without clicking decline
+    if (!invoiceFinalized && originalPurchaseContext) {
+      console.log("📧 Modal closing - finalizing invoice with original purchase only");
+      finalizeInvoice();
+    }
+
     // Clear pending upsell (this also clears sessionStorage via the updated function)
     const { setPendingUpsellAfterSetup } = useModalPriorityStore.getState();
     setPendingUpsellAfterSetup(false);
@@ -159,7 +172,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
 
     onClose();
-  }, [onClose, userData]);
+  }, [onClose, userData, invoiceFinalized, originalPurchaseContext, finalizeInvoice]);
 
   // Animation effect and reset payment processing state
   useEffect(() => {
@@ -509,7 +522,16 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           <div className="space-y-2 sm:space-y-3">
             {/* Primary CTA - Purchase with Default Card */}
             <button
-              onClick={handleAccept}
+              onClick={() => {
+                console.log("🟢 Upsell primary CTA clicked", {
+                  offerId: offer.id,
+                  isProcessing,
+                  hasDefaultPaymentMethod: !!defaultPaymentMethod,
+                  paymentMethodId: defaultPaymentMethod?.paymentMethodId,
+                  hasOriginalPurchaseContext: !!originalPurchaseContext,
+                });
+                handleAccept();
+              }}
               disabled={isProcessing || !defaultPaymentMethod}
               className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
             >
@@ -539,7 +561,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
             {/* Secondary Action */}
             <button
-              onClick={handleDecline}
+              onClick={() => {
+                console.log("🟡 Upsell decline button clicked", {
+                  offerId: offer.id,
+                  invoiceFinalized,
+                  hasOriginalPurchaseContext: !!originalPurchaseContext,
+                });
+                handleDecline();
+              }}
               className="w-full text-gray-500 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl hover:bg-gray-100 transition-colors font-medium text-sm sm:text-base"
             >
               No thanks, maybe later
@@ -547,7 +576,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
             {/* Card Selection Button */}
             <button
-              onClick={handleCardSelection}
+              onClick={() => {
+                console.log("🔵 Upsell select-card button clicked", {
+                  offerId: offer.id,
+                  invoiceFinalized,
+                  hasOriginalPurchaseContext: !!originalPurchaseContext,
+                });
+                handleCardSelection();
+              }}
               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl transition-colors font-medium text-sm sm:text-base flex items-center justify-center gap-2 underline"
             >
               <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />

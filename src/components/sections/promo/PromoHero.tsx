@@ -18,18 +18,8 @@ export default function PromoHero() {
     openEntryFlow({ openLocalModal: false });
   };
 
-  const getHeroImage = () => {
-    if (!activePromo?.multiplier) return "/images/background/promoBg.png";
-    const multiplier = activePromo.multiplier;
-    switch (multiplier) {
-      case 2:
-      case 3:
-      case 5:
-      case 10:
-      default:
-        return "/images/background/promoBg.png";
-    }
-  };
+  // Single landscape asset used across desktop + mobile to keep branding consistent.
+  const heroImageSrc = "/images/background/promo/promoBg.jpg";
 
   if (isLoading) {
     return (
@@ -43,13 +33,16 @@ export default function PromoHero() {
   }
 
   return (
-    <section ref={heroRef} className="relative h-screen flex flex-col justify-between items-center overflow-hidden">
+    <section
+      ref={heroRef}
+      className="relative flex flex-col justify-between items-center overflow-hidden min-h-[60svh] sm:min-h-[65svh] lg:min-h-[70vh]"
+    >
       {/* Backgrounds */}
       <div className="absolute inset-0 z-0">
         {/* Mobile Background */}
         <div className="lg:hidden absolute inset-0">
           <Image
-            src="/images/background/promo/promoBgMobile.jpg"
+            src={heroImageSrc}
             alt="Ultimate Tool Giveaway - Mobile Background"
             fill
             className="object-cover object-[50%_10%] w-full h-full"
@@ -62,10 +55,10 @@ export default function PromoHero() {
         {/* Desktop Background */}
         <div className="hidden lg:block absolute inset-0">
           <Image
-            src={getHeroImage()}
+            src={heroImageSrc}
             alt={`Ultimate Tool Giveaway - ${activePromo?.multiplier || 1}x Entries Active`}
             fill
-            className="object-cover object-[50%_35%] w-full h-full"
+            className="object-cover object-[10%_55%] w-full h-full"
             priority
             quality={100}
             sizes="100vw"
@@ -80,10 +73,10 @@ export default function PromoHero() {
       <div className="relative z-20 w-full text-center"></div>
 
       {/* Elevated ENTER NOW button - Absolutely positioned at bottom */}
-      <div className="absolute bottom-12 sm:bottom-14 left-1/2 transform -translate-x-1/2 z-30">
+      <div className="absolute bottom-14 sm:bottom-20 left-1/2 transform -translate-x-1/2 z-30">
         <button
           onClick={handleEnterNow}
-          className="group relative inline-flex items-center justify-center px-8 py-4 sm:px-14 sm:py-6 rounded-full font-extrabold text-lg sm:text-2xl tracking-wide text-white 
+          className="group relative inline-flex items-center justify-center px-6 py-3 text-base sm:px-14 sm:py-6 sm:text-2xl rounded-full font-extrabold tracking-wide text-white 
                       bg-gradient-to-br from-red-600 via-red-700 to-red-800 shadow-[0_0_40px_rgba(220,38,38,0.6)]
                       border border-white/20 backdrop-blur-lg transition-all duration-300 hover:scale-110 hover:shadow-[0_0_60px_rgba(239,68,68,0.8)]"
         >

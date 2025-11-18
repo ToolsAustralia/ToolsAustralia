@@ -919,6 +919,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits, 3000);
 
     // ✅ Store original purchase context for combined invoice (if needed for upsells)
+    // CRITICAL FIX: Create local variable to avoid React state closure issue
+    let contextToPass: OriginalPurchaseContext | null = null;
+
     console.log("🔍 Checking invoice context storage:", {
       hasPaymentIntentId: !!paymentIntentId,
       hasProcessingPackageName: !!processingPackageName,
@@ -954,7 +957,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         }
       }
 
-      setOriginalPurchaseContext({
+      // Create context object in local variable to pass directly (avoids closure issue)
+      contextToPass = {
         paymentIntentId,
         packageId: packageId || "",
         packageName: processingPackageName,
@@ -963,7 +967,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         entries: status.data?.entries || 0,
         miniDrawId,
         miniDrawName,
-      });
+      };
+
+      // Also update state for other component uses
+      setOriginalPurchaseContext(contextToPass);
       console.log("📧 Stored original purchase context for invoice finalization", {
         miniDrawId,
         miniDrawName,
@@ -975,6 +982,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     // Trigger upsell after successful payment processing
     if (!upsellTriggered) {
       setUpsellTriggered(true);
+
+      // Capture contextToPass in closure to ensure it's available when setTimeout executes
+      const finalContextToPass = contextToPass;
 
       setTimeout(() => {
         // Get the packageId based on package type
@@ -991,6 +1001,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageType: processingPackageType || packageType,
           packageId,
           triggerType,
+          hasContext: !!finalContextToPass,
         });
 
         triggerUpsellModal(
@@ -998,7 +1009,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           processingPackageName || activePlan.name,
           activePlan.price,
           packageId || undefined,
-          packageType
+          packageType,
+          finalContextToPass
         );
       }, 2000);
     }
@@ -1100,7 +1112,33 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
             // Success is now handled by global success screen above
 
+            // Store original purchase context for combined invoice (if paymentIntentId is available)
+            // CRITICAL FIX: Create local variable to avoid React state closure issue
+            let contextToPass: OriginalPurchaseContext | null = null;
+
+            if (paymentIntentId) {
+              const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+              const entriesCount = activePlan.metadata?.entriesCount || 0;
+
+              // Create context object in local variable to pass directly (avoids closure issue)
+              contextToPass = {
+                paymentIntentId,
+                packageId: packageId || "",
+                packageName: activePlan.name,
+                packageType: activePlan.period === "mo" ? "subscription" : "one-time",
+                price: activePlan.price,
+                entries: entriesCount,
+              };
+
+              // Also update state for other component uses
+              setOriginalPurchaseContext(contextToPass);
+              console.log("📧 Stored original purchase context for invoice finalization (new user)");
+            }
+
             // Add delay to allow authentication to complete before triggering upsell
+            // Capture contextToPass in closure to ensure it's available when setTimeout executes
+            const finalContextToPass = contextToPass;
+
             setTimeout(() => {
               // Prevent duplicate upsell calls for new users too
               if (upsellTriggered) {
@@ -1115,7 +1153,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 activePlan.name,
                 activePlan.price,
                 getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-                activePlan.period === "mo" ? "subscription" : "one-time"
+                activePlan.period === "mo" ? "subscription" : "one-time",
+                finalContextToPass
               );
 
               // Add delay to allow upsell modal to show before redirecting
@@ -1215,31 +1254,43 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
 
       // Store original purchase context for combined invoice (if needed for upsells)
+      // CRITICAL FIX: Create local variable to avoid React state closure issue
+      let contextToPass: OriginalPurchaseContext | null = null;
+
       if (paymentIntentId && activePlan.period === "one-time") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
-        setOriginalPurchaseContext({
+        // Create context object in local variable to pass directly (avoids closure issue)
+        contextToPass = {
           paymentIntentId,
           packageId: packageId || "",
           packageName: activePlan.name,
           packageType: "one-time",
           price: activePlan.price,
           entries: entriesCount,
-        });
+        };
+        // Also update state for other component uses
+        setOriginalPurchaseContext(contextToPass);
         console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
       } else if (paymentIntentId && activePlan.period === "mo") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
-        setOriginalPurchaseContext({
+        // Create context object in local variable to pass directly (avoids closure issue)
+        contextToPass = {
           paymentIntentId,
           packageId: packageId || "",
           packageName: activePlan.name,
           packageType: "subscription",
           price: activePlan.price,
           entries: entriesCount,
-        });
+        };
+        // Also update state for other component uses
+        setOriginalPurchaseContext(contextToPass);
         console.log("📧 Stored original purchase context for invoice finalization (subscription)");
       }
 
       // Trigger upsell modal for existing user after a delay with duplicate prevention
+      // Capture contextToPass in closure to ensure it's available when setTimeout executes
+      const finalContextToPass = contextToPass;
+
       setTimeout(() => {
         // Prevent duplicate upsell calls
         if (upsellTriggered) {
@@ -1255,6 +1306,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           subscriptionPackagesCount: subscriptionPackages?.length || 0,
           oneTimePackagesCount: oneTimePackages?.length || 0,
           packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]),
+          hasContext: !!finalContextToPass,
         });
 
         setUpsellTriggered(true); // Mark that we've triggered this once
@@ -1264,7 +1316,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           activePlan.name,
           activePlan.price,
           getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-          activePlan.period === "mo" ? "subscription" : "one-time"
+          activePlan.period === "mo" ? "subscription" : "one-time",
+          finalContextToPass
         );
       }, 2000); // 2 second delay
 
@@ -1502,7 +1555,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
               setUpsellTriggered(true);
 
-              triggerUpsellModal(triggerType, activePlan.name, activePlan.price, packageId || undefined, "one-time");
+              // Note: For mini-draw fallback case, we don't have paymentIntentId, so originalPurchaseContext can't be set
+              // This is a fallback path when paymentIntentId is not available
+              triggerUpsellModal(
+                triggerType,
+                activePlan.name,
+                activePlan.price,
+                packageId || undefined,
+                "one-time",
+                null
+              );
             }, 2000);
 
             onClose();
@@ -1642,19 +1704,34 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           let paymentIntentId: string | null = null;
 
           // Handle different response structures
-          if ("data" in result && result.data && "paymentIntent" in result.data) {
-            paymentIntentId = result.data.paymentIntent?.id || null;
-            console.log("🔍 Extracted paymentIntentId from result.data.paymentIntent:", paymentIntentId);
-          } else if ("paymentIntent" in result && result.paymentIntent) {
+          // Priority 1: Check root level paymentIntent (one-time packages from create-one-time-purchase-existing-user)
+          if ("paymentIntent" in result && result.paymentIntent) {
             // Handle API response with paymentIntent at root level
             paymentIntentId =
               typeof result.paymentIntent === "string" ? result.paymentIntent : result.paymentIntent.id || null;
             console.log("🔍 Extracted paymentIntentId from result.paymentIntent:", paymentIntentId);
-          } else if ("paymentIntentId" in result && result.paymentIntentId) {
+          }
+          // Priority 2: Check nested data.paymentIntent (some response formats)
+          else if ("data" in result && result.data && "paymentIntent" in result.data) {
+            paymentIntentId = result.data.paymentIntent?.id || null;
+            console.log("🔍 Extracted paymentIntentId from result.data.paymentIntent:", paymentIntentId);
+          }
+          // Priority 3: Check data.paymentIntentId (mini-draw packages)
+          else if ("data" in result && result.data && "paymentIntentId" in result.data) {
+            paymentIntentId = result.data.paymentIntentId as string;
+            console.log("🔍 Extracted paymentIntentId from result.data.paymentIntentId:", paymentIntentId);
+          }
+          // Priority 4: Check root level paymentIntentId (legacy format)
+          else if ("paymentIntentId" in result && result.paymentIntentId) {
             paymentIntentId = result.paymentIntentId as string;
             console.log("🔍 Extracted paymentIntentId from result.paymentIntentId:", paymentIntentId);
           } else {
-            console.log("⚠️ Could not extract paymentIntentId from result");
+            console.log("⚠️ Could not extract paymentIntentId from result. Result structure:", {
+              hasPaymentIntent: "paymentIntent" in result,
+              hasData: "data" in result,
+              hasPaymentIntentId: "paymentIntentId" in result,
+              resultKeys: Object.keys(result || {}),
+            });
           }
 
           if (paymentIntentId) {
@@ -1708,7 +1785,42 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
             showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
 
+            // Attempt to recover paymentIntentId even in fallback path
+            let fallbackPaymentIntentId: string | null = null;
+
+            if ("paymentIntent" in result && result.paymentIntent) {
+              fallbackPaymentIntentId =
+                typeof result.paymentIntent === "string" ? result.paymentIntent : result.paymentIntent.id || null;
+            } else if ("data" in result && result.data && "paymentIntent" in result.data) {
+              fallbackPaymentIntentId = result.data.paymentIntent?.id || null;
+            } else if ("data" in result && result.data && "paymentIntentId" in result.data) {
+              fallbackPaymentIntentId = result.data.paymentIntentId as string;
+            } else if ("paymentIntentId" in result && result.paymentIntentId) {
+              fallbackPaymentIntentId = result.paymentIntentId as string;
+            }
+
+            let fallbackContext: OriginalPurchaseContext | null = null;
+            if (fallbackPaymentIntentId) {
+              const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+              const entriesCount = activePlan.metadata?.entriesCount || 0;
+
+              fallbackContext = {
+                paymentIntentId: fallbackPaymentIntentId,
+                packageId: packageId || "",
+                packageName: activePlan.name,
+                packageType: "one-time",
+                price: activePlan.price,
+                entries: entriesCount,
+              };
+
+              setOriginalPurchaseContext(fallbackContext);
+              console.log("📧 Stored original purchase context for invoice finalization (fallback path)");
+            } else {
+              console.warn("⚠️ Fallback path could not extract paymentIntentId - invoice finalization may be delayed");
+            }
+
             // Trigger upsell modal for existing user after a delay with duplicate prevention
+            const finalFallbackContext = fallbackContext;
             setTimeout(() => {
               // Prevent duplicate upsell calls
               if (upsellTriggered) {
@@ -1733,7 +1845,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 activePlan.name,
                 activePlan.price,
                 getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-                activePlan.period === "mo" ? "subscription" : "one-time"
+                activePlan.period === "mo" ? "subscription" : "one-time",
+                finalFallbackContext || originalPurchaseContext
               );
             }, 2000); // 2 second delay
 
@@ -1756,7 +1869,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             activePlan.name,
             activePlan.price,
             getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-            activePlan.period === "mo" ? "subscription" : "one-time"
+            activePlan.period === "mo" ? "subscription" : "one-time",
+            originalPurchaseContext
           );
 
           // Close modal and exit early
@@ -1918,6 +2032,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
                     showSuccess("Welcome!", `${activePlan.name} activated`, benefits, 3000);
 
+                    // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
+                    const oneTimePaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
+                    const oneTimeOriginalContext: OriginalPurchaseContext | null = oneTimePaymentIntentId
+                      ? {
+                          paymentIntentId: oneTimePaymentIntentId,
+                          packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
+                          packageName: activePlan.name,
+                          packageType: "one-time",
+                          price: activePlan.price,
+                          entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
+                        }
+                      : null;
+
                     // Add delay to allow authentication to complete before triggering upsell
                     setTimeout(() => {
                       triggerUpsellModal(
@@ -1925,7 +2052,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                         activePlan.name,
                         activePlan.price,
                         getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-                        "one-time"
+                        "one-time",
+                        oneTimeOriginalContext || originalPurchaseContext
                       );
 
                       setTimeout(() => {
@@ -1986,6 +2114,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                       3000
                     );
 
+                    // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
+                    const oneTimePaymentIntentId2 =
+                      oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
+                    const oneTimeOriginalContext2: OriginalPurchaseContext | null = oneTimePaymentIntentId2
+                      ? {
+                          paymentIntentId: oneTimePaymentIntentId2,
+                          packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
+                          packageName: activePlan.name,
+                          packageType: activePlan.period === "mo" ? "subscription" : "one-time",
+                          price: activePlan.price,
+                          entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
+                        }
+                      : null;
+
                     onClose();
 
                     // Add delay to allow authentication to complete before triggering upsell
@@ -1996,7 +2138,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                         activePlan.name,
                         activePlan.price,
                         getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-                        activePlan.period === "mo" ? "subscription" : "one-time"
+                        activePlan.period === "mo" ? "subscription" : "one-time",
+                        oneTimeOriginalContext2 || originalPurchaseContext
                       );
 
                       // Add delay to allow upsell modal to show before redirecting
@@ -2050,13 +2193,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               );
             }
 
+            // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
+            const finalPaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
+            const finalOriginalContext: OriginalPurchaseContext | null = finalPaymentIntentId
+              ? {
+                  paymentIntentId: finalPaymentIntentId,
+                  packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
+                  packageName: activePlan.name,
+                  packageType: activePlan.period === "mo" ? "subscription" : "one-time",
+                  price: activePlan.price,
+                  entries: activePlan.metadata?.entriesCount || oneTimeData?.totalEntries || 0,
+                }
+              : null;
+
             // Trigger upsell modal
             triggerUpsellModal(
               "one-time-purchase",
               activePlan.name,
               activePlan.price,
               getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-              activePlan.period === "mo" ? "subscription" : "one-time"
+              activePlan.period === "mo" ? "subscription" : "one-time",
+              finalOriginalContext || originalPurchaseContext
             );
 
             onClose();
@@ -2147,7 +2304,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     recentPurchase: string,
     purchaseAmount: number,
     packageId?: string,
-    packageType?: "subscription" | "one-time"
+    packageType?: "subscription" | "one-time",
+    originalPurchaseContextParam?: OriginalPurchaseContext | null
   ) => {
     try {
       // If we have package information, use the new trigger API
@@ -2224,12 +2382,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
             // CRITICAL FIX: Set pending upsell IMMEDIATELY (not delayed)
             // This ensures sessionStorage is set BEFORE page navigation to /my-account
+            // Use passed parameter or fallback to state
+            const finalOriginalPurchaseContext = originalPurchaseContextParam ?? originalPurchaseContext;
+
             if (!isAuthenticated) {
               const { setPendingUpsellAfterSetup } = useModalPriorityStore.getState();
               setPendingUpsellAfterSetup(true, {
                 offer: upsellOffer,
                 userContext,
-                originalPurchaseContext: originalPurchaseContext || undefined,
+                originalPurchaseContext: finalOriginalPurchaseContext || undefined,
               });
               console.log("🎯 Set pending upsell IMMEDIATELY for first-time user (before navigation)");
             } else {
@@ -2239,7 +2400,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 requestModal("upsell", false, {
                   offer: upsellOffer,
                   userContext,
-                  originalPurchaseContext: originalPurchaseContext || undefined,
+                  originalPurchaseContext: finalOriginalPurchaseContext || undefined,
                 });
                 console.log("🎯 Showing upsell for existing user (after delay)");
               }, offer.showAfterDelay * 1000 || 2000);

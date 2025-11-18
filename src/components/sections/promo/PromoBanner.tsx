@@ -57,7 +57,7 @@ export default function PromoBanner() {
 
   if (isLoading) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-gray-800 via-gray-900 to-black shadow-lg">
+      <div className="w-full bg-gradient-to-r from-gray-800 via-gray-900 to-black shadow-lg mt-4 sm:mt-6">
         <div className="h-12 sm:h-14 flex items-center justify-center">
           <div className="animate-pulse text-white text-sm">Loading...</div>
         </div>
@@ -65,11 +65,12 @@ export default function PromoBanner() {
     );
   }
 
+  // Keep the banner below the header by default; only float it once scrolled for visibility.
   return (
     <div
       className={`${
-        isScrolled ? "fixed top-2 left-4 right-4 rounded-full" : "absolute top-0 left-0 right-0"
-      } z-50 bg-gradient-to-r from-gray-900 via-gray-800 to-black shadow-2xl border-b-2 border-red-500/50 transition-all duration-300`}
+        isScrolled ? "fixed -top-2 left-4 right-4 rounded-full z-50" : "relative w-full mt-0 z-30"
+      } bg-gradient-to-r from-gray-900 via-gray-800 to-black shadow-2xl border-b-2 border-red-500/50 transition-all duration-300`}
     >
       <div className="h-16 sm:h-20 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         {/* Background Pattern */}

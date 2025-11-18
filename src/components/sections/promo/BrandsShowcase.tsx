@@ -11,8 +11,8 @@ export default function BrandsShowcase() {
       <div className="w-full   mx-auto">
         {/* Section Header */}
         <div className="text-center mb-4">
-          <p className="text-lg text-gray-600 font-['Inter'] max-w-2xl mx-auto">
-            <strong>Win huge tool prizes from Australia&apos;s best brands!</strong>
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-['Inter'] font-semibold max-w-2xl mx-auto">
+            Win huge tool prizes from Australia&apos;s best brands!
           </p>
         </div>
 

@@ -40,7 +40,15 @@ import {
   Clock,
 } from "lucide-react";
 
-export default function Header() {
+type HeaderProps = {
+  /**
+   * Controls whether the header stays fixed to the top of the viewport.
+   * Pass false on pages (like promotions) where the header should scroll away with the content.
+   */
+  isFixed?: boolean;
+};
+
+export default function Header({ isFixed = true }: HeaderProps) {
   const { isMobileMenuOpen, setIsMobileMenuOpen, isCartOpen, setIsCartOpen } = useSidebar();
   const [isDesktopUserMenuOpen, setIsDesktopUserMenuOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
@@ -417,7 +425,11 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white fixed top-0 left-0 right-0 z-40 shadow-sm w-full overflow-visible">
+    <header
+      className={`bg-white ${
+        isFixed ? "fixed top-0 left-0 right-0 z-40" : "relative"
+      } shadow-sm w-full overflow-visible`}
+    >
       {/* Top Bar - Promotional or Setup Reminder - Only show when authentication state is fully resolved */}
       {/* Hidden by default, only shows after auth state is confirmed (userData exists OR confirmed not authenticated) */}
       {!isTopBarHidden && authStateResolved && (

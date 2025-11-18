@@ -9,7 +9,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useLoading } from "@/contexts/LoadingContext";
 // Upsell store removed - using unified modal priority system
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
-import { UpsellOffer, UpsellUserContext } from "@/types/upsell";
+import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/utils/payment/payment-status";
@@ -45,6 +45,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [processingPackageName, setProcessingPackageName] = useState<string>("");
+  const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
 
   // Get user context and payment methods
   const { isAuthenticated, userData, hasActiveSubscription } = useUserContext();
@@ -85,6 +86,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
     setProcessingPackageName("");
+    setOriginalPurchaseContext(null);
     onClose();
   }, [onClose]);
 
@@ -94,6 +96,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
       setProcessingPackageName("");
+      setOriginalPurchaseContext(null);
       setUpsellTriggered(false);
     }
   }, [isOpen]);
@@ -209,6 +212,19 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     console.log("🔍 handlePaymentSuccess called - about to trigger upsell");
     setShowPaymentProcessing(false);
 
+    // Store original purchase context for invoice finalization
+    if (paymentIntentId && selectedPackage) {
+      setOriginalPurchaseContext({
+        paymentIntentId,
+        packageId: selectedPackage._id || "",
+        packageName: processingPackageName,
+        packageType: "one-time",
+        price: selectedPackage.price,
+        entries: status.data?.entries || 0,
+      });
+      console.log("📧 Stored original purchase context for invoice finalization (special package)");
+    }
+
     // Invalidate user caches to update UI immediately
     if (userData?._id) {
       invalidateUserCaches(userData._id);
@@ -261,7 +277,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           processingPackageName,
           selectedPackage?.price || 0,
           selectedPackage?._id, // packageId
-          "one-time" // packageType
+          "one-time", // packageType
+          originalPurchaseContext
         );
       }, 2000); // 2 second delay
     } else {
@@ -293,7 +310,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     recentPurchase: string,
     purchaseAmount: number,
     packageId?: string,
-    packageType?: "subscription" | "one-time"
+    packageType?: "subscription" | "one-time",
+    originalPurchaseContextParam?: OriginalPurchaseContext | null
   ) => {
     try {
       // If we have package information, use the new trigger API
@@ -355,13 +373,20 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                 upsellsShown: 0,
               };
 
+              // Use passed parameter or fallback to state
+              const finalOriginalPurchaseContext = originalPurchaseContextParam ?? originalPurchaseContext;
+
               // Use modal priority system to show upsell
               const { requestModal } = useModalPriorityStore.getState();
               console.log("🎯 Requesting upsell modal via priority system:", {
                 upsellOffer: upsellOffer.title,
                 userContext,
               });
-              requestModal("upsell", false, { offer: upsellOffer, userContext });
+              requestModal("upsell", false, {
+                offer: upsellOffer,
+                userContext,
+                originalPurchaseContext: finalOriginalPurchaseContext || undefined,
+              });
             }, offer.showAfterDelay * 1000 || 2000);
 
             return;
