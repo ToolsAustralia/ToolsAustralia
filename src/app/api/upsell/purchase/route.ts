@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
+import MiniDraw from "@/models/MiniDraw";
 import { stripe } from "@/lib/stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
@@ -175,6 +176,51 @@ export async function POST(request: NextRequest) {
       validatedData.offerId,
       validatedData.originalPurchaseContext
     );
+
+    // ✅ Validate mini-draw entry limits for upsells (if it's a mini-draw upsell)
+    if (miniDrawInfo?.miniDrawId && offer.entriesCount > 0) {
+      const miniDraw = await MiniDraw.findById(miniDrawInfo.miniDrawId);
+
+      if (!miniDraw) {
+        return NextResponse.json(
+          {
+            error: "Mini draw not found",
+          },
+          { status: 404 }
+        );
+      }
+
+      // Validate draw is active
+      if (miniDraw.status !== "active") {
+        return NextResponse.json(
+          {
+            error: `Mini draw "${miniDraw.name}" is in ${miniDraw.status} status and cannot accept entries`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Check if minimum entries has been reached
+      if (miniDraw.totalEntries >= miniDraw.minimumEntries) {
+        return NextResponse.json(
+          {
+            error: `Mini draw "${miniDraw.name}" has reached its minimum entries limit (${miniDraw.minimumEntries}) and is now closed`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Check if upsell entries would exceed remaining entries
+      const remainingEntries = Math.max(miniDraw.minimumEntries - miniDraw.totalEntries, 0);
+      if (offer.entriesCount > remainingEntries) {
+        return NextResponse.json(
+          {
+            error: `Mini draw "${miniDraw.name}" only has ${remainingEntries} entries remaining`,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     if (validatedData.useDefaultPayment && validatedData.paymentMethodId) {
       // One-click purchase using the specific payment method provided

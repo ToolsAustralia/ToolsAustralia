@@ -12,6 +12,7 @@ import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/utils/payment/payment-status";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { useToast } from "@/components/ui/Toast";
 
 /**
  * UpsellModal Component
@@ -66,6 +67,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
   const { showLoading, hideLoading, showSuccess } = useLoading();
   const { mutate: purchaseUpsell } = usePurchaseUpsell();
+  const { showToast } = useToast();
 
   // Get default payment method
   const defaultPaymentMethod = paymentMethods?.find((pm) => pm.isDefault);
@@ -301,7 +303,16 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
             }
           },
           onError: (error) => {
-            throw new Error(error instanceof Error ? error.message : "Upsell purchase failed");
+            // Handle API errors (e.g., validation errors from entry limit checks)
+            hideLoading();
+            const errorMessage = error instanceof Error ? error.message : "Upsell purchase failed";
+            showToast({
+              type: "error",
+              title: "Purchase Failed",
+              message: errorMessage,
+              duration: 5000,
+            });
+            setIsProcessing(false);
           },
         }
       );
@@ -309,6 +320,15 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       console.error("Upsell purchase failed:", error);
       console.error(`Purchase failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       hideLoading(); // Hide loading screen on error
+
+      // Show error toast to user with the error message
+      const errorMessage = error instanceof Error ? error.message : "Upsell purchase failed";
+      showToast({
+        type: "error",
+        title: "Purchase Failed",
+        message: errorMessage,
+        duration: 5000,
+      });
     } finally {
       setIsProcessing(false);
     }

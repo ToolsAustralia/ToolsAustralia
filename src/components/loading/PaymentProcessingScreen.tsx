@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Check, Gift, Star, Zap, AlertCircle } from "lucide-react";
 import { pollPaymentStatusWithCancel, type PaymentStatusResponse } from "@/utils/payment/payment-status";
 
@@ -31,6 +31,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const onSuccessCalledRef = useRef(false); // Guard to prevent duplicate onSuccess calls
 
   // Define processing steps based on package type
   const getProcessingSteps = () => {
@@ -62,6 +63,9 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   useEffect(() => {
     if (!isVisible || !paymentIntentId) return;
 
+    // Reset onSuccess guard when paymentIntentId changes
+    onSuccessCalledRef.current = false;
+
     // Note: Removed immediate_upgrade case - all upgrades now follow webhook-first approach
 
     // Handle processing upgrade case (showing immediately when Pay button clicked)
@@ -81,15 +85,19 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
           setTimeout(() => {
             setIsProcessing(false);
             setCurrentStep(steps.length - 1);
-            onSuccess?.({
-              success: true,
-              processed: true,
-              status: "completed",
-              data: {
-                paymentIntentId: "upgrade_processing",
-                message: "Upgrade completed successfully",
-              },
-            });
+            // Guard against duplicate onSuccess calls
+            if (!onSuccessCalledRef.current) {
+              onSuccessCalledRef.current = true;
+              onSuccess?.({
+                success: true,
+                processed: true,
+                status: "completed",
+                data: {
+                  paymentIntentId: "upgrade_processing",
+                  message: "Upgrade completed successfully",
+                },
+              });
+            }
           }, 1000);
         }
       }, 2000); // Advance step every 2 seconds
@@ -111,7 +119,11 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
         if (status.processed) {
           setCurrentStep(steps.length - 1);
           setIsProcessing(false);
-          onSuccess?.(status);
+          // Guard against duplicate onSuccess calls
+          if (!onSuccessCalledRef.current) {
+            onSuccessCalledRef.current = true;
+            onSuccess?.(status);
+          }
         } else {
           // Increment step every 3 seconds while processing
           setCurrentStep((prev) => Math.min(prev + 1, steps.length - 2));
@@ -125,7 +137,11 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
         if (result.processed) {
           setStatus(result);
           setIsProcessing(false);
-          onSuccess?.(result);
+          // Guard against duplicate onSuccess calls
+          if (!onSuccessCalledRef.current) {
+            onSuccessCalledRef.current = true;
+            onSuccess?.(result);
+          }
         } else if (!result.success) {
           // Check if this is a timeout (payment might still be processing)
           if (result.data?.message?.includes("timeout")) {
@@ -174,20 +190,24 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
   // Fallback: Show success after 30 seconds if payment is successful but not processed
   useEffect(() => {
-    if (!isProcessing || !paymentIntentId || error) return;
+    if (!isProcessing || !paymentIntentId || error || onSuccessCalledRef.current) return;
 
     const fallbackTimer = setTimeout(() => {
       console.log("Fallback: Showing success after 30 seconds");
       setIsProcessing(false);
-      onSuccess?.({
-        success: true,
-        processed: true,
-        status: "completed",
-        data: {
-          paymentIntentId,
-          message: "Payment completed successfully",
-        },
-      });
+      // Guard against duplicate onSuccess calls
+      if (!onSuccessCalledRef.current) {
+        onSuccessCalledRef.current = true;
+        onSuccess?.({
+          success: true,
+          processed: true,
+          status: "completed",
+          data: {
+            paymentIntentId,
+            message: "Payment completed successfully",
+          },
+        });
+      }
     }, 30000); // 30 seconds fallback
 
     return () => clearTimeout(fallbackTimer);
