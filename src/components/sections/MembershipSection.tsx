@@ -1119,7 +1119,7 @@ export default function MembershipSection({
       )}
 
       {/* Member Exclusive Toggle - Only show for non-members on one-time tab */}
-      {!hasActiveSubscription && activeTab === "one-time" && (
+      {!hasActiveSubscription && activeTab === "one-time" ? (
         <div className="flex justify-center pt-4 sm:pt-10">
           <div className="flex items-center gap-3 bg-gray-100 rounded-[15px] p-3 border border-gray-200">
             <span className="text-[12px] sm:text-[14px] text-gray-700 font-medium">
@@ -1139,6 +1139,9 @@ export default function MembershipSection({
             </button>
           </div>
         </div>
+      ) : (
+        // Placeholder div to maintain consistent spacing when toggle is not shown
+        <div className="pt-4 sm:pt-10" aria-hidden="true" />
       )}
 
       {/* Signup Modal */}

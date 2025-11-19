@@ -98,7 +98,17 @@ const partnerDiscounts = [
   },
 ];
 
-export default function UnlockDiscounts() {
+interface UnlockDiscountsProps {
+  showUnlockButton?: boolean;
+  title?: string;
+  description?: string;
+}
+
+export default function UnlockDiscounts({
+  showUnlockButton = true,
+  title = "Unlock Massive Partner Discounts",
+  description = "Get instant access to exclusive discounts from Australia's top tool brands",
+}: UnlockDiscountsProps = {}) {
   const discountsRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
 
@@ -108,11 +118,9 @@ export default function UnlockDiscounts() {
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-12">
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
-            Unlock Massive Partner Discounts
+            {title}
           </h2>
-          <p className="text-base sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">
-            Get instant access to exclusive discounts from Australia&apos;s top tool brands
-          </p>
+          <p className="text-base sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">{description}</p>
         </div>
 
         {/* Partner Discounts Grid */}
@@ -194,31 +202,33 @@ export default function UnlockDiscounts() {
           ))}
         </div>
 
-        {/* Enter to Unlock Button */}
-        <div className="text-center mt-8 sm:mt-12">
-          <button
-            onClick={() => {
-              // Shared CTA hook ensures the correct modal flow is triggered every time.
-              openEntryFlow({ openLocalModal: false });
-            }}
-            className="relative bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl shadow-[0_8px_32px_rgba(239,68,68,0.4)] hover:shadow-[0_12px_40px_rgba(239,68,68,0.6)] transition-all duration-300 hover:scale-105 border-2 border-red-400/30 group"
-          >
-            {/* Metallic shine effect */}
-            <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
-            <span className="relative z-10 flex items-center gap-2 sm:gap-3">
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                />
-              </svg>
-              <span className="hidden sm:inline">ENTER TO UNLOCK DISCOUNT</span>
-              <span className="sm:hidden">UNLOCK DISCOUNT</span>
-            </span>
-          </button>
-        </div>
+        {/* Enter to Unlock Button - Conditionally rendered */}
+        {showUnlockButton && (
+          <div className="text-center mt-8 sm:mt-12">
+            <button
+              onClick={() => {
+                // Shared CTA hook ensures the correct modal flow is triggered every time.
+                openEntryFlow({ openLocalModal: false });
+              }}
+              className="relative bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl shadow-[0_8px_32px_rgba(239,68,68,0.4)] hover:shadow-[0_12px_40px_rgba(239,68,68,0.6)] transition-all duration-300 hover:scale-105 border-2 border-red-400/30 group"
+            >
+              {/* Metallic shine effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
+              <span className="relative z-10 flex items-center gap-2 sm:gap-3">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                  />
+                </svg>
+                <span className="hidden sm:inline">ENTER TO UNLOCK DISCOUNT</span>
+                <span className="sm:hidden">UNLOCK DISCOUNT</span>
+              </span>
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -9,8 +9,9 @@ import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useM
 import MembershipSection from "@/components/sections/MembershipSection";
 
 import MajorDrawSection from "@/components/sections/MajorDrawSection";
-import ProductCategories from "@/components/features/ProductCategories";
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
+import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
+import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import MembershipModal from "@/components/modals/MembershipModal";
@@ -22,6 +23,25 @@ import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/member
 import { Clock, Share2 } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
+
+// Partner Discounts Section Component
+// Conditionally renders UnlockDiscounts based on user's partner discount access
+function PartnerDiscountsSection({ user }: { user: import("@/hooks/queries/useUserQueries").UserData }) {
+  // Check if user has active partner discount access
+  const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
+
+  return (
+    <UnlockDiscounts
+      showUnlockButton={!hasAccess}
+      title={hasAccess ? "Partner Discounts" : "Unlock Massive Partner Discounts"}
+      description={
+        hasAccess
+          ? "Access exclusive discounts from Australia's top tool brands"
+          : "Get instant access to exclusive discounts from Australia's top tool brands"
+      }
+    />
+  );
+}
 
 // Simple countdown display component for the badge
 function CountdownDisplay({ targetDate }: { targetDate: string }) {
@@ -92,7 +112,7 @@ export default function MyAccountPage() {
     page: 1,
     limit: 8,
     status: "active",
-    sortBy: "activationDate",
+    sortBy: "createdAt",
     sortOrder: "desc",
   });
 
@@ -259,11 +279,62 @@ export default function MyAccountPage() {
 
   // Map mini draws to include fields required by ProductCard (must be after user is extracted)
   const hasActiveMembership = user?.subscription?.isActive === true;
-  const activeMiniDraws = (miniDrawsData?.miniDraws || []).map((miniDraw) => {
+
+  // Get user's mini draw participation IDs for prioritization
+  // Type assertion to access miniDrawParticipation which may not be in the UserData type
+  const userWithParticipation = user as unknown as {
+    miniDrawParticipation?: Array<{
+      miniDrawId: unknown;
+      totalEntries: number;
+    }>;
+  };
+
+  const userParticipatingMiniDrawIds = new Set(
+    (userWithParticipation?.miniDrawParticipation || [])
+      .filter((p) => p.totalEntries > 0)
+      .map((p) => {
+        // Handle both string and ObjectId formats
+        const miniDrawId = p.miniDrawId;
+        if (typeof miniDrawId === "string") {
+          return miniDrawId;
+        }
+        if (miniDrawId && typeof miniDrawId === "object") {
+          // Check if it has toString method (ObjectId-like)
+          if ("toString" in miniDrawId && typeof (miniDrawId as { toString: () => string }).toString === "function") {
+            return (miniDrawId as { toString: () => string }).toString();
+          }
+          // Check if it has _id property
+          if ("_id" in miniDrawId) {
+            const idValue = (miniDrawId as { _id: unknown })._id;
+            if (typeof idValue === "string") {
+              return idValue;
+            }
+            if (idValue && typeof idValue === "object" && "toString" in idValue) {
+              return (idValue as { toString: () => string }).toString();
+            }
+          }
+        }
+        return "";
+      })
+      .filter((id) => id !== "")
+  );
+
+  // Map and categorize mini draws
+  const allActiveMiniDraws = (miniDrawsData?.miniDraws || []).map((miniDraw) => {
     const totalEntries = miniDraw.totalEntries || 0;
     const minimumEntries = miniDraw.minimumEntries || 0;
     const entriesRemaining =
       miniDraw.entriesRemaining !== undefined ? miniDraw.entriesRemaining : Math.max(minimumEntries - totalEntries, 0);
+
+    // Check if user is a participant in this mini draw
+    const miniDrawId =
+      typeof miniDraw._id === "string"
+        ? miniDraw._id
+        : miniDraw._id && typeof miniDraw._id === "object" && "toString" in miniDraw._id
+        ? (miniDraw._id as { toString: () => string }).toString()
+        : String(miniDraw._id);
+    const isParticipant = userParticipatingMiniDrawIds.has(miniDrawId);
+
     return {
       ...miniDraw,
       totalEntries,
@@ -271,8 +342,16 @@ export default function MyAccountPage() {
       entriesRemaining,
       requiresMembership: true, // Mini draws require membership
       hasActiveMembership,
+      isParticipant, // Flag to indicate user is participating
     };
   });
+
+  // Separate into participant and non-participant draws
+  const participantMiniDraws = allActiveMiniDraws.filter((draw) => draw.isParticipant);
+  const otherMiniDraws = allActiveMiniDraws.filter((draw) => !draw.isParticipant);
+
+  // Combine: participant draws first, then others
+  const activeMiniDraws = [...participantMiniDraws, ...otherMiniDraws];
 
   // Get membership badge colors based on package type
   const getMembershipBadgeColors = (packageName?: string) => {
@@ -689,7 +768,7 @@ export default function MyAccountPage() {
           </div>
 
           {/* Mini Draw Section */}
-          <div className="mb-16">
+          <div className="">
             <div className="text-center mb-12">
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent font-['Poppins'] mb-6">
                 Mini Draw
@@ -705,24 +784,58 @@ export default function MyAccountPage() {
                 <p className="text-gray-600">No active mini-draws available at the moment.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                {activeMiniDraws.map((miniDraw) => (
-                  <ProductCard key={miniDraw._id} product={miniDraw} viewMode="grid" />
-                ))}
-              </div>
+              <>
+                {/* Participant Mini Draws Section */}
+                {participantMiniDraws.length > 0 && (
+                  <div className="mb-8">
+                    <div className="mb-4">
+                      <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2">
+                        Your Mini Draws
+                      </h3>
+                      <p className="text-sm text-gray-600">Mini draws you&apos;re currently participating in</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                      {participantMiniDraws.map((miniDraw) => (
+                        <div key={miniDraw._id} className="relative">
+                          <div className="absolute -top-2 -right-2 z-10">
+                            <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg border-2 border-green-400/30">
+                              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
+                              <span className="relative z-10">Your Draw</span>
+                            </div>
+                          </div>
+                          <ProductCard product={miniDraw} viewMode="grid" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Other Active Mini Draws Section */}
+                {otherMiniDraws.length > 0 && (
+                  <div>
+                    {participantMiniDraws.length > 0 && (
+                      <div className="mb-4">
+                        <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2">
+                          Explore More Mini Draws
+                        </h3>
+                        <p className="text-sm text-gray-600">Join these exciting mini draws</p>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                      {otherMiniDraws.map((miniDraw) => (
+                        <ProductCard key={miniDraw._id} product={miniDraw} viewMode="grid" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        {/* Partner Brands Section */}
-        <div className="my-account-product-categories">
-          <ProductCategories
-            title="OUR PARTNER BRANDS"
-            description="Explore our trusted partner brands and discover professional-grade tools and equipment for your trade"
-            padding="pb-8 sm:pb-12 lg:pb-16 pt-8"
-            margin="mb-16 sm:mb-20 lg:mb-24"
-            showBackground={false}
-          />
+        {/* Partner Discounts Section */}
+        <div className="my-account-partner-discounts ">
+          <PartnerDiscountsSection user={user} />
         </div>
       </div>
 

@@ -137,7 +137,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "apprentice-pack",
     name: "Apprentice Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 25
+    price: 25,
     description: "Quick boost for your entry wallet",
     features: ["3 Free Entries", "1 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 3,
@@ -152,7 +152,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "tradie-pack",
     name: "Tradie Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 50
+    price: 50,
     description: "Great value entry boost",
     features: ["15 Free Entries", "2 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 15,
@@ -167,7 +167,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "foreman-pack",
     name: "Foreman Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 100
+    price: 100,
     description: "Maximum entries for serious players",
     features: ["30 Free Entries", "4 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 30,
@@ -182,7 +182,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "boss-pack",
     name: "Boss Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 250
+    price: 250,
     description: "The ultimate entry package",
     features: ["150 Free Entries", "10 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 150,
@@ -197,7 +197,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "power-pack",
     name: "Power Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 500
+    price: 500,
     description: "Elite package for the ultimate professionals",
     features: ["600 Free Entries", "20 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 600,
@@ -214,7 +214,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-apprentice-pack",
     name: "Additional Apprentice Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 25
+    price: 25,
     description: "Quick boost for your entry wallet - Member Exclusive",
     features: ["10 Free Entries", "1 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 10,
@@ -229,7 +229,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-tradie-pack",
     name: "Additional Tradie Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 50
+    price: 50,
     description: "Great value entry boost - Member Exclusive",
     features: ["30 Free Entries", "2 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 30,
@@ -244,7 +244,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-foreman-pack",
     name: "Additional Foreman Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 100
+    price: 100,
     description: "Maximum entries for serious players - Member Exclusive",
     features: ["100 Free Entries", "4 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 100,
@@ -259,7 +259,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-boss-pack",
     name: "Additional Boss Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 250
+    price: 250,
     description: "The ultimate entry package - Member Exclusive",
     features: ["400 Free Entries", "10 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 400,
@@ -274,7 +274,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-power-pack",
     name: "Additional Power Pack",
     type: "one-time",
-    price: 0.5, // TEST PRICE - Original: 500
+    price: 500,
     description: "Elite package for the ultimate professionals - Member Exclusive",
     features: ["1200 Free Entries", "20 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 1200,

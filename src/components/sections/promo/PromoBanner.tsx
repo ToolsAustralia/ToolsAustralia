@@ -69,7 +69,7 @@ export default function PromoBanner() {
   return (
     <div
       className={`${
-        isScrolled ? "fixed -top-2 left-4 right-4 rounded-full z-50" : "relative w-full mt-0 z-30"
+        isScrolled ? "fixed top-4 left-4 right-4 rounded-full z-50" : "relative w-full mt-0 z-30"
       } bg-gradient-to-r from-gray-900 via-gray-800 to-black shadow-2xl border-b-2 border-red-500/50 transition-all duration-300`}
     >
       <div className="h-16 sm:h-20 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
