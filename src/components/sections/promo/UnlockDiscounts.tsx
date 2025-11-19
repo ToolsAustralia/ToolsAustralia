@@ -105,6 +105,8 @@ function highlightDiscountMessage(message: string): React.ReactNode {
   return <>{parts}</>;
 }
 
+const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.png";
+
 const partnerDiscounts = [
   {
     id: "milwaukee",
@@ -288,10 +290,20 @@ export default function UnlockDiscounts({
               </div>
 
               {/* Bottom Half: White Background with Discount Message */}
-              <div className="h-1/2 bg-white flex items-center justify-center p-3 sm:p-4 lg:p-5">
+              <div className="h-1/2 bg-white flex flex-col items-center justify-center gap-2 p-3 sm:p-4 lg:p-5">
                 <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 font-['Inter'] text-center leading-tight">
                   {highlightDiscountMessage(partner.discountMessage)}
                 </p>
+                <div className="flex items-center justify-center">
+                  <Image
+                    src={toolsAustraliaLogo}
+                    alt="Tools Australia logo"
+                    width={48}
+                    height={48}
+                    className="h-4 w-auto object-contain drop-shadow sm:h-6 lg:h-7"
+                    unoptimized
+                  />
+                </div>
               </div>
 
               {/* Hover Glow Effect */}

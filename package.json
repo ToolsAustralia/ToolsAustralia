@@ -21,6 +21,7 @@
     "@types/nodemailer": "^7.0.2",
     "@types/nprogress": "^0.2.3",
     "@vercel/analytics": "^1.5.0",
+    "@vercel/speed-insights": "^1.2.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "csv-stringify": "^6.6.0",

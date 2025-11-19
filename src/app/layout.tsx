@@ -7,6 +7,7 @@ import PixelTracker from "@/components/PixelTracker";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 // Import console log silencer for production - must be imported early
 import "@/utils/common/silence-logs";
 
@@ -90,6 +91,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>{children}</Providers>
         <MajorDrawTestControls />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

@@ -752,16 +752,26 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           )}
                           <Link
                             href="/my-account"
-                            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
+                            <UserCircle className="w-4 h-4 text-red-500" />
                             My Account
                           </Link>
                           <Link
-                            href="/draw-results"
-                            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            href="/my-account/benefits"
+                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
+                            <Handshake className="w-4 h-4 text-red-500" />
+                            Partner Benefits
+                          </Link>
+                          <Link
+                            href="/draw-results"
+                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            onClick={() => setIsDesktopUserMenuOpen(false)}
+                          >
+                            <Trophy className="w-4 h-4 text-red-500" />
                             Draw Results
                           </Link>
                         </>
@@ -769,8 +779,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       <hr className="my-2 border-gray-100" />
                       <button
                         onClick={handleSignOut}
-                        className="block w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                        className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
                       >
+                        <LogOut className="w-4 h-4 text-red-500" />
                         Sign Out
                       </button>
                     </div>
@@ -900,16 +911,26 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         )}
                         <Link
                           href="/my-account"
-                          className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
+                          <UserCircle className="w-4 h-4 text-red-500" />
                           My Account
                         </Link>
                         <Link
-                          href="/draw-results"
-                          className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          href="/my-account/benefits"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
+                          <Handshake className="w-4 h-4 text-red-500" />
+                          Partner Benefits
+                        </Link>
+                        <Link
+                          href="/draw-results"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          onClick={() => setIsMobileUserMenuOpen(false)}
+                        >
+                          <Trophy className="w-4 h-4 text-red-500" />
                           Draw Results
                         </Link>
                       </>
@@ -917,8 +938,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <hr className="my-2 border-gray-100" />
                     <button
                       onClick={handleSignOut}
-                      className="block w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                      className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
                     >
+                      <LogOut className="w-4 h-4 text-red-500" />
                       Sign Out
                     </button>
                   </div>
