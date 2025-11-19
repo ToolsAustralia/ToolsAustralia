@@ -4,6 +4,28 @@ import User from "@/models/User";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { sign } from "jsonwebtoken";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+
+const rawJwtSecret = process.env.NEXTAUTH_SECRET;
+if (!rawJwtSecret) {
+  throw new Error("NEXTAUTH_SECRET is required to sign login tokens.");
+}
+const jwtSecret = rawJwtSecret;
+
+const loginSessionCookie = {
+  name: "ta_session_token",
+  maxAgeSeconds: 60 * 60 * 24 * 7,
+};
+
+const allowedOrigins = [
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://toolsaustralia.com.au",
+  "http://localhost:3000",
+];
+
+const loginRateLimiter = createRateLimiter("auth-login", {
+  windowMs: 60 * 1000, // 1 minute window
+  maxRequests: 5, // 5 attempts per minute per IP
+});
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -12,6 +34,37 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Simple same-origin check: browsers always send the Origin header for POSTs,
+    // so blocking mismatched origins protects this endpoint from CSRF attacks.
+    const origin = request.headers.get("origin");
+    if (origin) {
+      const isAllowedOrigin = allowedOrigins.some((allowed) => {
+        try {
+          return new URL(allowed).origin === origin;
+        } catch {
+          return false;
+        }
+      });
+
+      if (!isAllowedOrigin) {
+        return NextResponse.json({ error: "Origin not allowed" }, { status: 403 });
+      }
+    }
+
+    const identifier = getClientIdentifier(request.headers.get("x-real-ip"), request.headers.get("x-forwarded-for"));
+    const rateCheck = loginRateLimiter.check(identifier);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please wait a moment before trying again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": rateCheck.retryAfterSeconds.toString(),
+          },
+        }
+      );
+    }
+
     await connectDB();
 
     const body = await request.json();
@@ -41,7 +94,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         role: user.role,
       },
-      process.env.NEXTAUTH_SECRET!,
+      jwtSecret,
       { expiresIn: "7d" }
     );
 
@@ -49,11 +102,23 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = user.toObject();
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: "Login successful",
       user: userWithoutPassword,
       token,
     });
+
+    response.cookies.set({
+      name: loginSessionCookie.name,
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: loginSessionCookie.maxAgeSeconds,
+    });
+
+    return response;
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });

@@ -6,6 +6,18 @@ import connectDB from "./mongodb";
 import User from "@/models/User";
 import { verifyJWT } from "./jwt";
 
+/**
+ * Lightweight debug helper so we never log sensitive auth data in production.
+ * Toggle via NEXT_PUBLIC_ENABLE_AUTH_DEBUG for local testing.
+ */
+const isAuthDebugEnabled =
+  process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_AUTH_DEBUG === "true";
+const authDebugLog = (...args: unknown[]): void => {
+  if (isAuthDebugEnabled) {
+    console.log(...args);
+  }
+};
+
 // Validate required environment variables
 const requiredEnvVars = {
   NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
@@ -26,8 +38,8 @@ if (missingVars.length > 0) {
 }
 
 export const authOptions: NextAuthOptions = {
-  // Enable debug logging in production for troubleshooting
-  debug: process.env.NODE_ENV === "production",
+  // Keep debug output strictly disabled in production
+  debug: isAuthDebugEnabled,
 
   providers: [
     GoogleProvider({
@@ -41,30 +53,30 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        console.log("🔍 NextAuth authorize called with:", {
+        authDebugLog("🔍 NextAuth authorize called with:", {
           email: credentials?.email,
           hasPassword: !!credentials?.password,
         });
 
         if (!credentials?.email) {
-          console.log("❌ Missing email");
+          authDebugLog("❌ Missing email");
           return null;
         }
 
         try {
-          console.log("🔍 Attempting to connect to database...");
+          authDebugLog("🔍 Attempting to connect to database...");
           await connectDB();
-          console.log("✅ Database connected successfully");
+          authDebugLog("✅ Database connected successfully");
 
-          console.log("🔍 Looking for user:", credentials.email);
+          authDebugLog("🔍 Looking for user:", credentials.email);
           const user = await User.findOne({ email: credentials.email });
 
           if (!user) {
-            console.log("❌ User not found:", credentials.email);
+            authDebugLog("❌ User not found:", credentials.email);
             return null;
           }
 
-          console.log("✅ User found:", {
+          authDebugLog("✅ User found:", {
             id: user._id,
             email: user.email,
             isActive: user.isActive,
@@ -75,28 +87,28 @@ export const authOptions: NextAuthOptions = {
 
           // Handle passwordless users (no password field)
           if (!user.password) {
-            console.log("🔍 User has no password - passwordless user");
+            authDebugLog("🔍 User has no password - passwordless user");
             // For passwordless users, we'll handle authentication via SMS OTP in a separate endpoint
             // This credentials provider is mainly for users with passwords
-            console.log("❌ Passwordless user cannot login via credentials provider");
+            authDebugLog("❌ Passwordless user cannot login via credentials provider");
             return null;
           }
 
           // Handle users with passwords
           if (!credentials?.password) {
-            console.log("❌ Password required for this user");
+            authDebugLog("❌ Password required for this user");
             return null;
           }
 
-          console.log("🔍 Checking password...");
+          authDebugLog("🔍 Checking password...");
           const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
 
           if (!isPasswordValid) {
-            console.log("❌ Invalid password for user:", credentials.email);
+            authDebugLog("❌ Invalid password for user:", credentials.email);
             return null;
           }
 
-          console.log("✅ Password valid for user:", credentials.email);
+          authDebugLog("✅ Password valid for user:", credentials.email);
 
           const result = {
             id: user._id.toString(),
@@ -106,7 +118,7 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
           };
 
-          console.log("✅ Returning user data:", result);
+          authDebugLog("✅ Returning user data:", result);
           return result;
         } catch (error) {
           console.error("❌ Auth error:", error);
@@ -125,17 +137,17 @@ export const authOptions: NextAuthOptions = {
         token: { label: "Token", type: "text" },
       },
       async authorize(credentials) {
-        console.log("🔍 Auto-login authorize called");
+        authDebugLog("🔍 Auto-login authorize called");
 
         if (!credentials?.token) {
-          console.log("❌ Missing auto-login token");
+          authDebugLog("❌ Missing auto-login token");
           return null;
         }
 
         try {
           // Verify the JWT token
           const payload = await verifyJWT(credentials.token);
-          console.log("✅ Auto-login token verified for:", payload.email);
+          authDebugLog("✅ Auto-login token verified for:", payload.email);
 
           return {
             id: payload.sub,
@@ -184,7 +196,7 @@ export const authOptions: NextAuthOptions = {
           await connectDB();
           const dbUser = await User.findById(token.sub);
           if (dbUser && dbUser.email !== token.email) {
-            console.log(`✅ Email synced from database: ${token.email} → ${dbUser.email}`);
+            authDebugLog(`✅ Email synced from database: ${token.email} → ${dbUser.email}`);
             token.email = dbUser.email;
             token.firstName = dbUser.firstName;
             token.lastName = dbUser.lastName;
@@ -215,7 +227,7 @@ export const authOptions: NextAuthOptions = {
           if (!existingUser) {
             // Google OAuth is only allowed for existing users
             // New users must register through the normal flow to set up their account
-            console.log(`❌ Google sign-in rejected: No existing account for ${user.email}`);
+            authDebugLog(`❌ Google sign-in rejected: No existing account for ${user.email}`);
             return false; // Reject sign-in for new users
           }
 
@@ -234,9 +246,9 @@ export const authOptions: NextAuthOptions = {
 
           if (hasActiveSubscription || hasActiveOneTimePackages) {
             const membershipType = hasActiveSubscription ? "subscription" : "one-time packages";
-            console.log(`✅ Google sign-in approved for ${user.email} with active ${membershipType}`);
+            authDebugLog(`✅ Google sign-in approved for ${user.email} with active ${membershipType}`);
           } else {
-            console.log(`✅ Google sign-in approved for ${user.email} (no active membership)`);
+            authDebugLog(`✅ Google sign-in approved for ${user.email} (no active membership)`);
           }
 
           return true;

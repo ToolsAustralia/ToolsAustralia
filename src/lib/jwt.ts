@@ -1,4 +1,14 @@
-const JWT_SECRET = process.env.NEXTAUTH_SECRET || "fallback-secret-key";
+/**
+ * JWT signing secret for auth tokens.
+ * We fail fast when the secret is missing so we never generate weak tokens.
+ */
+const rawJwtSecret = process.env.NEXTAUTH_SECRET;
+
+if (!rawJwtSecret) {
+  throw new Error("NEXTAUTH_SECRET is required for JWT operations but was not provided.");
+}
+
+const JWT_SECRET = rawJwtSecret;
 
 export interface JWTPayload {
   sub: string;

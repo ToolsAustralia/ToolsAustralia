@@ -10,8 +10,8 @@ export default withAuth(
     const protectedRoutes = ["/rewards", "/my-account"];
     const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
 
-    // Admin-only routes
-    const adminRoutes = ["/admin"];
+    // Admin-only routes (UI + API namespaces)
+    const adminRoutes = ["/admin", "/api/admin"];
     const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 
     // Check authentication for protected routes
@@ -46,7 +46,7 @@ export default withAuth(
         }
 
         // For admin routes, require admin role
-        const adminRoutes = ["/admin"];
+        const adminRoutes = ["/admin", "/api/admin"];
         const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 
         if (isAdminRoute) {
@@ -60,5 +60,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: ["/rewards/:path*", "/my-account/:path*", "/admin/:path*"],
+  matcher: ["/rewards/:path*", "/my-account/:path*", "/admin/:path*", "/api/admin/:path*"],
 };
