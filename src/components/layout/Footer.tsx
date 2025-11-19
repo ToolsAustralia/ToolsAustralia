@@ -40,6 +40,9 @@ export default function Footer() {
                 <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px] mb-3 sm:mb-4">
                   ABN:54 690 397 061 | ACN: 690 397 061 | License: TP/04720
                 </p>
+                <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px]">
+                  Notification Number: NTP/15117 (Major Giveaway)
+                </p>
               </div>
             </div>
 

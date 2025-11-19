@@ -179,6 +179,7 @@ export interface AdminUserDetail {
   email: string;
   mobile?: string;
   state?: string;
+  profession?: string;
   role: "user" | "admin";
   isActive: boolean;
   isEmailVerified: boolean;
@@ -382,6 +383,7 @@ export interface AdminUserUpdatePayload {
     email?: string;
     mobile?: string;
     state?: string;
+    profession?: string;
     role?: "user" | "admin";
     isActive?: boolean;
     isEmailVerified?: boolean;

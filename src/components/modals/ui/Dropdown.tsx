@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
+import Input from "./Input";
 
 export interface DropdownOption {
   value: string;
@@ -19,6 +20,13 @@ interface DropdownProps {
   label?: string;
   error?: string;
   required?: boolean;
+  // Custom input support for "Other" option
+  showCustomInput?: boolean;
+  customInputValue?: string;
+  onCustomInputChange?: (value: string) => void;
+  customInputPlaceholder?: string;
+  customInputError?: string;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 const Dropdown: React.FC<DropdownProps> = ({
@@ -31,6 +39,12 @@ const Dropdown: React.FC<DropdownProps> = ({
   label,
   error,
   required = false,
+  showCustomInput = false,
+  customInputValue = "",
+  onCustomInputChange,
+  customInputPlaceholder = "Enter your profession",
+  customInputError,
+  onOpenChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -64,6 +78,11 @@ const Dropdown: React.FC<DropdownProps> = ({
       };
     }
   }, [isOpen]);
+
+  // Notify parent when dropdown open state changes
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const selectedOption = options.find((option) => option.value === value);
 
@@ -153,6 +172,21 @@ const Dropdown: React.FC<DropdownProps> = ({
               </button>
             ))
           )}
+        </div>
+      )}
+
+      {/* Custom Input for "Other" option */}
+      {showCustomInput && value === "Other" && (
+        <div className="mt-3">
+          <Input
+            type="text"
+            value={customInputValue}
+            onChange={(e) => onCustomInputChange?.(e.target.value)}
+            placeholder={customInputPlaceholder}
+            error={customInputError}
+            maxLength={100}
+            required={required}
+          />
         </div>
       )}
 

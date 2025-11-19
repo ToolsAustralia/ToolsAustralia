@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Users, ArrowRight, Zap, Check } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -29,7 +28,6 @@ interface MajorDrawSectionProps {
 }
 
 export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
-  const router = useRouter();
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -234,54 +232,75 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
     return (
       <div className={layout === "desktop" ? "w-full" : ""}>
-        <p className="text-xs sm:text-sm text-gray-500 font-['Inter'] uppercase tracking-wide mb-2 sm:mb-3 text-center">
-          Pick Your Toolset
+        <p className="text-lg sm:text-xl font-bold text-black font-['Poppins'] mb-2 sm:mb-3 text-center">
+          What will YOU choose?
         </p>
         <div className="grid grid-cols-2 gap-2 sm:gap-4">
           {prizes.map((prizeOption) => {
             const isActive = prizeOption.slug === activeSlug;
             const shortLabel = getShortLabel(prizeOption.label);
+            const isCashPrize = prizeOption.slug === "cash-prize";
+
             return (
               <button
                 key={prizeOption.slug}
                 onClick={() => {
-                  // On mobile, redirect to prize page; on desktop, use state toggle
-                  if (layout === "mobile") {
-                    router.push(`/promotions/${prizeOption.slug}`);
-                  } else {
-                    handlePrizeSelect(prizeOption.slug);
-                  }
+                  handlePrizeSelect(prizeOption.slug);
                 }}
-                className={`relative p-2.5 sm:p-5 rounded-lg sm:rounded-xl border-2 transition-all duration-200 text-left hover:scale-[1.02] ${
+                className={`relative p-2.5 sm:p-5 rounded-lg sm:rounded-xl border-2 transition-all duration-200 text-left hover:scale-[1.02] overflow-visible min-h-[80px] sm:min-h-[100px] ${
                   isActive
-                    ? "bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
+                    ? isCashPrize
+                      ? "bg-white text-gray-700 border-green-500 shadow-lg shadow-green-500/40"
+                      : "bg-white text-gray-700 border-red-500 shadow-lg shadow-red-500/40"
+                    : isCashPrize
+                    ? "bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 text-gray-700 border-green-300 hover:border-green-400 hover:text-green-700 hover:shadow-md"
                     : "bg-white text-gray-700 border-slate-300 hover:border-red-400 hover:text-red-600 hover:shadow-md"
                 }`}
               >
                 {/* Active checkmark badge */}
                 {isActive && (
                   <div className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full flex items-center justify-center shadow-lg z-10">
-                    <Check className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+                    <Check className={`w-3 h-3 sm:w-4 sm:h-4 ${isCashPrize ? "text-green-600" : "text-red-600"}`} />
                   </div>
                 )}
 
-                {/* Card content */}
-                <div className="pr-5 sm:pr-6">
+                {/* Card content - text fills the space */}
+                <div className="relative z-10 pr-5 sm:pr-6">
                   <div
-                    className={`text-xs sm:text-base font-bold font-['Poppins'] mb-0.5 sm:mb-1 leading-tight ${
-                      isActive ? "text-white" : "text-gray-900"
+                    className={`${
+                      isCashPrize ? "text-base sm:text-xl" : "text-xs sm:text-base"
+                    } font-bold font-['Poppins'] mb-0.5 sm:mb-1 leading-tight ${
+                      isActive
+                        ? isCashPrize
+                          ? "text-green-700"
+                          : "text-red-700"
+                        : isCashPrize
+                        ? "text-gray-900"
+                        : "text-gray-900"
                     }`}
                   >
-                    {shortLabel}
+                    {isCashPrize ? "Or win $10,000 cash" : shortLabel}
                   </div>
                   {/* Full label as subtitle on desktop */}
                   <div
                     className={`text-[10px] sm:text-sm font-['Inter'] leading-tight ${
-                      isActive ? "text-white/80" : "text-gray-600"
+                      isActive
+                        ? isCashPrize
+                          ? "text-green-600"
+                          : "text-red-600"
+                        : isCashPrize
+                        ? "text-gray-700"
+                        : "text-gray-600"
                     }`}
                   >
-                    <span className="hidden sm:inline">{prizeOption.label}</span>
-                    <span className="sm:hidden line-clamp-1">{prizeOption.label.split(",")[0]}</span>
+                    {isCashPrize ? (
+                      <span className="font-semibold">Pure cash - no tools, just money!</span>
+                    ) : (
+                      <>
+                        <span className="hidden sm:inline">{prizeOption.label}</span>
+                        <span className="sm:hidden line-clamp-1">{prizeOption.label.split(",")[0]}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </button>
@@ -337,7 +356,9 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="text-center space-y-2 px-4">
               {/* Mobile: Main Title */}
               <div className="flex items-center justify-center gap-2">
-                <h2 className="text-[24px] font-bold text-black font-['Poppins'] leading-tight">{prizeHeroHeading}</h2>
+                <h2 className="hidden lg:block text-[24px] font-bold text-black font-['Poppins'] leading-tight">
+                  {prizeHeroHeading}
+                </h2>
               </div>
               {prizeLabel && (
                 <p className="hidden sm:block text-xs uppercase tracking-[0.35em] text-red-600 font-semibold">

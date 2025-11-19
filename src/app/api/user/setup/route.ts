@@ -10,6 +10,7 @@ import { z } from "zod";
 const setupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   state: z.string().min(1, "State is required"),
+  profession: z.string().min(1, "Profession is required").max(100, "Profession cannot exceed 100 characters"),
 });
 
 // Validation schema for email verification only
@@ -56,12 +57,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid input", details: validationResult.error.issues }, { status: 400 });
       }
 
-      const { password, state } = validationResult.data;
+      const { password, state, profession } = validationResult.data;
 
       // Validate state code
       const validStates = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
       if (!validStates.includes(state.toUpperCase())) {
         return NextResponse.json({ error: "Invalid state code" }, { status: 400 });
+      }
+
+      // Validate profession (trim and ensure it's not empty)
+      const trimmedProfession = profession.trim();
+      if (!trimmedProfession || trimmedProfession.length === 0) {
+        return NextResponse.json({ error: "Profession is required" }, { status: 400 });
+      }
+      if (trimmedProfession.length > 100) {
+        return NextResponse.json({ error: "Profession cannot exceed 100 characters" }, { status: 400 });
       }
 
       // Check if user already has a password and state set
@@ -76,6 +86,7 @@ export async function POST(request: NextRequest) {
       // Update user
       user.password = hashedPassword;
       user.state = state.toUpperCase();
+      user.profession = trimmedProfession;
       user.profileSetupCompleted = true; // Mark setup as completed
       await user.save();
 

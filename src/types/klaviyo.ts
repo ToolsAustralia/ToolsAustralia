@@ -23,6 +23,7 @@ export interface KlaviyoProfileProperties {
   is_active: boolean;
   role: string;
   state?: string; // Australian state/territory
+  profession?: string; // User's profession
 
   // Verification status
   is_email_verified: boolean;

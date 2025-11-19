@@ -448,6 +448,7 @@ async function buildAdminUserProfile(userId: string) {
     email: user.email,
     mobile: user.mobile,
     state: user.state,
+    profession: user.profession,
     role: user.role,
     isActive: user.isActive,
     isEmailVerified: user.isEmailVerified,
@@ -542,6 +543,15 @@ function applyBasicInfoUpdate(user: IUser, basicInfo?: AdminUserUpdatePayload["b
 
   if (basicInfo.state !== undefined) {
     user.state = basicInfo.state.toUpperCase();
+  }
+
+  if (basicInfo.profession !== undefined) {
+    // Trim and validate profession
+    const trimmedProfession = basicInfo.profession.trim();
+    if (trimmedProfession.length > 100) {
+      throw new Error("Profession cannot exceed 100 characters");
+    }
+    user.profession = trimmedProfession || undefined;
   }
 
   if (basicInfo.role !== undefined) {

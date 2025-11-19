@@ -41,6 +41,7 @@ export interface PrizeCatalogEntry {
   gallery: PrizeMedia[];
   highlights: PrizeHighlight[];
   specSections: PrizeSpecSection[];
+  cardBackgroundImage?: string; // Optional background image for toggle cards
 }
 
 export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "cash-prize";
@@ -912,8 +913,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     detailedDescription:
       "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$35,000+ Value",
+    cardBackgroundImage: "/images/majordraws/prize1/sidchrome-milwaukee-toggle.png",
     gallery: [
-      { src: "/images/majordraws/prize1/Milwaukee AI Giveaway Photo.png", alt: "Milwaukee tool collection overview" },
       { src: "/images/majordraws/prize1/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
       { src: "/images/majordraws/prize1/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit and storage" },
       { src: "/images/majordraws/prize1/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
@@ -985,6 +986,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using TSTAK storage, wheeled tool bags, and the Sidchrome 356-piece professional hand-tool kit.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
+      { src: "/images/majordraws/prize2/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
       { src: "/images/majordraws/prize2/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
       { src: "/images/majordraws/prize2/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
       { src: "/images/majordraws/prize2/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },

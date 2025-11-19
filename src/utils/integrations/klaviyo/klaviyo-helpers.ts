@@ -53,6 +53,7 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
       is_active: user.isActive,
       role: user.role,
       state: user.state ? getStateByCode(user.state)?.name : undefined,
+      profession: user.profession || undefined,
 
       // Verification status
       is_email_verified: user.isEmailVerified || false,

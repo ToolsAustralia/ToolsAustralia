@@ -31,6 +31,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { PROFESSIONS } from "@/data/professions";
 import { membershipPackages } from "@/data/membershipPackages";
 import { AdminUserUpdatePayload, UserActionType } from "@/types/admin";
 import { useAdminUpdateUser, useAdminUserActions, useAdminUserDetail } from "@/hooks/queries/useAdminQueries";
@@ -100,6 +101,7 @@ const overviewFormSchema = z.object({
   email: z.string().email("Enter a valid email"),
   mobile: z.string().min(8, "Mobile number is too short").optional().or(z.literal("")),
   state: z.string().optional(),
+  profession: z.string().max(100, "Profession cannot exceed 100 characters").optional().or(z.literal("")),
   role: z.enum(["user", "admin"]),
   isActive: z.boolean(),
   isEmailVerified: z.boolean(),
@@ -244,6 +246,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       email: user?.email ?? "",
       mobile: user?.mobile ?? "",
       state: user?.state ?? "",
+      profession: user?.profession ?? "",
       role: user?.role ?? "user",
       isActive: user?.isActive ?? false,
       isEmailVerified: user?.isEmailVerified ?? false,
@@ -645,6 +648,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         email: values.email.trim(),
         mobile: values.mobile?.replace(/\s+/g, "") || undefined,
         state: values.state ? values.state.toUpperCase() : undefined,
+        profession: values.profession?.trim() || undefined,
         role: values.role,
         isActive: values.isActive,
         isEmailVerified: values.isEmailVerified,
@@ -1020,6 +1024,20 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           )}
                         </div>
                         <div>
+                          <label className="text-sm font-medium text-gray-700">Profession</label>
+                          <input
+                            {...overviewForm.register("profession")}
+                            className={inputClasses}
+                            placeholder="Enter profession"
+                            maxLength={100}
+                          />
+                          {overviewForm.formState.errors.profession && (
+                            <p className="mt-1 text-xs text-red-600">
+                              {overviewForm.formState.errors.profession.message}
+                            </p>
+                          )}
+                        </div>
+                        <div>
                           <label className="text-sm font-medium text-gray-700">Role</label>
                           <select {...overviewForm.register("role")} className={inputClasses}>
                             <option value="user">User</option>
@@ -1170,6 +1188,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <div>
                             <p className="text-sm text-gray-600">State</p>
                             <p className="font-medium">{user.state || "Not provided"}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <User className="w-5 h-5 text-gray-400" />
+                          <div>
+                            <p className="text-sm text-gray-600">Profession</p>
+                            <p className="font-medium">{user.profession || "Not provided"}</p>
                           </div>
                         </div>
 

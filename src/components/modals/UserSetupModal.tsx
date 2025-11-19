@@ -3,9 +3,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Eye, EyeOff, CheckCircle } from "lucide-react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { PROFESSIONS } from "@/data/professions";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { DropdownOption } from "./ui/Dropdown";
+import Dropdown from "./ui/Dropdown";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input, Select } from "./ui";
 import EmailVerificationModal from "@/components/auth/EmailVerificationModal";
 import { environmentFlags } from "@/lib/environment";
@@ -25,6 +27,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const [inlineErrors, setInlineErrors] = useState<{
     password?: string;
     confirmPassword?: string;
+    profession?: string;
+    customProfession?: string;
   }>({});
 
   // Email verification state
@@ -44,15 +48,36 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [selectedState, setSelectedState] = useState("");
+  const [selectedProfession, setSelectedProfession] = useState("");
+  const [customProfession, setCustomProfession] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Dropdown open state tracking
+  const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
+  const [isProfessionDropdownOpen, setIsProfessionDropdownOpen] = useState(false);
+
+  // Handlers for dropdown open state changes
+  const handleStateDropdownChange = useCallback((isOpen: boolean) => {
+    setIsStateDropdownOpen(isOpen);
+  }, []);
+
+  const handleProfessionDropdownChange = useCallback((isOpen: boolean) => {
+    setIsProfessionDropdownOpen(isOpen);
+  }, []);
+
+  // Determine if any dropdown is open
+  const isAnyDropdownOpen = isStateDropdownOpen || isProfessionDropdownOpen;
 
   // Refs for focusing on error fields
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
-  
+
   // Ref to prevent multiple auto-completions of step 3
   const hasAutoCompletedRef = useRef(false);
+
+  // Ref to store handleComplete function for use in useEffect
+  const handleCompleteRef = useRef<((bypassEmailCheck?: boolean) => Promise<void>) | null>(null);
 
   // Password validation
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
@@ -112,6 +137,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       password,
       confirmPassword,
       selectedState,
+      selectedProfession,
+      customProfession,
       isEmailVerified,
       currentEmail,
       showEmailVerification,
@@ -124,7 +151,17 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     } catch (error) {
       console.error("Failed to save modal state:", error);
     }
-  }, [currentStep, password, confirmPassword, selectedState, isEmailVerified, currentEmail, showEmailVerification]);
+  }, [
+    currentStep,
+    password,
+    confirmPassword,
+    selectedState,
+    selectedProfession,
+    customProfession,
+    isEmailVerified,
+    currentEmail,
+    showEmailVerification,
+  ]);
 
   const restoreStateFromStorage = useCallback(() => {
     if (typeof window === "undefined") return null;
@@ -155,6 +192,12 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const stateOptions: DropdownOption[] = AUSTRALIAN_STATES.map((state) => ({
     value: state.code,
     label: state.name,
+  }));
+
+  // Convert professions to dropdown options
+  const professionOptions: DropdownOption[] = PROFESSIONS.map((profession) => ({
+    value: profession.value,
+    label: profession.label,
   }));
 
   // ModalContainer handles mount/unmount visuals; explicit visibility state removed
@@ -204,6 +247,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setPassword(savedState.password || "");
         setConfirmPassword(savedState.confirmPassword || "");
         setSelectedState(savedState.selectedState || "");
+        setSelectedProfession(savedState.selectedProfession || "");
+        setCustomProfession(savedState.customProfession || "");
         // Check userData.isEmailVerified as fallback (e.g., Gmail users who logged in after modal was opened)
         setIsEmailVerified(savedState.isEmailVerified || userData?.isEmailVerified || false);
         setCurrentEmail(savedState.currentEmail || userData?.email || "");
@@ -242,6 +287,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setPassword("");
         setConfirmPassword("");
         setSelectedState("");
+        setSelectedProfession("");
+        setCustomProfession("");
         // Initialize isEmailVerified from userData (e.g., Gmail users already have verified emails)
         setIsEmailVerified(userData?.isEmailVerified || false);
         setCurrentEmail(userData?.email || "");
@@ -279,27 +326,6 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     showEmailVerification,
     saveStateToStorage,
   ]);
-
-  // Auto-complete step 3 if email is already verified (e.g., Gmail users)
-  useEffect(() => {
-    if (
-      isOpen &&
-      currentStep === 3 &&
-      userData?.isEmailVerified &&
-      !isEmailVerified &&
-      !isLoading &&
-      !hasAutoCompletedRef.current
-    ) {
-      console.log("✅ Email already verified (e.g., Gmail login), auto-completing step 3...");
-      setIsEmailVerified(true);
-      hasAutoCompletedRef.current = true;
-      
-      // Auto-complete after a brief delay to show verified state
-      setTimeout(() => {
-        handleComplete(true); // bypassEmailCheck=true since email is already verified
-      }, 500);
-    }
-  }, [isOpen, currentStep, userData?.isEmailVerified, isEmailVerified, isLoading]);
 
   // Sync isEmailVerified state when userData updates while modal is open at step 3
   useEffect(() => {
@@ -388,6 +414,33 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setError("Please select your state");
         return;
       }
+
+      // Check if profession is selected
+      if (!selectedProfession) {
+        setInlineErrors({ profession: "Please select your profession" });
+        setError("Please select your profession");
+        return;
+      }
+
+      // If "Other" is selected, validate custom profession input
+      if (selectedProfession === "Other") {
+        const trimmedCustom = customProfession.trim();
+        if (!trimmedCustom) {
+          setInlineErrors({ customProfession: "Please enter your profession" });
+          setError("Please enter your profession");
+          return;
+        }
+        if (trimmedCustom.length < 2) {
+          setInlineErrors({ customProfession: "Profession must be at least 2 characters" });
+          setError("Profession must be at least 2 characters");
+          return;
+        }
+        if (trimmedCustom.length > 100) {
+          setInlineErrors({ customProfession: "Profession cannot exceed 100 characters" });
+          setError("Profession cannot exceed 100 characters");
+          return;
+        }
+      }
     }
 
     setCurrentStep(currentStep + 1);
@@ -446,6 +499,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
             body: JSON.stringify({
               password,
               state: selectedState,
+              profession: selectedProfession === "Other" ? customProfession.trim() : selectedProfession,
             }),
           });
 
@@ -508,6 +562,31 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       handleNext();
     }
   };
+
+  // Store handleComplete in ref for use in useEffect
+  handleCompleteRef.current = handleComplete;
+
+  // Auto-complete step 3 if email is already verified (e.g., Gmail users)
+  useEffect(() => {
+    if (
+      isOpen &&
+      currentStep === 3 &&
+      userData?.isEmailVerified &&
+      !isEmailVerified &&
+      !isLoading &&
+      !hasAutoCompletedRef.current &&
+      handleCompleteRef.current
+    ) {
+      console.log("✅ Email already verified (e.g., Gmail login), auto-completing step 3...");
+      setIsEmailVerified(true);
+      hasAutoCompletedRef.current = true;
+
+      // Auto-complete after a brief delay to show verified state
+      setTimeout(() => {
+        handleCompleteRef.current?.(true); // bypassEmailCheck=true since email is already verified
+      }, 500);
+    }
+  }, [isOpen, currentStep, userData?.isEmailVerified, isEmailVerified, isLoading]);
 
   // Email verification handlers
   const handleEmailVerificationSuccess = async () => {
@@ -692,9 +771,9 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                 </div>
               )}
 
-              {/* Step 2: State Selection */}
+              {/* Step 2: State and Profession Selection */}
               {currentStep === 2 && (
-                <div className="space-y-4 pb-48">
+                <div className={`space-y-4 ${isAnyDropdownOpen ? "pb-48" : ""}`}>
                   <Select
                     options={stateOptions}
                     value={selectedState}
@@ -703,6 +782,36 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                     label="Australian State or Territory"
                     required
                     error={error && !selectedState ? "Please select your state" : undefined}
+                    onOpenChange={handleStateDropdownChange}
+                  />
+                  <Dropdown
+                    options={professionOptions}
+                    value={selectedProfession}
+                    onChange={(value) => {
+                      setSelectedProfession(value);
+                      // Clear custom profession when switching away from "Other"
+                      if (value !== "Other") {
+                        setCustomProfession("");
+                      }
+                      // Clear errors when user makes a selection
+                      setError(null);
+                      setInlineErrors((prev) => ({ ...prev, profession: undefined, customProfession: undefined }));
+                    }}
+                    placeholder="Select your profession"
+                    label="Profession"
+                    required
+                    error={inlineErrors.profession}
+                    onOpenChange={handleProfessionDropdownChange}
+                    showCustomInput={true}
+                    customInputValue={customProfession}
+                    onCustomInputChange={(value) => {
+                      setCustomProfession(value);
+                      // Clear error when user starts typing
+                      setError(null);
+                      setInlineErrors((prev) => ({ ...prev, customProfession: undefined }));
+                    }}
+                    customInputPlaceholder="Enter your profession"
+                    customInputError={inlineErrors.customProfession}
                   />
                 </div>
               )}
@@ -827,7 +936,10 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                 onClick={currentStep === 3 ? () => void handleComplete() : handleNext}
                 disabled={
                   isLoading ||
-                  (currentStep === 2 && !selectedState) ||
+                  (currentStep === 2 &&
+                    (!selectedState ||
+                      !selectedProfession ||
+                      (selectedProfession === "Other" && !customProfession.trim()))) ||
                   (currentStep === 3 && environmentFlags.emailVerificationMandatory() && !isEmailVerified)
                 }
                 variant="metallic"

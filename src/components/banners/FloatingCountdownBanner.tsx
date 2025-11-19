@@ -233,8 +233,14 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                 <div className="sm:hidden">
                   {/* Mobile Expanded */}
                   <div className="text-center">
-                    <h3 className="text-sm font-bold text-white font-['Poppins'] mb-2">WIN PROFESSIONAL TOOLS!</h3>
-                    <p className="text-xs text-yellow-400 mb-4">UNTIL NEXT LIVE DRAW</p>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      {/* Pulsing Green Circle - Always visible in mobile */}
+                      <div className="relative">
+                        <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                        <div className="absolute inset-0 w-3 h-3 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                      </div>
+                      <h3 className="text-sm font-bold text-white font-['Poppins']">WIN PROFESSIONAL TOOLS!</h3>
+                    </div>
 
                     {isExpired ? (
                       <div className="text-center">
@@ -250,7 +256,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.days.toString().padStart(2, "0")}
                             </div>
-                            <div className="text-[10px] text-red-100 font-medium">D</div>
+                            <div className="text-[10px] text-red-100 font-medium">DAYS</div>
                           </div>
 
                           {/* Hours */}
@@ -258,7 +264,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.hours.toString().padStart(2, "0")}
                             </div>
-                            <div className="text-[10px] text-red-100 font-medium">H</div>
+                            <div className="text-[10px] text-red-100 font-medium">HRS</div>
                           </div>
 
                           {/* Minutes */}
@@ -266,7 +272,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.minutes.toString().padStart(2, "0")}
                             </div>
-                            <div className="text-[10px] text-red-100 font-medium">M</div>
+                            <div className="text-[10px] text-red-100 font-medium">MINS</div>
                           </div>
 
                           {/* Seconds */}
@@ -274,14 +280,14 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.seconds.toString().padStart(2, "0")}
                             </div>
-                            <div className="text-[10px] text-red-100 font-medium">S</div>
+                            <div className="text-[10px] text-red-100 font-medium">SECS</div>
                           </div>
                         </div>
 
-                        {/* Enter Now Button - In the same row */}
+                        {/* Enter Now Button - Same size as countdown cards */}
                         <button
                           onClick={handleViewDetails}
-                          className="px-3 py-1 text-xs bg-gradient-to-r from-yellow-500 via-yellow-600 to-orange-600 text-black rounded font-semibold"
+                          className="px-3 py-3 text-xs bg-gradient-to-r from-yellow-500 via-yellow-600 to-orange-600 text-black rounded font-semibold"
                         >
                           Enter Now
                         </button>

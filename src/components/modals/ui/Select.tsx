@@ -22,6 +22,7 @@ interface SelectProps {
   disabled?: boolean;
   searchable?: boolean;
   className?: string;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 const Select: React.FC<SelectProps> = ({
@@ -37,6 +38,7 @@ const Select: React.FC<SelectProps> = ({
   disabled = false,
   searchable = false,
   className = "",
+  onOpenChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -124,6 +126,11 @@ const Select: React.FC<SelectProps> = ({
       searchInputRef.current.focus();
     }
   }, [isOpen, searchable]);
+
+  // Notify parent when dropdown open state changes
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const toggleDropdown = () => {
     if (!disabled) {

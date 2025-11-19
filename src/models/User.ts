@@ -8,6 +8,7 @@ export interface IUser extends Document {
   password?: string; // Made optional for passwordless users
   mobile?: string;
   state?: string; // Australian state/territory code (e.g., "NSW", "VIC", "ACT")
+  profession?: string; // User's profession (e.g., "Builder", "Electrician", "Other", or custom value)
   profileSetupCompleted?: boolean; // Flag to track if user has completed profile setup
   role: "user" | "admin";
 
@@ -280,6 +281,11 @@ const UserSchema = new Schema<IUser>(
         },
         message: "Please enter a valid Australian state or territory code (NSW, VIC, QLD, WA, SA, TAS, ACT, NT)",
       },
+    },
+    profession: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Profession cannot be more than 100 characters"],
     },
     profileSetupCompleted: {
       type: Boolean,

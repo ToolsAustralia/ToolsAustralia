@@ -17,6 +17,7 @@ export interface UserData {
   role: string;
   mobile?: string;
   state?: string;
+  profession?: string;
   profileSetupCompleted?: boolean;
   subscription?: {
     packageId: string;
@@ -113,6 +114,7 @@ export interface UpdateUserProfileData {
   lastName?: string;
   mobile?: string;
   state?: string;
+  profession?: string;
   profileSetupCompleted?: boolean;
 }
 
