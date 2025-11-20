@@ -37,9 +37,9 @@ const partnerBrands = [
     productImage: "/images/brands/toolset/makitatools.jpg",
     description: "Innovative cordless and corded power tools",
     productCount: "View All Products",
-    color: "bg-cyan-600",
-    textColor: "text-blue-600",
-    metallicGradient: "from-cyan-600 via-blue-500 to-cyan-700",
+    color: "bg-makita-500", // Makita brand cyan
+    textColor: "text-makita-500", // Makita brand cyan
+    metallicGradient: "from-makita-500 via-makita-600 to-makita-700", // Makita brand gradient
     toolCategories: ["Drill", "Sander", "Nail Gun", "Vacuum", "Blower", "Trimmer"],
   },
   {

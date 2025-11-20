@@ -48,12 +48,12 @@ const resolveHighlightIcon = (iconName?: string): LucideIcon => {
   return fallbackIcon;
 };
 
-// Helper function to get shortened label for prize cards
+// Helper function to get full label for prize cards
 const getShortLabel = (label: string): string => {
-  if (label.includes("Milwaukee")) return "Milwaukee + $5K";
-  if (label.includes("DeWalt")) return "DeWalt + $5K";
-  if (label.includes("Makita")) return "Makita + $5K";
-  if (label.includes("$10000")) return "$10K Cash";
+  if (label.includes("Milwaukee")) return "Sidchrome/Milwaukee/Cash Prize";
+  if (label.includes("DeWalt")) return "Sidchrome/DeWalt/Cash Prize";
+  if (label.includes("Makita")) return "Sidchrome/Makita/Cash Prize";
+  if (label.includes("$10000") || label.includes("$10,000")) return "$10,000 Tax Free Cash";
   return label;
 };
 
@@ -136,11 +136,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 {prizes.map((prizeOption) => {
                   const isActive = prizeOption.slug === activeSlug;
                   const brandColors = getPrizeBrandColors(prizeOption.slug);
+                  const isMakita = prizeOption.slug === "makita-sidchrome";
                   return (
                     <button
                       key={prizeOption.slug}
                       onClick={() => handleSelectPrize(prizeOption.slug)}
-                      className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-left cursor-pointer min-h-[85px] sm:min-h-[110px] group ${
+                      className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-left cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
                         isActive
                           ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
                           : `bg-white text-gray-700 border-slate-300 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
@@ -166,17 +167,21 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                       )}
 
                       {/* Card content */}
-                      <div className="relative z-10 pr-6 sm:pr-8">
+                      <div className="relative z-10 w-full overflow-hidden">
                         <div
-                          className={`text-xs sm:text-base font-bold font-['Poppins'] mb-1 sm:mb-1.5 leading-tight transition-colors duration-200 ${
-                            isActive ? brandColors.textColor : "text-gray-900 group-hover:text-gray-950"
+                          className={`text-xs sm:text-base font-bold font-['Poppins'] mb-1 sm:mb-1.5 leading-tight transition-colors duration-200 break-words ${
+                            isMakita && isActive
+                              ? "text-red-600" // Red color for Makita label when active/focused
+                              : isActive
+                              ? brandColors.textColor
+                              : "text-gray-900 group-hover:text-gray-950"
                           }`}
                         >
                           {getShortLabel(prizeOption.label)}
                         </div>
                         {/* Full label - shown on both mobile and desktop */}
                         <div
-                          className={`text-[9px] sm:text-xs font-['Inter'] leading-tight transition-colors duration-200 ${
+                          className={`text-[9px] sm:text-xs font-['Inter'] leading-tight transition-colors duration-200 break-words ${
                             isActive ? brandColors.subtitleTextColor : "text-gray-600 group-hover:text-gray-700"
                           }`}
                         >

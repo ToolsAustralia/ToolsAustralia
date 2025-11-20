@@ -223,9 +223,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                       // DeWalt - Yellow/Black
                       product.brand.toLowerCase().includes("dewalt")
                         ? "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black"
-                        : // Makita - Teal/Blue
+                        : // Makita - Brand Cyan/Teal
                         product.brand.toLowerCase().includes("makita")
-                        ? "bg-gradient-to-r from-teal-500 to-cyan-600 text-white"
+                        ? "bg-gradient-to-r from-makita-500 to-makita-700 text-white" // Makita brand colors
                         : // Milwaukee - Red
                         product.brand.toLowerCase().includes("milwaukee")
                         ? "bg-gradient-to-r from-red-600 to-red-700 text-white"

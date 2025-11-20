@@ -44,13 +44,14 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
       };
     case "makita-sidchrome":
       return {
-        gradient: "from-cyan-600 via-blue-500 to-cyan-700",
-        borderColor: "border-cyan-500",
-        shadowColor: "shadow-cyan-500/40",
-        textColor: "text-red-600",
+        // Using custom Makita brand colors: #008C95 (light) and #007577 (dark)
+        gradient: "from-makita-500 via-makita-600 to-makita-700", // Makita cyan gradient
+        borderColor: "border-makita-500", // Primary Makita cyan border
+        shadowColor: "shadow-makita-500/40", // Makita cyan shadow
+        textColor: "text-white",
         subtitleTextColor: "text-white/90",
-        checkmarkColor: "text-cyan-600",
-        hoverBorderColor: "hover:border-cyan-400",
+        checkmarkColor: "text-makita-500", // Makita cyan checkmark
+        hoverBorderColor: "hover:border-makita-400", // Darker Makita teal on hover
       };
     case "cash-prize":
       return {

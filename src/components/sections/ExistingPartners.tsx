@@ -37,7 +37,7 @@ export default function ExistingPartners() {
 
   const partnerBrands = [
     { name: "DeWalt", logo: "/images/brands/dewalt.png", category: "Power Tools", color: "bg-yellow-600" },
-    { name: "Makita", logo: "/images/brands/Makita-red.png", category: "Professional Tools", color: "bg-cyan-600" },
+    { name: "Makita", logo: "/images/brands/Makita-red.png", category: "Professional Tools", color: "bg-makita-500" }, // Makita brand cyan
     { name: "Milwaukee", logo: "/images/brands/milwaukee.png", category: "Heavy Duty", color: "bg-red-600" },
     { name: "Sidchrome", logo: "/images/brands/sidchrome.png", category: "Hand Tools", color: "bg-red-700" },
     { name: "Kincrome", logo: "/images/brands/kincrome.png", category: "Tool Storage", color: "bg-blue-700" },

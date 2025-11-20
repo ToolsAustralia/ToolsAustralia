@@ -27,7 +27,7 @@ export const brandLogos: BrandLogo[] = [
     id: "makita",
     name: "Makita",
     logo: "/images/brands/Makita-red.png",
-    gradient: "from-cyan-600 via-blue-500 to-cyan-700",
+    gradient: "from-makita-500 via-makita-600 to-makita-700", // Makita brand gradient
     imageScale: 1.5,
   },
   {

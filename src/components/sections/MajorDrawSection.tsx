@@ -219,12 +219,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
   const detailsHref = `/promotions/${activeSlug ?? defaultSlug}`;
 
-  // Helper function to get shortened label for prize cards
+  // Helper function to get full label for prize cards
   const getShortLabel = (label: string): string => {
-    if (label.includes("Milwaukee")) return "Milwaukee + $5K";
-    if (label.includes("DeWalt")) return "DeWalt + $5K";
-    if (label.includes("Makita")) return "Makita + $5K";
-    if (label.includes("$10000")) return "$10K Cash";
+    if (label.includes("Milwaukee")) return "Sidchrome/Milwaukee/Cash Prize";
+    if (label.includes("DeWalt")) return "Sidchrome/DeWalt/Cash Prize";
+    if (label.includes("Makita")) return "Sidchrome/Makita/Cash Prize";
+    if (label.includes("$10000") || label.includes("$10,000")) return "$10,000 Tax Free Cash";
     return label;
   };
 
@@ -240,7 +240,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
           {prizes.map((prizeOption) => {
             const isActive = prizeOption.slug === activeSlug;
             const brandColors = getPrizeBrandColors(prizeOption.slug);
-            const isCashPrize = prizeOption.slug === "cash-prize";
+            const isMakita = prizeOption.slug === "makita-sidchrome";
 
             return (
               <button
@@ -274,19 +274,21 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 )}
 
                 {/* Card content - text fills the space */}
-                <div className="relative z-10 pr-6 sm:pr-8">
+                <div className="relative z-10 w-full overflow-hidden">
                   <div
-                    className={`${
-                      isCashPrize ? "text-base sm:text-xl" : "text-xs sm:text-base"
-                    } font-bold font-['Poppins'] mb-1 sm:mb-1.5 leading-tight transition-colors duration-200 ${
-                      isActive ? brandColors.textColor : "text-gray-900 group-hover:text-gray-950"
+                    className={`text-xs sm:text-base font-bold font-['Poppins'] mb-1 sm:mb-1.5 leading-tight transition-colors duration-200 break-words ${
+                      isMakita && isActive
+                        ? "text-red-600" // Red color for Makita label when active/focused
+                        : isActive
+                        ? brandColors.textColor
+                        : "text-gray-900 group-hover:text-gray-950"
                     }`}
                   >
                     {getShortLabel(prizeOption.label)}
                   </div>
                   {/* Full label - shown on both mobile and desktop */}
                   <div
-                    className={`text-[9px] sm:text-xs font-['Inter'] leading-tight transition-colors duration-200 ${
+                    className={`text-[9px] sm:text-xs font-['Inter'] leading-tight transition-colors duration-200 break-words ${
                       isActive ? brandColors.subtitleTextColor : "text-gray-600 group-hover:text-gray-700"
                     }`}
                   >

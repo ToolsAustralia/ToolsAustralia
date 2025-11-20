@@ -36,6 +36,17 @@ const config: Config = {
           800: "#1f2937",
           900: "#111827",
         },
+        makita: {
+          // Makita brand colors - official cyan/teal palette
+          // Using proper color scale for Tailwind compatibility
+          400: "#007577", // Darker Makita teal
+          500: "#008C95", // Primary Makita cyan
+          600: "#008C95", // Primary Makita cyan (same as 500)
+          700: "#007577", // Darker Makita teal (same as 400)
+          // Legacy aliases for backward compatibility
+          light: "#008C95",
+          dark: "#007577",
+        },
       },
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "sans-serif"],

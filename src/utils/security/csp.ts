@@ -46,7 +46,7 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     scriptSrc,
     "style-src 'self' 'unsafe-inline' https:",
     "style-src-attr 'self' 'unsafe-inline'",
-    "style-src-elem 'self' https:",
+    "style-src-elem 'self' 'unsafe-inline' https:", // Allow unsafe-inline for inline style elements (React/Next.js)
     "upgrade-insecure-requests",
   ];
 
@@ -68,7 +68,13 @@ export function buildSecurityHeaders(nonce?: string) {
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-    { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
+    // Cross-Origin-Embedder-Policy (COEP) is intentionally excluded:
+    // - COEP: require-corp breaks third-party scripts (Stripe.js, Vercel Analytics, etc.)
+    //   that don't send Cross-Origin-Resource-Policy headers
+    // - COEP is only needed for cross-origin isolation features (SharedArrayBuffer, etc.)
+    // - For e-commerce sites, COEP causes more problems than it solves
+    // - COOP: same-origin provides sufficient protection for most use cases
+    // - If cross-origin isolation is needed in the future, apply COEP selectively to specific routes
     { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
     { key: "Content-Security-Policy", value: csp },
   ];

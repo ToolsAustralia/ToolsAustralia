@@ -130,7 +130,7 @@ const partnerDiscounts = [
     logo: "/images/brands/Makita-red.png",
     discount: "20% OFF",
     discountMessage: "Use Code TA202 for 20% off all tools",
-    gradient: "from-cyan-600 via-blue-500 to-cyan-700",
+    gradient: "from-makita-500 via-makita-600 to-makita-700", // Makita brand gradient
   },
   {
     id: "sidchrome",
