@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { Suspense } from "react";
 import Image from "next/image";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
+import { getNonce } from "@/utils/security/getNonce";
 import MembershipSection from "@/components/sections/MembershipSection";
 import MiniDrawsContent from "@/components/features/MiniDrawsContent";
 import MetallicDivider from "@/components/ui/MetallicDivider";
@@ -13,8 +14,12 @@ export const metadata: Metadata = {
     "Activate your Tools Australia membership to unlock mini draw entry packages and go after premium prizes.",
 };
 
-export default function MiniDrawsPage() {
+export default async function MiniDrawsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+
+  // Get CSP nonce from request headers (set by middleware in production)
+  const nonce = await getNonce();
+
   return (
     <div className="min-h-screen-svh bg-white">
       <BreadcrumbJsonLd
@@ -22,6 +27,7 @@ export default function MiniDrawsPage() {
           { name: "Home", item: `${baseUrl}/` },
           { name: "Mini Draws", item: `${baseUrl}/mini-draws` },
         ]}
+        nonce={nonce}
       />
       {/* Page Header - Metallic Industrial Design */}
       <div className="relative pt-[86px] sm:pt-[106px] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">

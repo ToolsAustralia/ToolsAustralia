@@ -457,15 +457,7 @@ export default function PartnerDiscountQueue({
     >
       {/* Premium Background Effects */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 opacity-40"></div>
-      <div className="absolute inset-0 opacity-[0.08]">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.25) 1px, transparent 0)",
-            backgroundSize: "20px 20px",
-          }}
-        />
-      </div>
+      <div className="absolute inset-0 opacity-[0.08] pattern-radial-grid"></div>
       <div className="absolute top-[-40px] right-[-60px] w-72 h-72 bg-gradient-to-br from-red-500/20 via-yellow-400/10 to-transparent rounded-full blur-3xl"></div>
       <div className="absolute bottom-[-60px] left-[-40px] w-72 h-72 bg-gradient-to-tr from-white/10 via-red-500/10 to-transparent rounded-full blur-3xl"></div>
 

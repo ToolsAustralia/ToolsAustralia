@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { buildSecurityHeaders, buildSecurityHeadersForWebhook } from "./src/utils/security/csp";
 
 const DEFAULT_IMAGE_HOSTS = ["toolsaustralia.com.au", "assets.toolsaustralia.com.au", "res.cloudinary.com"];
 const configuredImageHosts = (process.env.NEXT_PUBLIC_IMAGE_HOSTS || "")
@@ -13,67 +14,22 @@ const imageRemotePatterns = allowedImageHosts.map((hostname) => ({
   hostname,
 }));
 
-const CONTENT_SECURITY_POLICY = `
-default-src 'self';
-base-uri 'self';
-block-all-mixed-content;
-connect-src 'self' https:;
-font-src 'self' https: data:;
-form-action 'self';
-frame-ancestors 'none';
-frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com;
-img-src 'self' https: data: blob:;
-manifest-src 'self';
-media-src 'self' https:;
-object-src 'none';
-script-src 'self' 'unsafe-inline' 'unsafe-eval' https:;
-style-src 'self' 'unsafe-inline' https:;
-upgrade-insecure-requests;
-`
-  .replace(/\s{2,}/g, " ")
-  .trim();
+// Fallback CSP without nonce (used as static fallback in next.config.ts)
+// In production, middleware sets CSP dynamically with nonce per request
+// Note: CONTENT_SECURITY_POLICY is built dynamically in buildSecurityHeaders() below
 
-const securityHeaders = [
-  // Enforce HTTPS for all subdomains
-  {
-    key: "Strict-Transport-Security",
-    value: "max-age=63072000; includeSubDomains; preload",
-  },
-  // Disable embedding to mitigate clickjacking
-  {
-    key: "X-Frame-Options",
-    value: "DENY",
-  },
-  // Prevent MIME sniffing attacks
-  {
-    key: "X-Content-Type-Options",
-    value: "nosniff",
-  },
-  // Provide modern referrer policy
-  {
-    key: "Referrer-Policy",
-    value: "strict-origin-when-cross-origin",
-  },
-  // Opt-in to the most restrictive same-origin isolation
-  {
-    key: "Cross-Origin-Opener-Policy",
-    value: "same-origin",
-  },
-  {
-    key: "Cross-Origin-Embedder-Policy",
-    value: "require-corp",
-  },
-  // Limit advanced browser features unless explicitly required
-  {
-    key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=()",
-  },
-  // Baseline CSP - adjust allow-lists as new third parties are integrated
-  {
-    key: "Content-Security-Policy",
-    value: CONTENT_SECURITY_POLICY,
-  },
-];
+// Static security headers (fallback for routes not handled by middleware)
+// In production, middleware sets these dynamically with per-request nonces
+// This static version is kept as a fallback and for development reference
+const securityHeaders =
+  process.env.NODE_ENV === "production"
+    ? buildSecurityHeaders() // Uses shared utility, but without nonce (middleware handles nonce)
+    : [];
+
+// Webhook-safe headers (excludes Cross-Origin-Embedder-Policy to allow external POST requests)
+// Webhooks are server-to-server requests that use signature verification for security
+// Applied in all environments to ensure webhooks work in development, staging, and production
+const webhookHeaders = buildSecurityHeadersForWebhook(); // Excludes COEP to allow Stripe webhook POSTs
 
 const nextConfig: NextConfig = {
   // External packages for server components
@@ -104,12 +60,30 @@ const nextConfig: NextConfig = {
 
   // Headers for security
   async headers() {
-    return [
+    // Always apply webhook-safe headers to webhook routes (all environments)
+    // This ensures Stripe webhooks work in development, staging, and production
+    const headerConfigs = [
       {
-        source: "/(.*)",
-        headers: securityHeaders,
+        // Apply webhook-safe headers (without COEP) to Stripe webhook endpoint
+        // This allows external POST requests from Stripe while maintaining other security headers
+        // Using exact match pattern for webhook route to ensure it's matched first
+        source: "/api/stripe/webhook",
+        headers: webhookHeaders,
       },
     ];
+
+    // In production, also apply full security headers to all other routes
+    if (securityHeaders.length > 0) {
+      headerConfigs.push({
+        // Apply full security headers to all routes except webhook routes
+        // The negative lookahead pattern excludes /api/stripe/webhook from this rule
+        // This pattern matches all routes that don't start with /api/stripe/webhook
+        source: "/((?!api/stripe/webhook).*)",
+        headers: securityHeaders,
+      });
+    }
+
+    return headerConfigs;
   },
 
   // SEO-friendly redirects

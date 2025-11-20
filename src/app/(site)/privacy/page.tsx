@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
+import { getNonce } from "@/utils/security/getNonce";
 
 // Metadata helps search engines understand this page.
 export const metadata: Metadata = {
@@ -8,8 +9,12 @@ export const metadata: Metadata = {
     "Learn how Tools Australia collects, uses, and protects your personal information across our shop, giveaways, and membership experiences.",
 };
 
-export default function PrivacyPolicyPage() {
+export default async function PrivacyPolicyPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+
+  // Get CSP nonce from request headers (set by middleware in production)
+  const nonce = await getNonce();
+
   return (
     <>
       <BreadcrumbJsonLd
@@ -17,6 +22,7 @@ export default function PrivacyPolicyPage() {
           { name: "Home", item: `${baseUrl}/` },
           { name: "Privacy Policy", item: `${baseUrl}/privacy` },
         ]}
+        nonce={nonce}
       />
       <main className="bg-slate-950 text-gray-100 pt-[110px] pb-24 sm:pt-[120px]">
         {/* Container keeps spacing consistent with the rest of the site */}

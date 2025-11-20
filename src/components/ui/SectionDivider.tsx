@@ -32,7 +32,7 @@ export default function SectionDivider({
 
   return (
     <div className={`w-full ${className}`}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-28 sm:h-44" style={{ fill: color }}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-28 sm:h-44" fill={color}>
         <path d={getPath()} />
       </svg>
     </div>

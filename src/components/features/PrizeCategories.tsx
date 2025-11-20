@@ -117,20 +117,15 @@ export default function PrizeCategories() {
         <div className="lg:hidden category-scroll-container">
           <div
             ref={scrollContainerRef}
-            className="flex gap-4 overflow-x-auto scrollbar-hide"
+            className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory"
             onScroll={handleScroll}
-            style={{
-              scrollBehavior: "smooth",
-              scrollSnapType: "x mandatory",
-            }}
           >
             {/* Render categories 3 times for infinite scroll effect */}
             {[...miniDrawCategories, ...miniDrawCategories, ...miniDrawCategories].map((category, index) => (
               <Link
                 key={`${category.id}-${index}`}
                 href={`/mini-draws?category=${encodeURIComponent(category.name)}`}
-                className="flex-shrink-0 w-[140px] sm:w-[160px] group"
-                style={{ scrollSnapAlign: "start" }}
+                className="flex-shrink-0 w-[140px] sm:w-[160px] group snap-start"
               >
                 <div className="bg-white rounded-[20px] sm:rounded-[25px] p-4 sm:p-6 shadow-[0px_4px_10px_0px_rgba(0,0,0,0.1)] hover:shadow-xl transition-all duration-300 group-hover:scale-105 h-full flex flex-col items-center text-center">
                   <div

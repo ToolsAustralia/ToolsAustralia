@@ -94,7 +94,7 @@ export default function ExistingPartners() {
 
           {/* Mobile Scroll */}
           <div className="lg:hidden overflow-x-auto scrollbar-hide">
-            <div className="flex gap-6 pb-4" style={{ width: "max-content" }}>
+            <div className="flex gap-6 pb-4 w-max">
               {partnerBrands.map((brand, index) => (
                 <div key={index} className="flex-shrink-0 w-32">
                   <div

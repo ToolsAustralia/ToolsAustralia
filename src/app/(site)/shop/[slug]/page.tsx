@@ -13,6 +13,7 @@ import Product from "@/models/Product";
 import { Product as ProductType } from "@/types/product";
 import { ProductJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
+import { getNonce } from "@/utils/security/getNonce";
 
 interface ProductPageProps {
   params: Promise<{
@@ -165,6 +166,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const productUrl = `${baseUrl}/shop/${product._id}`;
   const productImageUrl = `${baseUrl}${product.images[0]}`;
 
+  // Get CSP nonce from request headers (set by middleware in production)
+  const nonce = await getNonce();
+
   return (
     <div className="min-h-screen-svh bg-white">
       {/* JSON-LD structured data */}
@@ -181,6 +185,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             product.stock && product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
           url: productUrl,
         }}
+        nonce={nonce}
       />
       <BreadcrumbJsonLd
         items={[
@@ -188,6 +193,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           { name: "Shop", item: `${baseUrl}/shop` },
           { name: `${product.brand} ${product.name}`, item: productUrl },
         ]}
+        nonce={nonce}
       />
       {/* Product Detail */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { signOut } from "next-auth/react";
 import {
   BarChart3,
   Trophy,
@@ -130,6 +131,14 @@ export default function AdminSidebar({
   isMobile = false,
   onClose,
 }: AdminSidebarProps) {
+  const handleSignOut = () => {
+    // Clear localStorage when signing out
+    localStorage.removeItem("wasAuthenticated");
+    localStorage.removeItem("topBarHidden");
+    // Sign out and redirect to home page
+    signOut({ callbackUrl: "/" });
+  };
+
   return (
     <div className="w-full h-full bg-white border-r-2 border-red-100 flex flex-col shadow-lg">
       {/* Header */}
@@ -216,7 +225,10 @@ export default function AdminSidebar({
           </div>
         </div>
 
-        <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200">
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200"
+        >
           <LogOut className="w-4 h-4" />
           Sign Out
         </button>

@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .pattern-dots-white {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    background-size: 60px 60px;
+    background-repeat: repeat;
+  }
+
+  .pattern-dots-muted {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f3f4f6' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    background-size: 60px 60px;
+    background-repeat: repeat;
+  }
+
+  .pattern-rings-soft {
+    background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M20 20c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10 0c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 40px 40px;
+    background-repeat: repeat;
+  }
+
+  .pattern-radial-grid {
+    background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.25) 1px, transparent 0);
+    background-size: 20px 20px;
+  }
+
+  .clip-card-left {
+    clip-path: polygon(0% 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%);
+  }
+
+  .clip-card-center {
+    clip-path: polygon(40px 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%);
+  }
+
+  .clip-card-right {
+    clip-path: polygon(40px 0%, 100% 0%, 100% 100%, 0% 100%);
+  }
+}
+
 /* Custom Viewport Height Utilities */
 @layer utilities {
   .h-screen-svh {

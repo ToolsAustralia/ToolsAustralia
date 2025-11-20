@@ -266,8 +266,7 @@ export default function ProductCategories({
         <div className="lg:hidden brand-scroll-container">
           <div
             ref={scrollContainerRef}
-            className={`flex gap-4 ${isPaused ? "" : "animate-scroll-right-to-left"}`}
-            style={{ width: "max-content" }}
+            className={`flex gap-4 w-max ${isPaused ? "" : "animate-scroll-right-to-left"}`}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onTouchStart={handleTouchStart}

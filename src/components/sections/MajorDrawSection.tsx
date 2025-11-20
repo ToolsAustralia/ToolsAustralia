@@ -22,6 +22,7 @@ import { useCurrentMajorDraw, useUserMajorDrawStats } from "@/hooks/queries/useM
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { Skeleton } from "@/components/loading/SkeletonLoader";
+import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
 
 interface MajorDrawSectionProps {
   className?: string;
@@ -238,7 +239,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         <div className="grid grid-cols-2 gap-2 sm:gap-4">
           {prizes.map((prizeOption) => {
             const isActive = prizeOption.slug === activeSlug;
-            const shortLabel = getShortLabel(prizeOption.label);
+            const brandColors = getPrizeBrandColors(prizeOption.slug);
             const isCashPrize = prizeOption.slug === "cash-prize";
 
             return (
@@ -247,60 +248,49 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 onClick={() => {
                   handlePrizeSelect(prizeOption.slug);
                 }}
-                className={`relative p-2.5 sm:p-5 rounded-lg sm:rounded-xl border-2 transition-all duration-200 text-left hover:scale-[1.02] overflow-visible min-h-[80px] sm:min-h-[100px] ${
+                className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-left cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
                   isActive
-                    ? isCashPrize
-                      ? "bg-white text-gray-700 border-green-500 shadow-lg shadow-green-500/40"
-                      : "bg-white text-gray-700 border-red-500 shadow-lg shadow-red-500/40"
-                    : isCashPrize
-                    ? "bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 text-gray-700 border-green-300 hover:border-green-400 hover:text-green-700 hover:shadow-md"
-                    : "bg-white text-gray-700 border-slate-300 hover:border-red-400 hover:text-red-600 hover:shadow-md"
+                    ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
+                    : `bg-white text-gray-700 border-slate-300 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
                 }`}
               >
+                {/* Hover glow effect for inactive cards */}
+                {!isActive && (
+                  <div
+                    className={`absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
+                  />
+                )}
+
+                {/* Active shimmer effect */}
+                {isActive && (
+                  <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                )}
+
                 {/* Active checkmark badge */}
                 {isActive && (
-                  <div className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full flex items-center justify-center shadow-lg z-10">
-                    <Check className={`w-3 h-3 sm:w-4 sm:h-4 ${isCashPrize ? "text-green-600" : "text-red-600"}`} />
+                  <div className="absolute -top-2 -right-2 sm:-top-2.5 sm:-right-2.5 w-6 h-6 sm:w-7 sm:h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
+                    <Check className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${brandColors.checkmarkColor}`} />
                   </div>
                 )}
 
                 {/* Card content - text fills the space */}
-                <div className="relative z-10 pr-5 sm:pr-6">
+                <div className="relative z-10 pr-6 sm:pr-8">
                   <div
                     className={`${
                       isCashPrize ? "text-base sm:text-xl" : "text-xs sm:text-base"
-                    } font-bold font-['Poppins'] mb-0.5 sm:mb-1 leading-tight ${
-                      isActive
-                        ? isCashPrize
-                          ? "text-green-700"
-                          : "text-red-700"
-                        : isCashPrize
-                        ? "text-gray-900"
-                        : "text-gray-900"
+                    } font-bold font-['Poppins'] mb-1 sm:mb-1.5 leading-tight transition-colors duration-200 ${
+                      isActive ? brandColors.textColor : "text-gray-900 group-hover:text-gray-950"
                     }`}
                   >
-                    {isCashPrize ? "Or win $10,000 cash" : shortLabel}
+                    {getShortLabel(prizeOption.label)}
                   </div>
-                  {/* Full label as subtitle on desktop */}
+                  {/* Full label - shown on both mobile and desktop */}
                   <div
-                    className={`text-[10px] sm:text-sm font-['Inter'] leading-tight ${
-                      isActive
-                        ? isCashPrize
-                          ? "text-green-600"
-                          : "text-red-600"
-                        : isCashPrize
-                        ? "text-gray-700"
-                        : "text-gray-600"
+                    className={`text-[9px] sm:text-xs font-['Inter'] leading-tight transition-colors duration-200 ${
+                      isActive ? brandColors.subtitleTextColor : "text-gray-600 group-hover:text-gray-700"
                     }`}
                   >
-                    {isCashPrize ? (
-                      <span className="font-semibold">Pure cash - no tools, just money!</span>
-                    ) : (
-                      <>
-                        <span className="hidden sm:inline">{prizeOption.label}</span>
-                        <span className="sm:hidden line-clamp-1">{prizeOption.label.split(",")[0]}</span>
-                      </>
-                    )}
+                    <span className="block">{prizeOption.label}</span>
                   </div>
                 </div>
               </button>
@@ -344,7 +334,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     <>
       <section className={`relative py-8 sm:py-12   w-full overflow-visible ${className}`}>
         <div className="relative w-full px-2 sm:px-0 max-w-7xl mx-auto overflow-visible">
-          <div className="text-center mb-6 sm:mb-8">
+          <div className="text-center mb-0 sm:mb-8">
             <h1 className="text-lg sm:text-xl font-bold tracking-[0.35em] text-red-600 uppercase">
               OUR CURRENT GIVEAWAY
             </h1>
@@ -389,61 +379,76 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </div>
                   </button>
                 </div>
+                {prizeImages.length > 1 ? (
+                  <Swiper
+                    modules={[Navigation, Pagination, Thumbs]}
+                    thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }}
+                    navigation
+                    pagination={{ clickable: true }}
+                    className="main-swiper"
+                    spaceBetween={0}
+                    slidesPerView={1}
+                    onSwiper={setMobileMainSwiper}
+                  >
+                    {prizeImages.map((image, index) => (
+                      <SwiperSlide key={`${image.src}-${index}`}>
+                        <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                          <Image
+                            src={image.src}
+                            alt={image.alt || `Prize image ${index + 1}`}
+                            fill
+                            className="object-contain"
+                            priority={index === 0}
+                            sizes="(max-width: 640px) 100vw, 400px"
+                          />
+                        </div>
+                      </SwiperSlide>
+                    ))}
+                  </Swiper>
+                ) : (
+                  <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                    <Image
+                      src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
+                      alt={prizeImages[0]?.alt || "Prize image"}
+                      fill
+                      className="object-contain"
+                      priority
+                      sizes="(max-width: 640px) 100vw, 400px"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {prizeImages.length > 1 && (
                 <Swiper
-                  modules={[Navigation, Pagination, Thumbs]}
-                  thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }}
-                  navigation
-                  pagination={{ clickable: true }}
-                  className="main-swiper"
-                  spaceBetween={0}
-                  slidesPerView={1}
-                  onSwiper={setMobileMainSwiper}
+                  modules={[FreeMode, Thumbs]}
+                  onSwiper={setThumbsSwiper}
+                  spaceBetween={8}
+                  slidesPerView="auto"
+                  freeMode
+                  watchSlidesProgress
+                  slideToClickedSlide
+                  className="thumbs-swiper"
                 >
                   {prizeImages.map((image, index) => (
-                    <SwiperSlide key={`${image.src}-${index}`}>
-                      <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                    <SwiperSlide
+                      key={`mobile-thumb-${image.src}-${index}`}
+                      className="!w-16 !h-16 sm:!w-20 sm:!h-20"
+                      onClick={() => handleMobileThumbnailClick(index)}
+                    >
+                      <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80">
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
                         <Image
                           src={image.src}
-                          alt={image.alt || `Prize image ${index + 1}`}
+                          alt={image.alt || `Prize thumbnail ${index + 1}`}
                           fill
                           className="object-contain"
-                          priority={index === 0}
-                          sizes="(max-width: 640px) 100vw, 400px"
                         />
                       </div>
                     </SwiperSlide>
                   ))}
                 </Swiper>
-              </div>
-
-              <Swiper
-                modules={[FreeMode, Thumbs]}
-                onSwiper={setThumbsSwiper}
-                spaceBetween={8}
-                slidesPerView="auto"
-                freeMode
-                watchSlidesProgress
-                slideToClickedSlide
-                className="thumbs-swiper"
-              >
-                {prizeImages.map((image, index) => (
-                  <SwiperSlide
-                    key={`mobile-thumb-${image.src}-${index}`}
-                    className="!w-16 !h-16 sm:!w-20 sm:!h-20"
-                    onClick={() => handleMobileThumbnailClick(index)}
-                  >
-                    <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
-                      <Image
-                        src={image.src}
-                        alt={image.alt || `Prize thumbnail ${index + 1}`}
-                        fill
-                        className="object-contain"
-                      />
-                    </div>
-                  </SwiperSlide>
-                ))}
-              </Swiper>
+              )}
 
               {resolvedHighlights.length > 0 && renderHighlights("grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4")}
 
@@ -676,67 +681,82 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </div>
                   </button>
                 </div>
-                <Swiper
-                  modules={[Navigation, Pagination, Thumbs]}
-                  navigation
-                  pagination={{ clickable: true }}
-                  thumbs={{
-                    swiper: desktopThumbsSwiper && !desktopThumbsSwiper.destroyed ? desktopThumbsSwiper : null,
-                  }}
-                  className="main-swiper"
-                  spaceBetween={0}
-                  slidesPerView={1}
-                  onSwiper={setDesktopMainSwiper}
-                >
-                  {prizeImages.map((image, index) => (
-                    <SwiperSlide key={`${image.src}-${index}`}>
-                      <div className="relative aspect-[4/3]">
-                        <Image
-                          src={image.src}
-                          alt={image.alt || `Prize image ${index + 1}`}
-                          fill
-                          className="object-contain"
-                          priority={index === 0}
-                          sizes="(min-width: 1024px) 50vw, 100vw"
-                        />
-                      </div>
-                    </SwiperSlide>
-                  ))}
-                </Swiper>
+                {prizeImages.length > 1 ? (
+                  <Swiper
+                    modules={[Navigation, Pagination, Thumbs]}
+                    navigation
+                    pagination={{ clickable: true }}
+                    thumbs={{
+                      swiper: desktopThumbsSwiper && !desktopThumbsSwiper.destroyed ? desktopThumbsSwiper : null,
+                    }}
+                    className="main-swiper"
+                    spaceBetween={0}
+                    slidesPerView={1}
+                    onSwiper={setDesktopMainSwiper}
+                  >
+                    {prizeImages.map((image, index) => (
+                      <SwiperSlide key={`${image.src}-${index}`}>
+                        <div className="relative aspect-[4/3]">
+                          <Image
+                            src={image.src}
+                            alt={image.alt || `Prize image ${index + 1}`}
+                            fill
+                            className="object-contain"
+                            priority={index === 0}
+                            sizes="(min-width: 1024px) 50vw, 100vw"
+                          />
+                        </div>
+                      </SwiperSlide>
+                    ))}
+                  </Swiper>
+                ) : (
+                  <div className="relative aspect-[4/3]">
+                    <Image
+                      src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
+                      alt={prizeImages[0]?.alt || "Prize image"}
+                      fill
+                      className="object-contain"
+                      priority
+                      sizes="(min-width: 1024px) 50vw, 100vw"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* The thumbnail rail now lives inside an overflow-hidden container so long galleries stay tidy. */}
-              <div className="overflow-hidden">
-                <Swiper
-                  modules={[FreeMode, Thumbs]}
-                  onSwiper={setDesktopThumbsSwiper}
-                  spaceBetween={12}
-                  slidesPerView="auto"
-                  freeMode
-                  watchSlidesProgress
-                  slideToClickedSlide
-                  className="thumbs-swiper"
-                >
-                  {prizeImages.map((image, index) => (
-                    <SwiperSlide
-                      key={`thumb-${image.src}-${index}`}
-                      className="!w-20 !h-20 xl:!w-24 xl:!h-24 flex items-center justify-center cursor-pointer"
-                      onClick={() => handleDesktopThumbnailClick(index)}
-                    >
-                      <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/40 transition-all duration-300 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 cursor-pointer">
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
-                        <Image
-                          src={image.src}
-                          alt={image.alt || `Prize thumbnail ${index + 1}`}
-                          fill
-                          className="object-contain"
-                          sizes="96px"
-                        />
-                      </div>
-                    </SwiperSlide>
-                  ))}
-                </Swiper>
-              </div>
+              {prizeImages.length > 1 && (
+                <div className="overflow-hidden">
+                  <Swiper
+                    modules={[FreeMode, Thumbs]}
+                    onSwiper={setDesktopThumbsSwiper}
+                    spaceBetween={12}
+                    slidesPerView="auto"
+                    freeMode
+                    watchSlidesProgress
+                    slideToClickedSlide
+                    className="thumbs-swiper"
+                  >
+                    {prizeImages.map((image, index) => (
+                      <SwiperSlide
+                        key={`thumb-${image.src}-${index}`}
+                        className="!w-20 !h-20 xl:!w-24 xl:!h-24 flex items-center justify-center cursor-pointer"
+                        onClick={() => handleDesktopThumbnailClick(index)}
+                      >
+                        <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/40 transition-all duration-300 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 cursor-pointer">
+                          <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
+                          <Image
+                            src={image.src}
+                            alt={image.alt || `Prize thumbnail ${index + 1}`}
+                            fill
+                            className="object-contain"
+                            sizes="96px"
+                          />
+                        </div>
+                      </SwiperSlide>
+                    ))}
+                  </Swiper>
+                </div>
+              )}
 
               {/* Countdown / Draw Ended Notice */}
               {majorDrawLoading || !currentMajorDraw ? (

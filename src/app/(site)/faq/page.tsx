@@ -6,6 +6,7 @@ import MetallicButton from "@/components/ui/MetallicButton";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import { FAQPageJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getFaqEntries } from "@/data/faqs";
+import { getNonce } from "@/utils/security/getNonce";
 
 // SEO Metadata for FAQ Page
 export const metadata: Metadata = {
@@ -31,9 +32,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function FAQPage() {
+export default async function FAQPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const faqs = getFaqEntries();
+  
+  // Get CSP nonce from request headers (set by middleware in production)
+  const nonce = await getNonce();
+  
   return (
     <>
       <BreadcrumbJsonLd
@@ -41,8 +46,9 @@ export default function FAQPage() {
           { name: "Home", item: `${baseUrl}/` },
           { name: "Frequently Asked Questions", item: `${baseUrl}/faq` },
         ]}
+        nonce={nonce}
       />
-      <FAQPageJsonLd items={faqs.map((faq) => ({ question: faq.question, answer: faq.answer }))} />
+      <FAQPageJsonLd items={faqs.map((faq) => ({ question: faq.question, answer: faq.answer }))} nonce={nonce} />
       <div className="min-h-screen-svh bg-white">
       {/* Page Header - Metallic Industrial Design */}
       <div className="relative pt-[86px] sm:pt-[106px] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">

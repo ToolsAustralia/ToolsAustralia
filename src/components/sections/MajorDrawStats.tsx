@@ -78,14 +78,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
       <div className="sm:hidden">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 rounded-2xl p-3 overflow-hidden w-full shadow-2xl backdrop-blur-sm">
           {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-              }}
-            ></div>
-          </div>
+          <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>
 
           <div className="relative z-10 grid grid-cols-3 gap-2">
             {/* Total Prize Value */}
@@ -127,21 +120,9 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
       {/* Desktop: Original Layout */}
       <div className="hidden sm:block relative h-20 sm:h-28">
         {/* Total Prize Value Card */}
-        <div
-          className="absolute left-8 top-0 w-1/3 h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 p-4 sm:p-6 overflow-hidden shadow-2xl backdrop-blur-sm"
-          style={{
-            clipPath: "polygon(0% 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%)",
-          }}
-        >
+        <div className="absolute left-8 top-0 w-1/3 h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 p-4 sm:p-6 overflow-hidden shadow-2xl backdrop-blur-sm clip-card-left">
           {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-              }}
-            ></div>
-          </div>
+          <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>
           <div className="relative z-10 flex items-center justify-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-full flex items-center justify-center shadow-lg ring-4 ring-red-300/20">
               <Gift className="w-8 h-8 text-white drop-shadow-md" />
@@ -156,21 +137,9 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
         </div>
 
         {/* Winners to Date Card */}
-        <div
-          className="absolute left-1/3 top-0 w-1/3 h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 p-4 sm:p-6 overflow-hidden shadow-2xl backdrop-blur-sm"
-          style={{
-            clipPath: "polygon(40px 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%)",
-          }}
-        >
+        <div className="absolute left-1/3 top-0 w-1/3 h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 p-4 sm:p-6 overflow-hidden shadow-2xl backdrop-blur-sm clip-card-center">
           {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-              }}
-            ></div>
-          </div>
+          <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>
           <div className="relative z-10 flex items-center justify-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-slate-400 via-gray-300 to-slate-200 rounded-full flex items-center justify-center shadow-lg ring-4 ring-slate-400/20">
               <Award className="w-8 h-8 text-gray-900 drop-shadow-md" />
@@ -185,21 +154,9 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
         </div>
 
         {/* Total Entries Card */}
-        <div
-          className="absolute right-8 top-0 w-1/3 h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 p-4 sm:p-6 overflow-hidden shadow-2xl backdrop-blur-sm"
-          style={{
-            clipPath: "polygon(40px 0%, 100% 0%, 100% 100%, 0% 100%)",
-          }}
-        >
+        <div className="absolute right-8 top-0 w-1/3 h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 p-4 sm:p-6 overflow-hidden shadow-2xl backdrop-blur-sm clip-card-right">
           {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-              }}
-            ></div>
-          </div>
+          <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>
           <div className="relative z-10 flex items-center justify-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-300 rounded-full flex items-center justify-center shadow-lg ring-4 ring-blue-400/20">
               <Users className="w-8 h-8 text-gray-900 drop-shadow-md" />

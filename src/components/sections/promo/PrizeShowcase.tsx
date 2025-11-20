@@ -15,6 +15,7 @@ import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsMod
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -134,41 +135,52 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 {prizes.map((prizeOption) => {
                   const isActive = prizeOption.slug === activeSlug;
-                  const shortLabel = getShortLabel(prizeOption.label);
+                  const brandColors = getPrizeBrandColors(prizeOption.slug);
                   return (
                     <button
                       key={prizeOption.slug}
                       onClick={() => handleSelectPrize(prizeOption.slug)}
-                      className={`relative p-2.5 sm:p-5 rounded-lg sm:rounded-xl border-2 transition-all duration-200 text-left hover:scale-[1.02] ${
+                      className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-left cursor-pointer min-h-[85px] sm:min-h-[110px] group ${
                         isActive
-                          ? "bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
-                          : "bg-white text-gray-700 border-slate-300 hover:border-red-400 hover:text-red-600 hover:shadow-md"
+                          ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
+                          : `bg-white text-gray-700 border-slate-300 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
                       }`}
                     >
+                      {/* Hover glow effect for inactive cards */}
+                      {!isActive && (
+                        <div
+                          className={`absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
+                        />
+                      )}
+
+                      {/* Active shimmer effect */}
+                      {isActive && (
+                        <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                      )}
+
                       {/* Active checkmark badge */}
                       {isActive && (
-                        <div className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full flex items-center justify-center shadow-lg z-10">
-                          <Check className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+                        <div className="absolute -top-2 -right-2 sm:-top-2.5 sm:-right-2.5 w-6 h-6 sm:w-7 sm:h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
+                          <Check className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${brandColors.checkmarkColor}`} />
                         </div>
                       )}
 
                       {/* Card content */}
-                      <div className="pr-5 sm:pr-6">
+                      <div className="relative z-10 pr-6 sm:pr-8">
                         <div
-                          className={`text-xs sm:text-base font-bold font-['Poppins'] mb-0.5 sm:mb-1 leading-tight ${
-                            isActive ? "text-white" : "text-gray-900"
+                          className={`text-xs sm:text-base font-bold font-['Poppins'] mb-1 sm:mb-1.5 leading-tight transition-colors duration-200 ${
+                            isActive ? brandColors.textColor : "text-gray-900 group-hover:text-gray-950"
                           }`}
                         >
-                          {shortLabel}
+                          {getShortLabel(prizeOption.label)}
                         </div>
-                        {/* Full label as subtitle on desktop */}
+                        {/* Full label - shown on both mobile and desktop */}
                         <div
-                          className={`text-[10px] sm:text-sm font-['Inter'] leading-tight ${
-                            isActive ? "text-white/80" : "text-gray-600"
+                          className={`text-[9px] sm:text-xs font-['Inter'] leading-tight transition-colors duration-200 ${
+                            isActive ? brandColors.subtitleTextColor : "text-gray-600 group-hover:text-gray-700"
                           }`}
                         >
-                          <span className="hidden sm:inline">{prizeOption.label}</span>
-                          <span className="sm:hidden line-clamp-1">{prizeOption.label.split(",")[0]}</span>
+                          <span className="block">{prizeOption.label}</span>
                         </div>
                       </div>
                     </button>
@@ -184,30 +196,43 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             <div className="relative rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm">
               <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
 
-              <Swiper
-                modules={[Navigation, Pagination, Thumbs]}
-                thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }}
-                navigation
-                pagination={{ clickable: true }}
-                className="main-swiper"
-                spaceBetween={0}
-                slidesPerView={1}
-              >
-                {activePrize.gallery.map((image, index) => (
-                  <SwiperSlide key={`${image.src}-${index}`}>
-                    <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
-                      <Image
-                        src={image.src}
-                        alt={image.alt || `Prize view ${index + 1}`}
-                        fill
-                        className="object-contain"
-                        priority={index === 0}
-                        quality={90}
-                      />
-                    </div>
-                  </SwiperSlide>
-                ))}
-              </Swiper>
+              {activePrize.gallery.length > 1 ? (
+                <Swiper
+                  modules={[Navigation, Pagination, Thumbs]}
+                  thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }}
+                  navigation
+                  pagination={{ clickable: true }}
+                  className="main-swiper"
+                  spaceBetween={0}
+                  slidesPerView={1}
+                >
+                  {activePrize.gallery.map((image, index) => (
+                    <SwiperSlide key={`${image.src}-${index}`}>
+                      <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                        <Image
+                          src={image.src}
+                          alt={image.alt || `Prize view ${index + 1}`}
+                          fill
+                          className="object-contain"
+                          priority={index === 0}
+                          quality={90}
+                        />
+                      </div>
+                    </SwiperSlide>
+                  ))}
+                </Swiper>
+              ) : (
+                <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                  <Image
+                    src={activePrize.gallery[0]?.src || "/images/grand-draw.jpg"}
+                    alt={activePrize.gallery[0]?.alt || "Prize view"}
+                    fill
+                    className="object-contain"
+                    priority
+                    quality={90}
+                  />
+                </div>
+              )}
 
               <div className="absolute top-4 right-4 z-20">
                 <button
@@ -227,30 +252,32 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </div>
             </div>
 
-            <Swiper
-              modules={[FreeMode, Thumbs]}
-              onSwiper={setThumbsSwiper}
-              spaceBetween={8}
-              slidesPerView="auto"
-              freeMode
-              watchSlidesProgress
-              className="thumbs-swiper"
-            >
-              {activePrize.gallery.map((image, index) => (
-                <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-16 sm:!w-24 sm:!h-24">
-                  <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80">
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                    <Image
-                      src={image.src}
-                      alt={image.alt || `Prize thumbnail ${index + 1}`}
-                      fill
-                      className="object-contain"
-                      quality={60}
-                    />
-                  </div>
-                </SwiperSlide>
-              ))}
-            </Swiper>
+            {activePrize.gallery.length > 1 && (
+              <Swiper
+                modules={[FreeMode, Thumbs]}
+                onSwiper={setThumbsSwiper}
+                spaceBetween={8}
+                slidesPerView="auto"
+                freeMode
+                watchSlidesProgress
+                className="thumbs-swiper"
+              >
+                {activePrize.gallery.map((image, index) => (
+                  <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-16 sm:!w-24 sm:!h-24">
+                    <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80">
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
+                      <Image
+                        src={image.src}
+                        alt={image.alt || `Prize thumbnail ${index + 1}`}
+                        fill
+                        className="object-contain"
+                        quality={60}
+                      />
+                    </div>
+                  </SwiperSlide>
+                ))}
+              </Swiper>
+            )}
 
             <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20">
               <div className="grid grid-cols-4 gap-1.5 sm:gap-2">

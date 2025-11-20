@@ -47,11 +47,24 @@ Use this document after every security-focused change or before a major release 
 ## 7. Browser & Network Security Headers
 
 - Using `curl -I https://toolsaustralia.com.au`, confirm the following headers exist: `Strict-Transport-Security`, `Content-Security-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`, `Referrer-Policy`.
-- Visit the site in Firefox + Safari to ensure COOP/COEP didn’t break expected cross-origin resource sharing (e.g., PDF downloads or embedded widgets).
+- Visit the site in Firefox + Safari to ensure COOP/COEP didn't break expected cross-origin resource sharing (e.g., PDF downloads or embedded widgets).
+- **CSP Nonce Verification**: In production, verify that:
+  - The `Content-Security-Policy` header includes `'nonce-{random}'` in `script-src` (not `'unsafe-inline'`).
+  - JSON-LD structured data scripts in the HTML source include `nonce="{random}"` attributes matching the CSP nonce.
+  - All JSON-LD components (`OrganizationJsonLd`, `ProductJsonLd`, `BreadcrumbJsonLd`, etc.) receive and apply the nonce prop.
+    > Note for CSP: All Content-Security-Policy directives should be managed via the `buildContentSecurityPolicy()` helper in `src/utils/security/csp.ts` to ensure proper formatting and prevent `ERR_INVALID_CHAR` errors. The nonce is generated per-request in middleware and passed to server components via request headers.
+- Open DevTools → Console and reload key pages to verify there are no `Refused to apply inline style because it violates the CSP` messages. Any new warning means someone reintroduced inline CSS and needs a utility-class refactor.
+- If you need to change CSP directives, edit `buildContentSecurityPolicy()` in `next.config.ts` so the header remains a single line; never paste multi-line policy strings directly.
 
 ## 8. Monitoring & Alerts
 
 - Check log pipelines (Datadog/New Relic/etc.) to verify auth debug logs stay muted in production but still appear in staging when `NEXT_PUBLIC_ENABLE_AUTH_DEBUG=true`.
 - Trigger a failed login, then confirm alerting rules fire once thresholds are met.
+
+## 9. Inline Style Remediation Tracker
+
+- Pattern overlays (countdown banners, promos, footer, stats cards) use shared utilities such as `pattern-dots-white` and `pattern-rings-soft`. When new sections need a pattern, add a utility instead of inlining `background-image`.
+- Horizontal carousels (`ProductCategories`, `ExistingPartners`, `PrizeCategories`) now rely on Tailwind utilities (`w-max`, `scroll-smooth`, `snap-start`) instead of inline width or snap attributes. Follow the same approach for future sliders.
+- Progress indicators and sliders still rely on inline `style` attributes because they map live data to widths/positions. When redesigning them, prefer CSS variables populated via data attributes or convert to discrete class states to eventually drop inline styles entirely.
 
 > Tip for new teammates: run through the entire checklist in staging before every deploy that touches authentication, payments, or security headers. Record pass/fail outcomes so regressions can be traced quickly.

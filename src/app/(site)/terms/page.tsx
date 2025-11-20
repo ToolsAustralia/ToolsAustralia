@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
+import { getNonce } from "@/utils/security/getNonce";
 
 export const metadata: Metadata = {
   title: "Terms and Conditions | Tools Australia",
   description: "Review the membership, giveaway, and ecommerce terms that govern your use of Tools Australia.",
 };
 
-export default function TermsPage() {
+export default async function TermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+  
+  // Get CSP nonce from request headers (set by middleware in production)
+  const nonce = await getNonce();
+  
   return (
     <>
       <BreadcrumbJsonLd
@@ -15,6 +20,7 @@ export default function TermsPage() {
           { name: "Home", item: `${baseUrl}/` },
           { name: "Terms and Conditions", item: `${baseUrl}/terms` },
         ]}
+        nonce={nonce}
       />
       <main className="bg-slate-950 text-gray-100 pt-[110px] pb-24 sm:pt-[120px]">
         {/* Using the same layout spacing as other static pages keeps design consistent */}

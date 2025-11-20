@@ -904,8 +904,8 @@ export const MAKITA_SIDCHROME_STORAGE: PrizeSpecItem[] = [
 export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   {
     slug: "milwaukee-sidchrome",
-    label: "Sidchrome Toolbox, Milwaukee Power Tool Kit, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Milwaukee Power Tool Kit, $5000 cash",
+    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
     heroSubheading:
       "Complete Milwaukee 18V FUEL™ professional toolkit with Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
     summary:
@@ -976,8 +976,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "dewalt-sidchrome",
-    label: "Sidchrome Toolbox, DeWalt Power Tool Kit, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, DeWalt Power Tool Kit, $5000 cash",
+    label: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
     heroSubheading:
       "Heavy-duty DeWalt FlexVolt and XR cordless range with Sidchrome SCMT11402 356-piece toolkit plus $5000 cash.",
     summary:
@@ -1058,8 +1058,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "makita-sidchrome",
-    label: "Sidchrome Toolbox, Makita Power Tool Kit, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Makita Power Tool Kit, $5000 cash",
+    label: "Sidchrome Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
     heroSubheading:
       "Complete Makita 18V LXT brushless professional toolkit with Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
     summary:
@@ -1131,14 +1131,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "cash-prize",
-    label: "$10000 cold hard cash",
-    heroHeading: "$10000 cold hard cash",
+    label: "$10,000 Tax Free Cash",
+    heroHeading: "$10,000 Tax Free Cash",
     heroSubheading: "Pure cash prize - no tools, no hassle, just $10,000 straight to your bank account.",
     summary: "$10,000 cold hard cash prize - take the money and run.",
     detailedDescription:
       "Win $10,000 in cold hard cash! No tools, no equipment, no strings attached. Just a straight $10,000 cash prize deposited directly to your bank account. Use it however you want - pay bills, take a vacation, invest in your future, or buy whatever you need. The choice is yours.",
     prizeValueLabel: "$10,000 Cash",
-    gallery: [{ src: "/images/grand-draw.jpg", alt: "$10,000 cash prize" }],
+    gallery: [{ src: "/images/majordraws/prize4/10000cash.jpg", alt: "$10,000 cash prize" }],
     highlights: [
       {
         icon: "DollarSign",

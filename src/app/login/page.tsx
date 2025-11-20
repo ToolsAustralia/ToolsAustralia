@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Gift, Star, Zap, Shield } from "lucide-react";
 import Image from "next/image";
+import { useToast } from "@/components/ui/Toast";
 
 // Google Icon Component
 function GoogleIcon() {
@@ -134,6 +135,7 @@ export default function LoginPage() {
 
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { showToast } = useToast();
 
   // Redirect if user is already logged in based on their role
   useEffect(() => {
@@ -182,13 +184,96 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError("Invalid email or password");
+        // Check if this is a rate limit error (429)
+        // NextAuth may return different error formats, so we check the error message
+        const errorMessage = result.error.toLowerCase();
+        const isRateLimitError =
+          errorMessage.includes("too many") ||
+          errorMessage.includes("rate limit") ||
+          errorMessage.includes("429") ||
+          errorMessage.includes("failed to construct") ||
+          errorMessage.includes("construct") ||
+          result.status === 429;
+
+        if (isRateLimitError) {
+          // Show toast notification for rate limit errors
+          showToast({
+            type: "error",
+            title: "Too Many Login Attempts",
+            message: "Please wait a moment before trying again. You've exceeded the maximum number of login attempts.",
+            duration: 8000, // Longer duration for important security messages
+          });
+          setError("Too many login attempts. Please wait a moment before trying again.");
+        } else {
+          // Show toast for other authentication errors
+          showToast({
+            type: "error",
+            title: "Login Failed",
+            message: "Invalid email or password. Please check your credentials and try again.",
+            duration: 5000,
+          });
+          setError("Invalid email or password");
+        }
       } else {
+        // Login successful - show success toast
+        showToast({
+          type: "success",
+          title: "Login Successful",
+          message: "Welcome back! Redirecting to your account...",
+          duration: 3000,
+        });
         // The useEffect will handle the redirect once the session updates
         // No need to manually redirect here
       }
-    } catch {
-      setError("An error occurred. Please try again.");
+    } catch (error) {
+      // Handle unexpected errors, including rate limit errors that NextAuth might throw
+      // When NextAuth receives a 429 response, it throws: "Failed to construct 'URL': Invalid URL"
+      // This is the ONLY scenario where "construct" appears in login errors
+
+      // Get error message from all possible representations
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorString = String(error);
+      const errorToString = error?.toString() || "";
+      const allErrorText = `${errorMessage} ${errorString} ${errorToString}`.toLowerCase();
+
+      // Debug: Log the error to see what we're actually getting
+      console.log("🔍 Login catch block - Error details:", {
+        error,
+        errorMessage,
+        errorString,
+        errorToString,
+        allErrorText,
+        hasConstruct: allErrorText.includes("construct"),
+      });
+
+      // ULTRA-SIMPLE RULE: If error contains "construct" = rate limit error (429)
+      // Check all possible error representations to be absolutely sure
+      const isRateLimitError =
+        allErrorText.includes("construct") ||
+        allErrorText.includes("too many") ||
+        allErrorText.includes("rate limit") ||
+        allErrorText.includes("429");
+
+      if (isRateLimitError) {
+        // Show toast notification for rate limit errors
+        showToast({
+          type: "error",
+          title: "Too Many Login Attempts",
+          message: "Please wait a moment before trying again. You've exceeded the maximum number of login attempts.",
+          duration: 8000,
+        });
+        setError("Too many login attempts. Please wait a moment before trying again.");
+      } else {
+        // Show generic error toast for other unexpected errors
+        console.error("Login error:", error);
+        showToast({
+          type: "error",
+          title: "Login Error",
+          message: "An error occurred. Please try again.",
+          duration: 5000,
+        });
+        setError("An error occurred. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -199,7 +284,14 @@ export default function LoginPage() {
     try {
       // Let NextAuth handle the redirect, the useEffect will handle role-based routing
       await signIn("google", { redirect: false });
-    } catch {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An error occurred with Google sign-in";
+      showToast({
+        type: "error",
+        title: "Google Sign-In Error",
+        message: errorMessage,
+        duration: 5000,
+      });
       setError("An error occurred with Google sign-in");
       setIsLoading(false);
     }

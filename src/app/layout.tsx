@@ -10,6 +10,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 // Import console log silencer for production - must be imported early
 import "@/utils/common/silence-logs";
+import { getNonce } from "@/utils/security/getNonce";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -59,10 +60,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const googleVerify = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
   const bingVerify = process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION;
+
+  // Get CSP nonce from request headers (set by middleware in production)
+  // This allows JSON-LD scripts to execute under strict CSP without 'unsafe-inline'
+  const nonce = await getNonce();
+
   return (
     <html lang="en-AU" className={`${inter.variable} ${poppins.variable}`}>
       <head>
@@ -78,8 +84,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           logo={`${siteUrl}/Social%20Media%20Profile_Black%20Background.png`}
           // Listing social profiles here helps search engines connect verified brand entities.
           sameAs={["https://www.facebook.com/toolsaustralia", "https://www.instagram.com/toolsaustralia"]}
+          nonce={nonce}
         />
-        <WebSiteJsonLd name="Tools Australia" url={siteUrl} />
+        <WebSiteJsonLd name="Tools Australia" url={siteUrl} nonce={nonce} />
       </head>
       <body className={`${inter.className} antialiased`}>
         <TopLoadingBar />

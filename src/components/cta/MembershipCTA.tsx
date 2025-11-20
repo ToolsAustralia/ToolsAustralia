@@ -31,14 +31,7 @@ export default function MembershipCTA({
       className={`bg-gradient-to-r from-red-600 via-red-700 to-red-800 rounded-2xl p-8 sm:p-12 text-center text-white relative overflow-hidden shadow-2xl ${className}`}
     >
       {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M20 20c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10 0c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z'/%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        ></div>
-      </div>
+      <div className="absolute inset-0 opacity-10 pattern-rings-soft"></div>
 
       <div className="relative z-10 max-w-3xl mx-auto">
         <div className="flex items-center justify-center mb-6">

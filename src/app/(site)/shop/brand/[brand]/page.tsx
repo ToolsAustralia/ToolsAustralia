@@ -7,6 +7,7 @@ import MembershipSection from "@/components/sections/MembershipSection";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import { brandLogos } from "@/data/brandLogos";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
+import { getNonce } from "@/utils/security/getNonce";
 
 const BRAND_DETAILS = {
   milwaukee: {
@@ -226,7 +227,7 @@ export async function generateMetadata({ params }: BrandPageProps): Promise<Meta
   };
 }
 
-export default function BrandShopPage({ params }: BrandPageProps) {
+export default async function BrandShopPage({ params }: BrandPageProps) {
   const brandKey = params.brand as BrandSlug;
   const brand = BRAND_DETAILS[brandKey];
 
@@ -241,6 +242,9 @@ export default function BrandShopPage({ params }: BrandPageProps) {
     : `bg-gradient-to-br ${logoDetails?.gradient ?? "from-black via-slate-900 to-black"}`;
   const pageUrl = `${BASE_URL}/shop/brand/${brandKey}`;
 
+  // Get CSP nonce from request headers (set by middleware in production)
+  const nonce = await getNonce();
+
   return (
     <>
       <BreadcrumbJsonLd
@@ -249,6 +253,7 @@ export default function BrandShopPage({ params }: BrandPageProps) {
           { name: "Shop", item: `${BASE_URL}/shop` },
           { name: `${brand.name} Tools`, item: pageUrl },
         ]}
+        nonce={nonce}
       />
       <div className="min-h-screen-svh bg-white">
         {/* Hero section mirrors the main shop layout for design consistency */}

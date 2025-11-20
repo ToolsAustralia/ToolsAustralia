@@ -1,10 +1,17 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import { generateNonce } from "@/utils/security/nonce";
+import { buildSecurityHeaders } from "@/utils/security/csp";
 
 export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
+
+    // Generate nonce for CSP (only in production)
+    // In development, CSP headers are disabled to allow Next.js dev tools to work
+    const isProduction = process.env.NODE_ENV === "production";
+    const nonce = isProduction ? generateNonce() : undefined;
 
     // Protected routes that require authentication
     const protectedRoutes = ["/rewards", "/my-account"];
@@ -16,13 +23,43 @@ export default withAuth(
 
     // Check authentication for protected routes
     if (isProtectedRoute && !token) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      const response = NextResponse.redirect(new URL("/login", req.url));
+      // Apply security headers to redirect response
+      if (isProduction && nonce) {
+        buildSecurityHeaders(nonce).forEach(({ key, value }) => {
+          response.headers.set(key, value);
+        });
+        response.headers.set("x-nonce", nonce);
+      }
+      return response;
     }
 
     // Check admin role for admin routes
     if (isAdminRoute && (!token || token.role !== "admin")) {
-      return NextResponse.redirect(new URL("/", req.url));
+      const response = NextResponse.redirect(new URL("/", req.url));
+      // Apply security headers to redirect response
+      if (isProduction && nonce) {
+        buildSecurityHeaders(nonce).forEach(({ key, value }) => {
+          response.headers.set(key, value);
+        });
+        response.headers.set("x-nonce", nonce);
+      }
+      return response;
     }
+
+    // For all other routes, create a response and apply security headers
+    const response = NextResponse.next();
+
+    // In production, set CSP with nonce and attach nonce to request headers
+    if (isProduction && nonce) {
+      buildSecurityHeaders(nonce).forEach(({ key, value }) => {
+        response.headers.set(key, value);
+      });
+      // Attach nonce to request headers so server components can read it
+      response.headers.set("x-nonce", nonce);
+    }
+
+    return response;
   },
   {
     callbacks: {
@@ -60,5 +97,16 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: ["/rewards/:path*", "/my-account/:path*", "/admin/:path*", "/api/admin/:path*"],
+  // Match all routes to ensure CSP headers and nonce are set on every request
+  // The auth checks inside middleware will still only apply to protected routes
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
 };

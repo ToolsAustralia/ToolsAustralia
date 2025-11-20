@@ -7,9 +7,21 @@ interface StructuredDataProps<T = unknown> {
 /**
  * Renders JSON-LD structured data safely in the head.
  * Google recommends JSON-LD and a single script tag per schema block.
+ * 
+ * When a nonce is provided (in production), it's applied to the script tag
+ * to comply with strict Content Security Policy without 'unsafe-inline'.
+ * 
+ * @param data - The structured data object to serialize as JSON-LD
+ * @param nonce - Optional CSP nonce for script-src directive (production only)
  */
-export function StructuredData<T>({ data }: StructuredDataProps<T>) {
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />;
+export function StructuredData<T>({ data, nonce }: StructuredDataProps<T> & { nonce?: string }) {
+  return (
+    <script
+      type="application/ld+json"
+      nonce={nonce}
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
 }
 
 // Common schema helpers
@@ -47,6 +59,7 @@ export function OrganizationJsonLd(props: {
     postalCode?: string;
     addressCountry?: string;
   };
+  nonce?: string;
 }) {
   const data: OrganizationSchema = {
     "@context": "https://schema.org",
@@ -58,7 +71,7 @@ export function OrganizationJsonLd(props: {
     sameAs: props.sameAs,
     address: props.address ? { "@type": "PostalAddress", ...props.address } : undefined,
   };
-  return <StructuredData data={data} />;
+  return <StructuredData data={data} nonce={props.nonce} />;
 }
 
 export interface ProductOfferSchema {
@@ -120,6 +133,7 @@ export function ProductJsonLd(props: {
     name?: string;
     reviewRating?: number;
   }>;
+  nonce?: string;
 }) {
   const data: ProductSchema = {
     "@context": "https://schema.org",
@@ -155,7 +169,7 @@ export function ProductJsonLd(props: {
       reviewRating: r.reviewRating ? { "@type": "Rating", ratingValue: r.reviewRating, bestRating: 5 } : undefined,
     })),
   };
-  return <StructuredData data={data} />;
+  return <StructuredData data={data} nonce={props.nonce} />;
 }
 
 export interface BreadcrumbItemSchema {
@@ -171,7 +185,7 @@ export interface BreadcrumbListSchema {
   itemListElement: BreadcrumbItemSchema[];
 }
 
-export function BreadcrumbJsonLd(props: { items: Array<{ name: string; item: string }> }) {
+export function BreadcrumbJsonLd(props: { items: Array<{ name: string; item: string }>; nonce?: string }) {
   const data: BreadcrumbListSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -182,7 +196,7 @@ export function BreadcrumbJsonLd(props: { items: Array<{ name: string; item: str
       item: i.item,
     })),
   };
-  return <StructuredData data={data} />;
+  return <StructuredData data={data} nonce={props.nonce} />;
 }
 
 export interface LocalBusinessSchema {
@@ -207,6 +221,7 @@ export function LocalBusinessJsonLd(props: {
     addressCountry?: string;
   };
   openingHours?: string[];
+  nonce?: string;
 }) {
   const data: LocalBusinessSchema = {
     "@context": "https://schema.org",
@@ -217,7 +232,7 @@ export function LocalBusinessJsonLd(props: {
     address: props.address ? { "@type": "PostalAddress", ...props.address } : undefined,
     openingHours: props.openingHours,
   };
-  return <StructuredData data={data} />;
+  return <StructuredData data={data} nonce={props.nonce} />;
 }
 
 export interface WebSiteSchema {
@@ -232,7 +247,7 @@ export interface WebSiteSchema {
   };
 }
 
-export function WebSiteJsonLd(props: { name: string; url: string; potentialActionUrl?: string }) {
+export function WebSiteJsonLd(props: { name: string; url: string; potentialActionUrl?: string; nonce?: string }) {
   const data: WebSiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -246,14 +261,15 @@ export function WebSiteJsonLd(props: { name: string; url: string; potentialActio
         }
       : undefined,
   };
-  return <StructuredData data={data} />;
+  return <StructuredData data={data} nonce={props.nonce} />;
 }
 
 interface FAQPageJsonLdProps {
   items: Array<{ question: string; answer: string }>;
+  nonce?: string;
 }
 
-export function FAQPageJsonLd({ items }: FAQPageJsonLdProps) {
+export function FAQPageJsonLd({ items, nonce }: FAQPageJsonLdProps) {
   const data = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -267,5 +283,5 @@ export function FAQPageJsonLd({ items }: FAQPageJsonLdProps) {
     })),
   };
 
-  return <StructuredData data={data} />;
+  return <StructuredData data={data} nonce={nonce} />;
 }
