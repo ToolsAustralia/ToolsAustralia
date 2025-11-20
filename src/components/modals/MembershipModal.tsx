@@ -26,7 +26,7 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { convertUpsellToLocalPlan } from "@/utils/membership/membership-adapters";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { PaymentProcessingScreen } from "@/components/loading";
-import { type PaymentStatusResponse } from "@/utils/payment/payment-status";
+import { type PaymentStatusResponse } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";

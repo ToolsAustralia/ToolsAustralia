@@ -6,6 +6,8 @@
  */
 
 import PaymentEvent from "@/models/PaymentEvent";
+import User from "@/models/User";
+import Order from "@/models/Order";
 import connectDB from "@/lib/mongodb";
 
 // ✅ CRITICAL: Singleton pattern - only run index creation once per server instance
@@ -24,16 +26,27 @@ export async function ensureIndexesOnce(): Promise<void> {
   }
 
   // Start ensuring indexes
-  ensureIndexesPromise = ensurePaymentEventIndexes();
+  ensureIndexesPromise = ensureCriticalIndexes();
   await ensureIndexesPromise;
   indexesEnsured = true;
   ensureIndexesPromise = null;
 }
 
-async function ensurePaymentEventIndexes(): Promise<void> {
+async function ensureCriticalIndexes(): Promise<void> {
   try {
     await connectDB();
 
+    await ensurePaymentEventIndexes();
+    await ensureUserIndexes();
+    await ensureOrderIndexes();
+  } catch (error) {
+    console.error("❌ Failed to ensure indexes:", error);
+    throw error;
+  }
+}
+
+async function ensurePaymentEventIndexes(): Promise<void> {
+  try {
     console.log("🔍 Ensuring PaymentEvent indexes are created...");
 
     // ✅ CRITICAL FIX: Drop old non-unique index if it exists
@@ -104,6 +117,38 @@ async function ensurePaymentEventIndexes(): Promise<void> {
     }
   } catch (error) {
     console.error("❌ Failed to ensure PaymentEvent indexes:", error);
+    throw error;
+  }
+}
+
+async function ensureUserIndexes(): Promise<void> {
+  try {
+    console.log("🔍 Ensuring User indexes are created...");
+    await User.collection.createIndex({ stripeCustomerId: 1 }, { sparse: true, name: "stripeCustomerId_1_sparse" });
+    console.log("✅ User indexes ensured");
+  } catch (error: unknown) {
+    const err = error as { code?: number; message?: string };
+    if (err.code === 85 || err.code === 86 || err.message?.includes("already exists")) {
+      console.log("ℹ️  User index already exists");
+      return;
+    }
+    console.error("❌ Failed to ensure User indexes:", error);
+    throw error;
+  }
+}
+
+async function ensureOrderIndexes(): Promise<void> {
+  try {
+    console.log("🔍 Ensuring Order indexes are created...");
+    await Order.collection.createIndex({ paymentIntentId: 1 }, { sparse: true, name: "paymentIntentId_1_sparse" });
+    console.log("✅ Order indexes ensured");
+  } catch (error: unknown) {
+    const err = error as { code?: number; message?: string };
+    if (err.code === 85 || err.code === 86 || err.message?.includes("already exists")) {
+      console.log("ℹ️  Order index already exists");
+      return;
+    }
+    console.error("❌ Failed to ensure Order indexes:", error);
     throw error;
   }
 }

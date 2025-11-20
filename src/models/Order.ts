@@ -184,5 +184,6 @@ const OrderSchema = new Schema<IOrder>(
 OrderSchema.index({ user: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ createdAt: -1 });
+OrderSchema.index({ paymentIntentId: 1 }, { sparse: true });
 
 export default mongoose.models.Order || mongoose.model<IOrder>("Order", OrderSchema);

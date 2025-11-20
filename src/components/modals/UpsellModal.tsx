@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { useLoading } from "@/contexts/LoadingContext";
 import { PaymentProcessingScreen } from "@/components/loading";
-import { type PaymentStatusResponse } from "@/utils/payment/payment-status";
+import { type PaymentStatusResponse } from "@/hooks/queries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";

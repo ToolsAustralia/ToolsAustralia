@@ -12,7 +12,7 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
-import { type PaymentStatusResponse } from "@/utils/payment/payment-status";
+import { type PaymentStatusResponse } from "@/hooks/queries";
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";

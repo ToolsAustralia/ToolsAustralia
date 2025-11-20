@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Check, Gift, Star, Zap, AlertCircle } from "lucide-react";
-import { pollPaymentStatusWithCancel, type PaymentStatusResponse } from "@/utils/payment/payment-status";
+import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
 
 interface PaymentProcessingScreenProps {
   paymentIntentId: string;
@@ -32,6 +32,14 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const onSuccessCalledRef = useRef(false); // Guard to prevent duplicate onSuccess calls
+  const shouldSkipPolling = paymentIntentId === "processing_upgrade";
+  const shouldPoll = isVisible && !!paymentIntentId && !shouldSkipPolling;
+
+  const {
+    data: paymentStatus,
+    isError: paymentStatusError,
+    error: paymentStatusErrorDetails,
+  } = usePaymentStatus(paymentIntentId, { enabled: shouldPoll });
 
   // Define processing steps based on package type
   const getProcessingSteps = () => {
@@ -60,118 +68,89 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
   const steps = getProcessingSteps();
 
+  // Reset state when payment intent or visibility changes
   useEffect(() => {
-    if (!isVisible || !paymentIntentId) return;
-
-    // Reset onSuccess guard when paymentIntentId changes
-    onSuccessCalledRef.current = false;
-
-    // Note: Removed immediate_upgrade case - all upgrades now follow webhook-first approach
-
-    // Handle processing upgrade case (showing immediately when Pay button clicked)
-    if (paymentIntentId === "processing_upgrade") {
-      console.log("🔄 Processing upgrade - showing success after brief delay");
-
-      // For upgrades, show processing steps and then success
-      // Since webhook handles the actual processing, we just show progress
-      let stepIndex = 0;
-      const stepInterval = setInterval(() => {
-        if (stepIndex < steps.length - 1) {
-          setCurrentStep(stepIndex);
-          stepIndex++;
-        } else {
-          clearInterval(stepInterval);
-          // Show success after all steps complete
-          setTimeout(() => {
-            setIsProcessing(false);
-            setCurrentStep(steps.length - 1);
-            // Guard against duplicate onSuccess calls
-            if (!onSuccessCalledRef.current) {
-              onSuccessCalledRef.current = true;
-              onSuccess?.({
-                success: true,
-                processed: true,
-                status: "completed",
-                data: {
-                  paymentIntentId: "upgrade_processing",
-                  message: "Upgrade completed successfully",
-                },
-              });
-            }
-          }, 1000);
-        }
-      }, 2000); // Advance step every 2 seconds
-
-      // Cleanup function
-      return () => {
-        clearInterval(stepInterval);
-      };
+    if (!paymentIntentId || !isVisible) {
+      return;
     }
+    onSuccessCalledRef.current = false;
+    setStatus(null);
+    setError(null);
+    setCurrentStep(0);
+    setIsProcessing(true);
+  }, [paymentIntentId, isVisible]);
 
-    // Start polling payment status with cancellation support
-    const { promise, cancel } = pollPaymentStatusWithCancel(paymentIntentId, {
-      interval: 2000, // Poll every 2 seconds
-      timeout: 90000, // 90 second timeout for webhook processing
-      onUpdate: (status) => {
-        setStatus(status);
+  // Handle processing upgrade case (showing immediately when Pay button clicked)
+  useEffect(() => {
+    if (!isVisible || !shouldSkipPolling) return;
 
-        // Update step based on status
-        if (status.processed) {
+    let stepIndex = 0;
+    setIsProcessing(true);
+
+    const stepInterval = setInterval(() => {
+      if (stepIndex < steps.length - 1) {
+        setCurrentStep(stepIndex);
+        stepIndex++;
+      } else {
+        clearInterval(stepInterval);
+        setTimeout(() => {
+          const upgradeStatus: PaymentStatusResponse = {
+            success: true,
+            processed: true,
+            status: "completed",
+            data: {
+              paymentIntentId: "upgrade_processing",
+              message: "Upgrade completed successfully",
+            },
+          };
+          setStatus(upgradeStatus);
+          setIsProcessing(false);
           setCurrentStep(steps.length - 1);
-          setIsProcessing(false);
-          // Guard against duplicate onSuccess calls
+
           if (!onSuccessCalledRef.current) {
             onSuccessCalledRef.current = true;
-            onSuccess?.(status);
+            onSuccess?.(upgradeStatus);
           }
-        } else {
-          // Increment step every 3 seconds while processing
-          setCurrentStep((prev) => Math.min(prev + 1, steps.length - 2));
-        }
-      },
-    });
+        }, 1000);
+      }
+    }, 2000);
 
-    // Handle the polling result
-    promise
-      .then((result) => {
-        if (result.processed) {
-          setStatus(result);
-          setIsProcessing(false);
-          // Guard against duplicate onSuccess calls
-          if (!onSuccessCalledRef.current) {
-            onSuccessCalledRef.current = true;
-            onSuccess?.(result);
-          }
-        } else if (!result.success) {
-          // Check if this is a timeout (payment might still be processing)
-          if (result.data?.message?.includes("timeout")) {
-            setIsProcessing(false);
-            setError(
-              "Payment processing is taking longer than expected. Your payment was successful and benefits will be added shortly. Please check your account in a few minutes."
-            );
-            onTimeout?.();
-          } else {
-            setIsProcessing(false);
-            setError("Payment processing failed. Please check your account or contact support.");
-            onError?.("Payment processing failed");
-          }
-        } else {
-          // Payment is successful but not yet processed - show success after timeout
-          console.log("Payment successful but not yet processed, will show success after timeout");
-        }
-      })
-      .catch((err: unknown) => {
-        setIsProcessing(false);
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-        setError(errorMessage);
-        onError?.(errorMessage);
-      });
-
-    // Cleanup function to cancel polling
     return () => {
-      cancel();
+      clearInterval(stepInterval);
     };
-  }, [isVisible, paymentIntentId, onSuccess, onError, onTimeout, steps.length]);
+  }, [isVisible, shouldSkipPolling, steps.length, onSuccess]);
+
+  // React to payment status updates from React Query polling
+  useEffect(() => {
+    if (!shouldPoll || !paymentStatus) return;
+
+    setStatus(paymentStatus);
+
+    if (paymentStatus.processed) {
+      setCurrentStep(steps.length - 1);
+      setIsProcessing(false);
+      if (!onSuccessCalledRef.current) {
+        onSuccessCalledRef.current = true;
+        onSuccess?.(paymentStatus);
+      }
+    } else {
+      setIsProcessing(true);
+      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 2));
+    }
+  }, [paymentStatus, shouldPoll, steps.length, onSuccess]);
+
+  // Surface polling errors
+  useEffect(() => {
+    if (!shouldPoll || !paymentStatusError) return;
+    const errorMessage =
+      paymentStatusErrorDetails instanceof Error
+        ? paymentStatusErrorDetails.message
+        : "Payment processing failed. Please try again.";
+
+    setIsProcessing(false);
+    setError(errorMessage);
+    onError?.(errorMessage);
+  }, [shouldPoll, paymentStatusError, paymentStatusErrorDetails, onError]);
 
   // Auto-advance steps while processing
   useEffect(() => {

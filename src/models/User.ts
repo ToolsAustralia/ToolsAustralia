@@ -923,6 +923,7 @@ UserSchema.index({ role: 1 });
 UserSchema.index({ "subscription.isActive": 1 });
 UserSchema.index({ isActive: 1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
+UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 // ✅ OPTION 1: Major Draw Entries index removed - using single source of truth
 
 // MiniDraw participation indexes

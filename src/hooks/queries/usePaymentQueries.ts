@@ -45,14 +45,28 @@ interface SetDefaultPaymentMethodVariables {
 
 export interface PaymentStatusResponse {
   success: boolean;
+  processed: boolean;
+  status: "completed" | "pending";
   data: {
-    status: string;
     paymentIntentId: string;
-    amount: number;
-    currency: string;
-    metadata?: Record<string, unknown>;
+    eventType?: string;
+    packageType?: string;
+    packageName?: string;
+    entries?: number;
+    points?: number;
+    processedBy?: string;
+    timestamp?: string;
+    message?: string;
   };
 }
+
+interface UsePaymentStatusOptions {
+  enabled?: boolean;
+}
+
+const PAYMENT_STATUS_BASE_INTERVAL = 2000;
+const PAYMENT_STATUS_MAX_INTERVAL = 10000;
+const PAYMENT_STATUS_TIMEOUT_MS = 90000;
 
 // Hooks
 export const usePaymentMethods = (userId?: string) => {
@@ -81,18 +95,38 @@ export const useDefaultPaymentMethod = (userId?: string) => {
   });
 };
 
-export const usePaymentStatus = (paymentIntentId?: string) => {
+export const usePaymentStatus = (paymentIntentId?: string, options?: UsePaymentStatusOptions) => {
   return useQuery({
     queryKey: ["payment-status", paymentIntentId!],
     queryFn: async () => {
       const response = await apiGet<PaymentStatusResponse>(`/api/payment-status/${paymentIntentId}`);
       return response;
     },
-    enabled: !!paymentIntentId,
+    enabled: !!paymentIntentId && (options?.enabled ?? true),
     staleTime: 0, // Always fresh
     gcTime: 0, // Don't cache
-    refetchInterval: 2 * 1000, // Poll every 2 seconds
+    refetchInterval: (query) => {
+      const data = query.state.data as PaymentStatusResponse | undefined;
+      if (data?.processed) {
+        return false;
+      }
+
+      const startedAt = (query.meta?.startedAt as number) ?? 0;
+      if (startedAt && Date.now() - startedAt > PAYMENT_STATUS_TIMEOUT_MS) {
+        return false;
+      }
+
+      const attempts = query.state.dataUpdateCount ?? 0;
+      const interval = Math.min(
+        PAYMENT_STATUS_MAX_INTERVAL,
+        PAYMENT_STATUS_BASE_INTERVAL * Math.pow(2, attempts)
+      );
+      return interval;
+    },
     refetchIntervalInBackground: false, // Stop polling when tab is not active
+    meta: {
+      startedAt: Date.now(),
+    },
   });
 };
 

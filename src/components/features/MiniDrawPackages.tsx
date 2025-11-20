@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { usePaymentMethods } from "@/hooks/queries/usePaymentQueries";
 import { useUserContext } from "@/contexts/UserContext";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
-import type { PaymentStatusResponse } from "@/utils/payment/payment-status";
+import type { PaymentStatusResponse } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";

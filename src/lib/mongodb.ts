@@ -22,16 +22,26 @@ if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
 }
 
+function getMaxPoolSize(): number {
+  const rawValue = process.env.MONGODB_MAX_POOL;
+  const parsedValue = rawValue ? Number(rawValue) : NaN;
+  if (Number.isNaN(parsedValue) || parsedValue <= 0) {
+    return 10;
+  }
+  return parsedValue;
+}
+
 async function connectDB(): Promise<mongoose.Connection> {
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
+    const maxPoolSize = getMaxPoolSize();
     const opts = {
       bufferCommands: false,
       // Production optimizations
-      maxPoolSize: 10, // Maintain up to 10 socket connections
+      maxPoolSize, // Maintain up to N socket connections
       serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
       socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
       family: 4, // Use IPv4, skip trying IPv6
@@ -40,7 +50,7 @@ async function connectDB(): Promise<mongoose.Connection> {
     cached.promise = mongoose
       .connect(getMongoURI(), opts)
       .then((mongoose) => {
-        console.log("✅ MongoDB connected successfully");
+        console.log(`✅ MongoDB connected successfully (maxPoolSize=${maxPoolSize})`);
         return mongoose.connection;
       })
       .catch((error) => {
