@@ -47,14 +47,15 @@ export default function Hero() {
       {/* Background Images - Responsive for mobile and desktop */}
       <div className="absolute inset-0 z-0">
         {/* Mobile Background */}
+        {/* Note: priority removed to prevent preload warning on desktop where this image is hidden */}
         <div className="lg:hidden absolute inset-0">
           <Image
             src="/images/background/mobileBg.jpg"
             alt="Tools background"
             fill
             className="object-cover"
-            priority
             quality={90}
+            sizes="100vw"
           />
         </div>
         {/* Desktop Background */}
@@ -66,6 +67,7 @@ export default function Hero() {
             className="object-cover"
             priority
             quality={90}
+            sizes="100vw"
           />
         </div>
         {/* Dark overlay for better text readability */}

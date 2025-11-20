@@ -79,9 +79,10 @@ export function buildSecurityHeaders(nonce?: string) {
     // - COOP: same-origin provides sufficient protection for most use cases
     // - If cross-origin isolation is needed in the future, apply COEP selectively to specific routes
     // Allow payment API for Stripe.js (required for Stripe Elements to function)
+    // Note: Permissions-Policy uses structured header format - URLs must use double quotes, not single quotes
     {
       key: "Permissions-Policy",
-      value: "camera=(), microphone=(), geolocation=(), payment=(self 'https://js.stripe.com')",
+      value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com")',
     },
     { key: "Content-Security-Policy", value: csp },
   ];
@@ -116,9 +117,10 @@ export function buildSecurityHeadersForWebhook(nonce?: string) {
     { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
     // Note: Cross-Origin-Embedder-Policy is intentionally excluded for webhook routes
     // Allow payment API for Stripe.js (required for Stripe Elements to function)
+    // Note: Permissions-Policy uses structured header format - URLs must use double quotes, not single quotes
     {
       key: "Permissions-Policy",
-      value: "camera=(), microphone=(), geolocation=(), payment=(self 'https://js.stripe.com')",
+      value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com")',
     },
     { key: "Content-Security-Policy", value: csp },
   ];

@@ -40,13 +40,13 @@ export default function PromoHero() {
       {/* Backgrounds */}
       <div className="absolute inset-0 z-0">
         {/* Mobile Background */}
+        {/* Note: priority removed to prevent preload warning on desktop where this image is hidden */}
         <div className="lg:hidden absolute inset-0">
           <Image
             src={heroImageSrc}
             alt="Ultimate Tool Giveaway - Mobile Background"
             fill
             className="object-cover object-[50%_10%] w-full h-full"
-            priority
             quality={100}
             sizes="100vw"
           />
