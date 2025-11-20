@@ -40,9 +40,9 @@ const paymentStatusCache = new Map<string, { expiresAt: number; payload: Payment
  * GET /api/payment-status/[paymentIntentId]
  * Check if payment benefits have been processed
  */
-export async function GET(_request: NextRequest, { params }: { params: { paymentIntentId: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ paymentIntentId: string }> }) {
   try {
-    const { paymentIntentId } = params;
+    const { paymentIntentId } = await params;
 
     if (!paymentIntentId) {
       return NextResponse.json({ error: "Payment Intent ID is required" }, { status: 400 });

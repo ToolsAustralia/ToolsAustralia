@@ -301,7 +301,6 @@ const UserSchema = new Schema<IUser>(
     stripeCustomerId: {
       type: String,
       trim: true,
-      sparse: true, // Allows multiple null values
     },
     stripeSubscriptionId: {
       type: String,

@@ -122,35 +122,40 @@ async function ensurePaymentEventIndexes(): Promise<void> {
 }
 
 async function ensureUserIndexes(): Promise<void> {
-  try {
-    console.log("🔍 Ensuring User indexes are created...");
-    await User.collection.createIndex({ stripeCustomerId: 1 }, { sparse: true, name: "stripeCustomerId_1_sparse" });
-    console.log("✅ User indexes ensured");
-  } catch (error: unknown) {
-    const err = error as { code?: number; message?: string };
-    if (err.code === 85 || err.code === 86 || err.message?.includes("already exists")) {
-      console.log("ℹ️  User index already exists");
-      return;
-    }
-    console.error("❌ Failed to ensure User indexes:", error);
-    throw error;
-  }
+  console.log("🔍 Ensuring User indexes are created...");
+  await ensureIndex(User.collection, { stripeCustomerId: 1 }, { sparse: true });
+  console.log("✅ User indexes ensured");
 }
 
 async function ensureOrderIndexes(): Promise<void> {
-  try {
-    console.log("🔍 Ensuring Order indexes are created...");
-    await Order.collection.createIndex({ paymentIntentId: 1 }, { sparse: true, name: "paymentIntentId_1_sparse" });
-    console.log("✅ Order indexes ensured");
-  } catch (error: unknown) {
-    const err = error as { code?: number; message?: string };
-    if (err.code === 85 || err.code === 86 || err.message?.includes("already exists")) {
-      console.log("ℹ️  Order index already exists");
-      return;
-    }
-    console.error("❌ Failed to ensure Order indexes:", error);
-    throw error;
+  console.log("🔍 Ensuring Order indexes are created...");
+  await ensureIndex(Order.collection, { paymentIntentId: 1 }, { sparse: true });
+  console.log("✅ Order indexes ensured");
+}
+
+type MongooseCollection = typeof User.collection;
+
+async function ensureIndex(
+  collection: MongooseCollection,
+  indexSpec: Record<string, 1 | -1>,
+  options: { name?: string; sparse?: boolean } = {}
+): Promise<void> {
+  const indexName =
+    options.name ||
+    Object.entries(indexSpec)
+      .map(([field, direction]) => `${field}_${direction as number}`)
+      .join("_");
+
+  const existingIndexes = await collection.indexes();
+  const alreadyExists = existingIndexes.some((idx) => idx.name === indexName);
+
+  if (alreadyExists) {
+    console.log(`ℹ️  Index "${indexName}" already exists`);
+    return;
   }
+
+  await collection.createIndex(indexSpec, options);
+  console.log(`✅ Created index "${indexName}"`);
 }
 
 // ✅ NOTE: Indexes are now ensured via ensureIndexesOnce() called from webhook handler
