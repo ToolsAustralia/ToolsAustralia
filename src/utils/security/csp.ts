@@ -26,8 +26,11 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   // Build script-src directive
   // If nonce is provided, use it instead of 'unsafe-inline'
   // Keep 'unsafe-eval' only if Stripe.js requires it (documented below)
+  // Add Next.js inline script hashes to allow Next.js build chunks
+  // These hashes are for Next.js runtime inline scripts that don't support nonces
+  // When Next.js updates, new hashes may need to be added (monitor console for violations)
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https:`
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https: 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
     : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https:`;
 
   const directives = [
@@ -38,7 +41,7 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     "font-src 'self' https: data:",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com",
+    "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live",
     "img-src 'self' https: data: blob:",
     "manifest-src 'self'",
     "media-src 'self' https:",
@@ -75,7 +78,11 @@ export function buildSecurityHeaders(nonce?: string) {
     // - For e-commerce sites, COEP causes more problems than it solves
     // - COOP: same-origin provides sufficient protection for most use cases
     // - If cross-origin isolation is needed in the future, apply COEP selectively to specific routes
-    { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+    // Allow payment API for Stripe.js (required for Stripe Elements to function)
+    {
+      key: "Permissions-Policy",
+      value: "camera=(), microphone=(), geolocation=(), payment=(self 'https://js.stripe.com')",
+    },
     { key: "Content-Security-Policy", value: csp },
   ];
 }
@@ -108,7 +115,11 @@ export function buildSecurityHeadersForWebhook(nonce?: string) {
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
     // Note: Cross-Origin-Embedder-Policy is intentionally excluded for webhook routes
-    { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+    // Allow payment API for Stripe.js (required for Stripe Elements to function)
+    {
+      key: "Permissions-Policy",
+      value: "camera=(), microphone=(), geolocation=(), payment=(self 'https://js.stripe.com')",
+    },
     { key: "Content-Security-Policy", value: csp },
   ];
 }
