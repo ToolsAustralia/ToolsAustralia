@@ -30,6 +30,7 @@ export interface MiniDrawFilters extends Record<string, unknown> {
   category?: string;
   minValue?: number;
   maxValue?: number;
+  brandIds?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   page?: number;
@@ -276,8 +277,7 @@ export const useMiniDrawStats = (miniDrawId?: string) => {
     totalPrizeValue: miniDraw?.prize.value || 0,
     status: miniDraw?.status ?? "active",
     entriesRemaining:
-      miniDraw?.entriesRemaining ??
-      Math.max((miniDraw?.minimumEntries || 0) - (miniDraw?.totalEntries || 0), 0),
+      miniDraw?.entriesRemaining ?? Math.max((miniDraw?.minimumEntries || 0) - (miniDraw?.totalEntries || 0), 0),
   };
 };
 

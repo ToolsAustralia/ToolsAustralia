@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ClipboardList, Save, Settings, Trophy } from "lucide-react";
+import { brandOptions } from "@/utils/brand-utils";
 
 import {
   Button,
@@ -28,6 +29,7 @@ interface MiniDrawFormState {
   description: string;
   minimumEntries: number;
   status: "active" | "completed" | "cancelled";
+  brandId: string;
   prize: MiniDrawPrizeForm;
 }
 
@@ -38,6 +40,8 @@ export interface AdminMiniDrawSummary {
   minimumEntries: number;
   status: "active" | "completed" | "cancelled";
   configurationLocked?: boolean;
+  brandId: string;
+  displayOrder: number;
   prize: {
     name: string;
     description: string;
@@ -53,6 +57,7 @@ export interface MiniDrawEditPayload {
   description: string;
   minimumEntries: number;
   status: "active" | "completed" | "cancelled";
+  brandId: string;
   prize: {
     name: string;
     description: string;
@@ -69,18 +74,6 @@ interface MiniDrawEditModalProps {
   onSave: (payload: MiniDrawEditPayload) => Promise<void>;
   isSaving?: boolean;
 }
-
-const categoryOptions = [
-  { value: "vehicle", label: "Vehicle" },
-  { value: "electronics", label: "Electronics" },
-  { value: "travel", label: "Travel" },
-  { value: "cash", label: "Cash" },
-  { value: "experience", label: "Experience" },
-  { value: "home", label: "Home" },
-  { value: "fashion", label: "Fashion" },
-  { value: "sports", label: "Sports" },
-  { value: "other", label: "Other" },
-];
 
 export default function MiniDrawEditModal({
   isOpen,
@@ -108,6 +101,7 @@ export default function MiniDrawEditModal({
         description: miniDraw.description,
         minimumEntries: miniDraw.minimumEntries,
         status: miniDraw.status,
+        brandId: miniDraw.brandId,
         prize: {
           name: miniDraw.prize.name,
           description: miniDraw.prize.description,
@@ -198,11 +192,11 @@ export default function MiniDrawEditModal({
     if (!formState.prize.value || formState.prize.value <= 0) {
       nextErrors["prize.value"] = "Prize value must be greater than zero.";
     }
-    if (!formState.prize.category) {
-      nextErrors["prize.category"] = "Select a prize category.";
-    }
     if ((formState.prize.images || []).length === 0) {
       nextErrors["prize.images"] = "Upload at least one prize image.";
+    }
+    if (!formState.brandId) {
+      nextErrors.brandId = "Select a prize brand.";
     }
 
     setErrors(nextErrors);
@@ -254,6 +248,7 @@ export default function MiniDrawEditModal({
         description: formState.description.trim(),
         minimumEntries: formState.minimumEntries,
         status: formState.status,
+        brandId: formState.brandId,
         prize: {
           name: formState.prize.name.trim(),
           description: formState.prize.description.trim(),
@@ -362,6 +357,18 @@ export default function MiniDrawEditModal({
               disabled={disableConfigFields}
             />
 
+          <Select
+            id="brandId"
+            name="brandId"
+            label="Prize Brand"
+            value={formState.brandId}
+            onChange={(event) => handleFieldChange("brandId", event.target.value)}
+            options={brandOptions.map((brand) => ({ value: brand.value, label: brand.label }))}
+            error={errors.brandId}
+            required
+            disabled={disableConfigFields}
+          />
+
             <Input
               id="prize.value"
               name="prize.value"
@@ -374,18 +381,6 @@ export default function MiniDrawEditModal({
               error={errors["prize.value"]}
               min={0}
               step={0.01}
-              required
-              disabled={disableConfigFields}
-            />
-
-            <Select
-              id="prize.category"
-              name="prize.category"
-              label="Prize Category"
-              value={formState.prize.category}
-              onChange={(event) => handleFieldChange("prize", event.target.value, "category")}
-              options={categoryOptions}
-              error={errors["prize.category"]}
               required
               disabled={disableConfigFields}
             />

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Trophy, FileText, CheckCircle, Sparkles, Crown } from "lucide-react";
+import { getBrandMeta } from "@/utils/brand-utils";
 
 interface MiniDrawTabsProps {
   miniDraw: {
@@ -14,6 +15,7 @@ interface MiniDrawTabsProps {
     minimumEntries: number;
     entriesRemaining?: number;
     cycle?: number;
+    brandId?: string;
     latestWinner?: {
       entryNumber: number;
       selectedDate: string;
@@ -50,6 +52,8 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
   const isCompleted = miniDraw.status === "completed";
   const isCancelled = miniDraw.status === "cancelled";
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
+  const brandMeta = getBrandMeta(miniDraw.brandId);
+  const brandLabel = brandMeta?.name ?? "Mini Draw";
 
   return (
     <div className="mt-8 sm:mt-16 bg-gray-50 w-full">
@@ -102,12 +106,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                     <dt className="text-xs sm:text-sm text-gray-600">Prize Name</dt>
                     <dd className="text-xs sm:text-sm font-medium text-gray-900">{miniDraw.prize.name}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-xs sm:text-sm text-gray-600">Prize Value</dt>
-                    <dd className="text-xs sm:text-sm font-medium text-gray-900">
-                      ${miniDraw.prize.value.toLocaleString()}
-                    </dd>
-                  </div>
+
                   <div className="flex justify-between">
                     <dt className="text-xs sm:text-sm text-gray-600">Entries Sold</dt>
                     <dd className="text-xs sm:text-sm font-medium text-gray-900">

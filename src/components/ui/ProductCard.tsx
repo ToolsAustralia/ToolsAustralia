@@ -6,6 +6,9 @@ import Link from "next/link";
 import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
+import type { BrandLogo } from "@/data/brandLogos";
+import BrandLogoCard from "@/components/ui/BrandLogoCard";
 
 // Types
 interface ProductItem {
@@ -29,11 +32,40 @@ interface MiniDrawType {
   isActive?: boolean;
   requiresMembership: boolean;
   hasActiveMembership?: boolean;
+  brandId?: string;
   prize: {
     name: string;
     value: number;
     images: string[];
   };
+}
+
+interface NormalizedProductData {
+  id: string;
+  name: string;
+  price: number;
+  images: string[];
+  brand: string;
+  brandAccent: {
+    label: string;
+    logo: string;
+    overlayScale: number;
+    hasBrand: boolean;
+    brandData: BrandLogo;
+    gradientOverride?: string | null;
+  } | null;
+  stock: number | null;
+  rating: number;
+  isPrize: boolean;
+  endDate: Date | null;
+  startDate: Date | null;
+  isActive: boolean;
+  totalEntries: number | null;
+  minimumEntries: number | null;
+  status: MiniDrawType["status"] | null;
+  entriesRemaining: number | null;
+  requiresMembership: boolean;
+  hasActiveMembership: boolean;
 }
 
 type ProductCardProps = {
@@ -78,7 +110,7 @@ export default function ProductCard({
     return "prize" in item && "status" in item && "minimumEntries" in item;
   };
 
-  const getProductData = () => {
+  const getProductData = (): NormalizedProductData => {
     if (isMiniDrawProduct(product)) {
       const remainingEntries = Math.max(
         0,
@@ -88,12 +120,28 @@ export default function ProductCard({
           ? product.minimumEntries - product.totalEntries
           : 0
       );
+      const brandMeta = getBrandMeta(product.brandId);
+      const brandData = brandMeta ?? defaultBrandLogo;
+      const brandLabel = brandData.name;
+      const brandLogo = brandData.logo;
+      // Use the overlay scale (not the image scale) so badge dimensions stay consistent across brands.
+      const overlayScale = brandMeta?.overlayScale ?? defaultBrandLogo.overlayScale ?? 1;
+      const gradientOverride = brandMeta ? undefined : "bg-transparent";
+
       return {
         id: product._id,
         name: product.name,
         price: getValidPrice(product.prize?.value || 0),
         images: product.prize?.images || [],
-        brand: "Mini Draw",
+        brand: brandLabel,
+        brandAccent: {
+          label: brandLabel,
+          logo: brandLogo,
+          overlayScale,
+          hasBrand: Boolean(brandMeta),
+          brandData,
+          gradientOverride,
+        },
         stock: remainingEntries,
         rating: 4.5,
         isPrize: true,
@@ -114,6 +162,7 @@ export default function ProductCard({
         price: getValidPrice(product.price),
         images: product.images,
         brand: product.brand,
+        brandAccent: null,
         stock: product.stock,
         rating: getValidRating(product.rating),
         isPrize: false,
@@ -131,6 +180,7 @@ export default function ProductCard({
   };
 
   const productData = getProductData();
+  const brandAccent = productData.brandAccent;
 
   // Check if product is in cart (immediate local check)
   const isInCart = items.some((item) => item.productId === productData.id) || localAddedState[productData.id];
@@ -200,7 +250,7 @@ export default function ProductCard({
         setLocalLoadingState((prev) => ({ ...prev, [productData.id]: false }));
       }, 300);
     }
-  }, [productData, addToCart, onAddToCart, product]);
+  }, [productData, addToCart, onAddToCart, product, trackAddToCart]);
 
   // Retry failed operation
   const handleRetry = useCallback(async () => {
@@ -264,6 +314,20 @@ export default function ProductCard({
             </div>
           </Link>
 
+          {/* Brand Overlay */}
+          {productData.isPrize && brandAccent && (
+            <div className="absolute bottom-12 right-2 z-10">
+              <BrandLogoCard
+                brand={brandAccent.brandData}
+                overlayMode="overlay"
+                gradientOverride={brandAccent.gradientOverride ?? undefined}
+                scaleOverride={brandAccent.overlayScale}
+                widthClass="w-auto"
+                heightClass="h-auto"
+              />
+            </div>
+          )}
+
           {/* Entries Remaining Badge - Top Center */}
           {productData.isPrize && (
             <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10 whitespace-nowrap group">
@@ -322,10 +386,12 @@ export default function ProductCard({
               </h3>
             </Link>
 
-            {/* Brand */}
-            <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-gray-600 tracking-[0.1px]">
-              {productData.brand}
-            </p>
+            {/* Brand (products only) */}
+            {!productData.isPrize && (
+              <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-gray-600 tracking-[0.1px]">
+                {productData.brand}
+              </p>
+            )}
 
             {/* Rating - Only show for products, not mini draws */}
             {!productData.isPrize && (
@@ -373,13 +439,11 @@ export default function ProductCard({
           {/* Price and Button Section - Fixed at bottom */}
           <div className="mt-4 space-y-3">
             {/* Price */}
-            <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
-              {productData.isPrize ? (
-                <span>Prize: ${productData.price.toFixed(2)}</span>
-              ) : (
+            {!productData.isPrize && (
+              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
                 <span>${productData.price.toFixed(2)}</span>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Add to Cart Button - Optimistic with Error Handling */}
             <div>
@@ -407,7 +471,7 @@ export default function ProductCard({
                 // For mini draws, redirect to detail page
                 <Link
                   href={`/mini-draws/${productData.id}`}
-                  className="w-full py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-[10px] sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 bg-black hover:bg-gray-800 transition-colors"
+                  className="w-full py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-[10px] sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 bg-black hover:bg-gray-800"
                 >
                   <div className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5">
                     <Ticket className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
@@ -415,9 +479,7 @@ export default function ProductCard({
                   <span className="hidden sm:inline">
                     {isPrizeCancelled ? "Cancelled" : isPrizeClosed ? "View Details" : "Enter Draw"}
                   </span>
-                  <span className="sm:hidden">
-                    {isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter"}
-                  </span>
+                  <span className="sm:hidden">{isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter"}</span>
                 </Link>
               ) : (
                 <button
@@ -430,7 +492,7 @@ export default function ProductCard({
                         : isCurrentlyLoading
                         ? "bg-blue-600 cursor-not-allowed animate-pulse"
                         : "bg-gray-400 cursor-not-allowed"
-                      : "bg-black hover:bg-gray-800 transition-colors"
+                      : "bg-black hover:bg-gray-800"
                   }`}
                 >
                   <div className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5">
@@ -477,6 +539,18 @@ export default function ProductCard({
               className="object-cover"
               sizes="(max-width: 640px) 96px, 128px"
             />
+            {productData.isPrize && brandAccent && (
+              <div className="absolute bottom-1 right-1 z-10">
+                <BrandLogoCard
+                  brand={brandAccent.brandData}
+                  overlayMode="overlay"
+                  gradientOverride={brandAccent.gradientOverride ?? undefined}
+                  scaleOverride={brandAccent.overlayScale}
+                  widthClass="w-auto"
+                  heightClass="h-auto"
+                />
+              </div>
+            )}
             {/* Error indicator for list view */}
             {hasError && (
               <div className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full">
@@ -495,8 +569,10 @@ export default function ProductCard({
               </h3>
             </Link>
 
-            {/* Brand */}
-            <p className="text-[14px] sm:text-[16px] text-gray-600 tracking-[0.1px]">{productData.brand}</p>
+            {/* Brand (products only) */}
+            {!productData.isPrize && (
+              <p className="text-[14px] sm:text-[16px] text-gray-600 tracking-[0.1px]">{productData.brand}</p>
+            )}
 
             {/* Rating - Only show for products, not mini draws */}
             {!productData.isPrize && (
@@ -551,20 +627,18 @@ export default function ProductCard({
 
           <div className="flex items-center justify-between mt-4">
             {/* Price */}
-            <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
-              {productData.isPrize ? (
-                <span>Prize: ${productData.price.toFixed(2)}</span>
-              ) : (
+            {!productData.isPrize && (
+              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
                 <span>${productData.price.toFixed(2)}</span>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Add to Cart Button with optimistic feedback */}
             {productData.isPrize ? (
               // For mini draws, redirect to detail page
               <Link
                 href={`/mini-draws/${productData.id}`}
-                className="px-4 sm:px-8 py-2 sm:py-3 rounded-[50px] font-bold text-[12px] sm:text-[14px] text-white tracking-[0.1px] flex items-center gap-[6px] sm:gap-[9px] transition-all duration-200 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 transition-colors"
+                className="px-4 sm:px-8 py-2 sm:py-3 rounded-[50px] font-bold text-[12px] sm:text-[14px] text-white tracking-[0.1px] flex items-center gap-[6px] sm:gap-[9px] transition-all duration-200 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
               >
                 <div className="w-4 h-4 sm:w-5 sm:h-5">
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -572,9 +646,7 @@ export default function ProductCard({
                 <span className="hidden sm:inline">
                   {isPrizeCancelled ? "Cancelled" : isPrizeClosed ? "View Details" : "Enter Draw"}
                 </span>
-                <span className="sm:hidden">
-                  {isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter"}
-                </span>
+                <span className="sm:hidden">{isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter"}</span>
               </Link>
             ) : hasError ? (
               <div className="flex gap-2">

@@ -64,3 +64,38 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
   }
 }
+
+/**
+ * DELETE /api/admin/mini-draw/[id]
+ * Permanently remove a mini draw
+ */
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    if (!Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid mini draw ID" }, { status: 400 });
+    }
+
+    const deleted = await MiniDraw.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return NextResponse.json({ error: "Mini draw not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("❌ Error deleting mini draw:", error);
+    return NextResponse.json(
+      { error: "Failed to delete mini draw", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}

@@ -5,6 +5,9 @@ import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
 import { shouldLockConfiguration } from "@/utils/draws/mini-draw-helpers";
+import { brandLogos } from "@/data/brandLogos";
+
+const brandIds = brandLogos.map((brand) => brand.id) as [string, ...string[]];
 
 // Validation schema for mini draw updates
 const miniDrawUpdateSchema = z.object({
@@ -13,6 +16,8 @@ const miniDrawUpdateSchema = z.object({
   description: z.string().min(1, "Description is required").max(2000, "Description too long").optional(),
   status: z.enum(["active", "completed", "cancelled"]).optional(),
   minimumEntries: z.number().int().min(1, "Minimum entries must be at least 1").optional(),
+  brandId: z.enum(brandIds).optional(),
+  displayOrder: z.number().int().optional(),
   prize: z
     .object({
       name: z.string().min(1, "Prize name is required").optional(),
@@ -76,6 +81,12 @@ export async function PUT(request: NextRequest) {
     }
     if (validatedData.minimumEntries !== undefined) {
       miniDraw.minimumEntries = validatedData.minimumEntries;
+    }
+    if (validatedData.brandId !== undefined) {
+      miniDraw.brandId = validatedData.brandId;
+    }
+    if (validatedData.displayOrder !== undefined) {
+      miniDraw.displayOrder = validatedData.displayOrder;
     }
 
     // Update prize if provided

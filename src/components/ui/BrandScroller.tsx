@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import useEmblaCarousel from "embla-carousel-react";
 import AutoScroll from "embla-carousel-auto-scroll";
 import { brandLogos, BrandLogo } from "@/data/brandLogos";
+import BrandLogoCard from "@/components/ui/BrandLogoCard";
 
 interface BrandScrollerProps {
   speed?: number; // seconds for one full brand set pass (desktop default)
@@ -91,32 +91,11 @@ interface BrandItemProps {
 }
 
 function BrandItem({ brand }: BrandItemProps) {
-  const gradientClass = brand.splitGradient
-    ? `bg-gradient-to-b from-green-900 from-0% via-green-800 via-50% to-gray-900 to-50%`
-    : `bg-gradient-to-br ${brand.gradient}`;
-
   return (
-    <div className="flex-shrink-0 w-[140px] sm:w-[160px] lg:w-[200px]">
-      <div
-        className={`flex items-center justify-center w-full h-[60px] sm:h-[70px] lg:h-[90px] rounded-xl ${gradientClass} shadow-lg relative overflow-visible`}
-      >
-        {brand.hasOverlay && (
-          <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/10 rounded-xl pointer-events-none" />
-        )}
-        <Image
-          src={brand.logo}
-          alt={brand.name}
-          width={120}
-          height={48}
-          className={`h-8 sm:h-10 lg:h-12 w-auto object-contain drop-shadow-md relative z-10 ${
-            brand.imageScale && brand.imageScale !== 1 ? "scale-150" : ""
-          }`}
-          style={{
-            transform: brand.imageScale && brand.imageScale !== 1 ? `scale(${brand.imageScale})` : undefined,
-          }}
-          unoptimized
-        />
-      </div>
-    </div>
+    <BrandLogoCard
+      brand={brand}
+      widthClass="w-[140px] sm:w-[160px] lg:w-[200px]"
+      heightClass="h-[60px] sm:h-[70px] lg:h-[90px]"
+    />
   );
 }

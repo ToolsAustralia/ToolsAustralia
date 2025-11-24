@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IMiniDraw extends Document {
   name: string;
   description: string;
+  brandId: string;
   prize: {
     name: string;
     description: string;
@@ -10,6 +11,7 @@ export interface IMiniDraw extends Document {
     images: string[];
     category: string; // e.g., "vehicle", "electronics", "travel", "cash", "experience"
   };
+  displayOrder: number;
   isActive: boolean; // Backward compatibility - should use status instead
 
   // Status management for mini draw lifecycle
@@ -63,6 +65,11 @@ const MiniDrawSchema = new Schema<IMiniDraw>(
       trim: true,
       maxlength: [2000, "Description cannot be more than 2000 characters"],
     },
+    brandId: {
+      type: String,
+      required: [true, "Brand is required"],
+      trim: true,
+    },
     prize: {
       name: {
         type: String,
@@ -91,6 +98,10 @@ const MiniDrawSchema = new Schema<IMiniDraw>(
         trim: true,
         enum: ["vehicle", "electronics", "travel", "cash", "experience", "home", "fashion", "sports", "other"],
       },
+    },
+    displayOrder: {
+      type: Number,
+      default: () => Date.now(),
     },
     isActive: {
       type: Boolean,

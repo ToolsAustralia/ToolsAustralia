@@ -5,7 +5,9 @@ import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
 import { v2 as cloudinary } from "cloudinary";
+import { brandLogos } from "@/data/brandLogos";
 
+const brandIds = brandLogos.map((brand) => brand.id) as [string, ...string[]];
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -17,8 +19,10 @@ cloudinary.config({
 const createMiniDrawSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name too long"),
   description: z.string().min(1, "Description is required").max(2000, "Description too long"),
+  brandId: z.enum(brandIds),
   minimumEntries: z.number().int().min(1, "Minimum entries must be at least 1"),
   status: z.enum(["active", "cancelled"]).optional(),
+  displayOrder: z.number().int().optional(),
   prize: z.object({
     name: z.string().min(1, "Prize name is required"),
     description: z.string().min(1, "Prize description is required"),
@@ -98,6 +102,8 @@ export async function POST(request: NextRequest) {
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const minimumEntriesStr = formData.get("minimumEntries") as string;
+    const brandId = formData.get("brandId") as string;
+    const displayOrderStr = formData.get("displayOrder") as string | null;
     const statusStr = (formData.get("status") as string | null) ?? undefined;
     const prizeName = formData.get("prize.name") as string;
     const prizeDescription = formData.get("prize.description") as string;
@@ -129,7 +135,9 @@ export async function POST(request: NextRequest) {
     const dataToValidate = {
       name,
       description,
+      brandId,
       minimumEntries: parseInt(minimumEntriesStr, 10),
+      displayOrder: displayOrderStr ? parseInt(displayOrderStr, 10) : undefined,
       status: statusStr as "active" | "cancelled" | undefined,
       prize: {
         name: prizeName,
@@ -169,6 +177,7 @@ export async function POST(request: NextRequest) {
     const newMiniDraw = new MiniDraw({
       name: validatedData.name.trim(),
       description: validatedData.description.trim(),
+      brandId: validatedData.brandId,
       prize: {
         name: validatedData.prize.name.trim(),
         description: validatedData.prize.description.trim(),
@@ -177,6 +186,7 @@ export async function POST(request: NextRequest) {
         category: validatedData.prize.category,
       },
       minimumEntries: validatedData.minimumEntries,
+      displayOrder: validatedData.displayOrder ?? Date.now(),
       status: validatedData.status ?? "active",
       isActive: (validatedData.status ?? "active") === "active",
       configurationLocked: false,

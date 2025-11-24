@@ -13,6 +13,7 @@ import {
   FormSection,
   ImageUpload,
 } from "./ui";
+import { brandOptions } from "@/utils/brand-utils";
 
 interface AdminMiniDrawModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface AdminMiniDrawModalProps {
 interface MiniDrawFormData {
   name: string;
   description: string;
+  brandId: string;
   minimumEntries: number;
   status: "active" | "cancelled";
   prize: {
@@ -34,22 +36,11 @@ interface MiniDrawFormData {
   };
 }
 
-const categoryOptions = [
-  { value: "vehicle", label: "Vehicle" },
-  { value: "electronics", label: "Electronics" },
-  { value: "travel", label: "Travel" },
-  { value: "cash", label: "Cash" },
-  { value: "experience", label: "Experience" },
-  { value: "home", label: "Home" },
-  { value: "fashion", label: "Fashion" },
-  { value: "sports", label: "Sports" },
-  { value: "other", label: "Other" },
-];
-
 const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState<MiniDrawFormData>({
     name: "",
     description: "",
+    brandId: brandOptions[0]?.value ?? "",
     minimumEntries: 0,
     status: "active",
     prize: {
@@ -57,7 +48,7 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
       description: "",
       value: 0,
       images: [],
-      category: "",
+      category: "other",
     },
   });
 
@@ -74,6 +65,11 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
           ...prev.prize,
           [prizeField]: prizeField === "value" ? parseFloat(value) || 0 : value,
         },
+      }));
+    } else if (name === "brandId") {
+      setFormData((prev) => ({
+        ...prev,
+        brandId: value,
       }));
     } else {
       const nextValue = name === "minimumEntries" ? (value === "" ? 0 : parseInt(value, 10) || 0) : value;
@@ -117,6 +113,7 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
       formDataToSend.append("name", formData.name);
       formDataToSend.append("description", formData.description);
       formDataToSend.append("minimumEntries", formData.minimumEntries.toString());
+      formDataToSend.append("brandId", formData.brandId);
       formDataToSend.append("status", formData.status);
       formDataToSend.append("prize.name", formData.prize.name);
       formDataToSend.append("prize.description", formData.prize.description);
@@ -167,6 +164,7 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
     setFormData({
       name: "",
       description: "",
+      brandId: brandOptions[0]?.value ?? "",
       minimumEntries: 0,
       status: "active",
       prize: {
@@ -174,7 +172,7 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
         description: "",
         value: 0,
         images: [],
-        category: "",
+        category: "other",
       },
     });
     setErrors({});
@@ -243,6 +241,17 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
               rows={3}
             />
 
+            <Select
+              id="brandId"
+              name="brandId"
+              value={formData.brandId}
+              onChange={handleInputChange}
+              label="Prize Brand"
+              required
+              error={errors.brandId}
+              options={brandOptions.map((brand) => ({ value: brand.value, label: brand.label }))}
+            />
+
             <Input
               id="prize.value"
               name="prize.value"
@@ -255,17 +264,6 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
               min={0}
               step={0.01}
               error={errors["prize.value"]}
-            />
-
-            <Select
-              id="prize.category"
-              name="prize.category"
-              value={formData.prize.category}
-              onChange={handleInputChange}
-              label="Prize Category"
-              required
-              error={errors["prize.category"]}
-              options={categoryOptions}
             />
 
             <ImageUpload

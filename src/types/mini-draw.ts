@@ -1,4 +1,5 @@
 import { IMiniDraw } from "@/models/MiniDraw";
+import type { BrandId } from "@/data/brandLogos";
 
 export interface MiniDrawType
   extends Omit<
@@ -57,6 +58,7 @@ export interface MiniDrawSummary {
 export interface CreateMiniDrawData {
   name: string;
   description: string;
+  brandId: BrandId;
   prize: {
     name: string;
     description: string;
@@ -64,6 +66,7 @@ export interface CreateMiniDrawData {
     images: string[];
     category: string;
   };
+  displayOrder?: number;
   status?: "active" | "cancelled"; // Initial status (defaults to "active")
   minimumEntries: number; // Required minimum entries - when reached, draw auto-closes
 }
@@ -71,8 +74,10 @@ export interface CreateMiniDrawData {
 export interface UpdateMiniDrawData {
   name?: string;
   description?: string;
+  brandId?: BrandId;
   status?: "active" | "completed" | "cancelled";
   minimumEntries?: number; // Can be updated, but required on creation
+  displayOrder?: number;
   prize?: {
     name?: string;
     description?: string;

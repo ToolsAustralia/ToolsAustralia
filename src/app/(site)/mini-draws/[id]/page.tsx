@@ -14,6 +14,7 @@ import Winner, { IWinner } from "@/models/Winner";
 import mongoose from "mongoose";
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getCachedSession, getUserMembershipData } from "@/utils/database/queries/detail-page-queries";
+import { getBrandMeta } from "@/utils/brand-utils";
 
 interface MiniDrawDetailPageProps {
   params: Promise<{ id: string }>;
@@ -64,27 +65,28 @@ export async function generateMetadata({ params }: MiniDrawDetailPageProps): Pro
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
   const miniDrawUrl = `${baseUrl}/mini-draws/${miniDraw._id}`;
   const prizeImageUrl = `${baseUrl}${miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}`;
+  const brandMeta = getBrandMeta(miniDraw.brandId);
+  const brandLabel = brandMeta?.name ?? "Tools Australia";
+  const metaDescription = `Win ${miniDraw.prize.name} with ${brandLabel}. Secure your entries before allocations close. ${miniDraw.description}`;
 
   return {
     title: `${miniDraw.prize.name} | Mini Draw | Tools Australia`,
-    description: `Win ${miniDraw.prize.name} worth $${miniDraw.prize.value.toLocaleString()}. Get your entries now! ${
-      miniDraw.description
-    }`,
+    description: metaDescription,
     keywords: [
       miniDraw.prize.name,
+      brandLabel,
       "mini draw",
       "tools australia",
       "giveaway",
       "competition",
       "professional tools",
       "Australia",
-      `$${miniDraw.prize.value}`,
     ]
       .filter(Boolean)
       .join(", "),
     openGraph: {
       title: `${miniDraw.prize.name} - Mini Draw`,
-      description: `Win ${miniDraw.prize.name} worth $${miniDraw.prize.value.toLocaleString()}. Get your entries now!`,
+      description: metaDescription,
       url: miniDrawUrl,
       siteName: "Tools Australia",
       images: [
@@ -101,7 +103,7 @@ export async function generateMetadata({ params }: MiniDrawDetailPageProps): Pro
     twitter: {
       card: "summary_large_image",
       title: `${miniDraw.prize.name} - Mini Draw`,
-      description: `Win ${miniDraw.prize.name} worth $${miniDraw.prize.value.toLocaleString()}. Get your entries now!`,
+      description: metaDescription,
       images: [prizeImageUrl],
       site: "@toolsaustralia",
     },
@@ -157,6 +159,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const minimumEntries = miniDraw.minimumEntries ?? 0;
   const totalEntries = miniDraw.totalEntries ?? 0;
   const entriesRemaining = Math.max(minimumEntries - totalEntries, 0);
+  const capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
 
   // Convert to JSON-serializable format
   const latestWinnerData = latestWinnerDoc
@@ -176,6 +179,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     name: miniDraw.name,
     description: miniDraw.description,
     status: miniDraw.status,
+    brandId: miniDraw.brandId,
     cycle: miniDraw.cycle ?? 1,
     totalEntries,
     minimumEntries,
@@ -198,6 +202,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
       _id: drawId,
       name: draw.name,
       status: draw.status,
+      brandId: draw.brandId,
       totalEntries: drawTotalEntries,
       minimumEntries: drawMinEntries,
       entriesRemaining: Math.max(drawMinEntries - drawTotalEntries, 0),
@@ -216,6 +221,11 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const isCancelled = miniDrawData.status === "cancelled";
   const isActive = miniDrawData.status === "active" && miniDrawData.entriesRemaining > 0;
   const isSoldOut = miniDrawData.entriesRemaining <= 0 && miniDrawData.status === "active";
+  const brandMeta = getBrandMeta(miniDraw.brandId);
+  const brandLabel = brandMeta?.name ?? "Mini Draw";
+  const brandBadgeClass = brandMeta
+    ? `bg-gradient-to-r ${brandMeta.gradient} ${brandMeta.textClass ?? "text-white"}`
+    : "bg-gradient-to-r from-gray-800 to-gray-900 text-white";
 
   return (
     <div className="min-h-screen-svh bg-white">
@@ -231,6 +241,12 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
             {/* Status Badge and Share Button */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1 shadow-sm ${brandBadgeClass}`}
+                >
+                  <Trophy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                  {brandLabel}
+                </span>
                 {isActive && (
                   <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
                     Active
@@ -251,10 +267,6 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
                     Cancelled
                   </span>
                 )}
-                <span className="bg-gradient-to-r from-[#ee0000] to-red-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1">
-                  <Trophy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                  Mini Draw
-                </span>
               </div>
               <ShareButton name={miniDrawData.name} />
             </div>
@@ -264,21 +276,19 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
               {miniDrawData.name}
             </h1>
 
-            {/* Prize Value */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <span className="text-2xl sm:text-3xl font-bold text-[#ee0000] font-['Poppins']">
-                ${miniDrawData.prize.value.toLocaleString()}
-              </span>
-              <span className="text-xs sm:text-sm text-gray-500">Prize Value</span>
-              <span className="text-xs sm:text-sm font-medium text-green-600 bg-green-100 px-2 py-1 rounded">
-                Mini Draw
-              </span>
-            </div>
-
             {/* Entry Information */}
-            <div className="flex items-center gap-4">
-              <div className="text-xs sm:text-sm text-gray-600">
-                {miniDrawData.totalEntries.toLocaleString()} / {miniDrawData.minimumEntries.toLocaleString()} entries
+            <div className="w-full max-w-md space-y-2">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-gray-700">
+                <span>
+                  {miniDrawData.totalEntries.toLocaleString()} / {miniDrawData.minimumEntries.toLocaleString()}
+                </span>
+                <span>{capacityPercentage}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300"
+                  style={{ width: `${capacityPercentage}%` }}
+                />
               </div>
             </div>
 
@@ -287,8 +297,12 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">Description</h3>
               <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{miniDrawData.description}</p>
             </div>
+          </div>
+        </div>
 
-            {/* Interactions */}
+        {/* Purchase Entries */}
+        <div className="mt-10">
+          <div className="bg-white ">
             <MiniDrawInteractions miniDraw={miniDrawData} />
           </div>
         </div>
@@ -300,7 +314,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
         {serializedRelatedMiniDraws.length > 0 && (
           <section className="mt-16">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">You May Also Like</h2>
+              <h2 className="text-xl font-bold text-gray-900">You May Also Like</h2>
               <Link href="/mini-draws" className="text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
                 View All Mini Draws
                 <ArrowLeft className="w-4 h-4 rotate-180" />

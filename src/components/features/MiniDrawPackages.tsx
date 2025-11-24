@@ -18,9 +18,15 @@ interface MiniDrawPackagesProps {
   miniDrawId: string;
   minimumEntries?: number;
   totalEntries?: number;
+  userEntryCount?: number;
 }
 
-export default function MiniDrawPackages({ miniDrawId, minimumEntries, totalEntries }: MiniDrawPackagesProps) {
+export default function MiniDrawPackages({
+  miniDrawId,
+  minimumEntries,
+  totalEntries,
+  userEntryCount = 0,
+}: MiniDrawPackagesProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const { showToast } = useToast();
@@ -191,7 +197,7 @@ export default function MiniDrawPackages({ miniDrawId, minimumEntries, totalEntr
         try {
           // Get paymentIntentId from status.data or fallback
           const paymentIntentId = status.data?.paymentIntentId || `order-${Date.now()}`;
-          
+
           // Get package details - use purchasingPackageId from state as fallback
           const pkg = miniDrawPackages.find((p) => p._id === purchasingPackageId);
           const packageName = status.data?.packageName || processingPackageName || pkg?.name || "Mini Draw Package";
@@ -384,21 +390,29 @@ export default function MiniDrawPackages({ miniDrawId, minimumEntries, totalEntr
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4">
-      <div className="flex items-center gap-2 mb-3 sm:mb-4">
-        <Package className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-        <h3 className="text-base sm:text-lg font-bold text-gray-900">Purchase Entries</h3>
+    <div className="bg-white rounded-xl shadow-lg p-2 sm:p-4">
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-4">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <Package className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-red-600" />
+          <h3 className="text-sm sm:text-lg font-bold text-gray-900">Purchase Entries</h3>
+        </div>
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+          <span className="text-gray-600">Your Entries:</span>
+          <span className="font-semibold text-[#ee0000]">
+            {userEntryCount.toLocaleString()} {userEntryCount === 1 ? "entry" : "entries"}
+          </span>
+        </div>
       </div>
       {entriesRemaining !== undefined && (
         <div
-          className={`mb-3 sm:mb-4 text-xs sm:text-sm font-semibold ${
+          className={`mb-2 sm:mb-4 text-[10px] sm:text-sm font-semibold ${
             isSoldOut ? "text-red-600" : "text-gray-700"
           } text-center`}
         >
           {isSoldOut ? "Sold out — no more entries available." : `Only ${entriesRemaining} entries remaining.`}
         </div>
       )}
-      <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-3">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
         {miniDrawPackages.map((pkg) => (
           <div key={pkg._id} className="relative group" data-package-id={pkg._id}>
             {/* Compact Button with Info Icon */}
@@ -424,19 +438,21 @@ export default function MiniDrawPackages({ miniDrawId, minimumEntries, totalEntr
                   isSoldOut ||
                   (entriesRemaining !== undefined && pkg.entries > entriesRemaining)
                 }
-                className="w-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-black py-2 sm:py-3 px-2 sm:px-3 rounded-lg font-bold text-xs sm:text-sm hover:from-yellow-500 hover:via-orange-500 hover:to-red-500 transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="w-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-black py-2 sm:py-3 px-2 sm:px-3 rounded-md sm:rounded-lg font-bold text-xs sm:text-sm hover:from-yellow-500 hover:via-orange-500 hover:to-red-500 transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {purchasingPackageId === pkg._id ? (
                   <div className="flex items-center justify-center gap-1">
-                    <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-black border-t-transparent"></div>
-                    <span className="text-[10px] sm:text-xs">Processing...</span>
+                    <div className="animate-spin rounded-full h-2.5 w-2.5 sm:h-4 sm:w-4 border-2 border-black border-t-transparent"></div>
+                    <span className="text-[9px] sm:text-xs">Processing...</span>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                    <div className="text-xs sm:text-base font-semibold">${pkg.price}</div>
-                    <div className="text-[10px] sm:text-sm font-medium opacity-90">{pkg.entries} Entries</div>
+                    <div className="text-xs sm:text-base font-semibold leading-tight">${pkg.price}</div>
+                    <div className="text-[10px] sm:text-sm font-medium opacity-90 leading-tight">
+                      {pkg.entries} Entries
+                    </div>
                     {entriesRemaining !== undefined && pkg.entries > entriesRemaining && (
-                      <span className="text-[9px] sm:text-xs font-semibold text-red-700">
+                      <span className="text-[9px] sm:text-xs font-semibold text-red-700 leading-tight">
                         Only {entriesRemaining} left
                       </span>
                     )}
@@ -456,14 +472,14 @@ export default function MiniDrawPackages({ miniDrawId, minimumEntries, totalEntr
                     setHoveredPackageId(null);
                   }
                 }}
-                className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110 z-20"
+                className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 w-4 h-4 sm:w-5 sm:h-5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110 z-20"
                 onClick={(e) => {
                   e.stopPropagation();
                   // Open modal on click
                   setSelectedPackageId(pkg._id);
                 }}
               >
-                <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[10px] sm:text-sm" />
               </button>
 
               {/* Small hover tooltip - appears on hover for quick info (desktop only) */}

@@ -15,6 +15,7 @@ interface MiniDrawForCard {
   entriesRemaining?: number;
   requiresMembership: boolean;
   hasActiveMembership?: boolean;
+  brandId?: string;
   prize: {
     name: string;
     value: number;
@@ -32,8 +33,8 @@ export default function HomeMiniDraws() {
     page: 1,
     limit: 4, // Show 4 mini draws on home page
     status: "active", // Only show active mini draws
-    sortBy: "createdAt",
-    sortOrder: "desc",
+    sortBy: "displayOrder",
+    sortOrder: "asc",
   });
 
   // Transform React Query mini draws to match ProductCard's MiniDrawType interface
@@ -62,6 +63,7 @@ export default function HomeMiniDraws() {
           entriesRemaining,
           requiresMembership: miniDraw.requiresMembership ?? true,
           hasActiveMembership: miniDraw.hasActiveMembership ?? false,
+          brandId: miniDraw.brandId,
           prize: {
             name: miniDraw.prize.name,
             value: miniDraw.prize.value,

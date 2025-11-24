@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { brandLogos } from "@/data/brandLogos";
 
 interface MiniDrawFilterState {
-  category: string[];
-  prizeValueRange: [number, number];
-  status: string[];
+  brands: string[];
 }
 
 interface MiniDrawsFiltersProps {
@@ -17,35 +16,12 @@ interface MiniDrawsFiltersProps {
 
 export default function MiniDrawsFilters({ onFilterChangeAction, isMobile, onClose }: MiniDrawsFiltersProps) {
   const [filters, setFilters] = useState<MiniDrawFilterState>({
-    category: [],
-    prizeValueRange: [0, 10000],
-    status: [],
+    brands: [],
   });
 
   const [expandedSections, setExpandedSections] = useState({
-    category: true,
-    prizeValue: true,
-    status: true,
+    brands: true,
   });
-
-  // Mini draw categories
-  const categories = [
-    "Power Tools",
-    "Hand Tools",
-    "Safety Equipment",
-    "Cordless Tools",
-    "Automotive",
-    "Garden Tools",
-    "Accessories",
-    "Measurement Tools",
-  ];
-
-  // Status options
-  const statusOptions = [
-    { value: "active", label: "Active Draws", color: "text-green-600" },
-    { value: "upcoming", label: "Upcoming Draws", color: "text-blue-600" },
-    { value: "completed", label: "Completed Draws", color: "text-gray-600" },
-  ];
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({
@@ -54,94 +30,28 @@ export default function MiniDrawsFilters({ onFilterChangeAction, isMobile, onClo
     }));
   };
 
-  const handleCategoryChange = (category: string) => {
-    const newCategories = filters.category.includes(category)
-      ? filters.category.filter((c) => c !== category)
-      : [...filters.category, category];
+  const handleBrandChange = (brandId: string) => {
+    const newBrands = filters.brands.includes(brandId)
+      ? filters.brands.filter((id) => id !== brandId)
+      : [...filters.brands, brandId];
 
-    const newFilters = { ...filters, category: newCategories };
-    setFilters(newFilters);
-    onFilterChangeAction(newFilters);
-  };
-
-  const handleStatusChange = (status: string) => {
-    const newStatus = filters.status.includes(status)
-      ? filters.status.filter((s) => s !== status)
-      : [...filters.status, status];
-
-    const newFilters = { ...filters, status: newStatus };
-    setFilters(newFilters);
-    onFilterChangeAction(newFilters);
-  };
-
-  const handlePrizeValueChange = (min: number, max: number) => {
-    // Ensure min doesn't exceed max and vice versa
-    const adjustedMin = Math.min(min, max);
-    const adjustedMax = Math.max(min, max);
-
-    const newFilters = { ...filters, prizeValueRange: [adjustedMin, adjustedMax] as [number, number] };
+    const newFilters = { ...filters, brands: newBrands };
     setFilters(newFilters);
     onFilterChangeAction(newFilters);
   };
 
   const clearAllFilters = () => {
     const clearedFilters: MiniDrawFilterState = {
-      category: [],
-      prizeValueRange: [0, 10000],
-      status: [],
+      brands: [],
     };
     setFilters(clearedFilters);
     onFilterChangeAction(clearedFilters);
   };
 
-  const hasActiveFilters =
-    filters.category.length > 0 ||
-    filters.status.length > 0 ||
-    filters.prizeValueRange[0] > 0 ||
-    filters.prizeValueRange[1] < 10000;
+  const hasActiveFilters = filters.brands.length > 0;
 
   return (
     <>
-      <style jsx>{`
-        .slider-thumb {
-          pointer-events: none;
-        }
-
-        .slider-thumb::-webkit-slider-thumb {
-          appearance: none;
-          height: 20px;
-          width: 20px;
-          border-radius: 50%;
-          background: #dc2626;
-          cursor: pointer;
-          border: none;
-          box-shadow: none;
-          pointer-events: auto;
-        }
-
-        .slider-thumb::-moz-range-thumb {
-          height: 20px;
-          width: 20px;
-          border-radius: 50%;
-          background: #dc2626;
-          cursor: pointer;
-          border: none;
-          box-shadow: none;
-          pointer-events: auto;
-        }
-
-        .slider-thumb::-webkit-slider-track {
-          background: transparent;
-          height: 2px;
-          pointer-events: none;
-        }
-
-        .slider-thumb::-moz-range-track {
-          background: transparent;
-          height: 2px;
-          pointer-events: none;
-        }
-      `}</style>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -153,137 +63,33 @@ export default function MiniDrawsFilters({ onFilterChangeAction, isMobile, onClo
           )}
         </div>
 
-        {/* Status Filter */}
+        {/* Brand Filter */}
         <div className="border-b border-gray-200 pb-4">
           <button
-            onClick={() => toggleSection("status")}
+            onClick={() => toggleSection("brands")}
             className="flex items-center justify-between w-full text-left"
           >
-            <h4 className="font-medium text-gray-900">Status</h4>
-            {expandedSections.status ? (
+            <h4 className="font-medium text-gray-900">Brands</h4>
+            {expandedSections.brands ? (
               <ChevronUp className="w-4 h-4 text-gray-500" />
             ) : (
               <ChevronDown className="w-4 h-4 text-gray-500" />
             )}
           </button>
 
-          {expandedSections.status && (
-            <div className="mt-3 space-y-2">
-              {statusOptions.map((status) => (
-                <label key={status.value} className="flex items-center">
+          {expandedSections.brands && (
+            <div className="mt-3 space-y-2 max-h-72 overflow-y-auto pr-1">
+              {brandLogos.map((brand) => (
+                <label key={brand.id} className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={filters.status.includes(status.value)}
-                    onChange={() => handleStatusChange(status.value)}
+                    checked={filters.brands.includes(brand.id)}
+                    onChange={() => handleBrandChange(brand.id)}
                     className="rounded border-gray-300 text-red-600 focus:ring-2 focus:ring-red-500/20"
                   />
-                  <span className={`ml-2 text-sm ${status.color}`}>{status.label}</span>
+                  <span className="ml-2 text-sm text-gray-700">{brand.name}</span>
                 </label>
               ))}
-            </div>
-          )}
-        </div>
-
-        {/* Category Filter */}
-        <div className="border-b border-gray-200 pb-4">
-          <button
-            onClick={() => toggleSection("category")}
-            className="flex items-center justify-between w-full text-left"
-          >
-            <h4 className="font-medium text-gray-900">Category</h4>
-            {expandedSections.category ? (
-              <ChevronUp className="w-4 h-4 text-gray-500" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            )}
-          </button>
-
-          {expandedSections.category && (
-            <div className="mt-3 space-y-2">
-              {categories.map((category) => (
-                <label key={category} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={filters.category.includes(category)}
-                    onChange={() => handleCategoryChange(category)}
-                    className="rounded border-gray-300 text-red-600 focus:ring-2 focus:ring-red-500/20"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">{category}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Prize Value Range */}
-        <div className="border-b border-gray-200 pb-4">
-          <button
-            onClick={() => toggleSection("prizeValue")}
-            className="flex items-center justify-between w-full text-left"
-          >
-            <h4 className="font-medium text-gray-900">Prize Value</h4>
-            {expandedSections.prizeValue ? (
-              <ChevronUp className="w-4 h-4 text-gray-500" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            )}
-          </button>
-
-          {expandedSections.prizeValue && (
-            <div className="mt-3">
-              {/* Prize Value Range Slider */}
-              <div className="relative h-2 bg-gray-200 rounded-lg">
-                {/* Background track */}
-                <div className="absolute inset-0 h-2 bg-gray-200 rounded-lg"></div>
-
-                {/* Active range track */}
-                <div
-                  className="absolute h-2 bg-red-600 rounded-lg"
-                  style={{
-                    left: `${(filters.prizeValueRange[0] / 10000) * 100}%`,
-                    width: `${((filters.prizeValueRange[1] - filters.prizeValueRange[0]) / 10000) * 100}%`,
-                  }}
-                ></div>
-
-                {/* Min slider handle */}
-                <input
-                  type="range"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={filters.prizeValueRange[0]}
-                  onChange={(e) => handlePrizeValueChange(Number(e.target.value), filters.prizeValueRange[1])}
-                  className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-thumb"
-                  style={{ zIndex: 1 }}
-                />
-
-                {/* Max slider handle */}
-                <input
-                  type="range"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={filters.prizeValueRange[1]}
-                  onChange={(e) => handlePrizeValueChange(filters.prizeValueRange[0], Number(e.target.value))}
-                  className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer slider-thumb"
-                  style={{ zIndex: 1 }}
-                />
-              </div>
-
-              <div className="relative mt-2">
-                <div
-                  className="absolute text-xs text-gray-500 transform -translate-x-1/2"
-                  style={{ left: `${(filters.prizeValueRange[0] / 10000) * 100}%` }}
-                >
-                  ${filters.prizeValueRange[0].toLocaleString()}
-                </div>
-                <div
-                  className="absolute text-xs text-gray-500 transform -translate-x-1/2"
-                  style={{ left: `${(filters.prizeValueRange[1] / 10000) * 100}%` }}
-                >
-                  ${filters.prizeValueRange[1].toLocaleString()}
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -303,4 +109,3 @@ export default function MiniDrawsFilters({ onFilterChangeAction, isMobile, onClo
     </>
   );
 }
-

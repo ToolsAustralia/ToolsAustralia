@@ -13,8 +13,8 @@ const listQuerySchema = z.object({
   search: z.string().optional(),
   page: z.string().regex(/^\d+$/).default("1").transform(Number),
   limit: z.string().regex(/^\d+$/).default("20").transform(Number),
-  sortBy: z.enum(["createdAt", "name", "totalEntries", "minimumEntries"]).default("createdAt"),
-  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+  sortBy: z.enum(["displayOrder", "createdAt", "name", "totalEntries", "minimumEntries"]).default("displayOrder"),
+  sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
 /**
@@ -62,6 +62,9 @@ export async function GET(request: NextRequest) {
     // Build sort object
     const sort: Record<string, 1 | -1> = {};
     sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+    if (sortBy !== "displayOrder") {
+      sort.displayOrder = 1;
+    }
 
     // Fetch mini draws with pagination
     const [miniDrawsRaw, total] = await Promise.all([

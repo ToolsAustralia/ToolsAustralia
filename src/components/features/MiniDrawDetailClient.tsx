@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Trophy, Users, Gift, Lock, GaugeCircle } from "lucide-react";
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
 import Link from "next/link";
+import { getBrandMeta } from "@/utils/brand-utils";
 
 interface MiniDrawDetailClientProps {
   miniDraw: {
@@ -18,6 +19,7 @@ interface MiniDrawDetailClientProps {
     cycle?: number;
     requiresMembership?: boolean;
     hasActiveMembership?: boolean;
+    brandId?: string;
     prize: {
       name: string;
       description: string;
@@ -55,6 +57,11 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
   const requiresMembership = miniDraw.requiresMembership ?? true;
   const hasActiveMembership = miniDraw.hasActiveMembership ?? false;
   const showMembershipWarning = requiresMembership && !hasActiveMembership;
+  const brandMeta = getBrandMeta(miniDraw.brandId);
+  const brandLabel = brandMeta?.name ?? "Mini Draw";
+  const brandBadgeClass = brandMeta
+    ? `bg-gradient-to-r ${brandMeta.gradient} ${brandMeta.textClass ?? "text-white"}`
+    : "bg-gradient-to-r from-gray-800 to-gray-900 text-white";
 
   const getStatusBadge = () => {
     const badges = {
@@ -88,7 +95,13 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">{miniDraw.name}</h1>
           <p className="text-lg text-gray-600 mb-4">{miniDraw.description}</p>
-          <div className="flex items-center gap-3 mb-4">{getStatusBadge()}</div>
+          <div className="flex items-center gap-3 flex-wrap mb-4">
+            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${brandBadgeClass}`}>
+              <Trophy className="w-4 h-4" />
+              {brandLabel}
+            </span>
+            {getStatusBadge()}
+          </div>
 
           {/* Membership Required Warning */}
           {showMembershipWarning && (
@@ -124,7 +137,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">{miniDraw.prize.name}</h3>
               <p className="text-gray-600 mb-4">{miniDraw.prize.description}</p>
-              <div className="text-2xl font-bold text-red-600 mb-4">${miniDraw.prize.value.toLocaleString()}</div>
+              <div className="text-base font-semibold text-gray-700 mb-4">Exclusive reward details for members only</div>
               {miniDraw.prize.images && miniDraw.prize.images.length > 0 && (
                 <div className="grid grid-cols-2 gap-4">
                   {miniDraw.prize.images.map((image, index) => (

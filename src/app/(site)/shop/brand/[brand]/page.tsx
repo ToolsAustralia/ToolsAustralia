@@ -237,9 +237,16 @@ export default async function BrandShopPage({ params }: BrandPageProps) {
   }
 
   const logoDetails = brandLogos.find((logo) => logo.id === brandKey);
-  const gradientClass = logoDetails?.splitGradient
-    ? "bg-gradient-to-b from-green-900 from-0% via-green-800 via-50% to-gray-900 to-50%"
-    : `bg-gradient-to-br ${logoDetails?.gradient ?? "from-black via-slate-900 to-black"}`;
+  const gradientDirection = logoDetails
+    ? logoDetails.splitGradient
+      ? logoDetails.splitOrientation === "vertical"
+        ? "b"
+        : "r"
+      : logoDetails.gradientDirection ?? "br"
+    : null;
+  const gradientClass = logoDetails
+    ? `bg-gradient-to-${gradientDirection ?? "br"} ${logoDetails.gradient}`
+    : "bg-gradient-to-br from-black via-slate-900 to-black";
   const pageUrl = `${BASE_URL}/shop/brand/${brandKey}`;
 
   // Get CSP nonce from request headers (set by middleware in production)

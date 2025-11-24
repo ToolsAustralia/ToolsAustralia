@@ -13,8 +13,12 @@ const querySchema = z.object({
   status: z.enum(["active", "completed", "cancelled", "all", "upcoming"]).optional(),
   minPrice: z.string().optional(),
   maxPrice: z.string().optional(),
-  sortBy: z.enum(["createdAt", "prizeValue", "totalEntries", "minimumEntries"]).optional().default("createdAt"),
-  sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+  brandIds: z.string().optional(),
+  sortBy: z
+    .enum(["displayOrder", "createdAt", "prizeValue", "totalEntries", "minimumEntries", "name"])
+    .optional()
+    .default("displayOrder"),
+  sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
   search: z.string().optional(),
 });
 
@@ -60,6 +64,17 @@ export async function GET(request: NextRequest) {
       filter["prize.value"] = prizeValueFilter;
     }
 
+    // Filter by brand IDs (comma separated)
+    if (validatedQuery.brandIds) {
+      const brandIds = validatedQuery.brandIds
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+      if (brandIds.length > 0) {
+        filter.brandId = { $in: brandIds };
+      }
+    }
+
     // Search filter
     if (validatedQuery.search) {
       filter.$or = [
@@ -77,8 +92,13 @@ export async function GET(request: NextRequest) {
       sort["prize.value"] = validatedQuery.sortOrder === "asc" ? 1 : -1;
     } else if (validatedQuery.sortBy === "minimumEntries") {
       sort.minimumEntries = validatedQuery.sortOrder === "asc" ? 1 : -1;
+    } else if (validatedQuery.sortBy === "name") {
+      sort.name = validatedQuery.sortOrder === "asc" ? 1 : -1;
     } else {
       sort[validatedQuery.sortBy] = validatedQuery.sortOrder === "asc" ? 1 : -1;
+    }
+    if (validatedQuery.sortBy !== "displayOrder") {
+      sort.displayOrder = 1;
     }
 
     // Calculate pagination

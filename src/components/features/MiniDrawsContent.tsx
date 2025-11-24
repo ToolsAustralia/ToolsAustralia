@@ -18,6 +18,7 @@ interface MiniDrawForCard {
   entriesRemaining?: number;
   requiresMembership: boolean;
   hasActiveMembership?: boolean;
+  brandId?: string;
   prize: {
     name: string;
     value: number;
@@ -27,21 +28,17 @@ interface MiniDrawForCard {
 
 // Filter state interface for mini draws
 interface MiniDrawFilterState {
-  category: string[];
-  prizeValueRange: [number, number];
-  status: string[]; // active, upcoming, completed
+  brands: string[];
 }
 
 // Sort options for mini draws - Updated to match API (entry-based system)
 const sortOptions = [
-  { value: "createdAt-desc", label: "Newest" },
-  { value: "createdAt-asc", label: "Oldest" },
-  { value: "prizeValue-desc", label: "Prize Value: High to Low" },
-  { value: "prizeValue-asc", label: "Prize Value: Low to High" },
-  { value: "totalEntries-desc", label: "Most Entries" },
-  { value: "totalEntries-asc", label: "Least Entries" },
-  { value: "minimumEntries-asc", label: "Lowest Capacity" },
-  { value: "minimumEntries-desc", label: "Highest Capacity" },
+  { value: "name-asc", label: "Name (A-Z)" },
+  { value: "name-desc", label: "Name (Z-A)" },
+  { value: "totalEntries-desc", label: "Entry Size (High to Low)" },
+  { value: "totalEntries-asc", label: "Entry Size (Low to High)" },
+  { value: "minimumEntries-asc", label: "Minimum Entries (Low to High)" },
+  { value: "minimumEntries-desc", label: "Minimum Entries (High to Low)" },
 ];
 
 interface MiniDrawsContentProps {
@@ -60,11 +57,9 @@ export default function MiniDrawsContent({
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filters, setFilters] = useState<MiniDrawFilterState>({
-    category: [],
-    prizeValueRange: [0, 10000],
-    status: [],
+    brands: [],
   });
-  const [sortBy, setSortBy] = useState("createdAt-desc");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -82,12 +77,7 @@ export default function MiniDrawsContent({
     page: currentPage,
     limit: 12,
     search: debouncedSearch.trim() || undefined,
-    minPrice: filters.prizeValueRange[0] > 0 ? filters.prizeValueRange[0] : undefined,
-    maxPrice: filters.prizeValueRange[1] < 10000 ? filters.prizeValueRange[1] : undefined,
-    status:
-      filters.status.length > 0
-        ? (filters.status[0] as "active" | "upcoming" | "completed" | "cancelled")
-        : undefined,
+    brandIds: filters.brands.length > 0 ? filters.brands.join(",") : undefined,
     sortBy: sortField,
     sortOrder: sortOrder as "asc" | "desc",
   });
@@ -111,19 +101,20 @@ export default function MiniDrawsContent({
             : Math.max(minimumEntries - totalEntries, 0);
 
         return {
-      _id: miniDraw._id,
-      name: miniDraw.name,
+          _id: miniDraw._id,
+          name: miniDraw.name,
           status: miniDraw.status as "active" | "completed" | "cancelled",
           totalEntries,
           minimumEntries,
           entriesRemaining,
-      requiresMembership: miniDraw.requiresMembership ?? true,
-      hasActiveMembership: miniDraw.hasActiveMembership ?? false,
-      prize: {
-        name: miniDraw.prize.name,
-        value: miniDraw.prize.value,
-        images: miniDraw.prize.images || [],
-      },
+          requiresMembership: miniDraw.requiresMembership ?? true,
+          hasActiveMembership: miniDraw.hasActiveMembership ?? false,
+          brandId: miniDraw.brandId,
+          prize: {
+            name: miniDraw.prize.name,
+            value: miniDraw.prize.value,
+            images: miniDraw.prize.images || [],
+          },
         };
       }
     ) || [];
@@ -142,11 +133,11 @@ export default function MiniDrawsContent({
 
   // Handle URL parameters on component mount
   useEffect(() => {
-    const categoryParam = searchParams.get("category");
-    if (categoryParam) {
+    const brandParam = searchParams.get("brandId");
+    if (brandParam) {
       setFilters((prev) => ({
         ...prev,
-        category: [categoryParam],
+        brands: [brandParam],
       }));
     }
   }, [searchParams]);
@@ -227,15 +218,15 @@ export default function MiniDrawsContent({
         {/* Main Content */}
         <div className="flex-1">
           {/* Search Bar */}
-          <div className="mb-6">
-            <div className="relative">
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:w-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search mini draws..."
                 value={searchQuery}
                 onChange={handleSearchChange}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                className="w-full sm:w-[260px] lg:w-[320px] pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500/15 focus:border-red-500 transition-all duration-200"
               />
             </div>
           </div>
@@ -271,7 +262,7 @@ export default function MiniDrawsContent({
             )}
 
             {/* Controls row */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Filters Button - Mobile/Tablet only */}
               <div className="lg:hidden">
                 <button
@@ -282,10 +273,7 @@ export default function MiniDrawsContent({
                   <span className="text-xs">Filters</span>
                   <span className="text-xs text-gray-500">
                     {(() => {
-                      const activeFiltersCount =
-                        filters.category.length +
-                        filters.status.length +
-                        (filters.prizeValueRange[0] > 0 || filters.prizeValueRange[1] < 10000 ? 1 : 0);
+                      const activeFiltersCount = filters.brands.length;
                       return activeFiltersCount > 0 ? `(${activeFiltersCount})` : "";
                     })()}
                   </span>
@@ -315,12 +303,12 @@ export default function MiniDrawsContent({
               </div>
 
               {/* Sort Dropdown */}
-              <div className="flex items-center gap-1">
-                <span className="text-gray-600 text-xs">Sort:</span>
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-500">Sort:</span>
                 <select
                   value={sortBy}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200 min-w-[120px]"
+                  className="border border-gray-300 rounded px-2 py-1 text-[11px] sm:text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-red-500/15 focus:border-red-500 transition-all duration-200 min-w-[110px]"
                 >
                   {sortOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -358,12 +346,7 @@ export default function MiniDrawsContent({
               }`}
             >
               {transformedMiniDraws.map((miniDraw) => (
-                <ProductCard
-                  key={miniDraw._id}
-                  product={miniDraw}
-                  width="w-full"
-                  viewMode={viewMode}
-                />
+                <ProductCard key={miniDraw._id} product={miniDraw} width="w-full" viewMode={viewMode} />
               ))}
             </div>
           ) : (
@@ -400,9 +383,7 @@ export default function MiniDrawsContent({
                       onClick={() => {
                         setSearchQuery("");
                         setFilters({
-                          category: [],
-                          prizeValueRange: [0, 10000],
-                          status: [],
+                          brands: [],
                         });
                       }}
                       className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
@@ -491,4 +472,3 @@ export default function MiniDrawsContent({
     </div>
   );
 }
-
