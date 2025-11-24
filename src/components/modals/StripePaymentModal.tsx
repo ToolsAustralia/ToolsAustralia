@@ -212,7 +212,7 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
         </div>
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700">Amount:</span>
-          <span className="text-lg font-bold text-gray-900">${(amount / 100).toFixed(2)} USD</span>
+          <span className="text-lg font-bold text-gray-900">${(amount / 100).toFixed(2)} AUD</span>
         </div>
       </div>
 
@@ -479,7 +479,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
         ) : (
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">Total Amount:</span>
-            <span className="text-lg font-bold text-gray-900">${(amount / 100).toFixed(2)} USD</span>
+            <span className="text-lg font-bold text-gray-900">${(amount / 100).toFixed(2)} AUD</span>
           </div>
         )}
       </div>

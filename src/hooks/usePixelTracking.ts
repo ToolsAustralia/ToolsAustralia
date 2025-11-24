@@ -66,9 +66,9 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackPurchase(params.value || 0, params.currency || "USD", params.orderId);
+        fbTrackPurchase(params.value || 0, params.currency || "AUD", params.orderId);
       } else if (platform === "tiktok") {
-        trackTikTokPurchase(params.value || 0, params.currency || "USD", params.orderId);
+        trackTikTokPurchase(params.value || 0, params.currency || "AUD", params.orderId);
       }
     });
   }, []);
@@ -79,9 +79,9 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackAddToCart(params.value || 0, params.currency || "USD", params.productId);
+        fbTrackAddToCart(params.value || 0, params.currency || "AUD", params.productId);
       } else if (platform === "tiktok") {
-        trackTikTokAddToCart(params.value || 0, params.currency || "USD", params.productId);
+        trackTikTokAddToCart(params.value || 0, params.currency || "AUD", params.productId);
       }
     });
   }, []);
@@ -92,9 +92,9 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackInitiateCheckout(params.value || 0, params.currency || "USD", params.numItems);
+        fbTrackInitiateCheckout(params.value || 0, params.currency || "AUD", params.numItems);
       } else if (platform === "tiktok") {
-        trackTikTokInitiateCheckout(params.value || 0, params.currency || "USD", params.numItems);
+        trackTikTokInitiateCheckout(params.value || 0, params.currency || "AUD", params.numItems);
       }
     });
   }, []);
@@ -105,9 +105,9 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackViewContent(params.value || 0, params.currency || "USD", params.productId);
+        fbTrackViewContent(params.value || 0, params.currency || "AUD", params.productId);
       } else if (platform === "tiktok") {
-        trackTikTokViewContent(params.value || 0, params.currency || "USD", params.productId);
+        trackTikTokViewContent(params.value || 0, params.currency || "AUD", params.productId);
       }
     });
   }, []);
@@ -144,9 +144,9 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackLead(params.value, params.currency || "USD");
+        fbTrackLead(params.value, params.currency || "AUD");
       } else if (platform === "tiktok") {
-        trackTikTokLead(params.value, params.currency || "USD");
+        trackTikTokLead(params.value, params.currency || "AUD");
       }
     });
   }, []);
@@ -157,9 +157,9 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackSubscribe(params.value, params.currency || "USD");
+        fbTrackSubscribe(params.value, params.currency || "AUD");
       } else if (platform === "tiktok") {
-        trackTikTokSubscribe(params.value, params.currency || "USD");
+        trackTikTokSubscribe(params.value, params.currency || "AUD");
       }
     });
   }, []);
@@ -183,12 +183,12 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackAddPaymentInfo(params.value || 0, params.currency || "USD", params.contentIds, params.numItems);
+        fbTrackAddPaymentInfo(params.value || 0, params.currency || "AUD", params.contentIds, params.numItems);
       } else if (platform === "tiktok") {
         // TikTok doesn't have a specific AddPaymentInfo event, use custom event
         trackTikTokEvent("AddPaymentInfo", {
           value: params.value || 0,
-          currency: params.currency || "USD",
+          currency: params.currency || "AUD",
           content_ids: params.contentIds,
           num_items: params.numItems,
         });
@@ -202,12 +202,12 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackRemoveFromCart(params.value || 0, params.currency || "USD", params.productId, params.contentName);
+        fbTrackRemoveFromCart(params.value || 0, params.currency || "AUD", params.productId, params.contentName);
       } else if (platform === "tiktok") {
         // TikTok doesn't have a specific RemoveFromCart event, use custom event
         trackTikTokEvent("RemoveFromCart", {
           value: params.value || 0,
-          currency: params.currency || "USD",
+          currency: params.currency || "AUD",
           content_ids: params.productId ? [params.productId] : undefined,
           content_name: params.contentName,
         });
@@ -223,7 +223,7 @@ export function usePixelTracking() {
       if (platform === "facebook") {
         trackFacebookEvent("PaymentFailed", {
           value: params.value || 0,
-          currency: params.currency || "USD",
+          currency: params.currency || "AUD",
           order_id: params.orderId,
           error_message: params.errorMessage as string | undefined,
           error_code: params.errorCode as string | undefined,
@@ -231,7 +231,7 @@ export function usePixelTracking() {
       } else if (platform === "tiktok") {
         trackTikTokEvent("PaymentFailed", {
           value: params.value || 0,
-          currency: params.currency || "USD",
+          currency: params.currency || "AUD",
           order_id: params.orderId,
         });
       }

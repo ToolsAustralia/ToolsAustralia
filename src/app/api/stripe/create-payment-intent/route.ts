@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     // Create a payment intent for the subscription amount
     const paymentIntent = await stripe.paymentIntents.create({
       amount: price.unit_amount || 0,
-      currency: price.currency || "usd",
+      currency: price.currency || "aud",
       customer: subscription.customer as string,
       description: description, // Use description from subscription metadata
       metadata: {

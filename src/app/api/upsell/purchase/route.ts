@@ -353,7 +353,7 @@ async function handleOneClickPurchase(
     try {
       paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(offer.discountedPrice * 100), // Convert to cents
-        currency: "usd",
+        currency: "aud",
         customer: user.stripeCustomerId!,
         payment_method: finalPaymentMethodId, // Use the SAFE validated payment method
         confirm: true,
@@ -500,7 +500,7 @@ async function handlePaymentIntentCreation(
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(offer.discountedPrice * 100), // Convert to cents
-      currency: "usd",
+      currency: "aud",
       customer: user.stripeCustomerId!,
       payment_method: paymentMethodId,
       confirm: paymentMethodId ? true : false,

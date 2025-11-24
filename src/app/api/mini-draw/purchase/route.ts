@@ -400,7 +400,7 @@ async function handleOneClickPurchase(
     try {
       console.log("💳 Creating payment intent with:", {
         amount: Math.round(miniDrawPackage.price * 100),
-        currency: "usd",
+        currency: "aud",
         customer: user.stripeCustomerId,
         payment_method: finalPaymentMethodId,
       });
@@ -410,7 +410,7 @@ async function handleOneClickPurchase(
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
       paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(miniDrawPackage.price * 100), // Convert to cents
-        currency: "usd",
+        currency: "aud",
         customer: user.stripeCustomerId!,
         payment_method: finalPaymentMethodId,
         confirm: true,
@@ -639,7 +639,7 @@ async function handlePaymentIntentCreation(
     // Build payment intent data conditionally
     const basePaymentIntentData = {
       amount: Math.round(miniDrawPackage.price * 100), // Convert to cents
-      currency: "usd",
+      currency: "aud",
       customer: user.stripeCustomerId!,
       confirm: shouldConfirm,
       description: `${miniDrawPackage.name}`, // Add meaningful description

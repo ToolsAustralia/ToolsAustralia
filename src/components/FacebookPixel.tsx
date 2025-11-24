@@ -313,7 +313,7 @@ export const trackFacebookEvent = (
   }
 };
 
-export const trackPurchase = (value: number, currency: string = "USD", orderId?: string) => {
+export const trackPurchase = (value: number, currency: string = "AUD", orderId?: string) => {
   trackFacebookEvent("Purchase", {
     value,
     currency,
@@ -322,7 +322,7 @@ export const trackPurchase = (value: number, currency: string = "USD", orderId?:
   });
 };
 
-export const trackAddToCart = (value: number, currency: string = "USD", productId?: string) => {
+export const trackAddToCart = (value: number, currency: string = "AUD", productId?: string) => {
   trackFacebookEvent("AddToCart", {
     value,
     currency,
@@ -331,7 +331,7 @@ export const trackAddToCart = (value: number, currency: string = "USD", productI
   });
 };
 
-export const trackInitiateCheckout = (value: number, currency: string = "USD", numItems?: number) => {
+export const trackInitiateCheckout = (value: number, currency: string = "AUD", numItems?: number) => {
   trackFacebookEvent("InitiateCheckout", {
     value,
     currency,
@@ -340,7 +340,7 @@ export const trackInitiateCheckout = (value: number, currency: string = "USD", n
   });
 };
 
-export const trackViewContent = (value: number, currency: string = "USD", productId?: string) => {
+export const trackViewContent = (value: number, currency: string = "AUD", productId?: string) => {
   trackFacebookEvent("ViewContent", {
     value,
     currency,
@@ -363,14 +363,14 @@ export const trackCompleteRegistration = (method?: string) => {
   });
 };
 
-export const trackLead = (value?: number, currency: string = "USD") => {
+export const trackLead = (value?: number, currency: string = "AUD") => {
   trackFacebookEvent("Lead", {
     content_type: "lead",
     ...(value && { value, currency }),
   });
 };
 
-export const trackSubscribe = (value?: number, currency: string = "USD") => {
+export const trackSubscribe = (value?: number, currency: string = "AUD") => {
   trackFacebookEvent("Subscribe", {
     content_type: "subscription",
     ...(value && { value, currency }),
@@ -383,7 +383,7 @@ export const trackSubscribe = (value?: number, currency: string = "USD") => {
  */
 export const trackAddPaymentInfo = (
   value: number,
-  currency: string = "USD",
+  currency: string = "AUD",
   contentIds?: string[],
   numItems?: number
 ) => {
@@ -402,7 +402,7 @@ export const trackAddPaymentInfo = (
  */
 export const trackRemoveFromCart = (
   value: number,
-  currency: string = "USD",
+  currency: string = "AUD",
   productId?: string,
   contentName?: string
 ) => {

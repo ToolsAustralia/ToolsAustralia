@@ -75,7 +75,7 @@ export const trackTikTokEvent = (eventName: string, parameters?: Record<string, 
   }
 };
 
-export const trackTikTokPurchase = (value: number, currency: string = "USD", orderId?: string) => {
+export const trackTikTokPurchase = (value: number, currency: string = "AUD", orderId?: string) => {
   trackTikTokEvent("CompletePayment", {
     value,
     currency,
@@ -84,7 +84,7 @@ export const trackTikTokPurchase = (value: number, currency: string = "USD", ord
   });
 };
 
-export const trackTikTokAddToCart = (value: number, currency: string = "USD", productId?: string) => {
+export const trackTikTokAddToCart = (value: number, currency: string = "AUD", productId?: string) => {
   trackTikTokEvent("AddToCart", {
     value,
     currency,
@@ -93,7 +93,7 @@ export const trackTikTokAddToCart = (value: number, currency: string = "USD", pr
   });
 };
 
-export const trackTikTokInitiateCheckout = (value: number, currency: string = "USD", numItems?: number) => {
+export const trackTikTokInitiateCheckout = (value: number, currency: string = "AUD", numItems?: number) => {
   trackTikTokEvent("InitiateCheckout", {
     value,
     currency,
@@ -102,7 +102,7 @@ export const trackTikTokInitiateCheckout = (value: number, currency: string = "U
   });
 };
 
-export const trackTikTokViewContent = (value: number, currency: string = "USD", productId?: string) => {
+export const trackTikTokViewContent = (value: number, currency: string = "AUD", productId?: string) => {
   trackTikTokEvent("ViewContent", {
     value,
     currency,
@@ -125,14 +125,14 @@ export const trackTikTokCompleteRegistration = (method?: string) => {
   });
 };
 
-export const trackTikTokLead = (value?: number, currency: string = "USD") => {
+export const trackTikTokLead = (value?: number, currency: string = "AUD") => {
   trackTikTokEvent("SubmitForm", {
     content_type: "lead",
     ...(value && { value, currency }),
   });
 };
 
-export const trackTikTokSubscribe = (value?: number, currency: string = "USD") => {
+export const trackTikTokSubscribe = (value?: number, currency: string = "AUD") => {
   trackTikTokEvent("Subscribe", {
     content_type: "subscription",
     ...(value && { value, currency }),

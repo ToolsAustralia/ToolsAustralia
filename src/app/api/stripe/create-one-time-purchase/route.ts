@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
     // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(membershipPackage.price * 100), // Convert to cents
-      currency: "usd",
+      currency: "aud",
       customer: customer.id,
       payment_method: finalPaymentMethodId, // Use the final payment method ID
       confirm: true, // Auto-confirm for testing

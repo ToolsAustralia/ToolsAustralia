@@ -63,7 +63,7 @@ function ProductPage() {
   const handleProductView = () => {
     trackEvent("ViewContent", {
       value: 99.99,
-      currency: "USD",
+      currency: "AUD",
       productId: "product-123"
     });
   };
@@ -89,7 +89,7 @@ function CheckoutSuccess() {
   useEffect(() => {
     trackPurchase({
       value: 199.99,
-      currency: "USD",
+      currency: "AUD",
       orderId: "order-12345"
     });
   }, []);
@@ -148,7 +148,7 @@ All tracking methods accept a `PixelEventParams` object:
 ```typescript
 interface PixelEventParams {
   value?: number;           // Monetary value
-  currency?: string;        // Currency code (default: "USD")
+  currency?: string;        // Currency code (default: "AUD")
   productId?: string;       // Product identifier
   orderId?: string;         // Order identifier
   numItems?: number;        // Number of items

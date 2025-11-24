@@ -127,7 +127,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     },
     other: {
       "product:price:amount": product.price.toString(),
-      "product:price:currency": "USD",
+      "product:price:currency": "AUD",
       "product:availability": product.stock && product.stock > 0 ? "in stock" : "out of stock",
       "product:condition": "new",
       "product:brand": product.brand,
@@ -180,7 +180,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         category={product.category}
         offer={{
           price: product.price,
-          priceCurrency: "USD",
+          priceCurrency: "AUD",
           availability:
             product.stock && product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
           url: productUrl,

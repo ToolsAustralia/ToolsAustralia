@@ -444,7 +444,7 @@ export async function POST(request: NextRequest) {
           id: paymentIntent.id,
           clientSecret: paymentIntent.client_secret,
           amount: paymentIntent.amount,
-          currency: "usd",
+          currency: "aud",
           status: paymentIntent.status,
         },
         subscription: {

@@ -493,7 +493,7 @@ export async function POST(request: NextRequest) {
           id: paymentIntent.id,
           clientSecret: paymentIntent.client_secret,
           amount: prorationAmount,
-          currency: "usd",
+          currency: "aud",
           status: paymentIntent.status,
         },
         subscription: {

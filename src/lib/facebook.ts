@@ -165,7 +165,7 @@ export function trackPageView(url: string, userAgent?: string): FacebookPixelEve
 export function trackPurchase(
   orderId: string,
   value: number,
-  currency: string = "USD",
+  currency: string = "AUD",
   userData?: {
     email?: string;
     phone?: string;
@@ -204,7 +204,7 @@ export function trackPurchase(
 export function trackAddToCart(
   productId: string,
   value: number,
-  currency: string = "USD",
+  currency: string = "AUD",
   userData?: {
     email?: string;
     phone?: string;
@@ -234,7 +234,7 @@ export function trackAddToCart(
 // Track initiate checkout
 export function trackInitiateCheckout(
   value: number,
-  currency: string = "USD",
+  currency: string = "AUD",
   numItems: number,
   userData?: {
     email?: string;
@@ -293,7 +293,7 @@ export function trackSearch(
 export function trackViewContent(
   productId: string,
   value: number,
-  currency: string = "USD",
+  currency: string = "AUD",
   userData?: {
     email?: string;
     phone?: string;
