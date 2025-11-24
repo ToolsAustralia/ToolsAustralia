@@ -88,7 +88,8 @@ export default function MiniDrawManagement() {
   const fetchMiniDraws = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/admin/mini-draw/list");
+      // Request all mini-draws by setting a high limit
+      const response = await fetch("/api/admin/mini-draw/list?limit=1000");
       if (response.ok) {
         const data = await response.json();
         setMiniDraws(data.data.miniDraws || []);
@@ -439,7 +440,13 @@ export default function MiniDrawManagement() {
         </div>
 
         {/* Mini Draws List */}
-        <div className={isReorderMode ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" : "grid gap-4"}>
+        <div
+          className={
+            isReorderMode
+              ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3"
+              : "grid gap-4"
+          }
+        >
           {filteredMiniDraws.length === 0 ? (
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8 text-center">
               <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -665,50 +672,47 @@ function MiniDrawCard({
   if (reorderMode) {
     return (
       <div ref={setNodeRef} style={style} className={isDragging ? "opacity-95" : undefined}>
-        <div className="relative rounded-[24px] bg-white shadow-[0_12px_30px_rgba(0,0,0,0.08)] overflow-hidden group transition-all flex flex-col">
-          <div className="relative w-full h-48 bg-gray-100">
+        <div className="relative rounded-lg bg-white shadow-md border border-gray-200 overflow-hidden group transition-all flex flex-col">
+          <div className="relative w-full h-32 bg-gray-100">
             <Image
               src={previewImage}
               alt={draw.prize.name}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, 33vw"
+              sizes="(max-width: 768px) 20vw, 20vw"
             />
-            <div className="absolute bottom-3 right-3 z-10">
+            <div className="absolute bottom-1.5 right-1.5 z-10">
               <BrandLogoCard
                 brand={overlayBrand}
-                className="px-2 py-1"
+                className="px-1 py-0.5"
                 widthClass="w-auto"
                 heightClass="h-auto"
                 overlayMode="overlay"
                 gradientOverride={gradientOverride}
-                scaleOverride={overlayScale}
+                scaleOverride={overlayScale * 0.6}
               />
             </div>
             <button
               type="button"
-              className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-gray-700 shadow"
+              className="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700 shadow-sm"
               {...attributes}
               {...listeners}
             >
-              <GripVertical className="h-3.5 w-3.5" />
-              Drag
+              <GripVertical className="h-3 w-3" />
             </button>
           </div>
-          <div className="p-4 space-y-3 flex-1 flex flex-col">
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{draw.name}</h3>
-              <p className="text-xs text-gray-500 mt-1">Cycle #{draw.cycle}</p>
-              <p className="text-sm text-gray-600 mt-3 line-clamp-3">{draw.description}</p>
+          <div className="p-2.5 space-y-2 flex-1 flex flex-col">
+            <div className="flex-1 min-h-0">
+              <h3 className="text-xs font-bold text-gray-900 line-clamp-1 leading-tight">{draw.name}</h3>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
-                <span>
-                  {totalEntries.toLocaleString()} / {minimumEntries.toLocaleString()}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-semibold text-gray-700">
+                <span className="truncate">
+                  {totalEntries.toLocaleString()}/{minimumEntries.toLocaleString()}
                 </span>
                 <span>{capacityPercentage}%</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+              <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300"
                   style={{ width: `${capacityPercentage}%` }}
