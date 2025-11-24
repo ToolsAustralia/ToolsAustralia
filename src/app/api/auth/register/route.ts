@@ -5,9 +5,16 @@ import { z } from "zod";
 import { klaviyo } from "@/lib/klaviyo";
 import { createUserRegisteredEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
-import { trackTikTokEvent } from "@/components/TikTokPixel";
+// TikTok Pixel tracking disabled for now - client-side only
+// import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
-import { generateEventID, prepareUserData, getEventSourceURL } from "@/utils/tracking/facebook-helpers";
+import {
+  generateEventID,
+  prepareUserData,
+  getEventSourceURL,
+  extractFBCFromRequest,
+  extractFBPFromRequest,
+} from "@/utils/tracking/facebook-helpers";
 
 // Registration validation schema
 const registerSchema = z.object({
@@ -121,20 +128,10 @@ export async function POST(request: NextRequest) {
     ensureUserProfileSynced(newUser);
 
     // ✅ NEW: Track pixel registration event (non-blocking)
-    try {
-      const registrationParams = {
-        content_type: "user_registration",
-        content_name: "Complete Registration",
-        content_category: "account_creation",
-        value: 0, // Registration is free
-        currency: "AUD",
-        user_id: newUser._id.toString(),
-        user_email: newUser.email,
-        registration_method: "email",
-      };
+    // Generate unique event ID for deduplication (needed for response)
+    const eventID = generateEventID("registration", newUser._id.toString());
 
-      // Generate unique event ID for deduplication
-      const eventID = generateEventID("registration", newUser._id.toString());
+    try {
       const eventTime = Math.floor(Date.now() / 1000);
 
       // 1. Track Browser Pixel (if in browser context - this is server-side, so skip)
@@ -149,8 +146,12 @@ export async function POST(request: NextRequest) {
           lastName: newUser.lastName,
         });
 
-        // Note: fbc and fbp would need to be passed from client or extracted from request
-        // For server-side registration, these may not be available
+        // Extract fbc and fbp from request for better match quality
+        const fbc = extractFBCFromRequest(request);
+        const fbp = extractFBPFromRequest(request);
+
+        if (fbc) userData.fbc = fbc;
+        if (fbp) userData.fbp = fbp;
 
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
@@ -158,10 +159,14 @@ export async function POST(request: NextRequest) {
           event_id: eventID,
           action_source: "website",
           user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
-          event_source_url: getEventSourceURL(),
+          event_source_url: request.headers.get("referer") || undefined,
         };
 
-        const apiSuccess = await sendFacebookEvent(facebookEvent);
+        // Get test event code if in development
+        const testEventCode =
+          process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+
+        const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
         if (apiSuccess) {
           console.log(`📘 Facebook Conversions API: Registration tracked for ${newUser.email} (EventID: ${eventID})`);
         } else {
@@ -171,9 +176,10 @@ export async function POST(request: NextRequest) {
         console.error("❌ Error sending CompleteRegistration to Facebook Conversions API:", apiError);
       }
 
-      // 3. Track TikTok Pixel
-      trackTikTokEvent("CompleteRegistration", registrationParams);
-      console.log(`📱 TikTok Pixel: Registration tracked for ${newUser.email}`);
+      // 3. Track TikTok Pixel (disabled for now - client-side only)
+      // TikTok pixel tracking is client-side only and will be handled in the client component
+      // trackTikTokEvent("CompleteRegistration", registrationParams);
+      // console.log(`📱 TikTok Pixel: Registration tracked for ${newUser.email}`);
     } catch (pixelError) {
       console.error("❌ Pixel registration tracking failed (non-blocking):", pixelError);
     }
@@ -190,6 +196,8 @@ export async function POST(request: NextRequest) {
         role: newUser.role,
         isActive: newUser.isActive,
         createdAt: newUser.createdAt,
+        // Include EventID for client-side pixel tracking (deduplication)
+        pixelEventId: eventID,
       },
     });
   } catch (error) {

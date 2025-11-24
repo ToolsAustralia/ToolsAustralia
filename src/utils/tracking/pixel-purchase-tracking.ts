@@ -18,6 +18,8 @@ import {
   getFBCFromURL,
   getFBPFromCookie,
   getEventSourceURL,
+  extractFBCFromRequest,
+  extractFBPFromRequest,
 } from "./facebook-helpers";
 
 export interface PixelPurchaseParams {
@@ -44,6 +46,8 @@ export interface PixelPurchaseParams {
   content_ids?: string[];
   num_items?: number;
   eventSourceUrl?: string; // Optional URL override
+  fbc?: string; // Facebook Click ID (for server-side tracking)
+  fbp?: string; // Facebook Browser ID (for server-side tracking)
 }
 
 /**
@@ -76,6 +80,8 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       content_ids,
       num_items,
       eventSourceUrl,
+      fbc: providedFbc,
+      fbp: providedFbp,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -124,10 +130,27 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
         country: userCountry,
       });
 
-      // Get fbc and fbp from browser (if available in server context, these would need to be passed)
-      // For server-side, these should be passed from the client or extracted from request headers
-      const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
-      const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
+      // Get fbc and fbp - prioritize provided values, then try to extract
+      // For server-side tracking, these should be passed as parameters or extracted from request
+      let fbc = providedFbc;
+      let fbp = providedFbp;
+
+      // If not provided, try to extract from browser (client-side) or request (server-side)
+      if (!fbc) {
+        if (typeof window !== "undefined") {
+          fbc = getFBCFromURL();
+        }
+        // Note: For server-side, fbc should be passed as parameter or extracted from request
+        // using extractFBCFromRequest() helper
+      }
+
+      if (!fbp) {
+        if (typeof window !== "undefined") {
+          fbp = getFBPFromCookie();
+        }
+        // Note: For server-side, fbp should be passed as parameter or extracted from request
+        // using extractFBPFromRequest() helper
+      }
 
       // Add fbc and fbp to user data if available
       if (fbc) userData.fbc = fbc;
@@ -152,8 +175,11 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
         event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
+      // Get test event code if in development
+      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+
       // Send to Conversions API
-      const apiSuccess = await sendFacebookEvent(facebookEvent);
+      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
         console.log(`📘 Facebook Conversions API: Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
       } else {
@@ -247,8 +273,15 @@ export async function trackPixelSubscription(
         lastName: userLastName,
       });
 
-      const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
-      const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
+      // Get fbc and fbp - try to extract from browser if in client context
+      // For server-side, these should be passed as parameters
+      let fbc: string | undefined;
+      let fbp: string | undefined;
+
+      if (typeof window !== "undefined") {
+        fbc = getFBCFromURL();
+        fbp = getFBPFromCookie();
+      }
 
       if (fbc) userData.fbc = fbc;
       if (fbp) userData.fbp = fbp;
@@ -269,7 +302,10 @@ export async function trackPixelSubscription(
         event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
-      const apiSuccess = await sendFacebookEvent(facebookEvent);
+      // Get test event code if in development
+      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+
+      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
         console.log(
           `📘 Facebook Conversions API: ${action} tracked - ${packageName} - $${value} ${currency} (EventID: ${eventID})`
@@ -504,6 +540,8 @@ export async function trackPixelPaymentFailed(params: {
   errorCode?: string;
   failureReason?: string;
   eventSourceUrl?: string;
+  fbc?: string; // Facebook Click ID (for server-side tracking)
+  fbp?: string; // Facebook Browser ID (for server-side tracking)
 }): Promise<void> {
   try {
     const {
@@ -523,6 +561,8 @@ export async function trackPixelPaymentFailed(params: {
       errorCode,
       failureReason,
       eventSourceUrl,
+      fbc: providedFbc,
+      fbp: providedFbp,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -562,8 +602,15 @@ export async function trackPixelPaymentFailed(params: {
         lastName: userLastName,
       });
 
-      const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
-      const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
+      // Get fbc and fbp - try to extract from browser if in client context
+      // For server-side, these should be passed as parameters
+      let fbc: string | undefined;
+      let fbp: string | undefined;
+
+      if (typeof window !== "undefined") {
+        fbc = getFBCFromURL();
+        fbp = getFBPFromCookie();
+      }
 
       if (fbc) userData.fbc = fbc;
       if (fbp) userData.fbp = fbp;
@@ -585,7 +632,10 @@ export async function trackPixelPaymentFailed(params: {
         event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
-      const apiSuccess = await sendFacebookEvent(facebookEvent);
+      // Get test event code if in development
+      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+
+      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
         console.log(
           `📘 Facebook Conversions API: Payment failed tracked - $${value} ${currency} (EventID: ${eventID})`
@@ -623,6 +673,8 @@ export async function trackPixelSubscriptionRenewal(params: {
   userLastName?: string;
   entriesPerMonth?: number;
   eventSourceUrl?: string;
+  fbc?: string; // Facebook Click ID (for server-side tracking)
+  fbp?: string; // Facebook Browser ID (for server-side tracking)
 }): Promise<void> {
   try {
     const {
@@ -639,6 +691,8 @@ export async function trackPixelSubscriptionRenewal(params: {
       userLastName,
       entriesPerMonth,
       eventSourceUrl,
+      fbc: providedFbc,
+      fbp: providedFbp,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -677,8 +731,17 @@ export async function trackPixelSubscriptionRenewal(params: {
         lastName: userLastName,
       });
 
-      const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
-      const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
+      // Get fbc and fbp - prioritize provided values, then try to extract
+      let fbc = providedFbc;
+      let fbp = providedFbp;
+
+      if (!fbc && typeof window !== "undefined") {
+        fbc = getFBCFromURL();
+      }
+
+      if (!fbp && typeof window !== "undefined") {
+        fbp = getFBPFromCookie();
+      }
 
       if (fbc) userData.fbc = fbc;
       if (fbp) userData.fbp = fbp;
@@ -700,7 +763,10 @@ export async function trackPixelSubscriptionRenewal(params: {
         event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
-      const apiSuccess = await sendFacebookEvent(facebookEvent);
+      // Get test event code if in development
+      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+
+      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
         console.log(
           `📘 Facebook Conversions API: Subscription renewal tracked - $${value} ${currency} (EventID: ${eventID})`

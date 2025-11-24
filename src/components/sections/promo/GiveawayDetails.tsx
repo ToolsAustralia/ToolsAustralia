@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Clock, Calendar, Truck, Zap, Shield, Gift } from "lucide-react";
+import { Clock, Calendar, Truck, Zap, Shield, IdCard } from "lucide-react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
@@ -76,22 +76,22 @@ export default function GiveawayDetails() {
     },
     {
       icon: Zap,
-      title: "Entry Type",
-      description: "Auto or manual entry via package",
+      title: "We'll Call You",
+      description: "Winner contacted by phone at the draw",
       color: "text-red-500",
       bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
     },
     {
       icon: Shield,
       title: "Eligibility",
-      description: "Open to all Australian residents 18+",
+      description: "Open to all Australian residents 18+ (Excluding SA & ACT)",
       color: "text-red-500",
       bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
     },
     {
-      icon: Gift,
-      title: "Bonus Entries",
-      description: "For package subscribers",
+      icon: IdCard,
+      title: "License Numbers",
+      description: "TP/04720 and NTP/15117",
       color: "text-red-500",
       bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
     },

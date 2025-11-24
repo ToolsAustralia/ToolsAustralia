@@ -732,7 +732,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                                   {entriesNumber}
                                 </div>
                               )}
-                              <div className="text-sm text-white/70">Free Entries</div>
+                              <div className={`text-sm ${colorScheme.text}`}>Free Entries</div>
                             </div>
                           );
                         }

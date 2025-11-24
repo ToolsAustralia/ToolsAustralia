@@ -66,14 +66,35 @@ export function hashData(data: string): string {
 }
 
 // Send event to Facebook Conversions API
-export async function sendFacebookEvent(event: FacebookEvent): Promise<boolean> {
+export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: string): Promise<boolean> {
   try {
     const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
-    const pixelId = process.env.FACEBOOK_PIXEL_ID;
+    // Use NEXT_PUBLIC_FACEBOOK_PIXEL_ID (same as client-side pixel)
+    const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
 
-    if (!accessToken || !pixelId) {
-      console.warn("Facebook credentials not configured");
+    if (!accessToken) {
+      console.warn("⚠️ Facebook Conversions API: FACEBOOK_ACCESS_TOKEN not configured");
       return false;
+    }
+
+    if (!pixelId) {
+      console.warn("⚠️ Facebook Conversions API: NEXT_PUBLIC_FACEBOOK_PIXEL_ID not configured");
+      return false;
+    }
+
+    // Build request body
+    const requestBody: {
+      data: FacebookEvent[];
+      access_token: string;
+      test_event_code?: string;
+    } = {
+      data: [event],
+      access_token: accessToken,
+    };
+
+    // Add test_event_code if provided (for testing without affecting production data)
+    if (testEventCode) {
+      requestBody.test_event_code = testEventCode;
     }
 
     const response = await fetch(`https://graph.facebook.com/v18.0/${pixelId}/events`, {
@@ -81,21 +102,50 @@ export async function sendFacebookEvent(event: FacebookEvent): Promise<boolean> 
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        data: [event],
-        access_token: accessToken,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error("Facebook API error:", error);
+      const errorText = await response.text();
+      let errorMessage = "Unknown error";
+      let errorCode: string | undefined;
+
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error?.message || errorText;
+        errorCode = errorJson.error?.code?.toString();
+      } catch {
+        errorMessage = errorText;
+      }
+
+      console.error(`❌ Facebook Conversions API error (${errorCode || "unknown"}):`, {
+        message: errorMessage,
+        event_name: event.event_name,
+        event_id: event.event_id,
+        pixel_id: pixelId,
+      });
       return false;
+    }
+
+    // Parse response to check for warnings (e.g., Event Match Quality)
+    try {
+      const responseData = await response.json();
+      if (responseData.events_received !== undefined) {
+        console.log(
+          `✅ Facebook Conversions API: Event received - ${event.event_name} (EventID: ${event.event_id || "none"})`
+        );
+      }
+    } catch {
+      // Response parsing failed, but request was successful
     }
 
     return true;
   } catch (error) {
-    console.error("Error sending Facebook event:", error);
+    console.error("❌ Error sending Facebook event:", {
+      error: error instanceof Error ? error.message : String(error),
+      event_name: event.event_name,
+      event_id: event.event_id,
+    });
     return false;
   }
 }

@@ -28,6 +28,7 @@ import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
+import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
@@ -573,6 +574,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       if (result.success) {
         console.log("✅ User registered successfully:", result.data);
 
+        // Track CompleteRegistration event client-side for Meta Pixel Helper visibility
+        // Use same EventID from server for deduplication
+        try {
+          if (result.data.pixelEventId) {
+            // Track with EventID for deduplication (same EventID used in server-side Conversions API)
+            trackFacebookEvent("CompleteRegistration", {
+              eventID: result.data.pixelEventId,
+              content_type: "user",
+              registration_method: "email",
+            });
+            console.log(`📘 Facebook Pixel: CompleteRegistration tracked with EventID: ${result.data.pixelEventId}`);
+          } else {
+            // Fallback to standard tracking if EventID not available
+            trackCompleteRegistration("email");
+            console.log("📘 Facebook Pixel: CompleteRegistration tracked");
+          }
+        } catch (pixelError) {
+          console.error("❌ Error tracking CompleteRegistration client-side:", pixelError);
+          // Non-blocking - continue with registration flow
+        }
+
         // Store guest user data for later use
         setGuestUserData({
           userId: result.data.userId,
@@ -889,6 +911,50 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const handlePaymentProcessingSuccess = async (status: PaymentStatusResponse) => {
     console.log("🎉 Payment processing completed:", status);
     setShowPaymentProcessing(false);
+
+    // Track Purchase event client-side for Meta Pixel Helper visibility
+    // Use same EventID pattern as server-side for deduplication
+    // IMPORTANT: Always track when payment is completed, even if status.data is incomplete
+    if (status.status === "completed") {
+      try {
+        // Get paymentIntentId from status.data or fallback to processing state
+        const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
+        
+        // Determine packageType from status or fallback to activePlan context
+        const packageType = status.data?.packageType || (activePlan.period === "one-time" ? "one-time" : "subscription");
+        
+        // Get package details
+        const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        const packageName = status.data?.packageName || processingPackageName || activePlan.name;
+        const value = activePlan.price || 0;
+        const currency = "AUD";
+
+        // Generate EventID matching server-side format for deduplication
+        const eventID = `purchase_${finalPaymentIntentId}_${Date.now()}`;
+
+        // Track Purchase event with EventID
+        trackFacebookEvent("Purchase", {
+          eventID,
+          value,
+          currency,
+          order_id: finalPaymentIntentId,
+          content_type: packageType === "subscription" ? "subscription" : "membership_package",
+          content_ids: packageId ? [packageId] : [],
+          num_items: 1,
+          content_name: packageName,
+          package_type: packageType,
+          package_id: packageId,
+          package_name: packageName,
+          payment_intent_id: finalPaymentIntentId,
+          platform: "tools-australia",
+        });
+
+        console.log(`📘 Facebook Pixel: Purchase tracked - $${value} ${currency} (EventID: ${eventID}, packageType: ${packageType})`);
+      } catch (pixelError) {
+        console.error("❌ Error tracking Purchase client-side:", pixelError);
+        // Non-blocking - continue with success flow
+      }
+    }
 
     // Build benefits array with entry information
     const benefits = [];

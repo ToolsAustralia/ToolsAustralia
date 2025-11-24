@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
+import { generateEventID } from "@/utils/tracking/facebook-helpers";
 
 // Validation schema for Facebook tracking events
 const trackEventSchema = z.object({
@@ -15,6 +16,7 @@ const trackEventSchema = z.object({
     "Lead",
     "Subscribe",
   ]),
+  event_id: z.string().optional(), // Event ID for deduplication
   user_data: z
     .object({
       em: z.string().optional(), // email hash
@@ -57,31 +59,60 @@ export async function POST(request: NextRequest) {
     // Validate the request body
     const validatedData = trackEventSchema.parse(body);
 
+    // Generate EventID if not provided (critical for deduplication)
+    let eventId = validatedData.event_id;
+    if (!eventId) {
+      // Generate EventID using order_id, or fallback to timestamp
+      const identifier =
+        validatedData.custom_data?.order_id ||
+        validatedData.user_data?.em?.substring(0, 8) || // Use first 8 chars of email hash as identifier
+        Date.now().toString();
+      eventId = generateEventID(validatedData.event_name.toLowerCase(), identifier);
+    }
+
+    // Handle IP address (take first IP if comma-separated)
+    let clientIp = validatedData.user_data?.client_ip_address;
+    if (!clientIp) {
+      const forwardedFor = request.headers.get("x-forwarded-for");
+      if (forwardedFor) {
+        clientIp = forwardedFor.split(",")[0].trim();
+      } else {
+        clientIp = request.headers.get("x-real-ip") || "127.0.0.1";
+      }
+    }
+
     // Create Facebook event object
     const facebookEvent: FacebookEvent = {
       event_name: validatedData.event_name,
       event_time: Math.floor(Date.now() / 1000),
-      user_data: validatedData.user_data || {},
+      event_id: eventId, // Include EventID for deduplication
+      user_data: {
+        ...validatedData.user_data,
+        client_ip_address: clientIp,
+        client_user_agent:
+          validatedData.user_data?.client_user_agent || request.headers.get("user-agent") || undefined,
+      },
       custom_data: validatedData.custom_data,
       event_source_url: validatedData.event_source_url || request.headers.get("referer") || undefined,
       action_source: validatedData.action_source,
     };
 
-    // Add client IP and user agent if not provided
-    if (!facebookEvent.user_data.client_ip_address) {
-      facebookEvent.user_data.client_ip_address =
-        request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
-    }
-
-    if (!facebookEvent.user_data.client_user_agent) {
-      facebookEvent.user_data.client_user_agent = request.headers.get("user-agent") || undefined;
-    }
+    // Get test event code from environment if in development
+    const testEventCode =
+      process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
 
     // Send event to Facebook
-    const success = await sendFacebookEvent(facebookEvent);
+    const success = await sendFacebookEvent(facebookEvent, testEventCode);
 
     if (success) {
-      return NextResponse.json({ success: true, message: "Event tracked successfully" }, { status: 200 });
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Event tracked successfully",
+          event_id: eventId,
+        },
+        { status: 200 }
+      );
     } else {
       return NextResponse.json({ success: false, message: "Failed to track event" }, { status: 500 });
     }

@@ -207,10 +207,53 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   };
 
   // Payment processing handlers
-  const handlePaymentSuccess = (status: PaymentStatusResponse) => {
+  const handlePaymentSuccess = async (status: PaymentStatusResponse) => {
     console.log("🎉 Special package payment processing completed:", status);
     console.log("🔍 handlePaymentSuccess called - about to trigger upsell");
     setShowPaymentProcessing(false);
+
+    // Track Purchase event client-side for Meta Pixel Helper visibility
+    // IMPORTANT: Always track when payment is completed, even if status.data is incomplete
+    if (status.status === "completed") {
+      try {
+        // Get paymentIntentId from status.data or fallback to state
+        const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
+        
+        // Get package details - use selectedPackage as source of truth
+        const packageName = status.data?.packageName || processingPackageName || selectedPackage?.name || "Special Package";
+        const value = selectedPackage?.price || 0;
+        const currency = "AUD";
+        const packageId = selectedPackage?._id || "";
+
+        // Generate EventID matching server-side format for deduplication
+        const eventID = `purchase_${finalPaymentIntentId}_${Date.now()}`;
+
+        // Import trackFacebookEvent dynamically to avoid SSR issues
+        const { trackFacebookEvent } = await import("@/components/FacebookPixel");
+
+        // Track Purchase event with EventID - always use "one-time" as package_type for special packages
+        trackFacebookEvent("Purchase", {
+          eventID,
+          value,
+          currency,
+          order_id: finalPaymentIntentId,
+          content_type: "membership_package",
+          content_ids: packageId ? [packageId] : [],
+          num_items: 1,
+          content_name: packageName,
+          package_type: "one-time",
+          package_id: packageId,
+          package_name: packageName,
+          payment_intent_id: finalPaymentIntentId,
+          platform: "tools-australia",
+        });
+
+        console.log(`📘 Facebook Pixel: Special Package Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
+      } catch (pixelError) {
+        console.error("❌ Error tracking Special Package Purchase client-side:", pixelError);
+        // Non-blocking - continue with success flow
+      }
+    }
 
     // Store original purchase context for invoice finalization
     if (paymentIntentId && selectedPackage) {

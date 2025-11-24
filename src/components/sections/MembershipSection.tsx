@@ -660,7 +660,7 @@ export default function MembershipSection({
                                         <div
                                           className={`${
                                             isTwoColumn ? "text-[12px] sm:text-[16px]" : "text-[20px] sm:text-[24px]"
-                                          } text-white/70 mt-1`}
+                                          } ${colorScheme.text} mt-1`}
                                         >
                                           Free Entries
                                         </div>
@@ -979,7 +979,7 @@ export default function MembershipSection({
                                       {entriesNumber}
                                     </span>
                                   )}
-                                  <div className={`text-[16px] sm:text-[20px] text-white/70 mt-1`}>Free Entries</div>
+                                  <div className={`text-[16px] sm:text-[20px] ${colorScheme.text} mt-1`}>Free Entries</div>
                                 </div>
                               );
                             }
