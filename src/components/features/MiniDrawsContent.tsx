@@ -262,12 +262,12 @@ export default function MiniDrawsContent({
             )}
 
             {/* Controls row */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {/* Filters Button - Mobile/Tablet only */}
-              <div className="lg:hidden">
+              <div className="lg:hidden flex-shrink-0">
                 <button
                   onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors whitespace-nowrap"
                 >
                   <Filter className="w-3.5 h-3.5" />
                   <span className="text-xs">Filters</span>
@@ -281,7 +281,7 @@ export default function MiniDrawsContent({
               </div>
 
               {/* View Mode Toggle */}
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden flex-shrink-0">
                 <button
                   onClick={() => setViewMode("grid")}
                   className={`p-1.5 transition-colors ${
@@ -303,12 +303,12 @@ export default function MiniDrawsContent({
               </div>
 
               {/* Sort Dropdown */}
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-500">Sort:</span>
+              <div className="flex items-center gap-1 text-xs flex-shrink-0">
+                <span className="text-gray-500 whitespace-nowrap">Sort:</span>
                 <select
                   value={sortBy}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1 text-[11px] sm:text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-red-500/15 focus:border-red-500 transition-all duration-200 min-w-[110px]"
+                  className="border border-gray-300 rounded px-2 py-1 text-[11px] sm:text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-red-500/15 focus:border-red-500 transition-all duration-200 w-auto min-w-[100px] max-w-[140px]"
                 >
                   {sortOptions.map((option) => (
                     <option key={option.value} value={option.value}>

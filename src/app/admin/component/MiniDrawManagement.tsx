@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   arrayMove,
@@ -20,9 +28,9 @@ import {
   XCircle,
   FileSpreadsheet,
   Pencil,
-  GripVertical,
   Trash2,
   Loader2,
+  Move,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui/Toast";
@@ -78,9 +86,13 @@ export default function MiniDrawManagement() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MiniDraw | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  // Configure sensors for both mouse and touch input to support mobile devices
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 5 },
     })
   );
 
@@ -371,7 +383,7 @@ export default function MiniDrawManagement() {
               }`}
               disabled={isSavingOrder}
             >
-              <GripVertical className="w-4 h-4" />
+              <Move className="w-4 h-4" />
               {isReorderMode ? "Cancel Reorder" : "Reorder Mini Draws"}
             </button>
           </div>
@@ -380,8 +392,7 @@ export default function MiniDrawManagement() {
         {isReorderMode && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-amber-900">
-              Drag the cards using the handle to update how mini draws appear on the site. Save when you&apos;re happy
-              with the order.
+              Drag the cards to reorder them. Save when you&apos;re happy with the order.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -671,8 +682,14 @@ function MiniDrawCard({
 
   if (reorderMode) {
     return (
-      <div ref={setNodeRef} style={style} className={isDragging ? "opacity-95" : undefined}>
-        <div className="relative rounded-lg bg-white shadow-md border border-gray-200 overflow-hidden group transition-all flex flex-col">
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={isDragging ? "opacity-95 z-50" : undefined}
+        {...attributes}
+        {...listeners}
+      >
+        <div className="relative rounded-lg bg-white shadow-md border border-gray-200 overflow-hidden group transition-all flex flex-col cursor-grab active:cursor-grabbing touch-none">
           <div className="relative w-full h-32 bg-gray-100">
             <Image
               src={previewImage}
@@ -680,6 +697,7 @@ function MiniDrawCard({
               fill
               className="object-cover"
               sizes="(max-width: 768px) 20vw, 20vw"
+              draggable={false}
             />
             <div className="absolute bottom-1.5 right-1.5 z-10">
               <BrandLogoCard
@@ -692,14 +710,6 @@ function MiniDrawCard({
                 scaleOverride={overlayScale * 0.6}
               />
             </div>
-            <button
-              type="button"
-              className="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700 shadow-sm"
-              {...attributes}
-              {...listeners}
-            >
-              <GripVertical className="h-3 w-3" />
-            </button>
           </div>
           <div className="p-2.5 space-y-2 flex-1 flex flex-col">
             <div className="flex-1 min-h-0">

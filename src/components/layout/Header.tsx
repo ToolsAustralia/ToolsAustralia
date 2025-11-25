@@ -14,6 +14,7 @@ import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/member
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
+import MetallicButton from "@/components/ui/MetallicButton";
 import {
   Search,
   ShoppingCart,
@@ -1405,10 +1406,17 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   })}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                  <ShoppingCart className="h-16 w-16 mb-4" />
-                  <p className="text-lg font-medium">Your cart is empty</p>
-                  <p className="text-sm">Add some tools to get started!</p>
+                <div className="flex flex-col items-center justify-center h-full px-4 py-8 text-center">
+                  <div className="text-gray-400 mb-6">
+                    <Clock className="w-20 h-20 mx-auto text-gray-300" />
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 font-['Poppins']">Coming Soon</h3>
+                  <p className="text-sm sm:text-base text-gray-600 mb-6 max-w-sm mx-auto font-['Inter']">
+                    Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can win amazing tools!
+                  </p>
+                  <MetallicButton href="/mini-draws" variant="primary" size="md" borderRadius="lg" className="w-full max-w-xs">
+                    Visit Mini Draws
+                  </MetallicButton>
                 </div>
               )}
             </div>

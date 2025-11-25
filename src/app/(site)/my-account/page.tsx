@@ -33,7 +33,7 @@ function PartnerDiscountsSection({ user }: { user: import("@/hooks/queries/useUs
   return (
     <UnlockDiscounts
       showUnlockButton={!hasAccess}
-      title={hasAccess ? "Partner Discounts" : "Unlock Massive Partner Discounts"}
+      title={hasAccess ? "Partner Discounts" : "Unlock Partner Discounts"}
       description={
         hasAccess
           ? "Access exclusive discounts from Australia's top tool brands"

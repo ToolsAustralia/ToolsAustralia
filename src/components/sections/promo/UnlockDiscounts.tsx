@@ -109,108 +109,28 @@ const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.png"
 
 const partnerDiscounts = [
   {
-    id: "milwaukee",
-    name: "Milwaukee",
-    logo: "/images/brands/milwaukee.png",
-    discount: "25% OFF",
-    discountMessage: "Enter Code TA501 for 25% sitewide",
-    gradient: "from-red-600 via-red-500 to-red-700",
-  },
-  {
-    id: "dewalt",
-    name: "DeWalt",
-    logo: "/images/brands/dewalt-black.png",
-    discount: "30% OFF",
-    discountMessage: "Mention TA for $200 off your next purchase",
-    gradient: "from-yellow-500 via-yellow-600 to-amber-600",
-  },
-  {
-    id: "makita",
-    name: "Makita",
-    logo: "/images/brands/Makita-red.png",
-    discount: "20% OFF",
-    discountMessage: "Use Code TA202 for 20% off all tools",
-    gradient: "from-makita-500 via-makita-600 to-makita-700", // Makita brand gradient
-  },
-  {
-    id: "sidchrome",
-    name: "Sidchrome",
-    logo: "/images/brands/sidchrome.png",
-    discount: "15% OFF",
-    discountMessage: "Get $150 off orders over $500 with Code TA150",
-    gradient: "from-red-800 via-red-700 to-red-900",
-  },
-  {
-    id: "kincrome",
-    name: "Kincrome",
-    logo: "/images/brands/kincrome.png",
-    discount: "18% OFF",
-    discountMessage: "Free shipping on orders $100+ with Code TAFREE",
-    gradient: "from-blue-700 via-blue-600 to-blue-800",
-  },
-  {
-    id: "chicago-pneumatic",
-    name: "Chicago Pneumatic",
-    logo: "/images/brands/chicagoPneumatic.png",
-    discount: "22% OFF",
-    discountMessage: "Save 22% with promo code TA22",
+    id: "zjwraps",
+    name: "ZJWRAPS",
+    logo: "/images/partnerBrandLogos/ZJWRAPS.webp",
+    discount: "250 OFF",
+    discountMessage: "$250 off a wrap when you mention Tools Australia",
     gradient: "from-gray-900 via-gray-800 to-black",
   },
   {
-    id: "gearwrench",
-    name: "GearWrench",
-    logo: "/images/brands/gearWrench.png",
-    discount: "19% OFF",
-    discountMessage: "Get $300 off when you spend $1000+ (Code TA300)",
-    gradient: "from-gray-900 via-gray-800 to-black",
+    id: "superbad",
+    name: "Super Bad",
+    logo: "/images/partnerBrandLogos/SuperBad.png",
+    discount: "90% OFF",
+    discountMessage: "Mention Tools Australia for 90% off your trial shoot",
+    gradient: "from-red-900 via-red-800 to-amber-100",
   },
   {
-    id: "ingersoll-rand",
-    name: "Ingersoll Rand",
-    logo: "/images/brands/Ingersoll-Rand.png",
-    discount: "24% OFF",
-    discountMessage: "Enter Code TA240 for 24% off sitewide",
-    gradient: "from-gray-100 via-gray-200 to-gray-300",
-  },
-  {
-    id: "knipex",
-    name: "Knipex",
-    logo: "/images/brands/knipex.png",
-    discount: "21% OFF",
-    discountMessage: "Mention TA for $175 off orders $750+",
-    gradient: "from-gray-100 via-gray-200 to-gray-300",
-  },
-  {
-    id: "koken",
-    name: "Koken",
-    logo: "/images/brands/koken.png",
-    discount: "17% OFF",
-    discountMessage: "Use Code TA17 for 17% off all products",
-    gradient: "from-gray-700 via-gray-600 to-gray-800",
-  },
-  {
-    id: "mitutoyo",
-    name: "Mitutoyo",
-    logo: "/images/brands/mitutoyo.webp",
-    discount: "23% OFF",
-    discountMessage: "Get $250 off orders over $600 (Code TA250)",
-    gradient: "from-gray-100 via-gray-200 to-gray-300",
-  },
-  {
-    id: "stahlwille",
-    name: "Stahlwille",
-    logo: "/images/brands/stahlwille.png",
-    discount: "16% OFF",
-    discountMessage: "Enter Code TA160 for 16% sitewide discount",
-    gradient: "from-green-900 from-0% via-green-800 via-50% to-gray-900 to-50%",
-  },
-  {
-    id: "warren-brown",
-    name: "Warren & Brown",
-    logo: "/images/brands/warrenBrown.png",
-    discount: "20% OFF",
-    discountMessage: "Free shipping + 20% off with Code TA20",
-    gradient: "from-gray-100 via-gray-200 to-gray-300",
+    id: "multihub",
+    name: "Multi Hub",
+    logo: "/images/partnerBrandLogos/multiHub.png",
+    discount: "VIP PROMOS",
+    discountMessage: "Mention Tools Australia for VIP promos",
+    gradient: "from-pink-500 via-pink-600 to-fuchsia-600",
   },
 ];
 
@@ -222,7 +142,7 @@ interface UnlockDiscountsProps {
 
 export default function UnlockDiscounts({
   showUnlockButton = true,
-  title = "Unlock Massive Partner Discounts",
+  title = "Unlock Partner Discounts",
   description = "Get instant access to exclusive discounts from Australia's top tool brands",
 }: UnlockDiscountsProps = {}) {
   const discountsRef = useScrollAnimation();
@@ -240,78 +160,70 @@ export default function UnlockDiscounts({
         </div>
 
         {/* Partner Discounts Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-12 stagger-animation">
-          {partnerDiscounts.map((partner) => (
-            <div
-              key={partner.id}
-              className="group relative bg-white rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 border-2 border-gray-200 hover:border-gray-300 flex flex-col h-full"
-            >
-              {/* Top Half: Full Background with Centered Logo */}
+        <div className="flex justify-center mb-8 sm:mb-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 stagger-animation max-w-4xl">
+            {partnerDiscounts.map((partner) => (
               <div
-                className={`h-1/2 flex items-center justify-center p-3 sm:p-4 lg:p-6 ${
-                  partner.id === "stahlwille"
-                    ? `bg-gradient-to-b ${partner.gradient}`
-                    : `bg-gradient-to-br ${partner.gradient}`
-                }`}
+                key={partner.id}
+                className="group relative bg-white rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 border-2 border-gray-200 hover:border-gray-300 flex flex-col min-h-[200px] sm:min-h-[280px] lg:min-h-[320px]"
               >
-                <Image
-                  src={partner.logo}
-                  alt={`${partner.name} Logo`}
-                  width={90}
-                  height={36}
-                  className={`h-10 sm:h-12 lg:h-14 w-auto object-contain drop-shadow-md ${
-                    partner.id === "gearwrench" || partner.id === "ingersoll-rand"
-                      ? "scale-150"
-                      : partner.id === "milwaukee"
-                      ? "scale-150"
-                      : partner.id === "chicago-pneumatic"
-                      ? "scale-75 sm:scale-100"
-                      : partner.id === "warren-brown"
-                      ? "scale-75 sm:scale-100"
-                      : ""
+                {/* Top Half: Full Background with Centered Logo */}
+                <div
+                  className={`h-3/5 flex items-center justify-center p-3 sm:p-4 lg:p-6 relative ${
+                    partner.id === "zjwraps" || partner.id === "superbad" ? "" : `bg-gradient-to-br ${partner.gradient}`
                   }`}
                   style={
-                    partner.id === "chicago-pneumatic"
-                      ? { transform: "scale(1.7)" }
-                      : partner.id === "gearwrench" || partner.id === "ingersoll-rand"
-                      ? { transform: "scale(1.8)" }
-                      : partner.id === "warren-brown"
-                      ? { transform: "scale(1.8)" }
-                      : partner.id === "stahlwille"
-                      ? { transform: "scale(1.2)" }
-                      : partner.id === "knipex"
-                      ? { transform: "scale(1.2)" }
-                      : partner.id === "mitutoyo"
-                      ? { transform: "scale(1.2)" }
-                      : {}
+                    partner.id === "zjwraps" || partner.id === "superbad"
+                      ? {
+                          backgroundImage: "url('/images/partnerBrandLogos/partnerlogoBg.png')",
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                          backgroundRepeat: "no-repeat",
+                        }
+                      : undefined
                   }
-                  unoptimized
-                />
-              </div>
-
-              {/* Bottom Half: White Background with Discount Message */}
-              <div className="h-1/2 bg-white flex flex-col items-center justify-center gap-2 p-3 sm:p-4 lg:p-5">
-                <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 font-['Inter'] text-center leading-tight">
-                  {highlightDiscountMessage(partner.discountMessage)}
-                </p>
-                <div className="flex items-center justify-center">
+                >
                   <Image
-                    src={toolsAustraliaLogo}
-                    alt="Tools Australia logo"
-                    width={48}
-                    height={48}
-                    className="h-4 w-auto object-contain drop-shadow sm:h-6 lg:h-7"
+                    src={partner.logo}
+                    alt={`${partner.name} Logo`}
+                    width={90}
+                    height={36}
+                    className={`h-10 sm:h-12 lg:h-14 w-auto object-contain drop-shadow-md ${
+                      partner.id === "superbad" ? "scale-200" : ""
+                    }`}
+                    style={partner.id === "superbad" ? { transform: "scale(2)" } : undefined}
                     unoptimized
                   />
                 </div>
-              </div>
 
-              {/* Hover Glow Effect */}
-              <div
-                className={`absolute inset-0 bg-gradient-to-r ${partner.gradient} opacity-0 group-hover:opacity-5 rounded-xl sm:rounded-2xl transition-opacity duration-300 pointer-events-none`}
-              ></div>
-            </div>
-          ))}
+                {/* Bottom Half: White Background with Discount Message */}
+                <div className="h-2/5 bg-white flex flex-col items-center justify-center gap-2 p-3 sm:p-4 lg:p-5">
+                  {/* Brand Name Title */}
+                  <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 font-['Poppins'] text-center">
+                    {partner.name}
+                  </h3>
+                  <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 font-['Inter'] text-center leading-tight">
+                    {highlightDiscountMessage(partner.discountMessage)}
+                  </p>
+                  <div className="flex items-center justify-center">
+                    <Image
+                      src={toolsAustraliaLogo}
+                      alt="Tools Australia logo"
+                      width={48}
+                      height={48}
+                      className="h-4 w-auto object-contain drop-shadow sm:h-6 lg:h-7"
+                      unoptimized
+                    />
+                  </div>
+                </div>
+
+                {/* Hover Glow Effect */}
+                <div
+                  className={`absolute inset-0 bg-gradient-to-r ${partner.gradient} opacity-0 group-hover:opacity-5 rounded-xl sm:rounded-2xl transition-opacity duration-300 pointer-events-none`}
+                ></div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Enter to Unlock Button - Conditionally rendered */}

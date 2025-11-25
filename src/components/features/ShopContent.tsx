@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductFilters from "@/components/features/ProductFilters";
-import { Grid, List, Filter, X, Search } from "lucide-react";
+import MetallicButton from "@/components/ui/MetallicButton";
+import { Grid, List, Filter, X, Search, Clock } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
 
@@ -332,51 +333,17 @@ export default function ShopContent({
             </div>
           ) : (
             <div className="text-center py-16">
-              <div className="text-gray-400 mb-4">
-                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1}
-                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                  />
-                </svg>
+              <div className="text-gray-400 mb-6">
+                <Clock className="w-20 h-20 mx-auto text-gray-300" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {debouncedSearch ? `No products found for "${debouncedSearch}"` : "No products found"}
-              </h3>
-              <p className="text-gray-600 mb-4">
-                {debouncedSearch
-                  ? "Try searching for something else or adjust your filters."
-                  : "Try adjusting your filters to see more results."}
+              <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3 font-['Poppins']">Coming Soon</h3>
+              <p className="text-base sm:text-lg text-gray-600 mb-6 max-w-md mx-auto font-['Inter']">
+                Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can win
+                amazing tools!
               </p>
-              {debouncedSearch && (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-500">Suggestions:</p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
-                    >
-                      Clear search
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSearchQuery("");
-                        setFilters({
-                          category: [],
-                          priceRange: [0, 500],
-                          brands: [],
-                          styles: [],
-                        });
-                      }}
-                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
-                    >
-                      Clear all filters
-                    </button>
-                  </div>
-                </div>
-              )}
+              <MetallicButton href="/mini-draws" variant="primary" size="md" borderRadius="lg">
+                Visit Mini Draws
+              </MetallicButton>
             </div>
           )}
 

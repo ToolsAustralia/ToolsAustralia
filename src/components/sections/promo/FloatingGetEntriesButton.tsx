@@ -16,10 +16,10 @@ export default function FloatingGetEntriesButton() {
       const allSections = document.querySelectorAll("section");
       let unlockDiscountsSection: HTMLElement | null = null;
 
-      // Look for section containing "Unlock Massive Partner Discounts" text
+      // Look for section containing "Unlock Partner Discounts" text
       for (const section of allSections) {
         const sectionElement = section as HTMLElement;
-        if (sectionElement.textContent?.includes("Unlock Massive Partner Discounts")) {
+        if (sectionElement.textContent?.includes("Unlock Partner Discounts")) {
           unlockDiscountsSection = sectionElement;
           break;
         }

@@ -3,7 +3,6 @@ import PartnerInteractive from "./components/PartnerInteractive";
 import PartnershipFormSection from "./components/PartnershipFormSection";
 import AboutToolsAustralia from "@/components/sections/AboutToolsAustralia";
 // import PartnerBenefits from "./components/PartnerBenefits";
-// import ExistingPartners from "@/components/sections/ExistingPartners";
 
 // SEO Metadata for Partner Page
 export const metadata: Metadata = {
@@ -42,9 +41,6 @@ export default function PartnerPage() {
 
         {/* Partner Benefits Section - Server Component */}
         {/* <PartnerBenefits /> */}
-
-        {/* Existing Partners Section - Server Component */}
-        {/* <ExistingPartners /> */}
       </main>
     </div>
   );

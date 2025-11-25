@@ -93,12 +93,12 @@ export default function Hero() {
 
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8 sm:mb-12">
-                <MetallicButton href="/shop" variant="primary" size="md" borderRadius="lg">
-                  Shop Now
+                <MetallicButton href="/membership" variant="primary" size="md" borderRadius="lg">
+                  Join Membership
                 </MetallicButton>
 
-                <MetallicButton href="/membership" variant="secondary" size="md" borderRadius="lg" borderColor="red">
-                  Join Membership
+                <MetallicButton href="/shop" variant="secondary" size="md" borderRadius="lg" borderColor="red">
+                  Shop Now
                 </MetallicButton>
               </div>
 
@@ -150,12 +150,12 @@ export default function Hero() {
 
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
-                <MetallicButton href="/shop" variant="primary" size="md" borderRadius="lg">
-                  Shop Now
+                <MetallicButton href="/membership" variant="primary" size="md" borderRadius="lg">
+                  Join Membership
                 </MetallicButton>
 
-                <MetallicButton href="/membership" variant="secondary" size="md" borderRadius="lg" borderColor="red">
-                  Join Membership
+                <MetallicButton href="/shop" variant="secondary" size="md" borderRadius="lg" borderColor="red">
+                  Shop Now
                 </MetallicButton>
               </div>
 

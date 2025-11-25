@@ -53,15 +53,25 @@ export default function MiniDrawsFilters({ onFilterChangeAction, isMobile, onClo
   return (
     <>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
-          {hasActiveFilters && (
+        {/* Header - Only show on desktop, mobile overlay has its own header */}
+        {!isMobile && (
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+            {hasActiveFilters && (
+              <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 transition-colors">
+                Clear All
+              </button>
+            )}
+          </div>
+        )}
+        {/* Mobile header with Clear All */}
+        {isMobile && hasActiveFilters && (
+          <div className="flex items-center justify-end">
             <button onClick={clearAllFilters} className="text-sm text-red-600 hover:text-red-700 transition-colors">
               Clear All
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Brand Filter */}
         <div className="border-b border-gray-200 pb-4">
@@ -78,7 +88,7 @@ export default function MiniDrawsFilters({ onFilterChangeAction, isMobile, onClo
           </button>
 
           {expandedSections.brands && (
-            <div className="mt-3 space-y-2 max-h-72 overflow-y-auto pr-1">
+            <div className="mt-3 space-y-2 pr-1">
               {brandLogos.map((brand) => (
                 <label key={brand.id} className="flex items-center">
                   <input
