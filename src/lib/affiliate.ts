@@ -67,12 +67,18 @@ export async function trackAffiliateSignup({
     throw new Error("User not found");
   }
 
-  if (user.affiliateReferral) {
-    // User already has an affiliate referral, don't overwrite
+  const existingReferral = user.affiliateReferral;
+  if (existingReferral?.affiliateId && existingReferral?.affiliateCode) {
+    // User already has a valid affiliate referral, don't overwrite
     return {
-      affiliateId: user.affiliateReferral.affiliateId.toString(),
-      affiliateCode: user.affiliateReferral.affiliateCode,
+      affiliateId: existingReferral.affiliateId.toString(),
+      affiliateCode: existingReferral.affiliateCode,
     };
+  }
+
+  if (existingReferral && (!existingReferral.affiliateId || !existingReferral.affiliateCode)) {
+    // Clean up incomplete referral objects so we can set a fresh one
+    user.affiliateReferral = undefined;
   }
 
   // Set affiliate referral on user
