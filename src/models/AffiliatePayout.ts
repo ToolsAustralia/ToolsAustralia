@@ -60,3 +60,4 @@ if (mongoose.models.AffiliatePayout) {
 
 export default mongoose.model<IAffiliatePayout>("AffiliatePayout", AffiliatePayoutSchema);
 
+

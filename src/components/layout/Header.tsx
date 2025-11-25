@@ -10,6 +10,7 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 // User setup store removed - using unified modal priority system
 import { useCart } from "@/contexts/CartContext";
+import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
@@ -81,6 +82,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
   const { requestModal } = useModalPriorityStore();
+  const { isAuthenticated: isAffiliateAuthenticated, affiliateData, loading: affiliateLoading } = useAffiliateAuth();
   // Setup requirement check now handled through user data
   const checkSetupRequired = (userData: unknown) =>
     !(userData as { profileSetupCompleted?: boolean })?.profileSetupCompleted;
@@ -399,6 +401,15 @@ export default function Header({ isFixed = true }: HeaderProps) {
     signOut({ callbackUrl: "/" });
   };
 
+  const handleAffiliateLogout = async () => {
+    try {
+      await fetch("/api/affiliate/logout", { method: "POST" });
+      window.location.href = "/affiliate/login";
+    } catch (error) {
+      console.error("Error logging out affiliate:", error);
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -642,8 +653,33 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
           {/* Right Side - User Stats and Icons */}
           <div className="flex items-center gap-2 sm:gap-4">
+            {/* Affiliate Navigation - Show when affiliate is logged in */}
+            {!affiliateLoading && isAffiliateAuthenticated && affiliateData && (
+              <div className="hidden lg:flex items-center gap-4">
+                <Link
+                  href="/affiliate"
+                  className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
+                    pathname.startsWith("/affiliate")
+                      ? "text-white bg-[#ee0000]"
+                      : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  }`}
+                >
+                  Dashboard
+                </Link>
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="font-medium">{affiliateData.name}</span>
+                </div>
+                <button
+                  onClick={handleAffiliateLogout}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors duration-200"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </button>
+              </div>
+            )}
             {/* User Stats Display - Desktop Only - Clickable */}
-            {isAuthenticated && userData && (
+            {!affiliateLoading && !isAffiliateAuthenticated && isAuthenticated && userData && (
               <div className="hidden lg:flex items-center gap-4">
                 {/* User Info with Stats - Clickable */}
                 <div className="relative desktop-user-menu-container">
@@ -791,8 +827,25 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </div>
             )}
 
+            {/* Affiliate Mobile Menu */}
+            {!affiliateLoading && isAffiliateAuthenticated && affiliateData && (
+              <div className="lg:hidden flex items-center gap-2">
+                <Link
+                  href="/affiliate"
+                  className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                >
+                  Dashboard
+                </Link>
+                <button
+                  onClick={handleAffiliateLogout}
+                  className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             {/* User Badge Display - Mobile Only */}
-            {isAuthenticated && userData && (
+            {!affiliateLoading && !isAffiliateAuthenticated && isAuthenticated && userData && (
               <div className="lg:hidden flex items-center">
                 {(() => {
                   // Prioritize subscription over one-time packages
@@ -833,8 +886,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </span>
               )}
             </button>
-            {/* Login Button for Mobile - Show when not authenticated */}
-            {!isAuthenticated && (
+            {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
+            {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
                 href="/login"
                 className="lg:hidden inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white rounded-lg bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_8px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_12px_rgba(238,0,0,0.5)] transition-all duration-200 border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
@@ -950,7 +1003,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             )}
 
             {/* Login Link for Non-Authenticated Users - Desktop Only */}
-            {!isAuthenticated && (
+            {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
                 href="/login"
                 className="hidden lg:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_12px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_16px_rgba(238,0,0,0.5)] transition-all duration-200 border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
@@ -1052,8 +1105,22 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </button>
             </div>
 
+            {/* Affiliate Profile Section */}
+            {!affiliateLoading && isAffiliateAuthenticated && affiliateData && (
+              <div className="p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
+                    <User className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-900">{affiliateData.name}</p>
+                    <p className="text-sm text-gray-600">{affiliateData.email}</p>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* User Profile Section */}
-            {isAuthenticated && userData && (
+            {!affiliateLoading && !isAffiliateAuthenticated && isAuthenticated && userData && (
               <div className="p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
@@ -1243,8 +1310,22 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   Contact
                 </Link>
 
+                {/* Affiliate Links */}
+                {!affiliateLoading && isAffiliateAuthenticated && affiliateData && (
+                  <>
+                    <div className="border-t border-gray-200 my-4"></div>
+                    <Link
+                      href="/affiliate"
+                      className="flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      onClick={handleCloseMobileMenu}
+                    >
+                      <UserCircle className="w-5 h-5" />
+                      Dashboard
+                    </Link>
+                  </>
+                )}
                 {/* User Account Links */}
-                {isAuthenticated && userData && (
+                {!affiliateLoading && !isAffiliateAuthenticated && isAuthenticated && userData && (
                   <>
                     <div className="border-t border-gray-200 my-4"></div>
                     <Link
@@ -1272,7 +1353,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {/* Sidebar Footer - Always at Bottom */}
             <div className="border-t border-gray-200 bg-white flex-shrink-0">
               <div className="p-4">
-                {isAuthenticated ? (
+                {!affiliateLoading && isAffiliateAuthenticated ? (
+                  <button
+                    onClick={() => {
+                      handleAffiliateLogout();
+                      handleCloseMobileMenu();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    Sign Out
+                  </button>
+                ) : isAuthenticated ? (
                   <button
                     onClick={() => {
                       handleSignOut();
@@ -1412,9 +1504,16 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   </div>
                   <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 font-['Poppins']">Coming Soon</h3>
                   <p className="text-sm sm:text-base text-gray-600 mb-6 max-w-sm mx-auto font-['Inter']">
-                    Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can win amazing tools!
+                    Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can
+                    win amazing tools!
                   </p>
-                  <MetallicButton href="/mini-draws" variant="primary" size="md" borderRadius="lg" className="w-full max-w-xs">
+                  <MetallicButton
+                    href="/mini-draws"
+                    variant="primary"
+                    size="md"
+                    borderRadius="lg"
+                    className="w-full max-w-xs"
+                  >
                     Visit Mini Draws
                   </MetallicButton>
                 </div>

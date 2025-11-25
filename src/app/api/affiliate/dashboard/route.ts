@@ -77,6 +77,8 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
+        name: affiliate.name,
+        username: affiliate.username,
         affiliateCode: affiliate.affiliateCode,
         affiliateLink: affiliate.affiliateLink,
         totalSignups: affiliate.totalSignups,

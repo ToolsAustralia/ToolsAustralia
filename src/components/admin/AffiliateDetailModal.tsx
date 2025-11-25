@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, DollarSign, CheckCircle, XCircle, Copy, Check, Edit2, Trash2, Save, AlertTriangle } from "lucide-react";
+import { X, Copy, Check, Edit2, Trash2, Save, AlertTriangle } from "lucide-react";
 
 interface AffiliateDetail {
   affiliate: {
@@ -25,6 +25,14 @@ interface AffiliateDetail {
     createdAt: string;
     updatedAt: string;
   };
+  referredUsers: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string | null;
+    referredAt: string;
+  }>;
   commissions: Array<{
     id: string;
     type: string;
@@ -89,6 +97,7 @@ export default function AffiliateDetailModal({
       fetchAffiliateDetails();
       setIsEditing(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, affiliateId]);
 
   // Initialize edit form when data loads
@@ -465,6 +474,44 @@ export default function AffiliateDetailModal({
                 </div>
               </div>
 
+              {/* Bank Details */}
+              <div>
+                <h3 className="font-semibold mb-3 text-gray-900">Bank Details</h3>
+                {data.affiliate.bankDetails ? (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-2 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="font-medium text-gray-700">Account Name:</span>{" "}
+                        <span className="text-gray-900">{data.affiliate.bankDetails.accountName || "Not provided"}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">BSB:</span>{" "}
+                        <span className="text-gray-900">{data.affiliate.bankDetails.bsb || "Not provided"}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Account Number:</span>{" "}
+                        <span className="text-gray-900">
+                          {data.affiliate.bankDetails.accountNumber
+                            ? "••••" + data.affiliate.bankDetails.accountNumber.slice(-4)
+                            : "Not provided"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Bank Name:</span>{" "}
+                        <span className="text-gray-900">{data.affiliate.bankDetails.bankName || "Not provided"}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3">
+                      <strong>Note:</strong> BSB (Bank State Branch) is a 6-digit code used in Australia to identify banks and branches. It&apos;s typically required for Australian bank accounts but may not be needed for international accounts.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <p className="text-gray-600 text-sm">No bank details provided. The affiliate needs to add their bank details to receive payouts.</p>
+                  </div>
+                )}
+              </div>
+
               {/* Process Payout */}
               {unpaidCommissions.length > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
@@ -491,36 +538,89 @@ export default function AffiliateDetailModal({
                 </div>
               )}
 
+              {/* Referred Users */}
+              <div>
+                <h3 className="font-semibold mb-3 text-gray-900">
+                  Referred Users ({data.referredUsers.length})
+                  {data.referredUsers.length > 0 && (
+                    <span className="ml-2 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {data.affiliate.totalSignups} total signups
+                    </span>
+                  )}
+                </h3>
+                {data.referredUsers.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No referred users yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referred Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {data.referredUsers.map((user) => (
+                          <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="font-medium text-gray-900">
+                                {user.firstName} {user.lastName}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-600">{user.email}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-600">{user.phone || "N/A"}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(user.referredAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               {/* Commissions */}
               <div>
-                <h3 className="font-semibold mb-3">All Commissions ({data.commissions.length})</h3>
+                <h3 className="font-semibold mb-3 text-gray-900">All Commissions ({data.commissions.length})</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-2 text-left">Date</th>
-                        <th className="px-4 py-2 text-left">Type</th>
-                        <th className="px-4 py-2 text-left">Package</th>
-                        <th className="px-4 py-2 text-right">Purchase</th>
-                        <th className="px-4 py-2 text-right">Commission</th>
-                        <th className="px-4 py-2 text-left">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Commission</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y divide-gray-200">
                       {data.commissions.map((commission) => (
-                        <tr key={commission.id}>
-                          <td className="px-4 py-2">{formatDate(commission.earnedAt)}</td>
-                          <td className="px-4 py-2 capitalize">{commission.type.replace("-", " ")}</td>
-                          <td className="px-4 py-2">{commission.packageName || "N/A"}</td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(commission.purchaseAmount)}</td>
-                          <td className="px-4 py-2 text-right font-semibold text-green-600">
+                        <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {commission.referredUser ? (
+                              <div>
+                                <div className="font-medium text-gray-900">{commission.referredUser.name || "N/A"}</div>
+                                <div className="text-xs text-gray-500">{commission.referredUser.email}</div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(commission.earnedAt)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap capitalize text-gray-600">{commission.type.replace("-", " ")}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-600">{commission.packageName || "N/A"}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-right text-gray-600">{formatCurrency(commission.purchaseAmount)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-green-600">
                             {formatCurrency(commission.commissionAmount)}
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             {commission.status === "paid" ? (
-                              <span className="text-green-600">Paid</span>
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Paid</span>
                             ) : (
-                              <span className="text-yellow-600">Pending</span>
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>
                             )}
                           </td>
                         </tr>
@@ -533,26 +633,26 @@ export default function AffiliateDetailModal({
               {/* Payout History */}
               {data.payouts.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-3">Payout History</h3>
+                  <h3 className="font-semibold mb-3 text-gray-900">Payout History</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                          <th className="px-4 py-2 text-left">Date</th>
-                          <th className="px-4 py-2 text-right">Amount</th>
-                          <th className="px-4 py-2 text-left">Commissions</th>
-                          <th className="px-4 py-2 text-left">Processed By</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commissions</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Processed By</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y">
+                      <tbody className="divide-y divide-gray-200">
                         {data.payouts.map((payout) => (
-                          <tr key={payout.id}>
-                            <td className="px-4 py-2">{formatDate(payout.paidAt)}</td>
-                            <td className="px-4 py-2 text-right font-semibold">
+                          <tr key={payout.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(payout.paidAt)}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-gray-900">
                               {formatCurrency(payout.totalAmount)}
                             </td>
-                            <td className="px-4 py-2">{payout.commissionCount}</td>
-                            <td className="px-4 py-2">{payout.processedBy?.name || "N/A"}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-600">{payout.commissionCount} commissions</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-600">{payout.processedBy?.name || "N/A"}</td>
                           </tr>
                         ))}
                       </tbody>

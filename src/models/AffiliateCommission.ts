@@ -151,3 +151,4 @@ if (mongoose.models.AffiliateCommission) {
 
 export default mongoose.model<IAffiliateCommission>("AffiliateCommission", AffiliateCommissionSchema);
 
+

@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
 import AffiliateCommission from "@/models/AffiliateCommission";
 import AffiliatePayout from "@/models/AffiliatePayout";
+import User from "@/models/User";
 import mongoose from "mongoose";
 
 /**
@@ -49,6 +50,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .populate("processedBy", "firstName lastName email")
       .lean();
 
+    // Get referred users (users who have this affiliate in their affiliateReferral)
+    const referredUsers = await User.find({
+      "affiliateReferral.affiliateId": new mongoose.Types.ObjectId(id),
+    })
+      .select("firstName lastName email mobile affiliateReferral.referredAt")
+      .sort({ "affiliateReferral.referredAt": -1 })
+      .lean();
+
     return NextResponse.json({
       success: true,
       data: {
@@ -68,6 +77,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           createdAt: affiliate.createdAt,
           updatedAt: affiliate.updatedAt,
         },
+        referredUsers: referredUsers.map((user) => ({
+          id: user._id.toString(),
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.mobile || null,
+          referredAt: (user.affiliateReferral as { referredAt?: Date })?.referredAt || user.createdAt,
+        })),
         commissions: allCommissions.map((c) => ({
           id: c._id.toString(),
           type: c.commissionType,
