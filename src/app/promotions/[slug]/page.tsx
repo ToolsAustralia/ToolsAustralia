@@ -39,8 +39,9 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
           <PromoHero />
           <BrandsShowcase />
         </div>
-        <PrizeShowcase slug={prize.slug} />
         <PromoPackages />
+        <PrizeShowcase slug={prize.slug} />
+
         <GiveawayDetails />
         <PromoFAQs />
         <UnlockDiscounts />

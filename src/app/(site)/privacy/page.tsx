@@ -29,193 +29,363 @@ export default async function PrivacyPolicyPage() {
         <div className="mx-auto flex max-w-5xl flex-col gap-12 px-4 sm:px-6 lg:px-8 text-sm leading-relaxed sm:text-base">
           <header>
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-red-500">Privacy Policy</p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl lg:text-5xl">Protecting Your Personal Information</h1>
-            <p className="mt-4 max-w-3xl text-gray-300 sm:text-base">
-              Tools Australia Pty Ltd ABN 54 690 397 061 (“Tools Australia”, “we”, “our”, or “us”) is committed to
-              protecting your privacy in line with the Privacy Act 1988 (Cth) and the Australian Privacy Principles.
-              This policy explains how we collect, use, disclose, store, and protect personal information when you shop
-              with us, join our memberships, or take part in our giveaways and promotions.
-            </p>
-            <p className="mt-2 text-xs text-gray-400 sm:text-sm">Last updated: 13 November 2025</p>
+
+            <p className="mt-4 max-w-3xl text-gray-300 sm:text-base font-semibold">Tools Australia Pty Ltd</p>
+            <p className="mt-2 text-xs text-gray-400 sm:text-sm">Effective Date: 25/11/2025</p>
+            <p className="mt-1 text-xs text-gray-400 sm:text-sm">Last Updated: 25/11/2025</p>
           </header>
 
-          {/* 1. Introduction */}
-          <section id="introduction" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">1. Introduction</h2>
+          {/* 1. ABOUT THIS POLICY */}
+          <section
+            id="about-this-policy"
+            className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
+          >
+            <h2 className="text-2xl font-semibold text-white">1. ABOUT THIS POLICY</h2>
             <p className="text-gray-300">
-              By using our website, visiting our retail experiences, purchasing a membership, or participating in any
-              Tools Australia promotion, you consent to the practices described in this Privacy Policy. We only collect
-              personal information that is reasonably necessary for us to deliver quality products, manage entries and
-              rewards, and keep our community safe.
+              Tools Australia Pty Ltd (ABN 54690397061, ACN 690397061donr) (&quot;Tools Australia&quot;, &quot;we&quot;,
+              &quot;us&quot;, &quot;our&quot;) is committed to protecting your privacy in accordance with the Privacy
+              Act 1988 (Cth) and the <em>Australian Privacy Principles (APPs)</em>.
+            </p>
+            <p className="text-gray-300">
+              This Privacy Policy applies to our website (https://www.toolsaustralia.com.au ), competitions,
+              memberships, reward points program, and all related services.
+            </p>
+            <p className="text-gray-300">
+              By using our services, you consent to the collection, use, and disclosure of your personal information as
+              described in this policy. We may update this policy from time to time by posting changes on our website.
+              Your continued use after changes constitutes acceptance.
             </p>
           </section>
 
-          {/* 2. Collection of Personal Information */}
-          <section id="collection" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">2. Collection of Personal Information</h2>
-            <p className="text-gray-300">
-              We collect personal and, on occasion, sensitive information to provide and improve our services. The types
-              of information we may collect include:
-            </p>
-            <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>Full name and contact details (email address, phone number, postal address).</li>
-              <li>Date of birth and gender (if voluntarily supplied for eligibility checks).</li>
-              <li>Payment and transaction details processed securely via our payment partners.</li>
-              <li>Membership activity, giveaway entry history, redemptions, and referral participation.</li>
-              <li>Account login credentials, preferences, and saved settings.</li>
-              <li>Feedback, reviews, support enquiries, and survey responses.</li>
-              <li>Website usage data such as IP address, browser type, device identifiers, and cookies.</li>
-            </ul>
-            <p className="text-gray-300">
-              We collect information directly from you when you sign up, make a purchase, complete forms, or contact our
-              team. We also gather data automatically through cookies and analytics tools, and from trusted service
-              providers including payment gateways, email platforms, and advertising partners. Sensitive information is
-              only collected with your express consent and handled in accordance with the Australian Privacy Principles.
-            </p>
+          {/* 2. INFORMATION WE COLLECT */}
+          <section
+            id="information-we-collect"
+            className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
+          >
+            <h2 className="text-2xl font-semibold text-white">2. INFORMATION WE COLLECT</h2>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-2">2.1 Information You Provide</h3>
+                <ul className="list-inside list-disc space-y-2 text-gray-300">
+                  <li>
+                    <strong>Personal Details:</strong> Name, date of birth, gender, email, phone number, address
+                  </li>
+                  <li>
+                    <strong>Account Information:</strong> Username, password, preferences, reward points balance
+                  </li>
+                  <li>
+                    <strong>Payment Information:</strong> Credit/debit card details, bank account details, billing
+                    address, transaction history
+                  </li>
+                  <li>
+                    <strong>Competition Information:</strong> Entry details, package purchases, entry history
+                  </li>
+                  <li>
+                    <strong>Verification Information:</strong> ID documents, proof of age, proof of residency
+                  </li>
+                  <li>
+                    <strong>Communications:</strong> Your correspondence with us via email, phone, or social media
+                  </li>
+                  <li>
+                    <strong>User Content:</strong> Photos, videos, testimonials, reviews you submit
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-2">2.2 Information We Collect Automatically</h3>
+                <ul className="list-inside list-disc space-y-2 text-gray-300">
+                  <li>
+                    <strong>Technical Data:</strong> IP address, browser type, device type, operating system
+                  </li>
+                  <li>
+                    <strong>Usage Data:</strong> Pages viewed, time on site, navigation paths, referral sources
+                  </li>
+                  <li>
+                    <strong>Cookies and Tracking:</strong> Data from cookies, web beacons, and similar technologies
+                  </li>
+                  <li>
+                    <strong>Location Data:</strong> General location based on IP address
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-2">2.3 Information from Third Parties</h3>
+                <ul className="list-inside list-disc space-y-2 text-gray-300">
+                  <li>Payment processors (transaction verification, fraud detection)</li>
+                  <li>Social media platforms (if you connect accounts)</li>
+                  <li>Prize suppliers (delivery confirmation)</li>
+                  <li>Verification services (identity and age verification)</li>
+                  <li>Competition draw services (e.g., randomdraws.com.au)</li>
+                </ul>
+              </div>
+            </div>
           </section>
 
-          {/* 3. Use of Personal Information */}
-          <section id="use" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">3. Use of Personal Information</h2>
+          {/* 3. HOW WE USE YOUR INFORMATION */}
+          <section id="how-we-use" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">3. HOW WE USE YOUR INFORMATION</h2>
             <p className="text-gray-300">We use your personal information to:</p>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>Register and manage Tools Australia memberships and accounts.</li>
-              <li>Provide access to discounts, benefits, rewards, and partner offers.</li>
-              <li>Process orders, payments, shipping, and prize fulfilment.</li>
-              <li>Send important service updates, notifications, and administrative messages.</li>
-              <li>Run promotions, competitions, surveys, and loyalty programs responsibly.</li>
-              <li>Personalise product recommendations and website experiences.</li>
-              <li>Conduct analytics, reporting, and product development tasks.</li>
-              <li>Comply with legal obligations, including licence and regulatory requirements.</li>
-            </ul>
-            <p className="text-gray-300">
-              We will not use your personal information for unrelated purposes without first seeking your consent unless
-              required or authorised by law.
-            </p>
-          </section>
-
-          {/* 4. Disclosure of Personal Information */}
-          <section id="disclosure" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">4. Disclosure of Personal Information</h2>
-            <p className="text-gray-300">
-              We may disclose personal information to trusted parties that help us deliver our services, including:
-            </p>
-            <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>Tools Australia employees, contractors, and related corporate entities.</li>
-              <li>Payment processors, IT and cloud hosting providers, email platforms, and analytics services.</li>
-              <li>Mailing houses, marketing partners, and advertising platforms (where you have opted in).</li>
-              <li>Regulators, law enforcement agencies, and government bodies when required by law.</li>
-              <li>Any other party where you have given direct consent.</li>
-            </ul>
-            <p className="text-gray-300">
-              We will never sell or rent your personal information. All partners are required to handle your data
-              securely and only for the agreed purpose.
-            </p>
-          </section>
-
-          {/* 5. Overseas Disclosure */}
-          <section id="overseas" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">5. Overseas Disclosure</h2>
-            <p className="text-gray-300">
-              Some of our technology partners are located outside Australia, including in the United States, Singapore,
-              and member states of the European Union. When we transfer personal information overseas, we take
-              reasonable steps to ensure recipients adhere to privacy protections comparable to the Australian Privacy
-              Principles or other applicable safeguards.
-            </p>
-          </section>
-
-          {/* 6. Cookies and Tracking */}
-          <section id="cookies" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">6. Cookies and Tracking Technologies</h2>
-            <p className="text-gray-300">
-              Our website uses cookies, pixels, and similar technologies to recognise returning visitors, monitor
-              performance, and tailor advertising. You can adjust your browser settings to manage or block cookies,
-              though doing so may impact site functionality. Where required, we will seek your consent before deploying
-              cookies for marketing or remarketing purposes.
-            </p>
-          </section>
-
-          {/* 7. Direct Marketing */}
-          <section id="direct-marketing" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">7. Direct Marketing</h2>
-            <p className="text-gray-300">
-              We may use your personal information to send you promotions, product updates, and event invitations. You
-              can opt out at any time by:
-            </p>
-            <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>Clicking the “unsubscribe” link in our emails.</li>
-              <li>Updating your communication preferences in your Tools Australia account.</li>
+              <li>Process membership purchases, manage accounts, and handle payments</li>
               <li>
-                Emailing{" "}
+                Allocate competition entries, conduct draws, verify eligibility, select winners, notify winners, and
+                deliver prizes
+              </li>
+              <li>Manage reward points, process redemptions, track balances</li>
+              <li>Provide customer service, respond to inquiries, resolve complaints, handle refund requests</li>
+              <li>Comply with trade promotion permits, regulatory requirements, and legal obligations</li>
+              <li>Detect and prevent fraud, unauthorized access, and abuse of services</li>
+              <li>Improve our website, services, and user experience</li>
+              <li>Send marketing communications (with your consent where required)</li>
+              <li>Announce winners publicly on our website and social media (as required by permit conditions)</li>
+              <li>Conduct analytics and research using aggregated, de-identified data</li>
+            </ul>
+            <p className="text-gray-300">
+              You can opt out of marketing communications at any time using the unsubscribe link in emails, replying
+              &quot;STOP&quot; to SMS, or contacting us at{" "}
+              <a
+                className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                href="mailto:hello@toolsaustralia.com.au"
+              >
+                hello@toolsaustralia.com.au
+              </a>
+              .
+            </p>
+          </section>
+
+          {/* 4. HOW WE SHARE YOUR INFORMATION */}
+          <section id="how-we-share" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">4. HOW WE SHARE YOUR INFORMATION</h2>
+            <p className="text-gray-300">We may disclose your personal information to:</p>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>
+                <strong>Service Providers:</strong> Payment processors, draw services, prize suppliers, delivery
+                services, IT providers, marketing platforms, customer support tools, verification services, and
+                professional advisors. These providers are contractually required to protect your information.
+              </li>
+              <li>
+                <strong>Legal and Regulatory Authorities:</strong> When required by law, court orders, gaming regulators
+                (NSW Gaming and Racing), ACCC, OAIC, ATO, or to protect our legal rights.
+              </li>
+              <li>
+                <strong>Public Disclosure:</strong> Winner names (first name and initial of surname), city/state of
+                residence, prize won, and draw results as required by permit conditions. Published on our website and
+                social media.
+              </li>
+              <li>
+                <strong>Business Transfers:</strong> If we are acquired, merged, or sell assets, your information may
+                transfer to the new owner with prior notice to you.
+              </li>
+              <li>
+                <strong>With Your Consent:</strong> Other parties you authorize or provide consent for.
+              </li>
+              <li>
+                <strong>Overseas Recipients:</strong> Some service providers are located overseas (USA, EU, Singapore)
+                where Australian privacy laws may not apply. By using our services, you consent to overseas disclosure.
+              </li>
+            </ul>
+          </section>
+
+          {/* 5. DATA SECURITY AND RETENTION */}
+          <section id="data-security" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">5. DATA SECURITY AND RETENTION</h2>
+            <p className="text-gray-300">
+              We implement reasonable security measures including encryption (SSL/TLS), access controls, firewalls,
+              monitoring, and staff training to protect your information from unauthorized access, disclosure, or loss.
+            </p>
+            <p className="text-gray-300">
+              We retain personal information as long as necessary to provide services, comply with legal obligations
+              (typically 3-7 years for competition records), and resolve disputes.
+            </p>
+            <p className="text-gray-300 font-semibold">Retention periods:</p>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>
+                <strong>Account information:</strong> While active, plus 7 years after closure
+              </li>
+              <li>
+                <strong>Competition records:</strong> Minimum 3 years (permit requirement)
+              </li>
+              <li>
+                <strong>Transaction records:</strong> 7 years (tax purposes)
+              </li>
+              <li>
+                <strong>Marketing preferences:</strong> Until unsubscribe (opt-out records maintained indefinitely)
+              </li>
+            </ul>
+            <p className="text-gray-300">After retention periods, we securely destroy or de-identify information.</p>
+            <p className="text-gray-300">
+              In the event of a data breach likely to cause serious harm, we will notify you and the OAIC as required by
+              law. You are responsible for maintaining password confidentiality and notifying us of any unauthorized
+              access.
+            </p>
+          </section>
+
+          {/* 6. YOUR RIGHTS */}
+          <section id="your-rights" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">6. YOUR RIGHTS</h2>
+            <p className="text-gray-300">You have the right to:</p>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>
+                <strong>Access:</strong> Request access to personal information we hold about you
+              </li>
+              <li>
+                <strong>Correction:</strong> Request correction of inaccurate, incomplete, or out-of-date information
+              </li>
+              <li>
+                <strong>Deletion:</strong> Request deletion in certain circumstances (subject to legal retention
+                requirements)
+              </li>
+              <li>
+                <strong>Opt-Out:</strong> Unsubscribe from marketing communications at any time
+              </li>
+            </ul>
+            <p className="text-gray-300">
+              To exercise these rights, contact us at{" "}
+              <a
+                className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                href="mailto:hello@toolsaustralia.com.au"
+              >
+                hello@toolsaustralia.com.au
+              </a>{" "}
+              with your request and verification details. We will respond within 30 days. We may charge a reasonable fee
+              for access requests and may refuse requests in circumstances permitted by law.
+            </p>
+            <p className="text-gray-300">
+              <strong>Note:</strong> Even if you opt out of marketing, you will still receive transactional
+              communications (account notifications, purchase confirmations, winner notifications).
+            </p>
+          </section>
+
+          {/* 7. COOKIES AND TRACKING */}
+          <section id="cookies" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">7. COOKIES AND TRACKING</h2>
+            <p className="text-gray-300">
+              We use cookies and similar technologies to enhance your experience and analyze website usage.
+            </p>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>
+                <strong>Essential Cookies:</strong> Required for website functionality (cannot be disabled)
+              </li>
+              <li>
+                <strong>Functional Cookies:</strong> Remember preferences and settings
+              </li>
+              <li>
+                <strong>Analytics Cookies:</strong> Track website usage (e.g., Google Analytics)
+              </li>
+              <li>
+                <strong>Marketing Cookies:</strong> Enable targeted advertising (e.g., Facebook Pixel, Google Ads)
+              </li>
+            </ul>
+            <p className="text-gray-300">
+              You can manage cookies through your browser settings, though disabling some may affect website
+              functionality. Our website does not respond to &quot;Do Not Track&quot; signals.
+            </p>
+            <p className="text-gray-300">
+              Third-party cookies (Google Analytics, Facebook, payment processors, social media plugins) are subject to
+              those providers&apos; privacy policies.
+            </p>
+          </section>
+
+          {/* 8. CHILDREN'S PRIVACY */}
+          <section id="children" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">8. CHILDREN&apos;S PRIVACY</h2>
+            <p className="text-gray-300">
+              Our services are not intended for persons under 18 years of age. We do not knowingly collect information
+              from children under 18. If we discover we have collected such information, we will delete it promptly.
+              Parents who believe their child has provided information to us should contact{" "}
+              <a
+                className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                href="mailto:hello@toolsaustralia.com.au"
+              >
+                hello@toolsaustralia.com.au
+              </a>
+              .
+            </p>
+          </section>
+
+          {/* 9. THIRD-PARTY LINKS AND SOCIAL MEDIA */}
+          <section id="third-party" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">9. THIRD-PARTY LINKS AND SOCIAL MEDIA</h2>
+            <p className="text-gray-300">
+              Our website may link to third-party websites (partner retailers, social media, prize manufacturers). We
+              are not responsible for their privacy practices. Review their privacy policies before providing
+              information.
+            </p>
+            <p className="text-gray-300">
+              When you interact with our social media pages or use social login features, the social media
+              platform&apos;s privacy policy applies. We may collect publicly available information you share on our
+              pages.
+            </p>
+          </section>
+
+          {/* 10. MARKETING COMPLIANCE */}
+          <section
+            id="marketing-compliance"
+            className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
+          >
+            <h2 className="text-2xl font-semibold text-white">10. MARKETING COMPLIANCE</h2>
+            <p className="text-gray-300">
+              We comply with the Spam Act 2003 (Cth). We only send marketing messages to those who have consented,
+              clearly identify ourselves, include contact information, and provide functional unsubscribe mechanisms. We
+              honor opt-outs within 5 business days.
+            </p>
+          </section>
+
+          {/* 11. COMPLAINTS */}
+          <section id="complaints" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">11. COMPLAINTS</h2>
+            <p className="text-gray-300">If you have a privacy complaint:</p>
+            <ol className="list-inside list-decimal space-y-2 text-gray-300 ml-4">
+              <li>
+                <strong>Contact us:</strong> Email{" "}
                 <a
                   className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
                   href="mailto:hello@toolsaustralia.com.au"
                 >
                   hello@toolsaustralia.com.au
-                </a>
-                .
+                </a>{" "}
+                with &quot;Privacy Complaint&quot; in subject line
               </li>
-            </ul>
-            <p className="text-gray-300">
-              We do not sell or rent personal information to third parties for marketing purposes.
-            </p>
+              <li>We will acknowledge within 7 days and respond within 30 days</li>
+              <li>
+                If unsatisfied, contact the Office of the Australian Information Commissioner (OAIC):
+                <ul className="list-inside list-disc space-y-1 text-gray-300 ml-6 mt-2">
+                  <li>Phone: 1300 363 992</li>
+                  <li>
+                    Email:{" "}
+                    <a
+                      className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                      href="mailto:enquiries@oaic.gov.au"
+                    >
+                      enquiries@oaic.gov.au
+                    </a>
+                  </li>
+                  <li>
+                    Website:{" "}
+                    <a
+                      className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                      href="https://www.oaic.gov.au"
+                      rel="noopener noreferrer"
+                    >
+                      www.oaic.gov.au
+                    </a>
+                  </li>
+                </ul>
+              </li>
+            </ol>
           </section>
 
-          {/* 8. Data Security and Retention */}
-          <section id="security" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">8. Data Security and Retention</h2>
-            <p className="text-gray-300">
-              We implement technical, administrative, and physical safeguards to protect your information from misuse,
-              interference, loss, and unauthorised access. These safeguards include encrypted payment processing,
-              firewalls, multi-factor authentication for internal systems, and ongoing staff training. We retain
-              personal information only for as long as needed to fulfil the purposes described in this policy or as
-              required by law. When data is no longer required, we destroy or de-identify it securely.
-            </p>
-          </section>
-
-          {/* 9. Access and Correction */}
-          <section id="access" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">9. Access and Correction</h2>
-            <p className="text-gray-300">
-              You may request access to the personal information we hold about you and ask us to correct any inaccurate,
-              out-of-date, incomplete, or misleading data. Please contact us using the details in section 12 and include
-              enough information to identify your account. We will respond within a reasonable timeframe and may charge
-              a small administrative fee where permitted.
-            </p>
-          </section>
-
-          {/* 10. Notifiable Data Breaches */}
-          <section id="data-breaches" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">10. Notifiable Data Breaches</h2>
-            <p className="text-gray-300">
-              If a data breach occurs that is likely to result in serious harm, we will notify affected individuals and
-              the Office of the Australian Information Commissioner (OAIC) in accordance with the Notifiable Data
-              Breaches scheme. Our incident response process prioritises containment, assessment, and timely
-              communication.
-            </p>
-          </section>
-
-          {/* 11. Children’s Privacy */}
-          <section id="children" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">11. Children’s Privacy</h2>
-            <p className="text-gray-300">
-              Our products, competitions, and memberships are designed for adults aged 18 and over. We do not knowingly
-              collect personal information from minors without parental or guardian consent. If we learn that we have
-              unintentionally collected information from someone under 18, we will delete it as soon as possible.
-            </p>
-          </section>
-
-          {/* 12. Contacting Us */}
+          {/* 12. CONTACT US */}
           <section id="contact" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">12. Contacting Us</h2>
-            <p className="text-gray-300">
-              If you have questions, concerns, or complaints about this policy or how we handle personal information,
-              please contact our Privacy Officer:
-            </p>
+            <h2 className="text-2xl font-semibold text-white">12. CONTACT US</h2>
+            <p className="text-gray-300">For privacy questions or requests, contact our Privacy Officer:</p>
             <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-4 text-gray-200">
-              <p className="font-semibold text-white">Privacy Officer</p>
-              <p>Tools Australia Pty Ltd</p>
-              <p>Melbourne VIC 3000, Australia</p>
+              <p className="font-semibold text-white">Tools Australia Pty Ltd</p>
+              <p className="font-semibold text-white">Attention: Privacy Officer</p>
+              <p>Address: 6A Aylesbury Crescent, Gladstone Park, VIC 3043</p>
               <p>
                 Email:{" "}
                 <a
@@ -225,47 +395,48 @@ export default async function PrivacyPolicyPage() {
                   hello@toolsaustralia.com.au
                 </a>
               </p>
+              <p>
+                Website:{" "}
+                <a
+                  className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                  href="https://www.toolsaustralia.com.au"
+                  rel="noopener noreferrer"
+                >
+                  https://www.toolsaustralia.com.au
+                </a>
+              </p>
             </div>
+            <p className="text-gray-300">We aim to respond to inquiries within 5 business days.</p>
+          </section>
+
+          {/* 13. DEFINITIONS */}
+          <section id="definitions" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">13. DEFINITIONS</h2>
             <p className="text-gray-300">
-              We aim to respond to all enquiries within a reasonable timeframe. If you are not satisfied with our
-              response, you may contact the Office of the Australian Information Commissioner (OAIC) by calling 1300 363
-              992 or visiting{" "}
-              <a
-                className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="https://www.oaic.gov.au"
-                rel="noopener noreferrer"
-              >
-                www.oaic.gov.au
-              </a>
-              .
+              <em>
+                &quot;Personal Information&quot; means information about an identified or reasonably identifiable
+                individual.
+              </em>
+            </p>
+            <p className="text-gray-300">
+              <em>
+                &quot;Australian Privacy Principles&quot; (APPs) means the privacy standards in Schedule 1 of the
+                Privacy Act 1988 (Cth).
+              </em>
             </p>
           </section>
 
-          {/* 13. Changes to This Policy */}
-          <section id="changes" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">13. Changes to This Policy</h2>
+          {/* 14. GOVERNING LAW */}
+          <section id="governing-law" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">14. GOVERNING LAW</h2>
             <p className="text-gray-300">
-              We may update this Privacy Policy to reflect changes in our practices, technology, or legal requirements.
-              When we make material updates, we will publish the revised policy on our website and, where appropriate,
-              notify you through your account or email. The most recent version will always be available at{" "}
-              <a
-                className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href={`${baseUrl}/privacy`}
-              >
-                {baseUrl}/privacy
-              </a>
-              .
+              This Privacy Policy is governed by the laws of Victoria, Australia and the Commonwealth of Australia. You
+              submit to the exclusive jurisdiction of the courts of Victoria for disputes.
             </p>
-          </section>
-
-          {/* 14. Policy Review */}
-          <section id="review" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">14. Policy Review</h2>
             <p className="text-gray-300">
-              We review this policy at least annually, or more frequently if required, to ensure continuing compliance
-              with Australian privacy laws and to reflect evolving business practices. Feedback from our community is
-              always welcome.
+              By using our services, you acknowledge you have read, understood, and agree to this Privacy Policy.
             </p>
+            <p className="text-gray-300 font-semibold mt-4">Tools Australia Pty Ltd</p>
           </section>
         </div>
       </main>

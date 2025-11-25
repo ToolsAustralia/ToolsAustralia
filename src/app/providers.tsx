@@ -13,6 +13,7 @@ import UpgradeSuccessToast from "@/components/UpgradeSuccessToast";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useState } from "react";
 import PromoCountdownBanner from "@/components/banners/PromoCountdownBanner";
+import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 
 // Export loading components for global use
 export {
@@ -77,6 +78,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <CartProvider>
                   <LoadingProvider>
                     <ToastProvider>
+                      <AffiliateTracker />
                       <UpgradeSuccessToast />
                       {children}
                       <PromoCountdownBanner />

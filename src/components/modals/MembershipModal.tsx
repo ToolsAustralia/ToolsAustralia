@@ -33,6 +33,7 @@ import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { useReferralCode } from "@/hooks/useReferralCode";
+import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 // Member package mapping utilities imported but using inline mapping for simplicity
 
 // Type for one-time purchase response data
@@ -90,6 +91,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     setReferralCode: persistReferralCode,
     clearReferralCode,
   } = useReferralCode();
+  const { affiliateCode } = useAffiliateLink();
   const [isValidatingReferral, setIsValidatingReferral] = useState(false);
   const [referralInfo, setReferralInfo] = useState<{ referrerName: string } | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
@@ -566,6 +568,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           lastName: formData.lastName,
           email: formData.email,
           mobile: formData.phone,
+          affiliateCode: affiliateCode || undefined, // Include affiliate code if present
         }),
       });
 

@@ -11,10 +11,10 @@ import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
 import {
   generateEventID,
   prepareUserData,
-  getEventSourceURL,
   extractFBCFromRequest,
   extractFBPFromRequest,
 } from "@/utils/tracking/facebook-helpers";
+import { trackAffiliateSignup } from "@/lib/affiliate";
 
 // Registration validation schema
 const registerSchema = z.object({
@@ -29,6 +29,7 @@ const registerSchema = z.object({
       const cleaned = mobile.replace(/\s+/g, "");
       return /^(\+61|61|0)?[4-5]\d{8}$/.test(cleaned);
     }, "Please enter a valid Australian mobile number (e.g., 0412345678 or +61412345678)"),
+  affiliateCode: z.string().optional(),
 });
 
 /**
@@ -121,6 +122,21 @@ export async function POST(request: NextRequest) {
       needsSetup: !newUser.profileSetupCompleted,
     });
 
+    // Track affiliate signup if affiliate code is provided (non-blocking)
+    if (validatedData.affiliateCode) {
+      try {
+        await trackAffiliateSignup({
+          affiliateCode: validatedData.affiliateCode,
+          userId: newUser._id.toString(),
+          userEmail: newUser.email,
+        });
+        console.log(`✅ Affiliate signup tracked: ${validatedData.affiliateCode}`);
+      } catch (affiliateError) {
+        // Non-blocking - log but don't fail registration
+        console.error("Affiliate tracking error:", affiliateError);
+      }
+    }
+
     // Track registration in Klaviyo (non-blocking)
     klaviyo.trackEventBackground(createUserRegisteredEvent(newUser, "email"));
 
@@ -163,8 +179,7 @@ export async function POST(request: NextRequest) {
         };
 
         // Get test event code if in development
-        const testEventCode =
-          process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
 
         const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
         if (apiSuccess) {

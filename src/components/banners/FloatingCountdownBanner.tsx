@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
@@ -13,6 +13,7 @@ interface FloatingCountdownBannerProps {
 
 const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ className = "" }) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false); // For hover/click override
   const [isDismissed, setIsDismissed] = useState(false);
@@ -85,7 +86,13 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
   // Navigate to giveaway page using the default prize slug
   // This ensures we always navigate to an existing promotional page
   const handleViewDetails = () => {
-    router.push(`/promotions/${DEFAULT_PRIZE_SLUG}`);
+    // Preserve affiliate code from URL if present (App Router compatible)
+    const affiliateCode = searchParams.get("aff");
+    const newUrl = affiliateCode 
+      ? `/promotions/${DEFAULT_PRIZE_SLUG}?aff=${affiliateCode}`
+      : `/promotions/${DEFAULT_PRIZE_SLUG}`;
+    
+    router.push(newUrl);
   };
 
   // Don't render if dismissed or not ready

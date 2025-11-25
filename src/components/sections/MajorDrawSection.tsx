@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Users, ArrowRight, Zap, Check } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -29,6 +30,7 @@ interface MajorDrawSectionProps {
 }
 
 export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
+  const searchParams = useSearchParams();
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -217,7 +219,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const prizeSummary = selectedPrize.summary;
   const prizeDescription = selectedPrize.detailedDescription;
 
-  const detailsHref = `/promotions/${activeSlug ?? defaultSlug}`;
+  // Preserve affiliate code from URL if present
+  const affiliateCode = searchParams.get("aff");
+  const detailsHref = affiliateCode 
+    ? `/promotions/${activeSlug ?? defaultSlug}?aff=${affiliateCode}`
+    : `/promotions/${activeSlug ?? defaultSlug}`;
 
   // Helper function to get full label for prize cards
   const getShortLabel = (label: string): string => {

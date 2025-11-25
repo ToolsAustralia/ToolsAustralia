@@ -67,7 +67,7 @@ export default withAuth(
         const { pathname } = req.nextUrl;
 
         // Allow access to public routes
-        const publicRoutes = ["/", "/shop", "/mini-draws", "/partner", "/contact", "/faq", "/winners", "/membership"];
+        const publicRoutes = ["/", "/shop", "/mini-draws", "/partner", "/contact", "/faq", "/winners", "/membership", "/affiliate/login"];
         const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
         if (isPublicRoute) {

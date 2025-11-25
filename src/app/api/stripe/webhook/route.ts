@@ -1471,6 +1471,26 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       // Update Klaviyo profile
       ensureUserProfileSynced(user);
 
+      // ✅ CRITICAL: Process recurring membership commission (non-blocking)
+      // Only process for subscription_cycle (recurring payments), not initial subscription_create
+      if (invoice.billing_reason === "subscription_cycle") {
+        try {
+          const { processMembershipRecurringCommission } = await import("@/utils/affiliate/commission-processing");
+          const invoiceAmount = invoice.amount_paid; // Already in cents
+          const safeInvoiceId = invoice.id ?? invoice.number ?? `invoice_${invoice.created}`;
+
+          await processMembershipRecurringCommission({
+            userId: user._id.toString(),
+            invoiceId: safeInvoiceId,
+            subscriptionId: subscriptionId,
+            purchaseAmount: invoiceAmount,
+          });
+          webhookLog("info", `✅ Recurring membership commission processed for affiliate`);
+        } catch (commissionError) {
+          webhookLog("error", `Affiliate recurring commission error (non-blocking): ${commissionError}`);
+        }
+      }
+
       // ✅ NEW: Add invoice event for upgrades
       if (isUpgrade) {
         try {

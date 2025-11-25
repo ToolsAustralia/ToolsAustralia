@@ -16,6 +16,7 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
+import { useSearchParams } from "next/navigation";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -66,6 +67,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug });
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Countdown timer logic - matches FloatingCountdownBanner and MajorDrawSection
   useEffect(() => {
@@ -100,7 +102,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
   const handleSelectPrize = (nextSlug: string) => {
     if (!nextSlug || nextSlug === activeSlug) return;
-    router.push(`/promotions/${nextSlug}`, { scroll: false });
+
+    // Preserve affiliate code from URL if present (App Router compatible)
+    const affiliateCode = searchParams.get("aff");
+    const newUrl = affiliateCode ? `/promotions/${nextSlug}?aff=${affiliateCode}` : `/promotions/${nextSlug}`;
+
+    router.push(newUrl, { scroll: false });
   };
 
   if (!activePrize) {

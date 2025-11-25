@@ -21,6 +21,7 @@ import {
 } from "@/hooks/queries/useAdminQueries";
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import UsersManagement from "@/components/admin/UsersManagement";
+import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import {
   Users,
   DollarSign,
@@ -581,6 +582,9 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
 
           {/* PROMOS TAB */}
           {selectedTab === "promos" && <PromoManagement />}
+
+          {/* AFFILIATES TAB */}
+          {selectedTab === "affiliates" && <AffiliatesManagement />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (

@@ -186,6 +186,16 @@ export interface IUser extends Document {
     totalEntriesAwarded: number;
   };
 
+  // Affiliate tracking (for users referred by affiliates)
+  // Note: Affiliates are separate from users - this is just a reference link
+  affiliateReferral?: {
+    affiliateId: mongoose.Types.ObjectId; // Links to Affiliate model
+    affiliateCode: string; // Affiliate code used during signup
+    referredAt: Date; // When user was referred
+    firstPurchaseCompleted: boolean; // Whether first purchase has been completed
+    membershipTied: boolean; // Whether membership is permanently tied to affiliate
+  };
+
   // Points Redemption History
   redemptionHistory?: Array<{
     redemptionId?: string | null;
@@ -760,6 +770,30 @@ const UserSchema = new Schema<IUser>(
         type: Number,
         default: 0,
         min: [0, "Total referral entries cannot be negative"],
+      },
+    },
+
+    // Affiliate tracking (for users referred by affiliates)
+    affiliateReferral: {
+      affiliateId: {
+        type: Schema.Types.ObjectId,
+        ref: "Affiliate",
+      },
+      affiliateCode: {
+        type: String,
+        trim: true,
+        uppercase: true,
+      },
+      referredAt: {
+        type: Date,
+      },
+      firstPurchaseCompleted: {
+        type: Boolean,
+        default: false,
+      },
+      membershipTied: {
+        type: Boolean,
+        default: false,
       },
     },
 

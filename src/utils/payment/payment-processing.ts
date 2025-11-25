@@ -32,6 +32,7 @@ const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProce
 interface UserDocument {
   _id: { toString: () => string };
   email: string;
+  stripeSubscriptionId?: string;
   accumulatedEntries?: number;
   rewardsPoints?: number;
   oneTimePackages?: Array<{
@@ -546,6 +547,52 @@ async function grantBenefits(
   } catch (pixelError) {
     console.error("❌ Pixel tracking failed (non-blocking):", pixelError);
     // Don't throw - pixel tracking should not break purchase flow
+  }
+
+  // ✅ CRITICAL: Process affiliate commissions (non-blocking, only on successful payments)
+  // This function is ONLY called from webhook handlers, ensuring payment success
+  if (paymentIntentId) {
+    try {
+      // Import commission processing functions dynamically to avoid circular dependencies
+      const {
+        processOneTimePackageCommission,
+        processUpsellCommission,
+        processMembershipFirstCommission,
+        processMembershipUpsellCommission,
+      } = await import("@/utils/affiliate/commission-processing");
+
+      if (packageData.packageType === "one-time") {
+        await processOneTimePackageCommission({
+          userId: user._id.toString(),
+          packageId: packageData.packageId || "",
+          packageName: packageData.packageName || "",
+          purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+          paymentIntentId: paymentIntentId,
+        });
+      } else if (packageData.packageType === "upsell") {
+        await processUpsellCommission({
+          userId: user._id.toString(),
+          offerId: packageData.packageId || "",
+          offerName: packageData.packageName || "",
+          purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+          paymentIntentId: paymentIntentId,
+        });
+      } else if (packageData.packageType === "subscription") {
+        // Get subscription ID from user
+        const subscriptionId = user.stripeSubscriptionId || "";
+        await processMembershipFirstCommission({
+          userId: user._id.toString(),
+          packageId: packageData.packageId || "",
+          packageName: packageData.packageName || "",
+          purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+          paymentIntentId: paymentIntentId,
+          subscriptionId,
+        });
+      }
+    } catch (commissionError) {
+      // Non-blocking - log but don't fail payment processing
+      console.error("❌ Affiliate commission processing error (non-blocking):", commissionError);
+    }
   }
 
   // Save user
@@ -1200,9 +1247,7 @@ async function addToMiniDraw(
 
       if (packageData.entries > remainingEntries) {
         console.warn(
-          `⚠️ Mini draw ${miniDraw.name} only has ${remainingEntries} entries remaining. Skipping allocation of ${
-            packageData.entries
-          } entries.`
+          `⚠️ Mini draw ${miniDraw.name} only has ${remainingEntries} entries remaining. Skipping allocation of ${packageData.entries} entries.`
         );
         return;
       }

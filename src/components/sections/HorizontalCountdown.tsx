@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
@@ -12,6 +12,7 @@ interface HorizontalCountdownProps {
 
 const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "" }) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -56,7 +57,13 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
   }, [currentMajorDraw]);
 
   const handleViewDetails = () => {
-    router.push(`/promotions/${DEFAULT_PRIZE_SLUG}`);
+    // Preserve affiliate code from URL if present (App Router compatible)
+    const affiliateCode = searchParams.get("aff");
+    const newUrl = affiliateCode 
+      ? `/promotions/${DEFAULT_PRIZE_SLUG}?aff=${affiliateCode}`
+      : `/promotions/${DEFAULT_PRIZE_SLUG}`;
+    
+    router.push(newUrl);
   };
 
   // Don't show loading spinner - render with 0 values for better UX

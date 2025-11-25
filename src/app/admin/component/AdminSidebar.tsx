@@ -16,6 +16,7 @@ import {
   FileText as FileTextIcon,
   Users,
   Zap,
+  UserCheck,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -99,6 +100,11 @@ const adminTabs = [
     id: "promos",
     label: "Promos",
     icon: Zap,
+  },
+  {
+    id: "affiliates",
+    label: "Affiliates",
+    icon: UserCheck,
   },
   // Temporarily hidden - no content yet
   // {

@@ -9,10 +9,10 @@ export const metadata: Metadata = {
 
 export default async function TermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
-  
+
   // Get CSP nonce from request headers (set by middleware in production)
   const nonce = await getNonce();
-  
+
   return (
     <>
       <BreadcrumbJsonLd
@@ -27,14 +27,12 @@ export default async function TermsPage() {
         <div className="mx-auto flex max-w-5xl flex-col gap-12 px-4 sm:px-6 lg:px-8 text-sm leading-relaxed sm:text-base">
           <header>
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-red-500">Terms &amp; Conditions</p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl lg:text-5xl">Tools Australia Terms and Conditions</h1>
+
             <p className="mt-4 max-w-3xl text-gray-300 sm:text-base">
-              Welcome to Tools Australia (also referred to as “Tools Australia Pty Ltd”, “we”, “us”, or “our”). These
-              Terms and Conditions (“Terms”) govern your use of our website, memberships, giveaways, and associated
-              services. By accessing our site or purchasing any membership or entry package, you agree to be bound by
-              these Terms and the policies referenced here.
+              Welcome to Tools Australia (referred to as &quot;Tools Australia&quot;, &quot;we&quot;, &quot;us&quot;, or
+              &quot;our&quot;). By accessing or using our website, services, or purchasing a membership, you agree to be
+              bound by these Terms and Conditions (&quot;Terms&quot;). Please read them carefully.
             </p>
-            <p className="mt-2 text-xs text-gray-400 sm:text-sm">Last updated: 13 November 2025</p>
           </header>
 
           {/* 1. Company Information */}
@@ -46,18 +44,14 @@ export default async function TermsPage() {
             <div className="grid gap-2 text-gray-300 sm:grid-cols-[max-content,1fr]">
               <span className="font-semibold text-white">Name:</span>
               <span>Tools Australia Pty Ltd</span>
-              <span className="font-semibold text-white">ABN:</span>
-              <span>54 690 397 061</span>
-              <span className="font-semibold text-white">ACN:</span>
-              <span>690 397 061</span>
+              <span className="font-semibold text-white">Registered Address:</span>
+              <span>6A Aylesbury Crescent, Gladstone Park, VIC 3043</span>
               <span className="font-semibold text-white">Website:</span>
               <span>
                 <a className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline" href={baseUrl}>
-                  {baseUrl}
+                  https://www.toolsaustralia.com.au
                 </a>
               </span>
-              <span className="font-semibold text-white">Competition Licence:</span>
-              <span>TP/04720</span>
               <span className="font-semibold text-white">Email:</span>
               <span>
                 <a
@@ -67,354 +61,521 @@ export default async function TermsPage() {
                   hello@toolsaustralia.com.au
                 </a>
               </span>
+              <span className="font-semibold text-white">Last Updated:</span>
+              <span>25/11/2025</span>
             </div>
           </section>
 
           {/* 2. Eligibility */}
           <section id="eligibility" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
             <h2 className="text-2xl font-semibold text-white">2. Eligibility</h2>
-            <p className="text-gray-300">To become a Tools Australia member or entry holder you must:</p>
+            <p className="text-gray-300">To become a member of Tools Australia, you must:</p>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>Be at least 18 years of age.</li>
-              <li>Be a legal resident of Australia.</li>
-              <li>Agree to comply with these Terms and all applicable laws and regulations.</li>
+              <li>Be at least 18 years old</li>
+              <li>Be a legal resident of Australia</li>
+              <li>Agree to comply with these Terms and all applicable laws and regulations</li>
             </ul>
             <p className="text-gray-300">
-              <span className="font-semibold text-white">Exclusions:</span> Memberships and competition entries are
-              unavailable to residents of the Australian Capital Territory (ACT) and South Australia (SA) due to permit
-              restrictions. It is your responsibility to check local eligibility prior to purchasing. By proceeding you
-              confirm that you are eligible to participate.
+              <span className="font-semibold text-white">Exclusions:</span>
+            </p>
+            <p className="text-gray-300">
+              This offer is available to residents of all Australian states and territories excluding the Australian
+              Capital Territory (ACT) and South Australia (SA), due to applicable permit restrictions. It is the sole
+              responsibility of the customer to consult their respective state or territory&apos;s eligibility
+              requirements prior to making a purchase. By proceeding with a purchase, the customer acknowledges that
+              they have read, understood, and accepted these terms, and confirms their eligibility to participate.
             </p>
           </section>
 
-          {/* 3. Membership Types */}
+          {/* 3. Membership Types and Packages */}
           <section id="membership-types" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">3. Membership Types</h2>
+            <h2 className="text-2xl font-semibold text-white">3. Membership Types and Packages</h2>
             <p className="text-gray-300">
-              Tools Australia offers three membership products. Full details, including entry counts and pricing, are
-              displayed at purchase and confirmed by email.
+              Tools Australia offers two types of packages that provide entries into trade promotions and giveaways:
             </p>
             <div className="space-y-4 text-gray-300">
               <div>
-                <h3 className="text-xl font-semibold text-white">a. Major Giveaway One-Time Packages</h3>
+                <h3 className="text-xl font-semibold text-white">a. One-Time Packages:</h3>
                 <ul className="list-inside list-disc space-y-2">
-                  <li>Single purchase providing entries into the current monthly Major Giveaway only.</li>
-                  <li>Includes access to member discounts for the advertised period.</li>
-                  <li>Entries are credited immediately upon successful payment.</li>
-                  <li>Does not include entries into Mini Draw competitions.</li>
+                  <li>
+                    Single purchase providing entries into both Major Giveaway Competitions and Mini Draw Competitions
+                  </li>
+                  <li>
+                    Available in five tiers: Apprentice Pack, Tradie Pack, Foreman Pack, Boss Pack, and Power Pack
+                  </li>
+                  <li>Access to member discounts for specified period</li>
+                  <li>Entries credited immediately upon payment</li>
+                  <li>Valid for the current competition period as specified at time of purchase</li>
+                  <li>Entries do not carry forward to subsequent competition periods</li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">b. Mini Draw One-Time Packages</h3>
+                <h3 className="text-xl font-semibold text-white">b. Membership Packages (Monthly Subscription):</h3>
                 <ul className="list-inside list-disc space-y-2">
-                  <li>Single purchase providing entries into the specific Mini Draw nominated at checkout.</li>
-                  <li>Includes access to member discounts for the advertised period.</li>
-                  <li>Entries are credited immediately upon payment and only apply to that Mini Draw.</li>
-                  <li>Clearly labelled as “Mini Draw” at checkout and in the confirmation email.</li>
-                  <li>Does not include entries into Major Giveaway competitions.</li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">c. Member Packages (Monthly Subscription)</h3>
-                <ul className="list-inside list-disc space-y-2">
-                  <li>Recurring membership tiers (Tradie, Foreman, Boss) billed monthly per giveaway cycle.</li>
-                  <li>Provide recurring entries into both Major Giveaway and Mini Draw competitions.</li>
-                  <li>Include ongoing access to partner discounts, member offers, and loyalty benefits.</li>
-                  <li>“Per giveaway” means per calendar month unless otherwise stated.</li>
+                  <li>Recurring monthly billing available in three tiers: Tradie, Foreman, and Boss</li>
+                  <li>
+                    Provide monthly accumulated entries into both Major Giveaway Competitions and Mini Draw Competitions
+                  </li>
+                  <li>Ongoing access to member discounts and benefits</li>
+                  <li>&quot;Per giveaway&quot; means per calendar month</li>
                 </ul>
               </div>
             </div>
             <p className="text-gray-300">
-              One-Time Packages are competition-specific and do not transfer between Major Giveaways and Mini Draws.
-              Member Package entries apply to both competition types while the subscription remains active.
+              <strong>Package Details:</strong> Entry numbers, pricing, and benefits for each package type are displayed
+              on the website at time of purchase and confirmed via email.
             </p>
-          </section>
-
-          {/* 4. Membership Fees and Billing */}
-          <section id="billing" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">4. Membership Fees and Billing</h2>
-            <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>
-                Membership fees are displayed on our website and are non-refundable once purchased unless required by
-                law.
-              </li>
-              <li>One-Time Packages are charged once for the specified competition window.</li>
-              <li>
-                Member Packages auto-renew monthly until cancelled via{" "}
-                <a className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline" href="/my-account">
-                  My Account
-                </a>{" "}
-                or by contacting support.
-              </li>
-              <li>You are responsible for keeping payment details up to date.</li>
-              <li>We may adjust membership fees or plan inclusions with reasonable notice to members.</li>
-            </ul>
             <p className="text-gray-300">
-              <span className="font-semibold text-white">Billing exception:</span> If your billing cycle falls on the
-              18th, 19th, or 20th of a month, your renewal will be processed on the 17th to ensure eligibility for the
-              upcoming monthly giveaway.
+              <strong>Important:</strong> One-Time Packages provide entries to both Major Giveaway and Mini Draw
+              competitions for the specified period. Membership Packages provide ongoing monthly entries that apply to
+              both Major Giveaway and Mini Draw competitions. Purchase confirmations clearly specify the number of
+              entries and applicable competition periods.
             </p>
           </section>
 
-          {/* 5. Competition Entries */}
+          {/* 4. Reward Points System */}
+          <section id="reward-points" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">4. Reward Points System</h2>
+            <div className="space-y-4 text-gray-300">
+              <div>
+                <h3 className="text-xl font-semibold text-white">4.1 Earning Reward Points:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>
+                    Members may earn reward points through purchases, referrals, promotional activities, or other means
+                    specified on the website
+                  </li>
+                  <li>
+                    Reward points are credited to member accounts according to the terms specified at the time of
+                    earning
+                  </li>
+                  <li>Points accumulation rates and earning opportunities are displayed on the website and may vary</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">4.2 Redeeming Reward Points:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>
+                    Reward points can be redeemed for entry packages, giveaway participation, or other benefits as
+                    specified on the website
+                  </li>
+                  <li>Redemption values and options are clearly displayed at the time of redemption</li>
+                  <li>
+                    Once redeemed, reward points cannot be reversed except in cases of system error or as required by
+                    law
+                  </li>
+                  <li>Reward points have no cash value and cannot be transferred, sold, or exchanged for cash</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">4.3 Reward Points Expiry and Cancellation:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>
+                    Reward points may expire if account remains inactive for a specified period (details on website)
+                  </li>
+                  <li>Upon membership cancellation, unused reward points are forfeited unless otherwise specified</li>
+                  <li>
+                    Tools Australia reserves the right to adjust, cancel, or modify the reward points program with
+                    reasonable notice to members
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          {/* 5. Membership Fees and Billing */}
+          <section id="billing" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">5. Membership Fees and Billing</h2>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>Membership fees are outlined on our website and are non-refundable once purchased</li>
+              <li>One-Time Packages are charged once for the chosen tier</li>
+              <li>Membership Packages are billed on a recurring monthly basis according to the chosen tier</li>
+              <li>You are responsible for maintaining accurate and up-to-date payment information</li>
+              <li>
+                Tools Australia reserves the right to change membership fees or plans at any time, with reasonable
+                notice provided to members
+              </li>
+            </ul>
+          </section>
+
+          {/* 6. Competition Entries */}
           <section
             id="competition-entries"
             className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
           >
-            <h2 className="text-2xl font-semibold text-white">5. Competition Entries</h2>
+            <h2 className="text-2xl font-semibold text-white">6. Competition Entries</h2>
             <div className="space-y-4 text-gray-300">
               <div>
-                <h3 className="text-xl font-semibold text-white">5.1 Entry Allocation</h3>
+                <h3 className="text-xl font-semibold text-white">6.1 Entry Allocation:</h3>
                 <ul className="list-inside list-disc space-y-2">
-                  <li>Major Giveaway One-Time Packages provide entries for the current Major Giveaway only.</li>
-                  <li>Mini Draw One-Time Packages provide entries for the specified Mini Draw only.</li>
-                  <li>Member Package entries cover both Major Giveaway and Mini Draw competitions each month.</li>
-                  <li>Additional entries may be granted via promotions, referrals, or free entry pathways.</li>
+                  <li>
+                    One-Time Packages: Entries for both Major Giveaway and Mini Draw competitions for the specified
+                    period
+                  </li>
+                  <li>
+                    Membership Packages: Monthly accumulated entries apply to both Major Giveaway and Mini Draw
+                    competitions
+                  </li>
+                  <li>
+                    Additional entries may be offered via promotions, referrals, reward points redemption, or free entry
+                    methods
+                  </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">5.2 Entry Limits</h3>
-                <p>Entry limits are detailed in the specific competition terms and conditions published on our site.</p>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">5.3 Entry Validity</h3>
+                <h3 className="text-xl font-semibold text-white">6.2 Entry Limits:</h3>
                 <ul className="list-inside list-disc space-y-2">
-                  <li>Member Package entries continue month to month while the subscription is active.</li>
-                  <li>One-Time Package entries do not roll over and expire with the designated competition.</li>
-                  <li>If you cancel a membership, credited entries remain valid for the current draw only.</li>
-                  <li>Suspended memberships may be eligible for entry restoration under section 5.10.</li>
+                  <li>Entry limits specified in each competition&apos;s terms and conditions</li>
+                  <li>Mini Draws may have capped entry limits. Once reached, the draw closes to new entries</li>
+                  <li>Maximum entries per member may apply as specified in competition-specific terms</li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">5.4 Repeat Winner Restriction</h3>
+                <h3 className="text-xl font-semibold text-white">6.3 Entry Validity:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>
+                    Membership Package entries are accumulated monthly and carried forward as long as the subscription
+                    remains active
+                  </li>
+                  <li>
+                    One-Time Package entries do not carry forward to subsequent competition periods and are valid only
+                    for the period specified at time of purchase
+                  </li>
+                  <li>
+                    Upon membership cancellation or suspension, entries already credited remain valid for the current
+                    competition period only
+                  </li>
+                  <li>
+                    Suspended memberships may be eligible for entry restoration upon re-activation in accordance with
+                    Section 6.10
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">6.4 Repeat Winner Restriction:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>
+                    First Prize Winners cannot win another Tools Australia major giveaway for 10 months from date of win
+                  </li>
+                  <li>May still enter but entries ineligible for major prize selection during exclusion period</li>
+                  <li>
+                    Mini Draw prizes may have different repeat winner restrictions as specified in competition-specific
+                    terms
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">6.5 Employee Exclusion:</h3>
                 <p>
-                  First prize winners are ineligible to win another Tools Australia giveaway for 10 months from the win
-                  date. Entries may still be placed but will not be selected during the exclusion period.
+                  Tools Australia employees and immediate family (spouse, de facto partner, child, sibling) ineligible.
                 </p>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">5.5 Employee Exclusion</h3>
+                <h3 className="text-xl font-semibold text-white">6.6 Entry Adjustments:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>Tools Australia may adjust entries to correct errors or as compensation</li>
+                  <li>Where feasible, errors rectified rather than entries cancelled</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">6.7 Competition Disruption:</h3>
                 <p>
-                  Employees of Tools Australia and their immediate family members (spouse, de facto partner, child,
-                  sibling) are not eligible to enter our competitions.
+                  If competition is impacted by system failure or force majeure, Tools Australia may re-run using
+                  existing entries or transfer entries to equivalent future competition.
                 </p>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">5.6 Entry Adjustments</h3>
-                <p>
-                  We may adjust entries to correct errors or as part of goodwill gestures. Wherever practical, we will
-                  rectify errors rather than cancel entries.
-                </p>
+                <h3 className="text-xl font-semibold text-white">6.8 Competition-Specific Terms:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>Each competition has separate terms and conditions</li>
+                  <li>Review competition-specific terms in addition to these general terms</li>
+                  <li>Mini Draws may have specific entry caps and closure conditions</li>
+                </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">5.7 Competition Disruption</h3>
+                <h3 className="text-xl font-semibold text-white">6.9 Technical Failures and Notification Delays:</h3>
                 <p>
-                  If a competition is disrupted by a system failure, force majeure, or similar event, we may re-run the
-                  draw using existing entries or transfer entries to a comparable future competition.
+                  Tools Australia is not liable for any delays or failures in sending notifications, communications, or
+                  promotional messages (including SMS, email, or website notifications) due to technical issues, system
+                  failures, third-party service provider failures, or circumstances beyond Tools Australia&apos;s
+                  reasonable control. This includes but is not limited to:
                 </p>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">5.8 Competition-Specific Terms</h3>
-                <p>
-                  Each competition has its own terms. You must review the relevant competition rules in addition to
-                  these general Terms.
-                </p>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">5.9 Technical Failures and Notification Delays</h3>
-                <p>
-                  We are not liable for delays or failures in sending notifications or promotional messages caused by
-                  technical issues, system outages, or third-party service disruptions. We will make reasonable efforts
-                  to resolve issues and contact affected members. For assistance, email{" "}
+                <ul className="list-inside list-disc space-y-2 ml-4">
+                  <li>Delayed delivery of winner notifications</li>
+                  <li>Promotional messages sent outside the intended promotion period</li>
+                  <li>System downtime affecting communications</li>
+                  <li>Third-party messaging service failures</li>
+                </ul>
+                <p className="mt-2">
+                  In such circumstances, Tools Australia will make reasonable efforts to rectify the issue and
+                  communicate with affected members. Where notifications are delayed due to technical failure, Tools
+                  Australia reserves the right to extend deadlines or make alternative arrangements on a case-by-case
+                  basis to ensure fairness. Members affected by such technical issues should contact{" "}
                   <a
                     className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                    href="mailto:hello@toolsaustralia.com.au"
+                    href="mailto:info@toolsaustralia.com.au"
                   >
-                    hello@toolsaustralia.com.au
-                  </a>
-                  .
+                    info@toolsaustralia.com.au
+                  </a>{" "}
+                  for assistance.
                 </p>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">5.10 Entry Restoration for Reactivated Memberships</h3>
+                <h3 className="text-xl font-semibold text-white">
+                  6.10 Entry Restoration for Re-activated Memberships:
+                </h3>
                 <p>
-                  If a Member Package is suspended due to payment failure and reactivated within 90 days, standard
-                  monthly entries may be restored at our discretion. Restoration requires payment verification, good
-                  account standing, and a request within 7 days of reactivation. Promotional or One-Time Package entries
-                  are not eligible. We may refuse restoration in cases of repeated payment issues, suspected fraud, or
-                  misuse.
+                  If a Membership Package subscription is suspended due to payment failure and subsequently re-activated
+                  within 90 days:
+                </p>
+                <ul className="list-inside list-disc space-y-2 ml-4">
+                  <li>
+                    Monthly accumulated entries that would have been credited during the suspension period may be
+                    restored at Tools Australia&apos;s discretion
+                  </li>
+                  <li>Restoration is subject to verification of payment and account standing</li>
+                  <li>
+                    Requests for entry restoration must be made within 7 days of re-activation via{" "}
+                    <a
+                      className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                      href="mailto:info@toolsaustralia.com.au"
+                    >
+                      info@toolsaustralia.com.au
+                    </a>
+                  </li>
+                  <li>
+                    Restoration applies only to standard monthly accumulated entries, not promotional or bonus entries
+                  </li>
+                  <li>One-Time Package entries are not eligible for restoration</li>
+                  <li>Entry restoration is processed within 48 hours of approval</li>
+                </ul>
+                <p className="mt-2">
+                  Tools Australia reserves the right to decline restoration in cases of repeated payment failures (more
+                  than two suspensions within 12 months), suspected fraud, or abuse of this policy.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* 6. Cancellation and Termination */}
+          {/* 7. Cancellation and Termination */}
           <section id="cancellation" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">6. Cancellation and Termination</h2>
+            <h2 className="text-2xl font-semibold text-white">7. Cancellation and Termination</h2>
             <div className="space-y-4 text-gray-300">
               <div>
-                <h3 className="text-xl font-semibold text-white">6.1 Cancellation by You</h3>
-                <p>
-                  You may cancel a Member Package at any time via your account settings. Cancellation takes effect at
-                  the end of the current billing period. Fees already paid are non-refundable except as required by law.
-                  Entries already credited remain valid for the current draw.
-                </p>
+                <h3 className="text-xl font-semibold text-white">Membership Package Cancellation by You:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>Cancel anytime via account settings on the website</li>
+                  <li>Takes effect end of current billing period</li>
+                  <li>No refunds for unused portion</li>
+                  <li>Entries for current competition period remain valid</li>
+                  <li>Unused reward points are forfeited upon cancellation</li>
+                </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.2 Termination by Tools Australia</h3>
-                <p>
-                  We may suspend or terminate access for breach of these Terms, suspected fraud, or non-payment. Severe
-                  breaches may result in immediate termination. No refunds are provided unless required by law.
-                </p>
+                <h3 className="text-xl font-semibold text-white">Termination by Tools Australia:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>For breach of terms, fraud, non-payment, or undermining competition integrity</li>
+                  <li>Immediate termination for serious breach; otherwise reasonable notice provided</li>
+                  <li>All access disabled upon termination</li>
+                  <li>No refunds except as required by law</li>
+                </ul>
               </div>
             </div>
           </section>
 
-          {/* 7. Intellectual Property */}
+          {/* 8. Intellectual Property */}
           <section
             id="intellectual-property"
             className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
           >
-            <h2 className="text-2xl font-semibold text-white">7. Intellectual Property</h2>
-            <p className="text-gray-300">
-              All website content, branding, graphics, and copy are owned or licensed by Tools Australia. You may use
-              this content for personal, non-commercial purposes only. You must not reproduce, distribute, or modify our
-              content without written permission. By submitting reviews, testimonials, or user-generated content, you
-              grant us a royalty-free licence to use that content in marketing and promotional materials.
-            </p>
+            <h2 className="text-2xl font-semibold text-white">8. Intellectual Property</h2>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>All website content owned by Tools Australia or licensed to Tools Australia</li>
+              <li>Limited license for personal, non-commercial use only</li>
+              <li>No reproduction, distribution, or modification without written permission</li>
+              <li>
+                Submitted content (photos, testimonials) grants Tools Australia royalty-free license for promotional use
+              </li>
+            </ul>
           </section>
 
-          {/* 8. Acceptable Use */}
+          {/* 9. Acceptable Use */}
           <section id="acceptable-use" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">8. Acceptable Use</h2>
+            <h2 className="text-2xl font-semibold text-white">9. Acceptable Use</h2>
+            <p className="text-gray-300">You must not:</p>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>Use services for unlawful purposes</li>
+              <li>Access systems without authorization</li>
+              <li>Use automated means (bots, scripts) to access site or manipulate entries</li>
+              <li>Create multiple accounts to circumvent entry limits</li>
+              <li>Engage in fraud or misrepresentation</li>
+              <li>Interfere with site operation</li>
+              <li>Abuse the reward points system or attempt to exploit system vulnerabilities</li>
+            </ul>
             <p className="text-gray-300">
-              You must not engage in unlawful activity, tamper with systems, exploit automated tools to gain entries, or
-              create multiple accounts to bypass limits. Any suspected fraud or abuse may result in suspension or
-              termination. Please notify us immediately if you believe your account has been compromised.
+              You are responsible for account security. Notify us immediately of unauthorized access.
             </p>
           </section>
 
-          {/* 9. Privacy */}
+          {/* 10. Privacy */}
           <section id="privacy" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">9. Privacy</h2>
-            <p className="text-gray-300">
-              Personal information is managed in accordance with our{" "}
-              <a className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline" href="/privacy">
-                Privacy Policy
-              </a>{" "}
-              and the Privacy Act 1988 (Cth). To access, correct, or delete your personal information, contact{" "}
-              <a
-                className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="mailto:hello@toolsaustralia.com.au"
-              >
-                hello@toolsaustralia.com.au
-              </a>
-              .
-            </p>
+            <h2 className="text-2xl font-semibold text-white">10. Privacy</h2>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>Personal information handled per Privacy Act 1988 (Cth)</li>
+              <li>
+                Collected information: name, contact details, payment information, account activity, reward points
+                balance
+              </li>
+              <li>
+                Used for: service provision, competition administration, payment processing, communications, reward
+                points management
+              </li>
+              <li>
+                May be shared with third-party providers for payment processing, prize fulfillment, draw conduct, or
+                compliance
+              </li>
+              <li>Retained only as long as necessary for service provision and legal obligations</li>
+              <li>
+                Your rights: access, correct, or request deletion via{" "}
+                <a
+                  className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                  href="mailto:hello@toolsaustralia.com.au"
+                >
+                  hello@toolsaustralia.com.au
+                </a>
+              </li>
+              <li>
+                Full Privacy Policy available at{" "}
+                <a
+                  className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                  href="https://www.toolsaustralia.com.au/privacy"
+                >
+                  https://www.toolsaustralia.com.au/privacy
+                </a>
+              </li>
+            </ul>
           </section>
 
-          {/* 10. Third-Party Links */}
+          {/* 11. Third-Party Links and Suppliers */}
           <section id="third-parties" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">10. Third-Party Links and Suppliers</h2>
-            <p className="text-gray-300">
-              Our site may contain links to third-party websites or offer products fulfilled by partner suppliers. We do
-              not control these third parties and are not responsible for their content or services, except where
-              liability cannot be excluded under Australian Consumer Law.
-            </p>
+            <h2 className="text-2xl font-semibold text-white">11. Third-Party Links and Suppliers</h2>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>Site may link to third-party websites not controlled by Tools Australia</li>
+              <li>Tools Australia not responsible for third-party content, policies, or practices</li>
+              <li>Some prizes provided by third-party suppliers</li>
+              <li>
+                Tools Australia not responsible for third-party supplier issues beyond reasonable control, except where
+                liability cannot be excluded under Australian Consumer Law
+              </li>
+            </ul>
           </section>
 
-          {/* 11. Disclaimers and Liability */}
+          {/* 12. Disclaimers and Liability */}
           <section id="liability" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">11. Disclaimers and Liability</h2>
+            <h2 className="text-2xl font-semibold text-white">12. Disclaimers and Liability</h2>
             <p className="text-gray-300">
-              Our services are provided “as is” and “as available”. To the extent permitted by law, we exclude liability
-              for indirect, incidental, or consequential loss. Nothing in these Terms limits or excludes your rights
-              under the Australian Consumer Law. Where liability cannot be excluded, our total aggregate liability is
-              limited to the amount you paid to Tools Australia in the preceding 12 months.
+              Services provided &quot;as is&quot; without warranties. Tools Australia not liable for indirect,
+              incidental, or consequential damages, except where liability cannot be excluded by law.
+            </p>
+            <p className="text-gray-300">
+              <strong>Australian Consumer Law:</strong> Nothing in these terms limits, excludes, or modifies consumer
+              guarantees, rights, or remedies under Competition and Consumer Act 2010 (Cth) or Australian Consumer Law
+              that cannot be lawfully excluded.
+            </p>
+            <p className="text-gray-300">
+              <strong>Maximum Liability:</strong> Tools Australia&apos;s total liability limited to amount paid by you
+              in preceding 12 months, except where prohibited by law.
             </p>
           </section>
 
-          {/* 12. Responsible Participation */}
+          {/* 13. Responsible Participation */}
           <section
             id="responsible-participation"
             className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
           >
-            <h2 className="text-2xl font-semibold text-white">12. Responsible Participation</h2>
-            <p className="text-gray-300">
-              Competitions involve chance. Please participate responsibly and only spend what you can afford. For help,
-              contact Gambling Help on 1800 858 858 or email{" "}
-              <a
-                className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="mailto:hello@toolsaustralia.com.au"
-              >
-                hello@toolsaustralia.com.au
-              </a>{" "}
-              to request self-exclusion.
-            </p>
-          </section>
-
-          {/* 13. Tax */}
-          <section id="tax" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">13. Tax</h2>
-            <p className="text-gray-300">
-              Winners are solely responsible for any tax implications associated with receiving prizes or rewards. We
-              recommend obtaining independent tax advice.
-            </p>
-          </section>
-
-          {/* 14. Force Majeure */}
-          <section id="force-majeure" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">14. Force Majeure</h2>
-            <p className="text-gray-300">
-              We are not liable for delays or failures to perform obligations due to events beyond our reasonable
-              control, including natural disasters, pandemics, government restrictions, power or communications outages,
-              supply chain interruptions, or failures by third-party service providers.
-            </p>
-          </section>
-
-          {/* 15. Governing Law */}
-          <section id="governing-law" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">15. Governing Law and Dispute Resolution</h2>
-            <p className="text-gray-300">
-              These Terms are governed by the laws of the Commonwealth of Australia and the State of Victoria. Any
-              dispute will be submitted to binding arbitration in accordance with the rules of the Australian Commercial
-              Arbitration Centre. Nothing limits your rights to seek relief through applicable consumer protection
-              bodies.
-            </p>
-          </section>
-
-          {/* 16. Amendments */}
-          <section id="amendments" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">16. Amendments</h2>
-            <p className="text-gray-300">
-              We may amend these Terms at any time. Updated Terms take effect when posted on our website. Continued use
-              after updates constitutes acceptance of the revised Terms. For significant changes, we will provide
-              reasonable notice via email or in-app notification.
-            </p>
-          </section>
-
-          {/* 17. Acknowledgment */}
-          <section id="acknowledgment" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">17. Acknowledgment</h2>
-            <p className="text-gray-300">
-              By purchasing or using Tools Australia memberships, entries, or services you acknowledge that:
-            </p>
+            <h2 className="text-2xl font-semibold text-white">13. Responsible Participation</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>You have read and agree to these Terms.</li>
-              <li>You meet the eligibility requirements in section 2.</li>
-              <li>Major Giveaway One-Time Packages and Mini Draw One-Time Packages are competition-specific.</li>
-              <li>Member Package entries apply to both Major Giveaway and Mini Draw competitions.</li>
-              <li>You are responsible for maintaining accurate contact and payment details.</li>
+              <li>Competitions involve chance; prizes not guaranteed</li>
+              <li>Only spend what you can afford</li>
+              <li>
+                Assistance available: Gambling Help 1800 858 858 or{" "}
+                <a
+                  className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                  href="mailto:hello@toolsaustralia.com.au"
+                >
+                  hello@toolsaustralia.com.au
+                </a>{" "}
+                for self-exclusion options
+              </li>
+              <li>Tools Australia may implement purchase limits at discretion</li>
+            </ul>
+          </section>
+
+          {/* 14. Tax */}
+          <section id="tax" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">14. Tax</h2>
+            <p className="text-gray-300">
+              Winners solely responsible for any tax obligations. Seek independent tax advice.
+            </p>
+          </section>
+
+          {/* 15. Force Majeure */}
+          <section id="force-majeure" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">15. Force Majeure</h2>
+            <p className="text-gray-300">
+              Tools Australia is not liable for failure due to events beyond reasonable control (natural disasters,
+              pandemic, government restrictions, system failures, third-party service failures, telecommunications or
+              internet disruptions, etc.).
+            </p>
+          </section>
+
+          {/* 16. Governing Law and Dispute Resolution */}
+          <section id="governing-law" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">16. Governing Law and Dispute Resolution</h2>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>These Terms will be governed by and construed in accordance with the laws of Australia</li>
+              <li>
+                Any disputes arising out of or relating to these Terms will be resolved through binding arbitration in
+                accordance with the rules of the Australian Commercial Arbitration Centre
+              </li>
+            </ul>
+          </section>
+
+          {/* 17. Amendments */}
+          <section id="amendments" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">17. Amendments</h2>
+            <p className="text-gray-300">
+              Tools Australia reserves the right to amend these Terms at any time by posting the amended Terms on the
+              website. Your continued use of the Service after the posting of amended Terms constitutes your acceptance
+              of the amendments.
+            </p>
+          </section>
+
+          {/* 18. Acknowledgment */}
+          <section id="acknowledgment" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
+            <h2 className="text-2xl font-semibold text-white">18. Acknowledgment</h2>
+            <p className="text-gray-300">By purchasing or using Tools Australia services, you confirm:</p>
+            <ul className="list-inside list-disc space-y-2 text-gray-300">
+              <li>You have read and agree to these terms</li>
+              <li>You meet eligibility requirements</li>
+              <li>
+                You understand One-Time Packages provide entries to both Major Giveaway and Mini Draw competitions for
+                the specified period
+              </li>
+              <li>
+                You understand Membership Package entries are accumulated monthly and apply to both Major Giveaway and
+                Mini Draw competitions
+              </li>
+              <li>You understand the reward points system and redemption terms</li>
+              <li>You are responsible for maintaining accurate contact details</li>
             </ul>
             <p className="text-gray-300">
-              For any questions or clarifications, please contact us at{" "}
+              For questions:{" "}
               <a
                 className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
                 href="mailto:hello@toolsaustralia.com.au"
               >
                 hello@toolsaustralia.com.au
               </a>
-              .
             </p>
           </section>
         </div>
