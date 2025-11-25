@@ -1,6 +1,6 @@
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
-import AffiliateCommission, { CommissionType } from "@/models/AffiliateCommission";
+import AffiliateCommission from "@/models/AffiliateCommission";
 import User from "@/models/User";
 import { calculateCommission, COMMISSION_RATE } from "@/lib/affiliate";
 import mongoose from "mongoose";
@@ -25,23 +25,27 @@ export async function processOneTimePackageCommission({
   await connectDB();
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral) {
+  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
     return null; // No affiliate referral, no commission
-  }
-
-  // Check if this is the first one-time package purchase
-  // We need to check BEFORE this purchase was added, so we check if user has any previous packages
-  // The webhook processes after the package is added, so we check if there are more than 0 packages
-  // Actually, we should check the purchase history - if user already has one-time packages, this isn't first
-  const hasPreviousOneTimePurchase =
-    user.oneTimePackages && user.oneTimePackages.length > 0;
-  if (hasPreviousOneTimePurchase) {
-    // Not first purchase, no commission
-    return null;
   }
 
   const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
+
+  // Check if this is the first one-time package purchase
+  // Since the webhook processes AFTER the package is added, we check if there's already
+  // a commission record for a different payment intent (indicating a previous purchase)
+  const existingPreviousCommission = await AffiliateCommission.findOne({
+    affiliateId,
+    referredUserId,
+    commissionType: "one-time-package",
+    stripePaymentIntentId: { $ne: paymentIntentId }, // Different payment intent
+  });
+
+  if (existingPreviousCommission) {
+    // Not first purchase, no commission
+    return null;
+  }
 
   // Check if commission already exists for this payment
   const existingCommission = await AffiliateCommission.findOne({
@@ -115,21 +119,28 @@ export async function processUpsellCommission({
   await connectDB();
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral) {
+  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
     return null;
-  }
-
-  // Check if this is the first upsell purchase
-  // Check if user has any previous upsell purchases
-  const hasPreviousUpsell = user.upsellPurchases && user.upsellPurchases.length > 0;
-  if (hasPreviousUpsell) {
-    return null; // Not first upsell, no commission
   }
 
   const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  // Check if commission already exists
+  // Check if this is the first upsell purchase
+  // Since the webhook processes AFTER the upsell is added, we check if there's already
+  // a commission record for a different payment intent (indicating a previous purchase)
+  const existingPreviousCommission = await AffiliateCommission.findOne({
+    affiliateId,
+    referredUserId,
+    commissionType: "upsell",
+    stripePaymentIntentId: { $ne: paymentIntentId }, // Different payment intent
+  });
+
+  if (existingPreviousCommission) {
+    return null; // Not first upsell, no commission
+  }
+
+  // Check if commission already exists for this payment
   const existingCommission = await AffiliateCommission.findOne({
     affiliateId,
     referredUserId,
@@ -194,21 +205,27 @@ export async function processMembershipFirstCommission({
   await connectDB();
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral) {
+  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
     return null;
-  }
-
-  // Check if user already has an active membership
-  // If they do, this is not the first membership
-  const hasActiveMembership = user.subscription?.isActive;
-  if (hasActiveMembership) {
-    return null; // Not first membership, no commission
   }
 
   const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  // Check if commission already exists
+  // Check if this is the first membership purchase
+  // Check if there's already a commission record for membership-first (indicating previous membership)
+  const existingPreviousCommission = await AffiliateCommission.findOne({
+    affiliateId,
+    referredUserId,
+    commissionType: "membership-first",
+    stripePaymentIntentId: { $ne: paymentIntentId }, // Different payment intent
+  });
+
+  if (existingPreviousCommission) {
+    return null; // Not first membership, no commission
+  }
+
+  // Check if commission already exists for this payment
   const existingCommission = await AffiliateCommission.findOne({
     affiliateId,
     referredUserId,
@@ -305,7 +322,7 @@ export async function processMembershipRecurringCommission({
   await connectDB();
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral) {
+  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
     return null;
   }
 
@@ -358,4 +375,3 @@ export async function processMembershipRecurringCommission({
 
   return commission;
 }
-

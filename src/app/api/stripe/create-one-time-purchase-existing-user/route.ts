@@ -5,6 +5,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import { recordReferralPurchase } from "@/lib/referral";
+import { trackAffiliateSignup } from "@/lib/affiliate";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -15,6 +16,7 @@ const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   paymentMethodId: z.string().min(1, "Payment method ID is required").optional(),
   referralCode: z.string().optional(),
+  affiliateCode: z.string().optional(),
 });
 
 /**
@@ -83,13 +85,27 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validatedData = createOneTimePurchaseExistingUserSchema.parse(body);
+    const normalizedAffiliateCode = validatedData.affiliateCode?.trim().toUpperCase();
 
     console.log(`🛒 Creating one-time purchase for existing user: ${session.user.id}`);
 
     // Get the existing user
-    const existingUser = await User.findById(session.user.id);
+    let existingUser = await User.findById(session.user.id);
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (normalizedAffiliateCode && (!existingUser.affiliateReferral || !existingUser.affiliateReferral.affiliateId)) {
+      try {
+        await trackAffiliateSignup({
+          affiliateCode: normalizedAffiliateCode,
+          userId: existingUser._id.toString(),
+          userEmail: existingUser.email,
+        });
+        existingUser = (await User.findById(existingUser._id)) ?? existingUser;
+      } catch (affiliateError) {
+        console.error("Affiliate tracking error during existing-user one-time purchase:", affiliateError);
+      }
     }
 
     // Get the package (check both regular membership packages and mini draw packages)
@@ -214,6 +230,11 @@ export async function POST(request: NextRequest) {
         packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
+        ...(normalizedAffiliateCode
+          ? { affiliateCode: normalizedAffiliateCode }
+          : existingUser.affiliateReferral?.affiliateCode
+          ? { affiliateCode: existingUser.affiliateReferral.affiliateCode }
+          : {}),
       },
     });
 

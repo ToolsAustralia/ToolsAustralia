@@ -213,6 +213,7 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
       type: "upsell",
       packageType: "upsell",
       ...(miniDrawId && { miniDrawId: miniDrawId }), // Include miniDrawId if present
+      affiliateCode: paymentIntent.metadata.affiliateCode,
     }
   );
 
@@ -263,6 +264,7 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       created: paymentIntent.created * 1000, // Convert Stripe timestamp (seconds) to milliseconds
       type: "one-time",
       packageType: "one-time",
+      affiliateCode: paymentIntent.metadata.affiliateCode,
     }
   );
 
@@ -319,6 +321,7 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
       type: "mini-draw",
       packageType: "mini-draw",
       miniDrawId: miniDrawId, // Pass MiniDraw ID to payment processing
+      affiliateCode: paymentIntent.metadata.affiliateCode,
     }
   );
 

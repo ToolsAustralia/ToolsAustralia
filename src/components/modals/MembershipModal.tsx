@@ -922,10 +922,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       try {
         // Get paymentIntentId from status.data or fallback to processing state
         const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
-        
+
         // Determine packageType from status or fallback to activePlan context
-        const packageType = status.data?.packageType || (activePlan.period === "one-time" ? "one-time" : "subscription");
-        
+        const packageType =
+          status.data?.packageType || (activePlan.period === "one-time" ? "one-time" : "subscription");
+
         // Get package details
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
         const packageName = status.data?.packageName || processingPackageName || activePlan.name;
@@ -952,7 +953,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           platform: "tools-australia",
         });
 
-        console.log(`📘 Facebook Pixel: Purchase tracked - $${value} ${currency} (EventID: ${eventID}, packageType: ${packageType})`);
+        console.log(
+          `📘 Facebook Pixel: Purchase tracked - $${value} ${currency} (EventID: ${eventID}, packageType: ${packageType})`
+        );
       } catch (pixelError) {
         console.error("❌ Error tracking Purchase client-side:", pixelError);
         // Non-blocking - continue with success flow
@@ -1655,6 +1658,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             packageId,
             paymentMethodId,
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            affiliateCode: affiliateCode || undefined,
           });
         } else {
           // One-time purchase for existing user using optimistic updates
@@ -1663,6 +1667,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             userId: userData?._id || "",
             paymentMethodId,
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            affiliateCode: affiliateCode || undefined,
           });
         }
 
@@ -1963,6 +1968,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageId,
           paymentMethodId,
           referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+          affiliateCode: affiliateCode || undefined,
         };
 
         console.log("📦 Subscription data:", subscriptionData);

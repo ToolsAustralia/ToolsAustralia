@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import fs from "fs";
 import path from "path";
 import { klaviyo } from "@/lib/klaviyo";
+import { trackAffiliateSignup } from "@/lib/affiliate";
 import {
   createSubscriptionStartedEvent,
   createOneTimePackagePurchasedEvent,
@@ -29,6 +30,13 @@ import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
 
 // Type definitions for better type safety
+type PaymentMetadata = {
+  created?: number;
+  type?: string;
+  packageType?: string;
+  miniDrawId?: string;
+  affiliateCode?: string;
+};
 interface UserDocument {
   _id: { toString: () => string };
   email: string;
@@ -107,7 +115,7 @@ export async function processPaymentBenefits(
     price: number;
   },
   processedBy: "api" | "webhook",
-  paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string }
+  paymentMetadata?: PaymentMetadata
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   // ✅ CRITICAL: Validate input parameters
   console.log(`🔍 processPaymentBenefits called with:`, {
@@ -174,7 +182,7 @@ async function processPaymentBenefitsInternal(
     price: number;
   },
   processedBy: "api" | "webhook",
-  paymentMetadata?: { created?: number; type?: string; packageType?: string }
+  paymentMetadata?: PaymentMetadata
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -188,9 +196,29 @@ async function processPaymentBenefitsInternal(
       const eventId = `BenefitsGranted-${paymentIntentId}`;
 
       // Get user first (required for atomic operation)
-      const user = await User.findById(userId);
+      let user = await User.findById(userId);
       if (!user) {
         throw new Error(`User ${userId} not found`);
+      }
+
+      const metadataAffiliateCode = paymentMetadata?.affiliateCode?.trim().toUpperCase();
+      if (
+        metadataAffiliateCode &&
+        (!user.affiliateReferral || !user.affiliateReferral.affiliateId || !user.affiliateReferral.affiliateCode)
+      ) {
+        try {
+          await trackAffiliateSignup({
+            affiliateCode: metadataAffiliateCode,
+            userId: user._id.toString(),
+            userEmail: user.email,
+          });
+          const refreshedUser = await User.findById(userId);
+          if (refreshedUser) {
+            user = refreshedUser;
+          }
+        } catch (affiliateError) {
+          console.error("Affiliate tracking fallback failed:", affiliateError);
+        }
       }
 
       console.log(`🎯 Processing benefits for payment ${paymentIntentId} via ${processedBy}`);
@@ -554,12 +582,8 @@ async function grantBenefits(
   if (paymentIntentId) {
     try {
       // Import commission processing functions dynamically to avoid circular dependencies
-      const {
-        processOneTimePackageCommission,
-        processUpsellCommission,
-        processMembershipFirstCommission,
-        processMembershipUpsellCommission,
-      } = await import("@/utils/affiliate/commission-processing");
+      const { processOneTimePackageCommission, processUpsellCommission, processMembershipFirstCommission } =
+        await import("@/utils/affiliate/commission-processing");
 
       if (packageData.packageType === "one-time") {
         await processOneTimePackageCommission({

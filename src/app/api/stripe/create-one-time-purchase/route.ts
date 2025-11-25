@@ -5,6 +5,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import { recordReferralPurchase } from "@/lib/referral";
+import { trackAffiliateSignup } from "@/lib/affiliate";
 import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -20,6 +21,7 @@ const createOneTimePurchaseSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
   paymentMethodId: z.string().min(1, "Payment method is required"),
   referralCode: z.string().optional(),
+  affiliateCode: z.string().optional(),
 });
 
 /**
@@ -82,6 +84,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validatedData = createOneTimePurchaseSchema.parse(body);
+    const normalizedAffiliateCode = validatedData.affiliateCode?.trim().toUpperCase();
 
     console.log(`🛒 Creating one-time purchase for: ${validatedData.userEmail}`);
 
@@ -132,6 +135,8 @@ export async function POST(request: NextRequest) {
     // Check if user already exists (from registration)
     console.log("👤 Checking if user already exists...");
     const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
+    const existingAffiliateCode = registeredUser?.affiliateReferral?.affiliateCode;
+    const affiliateMetadataCode = normalizedAffiliateCode || existingAffiliateCode;
 
     // Handle payment method creation following Stripe best practices
     const finalPaymentMethodId = validatedData.paymentMethodId;
@@ -227,6 +232,7 @@ export async function POST(request: NextRequest) {
         packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
+        ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
       },
     });
 
@@ -305,6 +311,20 @@ export async function POST(request: NextRequest) {
 
       await user.save();
       console.log(`✅ Created user account: ${user._id}`);
+    }
+
+    // ✅ Attach affiliate referral if provided and not already set
+    if (normalizedAffiliateCode && user && (!user.affiliateReferral || !user.affiliateReferral.affiliateId)) {
+      try {
+        await trackAffiliateSignup({
+          affiliateCode: normalizedAffiliateCode,
+          userId: user._id.toString(),
+          userEmail: user.email,
+        });
+        user = (await User.findById(user._id)) ?? user;
+      } catch (affiliateError) {
+        console.error("Affiliate tracking error during one-time purchase:", affiliateError);
+      }
     }
 
     // ✅ CRITICAL: Handle different payment statuses and wait for settlement

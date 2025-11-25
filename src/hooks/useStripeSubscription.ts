@@ -18,6 +18,7 @@ export interface SubscriptionData {
   password?: string; // Made optional for passwordless users
   paymentMethodId: string;
   referralCode?: string;
+  affiliateCode?: string;
 }
 
 export interface OneTimePurchaseData {
@@ -29,18 +30,21 @@ export interface OneTimePurchaseData {
   password?: string; // Made optional for passwordless users
   paymentMethodId: string;
   referralCode?: string;
+  affiliateCode?: string;
 }
 
 export interface ExistingUserSubscriptionData {
   packageId: string;
   paymentMethodId: string;
   referralCode?: string;
+  affiliateCode?: string;
 }
 
 export interface ExistingUserOneTimePurchaseData {
   packageId: string;
   paymentMethodId?: string;
   referralCode?: string;
+  affiliateCode?: string;
 }
 
 export interface SubscriptionResult {
