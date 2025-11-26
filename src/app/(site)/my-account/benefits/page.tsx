@@ -108,11 +108,12 @@ export default function PartnerBenefitsPage() {
       <section id="partner-discounts-grid" className="bg-white ">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <UnlockDiscounts
+            hasAccess={hasAccess}
             showUnlockButton={!hasAccess}
             title={hasAccess ? "Your Partner Discounts" : "Become a Member to Unlock"}
             description={
               hasAccess
-                ? "Flash your code or mention TA at checkout to redeem partner deals instantly."
+                ? "Flash your code or mention Tools Australia to redeem partner deals instantly."
                 : "Subscriptions and one-time packages both unlock our partner network. Choose what suits you best."
             }
           />

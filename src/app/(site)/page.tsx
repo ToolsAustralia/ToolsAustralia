@@ -54,11 +54,8 @@ export default function HomePage() {
       <main className="w-full overflow-hidden">
         <Hero />
 
+        <MembershipSection padding="pt-8 pb-4" />
         <MajorDrawSection />
-
-        {/* <GiveawaySection /> */}
-
-        <MembershipSection />
 
         {/* Mini Draws Section - Client-side fetch */}
         <Suspense

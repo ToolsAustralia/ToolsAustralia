@@ -115,6 +115,7 @@ const partnerDiscounts = [
     discount: "250 OFF",
     discountMessage: "$250 off a wrap when you mention Tools Australia",
     gradient: "from-gray-900 via-gray-800 to-black",
+    businessLink: "https://www.zjwraps.com/",
   },
   {
     id: "superbad",
@@ -123,6 +124,7 @@ const partnerDiscounts = [
     discount: "90% OFF",
     discountMessage: "Mention Tools Australia for 90% off your trial shoot",
     gradient: "from-red-900 via-red-800 to-amber-100",
+    businessLink: "#", // Link to be provided later
   },
   {
     id: "multihub",
@@ -131,6 +133,34 @@ const partnerDiscounts = [
     discount: "VIP PROMOS",
     discountMessage: "Mention Tools Australia for VIP promos",
     gradient: "from-pink-500 via-pink-600 to-fuchsia-600",
+    businessLink: "#", // Link to be provided later
+  },
+  {
+    id: "artc",
+    name: "All Round Trade Constructions",
+    logo: "/images/partnerBrandLogos/ARTC.png",
+    discount: "10% OFF",
+    discountMessage: "Mention Tools Australia for 10% off quote",
+    gradient: "from-gray-900 via-gray-800 to-black",
+    businessLink: "https://www.facebook.com/share/16kRKXkcVa/?mibextid=wwXIfr",
+  },
+  {
+    id: "sealmotors",
+    name: "Seal Motors",
+    logo: "/images/partnerBrandLogos/sealMotors.png",
+    discount: "10% OFF",
+    discountMessage: "Mention Tools Australia for 10% off car services",
+    gradient: "from-gray-900 via-gray-800 to-black",
+    businessLink: "https://www.sealmotors.com.au/",
+  },
+  {
+    id: "toolmanlane",
+    name: "Toolman Lane",
+    logo: "/images/partnerBrandLogos/ToolmanLane.jpg",
+    discount: "10% OFF",
+    discountMessage: "10% off all purchases when you mention Tools Australia",
+    gradient: "from-gray-900 via-gray-800 to-black",
+    businessLink: "#", // Link to be provided later
   },
 ];
 
@@ -138,12 +168,14 @@ interface UnlockDiscountsProps {
   showUnlockButton?: boolean;
   title?: string;
   description?: string;
+  hasAccess?: boolean; // Whether user has access to partner discounts
 }
 
 export default function UnlockDiscounts({
   showUnlockButton = true,
   title = "Unlock Partner Discounts",
   description = "Get instant access to exclusive discounts from Australia's top tool brands",
+  hasAccess = false, // Default to false for public pages
 }: UnlockDiscountsProps = {}) {
   const discountsRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
@@ -159,21 +191,34 @@ export default function UnlockDiscounts({
           <p className="text-base sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">{description}</p>
         </div>
 
-        {/* Partner Discounts Grid */}
-        <div className="flex justify-center mb-8 sm:mb-12">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 stagger-animation max-w-4xl">
+        {/* Partner Discounts Grid - Only show when user has access */}
+        {hasAccess && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-12 stagger-animation">
             {partnerDiscounts.map((partner) => (
-              <div
+              <a
                 key={partner.id}
-                className="group relative bg-white rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 border-2 border-gray-200 hover:border-gray-300 flex flex-col min-h-[200px] sm:min-h-[280px] lg:min-h-[320px]"
+                href={partner.businessLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative bg-white rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 border-2 border-gray-200 hover:border-gray-300 flex flex-col min-h-[200px] sm:min-h-[280px] lg:min-h-[320px] cursor-pointer"
               >
-                {/* Top Half: Full Background with Centered Logo */}
+                {/* Top Section: Full Background with Centered Logo */}
                 <div
-                  className={`h-3/5 flex items-center justify-center p-3 sm:p-4 lg:p-6 relative ${
-                    partner.id === "zjwraps" || partner.id === "superbad" ? "" : `bg-gradient-to-br ${partner.gradient}`
+                  className={`h-[50%] flex items-center justify-center p-3 sm:p-4 lg:p-6 relative ${
+                    partner.id === "zjwraps" ||
+                    partner.id === "superbad" ||
+                    partner.id === "artc" ||
+                    partner.id === "sealmotors" ||
+                    partner.id === "toolmanlane"
+                      ? ""
+                      : `bg-gradient-to-br ${partner.gradient}`
                   }`}
                   style={
-                    partner.id === "zjwraps" || partner.id === "superbad"
+                    partner.id === "zjwraps" ||
+                    partner.id === "superbad" ||
+                    partner.id === "artc" ||
+                    partner.id === "sealmotors" ||
+                    partner.id === "toolmanlane"
                       ? {
                           backgroundImage: "url('/images/partnerBrandLogos/partnerlogoBg.png')",
                           backgroundSize: "cover",
@@ -191,21 +236,33 @@ export default function UnlockDiscounts({
                     className={`h-10 sm:h-12 lg:h-14 w-auto object-contain drop-shadow-md ${
                       partner.id === "superbad" ? "scale-200" : ""
                     }`}
-                    style={partner.id === "superbad" ? { transform: "scale(2)" } : undefined}
+                    style={
+                      partner.id === "superbad"
+                        ? { transform: "scale(2)" }
+                        : partner.id === "artc"
+                        ? { transform: "scale(1.5)" }
+                        : undefined
+                    }
                     unoptimized
                   />
                 </div>
 
-                {/* Bottom Half: White Background with Discount Message */}
-                <div className="h-2/5 bg-white flex flex-col items-center justify-center gap-2 p-3 sm:p-4 lg:p-5">
-                  {/* Brand Name Title */}
-                  <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 font-['Poppins'] text-center">
-                    {partner.name}
-                  </h3>
-                  <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 font-['Inter'] text-center leading-tight">
-                    {highlightDiscountMessage(partner.discountMessage)}
-                  </p>
-                  <div className="flex items-center justify-center">
+                {/* Bottom Section: White Background with Discount Message */}
+                <div className="h-[50%] bg-white flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-hidden">
+                  {/* Brand Name Title - Fixed max height with line clamping */}
+                  <div className="w-full flex-shrink-0 max-h-[3em] overflow-hidden">
+                    <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 font-['Poppins'] text-center line-clamp-2 leading-tight">
+                      {partner.name}
+                    </h3>
+                  </div>
+                  {/* Discount Message - Flexible middle section */}
+                  <div className="w-full flex-1 min-h-0 flex items-center justify-center py-1">
+                    <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 font-['Inter'] text-center leading-tight line-clamp-2">
+                      {highlightDiscountMessage(partner.discountMessage)}
+                    </p>
+                  </div>
+                  {/* Tools Australia Logo - Fixed at bottom */}
+                  <div className="w-full flex items-center justify-center flex-shrink-0">
                     <Image
                       src={toolsAustraliaLogo}
                       alt="Tools Australia logo"
@@ -221,10 +278,10 @@ export default function UnlockDiscounts({
                 <div
                   className={`absolute inset-0 bg-gradient-to-r ${partner.gradient} opacity-0 group-hover:opacity-5 rounded-xl sm:rounded-2xl transition-opacity duration-300 pointer-events-none`}
                 ></div>
-              </div>
+              </a>
             ))}
           </div>
-        </div>
+        )}
 
         {/* Enter to Unlock Button - Conditionally rendered */}
         {showUnlockButton && (

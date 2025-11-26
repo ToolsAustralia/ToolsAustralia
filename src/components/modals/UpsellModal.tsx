@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { CheckCircle, Gift, Zap, Star, Sparkles, CreditCard } from "lucide-react";
+import Image from "next/image";
+import { CheckCircle, CreditCard } from "lucide-react";
 import { UpsellModalProps } from "@/types/upsell";
 import { useUserContext } from "@/contexts/UserContext";
 import { usePaymentMethods } from "@/hooks/queries";
@@ -358,7 +359,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       try {
         // Get paymentIntentId from status.data or fallback to state
         const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
-        
+
         // Get package details - use offer data as source of truth
         const packageName = status.data?.packageName || offer.title;
         const value = offer.discountedPrice || offer.originalPrice || 0;
@@ -450,21 +451,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     setShowPaymentProcessing(false);
   };
 
-  const handleCardSelection = () => {
-    // Close the upsell modal first to prevent multiple modals
-    handleClose();
-
-    // Small delay to ensure upsell modal is closed before opening membership modal
-    setTimeout(() => {
-      // Create a custom event to trigger the membership modal with upsell offer
-      const event = new CustomEvent("showUpsellPayment", {
-        detail: { offer },
-      });
-      window.dispatchEvent(event);
-      console.log("🔄 Redirecting to MembershipModal for card selection");
-    }, 100);
-  };
-
   const handleDecline = () => {
     // Call decline handler but don't close immediately
     onDecline(offer);
@@ -478,18 +464,53 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }, 100);
   };
 
-  // Get icon based on offer category
-  const getCategoryIcon = () => {
-    switch (offer.category) {
-      case "major-draw":
-        return <Gift className="w-6 h-6" />;
-      case "mini-draw":
-        return <Star className="w-6 h-6" />;
-      case "membership":
-        return <Zap className="w-6 h-6" />;
-      default:
-        return <Gift className="w-6 h-6" />;
+  /**
+   * Maps offer ID to the corresponding image filename
+   * Returns the image path for the upsell promotional image
+   *
+   * Note: Some packages share the same image (e.g., subscription "tradie-plus-package"
+   * and one-time "tradie-plus-pack" both use "Tradie Plus.png")
+   */
+  const getUpsellImagePath = (): string => {
+    const imageMap: Record<string, string> = {
+      // === SUBSCRIPTION PLUS PACKAGES ===
+      "tradie-plus-package": "Tradie Package.png", // Subscription: Tradie Plus Package (shows Tradie Package image)
+      "foreman-plus-package": "Foreman Package.png", // Subscription: Foreman Plus Package (shows Foreman Package image)
+      "boss-plus-package": "Boss Package.png", // Subscription: Boss Plus Package (shows Boss Package image)
+
+      // === ONE-TIME PLUS PACKAGES ===
+      "apprentice-plus-pack": "Apprentice Plus.png", // One-time: Apprentice Plus Pack
+      "tradie-plus-pack": "Tradie Plus.png", // One-time: Tradie Plus Pack (shares image with subscription)
+      "foreman-plus-pack": "Foreman Plus.png", // One-time: Foreman Plus Pack (shares image with subscription)
+      "boss-plus-pack": "Boss Plus.png", // One-time: Boss Plus Pack (shares image with subscription)
+      "power-plus-pack": "Power Plus.png", // One-time: Power Plus Pack
+
+      // === ADDITIONAL UPGRADE PACKAGES ===
+      "additional-apprentice-pack-upgrade": "Apprentice Upgrade.png", // Additional: Apprentice Pack Upgrade
+      "additional-tradie-pack-upgrade": "Tradie Upgrade.png", // Additional: Tradie Pack Upgrade
+      "additional-foreman-pack-upgrade": "Foreman Upgrade.png", // Additional: Foreman Pack Upgrade
+      "additional-boss-pack-upgrade": "Boss Upgrade.png", // Additional: Boss Pack Upgrade
+      "additional-power-pack-upgrade": "Power Upgrade.png", // Additional: Power Pack Upgrade
+
+      // === MINI PACK UPGRADES ===
+      "mini-pack-1-upgrade": "Mini Pack 1.png",
+      "mini-pack-2-upgrade": "Mini Pack 2.png",
+      "mini-pack-3-upgrade": "Mini Pack 3.png",
+      "mini-pack-4-upgrade": "Mini Pack 4.png",
+      "mini-pack-5-upgrade": "Mini Pack 5.png",
+      "mini-pack-6-upgrade": "Mini Pack 6.png",
+      "mini-pack-7-upgrade": "Mini Pack 7.png",
+      "mini-pack-8-upgrade": "Mini Pack 8.png",
+    };
+
+    const imageName = imageMap[offer.id];
+    if (imageName) {
+      return `/images/upsells/${imageName}`;
     }
+
+    // Fallback: return a default image or the offer's imageUrl if available
+    console.warn(`⚠️ No image mapping found for upsell ID: ${offer.id}`);
+    return offer.imageUrl || "/images/upsells/Tradie Plus.png";
   };
 
   if (!isOpen) return null;
@@ -497,7 +518,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // Global loading and success screens are now handled by LoadingContext
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4 max-h-screen overflow-y-auto">
       {/* Animated Backdrop */}
       <div
         className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
@@ -509,59 +530,30 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       {/* Animated Modal */}
       <div
         className={`
-          relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden
+          relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-xs sm:max-w-lg mx-auto overflow-hidden
           transform transition-all duration-300 ease-out
           ${isVisible ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4"}
         `}
       >
-        {/* Main Content - Ultra Compact */}
-        <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-5">
-          {/* Hero Section - Compact */}
-          <div
-            className="relative rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden"
-            style={{
-              background: `linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)`,
-            }}
-          >
-            {/* Content */}
-            <div className="relative z-10 text-white">
-              {/* Category Icon - Compact */}
-              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg">{getCategoryIcon()}</div>
-                <span className="text-md sm:text-xl font-bold font-['Poppins'] opacity-90">Special Offer</span>
-              </div>
-
-              {/* Title - Responsive */}
-              <h2 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-3 font-['Poppins'] leading-tight">
-                {offer.title}
-              </h2>
-
-              {/* Description - Compact */}
-              <p className="text-sm sm:text-base opacity-90 mb-3 sm:mb-4 leading-relaxed">{offer.description}</p>
-
-              {/* Price and Entries Display - Side by Side */}
-              <div className="flex items-center justify-between gap-3 sm:gap-4">
-                <div className="text-2xl sm:text-3xl font-bold">${offer.discountedPrice}</div>
-                {offer.entriesCount > 0 && (
-                  <div className="flex items-center gap-2 bg-white/20 rounded-lg px-3 py-2 backdrop-blur-sm">
-                    <span className="text-sm sm:text-base font-semibold">
-                      {offer.entriesCount}{" "}
-                      {offer.category === "mini-draw" || originalPurchaseContext?.miniDrawId
-                        ? "Mini Draw"
-                        : "Major Draw"}{" "}
-                      Entries
-                      {originalPurchaseContext?.miniDrawName && (
-                        <span className="block text-xs opacity-90 mt-1">{originalPurchaseContext.miniDrawName}</span>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Hero Section - Image Display - No Padding */}
+        <div className="relative w-full overflow-hidden">
+          <div className="relative w-full">
+            <Image
+              src={getUpsellImagePath()}
+              alt={offer.title || "Special Offer"}
+              width={600}
+              height={800}
+              className="w-full h-auto"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 600px"
+              priority
+            />
           </div>
+        </div>
 
-          {/* Action Buttons - Compact */}
-          <div className="space-y-2 sm:space-y-3">
+        {/* Main Content - Ultra Compact */}
+        <div className="px-3 sm:px-6 pb-2 sm:pb-4 pt-2 sm:pt-4">
+          {/* Action Buttons - Stacked Vertically */}
+          <div className="flex flex-col gap-2 mb-2">
             {/* Primary CTA - Purchase with Default Card */}
             <button
               onClick={() => {
@@ -575,7 +567,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 handleAccept();
               }}
               disabled={isProcessing || !defaultPaymentMethod}
-              className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isProcessing ? (
                 <div className="flex items-center justify-center gap-2">
@@ -584,7 +576,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
-                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
                   {defaultPaymentMethod ? (
                     <>
                       <span>Purchase - ${offer.discountedPrice}</span>
@@ -611,30 +602,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 });
                 handleDecline();
               }}
-              className="w-full text-gray-500 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl hover:bg-gray-100 transition-colors font-medium text-sm sm:text-base"
+              className="w-full text-red-600 py-2 sm:py-2.5 px-4 sm:px-6 rounded-xl border border-red-300 hover:bg-red-50 transition-colors font-medium text-sm sm:text-base"
             >
               No thanks, maybe later
-            </button>
-
-            {/* Card Selection Button */}
-            <button
-              onClick={() => {
-                console.log("🔵 Upsell select-card button clicked", {
-                  offerId: offer.id,
-                  invoiceFinalized,
-                  hasOriginalPurchaseContext: !!originalPurchaseContext,
-                });
-                handleCardSelection();
-              }}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl transition-colors font-medium text-sm sm:text-base flex items-center justify-center gap-2 underline"
-            >
-              <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
-              Select different payment method
             </button>
           </div>
 
           {/* Trust Indicators - Compact */}
-          <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
+          <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-gray-200">
             <div className="flex items-center justify-center gap-3 sm:gap-6 text-xs sm:text-sm text-gray-500">
               <div className="flex items-center gap-1 sm:gap-2">
                 <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
@@ -646,7 +621,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
               </div>
               <div className="flex items-center gap-1 sm:gap-2">
                 <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                <span>No Sub</span>
+                <span>One-Time Payment</span>
               </div>
             </div>
           </div>

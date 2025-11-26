@@ -1,9 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
-import SectionDivider from "@/components/ui/SectionDivider";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 
@@ -18,8 +16,8 @@ export default function PromoHero() {
     openEntryFlow({ openLocalModal: false });
   };
 
-  // Single landscape asset used across desktop + mobile to keep branding consistent.
-  const heroImageSrc = "/images/background/promo/promoBg.jpg";
+  // Using the same image for both mobile and desktop - optimized positioning ensures all content is visible
+  const heroImageSrc = "/images/background/promo/promoBg.png";
 
   if (isLoading) {
     return (
@@ -35,48 +33,28 @@ export default function PromoHero() {
   return (
     <section
       ref={heroRef}
-      className="relative flex flex-col justify-between items-center overflow-hidden min-h-[60svh] sm:min-h-[65svh] lg:min-h-[70vh]"
+      className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 h-[50vh] min-h-[430px] lg:h-[83vh] lg:min-h-0"
     >
-      {/* Backgrounds */}
-      <div className="absolute inset-0 z-0">
-        {/* Mobile Background */}
-        {/* Note: priority removed to prevent preload warning on desktop where this image is hidden */}
-        <div className="lg:hidden absolute inset-0">
-          <Image
-            src={heroImageSrc}
-            alt="Ultimate Tool Giveaway - Mobile Background"
-            fill
-            className="object-cover object-[50%_10%] w-full h-full"
-            quality={100}
-            sizes="100vw"
-          />
-        </div>
-
-        {/* Desktop Background */}
-        <div className="hidden lg:block absolute inset-0">
-          <Image
-            src={heroImageSrc}
-            alt={`Ultimate Tool Giveaway - ${activePromo?.multiplier || 1}x Entries Active`}
-            fill
-            className="object-cover object-[10%_55%] w-full h-full"
-            priority
-            quality={100}
-            sizes="100vw"
-          />
-        </div>
-
-        {/* Dark overlay */}
-        <div className="absolute inset-0  z-10"></div>
-      </div>
+      {/* Background Banner Image with Ellipse Clip-Path */}
+      {/* Using background-image with clip-path for smooth rounded bottom effect */}
+      <div
+        className="main-banner-image absolute inset-0 z-0"
+        style={{
+          backgroundImage: `url("${heroImageSrc}")`,
+        }}
+        role="img"
+        aria-label={`Win Ford F-150 & Luxury Float - ${activePromo?.multiplier || 1}x Entries Active`}
+      />
 
       {/* Hero Content (optional title or info can go here) */}
       <div className="relative z-20 w-full text-center"></div>
 
       {/* Elevated ENTER NOW button - Absolutely positioned at bottom */}
-      <div className="absolute bottom-14 sm:bottom-20 left-1/2 transform -translate-x-1/2 z-30">
+      {/* Positioned above the rounded bottom curve with adequate clearance */}
+      <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30">
         <button
           onClick={handleEnterNow}
-          className="group relative inline-flex items-center justify-center px-6 py-3 text-base sm:px-14 sm:py-6 sm:text-2xl rounded-full font-extrabold tracking-wide text-white 
+          className="group relative inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white 
                       bg-gradient-to-br from-red-600 via-red-700 to-red-800 shadow-[0_0_40px_rgba(220,38,38,0.6)]
                       border border-white/20 backdrop-blur-lg transition-all duration-300 hover:scale-110 hover:shadow-[0_0_60px_rgba(239,68,68,0.8)]"
         >
@@ -89,9 +67,6 @@ export default function PromoHero() {
           ></span>
         </button>
       </div>
-
-      {/* Curved Divider */}
-      <SectionDivider type="curve" color="#f9fafb" className="absolute bottom-0 left-0 right-0 z-10" />
     </section>
   );
 }

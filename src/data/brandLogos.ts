@@ -152,7 +152,7 @@ export const brandLogos: BrandLogo[] = [
     id: "stahlwille",
     name: "Stahlwille",
     logo: "/images/brands/stahlwille.png",
-    gradient: "from-green-900 from-0% via-green-800 via-50% to-gray-900 to-50%",
+    gradient: "bg-[linear-gradient(to_bottom,#111827_0%,#111827_55%,#064e3b_55%,#064e3b_100%)]",
     imageScale: 1,
     imageScaleSm: 1.4,
     imageScaleMd: 1.4,

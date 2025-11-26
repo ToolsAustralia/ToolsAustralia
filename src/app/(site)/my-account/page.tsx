@@ -32,6 +32,7 @@ function PartnerDiscountsSection({ user }: { user: import("@/hooks/queries/useUs
 
   return (
     <UnlockDiscounts
+      hasAccess={hasAccess}
       showUnlockButton={!hasAccess}
       title={hasAccess ? "Partner Discounts" : "Unlock Partner Discounts"}
       description={

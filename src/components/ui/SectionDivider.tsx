@@ -32,7 +32,10 @@ export default function SectionDivider({
 
   return (
     <div className={`w-full ${className}`}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-28 sm:h-44" fill={color}>
+      {/* Height is controlled by Tailwind classes: h-16 = 64px (mobile), sm:h-24 = 96px (desktop) */}
+      {/* To adjust: Change h-16 and sm:h-24 to your desired Tailwind height classes */}
+      {/* Common options: h-12 (48px), h-16 (64px), h-20 (80px), h-24 (96px), h-28 (112px), h-32 (128px) */}
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-16 sm:h-24" fill={color}>
         <path d={getPath()} />
       </svg>
     </div>

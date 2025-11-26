@@ -3,6 +3,29 @@
 @tailwind utilities;
 
 @layer utilities {
+  /* Promo Hero Banner - Ellipse clip-path for rounded bottom effect */
+  /* Mobile: 50vh height, 135% ellipse width, min-height 430px */
+  /* Desktop: 83vh height, 126% ellipse width */
+  .main-banner-image {
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: 50%;
+    width: 100%;
+    /* Mobile styles */
+    height: 50vh;
+    min-height: 430px;
+    clip-path: ellipse(135% 97% at 50% 0);
+  }
+
+  /* Desktop styles - override mobile at lg breakpoint */
+  @media (min-width: 1024px) {
+    .main-banner-image {
+      height: 83vh !important;
+      min-height: unset !important;
+      clip-path: ellipse(126% 97% at 50% 0) !important;
+    }
+  }
+
   .pattern-dots-white {
     background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
     background-size: 60px 60px;

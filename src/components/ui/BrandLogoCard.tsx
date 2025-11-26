@@ -102,8 +102,49 @@ export default function BrandLogoCard({
       ? "b"
       : "r"
     : brand.gradientDirection ?? "br";
-  const baseGradientClass = brand.gradient ? `bg-gradient-to-${gradientDirection} ${brand.gradient}` : "";
+  // Check if gradient is already a complete class (e.g., arbitrary value with bg-[...])
+  // If so, use it directly; otherwise, construct the gradient class
+  const baseGradientClass = brand.gradient
+    ? brand.gradient.startsWith("bg-[") || brand.gradient.startsWith("bg-")
+      ? brand.gradient
+      : `bg-gradient-to-${gradientDirection} ${brand.gradient}`
+    : "";
   const gradientClass = gradientOverride ?? baseGradientClass;
+
+  // For split gradients, extract the gradient value and apply as inline style for precise control
+  const getSplitGradientStyle = () => {
+    if (!brand.splitGradient || !brand.gradient) return undefined;
+
+    // For Stahlwille, always use the hard-coded values for 55% black top, 45% green bottom split
+    if (brand.id === "stahlwille") {
+      const direction = brand.splitOrientation === "vertical" ? "to bottom" : "to right";
+      return {
+        backgroundImage: `linear-gradient(${direction}, #111827 0%, #111827 55%, #064e3b 55%, #064e3b 100%)`,
+      };
+    }
+
+    // If gradient is an arbitrary value, extract the linear-gradient part
+    if (brand.gradient.startsWith("bg-[linear-gradient")) {
+      // Extract the gradient value from bg-[linear-gradient(...)]
+      // Handle both to_bottom and to bottom syntax
+      const gradientMatch = brand.gradient.match(/linear-gradient\(([^)]+)\)/);
+      if (gradientMatch) {
+        // Replace underscores with spaces for proper CSS syntax
+        const gradientValue = gradientMatch[1].replace(/_/g, " ");
+        return { backgroundImage: `linear-gradient(${gradientValue})` };
+      }
+    }
+
+    // For standard Tailwind gradients, construct the linear-gradient
+    if (brand.gradient.includes("from-") && brand.gradient.includes("to-")) {
+      // This would need more complex parsing - skip for now
+      return undefined;
+    }
+
+    return undefined;
+  };
+
+  const splitGradientStyle = getSplitGradientStyle();
   const overlayScale = scaleOverride ?? brand.overlayScale ?? 1;
   const breakpoint = useBreakpoint();
 
@@ -136,8 +177,9 @@ export default function BrandLogoCard({
         <div
           className={cx(
             "flex items-center justify-center w-full h-full rounded-md shadow-lg overflow-hidden",
-            gradientClass
+            splitGradientStyle ? "" : gradientClass // Don't apply class if using inline style
           )}
+          style={splitGradientStyle}
         >
           <Image
             src={brand.logo}
@@ -157,9 +199,10 @@ export default function BrandLogoCard({
       <div
         className={cx(
           "flex items-center justify-center relative overflow-hidden rounded-xl shadow-lg",
-          gradientClass,
+          splitGradientStyle ? "" : gradientClass, // Don't apply class if using inline style
           heightClass
         )}
+        style={splitGradientStyle}
       >
         {brand.hasOverlay !== false && (
           <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/10 rounded-xl pointer-events-none" />

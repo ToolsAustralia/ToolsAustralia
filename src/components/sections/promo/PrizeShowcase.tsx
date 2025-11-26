@@ -49,13 +49,58 @@ const resolveHighlightIcon = (iconName?: string): LucideIcon => {
   return fallbackIcon;
 };
 
-// Helper function to get full label for prize cards
-const getShortLabel = (label: string): string => {
-  if (label.includes("Milwaukee")) return "Sidchrome/Milwaukee/Cash Prize";
-  if (label.includes("DeWalt")) return "Sidchrome/DeWalt/Cash Prize";
-  if (label.includes("Makita")) return "Sidchrome/Makita/Cash Prize";
-  if (label.includes("$10000") || label.includes("$10,000")) return "$10,000 Tax Free Cash";
-  return label;
+// Helper function to get brand logo path based on prize slug
+const getBrandLogoPath = (slug: string): string | null => {
+  switch (slug) {
+    case "milwaukee-sidchrome":
+      return "/images/brands/milwaukee.png";
+    case "dewalt-sidchrome":
+      return "/images/brands/dewalt-black.png";
+    case "makita-sidchrome":
+      return "/images/brands/Makita-red.png";
+    case "cash-prize":
+      return null; // No watermark for cash prize
+    default:
+      return null;
+  }
+};
+
+// Helper function to get formatted multi-line label for prize cards
+const getFormattedLabel = (label: string) => {
+  if (label.includes("Milwaukee")) {
+    return {
+      line1: "Sidchrome",
+      line2: "Milwaukee",
+      line3: "$5000 Cash Prize",
+    };
+  }
+  if (label.includes("DeWalt")) {
+    return {
+      line1: "Sidchrome",
+      line2: "DeWalt",
+      line3: "$5000 Cash Prize",
+    };
+  }
+  if (label.includes("Makita")) {
+    return {
+      line1: "Sidchrome",
+      line2: "Makita",
+      line3: "$5000 Cash Prize",
+    };
+  }
+  if (label.includes("$10000") || label.includes("$10,000")) {
+    return {
+      line1: "$10,000 Tax Free Cash",
+      line2: null,
+      line3: null,
+    };
+  }
+  // Fallback
+  return {
+    line1: label,
+    line2: null,
+    line3: null,
+  };
 };
 
 export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
@@ -139,21 +184,35 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               <p className="text-xs sm:text-sm text-gray-500 font-['Inter'] uppercase tracking-wide mb-2 sm:mb-3 text-center">
                 Pick Your Toolset
               </p>
-              <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 max-w-3xl mx-auto">
                 {prizes.map((prizeOption) => {
                   const isActive = prizeOption.slug === activeSlug;
                   const brandColors = getPrizeBrandColors(prizeOption.slug);
-                  const isMakita = prizeOption.slug === "makita-sidchrome";
+                  const brandLogoPath = getBrandLogoPath(prizeOption.slug);
+                  const formattedLabel = getFormattedLabel(prizeOption.label);
                   return (
                     <button
                       key={prizeOption.slug}
                       onClick={() => handleSelectPrize(prizeOption.slug)}
-                      className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-left cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
+                      className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
                         isActive
                           ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
                           : `bg-white text-gray-700 border-slate-300 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
                       }`}
                     >
+                      {/* Brand logo watermark - only shown when active */}
+                      {isActive && brandLogoPath && (
+                        <div className="absolute inset-0 rounded-xl sm:rounded-2xl overflow-hidden pointer-events-none">
+                          <Image
+                            src={brandLogoPath}
+                            alt=""
+                            fill
+                            className="object-contain opacity-20"
+                            sizes="(max-width: 640px) 100px, 150px"
+                          />
+                        </div>
+                      )}
+
                       {/* Hover glow effect for inactive cards */}
                       {!isActive && (
                         <div
@@ -173,26 +232,16 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                         </div>
                       )}
 
-                      {/* Card content */}
-                      <div className="relative z-10 w-full overflow-hidden">
+                      {/* Card content - formatted multi-line text */}
+                      <div className="relative z-10 w-full overflow-visible">
                         <div
-                          className={`text-xs sm:text-base font-bold font-['Poppins'] mb-1 sm:mb-1.5 leading-tight transition-colors duration-200 break-words ${
-                            isMakita && isActive
-                              ? "text-red-600" // Red color for Makita label when active/focused
-                              : isActive
-                              ? brandColors.textColor
-                              : "text-gray-900 group-hover:text-gray-950"
+                          className={`text-xs sm:text-base font-bold font-['Poppins'] leading-tight transition-colors duration-200 break-words text-center ${
+                            isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
                           }`}
                         >
-                          {getShortLabel(prizeOption.label)}
-                        </div>
-                        {/* Full label - shown on both mobile and desktop */}
-                        <div
-                          className={`text-[9px] sm:text-xs font-['Inter'] leading-tight transition-colors duration-200 break-words ${
-                            isActive ? brandColors.subtitleTextColor : "text-gray-600 group-hover:text-gray-700"
-                          }`}
-                        >
-                          <span className="block">{prizeOption.label}</span>
+                          <div className="block">{formattedLabel.line1}</div>
+                          {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
+                          {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
                         </div>
                       </div>
                     </button>
