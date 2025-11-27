@@ -3,7 +3,7 @@
 import React from "react";
 
 interface HexagonalPromoBadgeProps {
-  multiplier: 3 | 5 | 10;
+  multiplier: 2 | 3 | 5 | 10;
   size?: "xs" | "small" | "medium" | "large";
   className?: string;
 }

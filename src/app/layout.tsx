@@ -83,7 +83,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           url={siteUrl}
           logo={`${siteUrl}/Social%20Media%20Profile_Black%20Background.png`}
           // Listing social profiles here helps search engines connect verified brand entities.
-          sameAs={["https://www.facebook.com/toolsaustralia", "https://www.instagram.com/toolsaustralia"]}
+          sameAs={["https://www.facebook.com/toolsaust", "https://www.instagram.com/toolsaustralia/"]}
           nonce={nonce}
         />
         <WebSiteJsonLd name="Tools Australia" url={siteUrl} nonce={nonce} />

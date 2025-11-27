@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Types
+export type PromoType = "membership-packages" | "one-time-packages" | "mini-packages";
+
 export interface ActivePromo {
   id: string;
-  type: "one-time-packages" | "mini-packages";
-  multiplier: 3 | 5 | 10; // Only 3x, 5x, 10x supported (removed 2x)
+  type: PromoType;
+  multiplier: 2 | 3 | 5 | 10;
   startDate: string;
   endDate: string;
   duration: number;
@@ -25,8 +27,8 @@ export interface ActivePromo {
 // CreatePromoData interface removed - replaced with TogglePromoData
 
 export interface TogglePromoData {
-  type: "one-time-packages" | "mini-packages";
-  multiplier: 3 | 5 | 10 | null; // 3x, 5x, 10x, or null (OFF)
+  type: PromoType;
+  multiplier: 2 | 3 | 5 | 10 | null; // 2x, 3x, 5x, 10x, or null (OFF)
 }
 
 // API functions
@@ -100,7 +102,7 @@ export const useAdminActivePromos = () => {
   });
 };
 
-export const usePromoMultiplier = (packageType: "one-time" | "mini") => {
+export const usePromoMultiplier = (packageType: "membership" | "one-time" | "mini") => {
   const { data: promos } = useActivePromos();
 
   if (!promos || promos.length === 0) {
@@ -108,13 +110,18 @@ export const usePromoMultiplier = (packageType: "one-time" | "mini") => {
   }
 
   // Find active promo for the package type (updated for toggle system - no expiration check)
-  const promoType = packageType === "one-time" ? "one-time-packages" : "mini-packages";
+  const promoType =
+    packageType === "membership"
+      ? "membership-packages"
+      : packageType === "one-time"
+        ? "one-time-packages"
+        : "mini-packages";
   const activePromo = promos.find((promo) => promo.type === promoType && promo.isActive);
 
   return activePromo ? activePromo.multiplier : 1;
 };
 
-export const usePromoByType = (type: "one-time-packages" | "mini-packages") => {
+export const usePromoByType = (type: PromoType) => {
   const { data: promos, ...rest } = useActivePromos();
 
   // Updated for toggle system - no expiration check

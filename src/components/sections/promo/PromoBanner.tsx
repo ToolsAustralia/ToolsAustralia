@@ -13,7 +13,7 @@ export default function PromoBanner() {
 
   const [isScrolled, setIsScrolled] = useState(false);
 
-  const { data: activePromo } = usePromoByType("one-time-packages");
+  const { data: activePromo } = usePromoByType("membership-packages");
 
   // 24-hour looping countdown timer (resets at midnight server time/UTC)
   useEffect(() => {

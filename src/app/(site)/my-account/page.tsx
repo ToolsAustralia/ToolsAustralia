@@ -576,7 +576,7 @@ export default function MyAccountPage() {
                               <CountdownDisplay targetDate={currentMajorDraw.drawDate || ""} />
                             ) : (
                               <button
-                                onClick={() => window.open("https://facebook.com", "_blank")}
+                                onClick={() => window.open("https://www.facebook.com/toolsaust", "_blank")}
                                 className="text-blue-400 font-bold text-xs sm:text-sm hover:text-blue-300 transition-colors cursor-pointer"
                               >
                                 Live Now

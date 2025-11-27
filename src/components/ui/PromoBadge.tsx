@@ -3,7 +3,7 @@
 import React from "react";
 
 interface PromoBadgeProps {
-  multiplier: 3 | 5 | 10; // Only 3x, 5x, 10x supported (removed 2x)
+  multiplier: 2 | 3 | 5 | 10;
   size?: "small" | "medium" | "large";
   className?: string;
   showPromoText?: boolean; // Controls visibility of "PROMO" text, default true

@@ -15,7 +15,7 @@ const historyQuerySchema = z.object({
     .string()
     .optional()
     .transform((val) => (val ? parseInt(val, 10) : 10)),
-  type: z.enum(["one-time-packages", "mini-packages"]).optional(),
+  type: z.enum(["membership-packages", "one-time-packages", "mini-packages"]).optional(),
 });
 
 export async function GET(request: NextRequest) {

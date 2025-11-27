@@ -198,11 +198,14 @@ export const usePurchaseMembership = () => {
         const activePromos = queryClient.getQueryData<
           Array<{ type: string; multiplier: number; isActive: boolean; isExpired: boolean }>
         >(["promos", "active"]);
-        const oneTimePromo = activePromos?.find((p) => p.type === "one-time-packages" && p.isActive && !p.isExpired);
-        const promoMultiplier = oneTimePromo?.multiplier || 1;
+        const membershipPromo = activePromos?.find((p) => p.type === "membership-packages" && p.isActive);
+        const oneTimePromo = activePromos?.find((p) => p.type === "one-time-packages" && p.isActive);
+
+        const promoMultiplier = selectedPackage.type === "subscription" ? membershipPromo?.multiplier || 1 : oneTimePromo?.multiplier || 1;
 
         // Calculate entry count with promo applied
-        const baseEntries = selectedPackage.totalEntries || 0;
+        const baseEntries =
+          selectedPackage.type === "subscription" ? selectedPackage.entriesPerMonth || 0 : selectedPackage.totalEntries || 0;
         const entryCount = baseEntries * promoMultiplier;
 
         console.log(`🚀 OPTIMISTIC UPDATE: Adding ${entryCount} entries to major draw`, {

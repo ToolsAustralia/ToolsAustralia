@@ -572,7 +572,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                       <div className="text-xs sm:text-sm text-black font-semibold">{pkg.name}</div>
                       {/* Promo Badge for packages */}
                       {pkg.isPromoActive && pkg.promoMultiplier && (
-                        <PromoBadge multiplier={pkg.promoMultiplier as 3 | 5 | 10} size="small" />
+                        <PromoBadge multiplier={pkg.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
                       )}
                     </div>
 

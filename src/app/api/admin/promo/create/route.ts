@@ -7,7 +7,7 @@ import { z } from "zod";
 
 // Validation schema
 const createPromoSchema = z.object({
-  type: z.enum(["one-time-packages", "mini-packages"]),
+  type: z.enum(["membership-packages", "one-time-packages", "mini-packages"]),
   multiplier: z.enum(["2", "3", "5", "10"]).transform((val) => parseInt(val) as 2 | 3 | 5 | 10),
   startDate: z.string().datetime("Invalid start date format"),
   endDate: z.string().datetime("Invalid end date format"),

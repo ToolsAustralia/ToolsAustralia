@@ -7,8 +7,8 @@ import { z } from "zod";
 
 // Validation schema for toggle request
 const togglePromoSchema = z.object({
-  type: z.enum(["one-time-packages", "mini-packages"]),
-  multiplier: z.union([z.literal(3), z.literal(5), z.literal(10), z.null()]), // 3x, 5x, 10x, or null (OFF)
+  type: z.enum(["membership-packages", "one-time-packages", "mini-packages"]),
+  multiplier: z.union([z.literal(2), z.literal(3), z.literal(5), z.literal(10), z.null()]), // 2x, 3x, 5x, 10x, or null (OFF)
 });
 
 /**

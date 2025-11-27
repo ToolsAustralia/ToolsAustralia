@@ -1,12 +1,8 @@
 "use client";
 
 import MembershipSection from "@/components/sections/MembershipSection";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
-import SectionDivider from "@/components/ui/SectionDivider";
 
 export default function PromoPackages() {
-  const { data: activePromo } = usePromoByType("one-time-packages");
-
   return (
     <>
       {/* Packages Section with scroll target */}

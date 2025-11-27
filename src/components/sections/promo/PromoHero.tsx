@@ -7,7 +7,7 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 
 export default function PromoHero() {
   const { isLoading } = useCurrentMajorDraw();
-  const { data: activePromo } = usePromoByType("one-time-packages");
+  const { data: activePromo } = usePromoByType("membership-packages");
   const heroRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
 
@@ -30,6 +30,8 @@ export default function PromoHero() {
         return "/images/background/promo/x5 entries.png";
       case 3:
         return "/images/background/promo/x3 entries.png";
+      case 2:
+        return "/images/background/promo/$20.png";
       default:
         return "/images/background/promo/$20.png";
     }

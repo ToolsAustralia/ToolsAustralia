@@ -122,7 +122,7 @@ export default function ContactPage() {
                     <p className="text-white/80 text-[12px] sm:text-[14px] mb-3 sm:mb-4 font-['Poppins']">Follow Us:</p>
                     <div className="flex items-center gap-3 sm:gap-4">
                       <a
-                        href="https://facebook.com/toolsaustralia"
+                        href="https://www.facebook.com/toolsaust"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 hover:bg-blue-600 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110"
@@ -132,7 +132,7 @@ export default function ContactPage() {
                       </a>
 
                       <a
-                        href="https://instagram.com/toolsaustralia"
+                        href="https://www.instagram.com/toolsaustralia/"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110"

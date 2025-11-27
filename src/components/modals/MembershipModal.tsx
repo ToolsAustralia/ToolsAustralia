@@ -170,6 +170,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const { subscriptionPackages, oneTimePackages } = useMemberships();
 
   // Get active promos for different package types
+  const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
   const { data: miniPromo } = usePromoByType("mini-packages");
 
@@ -273,12 +274,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       return applyMultiplier(oneTimePromo.multiplier);
     }
 
+    if (activePlan.period !== "one-time" && !activePlan.id.startsWith("mini-pack-") && membershipPromo) {
+      return applyMultiplier(membershipPromo.multiplier);
+    }
+
     if (activePlan.id.startsWith("mini-pack-") && miniPromo) {
       return applyMultiplier(miniPromo.multiplier);
     }
 
     return activePlan;
-  }, [activePlan, oneTimePromo, miniPromo]);
+  }, [activePlan, membershipPromo, oneTimePromo, miniPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { savePaymentMethod } = useSavedPaymentMethods();
   const purchaseMembership = usePurchaseMembership();
@@ -2799,7 +2804,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                                 {promoEnhancedPlan?.metadata?.isPromoActive &&
                                   promoEnhancedPlan?.metadata?.promoMultiplier && (
                                     <PromoBadge
-                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as 3 | 5 | 10}
+                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
                                       size="small"
                                     />
                                   )}

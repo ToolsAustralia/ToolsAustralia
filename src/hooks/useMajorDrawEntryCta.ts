@@ -10,6 +10,7 @@ interface UseMajorDrawEntryCtaResult {
   membershipModal: ReturnType<typeof useMembershipModal>;
   hasActiveSubscription: boolean;
   oneTimePackages: ReturnType<typeof useMemberships>["oneTimePackages"];
+  membershipPromoMultiplier: number;
   oneTimePromoMultiplier: number;
   getHeavyDutyPack: () => LocalMembershipPlan;
   openEntryFlow: (options?: { openLocalModal?: boolean }) => void;
@@ -30,10 +31,11 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { subscriptionPackages, oneTimePackages } = useMemberships();
   const safeOneTimePackages = useMemo(() => oneTimePackages ?? [], [oneTimePackages]);
   const safeSubscriptionPackages = useMemo(() => subscriptionPackages ?? [], [subscriptionPackages]);
+  const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
-  // Promo multiplier applies to both subscription and one-time packages
-  const promoMultiplier = oneTimePromo?.multiplier ?? 1;
+  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
+  const oneTimePromoMultiplier = oneTimePromo?.multiplier ?? 1;
 
   const getHeavyDutyPack = useCallback((): LocalMembershipPlan => {
     const isMember = userData?.subscription?.isActive ?? false;
@@ -41,6 +43,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     // For non-members: Use Foreman subscription package
     // For members: Use additional-foreman-pack (one-time package)
     if (isMember) {
+      const promoMultiplier = oneTimePromoMultiplier;
       // Member path: Use additional-foreman-pack one-time package
       const targetPackageId = "additional-foreman-pack";
 
@@ -130,6 +133,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         },
       };
     } else {
+      const promoMultiplier = membershipPromoMultiplier;
       // Non-member path: Use Foreman subscription package
       const targetPackageId = "foreman-subscription";
 
@@ -229,7 +233,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         },
       };
     }
-  }, [safeOneTimePackages, safeSubscriptionPackages, promoMultiplier, userData]);
+  }, [safeOneTimePackages, safeSubscriptionPackages, membershipPromoMultiplier, oneTimePromoMultiplier, userData]);
 
   const openEntryFlow = useCallback(
     ({ openLocalModal = true }: { openLocalModal?: boolean } = {}) => {
@@ -266,10 +270,19 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipModal,
       hasActiveSubscription,
       oneTimePackages: safeOneTimePackages,
-      oneTimePromoMultiplier: promoMultiplier,
+      membershipPromoMultiplier,
+      oneTimePromoMultiplier,
       getHeavyDutyPack,
       openEntryFlow,
     }),
-    [membershipModal, hasActiveSubscription, safeOneTimePackages, promoMultiplier, getHeavyDutyPack, openEntryFlow]
+    [
+      membershipModal,
+      hasActiveSubscription,
+      safeOneTimePackages,
+      membershipPromoMultiplier,
+      oneTimePromoMultiplier,
+      getHeavyDutyPack,
+      openEntryFlow,
+    ]
   );
 }

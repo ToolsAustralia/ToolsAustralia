@@ -164,7 +164,6 @@ export default function MembershipSection({
   const router = useRouter();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
-  const [showMemberExclusive, setShowMemberExclusive] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
   // Handle client-side mounting to prevent hydration mismatch
@@ -186,7 +185,8 @@ export default function MembershipSection({
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
 
-  // Get active promo for one-time packages (also used for subscription initial purchase)
+  // Get active promos for each package type
+  const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
   // Listen for upsell modal requests
@@ -334,29 +334,15 @@ export default function MembershipSection({
       console.log("🔍 Showing subscription packages:", apiPlans.length);
     } else {
       // For one-time packages, filter based on membership status
-      // Show default packages immediately, apply user-specific filtering when it loads
       if (userLoading) {
-        // While user data is loading, show regular (non-member) packages to prevent flash
         apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
         console.log("🔍 User loading - showing regular packages:", apiPlans.length);
       } else if (hasActiveSubscription) {
-        // Show member-only packages for users with active subscriptions
         apiPlans = oneTimePackages.filter((pkg) => pkg.isMemberOnly === true);
         console.log("🔍 Member - showing member-only packages:", apiPlans.length);
       } else {
-        // Show regular packages for non-members
-        const regularPackages = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
-        console.log("🔍 Non-member - regular packages:", regularPackages.length);
-
-        // If toggle is enabled, show ONLY member-exclusive packages (hide regular ones)
-        if (showMemberExclusive) {
-          const memberExclusivePackages = oneTimePackages.filter((pkg) => pkg.isMemberOnly === true);
-          apiPlans = memberExclusivePackages; // Only show member-exclusive packages
-          console.log("🔍 Toggle enabled - showing member-exclusive packages:", apiPlans.length);
-        } else {
-          apiPlans = regularPackages; // Show only regular packages
-          console.log("🔍 Toggle disabled - showing regular packages:", apiPlans.length);
-        }
+        apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
+        console.log("🔍 Non-member - regular packages:", apiPlans.length);
       }
     }
 
@@ -382,10 +368,10 @@ export default function MembershipSection({
         };
       }
 
-      // Check if this is a subscription package with active promo (uses same one-time-packages promo)
-      if (activeTab === "membership" && oneTimePromo && plan.period !== "one-time") {
+      // Check if this is a subscription package with active membership promo
+      if (activeTab === "membership" && membershipPromo && plan.period !== "one-time") {
         const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoEntries = originalEntries * oneTimePromo.multiplier;
+        const promoEntries = originalEntries * membershipPromo.multiplier;
 
         return {
           ...plan,
@@ -394,7 +380,7 @@ export default function MembershipSection({
             ...plan.metadata,
             entriesCount: promoEntries,
             originalEntries,
-            promoMultiplier: oneTimePromo.multiplier,
+            promoMultiplier: membershipPromo.multiplier,
             isPromoActive: true,
             isInitialPurchaseOnly: true, // Mark as initial purchase only
           },
@@ -438,7 +424,6 @@ export default function MembershipSection({
               <button
                 onClick={() => {
                   setActiveTab("one-time");
-                  setShowMemberExclusive(false); // Reset toggle when switching tabs
                 }}
                 className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                   activeTab === "one-time"
@@ -449,13 +434,12 @@ export default function MembershipSection({
                 One-Time
                 {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                 {oneTimePromo && activeTab === "one-time" && (
-                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 3 | 5 | 10} />
+                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
                 )}
               </button>
               <button
                 onClick={() => {
                   setActiveTab("membership");
-                  setShowMemberExclusive(false); // Reset toggle when switching tabs
                 }}
                 className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                   activeTab === "membership"
@@ -465,8 +449,8 @@ export default function MembershipSection({
               >
                 Membership Packs
                 {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                {oneTimePromo && activeTab === "membership" && (
-                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 3 | 5 | 10} />
+                {membershipPromo && activeTab === "membership" && (
+                  <PromoMultiplierBadge multiplier={membershipPromo.multiplier as 2 | 3 | 5 | 10} />
                 )}
               </button>
             </div>
@@ -479,10 +463,7 @@ export default function MembershipSection({
             {(() => {
               // Determine if we should show 2 columns: when showing member-exclusive packages on one-time tab
               const showingMemberExclusive =
-                activeTab === "one-time" &&
-                (showMemberExclusive ||
-                  hasActiveSubscription ||
-                  (membershipPlans.length > 0 && membershipPlans.some((p) => p.isMemberOnly === true)));
+                activeTab === "one-time" && membershipPlans.some((plan) => plan.isMemberOnly === true);
               return (
                 <div
                   className={`grid ${
@@ -530,7 +511,7 @@ export default function MembershipSection({
                           {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
                             <div className="absolute top-2 left-2 z-20">
                               <HexagonalPromoBadge
-                                multiplier={plan.metadata.promoMultiplier as 3 | 5 | 10}
+                                multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
                                 size={plan.isMemberOnly ? "xs" : "medium"}
                               />
                             </div>
@@ -920,7 +901,7 @@ export default function MembershipSection({
                     {/* Octagonal Promo Badge - Top Left */}
                     {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
                       <div className="absolute top-2 left-2 z-20">
-                        <HexagonalPromoBadge multiplier={plan.metadata.promoMultiplier as 3 | 5 | 10} size="small" />
+                        <HexagonalPromoBadge multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
                       </div>
                     )}
                     {/* Popular and Current Plan Badges - Top Right */}
@@ -1133,31 +1114,8 @@ export default function MembershipSection({
         </div>
       )}
 
-      {/* Member Exclusive Toggle - Only show for non-members on one-time tab */}
-      {!hasActiveSubscription && activeTab === "one-time" ? (
-        <div className="flex justify-center pt-4 sm:pt-10">
-          <div className="flex items-center gap-3 bg-gray-100 rounded-[15px] p-3 border border-gray-200">
-            <span className="text-[12px] sm:text-[14px] text-gray-700 font-medium">
-              {showMemberExclusive ? "Hide Premium Packages" : "Show Premium Packages"}
-            </span>
-            <button
-              onClick={() => setShowMemberExclusive(!showMemberExclusive)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                showMemberExclusive ? "bg-red-600" : "bg-gray-300"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                  showMemberExclusive ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      ) : (
-        // Placeholder div to maintain consistent spacing when toggle is not shown
-        <div className="pt-4 sm:pt-10" aria-hidden="true" />
-      )}
+      {/* Spacer to keep consistent spacing below packages */}
+      <div className="pt-4 sm:pt-10" aria-hidden="true" />
 
       {/* Signup Modal */}
       <MembershipModal

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
-import { useActivePromos } from "@/hooks/queries/usePromoQueries";
+import { useActivePromos, type PromoType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { useSidebar } from "@/contexts/SidebarContext";
 
@@ -15,6 +15,34 @@ const PromoCountdownBanner: React.FC = () => {
 
   // Get current promo
   const currentPromo = promos && promos.length > 0 ? promos[currentPromoIndex] : null;
+
+  const getPromoCategoryLabel = (type?: PromoType) => {
+    if (!type) return "PROMO";
+    switch (type) {
+      case "membership-packages":
+        return "";
+      case "one-time-packages":
+        return "";
+      case "mini-packages":
+      default:
+        return "";
+    }
+  };
+
+  const getPromoTargetCopy = (type?: PromoType) => {
+    if (!type) return "entries";
+    switch (type) {
+      case "membership-packages":
+        return "membership packages";
+      case "one-time-packages":
+        return "one-time packages";
+      default:
+        return "mini packages";
+    }
+  };
+
+  const promoCategory = getPromoCategoryLabel(currentPromo?.type);
+  const promoTarget = getPromoTargetCopy(currentPromo?.type);
 
   // Auto-switch between promos every 5 seconds - animation will trigger on re-render
   useEffect(() => {
@@ -120,9 +148,7 @@ const PromoCountdownBanner: React.FC = () => {
                       variants={itemVariants}
                       className="text-white text-xs sm:text-sm font-bold whitespace-nowrap"
                     >
-                      {currentPromo.type === "one-time-packages" ? "ONE-TIME PROMO" : "MINI DRAW PROMO"}: Get{" "}
-                      {currentPromo.multiplier}x entries on all{" "}
-                      {currentPromo.type === "one-time-packages" ? "packages" : "mini packages"}!
+                      {promoCategory}: Get {currentPromo.multiplier}x entries on all {promoTarget}!
                     </motion.div>
                   </motion.div>
                 </AnimatePresence>
@@ -151,11 +177,10 @@ const PromoCountdownBanner: React.FC = () => {
                         <PromoBadge multiplier={currentPromo.multiplier} size="small" />
                       </motion.div>
 
-                      {/* Promo text (timer removed in toggle system) */}
+                      {/* Promo text (match desktop message, no trimming) */}
                       <motion.div className="flex-shrink-0 text-white" variants={itemVariants}>
                         <div className="text-[10px] font-bold whitespace-nowrap">
-                          {currentPromo.type === "one-time-packages" ? "ONE-TIME" : "MINI DRAW"}{" "}
-                          {currentPromo.multiplier}x ENTRIES!
+                          {promoCategory}: Get {currentPromo.multiplier}x entries on all {promoTarget}!
                         </div>
                       </motion.div>
                     </motion.div>

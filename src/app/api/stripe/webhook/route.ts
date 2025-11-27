@@ -63,21 +63,18 @@ async function markEventProcessed(paymentIntentId: string): Promise<void> {
 /**
  * Get active promo multiplier for a package type
  */
-async function getActivePromoMultiplier(packageType: "one-time" | "mini-draw"): Promise<number> {
+async function getActivePromoMultiplier(packageType: "membership" | "one-time" | "mini-draw"): Promise<number> {
   try {
     const promoType =
-      packageType === "one-time"
+      packageType === "membership"
+        ? "membership-packages"
+        : packageType === "one-time"
         ? "one-time-packages"
-        : packageType === "mini-draw"
-        ? "mini-packages"
-        : "one-time-packages";
-    const now = new Date();
+        : "mini-packages";
 
     const activePromo = await Promo.findOne({
       type: promoType,
       isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gt: now },
     }).sort({ createdAt: -1 });
 
     return activePromo?.multiplier || 1;
@@ -1377,7 +1374,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // ✅ NEW: Apply promo multiplier for initial subscription purchases only
     if (invoice.billing_reason === "subscription_create") {
       try {
-        const promoMultiplier = await getActivePromoMultiplier("one-time");
+        const promoMultiplier = await getActivePromoMultiplier("membership");
         if (promoMultiplier > 1) {
           const originalEntries = entriesToGrant;
           entriesToGrant = entriesToGrant * promoMultiplier;

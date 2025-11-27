@@ -160,6 +160,13 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   }
 
   const highlights = activePrize.highlights ?? [];
+  const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
+  const msUntilDraw = drawDateObj ? drawDateObj.getTime() - Date.now() : null;
+  const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;
+  const shouldShowCountdown = msUntilDraw !== null && msUntilDraw > 0 && daysUntilDraw !== null && daysUntilDraw <= 3;
+  const drawDateLabel = drawDateObj
+    ? drawDateObj.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
+    : "Draw date TBA";
 
   return (
     <section ref={prizeRef} className="py-8 sm:py-16 lg:py-20 relative">
@@ -340,40 +347,60 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </Swiper>
             )}
 
-            <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20">
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                {[
-                  { label: "Days", value: timeLeft.days },
-                  { label: "Hours", value: timeLeft.hours },
-                  { label: "Mins", value: timeLeft.minutes },
-                  { label: "Secs", value: timeLeft.seconds },
-                ].map((unit) => (
-                  <div
-                    key={unit.label}
-                    className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
-                  >
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(unit.value).padStart(2, "0")}
+            {shouldShowCountdown ? (
+              <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20">
+                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                  {[
+                    { label: "Days", value: timeLeft.days },
+                    { label: "Hours", value: timeLeft.hours },
+                    { label: "Mins", value: timeLeft.minutes },
+                    { label: "Secs", value: timeLeft.seconds },
+                  ].map((unit) => (
+                    <div
+                      key={unit.label}
+                      className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
+                    >
+                      <div className="text-lg sm:text-2xl font-bold text-white">
+                        {String(unit.value).padStart(2, "0")}
+                      </div>
+                      <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{unit.label}</div>
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{unit.label}</div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
 
-              <div className="mt-4 text-center">
-                <a
-                  href="https://facebook.com/tools-australia"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                  </svg>
-                  Follow for live draw updates
-                </a>
+                <div className="mt-4 text-center">
+                  <a
+                    href="https://www.facebook.com/toolsaust"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                    Follow for live draw updates
+                  </a>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-3xl p-4 shadow-2xl border-2 border-white/20 text-center">
+                <p className="text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
+                <p className="text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
+                <div className="mt-3 text-center">
+                  <a
+                    href="https://www.facebook.com/toolsaust"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                    Follow for live draw updates
+                  </a>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleEnterNow}

@@ -1,8 +1,8 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export interface IPromo extends Document {
-  type: "one-time-packages" | "mini-packages";
-  multiplier: 3 | 5 | 10; // Only 3x, 5x, 10x supported (removed 2x)
+  type: "membership-packages" | "one-time-packages" | "mini-packages";
+  multiplier: 2 | 3 | 5 | 10;
   startDate?: Date; // Optional - kept for backward compatibility but not used in toggle system
   endDate?: Date; // Optional - kept for backward compatibility but not used in toggle system
   duration?: number; // Optional - in hours, kept for backward compatibility
@@ -15,13 +15,13 @@ export interface IPromo extends Document {
 const PromoSchema = new Schema<IPromo>(
   {
     type: {
-      type: String,
-      enum: ["one-time-packages", "mini-packages"],
+    type: String,
+    enum: ["membership-packages", "one-time-packages", "mini-packages"],
       required: [true, "Promo type is required"],
     },
     multiplier: {
       type: Number,
-      enum: [3, 5, 10], // Only 3x, 5x, 10x supported (removed 2x)
+      enum: [2, 3, 5, 10],
       required: [true, "Multiplier is required"],
     },
     startDate: {
@@ -76,7 +76,9 @@ PromoSchema.statics.getActivePromos = async function () {
 };
 
 // Static method to get active promo by type (updated for toggle system - ignores dates)
-PromoSchema.statics.getActivePromoByType = async function (type: "one-time-packages" | "mini-packages") {
+PromoSchema.statics.getActivePromoByType = async function (
+  type: "membership-packages" | "one-time-packages" | "mini-packages"
+) {
   return this.findOne({
     type,
     isActive: true,

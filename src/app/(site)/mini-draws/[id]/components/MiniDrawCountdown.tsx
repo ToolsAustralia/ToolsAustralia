@@ -86,7 +86,7 @@ export default function MiniDrawCountdown({ drawDate, freezeEntriesAt, status }:
       {/* Facebook Follow Link */}
       <div className="mt-4 text-center">
         <a
-          href="https://facebook.com/tools-australia"
+          href="https://www.facebook.com/toolsaust"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors"

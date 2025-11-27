@@ -140,7 +140,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   // Fetch real membership data from API
   const { subscriptionPackages, oneTimePackages, loading, error } = useMemberships();
 
-  // Get active promo for one-time packages
+  // Get active promos
+  const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
   // Debug logging
@@ -164,10 +165,11 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     // Apply promo multiplier to packages if there's an active promo
     return convertedPlans.map((plan) => {
       // Check if this is a one-time package with active promo
-      if (activeTab === "one-time" && oneTimePromo && plan.period === "one-time") {
+      if (activeTab === "one-time" && plan.period === "one-time" && oneTimePromo?.multiplier) {
         // Apply promo multiplier to entries
         const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoEntries = originalEntries * oneTimePromo.multiplier;
+        const promoMultiplier = oneTimePromo.multiplier;
+        const promoEntries = originalEntries * promoMultiplier;
 
         // Update features to show promo effect
         const updatedFeatures = plan.features.map((feature) => {
@@ -177,7 +179,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
             if (match) {
               const originalNumber = parseInt(match[1]);
-              const newNumber = originalNumber * oneTimePromo.multiplier;
+              const newNumber = originalNumber * promoMultiplier;
               // Replace the number in the feature text
               return { text: feature.text.replace(originalNumber.toString(), newNumber.toString()) };
             }
@@ -192,17 +194,18 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ...plan.metadata,
             entriesCount: promoEntries,
             originalEntries,
-            promoMultiplier: oneTimePromo.multiplier,
+            promoMultiplier,
             isPromoActive: true,
           },
         };
       }
 
-      // Check if this is a subscription package with active promo (uses same one-time-packages promo)
-      if (activeTab === "membership" && oneTimePromo && plan.period !== "one-time") {
+      // Check if this is a subscription package with active membership promo
+      if (activeTab === "membership" && plan.period !== "one-time" && membershipPromo?.multiplier) {
         // Apply promo multiplier to entries for subscription packages (initial purchase only)
         const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoEntries = originalEntries * oneTimePromo.multiplier;
+        const promoMultiplier = membershipPromo.multiplier;
+        const promoEntries = originalEntries * promoMultiplier;
 
         // Update features to show promo effect
         const updatedFeatures = plan.features.map((feature) => {
@@ -212,7 +215,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
             if (match) {
               const originalNumber = parseInt(match[1]);
-              const newNumber = originalNumber * oneTimePromo.multiplier;
+              const newNumber = originalNumber * promoMultiplier;
               // Replace the number in the feature text
               return { text: feature.text.replace(originalNumber.toString(), newNumber.toString()) };
             }
@@ -227,7 +230,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ...plan.metadata,
             entriesCount: promoEntries,
             originalEntries,
-            promoMultiplier: oneTimePromo.multiplier,
+            promoMultiplier,
             isPromoActive: true,
             isInitialPurchaseOnly: true, // Mark as initial purchase only
           },
@@ -655,7 +658,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {/* Promo Badge - Top Left Corner */}
                 {plan.metadata?.isPromoActive && (
                   <div className="absolute top-2 left-2 z-20">
-                    <PromoBadge multiplier={plan.metadata.promoMultiplier as 3 | 5 | 10} size="small" />
+                    <PromoBadge multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
                   </div>
                 )}
 

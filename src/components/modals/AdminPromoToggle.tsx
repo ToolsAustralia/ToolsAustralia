@@ -16,16 +16,22 @@ interface AdminPromoToggleProps {
  * Simple toggle interface for managing promos (3x, 5x, 10x, or OFF)
  * Replaces the old date-based promo creation system
  */
+const promoMultipliers: (2 | 3 | 5 | 10)[] = [10, 5, 3, 2];
+
 const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) => {
   const { data: activePromos = [], isLoading, refetch } = useAdminActivePromos();
   const togglePromoMutation = useTogglePromo();
   const [togglingPromo, setTogglingPromo] = useState<string | null>(null);
 
   // Get active promo for each type
+  const membershipPromo = activePromos.find((p) => p.type === "membership-packages");
   const oneTimePromo = activePromos.find((p) => p.type === "one-time-packages");
   const miniPromo = activePromos.find((p) => p.type === "mini-packages");
 
-  const handleToggle = async (type: "one-time-packages" | "mini-packages", multiplier: 3 | 5 | 10 | null) => {
+  const handleToggle = async (
+    type: "membership-packages" | "one-time-packages" | "mini-packages",
+    multiplier: 2 | 3 | 5 | 10 | null
+  ) => {
     const toggleKey = `${type}-${multiplier}`;
     setTogglingPromo(toggleKey);
 
@@ -41,8 +47,8 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
   };
 
   const renderToggleSection = (
-    type: "one-time-packages" | "mini-packages",
-    currentPromo: typeof oneTimePromo | typeof miniPromo,
+    type: "membership-packages" | "one-time-packages" | "mini-packages",
+    currentPromo: typeof membershipPromo | typeof oneTimePromo | typeof miniPromo,
     typeLabel: string
   ) => {
     const currentMultiplier = currentPromo?.multiplier || null;
@@ -60,9 +66,9 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-3">
-          {/* Toggle buttons: 10x, 5x, 3x, OFF */}
-          {[10, 5, 3].map((multiplier) => {
+        <div className="grid grid-cols-5 gap-3">
+          {/* Toggle buttons: 10x, 5x, 3x, 2x, OFF */}
+          {promoMultipliers.map((multiplier) => {
             const isActive = currentMultiplier === multiplier;
             const toggleKey = `${type}-${multiplier}`;
             const isTogglingThis = togglingPromo === toggleKey;
@@ -70,7 +76,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
             return (
               <button
                 key={multiplier}
-                onClick={() => handleToggle(type, multiplier as 3 | 5 | 10)}
+                onClick={() => handleToggle(type, multiplier)}
                 disabled={isToggling || togglePromoMutation.isPending}
                 className={`
                   relative px-4 py-3 rounded-lg font-bold text-sm transition-all duration-200
@@ -137,6 +143,8 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
           </div>
         ) : (
           <div className="space-y-8">
+            {renderToggleSection("membership-packages", membershipPromo, "Membership Subscription Promo")}
+            <div className="border-t border-gray-200"></div>
             {renderToggleSection("one-time-packages", oneTimePromo, "One-Time Packages")}
             <div className="border-t border-gray-200"></div>
             {renderToggleSection("mini-packages", miniPromo, "Mini Packages")}
