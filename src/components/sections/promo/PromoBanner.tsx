@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 
 export default function PromoBanner() {
@@ -73,23 +74,79 @@ export default function PromoBanner() {
 
         {/* Main Content */}
         <div className="relative z-10 flex items-center justify-between w-full">
-          {/* Left Side - Alert Message with Enhanced Styling */}
+          {/* Left Side - Alert Message with Enhanced Styling and Animations */}
           <div className="flex items-center gap-3">
             <div className="text-left">
-              <div
-                className={`text-white font-black font-['Poppins'] tracking-wide ${
-                  isScrolled ? "text-xs sm:text-base lg:text-lg" : "text-sm sm:text-base lg:text-lg"
-                }`}
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="relative"
               >
-                First 500 people
-              </div>
-              <div
-                className={`text-yellow-300 font-bold font-['Poppins'] ${
-                  isScrolled ? "text-[10px] sm:text-sm" : "text-xs sm:text-sm"
-                }`}
+                <motion.div
+                  animate={{
+                    scale: [1, 1.03, 1],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className={`relative inline-block ${
+                    isScrolled ? "text-xs sm:text-base lg:text-lg" : "text-sm sm:text-base lg:text-lg"
+                  }`}
+                >
+                  <span className="relative z-10 text-white font-black font-['Poppins'] tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                    First 500 people
+                  </span>
+                  <motion.span
+                    animate={{
+                      opacity: [0.3, 0.6, 0.3],
+                    }}
+                    transition={{
+                      duration: 2.5,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                    className="absolute inset-0 bg-gradient-to-r from-yellow-400/40 via-yellow-300/50 to-yellow-400/40 blur-lg -z-0"
+                  />
+                </motion.div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.15, ease: "easeOut" }}
+                className="relative"
               >
-                Get {multiplier}x entries
-              </div>
+                <motion.div
+                  animate={{
+                    scale: [1, 1.05, 1],
+                  }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0.2,
+                  }}
+                  className={`relative inline-block ${isScrolled ? "text-[10px] sm:text-sm" : "text-xs sm:text-sm"}`}
+                >
+                  <span className="relative z-10 bg-gradient-to-r from-yellow-300 via-yellow-200 to-yellow-300 bg-clip-text text-transparent font-bold font-['Poppins'] drop-shadow-[0_2px_6px_rgba(251,191,36,0.4)]">
+                    Get {multiplier}x entries
+                  </span>
+                  <motion.span
+                    animate={{
+                      opacity: [0.2, 0.5, 0.2],
+                      scale: [1, 1.08, 1],
+                    }}
+                    transition={{
+                      duration: 2.8,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                    className="absolute inset-0 bg-gradient-to-r from-yellow-400/50 via-yellow-300/60 to-yellow-400/50 blur-xl -z-0"
+                  />
+                </motion.div>
+              </motion.div>
             </div>
           </div>
 

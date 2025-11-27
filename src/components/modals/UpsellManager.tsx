@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import UpsellModal from "./UpsellModal";
 import FloatingGiftIcon from "../ui/FloatingGiftIcon";
-import { UpsellManagerProps, UpsellOffer, SAMPLE_UPSELL_OFFERS } from "@/types/upsell";
+import { UpsellManagerProps, UpsellOffer, SAMPLE_UPSELL_OFFERS, OriginalPurchaseContext } from "@/types/upsell";
+import {
+  loadOriginalPurchaseContext,
+  clearOriginalPurchaseContext,
+} from "@/utils/storage/originalPurchaseContext";
 
 /**
  * UpsellManager Component
@@ -25,6 +29,24 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
   const [declinedOffer, setDeclinedOffer] = useState<UpsellOffer | null>(null);
   const [invoiceFinalized, setInvoiceFinalized] = useState(false);
   const [finalizationTimeoutId, setFinalizationTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [resolvedOriginalPurchaseContext, setResolvedOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(
+    originalPurchaseContext ?? null
+  );
+
+  useEffect(() => {
+    if (originalPurchaseContext) {
+      setResolvedOriginalPurchaseContext(originalPurchaseContext);
+      return;
+    }
+
+    if (!resolvedOriginalPurchaseContext) {
+      const storedContext = loadOriginalPurchaseContext();
+      if (storedContext) {
+        console.info("📦 UpsellManager hydrated purchase context from storage", storedContext);
+        setResolvedOriginalPurchaseContext(storedContext);
+      }
+    }
+  }, [originalPurchaseContext, resolvedOriginalPurchaseContext]);
 
   /**
    * Select the most relevant offer for the user based on context
@@ -130,8 +152,11 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
       price: number;
       entries: number;
     }) => {
-      if (invoiceFinalized || !originalPurchaseContext || !userContext.userId) {
-        console.log("📧 Invoice finalization skipped:", { invoiceFinalized, hasContext: !!originalPurchaseContext });
+      if (invoiceFinalized || !resolvedOriginalPurchaseContext || !userContext.userId) {
+        console.log("📧 Invoice finalization skipped:", {
+          invoiceFinalized,
+          hasContext: !!resolvedOriginalPurchaseContext,
+        });
         return;
       }
 
@@ -143,7 +168,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: userContext.userId,
-            originalPurchase: originalPurchaseContext,
+            originalPurchase: resolvedOriginalPurchaseContext,
             upsellPurchase: upsellData,
           }),
         });
@@ -152,6 +177,8 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
           const result = await response.json();
           console.log("✅ Invoice finalized:", result);
           setInvoiceFinalized(true);
+          clearOriginalPurchaseContext();
+          setResolvedOriginalPurchaseContext(null);
 
           // Clear timeout if it exists
           if (finalizationTimeoutId) {
@@ -165,7 +192,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
         console.error("❌ Invoice finalization error:", error);
       }
     },
-    [invoiceFinalized, originalPurchaseContext, userContext.userId, finalizationTimeoutId]
+    [invoiceFinalized, resolvedOriginalPurchaseContext, userContext.userId, finalizationTimeoutId]
   );
 
   /**
@@ -184,7 +211,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
       trackUpsellEvent("shown", offer);
 
       // Start 1-minute timeout for invoice finalization
-      if (originalPurchaseContext && !invoiceFinalized) {
+      if (resolvedOriginalPurchaseContext && !invoiceFinalized) {
         const timeoutId = setTimeout(() => {
           console.log("⏰ Invoice finalization timeout - sending original purchase only");
           finalizeInvoice();
@@ -193,7 +220,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
         setFinalizationTimeoutId(timeoutId);
       }
     },
-    [onOfferShown, trackUpsellEvent, originalPurchaseContext, invoiceFinalized, finalizeInvoice]
+    [onOfferShown, trackUpsellEvent, resolvedOriginalPurchaseContext, invoiceFinalized, finalizeInvoice]
   );
 
   /**

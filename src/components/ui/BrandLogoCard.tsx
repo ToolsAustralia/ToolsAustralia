@@ -97,6 +97,12 @@ export default function BrandLogoCard({
   gradientOverride,
   scaleOverride,
 }: BrandLogoCardProps) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const gradientDirection = brand.splitGradient
     ? brand.splitOrientation === "vertical"
       ? "b"
@@ -150,7 +156,13 @@ export default function BrandLogoCard({
 
   // Default to the desktop scale but allow each breakpoint to provide its own value so
   // wide logos, such as Warren & Brown, can breathe on small viewports.
+  // Only calculate responsive scale after mount to prevent hydration mismatch
   const responsiveCardScale = (() => {
+    if (!isMounted) {
+      // During SSR and initial render, use a safe default that won't cause layout shift
+      // Use mobile scale as default since mobile is most common
+      return brand.imageScaleSm ?? brand.imageScale ?? 1;
+    }
     const fallbackScale = brand.imageScale ?? 1;
     switch (breakpoint) {
       case "lg":
@@ -207,7 +219,7 @@ export default function BrandLogoCard({
         {brand.hasOverlay !== false && (
           <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/10 rounded-xl pointer-events-none" />
         )}
-        <div className="relative w-[120px] h-[48px]">
+        <div className="relative w-[120px] h-[48px] flex-shrink-0">
           <Image
             src={brand.logo}
             alt={brand.name}
@@ -215,6 +227,7 @@ export default function BrandLogoCard({
             className="object-contain drop-shadow-md"
             sizes="150px"
             unoptimized
+            priority
             style={
               cardScale !== 1
                 ? {

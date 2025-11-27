@@ -72,7 +72,7 @@ export default function Footer() {
                     My Account
                   </Link>
                   <Link
-                    href="/promotional/giveaway"
+                    href="/promotions/milwaukee-sidchrome"
                     className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
                   >
                     Promotions

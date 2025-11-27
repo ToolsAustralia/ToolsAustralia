@@ -34,6 +34,7 @@ import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
+import { persistOriginalPurchaseContext } from "@/utils/storage/originalPurchaseContext";
 // Member package mapping utilities imported but using inline mapping for simplicity
 
 // Type for one-time purchase response data
@@ -139,7 +140,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   >("subscription");
 
   // Original purchase context for combined invoice (invoice finalization)
-  const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
+  const [originalPurchaseContext, setOriginalPurchaseContextState] = useState<OriginalPurchaseContext | null>(null);
+
+  const updateOriginalPurchaseContext = useCallback((context: OriginalPurchaseContext | null) => {
+    setOriginalPurchaseContextState(context);
+    persistOriginalPurchaseContext(context);
+  }, []);
 
   // Payment confirmation state - now handled directly in handleSubmit
   // Removed showPaymentConfirmation and paymentData states
@@ -1064,7 +1070,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       };
 
       // Also update state for other component uses
-      setOriginalPurchaseContext(contextToPass);
+      updateOriginalPurchaseContext(contextToPass);
       console.log("📧 Stored original purchase context for invoice finalization", {
         miniDrawId,
         miniDrawName,
@@ -1225,7 +1231,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               };
 
               // Also update state for other component uses
-              setOriginalPurchaseContext(contextToPass);
+              updateOriginalPurchaseContext(contextToPass);
               console.log("📧 Stored original purchase context for invoice finalization (new user)");
             }
 
@@ -1363,7 +1369,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           entries: entriesCount,
         };
         // Also update state for other component uses
-        setOriginalPurchaseContext(contextToPass);
+        updateOriginalPurchaseContext(contextToPass);
         console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
       } else if (paymentIntentId && activePlan.period === "mo") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
@@ -1377,7 +1383,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           entries: entriesCount,
         };
         // Also update state for other component uses
-        setOriginalPurchaseContext(contextToPass);
+        updateOriginalPurchaseContext(contextToPass);
         console.log("📧 Stored original purchase context for invoice finalization (subscription)");
       }
 
@@ -1909,7 +1915,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 entries: entriesCount,
               };
 
-              setOriginalPurchaseContext(fallbackContext);
+              updateOriginalPurchaseContext(fallbackContext);
               console.log("📧 Stored original purchase context for invoice finalization (fallback path)");
             } else {
               console.warn("⚠️ Fallback path could not extract paymentIntentId - invoice finalization may be delayed");

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Package, Info } from "lucide-react";
@@ -13,6 +13,7 @@ import type { PaymentStatusResponse } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
+import { persistOriginalPurchaseContext } from "@/utils/storage/originalPurchaseContext";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -45,7 +46,12 @@ export default function MiniDrawPackages({
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [processingPackageName, setProcessingPackageName] = useState<string>("");
   const [upsellTriggered, setUpsellTriggered] = useState(false);
-  const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
+  const [originalPurchaseContext, setOriginalPurchaseContextState] = useState<OriginalPurchaseContext | null>(null);
+
+  const updateOriginalPurchaseContext = useCallback((context: OriginalPurchaseContext | null) => {
+    setOriginalPurchaseContextState(context);
+    persistOriginalPurchaseContext(context);
+  }, []);
   const [successToastShown, setSuccessToastShown] = useState(false); // Guard to prevent duplicate toasts
 
   // Get selected package for modal
@@ -136,7 +142,7 @@ export default function MiniDrawPackages({
         setShowPaymentProcessing(true);
 
         // Store original purchase context for upsell (only after webhook confirms)
-        setOriginalPurchaseContext({
+        updateOriginalPurchaseContext({
           paymentIntentId: extractedPaymentIntentId,
           packageId: pkg._id,
           packageName: pkg.name,
