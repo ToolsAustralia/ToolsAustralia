@@ -10,8 +10,8 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
-import PromoBadge from "@/components/ui/PromoBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
+import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
 
 // Import package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.png";
@@ -447,9 +447,9 @@ export default function MembershipSection({
                 }`}
               >
                 One-Time
-                {/* Multiplier Badge - Mobile only, upper right, fiery metallic red */}
+                {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                 {oneTimePromo && activeTab === "one-time" && (
-                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
+                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 3 | 5 | 10} />
                 )}
               </button>
               <button
@@ -464,9 +464,9 @@ export default function MembershipSection({
                 }`}
               >
                 Membership Packs
-                {/* Multiplier Badge - Mobile only, upper right, fiery metallic red */}
+                {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                 {oneTimePromo && activeTab === "membership" && (
-                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
+                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 3 | 5 | 10} />
                 )}
               </button>
             </div>
@@ -525,8 +525,18 @@ export default function MembershipSection({
                               plan.id
                             )} pointer-events-none rounded-2xl z-0`}
                           ></div>
-                          {/* Badges - Top Right Corner (Popular and Current Plan only) */}
-                          <div className="absolute top-2 right-2 z-20 flex flex-col gap-1">
+                          {/* Badges - Top Left Corner (Octagonal Promo Badge) and Top Right Corner (Popular and Current Plan) */}
+                          {/* Octagonal Promo Badge - Top Left */}
+                          {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
+                            <div className="absolute top-2 left-2 z-20">
+                              <HexagonalPromoBadge
+                                multiplier={plan.metadata.promoMultiplier as 3 | 5 | 10}
+                                size={plan.isMemberOnly ? "xs" : "medium"}
+                              />
+                            </div>
+                          )}
+                          {/* Popular and Current Plan Badges - Top Right */}
+                          <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
                             {/* Current Plan Badge - Highest Priority */}
                             {isCurrentSubscription(plan) && (
                               <div
@@ -889,11 +899,7 @@ export default function MembershipSection({
                           className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
                         />
                         {/* Promo Badge positioned on top of the image icon */}
-                        {plan.metadata?.isPromoActive && (
-                          <div className="absolute -top-2 -right-2 z-10">
-                            <PromoBadge multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
-                          </div>
-                        )}
+                        {/* Promo badge on icon removed - now shown as hexagonal badge on card top-right */}
                       </div>
                     </div>
                   )}
@@ -910,8 +916,15 @@ export default function MembershipSection({
                       backgroundClip: `padding-box, border-box`,
                     }}
                   >
-                    {/* Badges - Top Right Corner (Popular and Current Plan only) */}
-                    <div className="absolute top-2 right-2 z-20 flex flex-col gap-1">
+                    {/* Badges - Top Left Corner (Octagonal Promo Badge) and Top Right Corner (Popular and Current Plan) */}
+                    {/* Octagonal Promo Badge - Top Left */}
+                    {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
+                      <div className="absolute top-2 left-2 z-20">
+                        <HexagonalPromoBadge multiplier={plan.metadata.promoMultiplier as 3 | 5 | 10} size="small" />
+                      </div>
+                    )}
+                    {/* Popular and Current Plan Badges - Top Right */}
+                    <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
                       {/* Current Plan Badge - Highest Priority */}
                       {isCurrentSubscription(plan) && (
                         <div className="bg-gradient-to-r from-green-500 via-green-600 to-green-700 text-white px-2 py-1 rounded-full font-bold text-[8px] shadow-lg shadow-green-500/50 border border-green-400">
@@ -979,7 +992,9 @@ export default function MembershipSection({
                                       {entriesNumber}
                                     </span>
                                   )}
-                                  <div className={`text-[16px] sm:text-[20px] ${colorScheme.text} mt-1`}>Free Entries</div>
+                                  <div className={`text-[16px] sm:text-[20px] ${colorScheme.text} mt-1`}>
+                                    Free Entries
+                                  </div>
                                 </div>
                               );
                             }

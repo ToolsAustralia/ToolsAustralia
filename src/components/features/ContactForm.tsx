@@ -29,6 +29,7 @@ export default function ContactForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string>("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   // Helper function to check if a field is valid
@@ -152,6 +153,7 @@ export default function ContactForm() {
     }
 
     setIsSubmitting(true);
+    setSubmitError("");
 
     try {
       // Submit to API
@@ -165,7 +167,26 @@ export default function ContactForm() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to submit form");
+
+        // Handle rate limiting (429 Too Many Requests)
+        if (response.status === 429) {
+          const retryAfter = errorData.retryAfter || 300; // Default to 5 minutes if not provided
+          const minutes = Math.floor(retryAfter / 60);
+          const seconds = retryAfter % 60;
+          const timeMessage =
+            minutes > 0
+              ? `${minutes} minute${minutes > 1 ? "s" : ""}${
+                  seconds > 0 ? ` and ${seconds} second${seconds > 1 ? "s" : ""}` : ""
+                }`
+              : `${seconds} second${seconds > 1 ? "s" : ""}`;
+
+          setSubmitError(
+            `You've submitted too many messages recently. Please wait ${timeMessage} before submitting again.`
+          );
+          return;
+        }
+
+        throw new Error(errorData.message || errorData.error || "Failed to submit form");
       }
 
       const result = await response.json();
@@ -181,6 +202,7 @@ export default function ContactForm() {
       });
 
       setIsSubmitted(true);
+      setSubmitError("");
 
       // Reset form after successful submission
       setTimeout(() => {
@@ -198,7 +220,7 @@ export default function ContactForm() {
       }, 3000);
     } catch (error) {
       console.error("Error submitting form:", error);
-      alert("Something went wrong. Please try again.");
+      setSubmitError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -242,6 +264,13 @@ export default function ContactForm() {
             Fill out the form below and we&apos;ll get back to you as soon as possible.
           </p>
         </div>
+
+        {/* Error Message */}
+        {submitError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700 font-['Poppins']">{submitError}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" ref={formRef}>
           {/* First Name and Last Name Row */}

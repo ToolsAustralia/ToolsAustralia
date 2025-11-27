@@ -12,7 +12,6 @@ const PromoCountdownBanner: React.FC = () => {
   const { data: promos } = useActivePromos();
   const { isAnySidebarOpen } = useSidebar();
   const [currentPromoIndex, setCurrentPromoIndex] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(0);
 
   // Get current promo
   const currentPromo = promos && promos.length > 0 ? promos[currentPromoIndex] : null;
@@ -27,38 +26,6 @@ const PromoCountdownBanner: React.FC = () => {
 
     return () => clearInterval(switchInterval);
   }, [promos]);
-
-  // Real-time countdown effect
-  useEffect(() => {
-    if (!currentPromo || !currentPromo.endDate) return;
-
-    const updateCountdown = () => {
-      const now = new Date().getTime();
-      const endTime = new Date(currentPromo.endDate).getTime();
-      const remaining = Math.max(0, endTime - now);
-      setTimeRemaining(remaining);
-    };
-
-    // Update immediately
-    updateCountdown();
-
-    // Update every second
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
-  }, [currentPromo]);
-
-  // Format time remaining
-  const formatTimeRemaining = (ms: number) => {
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((ms % (1000 * 60)) / 1000);
-
-    return { days, hours, minutes, seconds };
-  };
-
-  const formattedTime = formatTimeRemaining(timeRemaining);
 
   // Framer Motion animation variants
   const bannerVariants = {
@@ -105,8 +72,8 @@ const PromoCountdownBanner: React.FC = () => {
     },
   };
 
-  // Don't render if no active promos, current promo expired, or on 404 page
-  if (pathname === "/not-found" || !promos || promos.length === 0 || !currentPromo || timeRemaining <= 0) {
+  // Don't render if no active promos or on 404 page (updated for toggle system - no expiration check)
+  if (pathname === "/not-found" || !promos || promos.length === 0 || !currentPromo) {
     return null;
   }
 
@@ -148,7 +115,7 @@ const PromoCountdownBanner: React.FC = () => {
                       <PromoBadge multiplier={currentPromo.multiplier} size="small" />
                     </motion.div>
 
-                    {/* Promo text - single line */}
+                    {/* Promo text - single line (timer removed in toggle system) */}
                     <motion.div
                       variants={itemVariants}
                       className="text-white text-xs sm:text-sm font-bold whitespace-nowrap"
@@ -157,61 +124,6 @@ const PromoCountdownBanner: React.FC = () => {
                       {currentPromo.multiplier}x entries on all{" "}
                       {currentPromo.type === "one-time-packages" ? "packages" : "mini packages"}!
                     </motion.div>
-
-                    {/* Countdown timer */}
-                    <motion.div variants={itemVariants} className="flex items-center gap-2 text-white">
-                      <div className="text-xs text-yellow-200 font-medium">Ends in:</div>
-                      <div className="flex items-center gap-1 font-mono font-bold">
-                        {formattedTime.days > 0 && (
-                          <>
-                            <span
-                              className="px-2 py-1 rounded text-sm font-mono font-bold"
-                              style={{
-                                background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                                border: `1px solid rgba(255, 255, 255, 0.3)`,
-                                boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 2px 4px rgba(0, 0, 0, 0.3)`,
-                              }}
-                            >
-                              {formattedTime.days.toString().padStart(2, "0")}
-                            </span>
-                            <span className="text-xs">d</span>
-                          </>
-                        )}
-                        <span
-                          className="px-2 py-1 rounded text-sm font-mono font-bold"
-                          style={{
-                            background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                            border: `1px solid rgba(255, 255, 255, 0.3)`,
-                            boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 2px 4px rgba(0, 0, 0, 0.3)`,
-                          }}
-                        >
-                          {formattedTime.hours.toString().padStart(2, "0")}
-                        </span>
-                        <span className="text-xs">h</span>
-                        <span
-                          className="px-2 py-1 rounded text-sm font-mono font-bold"
-                          style={{
-                            background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                            border: `1px solid rgba(255, 255, 255, 0.3)`,
-                            boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 2px 4px rgba(0, 0, 0, 0.3)`,
-                          }}
-                        >
-                          {formattedTime.minutes.toString().padStart(2, "0")}
-                        </span>
-                        <span className="text-xs">m</span>
-                        <span
-                          className="px-2 py-1 rounded text-sm font-mono font-bold"
-                          style={{
-                            background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                            border: `1px solid rgba(255, 255, 255, 0.3)`,
-                            boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 2px 4px rgba(0, 0, 0, 0.3)`,
-                          }}
-                        >
-                          {formattedTime.seconds.toString().padStart(2, "0")}
-                        </span>
-                        <span className="text-xs">s</span>
-                      </div>
-                    </motion.div>
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -219,7 +131,7 @@ const PromoCountdownBanner: React.FC = () => {
               {/* Mobile layout - horizontal scrolling with animation */}
               <div className="sm:hidden">
                 <div
-                  className="flex items-center gap-1 text-white overflow-x-auto hide-scrollbar"
+                  className="flex items-center justify-center gap-1 text-white overflow-x-auto hide-scrollbar"
                   style={{
                     scrollbarWidth: "none",
                     msOverflowStyle: "none",
@@ -239,66 +151,11 @@ const PromoCountdownBanner: React.FC = () => {
                         <PromoBadge multiplier={currentPromo.multiplier} size="small" />
                       </motion.div>
 
-                      {/* Promo text */}
+                      {/* Promo text (timer removed in toggle system) */}
                       <motion.div className="flex-shrink-0 text-white" variants={itemVariants}>
                         <div className="text-[10px] font-bold whitespace-nowrap">
                           {currentPromo.type === "one-time-packages" ? "ONE-TIME" : "MINI DRAW"}{" "}
                           {currentPromo.multiplier}x ENTRIES!
-                        </div>
-                      </motion.div>
-
-                      {/* Countdown timer */}
-                      <motion.div className="flex-shrink-0 flex items-center gap-1 text-white" variants={itemVariants}>
-                        <div className="text-[10px] text-yellow-200 font-medium">Ends:</div>
-                        <div className="flex items-center gap-0.5 font-mono font-bold">
-                          {formattedTime.days > 0 && (
-                            <>
-                              <span
-                                className="px-1 py-0.5 rounded text-[10px] font-mono font-bold"
-                                style={{
-                                  background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                                  border: `1px solid rgba(255, 255, 255, 0.3)`,
-                                  boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.3)`,
-                                }}
-                              >
-                                {formattedTime.days.toString().padStart(2, "0")}
-                              </span>
-                              <span className="text-[10px]">d</span>
-                            </>
-                          )}
-                          <span
-                            className="px-1 py-0.5 rounded text-[10px] font-mono font-bold"
-                            style={{
-                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                              border: `1px solid rgba(255, 255, 255, 0.3)`,
-                              boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.3)`,
-                            }}
-                          >
-                            {formattedTime.hours.toString().padStart(2, "0")}
-                          </span>
-                          <span className="text-[10px]">h</span>
-                          <span
-                            className="px-1 py-0.5 rounded text-[10px] font-mono font-bold"
-                            style={{
-                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                              border: `1px solid rgba(255, 255, 255, 0.3)`,
-                              boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.3)`,
-                            }}
-                          >
-                            {formattedTime.minutes.toString().padStart(2, "0")}
-                          </span>
-                          <span className="text-[10px]">m</span>
-                          <span
-                            className="px-1 py-0.5 rounded text-[10px] font-mono font-bold"
-                            style={{
-                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)`,
-                              border: `1px solid rgba(255, 255, 255, 0.3)`,
-                              boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.3)`,
-                            }}
-                          >
-                            {formattedTime.seconds.toString().padStart(2, "0")}
-                          </span>
-                          <span className="text-[10px]">s</span>
                         </div>
                       </motion.div>
                     </motion.div>

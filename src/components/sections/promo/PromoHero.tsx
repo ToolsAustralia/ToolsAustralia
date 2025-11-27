@@ -16,8 +16,26 @@ export default function PromoHero() {
     openEntryFlow({ openLocalModal: false });
   };
 
-  // Using the same image for both mobile and desktop - optimized positioning ensures all content is visible
-  const heroImageSrc = "/images/background/promo/promoBg.png";
+  // Conditionally render hero image based on active promo multiplier
+  // 10x → x10 entries.png, 5x → x5 entries.png, 3x → x3 entries.png, no promo → $20.png
+  const getHeroImageSrc = () => {
+    if (!activePromo) {
+      return "/images/background/promo/$20.png";
+    }
+
+    switch (activePromo.multiplier) {
+      case 10:
+        return "/images/background/promo/x10 entries.png";
+      case 5:
+        return "/images/background/promo/x5 entries.png";
+      case 3:
+        return "/images/background/promo/x3 entries.png";
+      default:
+        return "/images/background/promo/$20.png";
+    }
+  };
+
+  const heroImageSrc = getHeroImageSrc();
 
   if (isLoading) {
     return (

@@ -4,6 +4,7 @@ import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { sendContactSubmissionEmail, checkFormSubmissionRateLimit } from "@/lib/email";
 
 /**
  * Contact Submission API Endpoints
@@ -80,8 +81,8 @@ export async function GET(request: NextRequest) {
         .sort(sort)
         .skip(skip)
         .limit(limit)
-        .populate('assignedTo', 'name email')
-        .populate('respondedBy', 'name email')
+        .populate("assignedTo", "name email")
+        .populate("respondedBy", "name email")
         .lean(),
       ContactSubmission.countDocuments(query),
     ]);
@@ -116,10 +117,27 @@ export async function POST(request: NextRequest) {
     const validatedData = createContactSubmissionSchema.parse(body);
 
     // Get client IP and user agent for tracking
-    const ipAddress = request.headers.get("x-forwarded-for") || 
-                     request.headers.get("x-real-ip") || 
-                     "unknown";
+    const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
     const userAgent = request.headers.get("user-agent") || "unknown";
+
+    // Check rate limiting BEFORE saving to database (use email + IP for better spam prevention)
+    const rateLimitIdentifier = `${validatedData.email}_${ipAddress}`;
+    const rateLimitCheck = checkFormSubmissionRateLimit(rateLimitIdentifier);
+
+    if (!rateLimitCheck.allowed) {
+      console.warn(
+        `Rate limit exceeded for contact form submission from ${validatedData.email} (IP: ${ipAddress}). Retry after ${rateLimitCheck.retryAfter} seconds.`
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Rate limit exceeded",
+          message: `Please wait ${rateLimitCheck.retryAfter} seconds before submitting again.`,
+          retryAfter: rateLimitCheck.retryAfter,
+        },
+        { status: 429 } // 429 Too Many Requests
+      );
+    }
 
     // Create new contact submission
     const contactSubmission = new ContactSubmission({
@@ -131,20 +149,40 @@ export async function POST(request: NextRequest) {
 
     await contactSubmission.save();
 
-    return NextResponse.json({
-      success: true,
-      message: "Contact form submitted successfully",
-      data: {
-        id: contactSubmission._id,
-        status: contactSubmission.status,
+    // Send email notification (non-blocking - don't fail if email fails)
+    sendContactSubmissionEmail({
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName,
+      email: validatedData.email,
+      phone: validatedData.phone,
+      subject: validatedData.subject,
+      message: validatedData.message,
+      submittedAt: contactSubmission.submittedAt,
+    }).catch((error) => {
+      console.error("Failed to send contact submission email notification:", error);
+      // Don't throw - email failure shouldn't prevent form submission
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Contact form submitted successfully",
+        data: {
+          id: contactSubmission._id,
+          status: contactSubmission.status,
+        },
       },
-    }, { status: 201 });
+      { status: 201 }
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ 
-        error: "Validation error", 
-        details: error.issues 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Validation error",
+          details: error.issues,
+        },
+        { status: 400 }
+      );
     }
     console.error("Error creating contact submission:", error);
     return NextResponse.json({ error: "Failed to submit contact form" }, { status: 500 });

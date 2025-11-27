@@ -4,6 +4,7 @@ import PartnerApplication from "@/models/PartnerApplication";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { sendPartnerApplicationEmail, checkFormSubmissionRateLimit } from "@/lib/email";
 
 /**
  * Partner Application API Endpoints
@@ -116,6 +117,23 @@ export async function POST(request: NextRequest) {
                      "unknown";
     const userAgent = request.headers.get("user-agent") || "unknown";
 
+    // Check rate limiting BEFORE saving to database (use email + IP for better spam prevention)
+    const rateLimitIdentifier = `${validatedData.email}_${ipAddress}`;
+    const rateLimitCheck = checkFormSubmissionRateLimit(rateLimitIdentifier);
+    
+    if (!rateLimitCheck.allowed) {
+      console.warn(`Rate limit exceeded for partner application from ${validatedData.email} (IP: ${ipAddress}). Retry after ${rateLimitCheck.retryAfter} seconds.`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Rate limit exceeded",
+          message: `Please wait ${rateLimitCheck.retryAfter} seconds before submitting again.`,
+          retryAfter: rateLimitCheck.retryAfter,
+        },
+        { status: 429 } // 429 Too Many Requests
+      );
+    }
+
     // Create new partner application
     const partnerApplication = new PartnerApplication({
       ...validatedData,
@@ -125,6 +143,22 @@ export async function POST(request: NextRequest) {
     });
 
     await partnerApplication.save();
+
+    // Send email notification (non-blocking - don't fail if email fails)
+    sendPartnerApplicationEmail({
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName,
+      businessName: validatedData.businessName,
+      email: validatedData.email,
+      phone: validatedData.phone,
+      abn: validatedData.abn,
+      acn: validatedData.acn,
+      goals: validatedData.goals,
+      submittedAt: partnerApplication.submittedAt,
+    }).catch((error) => {
+      console.error("Failed to send partner application email notification:", error);
+      // Don't throw - email failure shouldn't prevent application submission
+    });
 
     return NextResponse.json({
       success: true,

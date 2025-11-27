@@ -17,7 +17,7 @@ import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSave
 import { getPackageId } from "@/utils/membership/membership-adapters";
 import { useUserContext } from "@/contexts/UserContext";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
@@ -71,6 +71,7 @@ interface MembershipModalProps {
 
 const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, selectedPlan, onPlanChange }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     firstName: "",
@@ -557,6 +558,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     setIsRegistering(true);
     setRegistrationErrors({}); // Clear previous errors
 
+    // Extract promotion slug from current URL if on promotions page
+    // Format: /promotions/[slug] -> extract slug
+    let promotionSlug: string | undefined;
+    try {
+      const currentPathname = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+      const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
+      if (promotionsMatch && promotionsMatch[1]) {
+        promotionSlug = promotionsMatch[1];
+        console.log(`📊 Captured promotion slug from URL: ${promotionSlug}`);
+      }
+    } catch (error) {
+      console.warn("⚠️ Could not extract promotion slug from URL:", error);
+      // Non-blocking - continue without slug (will default to "milwaukee")
+    }
+
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -569,6 +585,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           email: formData.email,
           mobile: formData.phone,
           affiliateCode: affiliateCode || undefined, // Include affiliate code if present
+          promotionSlug: promotionSlug, // Include promotion slug if on promotions page
         }),
       });
 
@@ -2782,7 +2799,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                                 {promoEnhancedPlan?.metadata?.isPromoActive &&
                                   promoEnhancedPlan?.metadata?.promoMultiplier && (
                                     <PromoBadge
-                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
+                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as 3 | 5 | 10}
                                       size="small"
                                     />
                                   )}

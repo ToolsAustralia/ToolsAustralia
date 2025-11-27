@@ -59,7 +59,7 @@ export interface CreateMajorDrawData {
     terms?: string[];
   };
   // Required fields
-  drawDate: Date; // When the draw happens (e.g., Sept 30, 8:00 PM AEST stored as UTC)
+  drawDate: Date; // When the draw happens (e.g., Sept 30, 8:30 PM AEST stored as UTC)
   activationDate: Date; // When draw becomes publicly visible (e.g., Oct 1, 12:00 AM AEST stored as UTC)
   freezeEntriesAt?: Date; // Auto-calculated from drawDate - 30 minutes
   status?: "queued" | "active"; // Initial status (defaults to "active")

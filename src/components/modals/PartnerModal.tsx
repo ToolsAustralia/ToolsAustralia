@@ -130,7 +130,21 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to submit application");
+        
+        // Handle rate limiting (429 Too Many Requests)
+        if (response.status === 429) {
+          const retryAfter = errorData.retryAfter || 300; // Default to 5 minutes if not provided
+          const minutes = Math.floor(retryAfter / 60);
+          const seconds = retryAfter % 60;
+          const timeMessage = minutes > 0 
+            ? `${minutes} minute${minutes > 1 ? 's' : ''}${seconds > 0 ? ` and ${seconds} second${seconds > 1 ? 's' : ''}` : ''}`
+            : `${seconds} second${seconds > 1 ? 's' : ''}`;
+          
+          setSubmitError(`You've submitted too many applications recently. Please wait ${timeMessage} before submitting again.`);
+          return;
+        }
+        
+        throw new Error(errorData.message || errorData.error || "Failed to submit application");
       }
 
       const result = await response.json();
@@ -138,6 +152,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
 
       // Show success state
       setIsSubmitted(true);
+      setSubmitError("");
 
       // Auto close modal after 3 seconds
       setTimeout(() => {
@@ -158,7 +173,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
       }, 3000);
     } catch (error) {
       console.error("Error submitting partner application:", error);
-      setSubmitError("Something went wrong. Please try again.");
+      setSubmitError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

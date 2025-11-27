@@ -152,11 +152,22 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
 
     // ✅ Update Klaviyo profile with latest user data after purchase
     try {
+      // Wait a bit to ensure MongoDB has committed all changes (especially for atomic operations like upsells)
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second buffer
+
       const fullUser = await User.findById(user._id.toString());
       if (fullUser && paymentIntent.metadata) {
         const packageType = paymentIntent.metadata.type || paymentIntent.metadata.packageType;
         const packageId = paymentIntent.metadata.packageId;
         const packageName = paymentIntent.metadata.packageName;
+
+        // Log user data before sync to debug
+        webhookLog(
+          "info",
+          `Klaviyo sync - User data: upsellPurchases=${fullUser.upsellPurchases?.length || 0}, accumulatedEntries=${
+            fullUser.accumulatedEntries
+          }, rewardsPoints=${fullUser.rewardsPoints}`
+        );
 
         // Only sync profile if we have package information and payment was processed
         if (packageId && packageName && packageType) {

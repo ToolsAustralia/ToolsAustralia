@@ -655,7 +655,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {/* Promo Badge - Top Left Corner */}
                 {plan.metadata?.isPromoActive && (
                   <div className="absolute top-2 left-2 z-20">
-                    <PromoBadge multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
+                    <PromoBadge multiplier={plan.metadata.promoMultiplier as 3 | 5 | 10} size="small" />
                   </div>
                 )}
 

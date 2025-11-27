@@ -2,13 +2,15 @@
  * Timezone Utility Functions
  *
  * All dates are stored in UTC in the database.
- * All display dates are shown in AEST (Australian Eastern Standard Time - UTC+10).
+ * All display dates are shown in Australia/Sydney timezone (AEST/AEDT).
  *
- * IMPORTANT: AEST is UTC+10 (standard time)
- *            AEDT is UTC+11 (daylight saving time)
+ * IMPORTANT: AEST is UTC+10 (standard time, April-October)
+ *            AEDT is UTC+11 (daylight saving time, October-April)
  *
  * Australia observes daylight saving from first Sunday in October to first Sunday in April.
- * For this implementation, we use AEST consistently as specified.
+ * This implementation uses "Australia/Sydney" timezone identifier which automatically
+ * handles DST transitions. The date-fns-tz library will correctly switch between
+ * AEST and AEDT based on the date being processed.
  */
 
 import { formatInTimeZone, toZonedTime, fromZonedTime } from "date-fns-tz";
@@ -102,13 +104,35 @@ export function formatDateInLocal(
 }
 
 /**
- * Format a UTC date as human-readable AEST string
- * Example: "Sept 30, 2024 8:00 PM AEST"
+ * Format a UTC date as human-readable AEST/AEDT string
+ * Automatically detects whether to show AEST or AEDT based on DST
+ * Example: "Sept 30, 2024 8:30 PM AEST" or "Dec 15, 2024 8:30 PM AEDT"
  * @param utcDate - Date in UTC
- * @returns Human-readable date string in AEST
+ * @returns Human-readable date string with correct timezone abbreviation
  */
 export function formatDateReadable(utcDate: Date): string {
-  return formatInTimeZone(utcDate, AEST_TIMEZONE, "MMM dd, yyyy h:mm a 'AEST'");
+  // Get the timezone abbreviation (AEST or AEDT) using Intl API for reliability
+  // This ensures we get the correct abbreviation based on DST
+  let timezoneAbbr: string;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-AU", {
+      timeZone: AEST_TIMEZONE,
+      timeZoneName: "short",
+    });
+    const parts = formatter.formatToParts(utcDate);
+    const tzPart = parts.find((part) => part.type === "timeZoneName");
+    timezoneAbbr = tzPart?.value || "AEST"; // Fallback to AEST if not found
+  } catch {
+    // Fallback: check offset to determine AEST (UTC+10) vs AEDT (UTC+11)
+    const zonedDate = toZonedTime(utcDate, AEST_TIMEZONE);
+    const utcTime = utcDate.getTime();
+    const zonedTime = zonedDate.getTime();
+    const offsetHours = (utcTime - zonedTime) / (1000 * 60 * 60);
+    timezoneAbbr = offsetHours === -10 ? "AEST" : "AEDT";
+  }
+
+  // Format the date with the correct timezone abbreviation
+  return formatInTimeZone(utcDate, AEST_TIMEZONE, `MMM dd, yyyy h:mm a '${timezoneAbbr}'`);
 }
 
 /**
@@ -139,8 +163,8 @@ export function getNowInUTC(): Date {
  * @returns Date object in UTC for database storage
  *
  * @example
- * // Create Sept 30, 2024 8:00 PM AEST
- * const drawDate = createAESTDateAsUTC(2024, 9, 30, 20, 0);
+ * // Create Sept 30, 2024 8:30 PM AEST
+ * const drawDate = createAESTDateAsUTC(2024, 9, 30, 20, 30);
  */
 export function createAESTDateAsUTC(
   year: number,
@@ -169,55 +193,55 @@ export function calculateFreezeTime(drawDateUTC: Date): Date {
 
 /**
  * Calculate activation date (midnight after draw date in AEST)
- * If draw is Sept 30, 8:00 PM AEST, activation is Oct 1, 12:00 AM AEST
+ * If draw is Sept 30, 8:30 PM AEST, activation is Oct 1, 12:00 AM AEST
  *
  * @param drawDateUTC - Draw date in UTC
  * @returns Activation date in UTC (midnight after draw in AEST)
  */
 export function calculateActivationDate(drawDateUTC: Date): Date {
-  // Convert draw date to AEST
-  const drawDateAEST = toZonedTime(drawDateUTC, AEST_TIMEZONE);
+  // Add one day - work in UTC by adding 24 hours, then get the AEST components of the result
+  const nextDayUTC = addDays(drawDateUTC, 1);
+  const nextYear = parseInt(formatInTimeZone(nextDayUTC, AEST_TIMEZONE, "yyyy"), 10);
+  const nextMonth = parseInt(formatInTimeZone(nextDayUTC, AEST_TIMEZONE, "M"), 10);
+  const nextDayNum = parseInt(formatInTimeZone(nextDayUTC, AEST_TIMEZONE, "d"), 10);
 
-  // Get the next day at midnight AEST
-  const nextDayAEST = new Date(
-    drawDateAEST.getFullYear(),
-    drawDateAEST.getMonth(),
-    drawDateAEST.getDate() + 1,
-    0, // midnight
-    0,
-    0
-  );
-
-  // Convert back to UTC for storage
-  return fromZonedTime(nextDayAEST, AEST_TIMEZONE);
+  // Create date string in AEST timezone format and convert to UTC
+  return createAESTDateAsUTC(nextYear, nextMonth, nextDayNum, 0, 0);
 }
 
 /**
- * Calculate next draw date (30 days after start date, at 8:00 PM AEST)
+ * Normalize an activation date to midnight (12:00 AM) in AEST
+ * Ensures that activation dates are always at midnight regardless of the input time
+ *
+ * @param activationDateUTC - Activation date in UTC (may have any time)
+ * @returns Activation date normalized to midnight AEST in UTC
+ */
+export function normalizeActivationDateToMidnight(activationDateUTC: Date): Date {
+  // Get the date components in AEST timezone
+  const year = parseInt(formatInTimeZone(activationDateUTC, AEST_TIMEZONE, "yyyy"), 10);
+  const month = parseInt(formatInTimeZone(activationDateUTC, AEST_TIMEZONE, "M"), 10);
+  const day = parseInt(formatInTimeZone(activationDateUTC, AEST_TIMEZONE, "d"), 10);
+
+  // Create date at midnight AEST
+  return createAESTDateAsUTC(year, month, day, 0, 0);
+}
+
+/**
+ * Calculate next draw date (30 days after start date, at 8:30 PM AEST)
  * Used for 30-day rolling cycle
  *
  * @param startDateUTC - Start date of current draw in UTC
- * @returns Next draw date in UTC (30 days later at 8:00 PM AEST)
+ * @returns Next draw date in UTC (30 days later at 8:30 PM AEST)
  */
 export function calculateNextDrawDate(startDateUTC: Date): Date {
-  // Convert to AEST
-  const startDateAEST = toZonedTime(startDateUTC, AEST_TIMEZONE);
+  // Add 30 days to the UTC date, then get the AEST components of the result
+  const nextDrawDateUTC = addDays(startDateUTC, 30);
+  const nextYear = parseInt(formatInTimeZone(nextDrawDateUTC, AEST_TIMEZONE, "yyyy"), 10);
+  const nextMonth = parseInt(formatInTimeZone(nextDrawDateUTC, AEST_TIMEZONE, "M"), 10);
+  const nextDay = parseInt(formatInTimeZone(nextDrawDateUTC, AEST_TIMEZONE, "d"), 10);
 
-  // Add 30 days
-  const nextDrawDateAEST = addDays(startDateAEST, 30);
-
-  // Set time to 8:00 PM AEST
-  const nextDrawAt8PM = new Date(
-    nextDrawDateAEST.getFullYear(),
-    nextDrawDateAEST.getMonth(),
-    nextDrawDateAEST.getDate(),
-    20, // 8 PM
-    0,
-    0
-  );
-
-  // Convert back to UTC
-  return fromZonedTime(nextDrawAt8PM, AEST_TIMEZONE);
+  // Create date string in AEST timezone format and convert to UTC
+  return createAESTDateAsUTC(nextYear, nextMonth, nextDay, 20, 30); // 8:30 PM
 }
 
 /**
@@ -226,24 +250,14 @@ export function calculateNextDrawDate(startDateUTC: Date): Date {
  * @returns Date when next draw should be created (7 days before, at midnight AEST)
  */
 export function calculateNextDrawCreationDate(currentDrawDateUTC: Date): Date {
-  // Convert to AEST
-  const drawDateAEST = toZonedTime(currentDrawDateUTC, AEST_TIMEZONE);
+  // Subtract 7 days from the UTC date, then get the AEST components of the result
+  const creationDateUTC = addDays(currentDrawDateUTC, -7);
+  const creationYear = parseInt(formatInTimeZone(creationDateUTC, AEST_TIMEZONE, "yyyy"), 10);
+  const creationMonth = parseInt(formatInTimeZone(creationDateUTC, AEST_TIMEZONE, "M"), 10);
+  const creationDay = parseInt(formatInTimeZone(creationDateUTC, AEST_TIMEZONE, "d"), 10);
 
-  // Go back 7 days
-  const creationDateAEST = addDays(drawDateAEST, -7);
-
-  // Set to midnight AEST
-  const creationAtMidnight = new Date(
-    creationDateAEST.getFullYear(),
-    creationDateAEST.getMonth(),
-    creationDateAEST.getDate(),
-    0, // midnight
-    0,
-    0
-  );
-
-  // Convert back to UTC
-  return fromZonedTime(creationAtMidnight, AEST_TIMEZONE);
+  // Create date string in AEST timezone format and convert to UTC
+  return createAESTDateAsUTC(creationYear, creationMonth, creationDay, 0, 0); // midnight
 }
 
 /**

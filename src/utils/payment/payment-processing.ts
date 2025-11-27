@@ -387,13 +387,43 @@ async function processPaymentBenefitsInternal(
         const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
         console.log(`📊 Updating Klaviyo profile after ${packageData.packageType} benefits granted`);
 
+        // ✅ CRITICAL: Wait a bit to ensure MongoDB has committed all changes (especially for atomic operations)
+        await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms buffer for database consistency
+
         // ✅ CRITICAL: Refetch user to ensure we have the latest data after grantBenefits()
+        // Use lean(false) to get Mongoose document with all methods, or just findById for full document
         const freshUser = await User.findById(userId);
         if (freshUser) {
+          // Verify we have the latest data by checking if arrays are populated
+          const upsellCount = freshUser.upsellPurchases?.length || 0;
+          const oneTimeCount = freshUser.oneTimePackages?.length || 0;
+          const miniDrawCount = freshUser.miniDrawPackages?.length || 0;
+
           console.log(
-            `📊 Fresh user data - accumulatedEntries: ${freshUser.accumulatedEntries}, rewardsPoints: ${freshUser.rewardsPoints}`
+            `📊 Fresh user data - accumulatedEntries: ${freshUser.accumulatedEntries}, rewardsPoints: ${freshUser.rewardsPoints}, upsellPurchases: ${upsellCount}, oneTimePackages: ${oneTimeCount}, miniDrawPackages: ${miniDrawCount}`
           );
-          ensureUserProfileSynced(freshUser as never);
+
+          // If we just processed an upsell but don't see it, wait a bit more and retry
+          if (packageData.packageType === "upsell" && upsellCount === 0) {
+            console.warn(`⚠️ Upsell purchase not yet visible in user data, waiting and retrying...`);
+            // Retry up to 3 times with increasing delays
+            let retryAttempts = 0;
+            let finalUser = freshUser;
+            while (retryAttempts < 3 && (finalUser.upsellPurchases?.length || 0) === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 1000 * (retryAttempts + 1))); // 1s, 2s, 3s
+              const retryUser = await User.findById(userId);
+              if (retryUser) {
+                finalUser = retryUser;
+                console.log(
+                  `📊 Retry attempt ${retryAttempts + 1} - upsellPurchases: ${retryUser.upsellPurchases?.length || 0}`
+                );
+              }
+              retryAttempts++;
+            }
+            ensureUserProfileSynced(finalUser as never);
+          } else {
+            ensureUserProfileSynced(freshUser as never);
+          }
         } else {
           console.error(`❌ Could not refetch user ${userId} for profile sync`);
         }

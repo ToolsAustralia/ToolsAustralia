@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// Image import removed - not used
-import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 
 export default function PromoBanner() {
   const [timeLeft, setTimeLeft] = useState({
@@ -14,34 +13,37 @@ export default function PromoBanner() {
 
   const [isScrolled, setIsScrolled] = useState(false);
 
-  const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
+  const { data: activePromo } = usePromoByType("one-time-packages");
 
-  // Update countdown timer
+  // 24-hour looping countdown timer (resets at midnight server time/UTC)
   useEffect(() => {
-    if (!currentMajorDraw?.drawDate) return;
-
     const updateTimer = () => {
-      const now = new Date().getTime();
-      const endTime = new Date(currentMajorDraw.drawDate!).getTime();
-      const difference = endTime - now;
+      const now = new Date();
+      // Get next midnight in UTC
+      const nextMidnight = new Date(now);
+      nextMidnight.setUTCHours(24, 0, 0, 0); // This automatically rolls over to next day if needed
 
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((difference % (1000 * 60)) / 1000),
-        });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
+      const difference = nextMidnight.getTime() - now.getTime();
+
+      // Calculate time remaining until next midnight
+      const totalSeconds = Math.max(0, Math.floor(difference / 1000));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      setTimeLeft({
+        days: 0, // Always 0 for 24-hour countdown
+        hours,
+        minutes,
+        seconds,
+      });
     };
 
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
 
     return () => clearInterval(timer);
-  }, [currentMajorDraw]);
+  }, []);
 
   // Handle scroll detection
   useEffect(() => {
@@ -55,15 +57,8 @@ export default function PromoBanner() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="w-full bg-gradient-to-r from-gray-800 via-gray-900 to-black shadow-lg mt-4 sm:mt-6">
-        <div className="h-12 sm:h-14 flex items-center justify-center">
-          <div className="animate-pulse text-white text-sm">Loading...</div>
-        </div>
-      </div>
-    );
-  }
+  // Get multiplier for dynamic text (default to 10x if no promo)
+  const multiplier = activePromo?.multiplier || 10;
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
   return (
@@ -86,44 +81,21 @@ export default function PromoBanner() {
                   isScrolled ? "text-xs sm:text-base lg:text-lg" : "text-sm sm:text-base lg:text-lg"
                 }`}
               >
-                LIVE NOW!
+                First 500 people
               </div>
               <div
                 className={`text-yellow-300 font-bold font-['Poppins'] ${
                   isScrolled ? "text-[10px] sm:text-sm" : "text-xs sm:text-sm"
                 }`}
               >
-                Enter Before Deadline!
+                Get {multiplier}x entries
               </div>
             </div>
           </div>
 
-          {/* Right Side - Enhanced Countdown */}
+          {/* Right Side - Enhanced Countdown (24-hour looping timer) */}
           <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-            {timeLeft.days > 0 && (
-              <div
-                className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center ${
-                  isScrolled
-                    ? "px-1 py-0.5 w-8 sm:px-3 sm:py-2 sm:w-16 lg:w-18"
-                    : "px-1.5 py-0.5 sm:px-3 sm:py-2 w-10 sm:w-16 lg:w-18"
-                }`}
-              >
-                <div
-                  className={`text-white font-black font-['Poppins'] drop-shadow-md ${
-                    isScrolled ? "text-[10px] sm:text-sm lg:text-base" : "text-xs sm:text-sm lg:text-base"
-                  }`}
-                >
-                  {timeLeft.days.toString().padStart(2, "0")}
-                </div>
-                <div
-                  className={`text-red-100 font-medium ${
-                    isScrolled ? "text-[8px] sm:text-[10px] lg:text-xs" : "text-[9px] sm:text-[10px] lg:text-xs"
-                  }`}
-                >
-                  DAYS
-                </div>
-              </div>
-            )}
+            {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
             <div
               className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center ${
                 isScrolled

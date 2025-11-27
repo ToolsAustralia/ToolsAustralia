@@ -1,4 +1,3 @@
-import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import NewsletterSection from "@/components/sections/NewsletterSection";
 import UnifiedModalManager from "@/components/modals/UnifiedModalManager";
@@ -6,8 +5,7 @@ import UnifiedModalManager from "@/components/modals/UnifiedModalManager";
 export default function PromotionalLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      {/* Promotions pages use the standard header but let it scroll with content */}
-      <Header isFixed={false} />
+      {/* Header removed from promo pages as per requirements */}
       {children}
       {/* Newsletter Section and Footer - Consistent across promotional pages */}
       <div className="relative">

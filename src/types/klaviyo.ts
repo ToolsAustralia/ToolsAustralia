@@ -41,9 +41,6 @@ export interface KlaviyoProfileProperties {
   accumulated_entries: number;
   rewards_points: number;
 
-  // Major draw entries (accurate from database - single source of truth)
-  total_major_draw_entries: number; // Sum of all entryCount values from majordraws collection
-
   // Purchase history (detailed)
   total_one_time_packages: number;
   total_mini_draw_packages: number;
@@ -81,6 +78,15 @@ export interface KlaviyoProfileProperties {
   subscription_previous_tier?: string;
   subscription_last_upgrade_date?: string;
   subscription_last_downgrade_date?: string;
+
+  // Brand interest tracking (for users who signed up but haven't purchased)
+  brand_interest?: string | null; // Brand name (e.g., "milwaukee", "dewalt", "makita") - set to null when user makes any purchase to remove tag
+
+  // Entry breakdown by source (for advanced segmentation)
+  member_entries?: number; // Total entries from subscriptions
+  one_time_entries?: number; // Total entries from one-time packages
+  upsell_entries?: number; // Total entries from upsell purchases
+  mini_draw_entries?: number; // Total entries from mini-draw packages
 }
 
 export interface KlaviyoProfile {

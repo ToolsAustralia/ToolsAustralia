@@ -2,10 +2,10 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface IPromo extends Document {
   type: "one-time-packages" | "mini-packages";
-  multiplier: 2 | 3 | 5 | 10;
-  startDate: Date;
-  endDate: Date;
-  duration: number; // in hours
+  multiplier: 3 | 5 | 10; // Only 3x, 5x, 10x supported (removed 2x)
+  startDate?: Date; // Optional - kept for backward compatibility but not used in toggle system
+  endDate?: Date; // Optional - kept for backward compatibility but not used in toggle system
+  duration?: number; // Optional - in hours, kept for backward compatibility
   isActive: boolean;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -21,20 +21,20 @@ const PromoSchema = new Schema<IPromo>(
     },
     multiplier: {
       type: Number,
-      enum: [2, 3, 5, 10],
+      enum: [3, 5, 10], // Only 3x, 5x, 10x supported (removed 2x)
       required: [true, "Multiplier is required"],
     },
     startDate: {
       type: Date,
-      required: [true, "Start date is required"],
+      required: false, // Optional - kept for backward compatibility
     },
     endDate: {
       type: Date,
-      required: [true, "End date is required"],
+      required: false, // Optional - kept for backward compatibility
     },
     duration: {
       type: Number,
-      required: [true, "Duration is required"],
+      required: false, // Optional - kept for backward compatibility
       min: [1, "Duration must be at least 1 hour"],
     },
     isActive: {
@@ -56,8 +56,9 @@ const PromoSchema = new Schema<IPromo>(
 PromoSchema.index({ type: 1, isActive: 1 });
 PromoSchema.index({ endDate: 1 });
 
-// Virtual to check if promo has expired
+// Virtual to check if promo has expired (deprecated - dates no longer used in toggle system)
 PromoSchema.virtual("isExpired").get(function (this: IPromo) {
+  if (!this.endDate) return false; // No expiration if no end date
   return new Date() > this.endDate;
 });
 
@@ -67,41 +68,23 @@ PromoSchema.methods.deactivate = async function (this: IPromo) {
   await this.save();
 };
 
-// Static method to get active promos
+// Static method to get active promos (updated for toggle system - ignores dates)
 PromoSchema.statics.getActivePromos = async function () {
-  const now = new Date();
   return this.find({
     isActive: true,
-    startDate: { $lte: now },
-    endDate: { $gt: now },
   }).sort({ createdAt: -1 });
 };
 
-// Static method to get active promo by type
+// Static method to get active promo by type (updated for toggle system - ignores dates)
 PromoSchema.statics.getActivePromoByType = async function (type: "one-time-packages" | "mini-packages") {
-  const now = new Date();
   return this.findOne({
     type,
     isActive: true,
-    startDate: { $lte: now },
-    endDate: { $gt: now },
   }).sort({ createdAt: -1 });
 };
 
-// Middleware to auto-deactivate expired promos on query
-PromoSchema.pre(/^find/, async function (next) {
-  const now = new Date();
-  await Promo.updateMany(
-    {
-      isActive: true,
-      endDate: { $lte: now },
-    },
-    {
-      $set: { isActive: false },
-    }
-  );
-  next();
-});
+// Middleware removed - no longer auto-deactivating based on dates in toggle system
+// Promos are now managed via toggle endpoint only
 
 const Promo = mongoose.models.Promo || mongoose.model<IPromo>("Promo", PromoSchema);
 

@@ -73,7 +73,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     description: "Perfect for tradies getting started with mini draws",
     features: [
       "15 Free Accumulated Entries",
-      "5% Off Shop purchases",
+      // "5% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
       "Mini Draws",
     ],
@@ -95,7 +95,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     description: "The most popular choice for serious tool enthusiasts",
     features: [
       "40 Free Accumulated Entries",
-      "10% Off Shop purchases",
+      // "10% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
       "Mini Draws",
     ],
@@ -117,7 +117,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     description: "Premium membership for the ultimate tool professionals",
     features: [
       "100 Free Accumulated Entries",
-      "20% Off Shop purchases",
+      // "20% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
       "Mini Draws",
     ],

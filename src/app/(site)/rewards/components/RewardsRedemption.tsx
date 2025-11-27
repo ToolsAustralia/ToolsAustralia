@@ -410,7 +410,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                           {option.name}
                         </h3>
                         {option.isPromoActive && option.promoMultiplier && (
-                          <PromoBadge multiplier={option.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
+                          <PromoBadge multiplier={option.promoMultiplier as 3 | 5 | 10} size="small" />
                         )}
                       </div>
                     </div>

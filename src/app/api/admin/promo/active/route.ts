@@ -21,37 +21,30 @@ export async function GET() {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
-    // Get all active promos
-    const now = new Date();
+    // Get all active promos (updated for toggle system - ignores dates)
     const activePromos = await Promo.find({
       isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gt: now },
     }).sort({ createdAt: -1 });
 
-    // Calculate remaining time for each promo
+    // Map promos to response format (no time remaining in toggle system)
     const promosWithTimeRemaining = activePromos.map((promo: IPromo & { _id: string }) => {
-      const now = new Date();
-      const timeRemaining = promo.endDate.getTime() - now.getTime();
-      const isExpired = timeRemaining <= 0;
-
       return {
         id: promo._id,
         type: promo.type,
         multiplier: promo.multiplier,
-        startDate: promo.startDate,
-        endDate: promo.endDate,
-        duration: promo.duration,
-        isActive: promo.isActive && !isExpired,
-        timeRemaining: Math.max(0, timeRemaining), // in milliseconds
-        isExpired,
+        startDate: promo.startDate || new Date(),
+        endDate: promo.endDate || new Date(),
+        duration: promo.duration || 24,
+        isActive: promo.isActive,
+        timeRemaining: 0, // Not used in toggle system
+        isExpired: false, // Not used in toggle system
         createdAt: promo.createdAt,
         createdBy: promo.createdBy,
       };
     });
 
-    // Filter out expired promos
-    const validActivePromos = promosWithTimeRemaining.filter((promo) => !promo.isExpired);
+    // All active promos are valid in toggle system
+    const validActivePromos = promosWithTimeRemaining;
 
     return NextResponse.json({
       success: true,
@@ -76,35 +69,28 @@ export async function POST() {
   try {
     await connectDB();
 
-    // Get all active promos
-    const now = new Date();
+    // Get all active promos (updated for toggle system - ignores dates)
     const activePromos = await Promo.find({
       isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gt: now },
     }).sort({ createdAt: -1 });
 
-    // Calculate remaining time for each promo
+    // Map promos to response format (no time remaining in toggle system)
     const promosWithTimeRemaining = activePromos.map((promo: IPromo & { _id: string }) => {
-      const now = new Date();
-      const timeRemaining = promo.endDate.getTime() - now.getTime();
-      const isExpired = timeRemaining <= 0;
-
       return {
         id: promo._id,
         type: promo.type,
         multiplier: promo.multiplier,
-        startDate: promo.startDate,
-        endDate: promo.endDate,
-        duration: promo.duration,
-        isActive: promo.isActive && !isExpired,
-        timeRemaining: Math.max(0, timeRemaining), // in milliseconds
-        isExpired,
+        startDate: promo.startDate || new Date(),
+        endDate: promo.endDate || new Date(),
+        duration: promo.duration || 24,
+        isActive: promo.isActive,
+        timeRemaining: 0, // Not used in toggle system
+        isExpired: false, // Not used in toggle system
       };
     });
 
-    // Filter out expired promos
-    const validActivePromos = promosWithTimeRemaining.filter((promo) => !promo.isExpired);
+    // All active promos are valid in toggle system
+    const validActivePromos = promosWithTimeRemaining;
 
     return NextResponse.json({
       success: true,

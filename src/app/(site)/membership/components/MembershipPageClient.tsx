@@ -9,10 +9,12 @@ import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import MembershipSection from "@/components/sections/MembershipSection";
 import FlowChartSection from "@/components/sections/FlowChartSection";
 import MembershipPackagesChart from "@/components/sections/MembershipPackagesChart";
-import { useMemberships } from "@/hooks/useMemberships";
-import { convertToLocalPlan } from "@/utils/membership/membership-adapters";
+import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 
 export default function MembershipPageClient() {
+  // Use the unified hook for consistent package selection across all entry points
+  const { openEntryFlow } = useMajorDrawEntryCta();
+
   // Scroll to #membership on load/hash change
   useEffect(() => {
     const handleScrollToMembership = () => {
@@ -36,11 +38,6 @@ export default function MembershipPageClient() {
       window.removeEventListener("hashchange", handleScrollToMembership);
     };
   }, []);
-
-  // Resolve Foreman subscription plan from static packages
-  const { subscriptionPackages } = useMemberships();
-  const foremanApiPackage = subscriptionPackages.find((p) => p._id === "foreman-subscription");
-  const foremanLocalPlan = foremanApiPackage ? convertToLocalPlan(foremanApiPackage) : undefined;
 
   return (
     <>
@@ -78,11 +75,8 @@ export default function MembershipPageClient() {
                 borderRadius="lg"
                 className="w-full sm:w-auto text-sm sm:text-base px-4 py-2 sm:px-6 sm:py-3"
                 onClick={() => {
-                  if (foremanLocalPlan) {
-                    window.dispatchEvent(
-                      new CustomEvent("openMembershipModal", { detail: { plan: foremanLocalPlan } })
-                    );
-                  }
+                  // Use unified entry flow for consistency with all other entry points
+                  openEntryFlow({ openLocalModal: false });
                 }}
               >
                 Join Now!

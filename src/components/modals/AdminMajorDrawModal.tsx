@@ -16,8 +16,7 @@ import {
   ImageUpload,
   IconPickerModal,
 } from "./ui";
-import { convertUTCToAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
-import { fromZonedTime } from "date-fns-tz";
+import { convertUTCToAEST, createAESTDateAsUTC, calculateActivationDate } from "@/utils/common/timezone";
 
 interface AdminMajorDrawModalProps {
   isOpen: boolean;
@@ -172,31 +171,27 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
         // Get current time in AEST
         const nowAEST = convertUTCToAEST(now);
 
-        // Create 8:30 PM AEST for today
-        const todayAEST = new Date(nowAEST);
-        todayAEST.setHours(20, 30, 0, 0); // 8:30 PM AEST
+        // Determine target date (today or tomorrow)
+        let targetYear = nowAEST.getFullYear();
+        let targetMonth = nowAEST.getMonth() + 1; // getMonth() returns 0-11, but we need 1-12
+        let targetDay = nowAEST.getDate();
+
+        // Create 8:30 PM AEST for today using createAESTDateAsUTC
+        const todayAt830PM = createAESTDateAsUTC(targetYear, targetMonth, targetDay, 20, 30);
+        const todayAt830PM_AEST = convertUTCToAEST(todayAt830PM);
 
         // If 8:30 PM AEST today has passed, set it for tomorrow
-        if (todayAEST <= nowAEST) {
-          todayAEST.setDate(todayAEST.getDate() + 1);
+        if (todayAt830PM_AEST <= nowAEST) {
+          // Add one day to the date
+          const tomorrow = new Date(nowAEST);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          targetYear = tomorrow.getFullYear();
+          targetMonth = tomorrow.getMonth() + 1;
+          targetDay = tomorrow.getDate();
         }
 
-        // Convert AEST date to UTC for storage
-        // Create the date string in AEST timezone format
-        const year = todayAEST.getFullYear();
-        const month = todayAEST.getMonth() + 1; // getMonth() returns 0-11, but we need 1-12
-        const day = todayAEST.getDate();
-        const hour = 20; // 8 PM
-        const minute = 30; // 30 minutes
-
-        // Create date string in AEST timezone
-        const dateString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(
-          hour
-        ).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
-
-        // Convert from AEST to UTC using the timezone utility
-        const utcDrawDate = fromZonedTime(dateString, "Australia/Sydney");
-
+        // Create the UTC date using createAESTDateAsUTC (handles DST automatically)
+        const utcDrawDate = createAESTDateAsUTC(targetYear, targetMonth, targetDay, 20, 30);
         const isoString = utcDrawDate.toISOString();
 
         setFormData((prev) => ({
@@ -232,20 +227,12 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
       if (previousDraws.length > 0) {
         // Set activation date to the day after the most recent previous draw
         const mostRecentPreviousDraw = new Date(previousDraws[0].drawDate);
-
-        // Convert to AEST, add 1 day, set to midnight AEST, then convert back to UTC
-        const previousDrawAEST = convertUTCToAEST(mostRecentPreviousDraw);
-        const nextDayAEST = new Date(previousDrawAEST);
-        nextDayAEST.setDate(nextDayAEST.getDate() + 1); // Day after previous draw
-        nextDayAEST.setHours(0, 0, 0, 0); // 12:00 AM (midnight) AEST
-        activationDate = fromZonedTime(nextDayAEST, "Australia/Sydney");
+        // Use calculateActivationDate to ensure it's always at midnight AEST
+        activationDate = calculateActivationDate(mostRecentPreviousDraw);
       } else {
         // No previous draws, set activation date to the day after draw date
-        const drawDateAEST = convertUTCToAEST(drawDate);
-        const nextDayAEST = new Date(drawDateAEST);
-        nextDayAEST.setDate(nextDayAEST.getDate() + 1); // Next day
-        nextDayAEST.setHours(0, 0, 0, 0); // 12:00 AM (midnight) AEST
-        activationDate = fromZonedTime(nextDayAEST, "Australia/Sydney");
+        // Use calculateActivationDate to ensure it's always at midnight AEST
+        activationDate = calculateActivationDate(drawDate);
       }
 
       // Set freeze date to 8:00 PM AEST (fixed time, not calculated)

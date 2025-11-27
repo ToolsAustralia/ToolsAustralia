@@ -138,6 +138,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string>("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -197,6 +198,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
     }
 
     setIsSubmitting(true);
+    setSubmitError("");
 
     try {
       // Submit to API
@@ -210,7 +212,26 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to submit application");
+
+        // Handle rate limiting (429 Too Many Requests)
+        if (response.status === 429) {
+          const retryAfter = errorData.retryAfter || 300; // Default to 5 minutes if not provided
+          const minutes = Math.floor(retryAfter / 60);
+          const seconds = retryAfter % 60;
+          const timeMessage =
+            minutes > 0
+              ? `${minutes} minute${minutes > 1 ? "s" : ""}${
+                  seconds > 0 ? ` and ${seconds} second${seconds > 1 ? "s" : ""}` : ""
+                }`
+              : `${seconds} second${seconds > 1 ? "s" : ""}`;
+
+          setSubmitError(
+            `You've submitted too many applications recently. Please wait ${timeMessage} before submitting again.`
+          );
+          return;
+        }
+
+        throw new Error(errorData.message || errorData.error || "Failed to submit application");
       }
 
       const result = await response.json();
@@ -218,6 +239,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
 
       // Show success state
       setIsSubmitted(true);
+      setSubmitError("");
 
       // Reset form after 3 seconds
       setTimeout(() => {
@@ -236,7 +258,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
       }, 3000);
     } catch (error) {
       console.error("Error submitting partner application:", error);
-      alert("Something went wrong. Please try again.");
+      setSubmitError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -280,6 +302,13 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
             opportunities.
           </p>
         </div>
+
+        {/* Error Message */}
+        {submitError && (
+          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-sm text-red-700 font-['Inter']">{submitError}</p>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-8">

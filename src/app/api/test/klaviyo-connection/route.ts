@@ -44,7 +44,6 @@ export async function POST() {
           has_active_subscription: false,
           accumulated_entries: 0,
           rewards_points: 0,
-          total_major_draw_entries: 0,
           total_one_time_packages: 0,
           total_mini_draw_packages: 0,
           total_upsells_purchased: 0,

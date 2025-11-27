@@ -4,9 +4,15 @@ import crypto from "crypto";
 // Email verification rate limiting store (in production, use Redis or database)
 const emailRateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
+// Form submission rate limiting store
+const formSubmissionRateLimitStore = new Map<string, { lastSubmissionTime: number }>();
+
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
 const MAX_ATTEMPTS_PER_HOUR = parseInt(process.env.EMAIL_VERIFICATION_RATE_LIMIT_PER_HOUR || "5");
+
+// Form submission rate limiting: 1 email every 5 minutes
+const FORM_SUBMISSION_RATE_LIMIT_WINDOW = 5 * 60 * 1000; // 5 minutes
 
 export interface EmailResult {
   success: boolean;
@@ -433,4 +439,599 @@ export function generateEmailVerificationToken(): string {
 export function getEmailVerificationExpiry(): Date {
   const expiryMinutes = parseInt(process.env.EMAIL_VERIFICATION_EXPIRY_MINUTES || "10");
   return new Date(Date.now() + expiryMinutes * 60 * 1000);
+}
+
+/**
+ * Check rate limiting for form submissions (contact form and partner applications)
+ * Returns true if submission is allowed, false if rate limited
+ * Rate limit: 1 submission per 5 minutes per identifier (email + IP)
+ */
+export function checkFormSubmissionRateLimit(identifier: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const key = `form_submission_${identifier}`;
+
+  const current = formSubmissionRateLimitStore.get(key);
+
+  if (!current) {
+    // First submission - allow it and record the time
+    formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
+    console.log(`✅ Rate limit check passed for ${identifier} - first submission`);
+    return { allowed: true };
+  }
+
+  const timeSinceLastSubmission = now - current.lastSubmissionTime;
+  const minutesSinceLastSubmission = Math.floor(timeSinceLastSubmission / (60 * 1000));
+
+  if (timeSinceLastSubmission < FORM_SUBMISSION_RATE_LIMIT_WINDOW) {
+    // Rate limited - calculate retry after time in seconds
+    const retryAfter = Math.ceil((FORM_SUBMISSION_RATE_LIMIT_WINDOW - timeSinceLastSubmission) / 1000);
+    const retryAfterMinutes = Math.ceil(retryAfter / 60);
+    console.warn(
+      `🚫 Rate limit BLOCKED for ${identifier} - Last submission was ${minutesSinceLastSubmission} minute(s) ago. Retry after ${retryAfterMinutes} minute(s) (${retryAfter} seconds)`
+    );
+    return { allowed: false, retryAfter };
+  }
+
+  // Enough time has passed - update last submission time and allow
+  formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
+  console.log(
+    `✅ Rate limit check passed for ${identifier} - ${minutesSinceLastSubmission} minute(s) since last submission`
+  );
+  return { allowed: true };
+}
+
+/**
+ * Create HTML email template for contact form submission
+ */
+function createContactSubmissionEmailTemplate(data: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  subject: string;
+  message: string;
+  submittedAt: Date;
+}): string {
+  const submittedDate = new Date(data.submittedAt).toLocaleString("en-AU", {
+    dateStyle: "full",
+    timeStyle: "long",
+    timeZone: "Australia/Sydney",
+  });
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>New Contact Form Submission - Tools Australia</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                background-color: #f3f4f6;
+                padding: 20px;
+            }
+            .email-container {
+                max-width: 650px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .header {
+                background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+                padding: 30px;
+                text-align: center;
+            }
+            .header-title {
+                color: #ffffff;
+                font-size: 24px;
+                font-weight: 600;
+                margin: 0;
+                letter-spacing: 0.5px;
+            }
+            .content {
+                padding: 40px;
+            }
+            .intro {
+                font-size: 16px;
+                color: #4b5563;
+                margin-bottom: 30px;
+                line-height: 1.7;
+            }
+            .info-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            .info-item {
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 15px;
+            }
+            .info-item:last-child {
+                border-bottom: none;
+            }
+            .info-label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 6px;
+            }
+            .info-value {
+                font-size: 16px;
+                color: #111827;
+                font-weight: 500;
+            }
+            .message-section {
+                background-color: #f9fafb;
+                border-left: 4px solid #dc2626;
+                padding: 20px;
+                border-radius: 4px;
+                margin: 30px 0;
+            }
+            .message-label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 10px;
+            }
+            .message-content {
+                font-size: 15px;
+                color: #1f2937;
+                line-height: 1.8;
+                white-space: pre-wrap;
+            }
+            .timestamp {
+                font-size: 13px;
+                color: #6b7280;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #e5e7eb;
+            }
+            .footer {
+                background-color: #f9fafb;
+                padding: 25px 40px;
+                text-align: center;
+                border-top: 1px solid #e5e7eb;
+            }
+            .footer-text {
+                font-size: 12px;
+                color: #6b7280;
+                margin: 0;
+            }
+            .footer-logo {
+                margin-top: 15px;
+                opacity: 0.6;
+            }
+            @media (max-width: 600px) {
+                .content {
+                    padding: 25px;
+                }
+                .header {
+                    padding: 25px 20px;
+                }
+                .header-title {
+                    font-size: 20px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="header">
+                <h1 class="header-title">New Contact Form Submission</h1>
+            </div>
+            
+            <div class="content">
+                <p class="intro">You have received a new contact form submission from the Tools Australia website.</p>
+                
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Full Name</div>
+                        <div class="info-value">${data.firstName} ${data.lastName}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Email Address</div>
+                        <div class="info-value"><a href="mailto:${
+                          data.email
+                        }" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Phone Number</div>
+                        <div class="info-value"><a href="tel:${
+                          data.phone
+                        }" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Subject</div>
+                        <div class="info-value">${data.subject}</div>
+                    </div>
+                </div>
+                
+                <div class="message-section">
+                    <div class="message-label">Message</div>
+                    <div class="message-content">${data.message.replace(/\n/g, "<br>")}</div>
+                </div>
+                
+                <div class="timestamp">
+                    <strong>Submitted:</strong> ${submittedDate}
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p class="footer-text">This is an automated notification from Tools Australia.</p>
+                <p class="footer-text">Please reply directly to this email to respond to the customer.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Create HTML email template for partner application
+ */
+function createPartnerApplicationEmailTemplate(data: {
+  firstName: string;
+  lastName: string;
+  businessName: string;
+  email: string;
+  phone: string;
+  abn?: string;
+  acn?: string;
+  goals?: string;
+  submittedAt: Date;
+}): string {
+  const submittedDate = new Date(data.submittedAt).toLocaleString("en-AU", {
+    dateStyle: "full",
+    timeStyle: "long",
+    timeZone: "Australia/Sydney",
+  });
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>New Partner Application - Tools Australia</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                background-color: #f3f4f6;
+                padding: 20px;
+            }
+            .email-container {
+                max-width: 650px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .header {
+                background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+                padding: 30px;
+                text-align: center;
+            }
+            .header-title {
+                color: #ffffff;
+                font-size: 24px;
+                font-weight: 600;
+                margin: 0;
+                letter-spacing: 0.5px;
+            }
+            .content {
+                padding: 40px;
+            }
+            .intro {
+                font-size: 16px;
+                color: #4b5563;
+                margin-bottom: 30px;
+                line-height: 1.7;
+            }
+            .info-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            .info-item {
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 15px;
+            }
+            .info-item:last-child {
+                border-bottom: none;
+            }
+            .info-label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 6px;
+            }
+            .info-value {
+                font-size: 16px;
+                color: #111827;
+                font-weight: 500;
+            }
+            .goals-section {
+                background-color: #f9fafb;
+                border-left: 4px solid #dc2626;
+                padding: 20px;
+                border-radius: 4px;
+                margin: 30px 0;
+            }
+            .goals-label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 10px;
+            }
+            .goals-content {
+                font-size: 15px;
+                color: #1f2937;
+                line-height: 1.8;
+                white-space: pre-wrap;
+            }
+            .timestamp {
+                font-size: 13px;
+                color: #6b7280;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #e5e7eb;
+            }
+            .footer {
+                background-color: #f9fafb;
+                padding: 25px 40px;
+                text-align: center;
+                border-top: 1px solid #e5e7eb;
+            }
+            .footer-text {
+                font-size: 12px;
+                color: #6b7280;
+                margin: 0;
+            }
+            .footer-logo {
+                margin-top: 15px;
+                opacity: 0.6;
+            }
+            @media (max-width: 600px) {
+                .content {
+                    padding: 25px;
+                }
+                .header {
+                    padding: 25px 20px;
+                }
+                .header-title {
+                    font-size: 20px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="header">
+                <h1 class="header-title">New Partner Application</h1>
+            </div>
+            
+            <div class="content">
+                <p class="intro">You have received a new partner application from the Tools Australia website.</p>
+                
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Contact Name</div>
+                        <div class="info-value">${data.firstName} ${data.lastName}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Email Address</div>
+                        <div class="info-value"><a href="mailto:${
+                          data.email
+                        }" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Phone Number</div>
+                        <div class="info-value"><a href="tel:${
+                          data.phone
+                        }" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Business Name</div>
+                        <div class="info-value">${data.businessName}</div>
+                    </div>
+                    ${
+                      data.abn
+                        ? `
+                    <div class="info-item">
+                        <div class="info-label">ABN</div>
+                        <div class="info-value">${data.abn}</div>
+                    </div>
+                    `
+                        : ""
+                    }
+                    ${
+                      data.acn
+                        ? `
+                    <div class="info-item">
+                        <div class="info-label">ACN</div>
+                        <div class="info-value">${data.acn}</div>
+                    </div>
+                    `
+                        : ""
+                    }
+                </div>
+                
+                ${
+                  data.goals
+                    ? `
+                <div class="goals-section">
+                    <div class="goals-label">Partnership Goals</div>
+                    <div class="goals-content">${data.goals.replace(/\n/g, "<br>")}</div>
+                </div>
+                `
+                    : ""
+                }
+                
+                <div class="timestamp">
+                    <strong>Submitted:</strong> ${submittedDate}
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p class="footer-text">This is an automated notification from Tools Australia.</p>
+                <p class="footer-text">Please reply directly to this email to respond to the applicant.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Send contact form submission notification email
+ * Note: Rate limiting is now checked BEFORE calling this function in the API endpoint
+ */
+export async function sendContactSubmissionEmail(data: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  subject: string;
+  message: string;
+  submittedAt: Date;
+}): Promise<EmailResult> {
+  try {
+    const transporter = createEmailTransporter();
+
+    if (!transporter) {
+      console.error("Email transporter not created - SMTP not configured");
+      return {
+        success: false,
+        error: "Email service not configured",
+      };
+    }
+
+    const htmlContent = createContactSubmissionEmailTemplate(data);
+    const recipientEmail = process.env.CONTACT_EMAIL || "hello@toolsaustralia.com.au";
+
+    const mailOptions = {
+      from: {
+        name: "Tools Australia Contact Form",
+        address: process.env.SMTP_SERVER_USER!,
+      },
+      to: recipientEmail,
+      replyTo: data.email,
+      subject: `New Contact Form Submission: ${data.subject}`,
+      html: htmlContent,
+      text: `New Contact Form Submission\n\nName: ${data.firstName} ${data.lastName}\nEmail: ${data.email}\nPhone: ${
+        data.phone
+      }\nSubject: ${data.subject}\n\nMessage:\n${data.message}\n\nSubmitted at: ${new Date(
+        data.submittedAt
+      ).toLocaleString("en-AU")}`,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log(`Contact form submission email sent to ${recipientEmail}: ${info.messageId}`);
+
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
+  } catch (error) {
+    console.error("Failed to send contact submission email:", error);
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send email",
+    };
+  }
+}
+
+/**
+ * Send partner application notification email
+ * Note: Rate limiting is now checked BEFORE calling this function in the API endpoint
+ */
+export async function sendPartnerApplicationEmail(data: {
+  firstName: string;
+  lastName: string;
+  businessName: string;
+  email: string;
+  phone: string;
+  abn?: string;
+  acn?: string;
+  goals?: string;
+  submittedAt: Date;
+}): Promise<EmailResult> {
+  try {
+    const transporter = createEmailTransporter();
+
+    if (!transporter) {
+      console.error("Email transporter not created - SMTP not configured");
+      return {
+        success: false,
+        error: "Email service not configured",
+      };
+    }
+
+    const htmlContent = createPartnerApplicationEmailTemplate(data);
+    const recipientEmail = process.env.CONTACT_EMAIL || "hello@toolsaustralia.com.au";
+
+    const mailOptions = {
+      from: {
+        name: "Tools Australia Partner Applications",
+        address: process.env.SMTP_SERVER_USER!,
+      },
+      to: recipientEmail,
+      replyTo: data.email,
+      subject: `New Partner Application: ${data.businessName}`,
+      html: htmlContent,
+      text: `New Partner Application\n\nName: ${data.firstName} ${data.lastName}\nBusiness: ${
+        data.businessName
+      }\nEmail: ${data.email}\nPhone: ${data.phone}${data.abn ? `\nABN: ${data.abn}` : ""}${
+        data.acn ? `\nACN: ${data.acn}` : ""
+      }${data.goals ? `\n\nGoals:\n${data.goals}` : ""}\n\nSubmitted at: ${new Date(data.submittedAt).toLocaleString(
+        "en-AU"
+      )}`,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log(`Partner application email sent to ${recipientEmail}: ${info.messageId}`);
+
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
+  } catch (error) {
+    console.error("Failed to send partner application email:", error);
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send email",
+    };
+  }
 }

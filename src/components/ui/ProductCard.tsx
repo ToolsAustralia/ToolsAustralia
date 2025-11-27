@@ -473,13 +473,14 @@ export default function ProductCard({
                   href={`/mini-draws/${productData.id}`}
                   className="w-full py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-[10px] sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 bg-black hover:bg-gray-800"
                 >
+                  <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold">$1</span>
                   <div className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5">
                     <Ticket className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
                   </div>
                   <span className="hidden sm:inline">
                     {isPrizeCancelled ? "Cancelled" : isPrizeClosed ? "View Details" : "Enter Draw"}
                   </span>
-                  <span className="sm:hidden">{isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter"}</span>
+                  <span className="sm:hidden">{isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter Draw"}</span>
                 </Link>
               ) : (
                 <button
@@ -640,13 +641,14 @@ export default function ProductCard({
                 href={`/mini-draws/${productData.id}`}
                 className="px-4 sm:px-8 py-2 sm:py-3 rounded-[50px] font-bold text-[12px] sm:text-[14px] text-white tracking-[0.1px] flex items-center gap-[6px] sm:gap-[9px] transition-all duration-200 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
               >
+                <span className="text-[10px] sm:text-xs font-semibold">$1</span>
                 <div className="w-4 h-4 sm:w-5 sm:h-5">
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <span className="hidden sm:inline">
                   {isPrizeCancelled ? "Cancelled" : isPrizeClosed ? "View Details" : "Enter Draw"}
                 </span>
-                <span className="sm:hidden">{isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter"}</span>
+                <span className="sm:hidden">{isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter Draw"}</span>
               </Link>
             ) : hasError ? (
               <div className="flex gap-2">

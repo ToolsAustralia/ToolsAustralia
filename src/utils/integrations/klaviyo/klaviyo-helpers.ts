@@ -10,13 +10,108 @@
 import type { IUser } from "@/models/User";
 import type { KlaviyoProfile } from "@/types/klaviyo";
 import { getStateByCode } from "@/data/australianStates";
+import { getPackageById } from "@/data/membershipPackages";
+import { extractBrandFromSlug } from "./brand-extraction";
+
+/**
+ * Calculate entry breakdown by source
+ * Returns total entries from each purchase type for Klaviyo segmentation
+ */
+export function calculateEntryBreakdown(user: IUser): {
+  memberEntries: number;
+  oneTimeEntries: number;
+  upsellEntries: number;
+  miniDrawEntries: number;
+} {
+  // Calculate member entries from subscription
+  let memberEntries = 0;
+  if (user.subscription?.isActive && user.subscription?.packageId && user.subscription?.startDate) {
+    try {
+      const subscriptionPackage = getPackageById(user.subscription.packageId);
+      if (subscriptionPackage && subscriptionPackage.entriesPerMonth) {
+        const startDate = new Date(user.subscription.startDate);
+        const endDate = user.subscription.endDate ? new Date(user.subscription.endDate) : new Date();
+        const now = new Date();
+
+        // Calculate months between start and end (or now if no end date)
+        const endDateToUse = endDate > now ? now : endDate;
+        const monthsDiff = Math.max(
+          0,
+          Math.floor((endDateToUse.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
+        );
+
+        // Add 1 month for the current month if subscription is active
+        const totalMonths = monthsDiff + (user.subscription.isActive ? 1 : 0);
+        memberEntries = subscriptionPackage.entriesPerMonth * totalMonths;
+      }
+    } catch (error) {
+      console.error(`Error calculating member entries for user ${user._id}:`, error);
+    }
+  }
+
+  // Calculate one-time entries
+  const oneTimeEntries = user.oneTimePackages?.reduce((sum, pkg) => sum + (pkg.entriesGranted || 0), 0) || 0;
+
+  // Calculate upsell entries
+  const upsellPurchases = user.upsellPurchases || [];
+  const upsellEntries = upsellPurchases.reduce((sum, purchase) => sum + (purchase.entriesAdded || 0), 0);
+
+  if (upsellPurchases.length > 0 && upsellEntries === 0) {
+    console.warn(
+      `⚠️ User ${user.email} has ${upsellPurchases.length} upsell purchase(s) but total entries is 0. Check entriesAdded values.`
+    );
+  }
+
+  // Calculate mini-draw entries
+  const miniDrawEntries = user.miniDrawPackages?.reduce((sum, pkg) => sum + (pkg.entriesGranted || 0), 0) || 0;
+
+  return {
+    memberEntries,
+    oneTimeEntries,
+    upsellEntries,
+    miniDrawEntries,
+  };
+}
+
+/**
+ * Determine if user has made any purchase
+ * Checks for subscriptions, one-time packages, mini-draw packages, or upsells
+ */
+function hasUserMadePurchase(user: IUser): boolean {
+  const hasSubscription = user.subscription?.isActive || false;
+  const hasOneTimePackages = (user.oneTimePackages?.length || 0) > 0;
+  const hasMiniDrawPackages = (user.miniDrawPackages?.length || 0) > 0;
+  const hasUpsells = (user.upsellPurchases?.length || 0) > 0;
+
+  return hasSubscription || hasOneTimePackages || hasMiniDrawPackages || hasUpsells;
+}
 
 /**
  * Convert User model to Klaviyo profile
  * Transforms MongoDB user data to Klaviyo format
  * Includes only strategic fields for segmentation and email automation
+ *
+ * @param user - User model instance
+ * @param brandInterestFromSignup - Optional brand interest from signup (e.g., "milwaukee", "dewalt", "makita")
+ *                                   Only used if user hasn't made any purchases yet
  */
-export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile> {
+export async function userToKlaviyoProfile(
+  user: IUser,
+  brandInterestFromSignup?: string | null
+): Promise<KlaviyoProfile> {
+  // ✅ DEBUG: Log user data structure to identify sync issues
+  console.log(`🔍 userToKlaviyoProfile called for ${user.email}:`, {
+    hasSubscription: !!user.subscription,
+    subscriptionIsActive: user.subscription?.isActive,
+    subscriptionPackageId: user.subscription?.packageId,
+    upsellPurchasesLength: user.upsellPurchases?.length || 0,
+    upsellPurchases: user.upsellPurchases ? JSON.stringify(user.upsellPurchases) : "undefined",
+    oneTimePackagesLength: user.oneTimePackages?.length || 0,
+    miniDrawPackagesLength: user.miniDrawPackages?.length || 0,
+    accumulatedEntries: user.accumulatedEntries,
+    rewardsPoints: user.rewardsPoints,
+  });
+
   // Format phone number - ensure it starts with +61 for Australian numbers
   const phone = user.mobile
     ? user.mobile.startsWith("+")
@@ -24,21 +119,48 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
       : `+61${user.mobile.replace(/^0/, "")}`
     : undefined;
 
-  // Calculate major draw entries from majordraws collection (single source of truth)
-  let totalMajorDrawEntries = 0;
-  try {
-    const { getUserTotalAccumulatedEntries } = await import("../../database/queries/major-draw-queries");
-    totalMajorDrawEntries = (await getUserTotalAccumulatedEntries(user._id)) || 0;
-  } catch (error) {
-    console.error(`Error calculating major draw entries for user ${user._id}:`, error);
-    // Default to 0 if calculation fails
-    totalMajorDrawEntries = 0;
-  }
+  // Helper function to safely convert date to ISO string
+  const safeDateToISO = (date: Date | undefined | null): string | undefined => {
+    if (!date) return undefined;
+    try {
+      return date instanceof Date ? date.toISOString() : new Date(date).toISOString();
+    } catch (error) {
+      console.error(`Error converting date to ISO string for user ${user._id}:`, error);
+      return undefined;
+    }
+  };
 
   // Calculate strategic metrics using helper functions
   const lifetimeValue = calculateLifetimeValue(user);
   const partnerDiscountStatus = calculatePartnerDiscountStatus(user);
   const upsellMetrics = calculateUpsellMetrics(user);
+  const entryBreakdown = calculateEntryBreakdown(user);
+
+  // Determine brand interest
+  // If user has made purchases, explicitly set to null to remove tag from Klaviyo
+  // If no purchases, use brand from signup or default to "milwaukee"
+  const userHasPurchases = hasUserMadePurchase(user);
+  let brandInterest: string | null | undefined;
+
+  if (userHasPurchases) {
+    // User has made purchases - explicitly set to null to remove tag from Klaviyo
+    brandInterest = null;
+    console.log(
+      `🏷️ User ${user.email} has purchases - removing brand_interest tag. Has subscription: ${!!user.subscription
+        ?.isActive}, upsells: ${user.upsellPurchases?.length || 0}, one-time: ${
+        user.oneTimePackages?.length || 0
+      }, mini-draw: ${user.miniDrawPackages?.length || 0}`
+    );
+  } else {
+    // User hasn't purchased yet - set brand interest
+    if (brandInterestFromSignup) {
+      brandInterest = extractBrandFromSlug(brandInterestFromSignup);
+    } else {
+      // Default to milwaukee if no brand provided
+      brandInterest = "milwaukee";
+    }
+    console.log(`🏷️ User ${user.email} has no purchases - setting brand_interest to: ${brandInterest}`);
+  }
 
   const klaviyoProfile = {
     email: user.email,
@@ -64,24 +186,29 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
 
       // Subscription details
       has_active_subscription: user.subscription?.isActive || false,
-      subscription_tier: user.subscription?.packageId,
-      subscription_start_date: user.subscription?.startDate?.toISOString(),
-      subscription_end_date: user.subscription?.endDate?.toISOString(),
+      subscription_tier:
+        user.subscription?.packageId && user.subscription.packageId.trim() !== ""
+          ? user.subscription.packageId
+          : undefined, // Handle empty string and undefined
+      subscription_start_date: safeDateToISO(user.subscription?.startDate),
+      subscription_end_date: safeDateToISO(user.subscription?.endDate),
       subscription_auto_renew: user.subscription?.autoRenew ?? undefined,
-      subscription_status: user.subscription?.status,
+      subscription_status:
+        user.subscription?.status && user.subscription.status.trim() !== "" ? user.subscription.status : undefined,
 
       // Subscription lifecycle tracking
       subscription_has_pending_upgrade: !!user.subscription?.pendingChange,
-      subscription_previous_tier: user.subscription?.previousSubscription?.packageId,
-      subscription_last_upgrade_date: user.subscription?.lastUpgradeDate?.toISOString(),
-      subscription_last_downgrade_date: user.subscription?.lastDowngradeDate?.toISOString(),
+      subscription_previous_tier:
+        user.subscription?.previousSubscription?.packageId &&
+        user.subscription.previousSubscription.packageId.trim() !== ""
+          ? user.subscription.previousSubscription.packageId
+          : undefined,
+      subscription_last_upgrade_date: safeDateToISO(user.subscription?.lastUpgradeDate),
+      subscription_last_downgrade_date: safeDateToISO(user.subscription?.lastDowngradeDate),
 
       // Entries and points
       accumulated_entries: user.accumulatedEntries || 0,
       rewards_points: user.rewardsPoints || 0,
-
-      // Major draw entries (accurate from database - single source of truth)
-      total_major_draw_entries: totalMajorDrawEntries,
 
       // Purchase history
       total_one_time_packages: user.oneTimePackages?.length || 0,
@@ -94,7 +221,7 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
       total_spent: lifetimeValue, // Alias for clarity
 
       // Upsell data
-      total_upsells_purchased: user.upsellPurchases?.length || 0,
+      total_upsells_purchased: (user.upsellPurchases?.length || 0) > 0 ? user.upsellPurchases!.length : 0,
       upsell_total_shown: upsellMetrics.totalShown,
       upsell_total_accepted: upsellMetrics.totalAccepted,
       upsell_total_declined: upsellMetrics.totalDeclined,
@@ -111,6 +238,15 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
       partner_discount_queued_count: partnerDiscountStatus.queuedCount,
       partner_discount_total_days: partnerDiscountStatus.totalDays,
       partner_discount_next_activation_date: partnerDiscountStatus.nextActivationDate,
+
+      // Brand interest tracking (removed when user makes any purchase)
+      brand_interest: brandInterest,
+
+      // Entry breakdown by source (for advanced segmentation)
+      member_entries: entryBreakdown.memberEntries,
+      one_time_entries: entryBreakdown.oneTimeEntries,
+      upsell_entries: entryBreakdown.upsellEntries,
+      mini_draw_entries: entryBreakdown.miniDrawEntries,
     },
   };
 
@@ -118,12 +254,30 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
   console.log(`📊 Klaviyo Profile Data for ${user.email}:`, {
     accumulated_entries: klaviyoProfile.properties.accumulated_entries,
     rewards_points: klaviyoProfile.properties.rewards_points,
-    total_major_draw_entries: klaviyoProfile.properties.total_major_draw_entries,
-    has_active_subscription: klaviyoProfile.properties.has_active_subscription,
-    subscription_status: klaviyoProfile.properties.subscription_status,
+    subscription: {
+      has_active_subscription: klaviyoProfile.properties.has_active_subscription,
+      subscription_tier: klaviyoProfile.properties.subscription_tier,
+      subscription_start_date: klaviyoProfile.properties.subscription_start_date,
+      subscription_end_date: klaviyoProfile.properties.subscription_end_date,
+      subscription_status: klaviyoProfile.properties.subscription_status,
+      subscription_auto_renew: klaviyoProfile.properties.subscription_auto_renew,
+      subscription_has_pending_upgrade: klaviyoProfile.properties.subscription_has_pending_upgrade,
+      subscription_previous_tier: klaviyoProfile.properties.subscription_previous_tier,
+      subscription_last_upgrade_date: klaviyoProfile.properties.subscription_last_upgrade_date,
+      subscription_last_downgrade_date: klaviyoProfile.properties.subscription_last_downgrade_date,
+    },
     lifetime_value: klaviyoProfile.properties.lifetime_value,
+    total_spent: klaviyoProfile.properties.total_spent,
+    brand_interest: klaviyoProfile.properties.brand_interest,
+    has_purchases: hasUserMadePurchase(user),
     referral_code: klaviyoProfile.properties.referral_code,
     partner_discount_active: klaviyoProfile.properties.partner_discount_active,
+    entry_breakdown: {
+      member_entries: klaviyoProfile.properties.member_entries,
+      one_time_entries: klaviyoProfile.properties.one_time_entries,
+      upsell_entries: klaviyoProfile.properties.upsell_entries,
+      mini_draw_entries: klaviyoProfile.properties.mini_draw_entries,
+    },
   });
 
   return klaviyoProfile;
@@ -136,20 +290,79 @@ export async function userToKlaviyoProfile(user: IUser): Promise<KlaviyoProfile>
 export function calculateLifetimeValue(user: IUser): number {
   let total = 0;
 
-  // Add mini-draw package prices
+  // Add mini-draw package prices (stored in user model)
   user.miniDrawPackages?.forEach((pkg) => {
     total += pkg.price || 0;
   });
 
-  // Add upsell purchase amounts
-  user.upsellPurchases?.forEach((purchase) => {
-    total += purchase.amountPaid || 0;
-  });
+  // Add upsell purchase amounts (stored in user model)
+  const upsellPurchases = user.upsellPurchases || [];
+  if (upsellPurchases.length > 0) {
+    upsellPurchases.forEach((purchase) => {
+      const amount = purchase.amountPaid || 0;
+      total += amount;
+      console.log(`💰 Adding upsell to lifetime value: ${purchase.offerTitle || purchase.offerId} - $${amount}`);
+    });
+  } else {
+    console.log(
+      `⚠️ No upsell purchases found for user ${user.email} (upsellPurchases: ${user.upsellPurchases?.length || 0})`
+    );
+  }
 
-  // Note: Subscription prices would need to be calculated from package data
-  // One-time packages don't store price in user model, would need package lookup
-  // For now, this covers mini-draws and upsells which are the main additional purchases
+  // Add subscription prices (need to look up package and calculate based on duration)
+  if (user.subscription?.isActive && user.subscription?.packageId && user.subscription?.startDate) {
+    try {
+      const subscriptionPackage = getPackageById(user.subscription.packageId);
+      if (subscriptionPackage && subscriptionPackage.price) {
+        const startDate = new Date(user.subscription.startDate);
+        const endDate = user.subscription.endDate ? new Date(user.subscription.endDate) : new Date();
+        const now = new Date();
 
+        // Calculate months between start and end (or now if no end date)
+        const endDateToUse = endDate > now ? now : endDate;
+        const monthsDiff = Math.max(
+          0,
+          Math.floor((endDateToUse.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
+        );
+
+        // Add 1 month for the current month if subscription is active
+        const totalMonths = monthsDiff + (user.subscription.isActive ? 1 : 0);
+        const subscriptionTotal = subscriptionPackage.price * totalMonths;
+        total += subscriptionTotal;
+        console.log(
+          `💰 Adding subscription to lifetime value: ${subscriptionPackage.name} - $${subscriptionPackage.price}/month × ${totalMonths} months = $${subscriptionTotal}`
+        );
+      } else {
+        console.warn(
+          `⚠️ Subscription package not found or has no price: ${user.subscription.packageId} for user ${user.email}`
+        );
+      }
+    } catch (error) {
+      console.error(`Error calculating subscription lifetime value for user ${user._id}:`, error);
+    }
+  } else {
+    console.log(
+      `ℹ️ No active subscription for lifetime value calculation: isActive=${user.subscription?.isActive}, packageId=${user.subscription?.packageId}`
+    );
+  }
+
+  // Add one-time package prices (need to look up package price)
+  if (user.oneTimePackages && user.oneTimePackages.length > 0) {
+    try {
+      user.oneTimePackages.forEach((pkg) => {
+        if (pkg.packageId) {
+          const oneTimePackage = getPackageById(pkg.packageId);
+          if (oneTimePackage && oneTimePackage.price) {
+            total += oneTimePackage.price;
+          }
+        }
+      });
+    } catch (error) {
+      console.error(`Error calculating one-time package lifetime value for user ${user._id}:`, error);
+    }
+  }
+
+  console.log(`💰 Total lifetime value calculated for ${user.email}: $${total.toFixed(2)}`);
   return total;
 }
 
@@ -164,7 +377,7 @@ export function calculatePartnerDiscountStatus(user: IUser): {
   nextActivationDate?: string;
 } {
   const queue = user.partnerDiscountQueue || [];
-  
+
   // Find active discount (status === "active")
   const activeDiscount = queue.find((item) => item.status === "active");
   const isActive = !!activeDiscount;
@@ -216,7 +429,7 @@ export function calculateUpsellMetrics(user: IUser): {
   const totalShown = stats?.totalShown || 0;
   const totalAccepted = stats?.totalAccepted || 0;
   const totalDeclined = stats?.totalDeclined || 0;
-  
+
   // Calculate conversion rate (accepted / shown, or 0 if no shows)
   const conversionRate = totalShown > 0 ? (totalAccepted / totalShown) * 100 : 0;
 

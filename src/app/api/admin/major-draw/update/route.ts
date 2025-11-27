@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { z } from "zod";
+import { normalizeActivationDateToMidnight } from "@/utils/common/timezone";
 
 // Validation schema for major draw updates
 const majorDrawUpdateSchema = z.object({
@@ -94,7 +95,10 @@ export async function PUT(request: NextRequest) {
       updateData.drawDate = new Date(updateData.drawDate as string | Date);
     }
     if (updateData.activationDate) {
-      updateData.activationDate = new Date(updateData.activationDate as string | Date);
+      // Normalize activation date to midnight AEST
+      updateData.activationDate = normalizeActivationDateToMidnight(
+        new Date(updateData.activationDate as string | Date)
+      );
     }
 
     // Validate date relationships

@@ -3,16 +3,16 @@
 import React from "react";
 
 interface PromoMultiplierBadgeProps {
-  multiplier: 2 | 3 | 5 | 10;
+  multiplier: 3 | 5 | 10; // Only 3x, 5x, 10x supported (removed 2x)
   className?: string;
   showPromoText?: boolean; // Controls visibility of "PROMO" text, default true
 }
 
 /**
  * PromoMultiplierBadge - A reusable component for displaying promo multiplier badges
- * with fiery metallic red styling. Designed for mobile toggle buttons.
+ * with fiery metallic red styling. Designed for toggle buttons (mobile and desktop).
  *
- * @param multiplier - The promo multiplier value (2, 3, 5, or 10)
+ * @param multiplier - The promo multiplier value (3, 5, or 10)
  * @param className - Additional CSS classes for custom styling
  * @param showPromoText - Whether to show "PROMO" text after the multiplier (default: true)
  */
@@ -22,7 +22,7 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
   showPromoText = true,
 }) => {
   return (
-    <div className={`absolute -top-1.5 -right-1.5 lg:hidden z-10 ${className}`}>
+    <div className={`absolute -top-1.5 -right-1.5 z-10 ${className}`}>
       <div
         className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide rounded-full shadow-lg relative overflow-hidden border border-red-400/50"
         style={{

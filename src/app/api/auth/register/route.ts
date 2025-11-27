@@ -15,6 +15,7 @@ import {
   extractFBPFromRequest,
 } from "@/utils/tracking/facebook-helpers";
 import { trackAffiliateSignup } from "@/lib/affiliate";
+import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
 
 // Registration validation schema
 const registerSchema = z.object({
@@ -30,6 +31,7 @@ const registerSchema = z.object({
       return /^(\+61|61|0)?[4-5]\d{8}$/.test(cleaned);
     }, "Please enter a valid Australian mobile number (e.g., 0412345678 or +61412345678)"),
   affiliateCode: z.string().optional(),
+  promotionSlug: z.string().optional(), // Optional promotion slug for brand interest tracking
 });
 
 /**
@@ -140,8 +142,15 @@ export async function POST(request: NextRequest) {
     // Track registration in Klaviyo (non-blocking)
     klaviyo.trackEventBackground(createUserRegisteredEvent(newUser, "email"));
 
+    // Extract brand interest from promotion slug (if provided)
+    // This will be used to set brand_interest in Klaviyo profile for users who haven't purchased yet
+    const brandInterest = validatedData.promotionSlug
+      ? extractBrandFromSlug(validatedData.promotionSlug)
+      : extractBrandFromSlug(null); // Default to "milwaukee" if no slug provided
+
     // ✅ NEW: Ensure user profile is synced to Klaviyo (works for all users, paid or not)
-    ensureUserProfileSynced(newUser);
+    // Pass brand interest so it can be set in Klaviyo profile (will be removed when user makes any purchase)
+    ensureUserProfileSynced(newUser, brandInterest);
 
     // ✅ NEW: Track pixel registration event (non-blocking)
     // Generate unique event ID for deduplication (needed for response)

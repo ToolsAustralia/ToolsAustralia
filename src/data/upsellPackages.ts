@@ -58,7 +58,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     buttonText: "Add Tradie Plus - $9.99",
     conditions: [
       "30 One-time Entries",
-      "5% Off Shop",
+      // "5% Off Shop", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
       "1 Day access after membership expires",
     ],
@@ -89,7 +89,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     buttonText: "Add Foreman Plus - $19.99",
     conditions: [
       "80 Free One-Time Entries",
-      "10% Off Shop",
+      // "10% Off Shop", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
       "2 Days access after membership expires",
     ],
@@ -120,7 +120,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     buttonText: "Add Boss Plus - $39.99",
     conditions: [
       "200 Free One-Time Entries",
-      "20% Off Shop",
+      // "20% Off Shop", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
       "3 Days access after membership expires",
     ],

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { z } from "zod";
-import { calculateActivationDate, calculateFreezeTime } from "@/utils/common/timezone";
+import { calculateActivationDate, calculateFreezeTime, normalizeActivationDateToMidnight } from "@/utils/common/timezone";
 
 // Validation schema for major draw creation
 const prizeSchema = z
@@ -101,8 +101,8 @@ export async function POST(request: NextRequest) {
     let freezeEntriesAt: Date;
 
     if (validatedData.activationDate) {
-      // Admin provided custom activation date
-      activationDate = new Date(validatedData.activationDate);
+      // Admin provided custom activation date - normalize to midnight AEST
+      activationDate = normalizeActivationDateToMidnight(new Date(validatedData.activationDate));
     } else {
       // Auto-calculate activation date (midnight AEST after previous draw completes)
       activationDate = calculateActivationDate(drawDate);

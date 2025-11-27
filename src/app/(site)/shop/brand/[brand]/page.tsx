@@ -188,9 +188,9 @@ type BrandSlug = keyof typeof BRAND_DETAILS;
 const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
 
 interface BrandPageProps {
-  params: {
+  params: Promise<{
     brand: string;
-  };
+  }>;
 }
 
 export async function generateStaticParams() {
@@ -198,7 +198,8 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: BrandPageProps): Promise<Metadata> {
-  const brandKey = params.brand as BrandSlug;
+  const { brand: brandParam } = await params;
+  const brandKey = brandParam as BrandSlug;
   const brand = BRAND_DETAILS[brandKey];
 
   if (!brand) {
@@ -228,7 +229,8 @@ export async function generateMetadata({ params }: BrandPageProps): Promise<Meta
 }
 
 export default async function BrandShopPage({ params }: BrandPageProps) {
-  const brandKey = params.brand as BrandSlug;
+  const { brand: brandParam } = await params;
+  const brandKey = brandParam as BrandSlug;
   const brand = BRAND_DETAILS[brandKey];
 
   if (!brand) {
