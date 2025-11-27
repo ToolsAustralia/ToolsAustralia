@@ -126,7 +126,7 @@ export const usePromoByType = (type: "one-time-packages" | "mini-packages") => {
   };
 };
 
-
+// useCreatePromo hook removed - replaced with useTogglePromo
 
 export const useTogglePromo = () => {
   const queryClient = useQueryClient();
