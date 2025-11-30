@@ -72,7 +72,7 @@ export default function Footer() {
                     My Account
                   </Link>
                   <Link
-                    href="/promotions/milwaukee-sidchrome"
+                    href="/promotional/giveaway"
                     className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
                   >
                     Promotions
@@ -120,10 +120,16 @@ export default function Footer() {
                     Terms and Conditions
                   </Link>
                   <Link
-                    href="/competition-term-majordraw"
+                    href="/competition-terms/major-giveaway"
                     className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
                   >
                     Competition Terms (Major Giveaway)
+                  </Link>
+                  <Link
+                    href="/competition-terms/mini-draw"
+                    className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
+                  >
+                    Competition Terms (Mini Draw)
                   </Link>
                 </div>
               </div>
@@ -190,7 +196,7 @@ export default function Footer() {
                 <span className="text-gray-400 text-xs sm:text-sm lg:text-[14px] font-medium">Follow Us:</span>
                 <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
                   <Link
-                    href="https://www.facebook.com/toolsaust"
+                    href="https://facebook.com/toolsaustralia"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 bg-gray-700 hover:bg-blue-600 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110"
@@ -199,7 +205,7 @@ export default function Footer() {
                     <Facebook size={16} className="sm:w-5 sm:h-5 lg:w-5 lg:h-5" />
                   </Link>
                   <Link
-                    href="https://www.instagram.com/toolsaustralia/"
+                    href="https://instagram.com/toolsaustralia"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 bg-gray-700 hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110"

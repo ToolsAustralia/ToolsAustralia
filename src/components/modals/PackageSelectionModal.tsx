@@ -11,6 +11,7 @@ import { useUserData } from "@/hooks/queries";
 import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
+import BestChanceBadge from "@/components/ui/BestChanceBadge";
 
 // Import package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.png";
@@ -50,6 +51,17 @@ const PACKAGE_ICONS: Record<string, StaticImageData> = {
 
 const getPackageIcon = (planId: string): StaticImageData | null => {
   return PACKAGE_ICONS[planId] || null;
+};
+
+// Helper function to extract gradient color for rounded borders
+const getGradientColor = (gradient: string) => {
+  if (gradient.includes("yellow-4") || gradient.includes("yellow-400")) return "#fbbf24";
+  if (gradient.includes("blue-6") || gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6";
+  if (gradient.includes("emerald") || gradient.includes("green-5") || gradient.includes("green-500")) return "#10b981";
+  if (gradient.includes("gray-3") || gradient.includes("slate-4") || gradient.includes("gray-400")) return "#94a3b8";
+  if (gradient.includes("orange-6") || gradient.includes("orange-5") || gradient.includes("orange-500"))
+    return "#f97316";
+  return "#6b7280";
 };
 
 // Helper function to get package color scheme
@@ -127,9 +139,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   currentPlan,
   onPlanSelect,
 }) => {
-  const [activeTab, setActiveTab] = useState<"membership" | "one-time">(
-    currentPlan.period === "mo" ? "membership" : "one-time"
-  );
+  // Determine active tab based on current plan (no toggle, just display what's selected)
+  const activeTab: "membership" | "one-time" = currentPlan.period === "mo" ? "membership" : "one-time";
   const { data: session } = useSession();
   const [selectedPlan, setSelectedPlan] = useState<LocalMembershipPlan>(currentPlan);
 
@@ -564,36 +575,6 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
       <ModalHeader title="Select Your Package" onClose={onClose} showLogo={true} />
 
       <ModalContent padding="lg" className="pb-16 sm:pb-20">
-        {/* Toggle */}
-        <div className="flex justify-center mb-4 sm:mb-6">
-          <div className="bg-[#2b2d37] rounded-[16px] sm:rounded-[20px] p-[3px] sm:p-[4px] shadow-lg">
-            <div className="flex flex-row items-center justify-center">
-              <button
-                onClick={() => setActiveTab("membership")}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-[12px] sm:rounded-[16px] font-semibold text-[10px] sm:text-[12px] transition-all duration-300 ${
-                  activeTab === "membership"
-                    ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-black shadow-lg"
-                    : "text-[#f9f9f9] hover:text-white hover:bg-white/10"
-                }`}
-              >
-                <span className="sm:hidden">MEMBERSHIP</span>
-                <span className="hidden sm:inline">MEMBERSHIP</span>
-              </button>
-              <button
-                onClick={() => setActiveTab("one-time")}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-[12px] sm:rounded-[16px] font-semibold text-[10px] sm:text-[12px] transition-all duration-300 ${
-                  activeTab === "one-time"
-                    ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-black shadow-lg"
-                    : "text-[#f9f9f9] hover:text-white hover:bg-white/10"
-                }`}
-              >
-                <span className="sm:hidden">ONE-TIME</span>
-                <span className="hidden sm:inline">ONE-TIME</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Member Status Info */}
         {isMember && activeTab === "one-time" && (
           <div className="flex justify-center mb-4 sm:mb-6">
@@ -608,57 +589,62 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
         )}
 
         {/* Packages Stacked Vertically */}
-        <div className="space-y-4 sm:space-y-6 max-w-2xl mx-auto">
+        <div className="space-y-2 sm:space-y-3 max-w-2xl mx-auto">
           {finalMembershipPlans.map((plan) => {
             const colorScheme = getPackageColorScheme(plan.id);
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-2xl p-4 sm:p-6 shadow-[0_0_15px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-[1.02] ${
+                className={`relative rounded-2xl p-2.5 sm:p-4 shadow-[0_0_15px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-[1.02] ${
                   isCurrentPlan(plan) ? "cursor-not-allowed opacity-75" : "cursor-pointer"
                 } ${
                   isSelectedPlan(plan) ? "ring-2 ring-yellow-400 shadow-2xl" : "hover:shadow-[0_0_25px_rgba(0,0,0,0.6)]"
-                } bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 ${colorScheme.border}`}
+                }`}
                 style={{
-                  background: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)`,
-                  borderImage: `linear-gradient(135deg, ${
-                    colorScheme.gradient.includes("yellow")
-                      ? "#fbbf24"
-                      : colorScheme.gradient.includes("blue")
-                      ? "#3b82f6"
-                      : colorScheme.gradient.includes("emerald") || colorScheme.gradient.includes("green")
-                      ? "#10b981"
-                      : colorScheme.gradient.includes("gray") || colorScheme.gradient.includes("slate")
-                      ? "#94a3b8"
-                      : colorScheme.gradient.includes("orange")
-                      ? "#f97316"
-                      : "#6b7280"
-                  }, transparent) 1`,
+                  border: `2px solid transparent`,
+                  backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${getGradientColor(
+                    colorScheme.gradient
+                  )}, transparent)`,
+                  backgroundOrigin: `border-box`,
+                  backgroundClip: `padding-box, border-box`,
                 }}
                 onClick={() => !isCurrentPlan(plan) && handlePlanSelect(plan)}
               >
-                {/* Badges - Top Right Corner (Current Plan and Popular) */}
-                <div className="absolute top-2 right-2 z-20 flex flex-col gap-1">
-                  {/* Current Plan Badge - Highest Priority */}
-                  {isCurrentPlan(plan) && (
-                    <div className="bg-green-500 text-white rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-[10px] font-bold shadow-lg">
-                      <span className="sm:hidden">CURRENT</span>
-                      <span className="hidden sm:inline">CURRENT PLAN</span>
-                    </div>
-                  )}
-                  {/* Popular Badge - Show only if not current plan */}
-                  {plan.isPopular && !isCurrentPlan(plan) && (
-                    <div className="bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-bold text-[8px] sm:text-[10px] shadow-xl shadow-yellow-500/50 border border-yellow-300">
-                      <span className="sm:hidden">POPULAR</span>
-                      <span className="hidden sm:inline">POPULAR</span>
-                    </div>
-                  )}
-                </div>
-
                 {/* Promo Badge - Top Left Corner */}
-                {plan.metadata?.isPromoActive && (
+                {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
                   <div className="absolute top-2 left-2 z-20">
-                    <PromoBadge multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
+                    <PromoBadge
+                      multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
+                      size="small"
+                      showPromoText={false}
+                    />
+                  </div>
+                )}
+
+                {/* Best Chance Badge - Top Right Corner (for boss/power packages) */}
+                {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                  <div className="absolute top-2 right-2 z-20">
+                    <BestChanceBadge size="small" />
+                  </div>
+                )}
+
+                {/* Badges - Top Right Corner (Current Plan and Popular) - Only show if not boss/power */}
+                {!(plan.id.includes("boss") || plan.id.includes("power")) && (
+                  <div className="absolute top-2 right-2 z-20 flex flex-col gap-1">
+                    {/* Current Plan Badge - Highest Priority */}
+                    {isCurrentPlan(plan) && (
+                      <div className="bg-green-500 text-white rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-[10px] font-bold shadow-lg">
+                        <span className="sm:hidden">CURRENT</span>
+                        <span className="hidden sm:inline">CURRENT PLAN</span>
+                      </div>
+                    )}
+                    {/* Popular Badge - Show only if not current plan */}
+                    {plan.isPopular && !isCurrentPlan(plan) && (
+                      <div className="bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-bold text-[8px] sm:text-[10px] shadow-xl shadow-yellow-500/50 border border-yellow-300">
+                        <span className="sm:hidden">POPULAR</span>
+                        <span className="hidden sm:inline">POPULAR</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -672,9 +658,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
                 {/* Package Icon - Centered at top */}
                 {getPackageIcon(plan.id) && (
-                  <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 z-20">
+                  <div className="absolute -top-4 sm:-top-5 left-1/2 transform -translate-x-1/2 z-20">
                     <div
-                      className={`w-12 h-12 sm:w-16 sm:h-16 relative ${
+                      className={`w-8 h-8 sm:w-12 sm:h-12 relative ${
                         plan.id.includes("boss") ? "scale-110 sm:scale-110" : ""
                       }`}
                     >
@@ -688,14 +674,14 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 )}
 
                 {/* Plan Content - Centered Layout */}
-                <div className="text-center pt-4">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <h3 className={`text-lg sm:text-xl font-bold ${colorScheme.text} tracking-wide`}>{plan.name}</h3>
+                <div className="text-center pt-2 sm:pt-3">
+                  <div className="flex items-center justify-center gap-2 mb-1 sm:mb-1.5">
+                    <h3 className={`text-base sm:text-lg font-bold ${colorScheme.text} tracking-wide`}>{plan.name}</h3>
                   </div>
-                  {plan.subtitle && <p className="text-sm text-white/80 mb-3">{plan.subtitle}</p>}
+                  {plan.subtitle && <p className="text-xs sm:text-sm text-white/80 mb-1.5 sm:mb-2">{plan.subtitle}</p>}
 
                   {/* Entries and Price - Horizontal Layout */}
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
                     {/* Entries - Main Focus (Left) */}
                     <div className="flex-1 text-left">
                       {(() => {
@@ -717,25 +703,25 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                           return (
                             <div className={`${colorScheme.text}`}>
                               {isPromoActive ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[18px] font-bold line-through opacity-40 text-slate-400">
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                  <span className="text-sm sm:text-base font-bold line-through opacity-40 text-slate-400">
                                     {originalEntries}
                                   </span>
-                                  <span className="text-[16px] font-bold text-yellow-400">→</span>
+                                  <span className="text-sm sm:text-base font-bold text-yellow-400">→</span>
                                   <div
-                                    className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
+                                    className={`text-xl sm:text-2xl font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
                                   >
                                     {entriesNumber}
                                   </div>
                                 </div>
                               ) : (
                                 <div
-                                  className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
+                                  className={`text-xl sm:text-2xl font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
                                 >
                                   {entriesNumber}
                                 </div>
                               )}
-                              <div className={`text-sm ${colorScheme.text}`}>Free Entries</div>
+                              <div className={`text-xs sm:text-sm ${colorScheme.text}`}>Free Entries</div>
                             </div>
                           );
                         }
@@ -745,8 +731,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
                     {/* Price - Secondary (Right) */}
                     <div className="flex-1 text-right">
-                      <div className={`text-xl sm:text-2xl font-bold text-slate-200`}>${plan.price}</div>
-                      <div className="text-xs text-slate-400">
+                      <div className={`text-lg sm:text-xl font-bold text-slate-200`}>${plan.price}</div>
+                      <div className="text-[10px] sm:text-xs text-slate-400">
                         {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
                       </div>
                     </div>
@@ -757,27 +743,11 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                     .filter((feature) => !feature.text.includes("Entries") && !feature.text.includes("entries"))
                     .slice(0, 1)
                     .map((feature, index) => (
-                      <p key={index} className="text-sm text-white/90 mb-3">
+                      <p key={index} className="text-xs sm:text-sm text-white/90 mb-0">
                         {feature.text}
                       </p>
                     ))}
                 </div>
-
-                {/* Expanded Features - Show if selected plan */}
-                {isSelectedPlan(plan) && (
-                  <div className="mt-4 pt-4 border-t border-white/20">
-                    <div className="space-y-2">
-                      {plan.features
-                        .filter((feature) => !feature.text.includes("Entries") && !feature.text.includes("entries"))
-                        .map((feature, index) => (
-                          <div key={index} className="flex items-center gap-2 text-sm text-white/90">
-                            <Check size={14} className={`${colorScheme.text} flex-shrink-0`} />
-                            <span>{feature.text}</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}

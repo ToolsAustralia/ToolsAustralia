@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { CheckCircle, CreditCard } from "lucide-react";
-import { UpsellModalProps, OriginalPurchaseContext } from "@/types/upsell";
+import { UpsellModalProps } from "@/types/upsell";
 import { useUserContext } from "@/contexts/UserContext";
 import { usePaymentMethods } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,10 +14,6 @@ import { type PaymentStatusResponse } from "@/hooks/queries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
-import {
-  loadOriginalPurchaseContext,
-  clearOriginalPurchaseContext,
-} from "@/utils/storage/originalPurchaseContext";
 
 /**
  * UpsellModal Component
@@ -77,26 +73,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // Get default payment method
   const defaultPaymentMethod = paymentMethods?.find((pm) => pm.isDefault);
 
-  const [resolvedOriginalPurchaseContext, setResolvedOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(
-    originalPurchaseContext ?? null
-  );
-
-  // Hydrate purchase context from storage if it is missing (staging/prod timing guard)
-  useEffect(() => {
-    if (originalPurchaseContext) {
-      setResolvedOriginalPurchaseContext(originalPurchaseContext);
-      return;
-    }
-
-    if (!resolvedOriginalPurchaseContext) {
-      const storedContext = loadOriginalPurchaseContext();
-      if (storedContext) {
-        console.info("📦 Loaded stored purchase context for upsell flow", storedContext);
-        setResolvedOriginalPurchaseContext(storedContext);
-      }
-    }
-  }, [originalPurchaseContext, resolvedOriginalPurchaseContext]);
-
   /**
    * Finalize invoice and send to Klaviyo
    */
@@ -108,15 +84,15 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       price: number;
       entries: number;
     }) => {
-      if (invoiceFinalized || !resolvedOriginalPurchaseContext || !userContext?.userId) {
+      if (invoiceFinalized || !originalPurchaseContext || !userContext?.userId) {
         console.log("📧 Invoice finalization skipped:", {
           invoiceFinalized,
-          hasContext: !!resolvedOriginalPurchaseContext,
+          hasContext: !!originalPurchaseContext,
           hasUserId: !!userContext?.userId,
-          contextDetails: resolvedOriginalPurchaseContext
+          contextDetails: originalPurchaseContext
             ? {
-                paymentIntentId: resolvedOriginalPurchaseContext.paymentIntentId,
-                packageName: resolvedOriginalPurchaseContext.packageName,
+                paymentIntentId: originalPurchaseContext.paymentIntentId,
+                packageName: originalPurchaseContext.packageName,
               }
             : null,
         });
@@ -131,7 +107,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: userContext.userId,
-            originalPurchase: resolvedOriginalPurchaseContext,
+            originalPurchase: originalPurchaseContext,
             upsellPurchase: upsellData,
           }),
         });
@@ -140,8 +116,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           const result = await response.json();
           console.log("✅ Invoice finalized:", result);
           setInvoiceFinalized(true);
-          clearOriginalPurchaseContext();
-          setResolvedOriginalPurchaseContext(null);
 
           // Clear timeout if it exists
           if (finalizationTimeoutIdRef.current) {
@@ -155,7 +129,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         console.error("❌ Invoice finalization error:", error);
       }
     },
-    [invoiceFinalized, resolvedOriginalPurchaseContext, userContext?.userId]
+    [invoiceFinalized, originalPurchaseContext, userContext?.userId]
   );
 
   // Custom close handler that resets payment processing state
@@ -171,7 +145,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
     // ✅ CRITICAL: Finalize invoice if not already finalized
     // This ensures Klaviyo email is sent even if user closes modal without clicking decline
-    if (!invoiceFinalized && resolvedOriginalPurchaseContext) {
+    if (!invoiceFinalized && originalPurchaseContext) {
       console.log("📧 Modal closing - finalizing invoice with original purchase only");
       finalizeInvoice();
     }
@@ -199,7 +173,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
 
     onClose();
-  }, [onClose, userData, invoiceFinalized, resolvedOriginalPurchaseContext, finalizeInvoice]);
+  }, [onClose, userData, invoiceFinalized, originalPurchaseContext, finalizeInvoice]);
 
   // Animation effect and reset payment processing state
   useEffect(() => {
@@ -212,19 +186,19 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
       // Debug logging to check context
       console.log("🔍 UpsellModal opened:", {
-        hasContext: !!resolvedOriginalPurchaseContext,
-        contextDetails: resolvedOriginalPurchaseContext
+        hasContext: !!originalPurchaseContext,
+        contextDetails: originalPurchaseContext
           ? {
-              paymentIntentId: resolvedOriginalPurchaseContext.paymentIntentId,
-              packageName: resolvedOriginalPurchaseContext.packageName,
-              packageType: resolvedOriginalPurchaseContext.packageType,
+              paymentIntentId: originalPurchaseContext.paymentIntentId,
+              packageName: originalPurchaseContext.packageName,
+              packageType: originalPurchaseContext.packageType,
             }
           : null,
         invoiceFinalized,
       });
 
       // Start 1-minute timeout for invoice finalization if we have purchase context
-      if (resolvedOriginalPurchaseContext && !invoiceFinalized) {
+      if (originalPurchaseContext && !invoiceFinalized) {
         const timeoutId = setTimeout(() => {
           console.log("⏰ Invoice finalization timeout - sending original purchase only");
           finalizeInvoice();
@@ -246,7 +220,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     } else {
       setIsVisible(false);
     }
-  }, [isOpen, resolvedOriginalPurchaseContext, invoiceFinalized, finalizeInvoice]);
+  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice]);
 
   // Countdown timer for urgency - TODO: Implement countdown timer
   // useEffect(() => {
@@ -319,10 +293,10 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           useDefaultPayment: true,
           paymentMethodId: defaultPaymentMethod.paymentMethodId,
           userId: userData?._id || "",
-          originalPurchaseContext: resolvedOriginalPurchaseContext
+          originalPurchaseContext: originalPurchaseContext
             ? {
-                miniDrawId: resolvedOriginalPurchaseContext.miniDrawId,
-                miniDrawName: resolvedOriginalPurchaseContext.miniDrawName,
+                miniDrawId: originalPurchaseContext.miniDrawId,
+                miniDrawName: originalPurchaseContext.miniDrawName,
               }
             : undefined,
         },
@@ -455,7 +429,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     showSuccess("Upsell Successful!", `${offer.title} activated`, benefits, 3000);
 
     // ✅ Finalize invoice with both original purchase and upsell
-    if (paymentIntentId && resolvedOriginalPurchaseContext) {
+    if (paymentIntentId && originalPurchaseContext) {
       finalizeInvoice({
         paymentIntentId,
         offerId: offer.id,
@@ -588,7 +562,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                   isProcessing,
                   hasDefaultPaymentMethod: !!defaultPaymentMethod,
                   paymentMethodId: defaultPaymentMethod?.paymentMethodId,
-                  hasOriginalPurchaseContext: !!resolvedOriginalPurchaseContext,
+                  hasOriginalPurchaseContext: !!originalPurchaseContext,
                 });
                 handleAccept();
               }}
@@ -624,7 +598,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 console.log("🟡 Upsell decline button clicked", {
                   offerId: offer.id,
                   invoiceFinalized,
-                  hasOriginalPurchaseContext: !!resolvedOriginalPurchaseContext,
+                  hasOriginalPurchaseContext: !!originalPurchaseContext,
                 });
                 handleDecline();
               }}

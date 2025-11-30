@@ -31,10 +31,9 @@ import { useToast } from "@/components/ui/Toast";
 import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
-import PromoBadge from "@/components/ui/PromoBadge";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
-import { persistOriginalPurchaseContext } from "@/utils/storage/originalPurchaseContext";
+import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 // Member package mapping utilities imported but using inline mapping for simplicity
 
 // Type for one-time purchase response data
@@ -140,12 +139,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   >("subscription");
 
   // Original purchase context for combined invoice (invoice finalization)
-  const [originalPurchaseContext, setOriginalPurchaseContextState] = useState<OriginalPurchaseContext | null>(null);
-
-  const updateOriginalPurchaseContext = useCallback((context: OriginalPurchaseContext | null) => {
-    setOriginalPurchaseContextState(context);
-    persistOriginalPurchaseContext(context);
-  }, []);
+  const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
 
   // Payment confirmation state - now handled directly in handleSubmit
   // Removed showPaymentConfirmation and paymentData states
@@ -176,7 +170,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const { subscriptionPackages, oneTimePackages } = useMemberships();
 
   // Get active promos for different package types
-  const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
   const { data: miniPromo } = usePromoByType("mini-packages");
 
@@ -280,16 +273,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       return applyMultiplier(oneTimePromo.multiplier);
     }
 
-    if (activePlan.period !== "one-time" && !activePlan.id.startsWith("mini-pack-") && membershipPromo) {
-      return applyMultiplier(membershipPromo.multiplier);
-    }
-
     if (activePlan.id.startsWith("mini-pack-") && miniPromo) {
       return applyMultiplier(miniPromo.multiplier);
     }
 
     return activePlan;
-  }, [activePlan, membershipPromo, oneTimePromo, miniPromo]);
+  }, [activePlan, oneTimePromo, miniPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { savePaymentMethod } = useSavedPaymentMethods();
   const purchaseMembership = usePurchaseMembership();
@@ -1070,7 +1059,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       };
 
       // Also update state for other component uses
-      updateOriginalPurchaseContext(contextToPass);
+      setOriginalPurchaseContext(contextToPass);
       console.log("📧 Stored original purchase context for invoice finalization", {
         miniDrawId,
         miniDrawName,
@@ -1231,7 +1220,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               };
 
               // Also update state for other component uses
-              updateOriginalPurchaseContext(contextToPass);
+              setOriginalPurchaseContext(contextToPass);
               console.log("📧 Stored original purchase context for invoice finalization (new user)");
             }
 
@@ -1369,7 +1358,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           entries: entriesCount,
         };
         // Also update state for other component uses
-        updateOriginalPurchaseContext(contextToPass);
+        setOriginalPurchaseContext(contextToPass);
         console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
       } else if (paymentIntentId && activePlan.period === "mo") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
@@ -1383,7 +1372,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           entries: entriesCount,
         };
         // Also update state for other component uses
-        updateOriginalPurchaseContext(contextToPass);
+        setOriginalPurchaseContext(contextToPass);
         console.log("📧 Stored original purchase context for invoice finalization (subscription)");
       }
 
@@ -1915,7 +1904,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 entries: entriesCount,
               };
 
-              updateOriginalPurchaseContext(fallbackContext);
+              setOriginalPurchaseContext(fallbackContext);
               console.log("📧 Stored original purchase context for invoice finalization (fallback path)");
             } else {
               console.warn("⚠️ Fallback path could not extract paymentIntentId - invoice finalization may be delayed");
@@ -2806,14 +2795,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                                 >
                                   {promoEnhancedPlan?.name || "No package selected"}
                                 </h4>
-                                {/* Promo Badge */}
-                                {promoEnhancedPlan?.metadata?.isPromoActive &&
-                                  promoEnhancedPlan?.metadata?.promoMultiplier && (
-                                    <PromoBadge
-                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
-                                      size="small"
-                                    />
-                                  )}
                               </div>
                               <p
                                 className={`text-xs sm:text-sm ${
@@ -2862,7 +2843,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                               {promoEnhancedPlan?.metadata?.isUpsellOffer !== true && (
                                 <button
                                   onClick={handlePackageChange}
-                                  className={`relative z-10 mt-1 text-xs sm:text-sm hover:underline transition-all duration-200 cursor-pointer ${
+                                  className={`relative z-10 mt-1 text-xs sm:text-sm underline hover:no-underline transition-all duration-200 cursor-pointer ${
                                     promoEnhancedPlan?.id &&
                                     (promoEnhancedPlan.id.startsWith("mini-pack-") ||
                                       promoEnhancedPlan.id.includes("tradie") ||
@@ -2882,6 +2863,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                               )}
                             </div>
                           </div>
+                          {/* Promo Active Section */}
+                          {promoEnhancedPlan?.metadata?.isPromoActive &&
+                            promoEnhancedPlan?.metadata?.promoMultiplier && (
+                              <div className="mt-3 pt-3 border-t border-yellow-400/30">
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className="text-xs sm:text-sm text-yellow-300 font-semibold">
+                                    <HexagonalPromoBadge
+                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
+                                      size="xs"
+                                    />
+                                  </span>
+                                  <span className="text-xs sm:text-sm text-white font-bold">
+                                    {promoEnhancedPlan.metadata.promoMultiplier}x Bonus entries have been applied
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                         </div>
                       </>
                     )}

@@ -15,22 +15,22 @@ const PromoBadge: React.FC<PromoBadgeProps> = ({
   className = "",
   showPromoText = true,
 }) => {
-  // Size configurations
+  // Size configurations - matching BestChanceBadge text sizes
   const sizeConfig = {
     small: {
-      container: "px-2 py-1 text-xs",
-      text: "text-xs",
-      icon: "w-3 h-3",
+      container: "px-2 py-1 text-[8px]",
+      text: "text-[8px]",
+      icon: "w-2.5 h-2.5",
     },
     medium: {
-      container: "px-3 py-1.5 text-sm",
-      text: "text-sm",
-      icon: "w-4 h-4",
+      container: "px-2.5 py-1 text-[10px]",
+      text: "text-[10px]",
+      icon: "w-3 h-3",
     },
     large: {
-      container: "px-4 py-2 text-base",
-      text: "text-base",
-      icon: "w-5 h-5",
+      container: "px-3 py-1.5 text-xs",
+      text: "text-xs",
+      icon: "w-3.5 h-3.5",
     },
   };
 

@@ -760,13 +760,13 @@ export default function MyAccountPage() {
             <PartnerDiscountQueue />
           </div>
 
-          {/* Major Draw Section */}
-          <MajorDrawSection className="mb-12" />
-
           {/* Boost Your Odds 50% Section - Using MembershipSection */}
           <div className="mb-12">
             <MembershipSection title="BOOST YOUR ODDS 50%" padding="py-8 sm:py-12" />
           </div>
+
+          {/* Major Draw Section */}
+          <MajorDrawSection className="mb-12" />
 
           {/* Mini Draw Section */}
           <div className="">

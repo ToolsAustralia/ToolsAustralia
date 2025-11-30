@@ -20,7 +20,7 @@ const ModalContent: React.FC<ModalContentProps> = ({
     none: "",
     sm: "p-3",
     md: "p-4",
-    lg: "p-6",
+    lg: "p-3 sm:p-6", // Responsive: small on mobile, large on sm and up
   };
 
   const scrollbarClass = scrollbar === "metallic" ? "modal-scrollbar" : scrollbar === "none" ? "scrollbar-hide" : "";

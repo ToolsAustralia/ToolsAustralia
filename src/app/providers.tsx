@@ -12,7 +12,7 @@ import { defaultQueryOptions, defaultMutationOptions, retryConfig } from "@/lib/
 import UpgradeSuccessToast from "@/components/UpgradeSuccessToast";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useState } from "react";
-import PromoCountdownBanner from "@/components/banners/PromoCountdownBanner";
+import FloatingPromoBanner from "@/components/banners/FloatingPromoBanner";
 import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
 
@@ -83,7 +83,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                       <ReferralTracker />
                       <UpgradeSuccessToast />
                       {children}
-                      <PromoCountdownBanner />
+                      <FloatingPromoBanner />
                     </ToastProvider>
                   </LoadingProvider>
                   {/* React Query DevTools - temporarily disabled */}

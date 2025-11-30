@@ -17,7 +17,6 @@ import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
-import { persistOriginalPurchaseContext } from "@/utils/storage/originalPurchaseContext";
 
 /**
  * SpecialPackagesModalProps Interface
@@ -46,12 +45,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [processingPackageName, setProcessingPackageName] = useState<string>("");
-  const [originalPurchaseContext, setOriginalPurchaseContextState] = useState<OriginalPurchaseContext | null>(null);
-
-  const updateOriginalPurchaseContext = useCallback((context: OriginalPurchaseContext | null) => {
-    setOriginalPurchaseContextState(context);
-    persistOriginalPurchaseContext(context);
-  }, []);
+  const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
 
   // Get user context and payment methods
   const { isAuthenticated, userData, hasActiveSubscription } = useUserContext();
@@ -92,9 +86,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
     setProcessingPackageName("");
-    updateOriginalPurchaseContext(null);
+    setOriginalPurchaseContext(null);
     onClose();
-  }, [onClose, updateOriginalPurchaseContext]);
+  }, [onClose]);
 
   // Reset payment processing state when modal opens
   useEffect(() => {
@@ -102,10 +96,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
       setProcessingPackageName("");
-      updateOriginalPurchaseContext(null);
+      setOriginalPurchaseContext(null);
       setUpsellTriggered(false);
     }
-  }, [isOpen, updateOriginalPurchaseContext]);
+  }, [isOpen]);
 
   // CRITICAL: Verify user has active subscription before showing modal
   if (!isOpen) return null;
@@ -224,10 +218,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       try {
         // Get paymentIntentId from status.data or fallback to state
         const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
-
+        
         // Get package details - use selectedPackage as source of truth
-        const packageName =
-          status.data?.packageName || processingPackageName || selectedPackage?.name || "Special Package";
+        const packageName = status.data?.packageName || processingPackageName || selectedPackage?.name || "Special Package";
         const value = selectedPackage?.price || 0;
         const currency = "AUD";
         const packageId = selectedPackage?._id || "";
@@ -255,9 +248,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           platform: "tools-australia",
         });
 
-        console.log(
-          `📘 Facebook Pixel: Special Package Purchase tracked - $${value} ${currency} (EventID: ${eventID})`
-        );
+        console.log(`📘 Facebook Pixel: Special Package Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
       } catch (pixelError) {
         console.error("❌ Error tracking Special Package Purchase client-side:", pixelError);
         // Non-blocking - continue with success flow
@@ -266,7 +257,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
     // Store original purchase context for invoice finalization
     if (paymentIntentId && selectedPackage) {
-      updateOriginalPurchaseContext({
+      setOriginalPurchaseContext({
         paymentIntentId,
         packageId: selectedPackage._id || "",
         packageName: processingPackageName,
@@ -581,7 +572,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                       <div className="text-xs sm:text-sm text-black font-semibold">{pkg.name}</div>
                       {/* Promo Badge for packages */}
                       {pkg.isPromoActive && pkg.promoMultiplier && (
-                        <PromoBadge multiplier={pkg.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
+                        <PromoBadge multiplier={pkg.promoMultiplier as 3 | 5 | 10} size="small" />
                       )}
                     </div>
 

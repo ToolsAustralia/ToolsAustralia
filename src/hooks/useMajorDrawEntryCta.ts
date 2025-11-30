@@ -21,8 +21,8 @@ interface UseMajorDrawEntryCtaResult {
  * A new developer can call `openEntryFlow` and the hook handles every state change for them.
  *
  * Package Selection Logic:
- * - Non-members: Returns Foreman subscription package (40 entries/month, with promo support)
- * - Members: Returns additional-foreman-pack one-time package (100 entries, with promo support)
+ * - Non-members: Returns Tradie subscription package (15 entries/month, with promo support)
+ * - Members: Returns additional-apprentice-pack one-time package (10 entries, $25, with promo support) - lowest member package
  */
 export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { hasActiveSubscription, userData } = useUserContext();
@@ -40,29 +40,29 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const getHeavyDutyPack = useCallback((): LocalMembershipPlan => {
     const isMember = userData?.subscription?.isActive ?? false;
 
-    // For non-members: Use Foreman subscription package
-    // For members: Use additional-foreman-pack (one-time package)
+    // For non-members: Use Tradie subscription package
+    // For members: Use additional-apprentice-pack (one-time package) - lowest member package
     if (isMember) {
       const promoMultiplier = oneTimePromoMultiplier;
-      // Member path: Use additional-foreman-pack one-time package
-      const targetPackageId = "additional-foreman-pack";
+      // Member path: Use additional-apprentice-pack one-time package (lowest price/entry option)
+      const targetPackageId = "additional-apprentice-pack";
 
       if (safeOneTimePackages.length === 0) {
         // Fallback if packages aren't loaded yet
-        const baseEntries = 100;
+        const baseEntries = 10; // Additional Apprentice Pack has 10 entries
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Additional Foreman Pack",
-          price: 100,
+          name: "Additional Apprentice Pack",
+          price: 25,
           period: "one-time",
           features: [
             { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
-            { text: "4 Days Access to Partner Discounts" },
+            { text: "1 Days Access to Partner Discounts" },
             { text: "100% of Partner Discounts Available" },
           ],
-          buttonText: "Go Foreman",
+          buttonText: "Get Started",
           buttonStyle: "secondary",
           isMemberOnly: true,
           metadata: {
@@ -78,20 +78,20 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
       if (!packageData) {
         // Fallback if package not found
-        const baseEntries = 100;
+        const baseEntries = 10; // Additional Apprentice Pack has 10 entries
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Additional Foreman Pack",
-          price: 100,
+          name: "Additional Apprentice Pack",
+          price: 25,
           period: "one-time",
           features: [
             { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
-            { text: "4 Days Access to Partner Discounts" },
+            { text: "1 Days Access to Partner Discounts" },
             { text: "100% of Partner Discounts Available" },
           ],
-          buttonText: "Go Foreman",
+          buttonText: "Get Started",
           buttonStyle: "secondary",
           isMemberOnly: true,
           metadata: {
@@ -134,18 +134,18 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       };
     } else {
       const promoMultiplier = membershipPromoMultiplier;
-      // Non-member path: Use Foreman subscription package
-      const targetPackageId = "foreman-subscription";
+      // Non-member path: Use Tradie subscription package
+      const targetPackageId = "tradie-subscription";
 
       if (safeSubscriptionPackages.length === 0) {
         // Fallback if packages aren't loaded yet
-        const baseEntries = 40; // Foreman subscription has 40 entries per month
+        const baseEntries = 15; // Tradie subscription has 15 entries per month
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Foreman",
-          price: 40,
+          name: "Tradie",
+          price: 20,
           period: "mo",
           features: [
             {
@@ -153,11 +153,11 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
                 promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""
               }`,
             },
-            // { text: "10% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
+            // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
             { text: "100% Access to Partner Discounts" },
             { text: "Mini Draws" },
           ],
-          buttonText: "Go Foreman",
+          buttonText: "Get Started",
           buttonStyle: "secondary",
           isMemberOnly: false,
           metadata: {
@@ -173,13 +173,13 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
       if (!packageData) {
         // Fallback if package not found
-        const baseEntries = 40;
+        const baseEntries = 15; // Tradie subscription has 15 entries per month
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Foreman",
-          price: 40,
+          name: "Tradie",
+          price: 20,
           period: "mo",
           features: [
             {
@@ -187,11 +187,11 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
                 promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""
               }`,
             },
-            // { text: "10% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
+            // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
             { text: "100% Access to Partner Discounts" },
             { text: "Mini Draws" },
           ],
-          buttonText: "Go Foreman",
+          buttonText: "Get Started",
           buttonStyle: "secondary",
           isMemberOnly: false,
           metadata: {

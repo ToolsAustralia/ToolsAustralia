@@ -12,6 +12,7 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
+import BestChanceBadge from "@/components/ui/BestChanceBadge";
 
 // Import package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.png";
@@ -214,10 +215,15 @@ export default function MembershipSection({
   // Update default tab based on subscription status
   useEffect(() => {
     if (!userLoading && userData) {
-      if (hasActiveSubscription) {
-        setActiveTab("one-time");
-      } else {
-        setActiveTab("membership");
+      const newTab = hasActiveSubscription ? "one-time" : "membership";
+      setActiveTab(newTab);
+      // Dispatch event for FloatingPromoBanner to sync
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("membershipTabChanged", {
+            detail: { activeTab: newTab },
+          })
+        );
       }
     }
   }, [hasActiveSubscription, userLoading, userData]);
@@ -424,6 +430,14 @@ export default function MembershipSection({
               <button
                 onClick={() => {
                   setActiveTab("one-time");
+                  // Dispatch event for FloatingPromoBanner to sync
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                      new CustomEvent("membershipTabChanged", {
+                        detail: { activeTab: "one-time" },
+                      })
+                    );
+                  }
                 }}
                 className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                   activeTab === "one-time"
@@ -440,6 +454,14 @@ export default function MembershipSection({
               <button
                 onClick={() => {
                   setActiveTab("membership");
+                  // Dispatch event for FloatingPromoBanner to sync
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                      new CustomEvent("membershipTabChanged", {
+                        detail: { activeTab: "membership" },
+                      })
+                    );
+                  }
                 }}
                 className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                   activeTab === "membership"
@@ -516,29 +538,38 @@ export default function MembershipSection({
                               />
                             </div>
                           )}
-                          {/* Popular and Current Plan Badges - Top Right */}
-                          <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
-                            {/* Current Plan Badge - Highest Priority */}
-                            {isCurrentSubscription(plan) && (
-                              <div
-                                className={`bg-gradient-to-r from-green-500 via-green-600 to-green-700 text-white ${
-                                  isTwoColumn ? "px-1.5 py-0.5 text-[6px]" : "px-2 py-1 text-[8px]"
-                                } rounded-full font-bold shadow-lg shadow-green-500/50 border border-green-400`}
-                              >
-                                CURRENT
-                              </div>
-                            )}
-                            {/* Popular Badge - Show only if not current plan */}
-                            {plan.isPopular && !isCurrentSubscription(plan) && (
-                              <div
-                                className={`bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black ${
-                                  isTwoColumn ? "px-1.5 py-0.5 text-[6px]" : "px-2 py-1 text-[8px]"
-                                } rounded-full font-bold shadow-lg shadow-yellow-500/50 border border-yellow-300`}
-                              >
-                                POPULAR
-                              </div>
-                            )}
-                          </div>
+                          {/* Best Chance Badge - Top Right (for boss/power packages) */}
+                          {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                            <div className="absolute top-2 right-2 z-20">
+                              <BestChanceBadge size={isTwoColumn ? "small" : "small"} />
+                            </div>
+                          )}
+
+                          {/* Popular and Current Plan Badges - Top Right - Only show if not boss/power */}
+                          {!(plan.id.includes("boss") || plan.id.includes("power")) && (
+                            <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
+                              {/* Current Plan Badge - Highest Priority */}
+                              {isCurrentSubscription(plan) && (
+                                <div
+                                  className={`bg-gradient-to-r from-green-500 via-green-600 to-green-700 text-white ${
+                                    isTwoColumn ? "px-1.5 py-0.5 text-[6px]" : "px-2 py-1 text-[8px]"
+                                  } rounded-full font-bold shadow-lg shadow-green-500/50 border border-green-400`}
+                                >
+                                  CURRENT
+                                </div>
+                              )}
+                              {/* Popular Badge - Show only if not current plan */}
+                              {plan.isPopular && !isCurrentSubscription(plan) && (
+                                <div
+                                  className={`bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black ${
+                                    isTwoColumn ? "px-1.5 py-0.5 text-[6px]" : "px-2 py-1 text-[8px]"
+                                  } rounded-full font-bold shadow-lg shadow-yellow-500/50 border border-yellow-300`}
+                                >
+                                  POPULAR
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {/* Package Icon - Centered at top */}
                           {getPackageIcon(plan.id) && (
@@ -862,7 +893,7 @@ export default function MembershipSection({
               return (
                 <div
                   key={plan.id}
-                  className={`relative w-[290px] max-w-[320px] h-[520px] rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible ${
+                  className={`relative w-[290px] max-w-[320px] h-[520px] rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible isolate ${
                     isCurrentSubscription(plan)
                       ? "ring-4 ring-green-400 ring-opacity-60 shadow-green-500/30"
                       : plan.isPopular
@@ -904,21 +935,30 @@ export default function MembershipSection({
                         <HexagonalPromoBadge multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
                       </div>
                     )}
-                    {/* Popular and Current Plan Badges - Top Right */}
-                    <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
-                      {/* Current Plan Badge - Highest Priority */}
-                      {isCurrentSubscription(plan) && (
-                        <div className="bg-gradient-to-r from-green-500 via-green-600 to-green-700 text-white px-2 py-1 rounded-full font-bold text-[8px] shadow-lg shadow-green-500/50 border border-green-400">
-                          CURRENT
-                        </div>
-                      )}
-                      {/* Popular Badge - Show only if not current plan */}
-                      {plan.isPopular && !isCurrentSubscription(plan) && (
-                        <div className="bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black px-2 py-1 rounded-full font-bold text-[8px] shadow-lg shadow-yellow-500/50 border border-yellow-300">
-                          POPULAR
-                        </div>
-                      )}
-                    </div>
+                    {/* Best Chance Badge - Top Right (for boss/power packages) */}
+                    {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                      <div className="absolute top-2 right-2 z-10">
+                        <BestChanceBadge size="small" />
+                      </div>
+                    )}
+
+                    {/* Popular and Current Plan Badges - Top Right - Only show if not boss/power */}
+                    {!(plan.id.includes("boss") || plan.id.includes("power")) && (
+                      <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
+                        {/* Current Plan Badge - Highest Priority */}
+                        {isCurrentSubscription(plan) && (
+                          <div className="bg-gradient-to-r from-green-500 via-green-600 to-green-700 text-white px-2 py-1 rounded-full font-bold text-[8px] shadow-lg shadow-green-500/50 border border-green-400">
+                            CURRENT
+                          </div>
+                        )}
+                        {/* Popular Badge - Show only if not current plan */}
+                        {plan.isPopular && !isCurrentSubscription(plan) && (
+                          <div className="bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black px-2 py-1 rounded-full font-bold text-[8px] shadow-lg shadow-yellow-500/50 border border-yellow-300">
+                            POPULAR
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="h-full flex flex-col pt-10 relative px-4 py-2">
                       {/* Inside Glow - Whole Card with Margin */}
                       <div
