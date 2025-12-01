@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
+import { getStartOfTodayInAEST, getStartOfMonthInAEST } from "@/utils/common/timezone";
 
 /**
  * GET /api/admin/dashboard/stats
@@ -28,10 +29,10 @@ export async function GET() {
 
     console.log("📊 Fetching admin dashboard stats...");
 
-    // Calculate date ranges
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Calculate date ranges using AEST timezone (Australian business day)
+    // This ensures "today" resets at midnight AEST, not UTC
+    const startOfToday = getStartOfTodayInAEST();
+    const startOfMonth = getStartOfMonthInAEST();
 
     // ========================================
     // USER STATISTICS

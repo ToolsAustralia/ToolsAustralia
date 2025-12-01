@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
-import { Check } from "lucide-react";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import MembershipModal from "@/components/modals/MembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
@@ -15,6 +15,7 @@ import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 
 // Import package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.png";
@@ -168,6 +169,7 @@ export default function MembershipSection({
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   const [isMounted, setIsMounted] = useState(false);
+  const [isInclusionsExpanded, setIsInclusionsExpanded] = useState(false);
 
   // Handle client-side mounting to prevent hydration mismatch
   useEffect(() => {
@@ -1287,6 +1289,48 @@ export default function MembershipSection({
           )}
         </div>
       )}
+
+      {/* Payment Methods Image */}
+      <div className="flex justify-center mt-8 sm:mt-12 mb-4 sm:mb-6">
+        <div className="max-w-2xl w-full px-4 sm:max-w-xl lg:max-w-md">
+          <Image
+            src="/images/payment-methods-clean.webp"
+            alt="Accepted Payment Methods"
+            width={800}
+            height={100}
+            className="w-full h-auto object-contain"
+            priority={false}
+          />
+        </div>
+      </div>
+
+      {/* Toggle Button for Package Inclusions - Mobile Only, Additional Packages */}
+      {(() => {
+        const showingMemberExclusive =
+          activeTab === "one-time" && membershipPlans.some((plan) => plan.isMemberOnly === true);
+        const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+        const shouldShowToggle = showingMemberExclusive && hasAccess && !loading && !error;
+
+        if (!shouldShowToggle) return null;
+
+        // Get additional packages for the expanded view
+        const additionalPackages = membershipPlans.filter((plan) => plan.isMemberOnly === true);
+
+        return (
+          <div className="lg:hidden px-4">
+            <button
+              onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
+              className="w-full py-3 px-4 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 rounded-2xl text-white font-semibold text-sm sm:text-base shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] border border-slate-700 flex items-center justify-center gap-2"
+            >
+              <span>Click here to see full package inclusion</span>
+              {isInclusionsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+
+            {/* Package Inclusions Expanded Component */}
+            <PackageInclusionsExpanded isExpanded={isInclusionsExpanded} packages={additionalPackages} />
+          </div>
+        );
+      })()}
 
       {/* Spacer to keep consistent spacing below packages */}
       <div className="pt-4 sm:pt-10" aria-hidden="true" />

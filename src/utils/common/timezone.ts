@@ -152,6 +152,67 @@ export function getNowInUTC(): Date {
 }
 
 /**
+ * Get start of today (midnight) in AEST timezone
+ * Used for business day calculations (revenue, statistics, etc.)
+ * This ensures "today" resets at midnight AEST, not UTC
+ * @returns Date object representing midnight AEST today, converted to UTC for storage
+ */
+export function getStartOfTodayInAEST(): Date {
+  const now = new Date();
+  // Get current date components in AEST timezone
+  const year = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+  const month = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+  const day = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
+
+  // Create midnight AEST and convert to UTC for database queries
+  return createAESTDateAsUTC(year, month, day, 0, 0);
+}
+
+/**
+ * Get start of month (first day at midnight) in AEST timezone
+ * Used for monthly business calculations
+ * @returns Date object representing first day of current month at midnight AEST, converted to UTC
+ */
+export function getStartOfMonthInAEST(): Date {
+  const now = new Date();
+  // Get current date components in AEST timezone
+  const year = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+  const month = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+
+  // Create first day of month at midnight AEST and convert to UTC
+  return createAESTDateAsUTC(year, month, 1, 0, 0);
+}
+
+/**
+ * Get next midnight in AEST timezone
+ * Used for countdown timers that reset at midnight AEST
+ * This ensures countdowns align with Australian business day boundaries
+ * @returns Date object representing next midnight AEST, converted to UTC
+ */
+export function getNextMidnightAEST(): Date {
+  const now = new Date();
+  // Get current date components in AEST timezone
+  const year = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+  const month = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+  const day = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
+
+  // Create today's midnight AEST
+  const todayMidnight = createAESTDateAsUTC(year, month, day, 0, 0);
+
+  // If we've already passed midnight AEST today, get tomorrow's midnight
+  if (now >= todayMidnight) {
+    // Add 1 day to today's date in AEST, then create tomorrow's midnight
+    const tomorrowDate = addDays(now, 1);
+    const tomorrowYear = parseInt(formatInTimeZone(tomorrowDate, AEST_TIMEZONE, "yyyy"), 10);
+    const tomorrowMonth = parseInt(formatInTimeZone(tomorrowDate, AEST_TIMEZONE, "M"), 10);
+    const tomorrowDay = parseInt(formatInTimeZone(tomorrowDate, AEST_TIMEZONE, "d"), 10);
+    return createAESTDateAsUTC(tomorrowYear, tomorrowMonth, tomorrowDay, 0, 0);
+  }
+
+  return todayMidnight;
+}
+
+/**
  * Create a specific AEST date/time and convert to UTC for storage
  * Used when admin creates a major draw with AEST times
  *

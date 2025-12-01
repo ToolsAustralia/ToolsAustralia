@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { getNextMidnightAEST } from "@/utils/common/timezone";
 
 export default function PromoBanner() {
   const [timeLeft, setTimeLeft] = useState({
@@ -15,17 +16,16 @@ export default function PromoBanner() {
 
   const { data: activePromo } = usePromoByType("one-time-packages");
 
-  // 24-hour looping countdown timer (resets at midnight server time/UTC)
+  // 24-hour looping countdown timer (resets at midnight AEST - Australian business day)
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
-      // Get next midnight in UTC
-      const nextMidnight = new Date(now);
-      nextMidnight.setUTCHours(24, 0, 0, 0); // This automatically rolls over to next day if needed
+      // Get next midnight in AEST timezone (Australian business day boundary)
+      const nextMidnight = getNextMidnightAEST();
 
       const difference = nextMidnight.getTime() - now.getTime();
 
-      // Calculate time remaining until next midnight
+      // Calculate time remaining until next midnight AEST
       const totalSeconds = Math.max(0, Math.floor(difference / 1000));
       const hours = Math.floor(totalSeconds / 3600);
       const minutes = Math.floor((totalSeconds % 3600) / 60);
