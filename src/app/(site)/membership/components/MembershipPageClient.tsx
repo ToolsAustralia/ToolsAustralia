@@ -24,6 +24,11 @@ export default function MembershipPageClient() {
   const membershipModal = useMembershipModal();
   const { userData } = useUserContext();
   const hasActiveSubscription = userData?.subscription?.isActive === true;
+  // Check if user has active partner discount access (handles null/undefined userData)
+  // Type assertion needed because UserData is a simplified type, but function handles missing fields gracefully
+  const hasPartnerDiscountAccess = hasActivePartnerDiscountAccess(
+    (userData as unknown as import("@/models/User").IUser) ?? null
+  );
   const { subscriptionPackages } = useMemberships();
   const { data: membershipPromo } = usePromoByType("membership-packages");
   const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
@@ -194,15 +199,11 @@ export default function MembershipPageClient() {
 
       {/* Unlock Discounts at the bottom */}
       <UnlockDiscounts
-        hasAccess={hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)}
-        showUnlockButton={!hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)}
-        title={
-          hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)
-            ? "Partner Discounts"
-            : "Unlock Partner Discounts"
-        }
+        hasAccess={hasPartnerDiscountAccess}
+        showUnlockButton={!hasPartnerDiscountAccess}
+        title={hasPartnerDiscountAccess ? "Partner Discounts" : "Unlock Partner Discounts"}
         description={
-          hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)
+          hasPartnerDiscountAccess
             ? "Access exclusive discounts from Australia's top tool brands"
             : "Get instant access to exclusive discounts from Australia's top tool brands"
         }

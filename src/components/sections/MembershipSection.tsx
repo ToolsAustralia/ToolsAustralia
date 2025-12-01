@@ -342,9 +342,11 @@ export default function MembershipSection({
 
     let apiPlans;
 
-    // If user has access, only show one-time packages (force one-time view)
-    // Otherwise, show based on activeTab
-    const effectiveTab = hasAccessToAdditionalPackages ? "one-time" : activeTab;
+    // Determine effective tab:
+    // - On membership page: always respect activeTab (user can switch between tabs)
+    // - On other pages: if user has access, force "one-time", otherwise use activeTab
+    const effectiveTab =
+      pathname === "/membership" ? activeTab : hasAccessToAdditionalPackages ? "one-time" : activeTab;
 
     if (effectiveTab === "membership") {
       // Always show subscription packages
@@ -501,9 +503,9 @@ export default function MembershipSection({
         {/* Show one-time only label when user has access AND NOT on membership page */}
         {hasAccessToAdditionalPackages && pathname !== "/membership" && (
           <div className="flex justify-center mb-4 sm:mb-6 lg:mb-8">
-            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
-              <div className="flex flex-row items-center justify-center w-full">
-                <div className="flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)] relative">
+            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-auto inline-block">
+              <div className="flex flex-row items-center justify-center">
+                <div className="px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)] relative whitespace-nowrap">
                   One-Time Packs
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                   {oneTimePromo && <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />}

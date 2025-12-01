@@ -182,10 +182,15 @@ export function getDaysUntilDowngrade(user: Partial<IUser>): number | null {
  * - Mini-draw package
  * - Upsell offer
  *
- * @param user - The user object with partner discount queue
+ * @param user - The user object with partner discount queue (can be null/undefined)
  * @returns True if user has active partner discount access
  */
-export function hasActivePartnerDiscountAccess(user: IUser): boolean {
+export function hasActivePartnerDiscountAccess(user: IUser | null | undefined): boolean {
+  // Early return if user is null or undefined
+  if (!user) {
+    return false;
+  }
+
   // Check if user has active subscription (immediate access)
   if (user.subscription?.isActive) {
     return true;

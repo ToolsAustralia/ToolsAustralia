@@ -121,7 +121,11 @@ export default async function PrivacyPolicyPage() {
                   <li>Competition draw services (e.g., randomdraws.com.au)</li>
                 </ul>
                 <p className="text-gray-300 mt-4">
-                  <strong>Note on Payment Card Information:</strong> While we collect Payment and transaction details for processing your membership, we do not store your full payment card number (e.g., credit card or debit card number) on our systems. All payment processing is conducted securely by our third-party, PCI DSS-compliant payment gateway (Stripe), who securely encrypts and stores this data for the purpose of processing your recurring membership fees.
+                  <strong>Note on Payment Card Information:</strong> While we collect Payment and transaction details
+                  for processing your membership, we do not store your full payment card number (e.g., credit card or
+                  debit card number) on our systems. All payment processing is conducted securely by our third-party,
+                  PCI DSS-compliant payment gateway (Stripe), who securely encrypts and stores this data for the purpose
+                  of processing your recurring membership fees.
                 </p>
               </div>
             </div>
