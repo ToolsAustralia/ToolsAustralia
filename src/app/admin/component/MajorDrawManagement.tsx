@@ -6,6 +6,7 @@ import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { formatDateInAEST, formatCountdown } from "@/utils/common/timezone";
 import { useToast } from "@/components/ui/Toast";
 import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
+import ParticipantsModal from "@/components/modals/ParticipantsModal";
 import {
   Trophy,
   Users,
@@ -31,6 +32,7 @@ export default function MajorDrawManagement() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
+  const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -275,7 +277,14 @@ export default function MajorDrawManagement() {
             <h3 className="text-3xl font-bold text-gray-900 mb-1 font-['Poppins']">
               {majorDraw.totalParticipants || 0}
             </h3>
-            <p className="text-sm text-gray-600">{majorDraw.totalEntries || 0} total entries</p>
+            <p className="text-sm text-gray-600 mb-4">{majorDraw.totalEntries || 0} total entries</p>
+            <button
+              onClick={() => setIsParticipantsModalOpen(true)}
+              className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg font-medium text-sm flex items-center justify-center gap-2"
+            >
+              <Users className="w-4 h-4" />
+              View Participants
+            </button>
           </div>
 
           {/* Draw Date Card */}
@@ -481,6 +490,14 @@ export default function MajorDrawManagement() {
                 }
               : undefined
           }
+        />
+
+        {/* Participants Modal */}
+        <ParticipantsModal
+          isOpen={isParticipantsModalOpen}
+          onClose={() => setIsParticipantsModalOpen(false)}
+          majorDrawId={majorDraw._id || ""}
+          majorDrawName={majorDraw.name || ""}
         />
       </div>
     </div>

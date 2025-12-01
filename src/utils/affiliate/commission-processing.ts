@@ -6,6 +6,14 @@ import { calculateCommission, COMMISSION_RATE } from "@/lib/affiliate";
 import mongoose from "mongoose";
 
 /**
+ * Get affiliate's commission rate, with fallback to default
+ */
+async function getAffiliateCommissionRate(affiliateId: mongoose.Types.ObjectId): Promise<number> {
+  const affiliate = await Affiliate.findById(affiliateId).select("commissionRate").lean();
+  return affiliate?.commissionRate ?? COMMISSION_RATE; // Fallback to default if not set
+}
+
+/**
  * Process commission for one-time package purchase
  * Only grants commission on first-time one-time package purchase
  */
@@ -59,8 +67,11 @@ export async function processOneTimePackageCommission({
     return existingCommission; // Already processed
   }
 
+  // Get affiliate's commission rate
+  const commissionRate = await getAffiliateCommissionRate(affiliateId);
+
   // Calculate commission
-  const commissionAmount = calculateCommission(purchaseAmount, COMMISSION_RATE);
+  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
 
   // Create commission record
   const commission = new AffiliateCommission({
@@ -72,7 +83,7 @@ export async function processOneTimePackageCommission({
     packageId,
     packageName,
     purchaseAmount,
-    commissionRate: COMMISSION_RATE,
+    commissionRate: commissionRate,
     commissionAmount,
     stripePaymentIntentId: paymentIntentId,
     isFirstTimePurchase: true,
@@ -152,7 +163,10 @@ export async function processUpsellCommission({
     return existingCommission;
   }
 
-  const commissionAmount = calculateCommission(purchaseAmount, COMMISSION_RATE);
+  // Get affiliate's commission rate
+  const commissionRate = await getAffiliateCommissionRate(affiliateId);
+
+  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
 
   const commission = new AffiliateCommission({
     affiliateId,
@@ -163,7 +177,7 @@ export async function processUpsellCommission({
     packageId: offerId,
     packageName: offerName,
     purchaseAmount,
-    commissionRate: COMMISSION_RATE,
+    commissionRate: commissionRate,
     commissionAmount,
     stripePaymentIntentId: paymentIntentId,
     isFirstTimePurchase: true,
@@ -237,7 +251,10 @@ export async function processMembershipFirstCommission({
     return existingCommission;
   }
 
-  const commissionAmount = calculateCommission(purchaseAmount, COMMISSION_RATE);
+  // Get affiliate's commission rate
+  const commissionRate = await getAffiliateCommissionRate(affiliateId);
+
+  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
 
   const commission = new AffiliateCommission({
     affiliateId,
@@ -248,7 +265,7 @@ export async function processMembershipFirstCommission({
     packageId,
     packageName,
     purchaseAmount,
-    commissionRate: COMMISSION_RATE,
+    commissionRate: commissionRate,
     commissionAmount,
     stripePaymentIntentId: paymentIntentId,
     stripeSubscriptionId: subscriptionId,
@@ -346,7 +363,10 @@ export async function processMembershipRecurringCommission({
     return existingCommission;
   }
 
-  const commissionAmount = calculateCommission(purchaseAmount, COMMISSION_RATE);
+  // Get affiliate's commission rate
+  const commissionRate = await getAffiliateCommissionRate(affiliateId);
+
+  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
 
   const commission = new AffiliateCommission({
     affiliateId,
@@ -355,7 +375,7 @@ export async function processMembershipRecurringCommission({
     status: "pending",
     purchaseType: "membership",
     purchaseAmount,
-    commissionRate: COMMISSION_RATE,
+    commissionRate: commissionRate,
     commissionAmount,
     stripeInvoiceId: invoiceId,
     stripeSubscriptionId: subscriptionId,

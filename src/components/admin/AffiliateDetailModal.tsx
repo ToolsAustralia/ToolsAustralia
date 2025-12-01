@@ -13,6 +13,7 @@ interface AffiliateDetail {
     affiliateCode: string;
     affiliateLink: string;
     isActive: boolean;
+    commissionRate?: number;
     totalSignups: number;
     totalSales: number;
     totalCommissions: number;
@@ -90,6 +91,7 @@ export default function AffiliateDetailModal({
     username: "",
     password: "",
     isActive: true,
+    commissionRate: "30", // Default 30% as percentage string for display
   });
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export default function AffiliateDetailModal({
   // Initialize edit form when data loads
   useEffect(() => {
     if (data?.affiliate) {
+      const commissionRate = data.affiliate.commissionRate ?? 0.3; // Default to 30% if not set
       setEditForm({
         name: data.affiliate.name,
         email: data.affiliate.email,
@@ -110,6 +113,7 @@ export default function AffiliateDetailModal({
         username: data.affiliate.username,
         password: "", // Don't pre-fill password
         isActive: data.affiliate.isActive,
+        commissionRate: (commissionRate * 100).toString(), // Convert to percentage string
       });
     }
   }, [data]);
@@ -174,6 +178,16 @@ export default function AffiliateDetailModal({
     setIsSaving(true);
     setError(null);
     try {
+      // Convert percentage to decimal (30% -> 0.3)
+      const commissionRateDecimal = parseFloat(editForm.commissionRate) / 100;
+      
+      // Validate commission rate
+      if (isNaN(commissionRateDecimal) || commissionRateDecimal < 0 || commissionRateDecimal > 1) {
+        setError("Commission rate must be between 0 and 100%");
+        setIsSaving(false);
+        return;
+      }
+
       const response = await fetch(`/api/admin/affiliate/${affiliateId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -184,6 +198,7 @@ export default function AffiliateDetailModal({
           username: editForm.username,
           password: editForm.password || undefined, // Only send if provided
           isActive: editForm.isActive,
+          commissionRate: commissionRateDecimal,
         }),
       });
       const result = await response.json();
@@ -205,6 +220,7 @@ export default function AffiliateDetailModal({
 
   const handleCancelEdit = () => {
     if (data?.affiliate) {
+      const commissionRate = data.affiliate.commissionRate ?? 0.3; // Default to 30% if not set
       setEditForm({
         name: data.affiliate.name,
         email: data.affiliate.email,
@@ -212,6 +228,7 @@ export default function AffiliateDetailModal({
         username: data.affiliate.username,
         password: "",
         isActive: data.affiliate.isActive,
+        commissionRate: (commissionRate * 100).toString(), // Convert to percentage string
       });
     }
     setIsEditing(false);
@@ -388,6 +405,21 @@ export default function AffiliateDetailModal({
                         />
                         <p className="text-xs text-gray-500 mt-1">Leave blank to keep current password</p>
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%) *</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={editForm.commissionRate}
+                          onChange={(e) => setEditForm({ ...editForm, commissionRate: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+                          placeholder="30"
+                          required
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Commission rate as percentage (0-100%)</p>
+                      </div>
                       <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -420,6 +452,12 @@ export default function AffiliateDetailModal({
                       <p>
                         <span className="font-medium text-gray-700">Username:</span>{" "}
                         <span className="text-gray-900">{data.affiliate.username}</span>
+                      </p>
+                      <p>
+                        <span className="font-medium text-gray-700">Commission Rate:</span>{" "}
+                        <span className="text-gray-900 font-semibold">
+                          {((data.affiliate.commissionRate ?? 0.3) * 100).toFixed(1)}%
+                        </span>
                       </p>
                       <p>
                         <span className="font-medium text-gray-700">Status:</span>{" "}

@@ -23,6 +23,9 @@ export interface IAffiliate extends Document {
   // Account Status
   isActive: boolean; // Whether affiliate account is active (admin can enable/disable)
 
+  // Commission Rate (set by admin, editable per affiliate)
+  commissionRate: number; // Commission rate as decimal (0.3 = 30%), default 0.3
+
   // Statistics (updated automatically)
   totalSignups: number; // Total users referred
   totalSales: number; // Total sales amount in cents
@@ -105,6 +108,12 @@ const AffiliateSchema = new Schema<IAffiliate>(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    commissionRate: {
+      type: Number,
+      default: 0.3, // 30% default commission rate
+      min: 0,
+      max: 1,
     },
     totalSignups: {
       type: Number,

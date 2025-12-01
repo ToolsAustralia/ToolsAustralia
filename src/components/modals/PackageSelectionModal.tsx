@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Check, Crown } from "lucide-react";
+import { Check } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
@@ -12,6 +12,7 @@ import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
+import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
@@ -145,11 +146,15 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   const activeTab: "membership" | "one-time" = currentPlan.period === "mo" ? "membership" : "one-time";
   const { data: session } = useSession();
   const [selectedPlan, setSelectedPlan] = useState<LocalMembershipPlan>(currentPlan);
+  // Sub-tab for one-time packages: allow switching between regular one-time and membership packages
+  const [oneTimeSubTab, setOneTimeSubTab] = useState<"one-time" | "membership">("one-time");
 
   // Get user data to determine membership status
   const { data: user } = useUserData(session?.user?.id);
   const isMember = user?.subscription?.isActive || false;
   const { data: userMajorDrawStats } = useUserMajorDrawStats(user?._id);
+  // Check if user has access to additional packages (subscription OR current draw entries)
+  const hasAdditionalPackageAccessFlag = hasAdditionalPackageAccess(user, userMajorDrawStats);
 
   // Fetch real membership data from API
   const { subscriptionPackages, oneTimePackages, loading, error } = useMemberships();
@@ -173,13 +178,32 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     if (loading) return [];
     if (error) return [];
 
-    const apiPlans = activeTab === "membership" ? subscriptionPackages : oneTimePackages;
+    // When activeTab is "one-time" and user doesn't have access, we might need both types for sub-tab switching
+    const needsBothTypes = activeTab === "one-time" && !hasAdditionalPackageAccessFlag;
+
+    // Get the appropriate API plans based on activeTab and sub-tab
+    let apiPlans;
+    if (activeTab === "membership") {
+      apiPlans = subscriptionPackages;
+    } else if (needsBothTypes && oneTimeSubTab === "membership") {
+      // When showing membership sub-tab in one-time view, show subscription packages
+      apiPlans = subscriptionPackages;
+    } else {
+      // Default: show one-time packages
+      apiPlans = oneTimePackages;
+    }
+
     const convertedPlans = apiPlans.map(convertToLocalPlan);
 
     // Apply promo multiplier to packages if there's an active promo
     return convertedPlans.map((plan) => {
+      // Determine if we're showing one-time packages (either from activeTab or sub-tab)
+      const showingOneTime = activeTab === "one-time" && oneTimeSubTab === "one-time";
+      const showingMembership =
+        activeTab === "membership" || (activeTab === "one-time" && oneTimeSubTab === "membership");
+
       // Check if this is a one-time package with active promo
-      if (activeTab === "one-time" && plan.period === "one-time" && oneTimePromo?.multiplier) {
+      if (showingOneTime && plan.period === "one-time" && oneTimePromo?.multiplier) {
         // Apply promo multiplier to entries
         const originalEntries = plan.metadata?.entriesCount || 0;
         const promoMultiplier = oneTimePromo.multiplier;
@@ -215,7 +239,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
       }
 
       // Check if this is a subscription package with active membership promo
-      if (activeTab === "membership" && plan.period !== "one-time" && membershipPromo?.multiplier) {
+      if (showingMembership && plan.period !== "one-time" && membershipPromo?.multiplier) {
         // Apply promo multiplier to entries for subscription packages (initial purchase only)
         const originalEntries = plan.metadata?.entriesCount || 0;
         const promoMultiplier = membershipPromo.multiplier;
@@ -558,19 +582,23 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
       finalMembershipPlans = finalMembershipPlans;
     }
   } else if (activeTab === "one-time") {
-    // Check if user has access to additional packages (subscription OR current draw entries)
-    const hasAccess = hasAdditionalPackageAccess(user, userMajorDrawStats);
-
-    if (hasAccess) {
+    if (hasAdditionalPackageAccessFlag) {
       // If user has access (subscription OR entries), show additional packages
       finalMembershipPlans = finalMembershipPlans.filter((plan) => {
         return plan.isMemberOnly === true;
       });
     } else {
-      // For users without access, show regular one-time packages (non-member exclusive)
-      finalMembershipPlans = finalMembershipPlans.filter((plan) => {
-        return plan.isMemberOnly !== true;
-      });
+      // For users without access, show packages based on sub-tab selection
+      if (oneTimeSubTab === "one-time") {
+        // Show regular one-time packages (non-member exclusive)
+        finalMembershipPlans = finalMembershipPlans.filter((plan) => {
+          return plan.isMemberOnly !== true && plan.period === "one-time";
+        });
+      } else {
+        // Show membership packages (subscription) to encourage subscription
+        // Already fetching subscription packages from API, so no additional filter needed
+        finalMembershipPlans = finalMembershipPlans;
+      }
     }
   }
 
@@ -580,16 +608,49 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     <ModalContainer isOpen={isOpen} onClose={onClose} size="md" height="fixed" fixedHeight="h-[87dvh]">
       <ModalHeader title="Select Your Package" onClose={onClose} showLogo={true} />
 
-      <ModalContent padding="lg" className="pb-16 sm:pb-20">
+      <ModalContent padding="lg" className="!pb-28 sm:!pb-32">
         {/* Member Status Info */}
-        {isMember && activeTab === "one-time" && (
+
+        {/* Toggle - Show when viewing one-time packages and user doesn't have access to additional packages */}
+        {activeTab === "one-time" && !hasAdditionalPackageAccessFlag && (
           <div className="flex justify-center mb-4 sm:mb-6">
-            <div className="flex items-center gap-1.5 sm:gap-2 bg-blue-50 rounded-[12px] sm:rounded-[15px] p-2 sm:p-3 border border-blue-200">
-              <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-              <span className="text-[12px] sm:text-[14px] text-blue-700 font-medium">
-                <span className="sm:hidden">Member-Exclusive Available</span>
-                <span className="hidden sm:inline">Member-Exclusive Packages Available</span>
-              </span>
+            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
+              <div className="flex flex-row items-center justify-center w-full">
+                <button
+                  onClick={() => {
+                    setOneTimeSubTab("one-time");
+                    setSelectedPlan(currentPlan); // Reset selection when switching tabs
+                  }}
+                  className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                    oneTimeSubTab === "one-time"
+                      ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                  }`}
+                >
+                  One-Time
+                  {/* Multiplier Badge - Upper right */}
+                  {oneTimePromo && oneTimeSubTab === "one-time" && (
+                    <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setOneTimeSubTab("membership");
+                    setSelectedPlan(currentPlan); // Reset selection when switching tabs
+                  }}
+                  className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                    oneTimeSubTab === "membership"
+                      ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                  }`}
+                >
+                  Membership Packs
+                  {/* Multiplier Badge - Upper right */}
+                  {membershipPromo && oneTimeSubTab === "membership" && (
+                    <PromoMultiplierBadge multiplier={membershipPromo.multiplier as 2 | 3 | 5 | 10} />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -106,6 +106,7 @@ export default function AffiliatesManagement() {
     phone?: string;
     username: string;
     password: string;
+    commissionRate?: number;
   }) => {
     try {
       const response = await fetch("/api/admin/affiliate/create", {
@@ -392,7 +393,7 @@ function CreateAffiliateModal({
   onSubmit,
 }: {
   onClose: () => void;
-  onSubmit: (data: { name: string; email: string; phone?: string; username: string; password: string }) => void;
+  onSubmit: (data: { name: string; email: string; phone?: string; username: string; password: string; commissionRate?: number }) => void;
 }) {
   const [formData, setFormData] = useState({
     name: "",
@@ -400,6 +401,7 @@ function CreateAffiliateModal({
     phone: "",
     username: "",
     password: "",
+    commissionRate: "30", // Default 30% as percentage string for display
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -411,11 +413,20 @@ function CreateAffiliateModal({
     if (!formData.email.trim()) newErrors.email = "Email is required";
     if (!formData.username.trim()) newErrors.username = "Username is required";
     if (formData.password.length < 6) newErrors.password = "Password must be at least 6 characters";
+    
+    // Validate commission rate (0-100%)
+    const commissionRateNum = parseFloat(formData.commissionRate);
+    if (isNaN(commissionRateNum) || commissionRateNum < 0 || commissionRateNum > 100) {
+      newErrors.commissionRate = "Commission rate must be between 0 and 100%";
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
+
+    // Convert percentage to decimal (30% -> 0.3)
+    const commissionRateDecimal = commissionRateNum / 100;
 
     onSubmit({
       name: formData.name.trim(),
@@ -423,6 +434,7 @@ function CreateAffiliateModal({
       phone: formData.phone.trim() || undefined,
       username: formData.username.trim(),
       password: formData.password,
+      commissionRate: commissionRateDecimal,
     });
   };
 
@@ -488,6 +500,22 @@ function CreateAffiliateModal({
               required
             />
             {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%) *</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={formData.commissionRate}
+              onChange={(e) => setFormData({ ...formData, commissionRate: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              placeholder="30"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">Enter commission rate as percentage (0-100%). Default: 30%</p>
+            {errors.commissionRate && <p className="text-red-600 text-xs mt-1">{errors.commissionRate}</p>}
           </div>
           <div className="flex gap-2 justify-end pt-4">
             <button

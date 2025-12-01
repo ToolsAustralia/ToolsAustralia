@@ -82,7 +82,11 @@ const FloatingPromoBanner: React.FC = () => {
         <div className="max-w-7xl mx-auto px-1 sm:px-4 py-1 sm:py-2">
           {/* Centered badge only - no text */}
           <div className="flex items-center justify-center">
-            <PromoBadge multiplier={activePromo.multiplier as 2 | 3 | 5 | 10} size="small" />
+            <PromoBadge
+              multiplier={activePromo.multiplier as 2 | 3 | 5 | 10}
+              size="small"
+              customText="ENTRY BOOST ENDING SOON"
+            />
           </div>
 
           {/* Animated background effect */}

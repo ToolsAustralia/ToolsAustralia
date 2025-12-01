@@ -528,14 +528,26 @@ export default function MembershipSection({
                     showingMemberExclusive ? "grid-cols-2 gap-1 sm:gap-4" : "grid-cols-1 gap-12 sm:gap-14"
                   }  ${showingMemberExclusive ? "max-w-full  sm:px-4" : "max-w-md mx-auto"}`}
                 >
-                  {membershipPlans.map((plan) => {
+                  {membershipPlans.map((plan, index) => {
                     const colorScheme = getPackageColorScheme(plan.id);
                     const isTwoColumn = showingMemberExclusive;
+                    // Check if this is the last card and there's an odd number of cards (5 cards = last one alone)
+                    const isLastCard = index === membershipPlans.length - 1;
+                    const isOddCount = membershipPlans.length % 2 !== 0;
+                    const shouldCenterLastCard = isTwoColumn && isLastCard && isOddCount;
                     return (
                       <div
                         key={plan.id}
-                        className={`relative w-full ${
-                          isTwoColumn ? "h-[380px] sm:h-[400px]" : "h-[480px]"
+                        className={`relative ${
+                          shouldCenterLastCard
+                            ? "col-span-2 justify-self-center w-[calc(50%-0.125rem)] sm:w-[calc(50%-1rem)]"
+                            : "w-full"
+                        } ${
+                          isTwoColumn && plan.isMemberOnly
+                            ? "h-[280px] sm:h-[300px]"
+                            : isTwoColumn
+                            ? "h-[320px] sm:h-[340px]"
+                            : "h-[480px]"
                         } rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 lg:hover:scale-105 lg:hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible ${
                           isCurrentSubscription(plan)
                             ? "ring-4 ring-green-400 ring-opacity-60 shadow-green-500/30"
@@ -630,9 +642,9 @@ export default function MembershipSection({
                           )}
 
                           <div
-                            className={`h-full flex flex-col pt-6 relative ${
-                              isTwoColumn ? "px-2 py-1.5 sm:px-3 sm:py-2" : "px-4 py-2"
-                            }`}
+                            className={`h-full flex flex-col ${
+                              isTwoColumn && plan.isMemberOnly ? "pt-6" : isTwoColumn ? "pt-4" : "pt-6"
+                            } relative ${isTwoColumn ? "px-2 py-1 sm:px-3 sm:py-1.5" : "px-4 py-2"}`}
                           >
                             {/* Plan Header - Centered */}
                             <div className="text-center ">
@@ -641,7 +653,14 @@ export default function MembershipSection({
                                   isTwoColumn ? "text-[14px] sm:text-[18px]" : "text-[22px] sm:text-[28px]"
                                 } font-bold mb-1.5 ${colorScheme.text} tracking-wide`}
                               >
-                                {plan.name}
+                                {isTwoColumn && plan.isMemberOnly && plan.name.includes("Additional") ? (
+                                  <>
+                                    <div>Additional</div>
+                                    <div>{plan.name.replace("Additional ", "")}</div>
+                                  </>
+                                ) : (
+                                  plan.name
+                                )}
                               </h3>
                               {plan.subtitle && (
                                 <p
@@ -654,7 +673,9 @@ export default function MembershipSection({
                               )}
 
                               {/* Entries - Main Focus */}
-                              <div className="mb-3">
+                              <div
+                                className={isTwoColumn && plan.isMemberOnly ? "mb-1.5" : isTwoColumn ? "mb-2" : "mb-3"}
+                              >
                                 {(() => {
                                   // Extract entries from features
                                   const entriesFeature = plan.features.find(
@@ -731,25 +752,49 @@ export default function MembershipSection({
                             </div>
 
                             {/* Horizontal Divider */}
-                            <div className="w-full p-[0.25px] bg-white/80 mb-3"></div>
+                            <div
+                              className={`w-full p-[0.25px] bg-white/80 ${
+                                isTwoColumn && plan.isMemberOnly ? "mb-1.5" : isTwoColumn ? "mb-2" : "mb-3"
+                              }`}
+                            ></div>
 
                             {/* Features List - Flexible height with max height */}
                             <div
-                              className={`flex-1 overflow-visible space-y-2 sm:space-y-3 mb-4 ${
-                                isTwoColumn ? "pb-[55px]" : "pb-[70px]"
+                              className={`flex-1 overflow-visible space-y-2 sm:space-y-3 ${
+                                isTwoColumn && plan.isMemberOnly ? "mb-1" : "mb-4"
+                              } ${
+                                isTwoColumn && plan.isMemberOnly
+                                  ? "pb-[34px] sm:pb-[38px]"
+                                  : isTwoColumn
+                                  ? "pb-[40px]"
+                                  : "pb-[70px]"
                               }`}
                             >
-                              {/* Price Badge - Inside Features Section */}
-                              <div className="pb-1">
+                              {/* Price Badge - Larger for additional packages since no features */}
+                              <div className={isTwoColumn && plan.isMemberOnly ? "pb-0" : "pb-1"}>
                                 <div
                                   className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 backdrop-blur-sm ${
-                                    isTwoColumn ? "px-2 py-1.5" : "px-3 py-2"
+                                    isTwoColumn && plan.isMemberOnly
+                                      ? "px-3 py-2 sm:px-4 sm:py-2.5"
+                                      : isTwoColumn
+                                      ? "px-2 py-1.5"
+                                      : "px-3 py-2"
                                   } rounded-2xl border border-slate-600/50 shadow-lg shadow-black/30`}
                                 >
-                                  <div className="flex items-baseline gap-1">
+                                  <div
+                                    className={`${
+                                      isTwoColumn && plan.isMemberOnly
+                                        ? "flex flex-col items-center gap-0.5"
+                                        : "flex items-baseline gap-1"
+                                    }`}
+                                  >
                                     <div
                                       className={`${
-                                        isTwoColumn ? "text-xs sm:text-lg" : "text-xl sm:text-2xl"
+                                        isTwoColumn && plan.isMemberOnly
+                                          ? "text-lg sm:text-2xl"
+                                          : isTwoColumn
+                                          ? "text-xs sm:text-lg"
+                                          : "text-xl sm:text-2xl"
                                       } font-bold bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent`}
                                     >
                                       ${plan.price}
@@ -757,7 +802,11 @@ export default function MembershipSection({
                                     {plan.period !== "one-time" ? (
                                       <div
                                         className={`${
-                                          isTwoColumn ? "text-[10px] sm:text-xs" : "text-sm"
+                                          isTwoColumn && plan.isMemberOnly
+                                            ? "text-xs sm:text-sm"
+                                            : isTwoColumn
+                                            ? "text-[10px] sm:text-xs"
+                                            : "text-sm"
                                         } font-semibold text-slate-200/90`}
                                       >
                                         {isHomeOrMembershipPage ? `/${plan.period}` : " Per Giveaway"}
@@ -765,7 +814,11 @@ export default function MembershipSection({
                                     ) : (
                                       <div
                                         className={`${
-                                          isTwoColumn ? "text-[8px] sm:text-xs" : "text-sm"
+                                          isTwoColumn && plan.isMemberOnly
+                                            ? "text-[10px] sm:text-xs"
+                                            : isTwoColumn
+                                            ? "text-[8px] sm:text-xs"
+                                            : "text-sm"
                                         } font-semibold text-slate-200/90`}
                                       >
                                         One Time Payment
@@ -774,81 +827,98 @@ export default function MembershipSection({
                                   </div>
                                 </div>
                               </div>
-                              {plan.features.map((feature, index) => {
-                                // Check if this feature mentions entries and we have promo data
-                                const isPromoActive = plan.metadata?.isPromoActive;
-                                const originalEntries = plan.metadata?.originalEntries;
+                              {/* Smart rendering for additional packages - no features displayed (entries shown in header) */}
+                              {/* Additional packages: skip features list to save space (entries shown in header) */}
+                              {!(isTwoColumn && plan.isMemberOnly) &&
+                                plan.features.map((feature, index) => {
+                                  // Check if this feature mentions entries and we have promo data
+                                  const isPromoActive = plan.metadata?.isPromoActive;
+                                  const originalEntries = plan.metadata?.originalEntries;
 
-                                if (
-                                  isPromoActive &&
-                                  originalEntries &&
-                                  (feature.text.includes("Entries") || feature.text.includes("entries"))
-                                ) {
-                                  // Replace the multiplied number with original number in the feature text
-                                  const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
-                                  if (match) {
-                                    const multipliedNumber = parseInt(match[1]);
-                                    const originalNumber = originalEntries;
-                                    const updatedText = feature.text.replace(
-                                      multipliedNumber.toString(),
-                                      originalNumber.toString()
-                                    );
+                                  if (
+                                    isPromoActive &&
+                                    originalEntries &&
+                                    (feature.text.includes("Entries") || feature.text.includes("entries"))
+                                  ) {
+                                    // Replace the multiplied number with original number in the feature text
+                                    const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
+                                    if (match) {
+                                      const multipliedNumber = parseInt(match[1]);
+                                      const originalNumber = originalEntries;
+                                      const updatedText = feature.text.replace(
+                                        multipliedNumber.toString(),
+                                        originalNumber.toString()
+                                      );
 
-                                    return (
-                                      <div
-                                        key={index}
-                                        className={`flex items-start ${isTwoColumn ? "gap-2" : "gap-3"}`}
-                                      >
-                                        <div className="flex-shrink-0 mt-1">
-                                          <Check
-                                            className={`${isTwoColumn ? "h-3.5 w-3.5" : "h-5 w-5"} ${colorScheme.text}`}
-                                          />
-                                        </div>
-                                        <span
-                                          className={`${
-                                            isTwoColumn ? "text-[11px] sm:text-[13px]" : "text-[14px] sm:text-[16px]"
-                                          } leading-relaxed text-white/90`}
+                                      return (
+                                        <div
+                                          key={index}
+                                          className={`flex items-start ${isTwoColumn ? "gap-2" : "gap-3"}`}
                                         >
-                                          {updatedText}
-                                        </span>
-                                      </div>
-                                    );
+                                          <div className="flex-shrink-0 mt-1">
+                                            <Check
+                                              className={`${isTwoColumn ? "h-3.5 w-3.5" : "h-5 w-5"} ${
+                                                colorScheme.text
+                                              }`}
+                                            />
+                                          </div>
+                                          <span
+                                            className={`${
+                                              isTwoColumn ? "text-[11px] sm:text-[13px]" : "text-[14px] sm:text-[16px]"
+                                            } leading-relaxed text-white/90`}
+                                          >
+                                            {updatedText}
+                                          </span>
+                                        </div>
+                                      );
+                                    }
                                   }
-                                }
 
-                                // Default feature display
-                                return (
-                                  <div key={index} className={`flex items-start ${isTwoColumn ? "gap-2" : "gap-3"}`}>
-                                    <div className="flex-shrink-0 mt-1">
-                                      <Check
-                                        className={`${isTwoColumn ? "h-3.5 w-3.5" : "h-5 w-5"} ${colorScheme.text}`}
-                                      />
+                                  // Default feature display
+                                  return (
+                                    <div key={index} className={`flex items-start ${isTwoColumn ? "gap-2" : "gap-3"}`}>
+                                      <div className="flex-shrink-0 mt-1">
+                                        <Check
+                                          className={`${isTwoColumn ? "h-3.5 w-3.5" : "h-5 w-5"} ${colorScheme.text}`}
+                                        />
+                                      </div>
+                                      <span
+                                        className={`${
+                                          isTwoColumn ? "text-[11px] sm:text-[13px]" : "text-[14px] sm:text-[16px]"
+                                        } leading-relaxed text-white/90`}
+                                      >
+                                        {feature.text}
+                                      </span>
                                     </div>
-                                    <span
-                                      className={`${
-                                        isTwoColumn ? "text-[11px] sm:text-[13px]" : "text-[14px] sm:text-[16px]"
-                                      } leading-relaxed text-white/90`}
-                                    >
-                                      {feature.text}
-                                    </span>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
                             </div>
 
                             {/* Action Button - Fixed position at bottom */}
                             <div
                               className={`absolute bottom-0 left-2 right-2 ${
-                                isTwoColumn ? "h-[55px] sm:h-[60px]" : "h-[60px] sm:h-[70px]"
+                                isTwoColumn && plan.isMemberOnly
+                                  ? "h-[34px] sm:h-[38px]"
+                                  : isTwoColumn
+                                  ? "h-[40px] sm:h-[45px]"
+                                  : "h-[60px] sm:h-[70px]"
                               } flex items-end`}
                             >
                               {isCurrentSubscription(plan) ? (
                                 <button
                                   disabled
                                   className={`w-full ${
-                                    isTwoColumn ? "h-[45px] sm:h-[50px]" : "h-[50px] sm:h-[55px]"
+                                    isTwoColumn && plan.isMemberOnly
+                                      ? "h-[32px] sm:h-[36px]"
+                                      : isTwoColumn
+                                      ? "h-[35px] sm:h-[40px]"
+                                      : "h-[50px] sm:h-[55px]"
                                   } rounded-2xl flex items-center justify-center font-bold ${
-                                    isTwoColumn ? "text-[12px] sm:text-[16px]" : "text-[16px] sm:text-[18px]"
+                                    isTwoColumn && plan.isMemberOnly
+                                      ? "text-[12px] sm:text-[15px]"
+                                      : isTwoColumn
+                                      ? "text-[12px] sm:text-[16px]"
+                                      : "text-[16px] sm:text-[18px]"
                                   } bg-green-600 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
                                 >
                                   Current Plan
@@ -857,9 +927,17 @@ export default function MembershipSection({
                                 <button
                                   disabled
                                   className={`w-full ${
-                                    isTwoColumn ? "h-[45px] sm:h-[50px]" : "h-[50px] sm:h-[55px]"
+                                    isTwoColumn && plan.isMemberOnly
+                                      ? "h-[32px] sm:h-[36px]"
+                                      : isTwoColumn
+                                      ? "h-[35px] sm:h-[40px]"
+                                      : "h-[50px] sm:h-[55px]"
                                   } rounded-2xl flex items-center justify-center font-bold ${
-                                    isTwoColumn ? "text-[12px] sm:text-[16px]" : "text-[16px] sm:text-[18px]"
+                                    isTwoColumn && plan.isMemberOnly
+                                      ? "text-[12px] sm:text-[15px]"
+                                      : isTwoColumn
+                                      ? "text-[12px] sm:text-[16px]"
+                                      : "text-[16px] sm:text-[18px]"
                                   } bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
                                 >
                                   Subscription or Entries Required
@@ -872,14 +950,20 @@ export default function MembershipSection({
                                   const isAdditionalPackage =
                                     plan.id.includes("additional-") || plan.period === "one-time";
                                   const buttonHeight = isAdditionalPackage
-                                    ? isTwoColumn
+                                    ? isTwoColumn && plan.isMemberOnly
+                                      ? "h-[32px] sm:h-[36px]"
+                                      : isTwoColumn
                                       ? "h-[35px] sm:h-[40px]"
                                       : "h-[40px] sm:h-[45px]"
                                     : isTwoColumn
-                                    ? "h-[45px] sm:h-[50px]"
+                                    ? "h-[35px] sm:h-[40px]"
                                     : "h-[50px] sm:h-[55px]";
                                   let buttonClass = `w-full ${buttonHeight} rounded-2xl flex items-center justify-center font-bold ${
-                                    isTwoColumn ? "text-[12px] sm:text-[16px]" : "text-[16px] sm:text-[18px]"
+                                    isTwoColumn && plan.isMemberOnly
+                                      ? "text-[12px] sm:text-[15px]"
+                                      : isTwoColumn
+                                      ? "text-[12px] sm:text-[16px]"
+                                      : "text-[16px] sm:text-[18px]"
                                   } transition-all duration-300 transform lg:hover:scale-105 lg:hover:shadow-xl bg-gradient-to-r ${
                                     colorScheme.gradient
                                   } text-white lg:hover:shadow-[0_0_20px_rgba(0,0,0,0.8)]`;

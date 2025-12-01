@@ -93,6 +93,9 @@ export async function GET() {
     const timeUntilFreeze = majorDraw.freezeEntriesAt ? getTimeUntilFreeze(majorDraw.freezeEntriesAt) : undefined;
     const timeUntilDraw = majorDraw.drawDate ? getTimeUntilDraw(majorDraw.drawDate) : undefined;
 
+    // Calculate total participants (number of unique users with entries)
+    const totalParticipants = majorDraw.entries?.length || 0;
+
     const response = {
       success: true,
       data: {
@@ -108,12 +111,14 @@ export async function GET() {
           activationDate: majorDraw.activationDate,
           configurationLocked: majorDraw.configurationLocked,
           totalEntries: majorDraw.totalEntries,
+          totalParticipants: totalParticipants,
           winner: majorDraw.winner,
           createdAt: majorDraw.createdAt,
           updatedAt: majorDraw.updatedAt,
         },
         userStats,
         totalEntries: majorDraw.totalEntries,
+        totalParticipants: totalParticipants,
         daysRemaining,
         isActive: majorDraw.isActive,
         // NEW: Freeze period information

@@ -70,6 +70,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           affiliateCode: affiliate.affiliateCode,
           affiliateLink: affiliate.affiliateLink,
           isActive: affiliate.isActive,
+          commissionRate: affiliate.commissionRate ?? 0.3, // Default to 30% if not set
           totalSignups: affiliate.totalSignups,
           totalSales: affiliate.totalSales,
           totalCommissions: affiliate.totalCommissions,
@@ -197,6 +198,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const bcrypt = await import("bcryptjs");
       affiliate.password = await bcrypt.hash(body.password.trim(), 12);
     }
+    if (body.commissionRate !== undefined) {
+      // Validate commission rate (0-1 range)
+      if (typeof body.commissionRate === "number" && body.commissionRate >= 0 && body.commissionRate <= 1) {
+        affiliate.commissionRate = body.commissionRate;
+      } else {
+        return NextResponse.json({ error: "Commission rate must be between 0 and 1" }, { status: 400 });
+      }
+    }
 
     await affiliate.save();
     const affiliateId = (affiliate._id as mongoose.Types.ObjectId).toString();
@@ -211,6 +220,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           phone: affiliate.phone,
           username: affiliate.username,
           isActive: affiliate.isActive,
+          commissionRate: affiliate.commissionRate ?? 0.3,
         },
       },
     });

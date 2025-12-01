@@ -15,6 +15,7 @@ const createAffiliateSchema = z.object({
   phone: z.string().optional(),
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username cannot be more than 50 characters"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  commissionRate: z.number().min(0, "Commission rate must be at least 0").max(1, "Commission rate cannot exceed 100%").optional(),
 });
 
 /**
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
       affiliateCode,
       affiliateLink,
       isActive: true,
+      commissionRate: validatedData.commissionRate ?? 0.3, // Default to 30% if not provided
       totalSignups: 0,
       totalSales: 0,
       totalCommissions: 0,
