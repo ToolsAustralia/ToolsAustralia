@@ -330,7 +330,10 @@ export const getPackagesByType = (type: "subscription" | "one-time"): StaticMemb
 };
 
 /**
- * Get member-exclusive packages
+ * Get additional packages (previously "member-exclusive" packages)
+ * These packages are accessible to users with:
+ * - Active subscription, OR
+ * - Entries in the current major draw
  */
 export const getMemberOnlyPackages = (): StaticMembershipPackage[] => {
   return membershipPackages.filter((pkg) => pkg.isMemberOnly && pkg.isActive);

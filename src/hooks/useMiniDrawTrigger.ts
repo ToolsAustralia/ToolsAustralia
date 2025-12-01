@@ -4,6 +4,8 @@ import { useEffect, useCallback, useRef } from "react";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { hasRecentPurchase } from "@/utils/tracking/purchase-tracking";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 interface UseMiniDrawTriggerProps {
   /**
@@ -25,7 +27,7 @@ interface UseMiniDrawTriggerProps {
 
 /**
  * Hook to manage special packages modal triggers
- * Shows special packages modal for authenticated members with active subscriptions after a delay
+ * Shows special packages modal for authenticated users with active subscriptions OR current draw entries after a delay
  * Uses sessionStorage to track if modal has been shown in current session
  */
 export const useMiniDrawTrigger = ({
@@ -33,7 +35,8 @@ export const useMiniDrawTrigger = ({
   showOncePerSession = true,
   enabled = true,
 }: UseMiniDrawTriggerProps = {}) => {
-  const { isAuthenticated, hasActiveSubscription, userData } = useUserContext();
+  const { isAuthenticated, userData } = useUserContext();
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { requestModal, isModalActive } = useModalPriorityStore();
 
   // Track if modal has been shown in this session using sessionStorage
@@ -79,13 +82,13 @@ export const useMiniDrawTrigger = ({
 
   /**
    * Check if user is eligible for special packages modal
-   * CRITICAL: Only users with active subscriptions are eligible
+   * CRITICAL: Users with active subscriptions OR current draw entries are eligible
    */
   const isEligibleForMiniDraw = useCallback(() => {
     console.log("🔍 Special packages eligibility check:", {
       isAuthenticated,
-      hasActiveSubscription,
       userData: userData ? "exists" : "null",
+      currentDrawEntries: userMajorDrawStats?.currentDrawEntries,
     });
 
     // Must be authenticated
@@ -100,15 +103,16 @@ export const useMiniDrawTrigger = ({
       return false;
     }
 
-    // CRITICAL: Must have active subscription (not just one-time packages)
-    if (!hasActiveSubscription) {
-      console.log("🚫 Special packages trigger: User does not have active subscription");
+    // CRITICAL: Must have access (active subscription OR current draw entries)
+    const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+    if (!hasAccess) {
+      console.log("🚫 Special packages trigger: User doesn't have access (subscription OR current draw entries)");
       return false;
     }
 
     console.log("✅ Special packages trigger: User is eligible");
     return true;
-  }, [isAuthenticated, hasActiveSubscription, userData, checkRecentPurchase]);
+  }, [isAuthenticated, userData, userMajorDrawStats, checkRecentPurchase]);
 
   /**
    * Trigger special packages modal

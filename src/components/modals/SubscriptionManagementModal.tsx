@@ -10,6 +10,9 @@ import ConfirmationModal from "./ConfirmationModal";
 import BenefitCountdown from "@/components/ui/BenefitCountdown";
 import StripePaymentModal from "./StripePaymentModal";
 import CancellationUpsellModal from "./CancellationUpsellModal";
+import { useMembershipModal } from "@/hooks/useMembershipModal";
+import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 
 interface User {
   _id: string;
@@ -142,6 +145,7 @@ interface SubscriptionManagementModalProps {
   onClose: () => void;
   user: User;
   onSubscriptionUpdate?: () => void;
+  membershipModal?: ReturnType<typeof useMembershipModal>;
 }
 
 const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = ({
@@ -149,6 +153,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   onClose,
   user,
   onSubscriptionUpdate,
+  membershipModal: parentMembershipModal,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -201,10 +206,84 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const { showToast } = useToast();
 
   // Fetch membership packages to get full package data
-  const { loading: packagesLoading } = useMemberships();
+  const { loading: packagesLoading, subscriptionPackages } = useMemberships();
 
   // Renew subscription mutation
   const renewSubscription = useRenewSubscription();
+
+  // Hooks for opening MembershipModal with Tradie package
+  // Use parent's membershipModal if provided, otherwise create a new instance
+  const localMembershipModal = useMembershipModal();
+  const membershipModal = parentMembershipModal || localMembershipModal;
+  const { data: membershipPromo } = usePromoByType("membership-packages");
+  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
+
+  // Helper function to get Tradie subscription package for non-subscribers
+  const getTradiePackage = (): LocalMembershipPlan => {
+    const targetPackageId = "tradie-subscription";
+    const packageData = subscriptionPackages.find((pkg) => pkg.id === targetPackageId);
+
+    if (!packageData) {
+      // Fallback if package not found
+      const baseEntries = 15; // Tradie subscription has 15 entries per month
+      const promoEntries = baseEntries * membershipPromoMultiplier;
+
+      return {
+        id: targetPackageId,
+        name: "Tradie",
+        price: 20,
+        period: "mo",
+        features: [
+          {
+            text: `${promoEntries} Free Accumulated Entries${
+              membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
+            }`,
+          },
+          { text: "100% Access to Partner Discounts" },
+          { text: "Mini Draws" },
+        ],
+        buttonText: "Get Started",
+        buttonStyle: "secondary",
+        isMemberOnly: false,
+        metadata: {
+          entriesCount: promoEntries,
+          promoMultiplier: membershipPromoMultiplier,
+          originalEntries: baseEntries,
+          isPromoActive: membershipPromoMultiplier > 1,
+        },
+      };
+    }
+
+    const localPlan = convertToLocalPlan(packageData);
+
+    // Apply promo multiplier if active
+    if (membershipPromoMultiplier <= 1) {
+      return localPlan;
+    }
+
+    const originalEntries = localPlan.metadata?.entriesCount ?? 0;
+    const promoEntries = originalEntries * membershipPromoMultiplier;
+
+    return {
+      ...localPlan,
+      features: localPlan.features.map((feature) => {
+        if (feature.text.toLowerCase().includes("entries")) {
+          return {
+            ...feature,
+            text: feature.text.replace(/\d+/, promoEntries.toString()),
+          };
+        }
+        return feature;
+      }),
+      metadata: {
+        ...localPlan.metadata,
+        entriesCount: promoEntries,
+        originalEntries,
+        promoMultiplier: membershipPromoMultiplier,
+        isPromoActive: true,
+      },
+    };
+  };
 
   // Fetch subscription benefits
   const fetchSubscriptionBenefits = useCallback(async () => {
@@ -871,6 +950,18 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 One-time packages don&apos;t require subscription management. You can purchase additional packages
                 anytime.
               </p>
+              <Button
+                onClick={() => {
+                  onClose(); // Close SubscriptionManagementModal
+                  const tradiePlan = getTradiePackage(); // Get Tradie package directly
+                  membershipModal.setSelectedPlan(tradiePlan);
+                  membershipModal.openModal(); // Open MembershipModal
+                }}
+                variant="primary"
+                className="mt-4"
+              >
+                Subscribe to Membership Packages
+              </Button>
             </div>
           </div>
         ) : (

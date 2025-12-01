@@ -14,9 +14,11 @@ import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
-import PromoBadge from "@/components/ui/PromoBadge";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 
 /**
  * SpecialPackagesModalProps Interface
@@ -31,7 +33,7 @@ export interface SpecialPackagesModalProps {
 
 /**
  * SpecialPackagesModal Component
- * Displays exclusive member-only one-time packages for users with active subscriptions
+ * Displays additional one-time packages for users with active subscriptions OR current draw entries
  * Features package selection with one-click purchase using saved payment methods
  */
 const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onClose, packages, onPackageSelect }) => {
@@ -49,15 +51,34 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
   // Get user context and payment methods
   const { isAuthenticated, userData, hasActiveSubscription } = useUserContext();
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { paymentMethods } = useSavedPaymentMethods();
 
-  // Get packages with promo applied (if needed)
-  // Note: Promo handling for member-only packages can be added later if needed
+  // Get active one-time promo (same as MembershipSection)
+  const { data: oneTimePromo } = usePromoByType("one-time-packages");
+
+  // Get packages with promo applied (same logic as MembershipSection)
   const packagesWithPromo = React.useMemo(() => {
-    // For now, return packages as-is since promo handling for member-only packages
-    // may need special handling. Can be enhanced later if needed.
-    return packages;
-  }, [packages]);
+    // Apply promo multiplier to packages if there's an active one-time promo
+    return packages.map((pkg) => {
+      // Check if this is a one-time package with active promo
+      if (oneTimePromo && pkg.type === "one-time") {
+        const originalEntries = pkg.totalEntries || 0;
+        const promoEntries = originalEntries * oneTimePromo.multiplier;
+
+        return {
+          ...pkg,
+          totalEntries: promoEntries,
+          originalEntries, // Store original for display purposes
+          promoMultiplier: oneTimePromo.multiplier,
+          isPromoActive: true,
+        };
+      }
+
+      // Return package unchanged if no promo applies
+      return pkg;
+    });
+  }, [packages, oneTimePromo]);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();
@@ -101,12 +122,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     }
   }, [isOpen]);
 
-  // CRITICAL: Verify user has active subscription before showing modal
+  // CRITICAL: Verify user has access (subscription OR current draw entries) before showing modal
   if (!isOpen) return null;
 
-  // Verify user is authenticated and has active subscription
-  if (!isAuthenticated || !hasActiveSubscription) {
-    console.log("🚫 SpecialPackagesModal: User not authenticated or no active subscription");
+  // Verify user is authenticated and has access to additional packages
+  if (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
+    console.log("🚫 SpecialPackagesModal: User not authenticated or doesn't have access to additional packages");
     return null;
   }
 
@@ -218,9 +239,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       try {
         // Get paymentIntentId from status.data or fallback to state
         const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
-        
+
         // Get package details - use selectedPackage as source of truth
-        const packageName = status.data?.packageName || processingPackageName || selectedPackage?.name || "Special Package";
+        const packageName =
+          status.data?.packageName || processingPackageName || selectedPackage?.name || "Special Package";
         const value = selectedPackage?.price || 0;
         const currency = "AUD";
         const packageId = selectedPackage?._id || "";
@@ -248,7 +270,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           platform: "tools-australia",
         });
 
-        console.log(`📘 Facebook Pixel: Special Package Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
+        console.log(
+          `📘 Facebook Pixel: Special Package Purchase tracked - $${value} ${currency} (EventID: ${eventID})`
+        );
       } catch (pixelError) {
         console.error("❌ Error tracking Special Package Purchase client-side:", pixelError);
         // Non-blocking - continue with success flow
@@ -564,36 +588,27 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                   </div>
                 )}
 
-                <div className="flex items-center">
-                  {/* Left Side - Entries Info */}
-                  <div className="flex-[2] flex items-center justify-between px-1 sm:px-2">
-                    {/* Package Name */}
-                    <div className="flex items-center gap-1 sm:gap-2">
-                      <div className="text-xs sm:text-sm text-black font-semibold">{pkg.name}</div>
-                      {/* Promo Badge for packages */}
-                      {pkg.isPromoActive && pkg.promoMultiplier && (
-                        <PromoBadge multiplier={pkg.promoMultiplier as 3 | 5 | 10} size="small" />
-                      )}
-                    </div>
+                <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 sm:gap-3">
+                  {/* Package Name - Left */}
+                  <div className="text-xs sm:text-sm text-black font-semibold">{pkg.name}</div>
 
-                    {/* Main Entries Display */}
-                    <div className="text-center">
-                      <div
-                        className={`text-base sm:text-lg font-bold ${
-                          selectedPackage?._id === pkg._id ? "text-green-600" : "text-black"
-                        }`}
-                      >
-                        {pkg.totalEntries || 0}
-                      </div>
-                      <div className="text-xs font-bold text-black">ENTRIES</div>
+                  {/* Main Entries Display - Center */}
+                  <div className="text-center min-w-[60px] sm:min-w-[80px]">
+                    <div
+                      className={`text-base sm:text-lg font-bold ${
+                        selectedPackage?._id === pkg._id ? "text-green-600" : "text-black"
+                      }`}
+                    >
+                      {pkg.totalEntries || 0}
                     </div>
+                    <div className="text-xs font-bold text-black">ENTRIES</div>
                   </div>
 
-                  {/* Divider */}
-                  <div className="w-px h-8 sm:h-10 bg-black/20 mx-1 sm:mx-2"></div>
+                  {/* Divider - Fixed position */}
+                  <div className="w-px h-8 sm:h-10 bg-black/20"></div>
 
                   {/* Right Side - Price and Button */}
-                  <div className="flex-1 flex items-center justify-between gap-1 sm:gap-2">
+                  <div className="flex items-center justify-end gap-2 sm:gap-3">
                     {/* Main Price Display */}
                     <div className="text-base sm:text-lg font-bold text-black">${pkg.price}</div>
 

@@ -13,6 +13,8 @@ import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 // Import package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.png";
@@ -44,7 +46,7 @@ const PACKAGE_ICONS: Record<string, StaticImageData> = {
   "boss-pack": boss,
   "power-pack": power,
 
-  // Member exclusive packages (additional packages)
+  // Additional packages (accessible to users with subscription OR current draw entries)
   "additional-apprentice-pack-member": apprentice,
   "additional-tradie-pack-member": tradie,
   "additional-foreman-pack-member": foreman,
@@ -182,6 +184,7 @@ export default function MembershipSection({
 
   // Fetch user data to check membership status
   const { userData, loading: userLoading } = useUserContext();
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
 
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
@@ -212,10 +215,15 @@ export default function MembershipSection({
   const hasActiveSubscription = userData?.subscription?.isActive || false;
   const currentUserSubscription = userData?.subscriptionPackageData;
 
-  // Update default tab based on subscription status
+  // Check if user has access to additional packages (subscription OR current draw entries)
+  const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+
+  // Update default tab based on subscription status or access
   useEffect(() => {
     if (!userLoading && userData) {
-      const newTab = hasActiveSubscription ? "one-time" : "membership";
+      // If user has access (subscription OR entries), show one-time only
+      // Otherwise, show membership tab
+      const newTab = hasAccessToAdditionalPackages ? "one-time" : "membership";
       setActiveTab(newTab);
       // Dispatch event for FloatingPromoBanner to sync
       if (typeof window !== "undefined") {
@@ -226,7 +234,7 @@ export default function MembershipSection({
         );
       }
     }
-  }, [hasActiveSubscription, userLoading, userData]);
+  }, [hasAccessToAdditionalPackages, userLoading, userData]);
 
   // Check if a plan is the user's current subscription
   // Note: This only applies to subscription plans, not one-time packages
@@ -334,21 +342,25 @@ export default function MembershipSection({
 
     let apiPlans;
 
-    if (activeTab === "membership") {
+    // If user has access, only show one-time packages (force one-time view)
+    // Otherwise, show based on activeTab
+    const effectiveTab = hasAccessToAdditionalPackages ? "one-time" : activeTab;
+
+    if (effectiveTab === "membership") {
       // Always show subscription packages
       apiPlans = subscriptionPackages;
       console.log("🔍 Showing subscription packages:", apiPlans.length);
     } else {
-      // For one-time packages, filter based on membership status
+      // For one-time packages, filter based on access (subscription OR current draw entries)
       if (userLoading) {
         apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
         console.log("🔍 User loading - showing regular packages:", apiPlans.length);
-      } else if (hasActiveSubscription) {
+      } else if (hasAccessToAdditionalPackages) {
         apiPlans = oneTimePackages.filter((pkg) => pkg.isMemberOnly === true);
-        console.log("🔍 Member - showing member-only packages:", apiPlans.length);
+        console.log("🔍 User with access - showing additional packages:", apiPlans.length);
       } else {
         apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
-        console.log("🔍 Non-member - regular packages:", apiPlans.length);
+        console.log("🔍 User without access - showing regular packages:", apiPlans.length);
       }
     }
 
@@ -357,7 +369,7 @@ export default function MembershipSection({
     // Apply promo multiplier to packages if there's an active promo
     const finalPlans = convertedPlans.map((plan) => {
       // Check if this is a one-time package with active promo
-      if (activeTab === "one-time" && oneTimePromo && plan.period === "one-time") {
+      if (effectiveTab === "one-time" && oneTimePromo && plan.period === "one-time") {
         const originalEntries = plan.metadata?.entriesCount || 0;
         const promoEntries = originalEntries * oneTimePromo.multiplier;
 
@@ -375,7 +387,7 @@ export default function MembershipSection({
       }
 
       // Check if this is a subscription package with active membership promo
-      if (activeTab === "membership" && membershipPromo && plan.period !== "one-time") {
+      if (effectiveTab === "membership" && membershipPromo && plan.period !== "one-time") {
         const originalEntries = plan.metadata?.entriesCount || 0;
         const promoEntries = originalEntries * membershipPromo.multiplier;
 
@@ -419,71 +431,93 @@ export default function MembershipSection({
           <h2
             className={`text-[20px] sm:text-[24px] lg:text-[32px] font-bold ${titleColor} mb-2 sm:mb-3 lg:mb-4 font-['Poppins'] leading-tight`}
           >
-            {title}
+            {hasAccessToAdditionalPackages ? "GET MORE ENTRIES 50% OFF" : title}
           </h2>
         </div>
 
         {/* Toggle - Enhanced metallic design */}
-        <div className="flex justify-center mb-4 sm:mb-6 lg:mb-8">
-          <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
-            <div className="flex flex-row items-center justify-center w-full">
-              <button
-                onClick={() => {
-                  setActiveTab("one-time");
-                  // Dispatch event for FloatingPromoBanner to sync
-                  if (typeof window !== "undefined") {
-                    window.dispatchEvent(
-                      new CustomEvent("membershipTabChanged", {
-                        detail: { activeTab: "one-time" },
-                      })
-                    );
-                  }
-                }}
-                className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
-                  activeTab === "one-time"
-                    ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                    : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
-                }`}
-              >
-                One-Time
-                {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                {oneTimePromo && activeTab === "one-time" && (
-                  <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab("membership");
-                  // Dispatch event for FloatingPromoBanner to sync
-                  if (typeof window !== "undefined") {
-                    window.dispatchEvent(
-                      new CustomEvent("membershipTabChanged", {
-                        detail: { activeTab: "membership" },
-                      })
-                    );
-                  }
-                }}
-                className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
-                  activeTab === "membership"
-                    ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                    : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
-                }`}
-              >
-                Membership Packs
-                {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                {membershipPromo && activeTab === "membership" && (
-                  <PromoMultiplierBadge multiplier={membershipPromo.multiplier as 2 | 3 | 5 | 10} />
-                )}
-              </button>
+        {/* Show toggle if:
+            - User doesn't have access (show both tabs), OR
+            - User has access AND we're on the membership page (show both tabs)
+            - Otherwise, if user has access and NOT on membership page, show only "One-Time Packs" label
+        */}
+        {(!hasAccessToAdditionalPackages || pathname === "/membership") && (
+          <div className="flex justify-center mb-4 sm:mb-6 lg:mb-8">
+            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
+              <div className="flex flex-row items-center justify-center w-full">
+                <button
+                  onClick={() => {
+                    setActiveTab("one-time");
+                    // Dispatch event for FloatingPromoBanner to sync
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(
+                        new CustomEvent("membershipTabChanged", {
+                          detail: { activeTab: "one-time" },
+                        })
+                      );
+                    }
+                  }}
+                  className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                    activeTab === "one-time"
+                      ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                  }`}
+                >
+                  One-Time
+                  {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
+                  {oneTimePromo && activeTab === "one-time" && (
+                    <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("membership");
+                    // Dispatch event for FloatingPromoBanner to sync
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(
+                        new CustomEvent("membershipTabChanged", {
+                          detail: { activeTab: "membership" },
+                        })
+                      );
+                    }
+                  }}
+                  className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                    activeTab === "membership"
+                      ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                  }`}
+                >
+                  Membership Packs
+                  {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
+                  {membershipPromo && activeTab === "membership" && (
+                    <PromoMultiplierBadge multiplier={membershipPromo.multiplier as 2 | 3 | 5 | 10} />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Show one-time only label when user has access AND NOT on membership page */}
+        {hasAccessToAdditionalPackages && pathname !== "/membership" && (
+          <div className="flex justify-center mb-4 sm:mb-6 lg:mb-8">
+            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
+              <div className="flex flex-row items-center justify-center w-full">
+                <div className="flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)] relative">
+                  One-Time Packs
+                  {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
+                  {oneTimePromo && <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Mobile/Tablet: Vertical Stack Layout */}
         {!loading && !error && (
           <div className="lg:hidden overflow-visible pt-8">
             {(() => {
-              // Determine if we should show 2 columns: when showing member-exclusive packages on one-time tab
+              // Determine if we should show 2 columns: when showing additional packages on one-time tab
               const showingMemberExclusive =
                 activeTab === "one-time" && membershipPlans.some((plan) => plan.isMemberOnly === true);
               return (
@@ -540,8 +574,8 @@ export default function MembershipSection({
                           )}
                           {/* Best Chance Badge - Top Right (for boss/power packages) */}
                           {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                            <div className="absolute top-2 right-2 z-20">
-                              <BestChanceBadge size={isTwoColumn ? "small" : "small"} />
+                            <div className="absolute top-1.5 right-1.5 z-20">
+                              <BestChanceBadge size="xs" />
                             </div>
                           )}
 
@@ -817,7 +851,7 @@ export default function MembershipSection({
                                 >
                                   Current Plan
                                 </button>
-                              ) : !hasActiveSubscription && plan.isMemberOnly ? (
+                              ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                                 <button
                                   disabled
                                   className={`w-full ${
@@ -826,15 +860,23 @@ export default function MembershipSection({
                                     isTwoColumn ? "text-[12px] sm:text-[16px]" : "text-[16px] sm:text-[18px]"
                                   } bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
                                 >
-                                  Membership Required
+                                  Subscription or Entries Required
                                 </button>
                               ) : (
                                 (() => {
                                   const hierarchy = getPlanHierarchy(plan);
                                   let buttonText = "Enter Now";
-                                  let buttonClass = `w-full ${
-                                    isTwoColumn ? "h-[45px] sm:h-[50px]" : "h-[50px] sm:h-[55px]"
-                                  } rounded-2xl flex items-center justify-center font-bold ${
+                                  // Reduce height for additional packages (one-time packages)
+                                  const isAdditionalPackage =
+                                    plan.id.includes("additional-") || plan.period === "one-time";
+                                  const buttonHeight = isAdditionalPackage
+                                    ? isTwoColumn
+                                      ? "h-[35px] sm:h-[40px]"
+                                      : "h-[40px] sm:h-[45px]"
+                                    : isTwoColumn
+                                    ? "h-[45px] sm:h-[50px]"
+                                    : "h-[50px] sm:h-[55px]";
+                                  let buttonClass = `w-full ${buttonHeight} rounded-2xl flex items-center justify-center font-bold ${
                                     isTwoColumn ? "text-[12px] sm:text-[16px]" : "text-[16px] sm:text-[18px]"
                                   } transition-all duration-300 transform lg:hover:scale-105 lg:hover:shadow-xl bg-gradient-to-r ${
                                     colorScheme.gradient
@@ -932,13 +974,16 @@ export default function MembershipSection({
                     {/* Octagonal Promo Badge - Top Left */}
                     {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
                       <div className="absolute top-2 left-2 z-20">
-                        <HexagonalPromoBadge multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
+                        <HexagonalPromoBadge
+                          multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
+                          size="small"
+                        />
                       </div>
                     )}
                     {/* Best Chance Badge - Top Right (for boss/power packages) */}
                     {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                      <div className="absolute top-2 right-2 z-10">
-                        <BestChanceBadge size="small" />
+                      <div className="absolute top-1.5 right-1.5 z-10">
+                        <BestChanceBadge size="xs" />
                       </div>
                     )}
 
@@ -1102,18 +1147,21 @@ export default function MembershipSection({
                           >
                             Current Plan
                           </button>
-                        ) : !hasActiveSubscription && plan.isMemberOnly ? (
+                        ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                           <button
                             disabled
                             className={`w-full h-[50px] sm:h-[55px] rounded-2xl flex items-center justify-center font-bold text-[14px] sm:text-[16px] bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
                           >
-                            Membership Required
+                            Subscription or Entries Required
                           </button>
                         ) : (
                           (() => {
                             const hierarchy = getPlanHierarchy(plan);
                             let buttonText = "Enter Now";
-                            let buttonClass = `w-full h-[50px] sm:h-[55px] rounded-2xl flex items-center justify-center font-bold text-[14px] sm:text-[16px] transition-all duration-300 transform hover:scale-105 hover:shadow-xl bg-gradient-to-r ${colorScheme.gradient} text-white hover:shadow-[0_0_20px_rgba(0,0,0,0.8)]`;
+                            // Reduce height for additional packages (one-time packages)
+                            const isAdditionalPackage = plan.id.includes("additional-") || plan.period === "one-time";
+                            const buttonHeight = isAdditionalPackage ? "h-[40px] sm:h-[45px]" : "h-[50px] sm:h-[55px]";
+                            let buttonClass = `w-full ${buttonHeight} rounded-2xl flex items-center justify-center font-bold text-[14px] sm:text-[16px] transition-all duration-300 transform hover:scale-105 hover:shadow-xl bg-gradient-to-r ${colorScheme.gradient} text-white hover:shadow-[0_0_20px_rgba(0,0,0,0.8)]`;
 
                             if (hasActiveSubscription && activeTab === "membership") {
                               if (hierarchy.isCurrent) {

@@ -10,6 +10,8 @@ import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 interface RewardsRedemptionProps {
   user: UserData;
@@ -74,15 +76,18 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
     }
   };
 
-  // Check if user has active membership
-  const userHasMembership = user.subscription && user.subscription.isActive;
+  // Get user's major draw stats to check for current draw entries
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(user._id);
+  
+  // Check if user has access to additional packages (subscription OR current draw entries)
+  const hasAccess = hasAdditionalPackageAccess(user, userMajorDrawStats);
 
   // Create package redemption options (5x multiplier) - memoized for performance
   const redemptionOptions: RedemptionOption[] = useMemo(
     () => [
-      // Show packages based on membership status
-      ...(userHasMembership
-        ? // Members see only member-exclusive packages
+      // Show packages based on access (subscription OR current draw entries)
+      ...(hasAccess
+        ? // Users with access see additional packages
           allOneTimePackages
             .filter((pkg) => pkg.isMemberOnly)
             .map((pkg) => ({
@@ -100,7 +105,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
               isPromoActive: pkg.isPromoActive,
               promoMultiplier: pkg.promoMultiplier,
             }))
-        : // Non-members see only non-member packages
+        : // Users without access see only regular packages
           allOneTimePackages
             .filter((pkg) => !pkg.isMemberOnly)
             .map((pkg) => ({
@@ -136,7 +141,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
         promoMultiplier: pkg.promoMultiplier,
       })),
     ],
-    [allOneTimePackages, miniDrawPackages, userHasMembership, currentUserPoints, user.rewardsPoints]
+    [allOneTimePackages, miniDrawPackages, hasAccess, currentUserPoints, user.rewardsPoints, userMajorDrawStats]
   );
 
   // Infinite scrolling effect

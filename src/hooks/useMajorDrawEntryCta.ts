@@ -5,6 +5,8 @@ import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 interface UseMajorDrawEntryCtaResult {
   membershipModal: ReturnType<typeof useMembershipModal>;
@@ -26,6 +28,7 @@ interface UseMajorDrawEntryCtaResult {
  */
 export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { hasActiveSubscription, userData } = useUserContext();
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const membershipModal = useMembershipModal();
   const { requestModal, clearModalFromSession } = useModalPriorityStore();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
@@ -38,11 +41,12 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const oneTimePromoMultiplier = oneTimePromo?.multiplier ?? 1;
 
   const getHeavyDutyPack = useCallback((): LocalMembershipPlan => {
-    const isMember = userData?.subscription?.isActive ?? false;
+    // Check if user has access to additional packages (subscription OR current draw entries)
+    const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
-    // For non-members: Use Tradie subscription package
-    // For members: Use additional-apprentice-pack (one-time package) - lowest member package
-    if (isMember) {
+    // For users without access: Use Tradie subscription package
+    // For users with access: Use additional-apprentice-pack (one-time package) - lowest additional package
+    if (hasAccess) {
       const promoMultiplier = oneTimePromoMultiplier;
       // Member path: Use additional-apprentice-pack one-time package (lowest price/entry option)
       const targetPackageId = "additional-apprentice-pack";
@@ -233,11 +237,20 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         },
       };
     }
-  }, [safeOneTimePackages, safeSubscriptionPackages, membershipPromoMultiplier, oneTimePromoMultiplier, userData]);
+  }, [
+    safeOneTimePackages,
+    safeSubscriptionPackages,
+    membershipPromoMultiplier,
+    oneTimePromoMultiplier,
+    userData,
+    userMajorDrawStats,
+  ]);
 
   const openEntryFlow = useCallback(
     ({ openLocalModal = true }: { openLocalModal?: boolean } = {}) => {
-      if (hasActiveSubscription) {
+      // Check if user has access (subscription OR current draw entries)
+      const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+      if (hasAccess) {
         clearModalFromSession("special-packages");
         if (typeof window !== "undefined") {
           sessionStorage.removeItem("specialPackagesModalShown");
@@ -262,7 +275,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         );
       }
     },
-    [clearModalFromSession, getHeavyDutyPack, hasActiveSubscription, membershipModal, requestModal]
+    [clearModalFromSession, getHeavyDutyPack, userData, userMajorDrawStats, membershipModal, requestModal]
   );
 
   return useMemo(

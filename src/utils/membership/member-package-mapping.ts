@@ -1,7 +1,11 @@
 /**
  * Member Package Mapping Utilities
- * Handles mapping between non-member and member packages
- * Provides safety checks for existing members
+ * Handles mapping between non-member and additional packages
+ * Provides safety checks for users with access (subscription OR current draw entries)
+ * 
+ * Note: Additional packages are now accessible to users with:
+ * - Active subscription, OR
+ * - Entries in the current major draw
  */
 
 import { StaticMembershipPackage } from "@/data/membershipPackages";
@@ -77,21 +81,21 @@ export const getAppropriatePackageForUser = (
 };
 
 /**
- * Filter packages based on user membership status
+ * Filter packages based on user access (subscription OR current draw entries)
  * @param packages - All packages to filter
- * @param isMember - Whether the user is a member
+ * @param hasAccess - Whether the user has access to additional packages (subscription OR current draw entries)
  * @returns Filtered packages appropriate for the user
  */
 export const filterPackagesForUser = (
   packages: StaticMembershipPackage[],
-  isMember: boolean
+  hasAccess: boolean
 ): StaticMembershipPackage[] => {
-  if (!isMember) {
-    // Non-members can see all packages
+  if (!hasAccess) {
+    // Users without access can see all packages (they'll see regular packages)
     return packages;
   }
 
-  // Members should not see non-member packages
+  // Users with access should not see non-member packages (they see additional packages)
   return packages.filter((pkg) => !isNonMemberPackage(pkg._id));
 };
 

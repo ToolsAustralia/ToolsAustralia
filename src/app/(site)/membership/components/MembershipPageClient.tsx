@@ -6,14 +6,94 @@ import MetallicButton from "@/components/ui/MetallicButton";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import BrandScroller from "@/components/ui/BrandScroller";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
+import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import MembershipSection from "@/components/sections/MembershipSection";
 import FlowChartSection from "@/components/sections/FlowChartSection";
 import MembershipPackagesChart from "@/components/sections/MembershipPackagesChart";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useMembershipModal } from "@/hooks/useMembershipModal";
+import { useUserContext } from "@/contexts/UserContext";
+import MembershipModal from "@/components/modals/MembershipModal";
+import { useMemberships } from "@/hooks/useMemberships";
+import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 
 export default function MembershipPageClient() {
   // Use the unified hook for consistent package selection across all entry points
   const { openEntryFlow } = useMajorDrawEntryCta();
+  const membershipModal = useMembershipModal();
+  const { userData } = useUserContext();
+  const hasActiveSubscription = userData?.subscription?.isActive === true;
+  const { subscriptionPackages } = useMemberships();
+  const { data: membershipPromo } = usePromoByType("membership-packages");
+  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
+
+  // Helper function to get Tradie subscription package for non-subscribers
+  const getTradiePackage = (): LocalMembershipPlan => {
+    const targetPackageId = "tradie-subscription";
+    const packageData = subscriptionPackages.find((pkg) => pkg.id === targetPackageId);
+
+    if (!packageData) {
+      // Fallback if package not found
+      const baseEntries = 15; // Tradie subscription has 15 entries per month
+      const promoEntries = baseEntries * membershipPromoMultiplier;
+
+      return {
+        id: targetPackageId,
+        name: "Tradie",
+        price: 20,
+        period: "mo",
+        features: [
+          {
+            text: `${promoEntries} Free Accumulated Entries${
+              membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
+            }`,
+          },
+          { text: "100% Access to Partner Discounts" },
+          { text: "Mini Draws" },
+        ],
+        buttonText: "Get Started",
+        buttonStyle: "secondary",
+        isMemberOnly: false,
+        metadata: {
+          entriesCount: promoEntries,
+          promoMultiplier: membershipPromoMultiplier,
+          originalEntries: baseEntries,
+          isPromoActive: membershipPromoMultiplier > 1,
+        },
+      };
+    }
+
+    const localPlan = convertToLocalPlan(packageData);
+
+    // Apply promo multiplier if active
+    if (membershipPromoMultiplier <= 1) {
+      return localPlan;
+    }
+
+    const originalEntries = localPlan.metadata?.entriesCount ?? 0;
+    const promoEntries = originalEntries * membershipPromoMultiplier;
+
+    return {
+      ...localPlan,
+      features: localPlan.features.map((feature) => {
+        if (feature.text.toLowerCase().includes("entries")) {
+          return {
+            ...feature,
+            text: feature.text.replace(/\d+/, promoEntries.toString()),
+          };
+        }
+        return feature;
+      }),
+      metadata: {
+        ...localPlan.metadata,
+        entriesCount: promoEntries,
+        originalEntries,
+        promoMultiplier: membershipPromoMultiplier,
+        isPromoActive: true,
+      },
+    };
+  };
 
   // Scroll to #membership on load/hash change
   useEffect(() => {
@@ -75,8 +155,15 @@ export default function MembershipPageClient() {
                 borderRadius="lg"
                 className="w-full sm:w-auto text-sm sm:text-base px-4 py-2 sm:px-6 sm:py-3"
                 onClick={() => {
-                  // Use unified entry flow for consistency with all other entry points
-                  openEntryFlow({ openLocalModal: false });
+                  if (!hasActiveSubscription) {
+                    // Get Tradie package directly (for non-subscribers, regardless of entries)
+                    const tradiePlan = getTradiePackage();
+                    membershipModal.setSelectedPlan(tradiePlan);
+                    membershipModal.openModal();
+                  } else {
+                    // User has subscription - show additional packages
+                    openEntryFlow({ openLocalModal: false });
+                  }
                 }}
               >
                 Join Now!
@@ -106,7 +193,28 @@ export default function MembershipPageClient() {
       <MembershipPackagesChart />
 
       {/* Unlock Discounts at the bottom */}
-      <UnlockDiscounts />
+      <UnlockDiscounts
+        hasAccess={hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)}
+        showUnlockButton={!hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)}
+        title={
+          hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)
+            ? "Partner Discounts"
+            : "Unlock Partner Discounts"
+        }
+        description={
+          hasActivePartnerDiscountAccess(userData as unknown as import("@/models/User").IUser)
+            ? "Access exclusive discounts from Australia's top tool brands"
+            : "Get instant access to exclusive discounts from Australia's top tool brands"
+        }
+      />
+
+      {/* Membership Modal */}
+      <MembershipModal
+        isOpen={membershipModal.isModalOpen}
+        onClose={membershipModal.closeModal}
+        selectedPlan={membershipModal.selectedPlan}
+        onPlanChange={membershipModal.selectPlan}
+      />
     </>
   );
 }

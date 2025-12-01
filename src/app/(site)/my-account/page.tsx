@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import MembershipSection from "@/components/sections/MembershipSection";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 import MajorDrawSection from "@/components/sections/MajorDrawSection";
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
@@ -281,6 +282,10 @@ export default function MyAccountPage() {
   // Map mini draws to include fields required by ProductCard (must be after user is extracted)
   const hasActiveMembership = user?.subscription?.isActive === true;
 
+  // Check if user has access to additional packages (subscription OR current draw entries)
+  // Use accountData.user as userData since we're already using accountData
+  const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(accountData?.user || null, majorDrawStats);
+
   // Get user's mini draw participation IDs for prioritization
   // Type assertion to access miniDrawParticipation which may not be in the UserData type
   const userWithParticipation = user as unknown as {
@@ -491,33 +496,35 @@ export default function MyAccountPage() {
                     <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-white/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      // Clear session tracking for special packages modal so it can show
-                      const { clearModalFromSession } = useModalPriorityStore.getState();
-                      clearModalFromSession("special-packages");
-                      // Clear sessionStorage flag as well to bypass session check
-                      if (typeof window !== "undefined") {
-                        sessionStorage.removeItem("specialPackagesModalShown");
-                      }
-                      // Request special packages modal through priority system (force=true to bypass checks)
-                      requestModal("special-packages", true);
-                    }}
-                    className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
-                  >
-                    <span className="relative z-10 flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13 10V3L4 14h7v7l9-11h-7z"
-                        />
-                      </svg>
-                      Get More Entries
-                    </span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-orange-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  </button>
+                  {hasAccessToAdditionalPackages && (
+                    <button
+                      onClick={() => {
+                        // Clear session tracking for special packages modal so it can show
+                        const { clearModalFromSession } = useModalPriorityStore.getState();
+                        clearModalFromSession("special-packages");
+                        // Clear sessionStorage flag as well to bypass session check
+                        if (typeof window !== "undefined") {
+                          sessionStorage.removeItem("specialPackagesModalShown");
+                        }
+                        // Request special packages modal through priority system (force=true to bypass checks)
+                        requestModal("special-packages", true);
+                      }}
+                      className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                        Get More Entries
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-orange-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -716,8 +723,8 @@ export default function MyAccountPage() {
                     </button>
                   </div>
 
-                  {/* Second Row: Get More Entries (only for members) */}
-                  {hasActiveMembership && (
+                  {/* Second Row: Get More Entries (for users with subscription OR current draw entries) */}
+                  {hasAccessToAdditionalPackages && (
                     <button
                       onClick={() => {
                         // Clear session tracking for special packages modal so it can show
@@ -761,7 +768,7 @@ export default function MyAccountPage() {
           </div>
 
           {/* Boost Your Odds 50% Section - Using MembershipSection */}
-          <div className="mb-12">
+          <div className="">
             <MembershipSection title="BOOST YOUR ODDS 50%" padding="py-8 sm:py-12" />
           </div>
 
@@ -852,6 +859,7 @@ export default function MyAccountPage() {
         isOpen={isSubscriptionManagementModalOpen}
         onClose={() => setIsSubscriptionManagementModalOpen(false)}
         user={user}
+        membershipModal={membershipModal}
       />
 
       <ReferFriendModal

@@ -34,6 +34,8 @@ import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 // Member package mapping utilities imported but using inline mapping for simplicity
 
 // Type for one-time purchase response data
@@ -280,6 +282,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     return activePlan;
   }, [activePlan, oneTimePromo, miniPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { savePaymentMethod } = useSavedPaymentMethods();
   const purchaseMembership = usePurchaseMembership();
   const purchaseUpsell = usePurchaseUpsell();
@@ -1486,16 +1489,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         }
       }
 
-      // Safety check: Prevent non-members from purchasing member-exclusive packages
-      const isMemberExclusivePackage = packageId.startsWith("additional-");
-      if (isMemberExclusivePackage && (!isAuthenticated || !userData?.subscription?.isActive)) {
+      // Safety check: Prevent users without access from purchasing additional packages
+      const isAdditionalPackage = packageId.startsWith("additional-");
+      if (isAdditionalPackage && (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats))) {
         throw new Error(
-          "This package is exclusive to members. Please subscribe to a membership first to access member-exclusive packages."
+          "This package requires an active subscription or entries in the current draw. Please subscribe to a membership or enter the draw first to access additional packages."
         );
       }
 
-      // Safety check: Auto-adjust non-member packages to member packages for existing members
-      if (isAuthenticated && userData?.subscription?.isActive) {
+      // Safety check: Auto-adjust non-member packages to additional packages for users with access
+      if (isAuthenticated && hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
         // Simple mapping for non-member to member packages
         const packageMapping: Record<string, string> = {
           "apprentice-pack": "additional-apprentice-pack",
@@ -2409,12 +2412,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         // Regular one-time packages should use "returning-user" or "new-user"
         const isMiniDrawPackage = packageId.startsWith("mini-pack-");
 
-        // Check if this is a member-exclusive package (additional- packages)
-        const isMemberExclusivePackage = packageId.startsWith("additional-");
+        // Check if this is an additional package (additional- packages)
+        const isAdditionalPackage = packageId.startsWith("additional-");
 
-        // If non-member is trying to trigger upsell for member-exclusive package, skip it
-        if (isMemberExclusivePackage && !isMember) {
-          console.log("⚠️ Skipping upsell trigger: Non-member cannot access member-exclusive package upsells");
+        // If user doesn't have access, skip upsell trigger for additional packages
+        if (isAdditionalPackage && !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
+          console.log("⚠️ Skipping upsell trigger: User doesn't have access to additional packages");
           return;
         }
 

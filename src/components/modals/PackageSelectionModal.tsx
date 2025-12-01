@@ -12,6 +12,8 @@ import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 // Import package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.png";
@@ -147,6 +149,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   // Get user data to determine membership status
   const { data: user } = useUserData(session?.user?.id);
   const isMember = user?.subscription?.isActive || false;
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(user?._id);
 
   // Fetch real membership data from API
   const { subscriptionPackages, oneTimePackages, loading, error } = useMemberships();
@@ -555,13 +558,16 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
       finalMembershipPlans = finalMembershipPlans;
     }
   } else if (activeTab === "one-time") {
-    if (isMember) {
-      // If user is a member, show only member-exclusive one-time packages
+    // Check if user has access to additional packages (subscription OR current draw entries)
+    const hasAccess = hasAdditionalPackageAccess(user, userMajorDrawStats);
+    
+    if (hasAccess) {
+      // If user has access (subscription OR entries), show additional packages
       finalMembershipPlans = finalMembershipPlans.filter((plan) => {
         return plan.isMemberOnly === true;
       });
     } else {
-      // For non-members, show regular one-time packages (non-member exclusive)
+      // For users without access, show regular one-time packages (non-member exclusive)
       finalMembershipPlans = finalMembershipPlans.filter((plan) => {
         return plan.isMemberOnly !== true;
       });
@@ -623,8 +629,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
                 {/* Best Chance Badge - Top Right Corner (for boss/power packages) */}
                 {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                  <div className="absolute top-2 right-2 z-20">
-                    <BestChanceBadge size="small" />
+                  <div className="absolute top-1.5 right-1.5 z-20">
+                    <BestChanceBadge size="xs" />
                   </div>
                 )}
 

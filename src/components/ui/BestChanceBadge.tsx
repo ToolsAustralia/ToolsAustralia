@@ -4,7 +4,7 @@ import React from "react";
 import { Star } from "lucide-react";
 
 interface BestChanceBadgeProps {
-  size?: "small" | "medium" | "large";
+  size?: "xs" | "small" | "medium" | "large";
   className?: string;
 }
 
@@ -19,6 +19,11 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
 }) => {
   // Size configurations
   const sizeConfig = {
+    xs: {
+      container: "px-1.5 py-0.5 text-[7px]",
+      text: "text-[7px]",
+      icon: "w-2 h-2",
+    },
     small: {
       container: "px-2 py-1 text-[8px]",
       text: "text-[8px]",
@@ -74,10 +79,10 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
       />
 
       {/* Content */}
-      <div className="relative z-10 flex items-center gap-1">
-        {/* Star icon with metallic effect */}
+      <div className={`relative z-10 flex items-center ${size === "xs" ? "gap-0.5" : "gap-1"}`}>
+        {/* Star icon with metallic effect - hidden on mobile */}
         <Star
-          className={`${config.icon} text-white fill-white drop-shadow-sm`}
+          className={`${config.icon} text-white fill-white drop-shadow-sm flex-shrink-0 hidden sm:block`}
           style={{
             filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))",
           }}
@@ -85,7 +90,7 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
 
         {/* "BEST CHANCE" text */}
         <span
-          className="font-black"
+          className="font-black whitespace-nowrap"
           style={{
             textShadow: "0 1px 2px rgba(0, 0, 0, 0.5), 0 0 8px rgba(255, 255, 255, 0.3)",
           }}
