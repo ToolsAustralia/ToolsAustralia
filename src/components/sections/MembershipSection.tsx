@@ -1332,9 +1332,6 @@ export default function MembershipSection({
         );
       })()}
 
-      {/* Spacer to keep consistent spacing below packages */}
-      <div className="pt-4 sm:pt-10" aria-hidden="true" />
-
       {/* Signup Modal */}
       <MembershipModal
         isOpen={membershipModal.isModalOpen}

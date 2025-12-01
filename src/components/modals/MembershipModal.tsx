@@ -37,6 +37,7 @@ import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { rewardsEnabled } from "@/config/featureFlags";
 // Member package mapping utilities imported but using inline mapping for simplicity
 
 // Type for one-time purchase response data
@@ -1015,8 +1016,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       });
     }
 
-    // Add reward points if available
-    if (status.data?.points && status.data.points > 0) {
+    // Add reward points if available and rewards are enabled
+    if (rewardsEnabled() && status.data?.points && status.data.points > 0) {
       benefits.push({
         text: `${status.data.points} reward points earned`,
         icon: "zap" as const,
@@ -1346,17 +1347,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         });
       }
 
-      // Add reward points if available (with "every month" for subscriptions)
-      const rewardPoints = Math.floor(activePlan.price);
-      if (rewardPoints > 0) {
-        const pointsText =
-          activePlan.period === "mo"
-            ? `${rewardPoints} reward points earned every month`
-            : `${rewardPoints} reward points earned`;
-        benefits.push({
-          text: pointsText,
-          icon: "gift" as const,
-        });
+      // Add reward points if available and rewards are enabled (with "every month" for subscriptions)
+      if (rewardsEnabled()) {
+        const rewardPoints = Math.floor(activePlan.price);
+        if (rewardPoints > 0) {
+          const pointsText =
+            activePlan.period === "mo"
+              ? `${rewardPoints} reward points earned every month`
+              : `${rewardPoints} reward points earned`;
+          benefits.push({
+            text: pointsText,
+            icon: "gift" as const,
+          });
+        }
       }
 
       showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
@@ -1643,13 +1646,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               });
             }
 
-            // Add reward points if available
-            const rewardPoints = Math.floor(activePlan.price);
-            if (rewardPoints > 0) {
-              benefits.push({
-                text: `${rewardPoints} reward points earned`,
-                icon: "gift" as const,
-              });
+            // Add reward points if available and rewards are enabled
+            if (rewardsEnabled()) {
+              const rewardPoints = Math.floor(activePlan.price);
+              if (rewardPoints > 0) {
+                benefits.push({
+                  text: `${rewardPoints} reward points earned`,
+                  icon: "gift" as const,
+                });
+              }
             }
 
             showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
@@ -1883,14 +1888,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               });
             }
 
-            // Add reward points if available (using a default calculation)
+            // Add reward points if available and rewards are enabled (using a default calculation)
             // For one-time packages, reward points are typically 1 point per dollar spent
-            const rewardPoints = Math.floor(activePlan.price); // Price is already in dollars
-            if (rewardPoints > 0) {
-              benefits.push({
-                text: `${rewardPoints} reward points earned`,
-                icon: "gift" as const,
-              });
+            if (rewardsEnabled()) {
+              const rewardPoints = Math.floor(activePlan.price); // Price is already in dollars
+              if (rewardPoints > 0) {
+                benefits.push({
+                  text: `${rewardPoints} reward points earned`,
+                  icon: "gift" as const,
+                });
+              }
             }
 
             showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
@@ -2132,13 +2139,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                       });
                     }
 
-                    // Add reward points if available
-                    const rewardPoints = Math.floor(activePlan.price);
-                    if (rewardPoints > 0) {
-                      benefits.push({
-                        text: `${rewardPoints} reward points earned`,
-                        icon: "gift" as const,
-                      });
+                    // Add reward points if available and rewards are enabled
+                    if (rewardsEnabled()) {
+                      const rewardPoints = Math.floor(activePlan.price);
+                      if (rewardPoints > 0) {
+                        benefits.push({
+                          text: `${rewardPoints} reward points earned`,
+                          icon: "gift" as const,
+                        });
+                      }
                     }
 
                     showSuccess("Welcome!", `${activePlan.name} activated`, benefits, 3000);

@@ -362,23 +362,29 @@ async function buildAdminUserProfile(userId: string) {
 
   const subscriptionHistory = paymentEvents
     .filter((event) => event.packageType === "subscription")
-    .map((event) => ({
-      timestamp: event.timestamp,
-      packageId: event.data?.packageId,
-      packageName: resolveMembershipPackageName(event.data?.packageId, event.data?.packageName ?? null),
-      price: event.data?.price,
-      status: event.eventType,
-    }));
+    .map((event) => {
+      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      return {
+        timestamp: event.timestamp,
+        packageId: event.data?.packageId,
+        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        price: event.data?.price,
+        status: event.eventType,
+      };
+    });
 
   const oneTimePackageHistory = paymentEvents
     .filter((event) => event.packageType === "one-time")
-    .map((event) => ({
-      timestamp: event.timestamp,
-      packageId: event.data?.packageId,
-      packageName: resolveMembershipPackageName(event.data?.packageId, event.data?.packageName ?? null),
-      price: event.data?.price,
-      entries: event.data?.entries,
-    }));
+    .map((event) => {
+      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      return {
+        timestamp: event.timestamp,
+        packageId: event.data?.packageId,
+        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        price: event.data?.price,
+        entries: event.data?.entries,
+      };
+    });
 
   const upsellHistory = paymentEvents
     .filter((event) => event.packageType === "upsell")
@@ -392,13 +398,16 @@ async function buildAdminUserProfile(userId: string) {
 
   const miniDrawHistory = paymentEvents
     .filter((event) => event.packageType === "mini-draw")
-    .map((event) => ({
-      timestamp: event.timestamp,
-      packageId: event.data?.packageId,
-      packageName: resolveMiniPackageName(event.data?.packageId, event.data?.packageName ?? null),
-      price: event.data?.price,
-      entries: event.data?.entries,
-    }));
+    .map((event) => {
+      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      return {
+        timestamp: event.timestamp,
+        packageId: event.data?.packageId,
+        packageName: resolveMiniPackageName(event.data?.packageId, packageNameFallback),
+        price: event.data?.price,
+        entries: event.data?.entries,
+      };
+    });
 
   const activePartnerDiscount = user.partnerDiscountQueue?.find((discount) => discount.status === "active");
   const queuedPartnerDiscounts = user.partnerDiscountQueue?.filter((discount) => discount.status === "queued") || [];

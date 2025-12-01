@@ -81,7 +81,19 @@ export async function GET() {
       .populate("userId", "firstName lastName email");
 
     recentPayments.forEach((payment) => {
-      const user = payment.userId as { firstName: string; lastName: string; email: string } | null;
+      // Handle populated userId - it could be an ObjectId or populated user object
+      let user: { firstName: string; lastName: string; email: string } | null = null;
+      const populatedUser = payment.userId as unknown;
+      if (
+        populatedUser &&
+        typeof populatedUser === "object" &&
+        "firstName" in populatedUser &&
+        "lastName" in populatedUser &&
+        "email" in populatedUser
+      ) {
+        user = populatedUser as { firstName: string; lastName: string; email: string };
+      }
+      
       const timeAgo = getTimeAgo(payment.timestamp);
       const amount = payment.data?.price || 0;
 
@@ -154,10 +166,21 @@ export async function GET() {
     })
       .sort({ createdAt: -1 })
       .limit(5)
-      .populate("userId", "firstName lastName");
+      .populate("user", "firstName lastName");
 
     recentOrders.forEach((order) => {
-      const user = order.userId as { firstName: string; lastName: string } | null;
+      // Handle populated user - it could be an ObjectId or populated user object
+      let user: { firstName: string; lastName: string } | null = null;
+      const populatedUser = order.user as unknown;
+      if (
+        populatedUser &&
+        typeof populatedUser === "object" &&
+        "firstName" in populatedUser &&
+        "lastName" in populatedUser
+      ) {
+        user = populatedUser as { firstName: string; lastName: string };
+      }
+      
       const timeAgo = getTimeAgo(order.createdAt);
 
       activities.push({

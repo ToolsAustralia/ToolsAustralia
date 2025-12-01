@@ -19,6 +19,7 @@ import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { rewardsEnabled } from "@/config/featureFlags";
 
 /**
  * SpecialPackagesModalProps Interface
@@ -314,8 +315,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       });
     }
 
-    // Add reward points if available
-    if (status.data?.points && status.data.points > 0) {
+    // Add reward points if available and rewards are enabled
+    if (rewardsEnabled() && status.data?.points && status.data.points > 0) {
       benefits.push({
         text: `${status.data.points} reward points earned`,
         icon: "zap" as const,

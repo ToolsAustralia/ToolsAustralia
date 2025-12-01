@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Check, Gift, Star, Zap, AlertCircle } from "lucide-react";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
+import { rewardsEnabled } from "@/config/featureFlags";
 
 interface PaymentProcessingScreenProps {
   paymentIntentId: string;
@@ -205,7 +206,8 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
       });
     }
 
-    if (status.data.points && status.data.points > 0) {
+    // Add reward points if available and rewards are enabled
+    if (rewardsEnabled() && status.data.points && status.data.points > 0) {
       benefits.push({
         text: `${status.data.points} reward points earned`,
         icon: "gift" as const,

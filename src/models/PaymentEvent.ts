@@ -3,7 +3,14 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IPaymentEvent extends Document {
   _id: string; // Format: "BenefitsGranted-pi_1234567890" for natural idempotency
   paymentIntentId: string;
-  eventType: "BenefitsGranted" | "PaymentProcessed" | "SubscriptionActivated" | "UpsellProcessed" | "MiniDrawProcessed";
+  eventType:
+    | "BenefitsGranted"
+    | "PaymentProcessed"
+    | "SubscriptionActivated"
+    | "UpsellProcessed"
+    | "MiniDrawProcessed"
+    | "RefundProcessed"
+    | "BenefitsReversed";
   userId: mongoose.Types.ObjectId;
   packageType: "one-time" | "subscription" | "upsell" | "mini-draw";
   packageId?: string;
@@ -34,7 +41,15 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
     eventType: {
       type: String,
       required: true,
-      enum: ["BenefitsGranted", "PaymentProcessed", "SubscriptionActivated", "UpsellProcessed", "MiniDrawProcessed"],
+      enum: [
+        "BenefitsGranted",
+        "PaymentProcessed",
+        "SubscriptionActivated",
+        "UpsellProcessed",
+        "MiniDrawProcessed",
+        "RefundProcessed",
+        "BenefitsReversed",
+      ],
     },
     userId: {
       type: Schema.Types.ObjectId,
@@ -85,4 +100,11 @@ PaymentEventSchema.index({ paymentIntentId: 1, eventType: 1 }, { unique: true })
 PaymentEventSchema.index({ userId: 1, timestamp: -1 });
 PaymentEventSchema.index({ packageType: 1, timestamp: -1 });
 
-export default mongoose.models.PaymentEvent || mongoose.model<IPaymentEvent>("PaymentEvent", PaymentEventSchema);
+// ✅ CRITICAL: Clear cached model to ensure schema updates (especially enum changes) are applied
+// This is necessary when enum values like "RefundProcessed" and "BenefitsReversed" are added
+const modelName = "PaymentEvent";
+if (mongoose.models[modelName]) {
+  delete mongoose.models[modelName];
+}
+
+export default mongoose.model<IPaymentEvent>(modelName, PaymentEventSchema);

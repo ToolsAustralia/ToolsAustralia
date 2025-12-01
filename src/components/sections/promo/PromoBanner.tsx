@@ -1,10 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { getNextMidnightAEST } from "@/utils/common/timezone";
+import { useSidebar } from "@/contexts/SidebarContext";
 
+/**
+ * PromoBanner Component
+ * Displays a promo banner with countdown timer
+ * - Syncs with MembershipSection active tab (membership or one-time)
+ * - Shows appropriate promo based on active tab
+ * - Hides when sidebar is open or on 404 page
+ */
 export default function PromoBanner() {
+  const pathname = usePathname();
+  const { isAnySidebarOpen } = useSidebar();
+  const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
+
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -14,7 +27,9 @@ export default function PromoBanner() {
 
   const [isScrolled, setIsScrolled] = useState(false);
 
-  const { data: activePromo } = usePromoByType("one-time-packages");
+  // Get promos for each type
+  const { data: membershipPromo } = usePromoByType("membership-packages");
+  const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
   // 24-hour looping countdown timer (resets at midnight AEST - Australian business day)
   useEffect(() => {
@@ -45,6 +60,19 @@ export default function PromoBanner() {
     return () => clearInterval(timer);
   }, []);
 
+  // Listen for tab changes from MembershipSection
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent<{ activeTab: "membership" | "one-time" }>) => {
+      setActiveTab(event.detail.activeTab);
+    };
+
+    window.addEventListener("membershipTabChanged", handleTabChange as EventListener);
+
+    return () => {
+      window.removeEventListener("membershipTabChanged", handleTabChange as EventListener);
+    };
+  }, []);
+
   // Handle scroll detection
   useEffect(() => {
     const handleScroll = () => {
@@ -57,8 +85,27 @@ export default function PromoBanner() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Determine which promo to display based on active tab
+  const getActivePromo = () => {
+    if (activeTab === "membership") {
+      return membershipPromo;
+    } else {
+      return oneTimePromo;
+    }
+  };
+
+  const activePromo = getActivePromo();
+
   // Get multiplier for dynamic text (default to 10x if no promo)
   const multiplier = activePromo?.multiplier || 10;
+
+  // Don't render if:
+  // - On 404 page
+  // - Sidebar is open
+  // - No active promo for current context
+  if (pathname === "/not-found" || isAnySidebarOpen || !activePromo) {
+    return null;
+  }
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
   return (

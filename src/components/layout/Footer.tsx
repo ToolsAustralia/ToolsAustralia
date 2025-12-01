@@ -120,16 +120,10 @@ export default function Footer() {
                     Terms and Conditions
                   </Link>
                   <Link
-                    href="/competition-terms/major-giveaway"
+                    href="/competition-term-majordraw"
                     className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
                   >
                     Competition Terms (Major Giveaway)
-                  </Link>
-                  <Link
-                    href="/competition-terms/mini-draw"
-                    className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
-                  >
-                    Competition Terms (Mini Draw)
                   </Link>
                 </div>
               </div>

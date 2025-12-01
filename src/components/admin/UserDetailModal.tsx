@@ -25,6 +25,7 @@ import {
   UserX,
   MessageSquare,
   Gift,
+  Trash2,
 } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,6 +39,7 @@ import { useAdminUpdateUser, useAdminUserActions, useAdminUserDetail } from "@/h
 import { UserStatsCardCompact } from "./UserStatsCard";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
 // Proper interfaces for user data structures
 interface SubscriptionHistoryItem {
@@ -230,6 +232,24 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     inputPlaceholder?: string;
   } | null>(null);
   const [actionInput, setActionInput] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletionSummary, setDeletionSummary] = useState<{
+    majorDrawEntries: number;
+    miniDrawEntries: number;
+    affiliateCommissions: number;
+    paymentEvents: number;
+    orders: number;
+    winners: number;
+    referralEvents: { asReferrer: number; asInvitee: number; total: number };
+    ticketEntries: number;
+    warnings: {
+      hasActiveSubscription: boolean;
+      isWinner: boolean;
+      winnerDraws?: Array<{ drawName: string; drawType: "major" | "mini" }>;
+    };
+  } | null>(null);
+  const [isLoadingDeletionSummary, setIsLoadingDeletionSummary] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { data: user, isLoading, error } = useAdminUserDetail(userId || "");
   const userActions = useAdminUserActions();
@@ -544,6 +564,53 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     const reason = action === "toggle_status" ? actionInput : undefined;
 
     handleAction(action, note, reason);
+  };
+
+  // Fetch deletion summary
+  const handleDeleteClick = async () => {
+    if (!userId) return;
+
+    setIsLoadingDeletionSummary(true);
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/deletion-summary`);
+      if (!response.ok) throw new Error("Failed to fetch deletion summary");
+
+      const data = await response.json();
+      setDeletionSummary(data.data);
+      setShowDeleteModal(true);
+    } catch (error) {
+      console.error("Error fetching deletion summary:", error);
+      alert("Failed to load deletion summary. Please try again.");
+    } finally {
+      setIsLoadingDeletionSummary(false);
+    }
+  };
+
+  // Handle actual deletion
+  const handleConfirmDelete = async () => {
+    if (!userId) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/delete`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete user");
+      }
+
+      alert("User deleted successfully!");
+      setShowDeleteModal(false);
+      setDeletionSummary(null);
+      onCloseAction(); // Close modal and refresh user list
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      alert(error instanceof Error ? error.message : "Failed to delete user. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const isEditing = (tab: TabType) => activeEditTab === tab;
@@ -1375,6 +1442,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     >
                       <MessageSquare className="w-5 h-5 text-purple-600" />
                       <span className="text-xs font-medium text-gray-700">Add Note</span>
+                    </button>
+
+                    <button
+                      onClick={handleDeleteClick}
+                      disabled={isLoadingDeletionSummary || !userId}
+                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-5 h-5 text-red-600" />
+                      <span className="text-xs font-medium text-gray-700">Delete User</span>
                     </button>
                   </div>
                 </div>
@@ -2488,6 +2564,28 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setDeletionSummary(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        type="delete"
+        title="Delete User"
+        message="This will permanently delete the user and all associated data. This action cannot be undone."
+        confirmText="Delete User"
+        cancelText="Cancel"
+        isLoading={isDeleting}
+        details={{
+          packageName: "", // Not used for deletion, but required by interface
+          deletionDetails: deletionSummary || undefined,
+          requireEmailConfirmation: true,
+          userEmail: user?.email,
+        }}
+      />
     </>
   );
 }

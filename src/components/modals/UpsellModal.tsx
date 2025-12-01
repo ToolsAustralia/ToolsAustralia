@@ -14,6 +14,7 @@ import { type PaymentStatusResponse } from "@/hooks/queries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
+import { rewardsEnabled } from "@/config/featureFlags";
 
 /**
  * UpsellModal Component
@@ -417,8 +418,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       });
     }
 
-    // Add reward points if available
-    if (status.data?.points && status.data.points > 0) {
+    // Add reward points if available and rewards are enabled
+    if (rewardsEnabled() && status.data?.points && status.data.points > 0) {
       benefits.push({
         text: `${status.data.points} reward points earned`,
         icon: "zap" as const,

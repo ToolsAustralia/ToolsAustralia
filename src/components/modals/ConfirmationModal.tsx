@@ -1,14 +1,14 @@
 "use client";
 
-import React from "react";
-import { AlertTriangle, CheckCircle, ArrowUp, ArrowDown, XCircle } from "lucide-react";
+import React, { useState } from "react";
+import { AlertTriangle, CheckCircle, ArrowUp, ArrowDown, XCircle, Trash2 } from "lucide-react";
 import { Button } from "./ui";
 
 export interface ConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  type: "upgrade" | "downgrade" | "cancel" | "warning";
+  type: "upgrade" | "downgrade" | "cancel" | "warning" | "delete";
   title: string;
   message: string;
   confirmText: string;
@@ -33,6 +33,29 @@ export interface ConfirmationModalProps {
         billingDateStays: boolean;
       };
     };
+    // ✅ NEW: Deletion details for user deletion confirmation
+    deletionDetails?: {
+      majorDrawEntries: number;
+      miniDrawEntries: number;
+      affiliateCommissions: number;
+      paymentEvents: number;
+      orders: number;
+      winners: number;
+      referralEvents: {
+        asReferrer: number;
+        asInvitee: number;
+        total: number;
+      };
+      ticketEntries: number;
+      warnings: {
+        hasActiveSubscription: boolean;
+        isWinner: boolean;
+        winnerDraws?: Array<{ drawName: string; drawType: "major" | "mini" }>;
+      };
+    };
+    // Email confirmation for deletions
+    requireEmailConfirmation?: boolean;
+    userEmail?: string;
   };
 }
 
@@ -48,6 +71,15 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   isLoading = false,
   details,
 }) => {
+  // Email confirmation state for deletions
+  const [emailConfirmation, setEmailConfirmation] = useState("");
+
+  // Reset email confirmation when modal closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      setEmailConfirmation("");
+    }
+  }, [isOpen]);
   const getIcon = () => {
     switch (type) {
       case "upgrade":
@@ -58,6 +90,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         return <XCircle className="w-5 h-5 text-red-600" />;
       case "warning":
         return <AlertTriangle className="w-5 h-5 text-yellow-600" />;
+      case "delete":
+        return <Trash2 className="w-5 h-5 text-red-600" />;
       default:
         return <CheckCircle className="w-5 h-5 text-blue-600" />;
     }
@@ -73,6 +107,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         return "border-red-300 text-red-600 hover:bg-red-50";
       case "warning":
         return "border-yellow-300 text-yellow-600 hover:bg-yellow-50";
+      case "delete":
+        return "bg-red-600 hover:bg-red-700 text-white";
       default:
         return "bg-blue-600 hover:bg-blue-700 text-white";
     }
@@ -180,6 +216,103 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Deletion Details */}
+              {details?.deletionDetails && (
+                <div className="bg-red-50 rounded-lg p-3 sm:p-4 border border-red-200">
+                  <h4 className="text-sm font-medium text-red-800 mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    What Will Be Deleted
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {details.deletionDetails.majorDrawEntries > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Major Draw Entries:</span>
+                        <span className="font-semibold">{details.deletionDetails.majorDrawEntries}</span>
+                      </div>
+                    )}
+                    {details.deletionDetails.miniDrawEntries > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Mini Draw Entries:</span>
+                        <span className="font-semibold">{details.deletionDetails.miniDrawEntries}</span>
+                      </div>
+                    )}
+                    {details.deletionDetails.affiliateCommissions > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Affiliate Commissions:</span>
+                        <span className="font-semibold">{details.deletionDetails.affiliateCommissions}</span>
+                      </div>
+                    )}
+                    {details.deletionDetails.paymentEvents > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Payment Events:</span>
+                        <span className="font-semibold">{details.deletionDetails.paymentEvents}</span>
+                      </div>
+                    )}
+                    {details.deletionDetails.orders > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Orders:</span>
+                        <span className="font-semibold">{details.deletionDetails.orders}</span>
+                      </div>
+                    )}
+                    {details.deletionDetails.winners > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Winner Records:</span>
+                        <span className="font-semibold">{details.deletionDetails.winners}</span>
+                      </div>
+                    )}
+                    {details.deletionDetails.referralEvents.total > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Referral Events:</span>
+                        <span className="font-semibold">{details.deletionDetails.referralEvents.total}</span>
+                      </div>
+                    )}
+                    {details.deletionDetails.ticketEntries > 0 && (
+                      <div className="flex justify-between text-red-700">
+                        <span>Ticket Entries:</span>
+                        <span className="font-semibold">{details.deletionDetails.ticketEntries}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Warnings */}
+                  {(details.deletionDetails.warnings.hasActiveSubscription ||
+                    details.deletionDetails.warnings.isWinner) && (
+                    <div className="mt-3 pt-3 border-t border-red-200">
+                      <div className="text-xs font-semibold text-red-800 mb-2">⚠️ Warnings:</div>
+                      {details.deletionDetails.warnings.hasActiveSubscription && (
+                        <div className="text-xs text-red-700 mb-1">
+                          • User has an active subscription (will be canceled)
+                        </div>
+                      )}
+                      {details.deletionDetails.warnings.isWinner && (
+                        <div className="text-xs text-red-700">
+                          • User is a winner in:{" "}
+                          {details.deletionDetails.warnings.winnerDraws
+                            ?.map((draw) => `${draw.drawName} (${draw.drawType})`)
+                            .join(", ") || "Unknown"}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Email Confirmation Input for Deletions */}
+              {details?.requireEmailConfirmation && details?.userEmail && (
+                <div className="bg-red-50 rounded-lg p-3 sm:p-4 border border-red-200">
+                  <label className="block text-sm font-medium text-red-800 mb-2">
+                    Type the user&apos;s email to confirm deletion:
+                  </label>
+                  <input
+                    type="email"
+                    value={emailConfirmation}
+                    onChange={(e) => setEmailConfirmation(e.target.value)}
+                    placeholder={details.userEmail}
+                    className="w-full px-3 py-2 border border-red-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -194,7 +327,10 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             variant="secondary"
             className={`flex-1 text-sm sm:text-base ${getButtonStyle()}`}
             loading={isLoading}
-            disabled={isLoading}
+            disabled={
+              isLoading ||
+              !!(details?.requireEmailConfirmation && details?.userEmail && emailConfirmation !== details.userEmail)
+            }
           >
             {confirmText}
           </Button>

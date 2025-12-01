@@ -1547,6 +1547,336 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 }
 
 /**
+ * Resolves invoice ID from a refund webhook event
+ * Tries multiple methods: charge invoice field → payment intent invoice → invoice search
+ *
+ * @param paymentIntentId - Payment intent ID from the refund event
+ * @param charge - Optional charge object (from webhook or retrieved)
+ * @param refund - Optional refund object (for refund.updated events)
+ * @returns Invoice ID if found, undefined otherwise
+ */
+async function resolveInvoiceIdFromRefund(
+  paymentIntentId: string,
+  charge?: Stripe.Charge,
+  refund?: Stripe.Refund
+): Promise<string | undefined> {
+  // Method 1: Try to get invoice from charge object if available
+  if (charge) {
+    const chargeWithInvoice = charge as Stripe.Charge & { invoice?: string | Stripe.Invoice };
+    if (chargeWithInvoice.invoice) {
+      const invoiceId =
+        typeof chargeWithInvoice.invoice === "string" ? chargeWithInvoice.invoice : chargeWithInvoice.invoice.id;
+      webhookLog("info", `✅ Found invoice ID from charge: ${invoiceId}`);
+      return invoiceId;
+    }
+  }
+
+  // Method 2: Retrieve payment intent and check invoice field
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntentWithInvoice = paymentIntent as Stripe.PaymentIntent & {
+      invoice?: string | Stripe.Invoice;
+    };
+    if (paymentIntentWithInvoice.invoice) {
+      const invoiceId =
+        typeof paymentIntentWithInvoice.invoice === "string"
+          ? paymentIntentWithInvoice.invoice
+          : paymentIntentWithInvoice.invoice.id;
+      webhookLog("info", `✅ Found invoice ID from payment intent: ${invoiceId}`);
+      return invoiceId;
+    }
+  } catch (piError) {
+    webhookLog("warn", `Could not retrieve payment intent to get invoice: ${piError}`);
+  }
+
+  // Method 3: Search customer's invoices if we have customer info
+  let customerId: string | undefined;
+  if (charge?.customer) {
+    customerId = typeof charge.customer === "string" ? charge.customer : charge.customer.id;
+  } else if (refund?.charge) {
+    try {
+      const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge.id;
+      const retrievedCharge = await stripe.charges.retrieve(chargeId);
+      if (retrievedCharge.customer) {
+        customerId =
+          typeof retrievedCharge.customer === "string" ? retrievedCharge.customer : retrievedCharge.customer.id;
+      }
+    } catch (chargeError) {
+      webhookLog("warn", `Could not retrieve charge to get customer: ${chargeError}`);
+    }
+  }
+
+  if (customerId) {
+    try {
+      webhookLog("info", `Searching customer invoices to find invoice for payment: ${paymentIntentId}`);
+      const invoices = await stripe.invoices.list({
+        customer: customerId,
+        limit: 20,
+      });
+
+      const matchingInvoice = invoices.data.find((inv) => {
+        const invPaymentIntent = (
+          inv as Stripe.Invoice & {
+            payment_intent?: string | Stripe.PaymentIntent;
+          }
+        ).payment_intent;
+        const invPaymentIntentId = typeof invPaymentIntent === "string" ? invPaymentIntent : invPaymentIntent?.id;
+        return invPaymentIntentId === paymentIntentId;
+      });
+
+      if (matchingInvoice) {
+        webhookLog("info", `✅ Found invoice by searching customer invoices: ${matchingInvoice.id}`);
+        return matchingInvoice.id;
+      }
+    } catch (searchError) {
+      webhookLog("warn", `Could not search invoices: ${searchError}`);
+    }
+  }
+
+  webhookLog("info", `Could not resolve invoice ID for payment intent: ${paymentIntentId}`);
+  return undefined;
+}
+
+/**
+ * Handle charge refunded event (handles both one-time payments and subscription refunds)
+ * Refunds are processed in Stripe Dashboard - we listen and sync database
+ * Note: Stripe doesn't have an "invoice.refunded" event - invoice refunds also trigger charge.refunded
+ */
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  try {
+    webhookLog("info", `Processing charge refunded: ${charge.id}`);
+
+    // Find payment intent ID from charge
+    const paymentIntentId =
+      typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+
+    if (!paymentIntentId) {
+      webhookLog("error", `No payment intent found in charge: ${charge.id}`);
+      return;
+    }
+
+    // Resolve invoice ID for subscription refunds (subscription payments use invoice_xxx format)
+    const invoiceId = await resolveInvoiceIdFromRefund(paymentIntentId, charge);
+
+    // Find user by customer ID
+    let user;
+    if (charge.customer) {
+      const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer.id;
+      user = await User.findOne({ stripeCustomerId: customerId });
+    }
+
+    if (!user) {
+      webhookLog("error", `User not found for charge refund: ${charge.id}`);
+      return;
+    }
+
+    // Get refund amount
+    const refundAmount = charge.amount_refunded || 0;
+    const chargeAmount = charge.amount || 0;
+    const isFullRefund = refundAmount >= chargeAmount;
+
+    // Process refund reversal - pass invoice ID if available (for subscription refunds)
+    const { processRefundReversal } = await import("@/utils/payment/refund-processing");
+    const result = await processRefundReversal(
+      paymentIntentId,
+      user._id.toString(),
+      refundAmount,
+      isFullRefund,
+      invoiceId
+    );
+
+    if (result.success) {
+      webhookLog(
+        "info",
+        `✅ Refund reversal processed successfully for payment: ${paymentIntentId}${
+          invoiceId ? ` (invoice: ${invoiceId})` : ""
+        }`
+      );
+    } else {
+      webhookLog("error", `❌ Refund reversal failed: ${result.error}`);
+    }
+  } catch (error) {
+    webhookLog("error", `Error handling charge refunded: ${error}`);
+  }
+}
+
+/**
+ * Handle charge refund updated event (when refund status changes)
+ */
+async function handleChargeRefundUpdated(refund: Stripe.Refund) {
+  try {
+    webhookLog("info", `Processing charge refund updated: ${refund.id}, status: ${refund.status}`);
+
+    // Only process if refund is now succeeded
+    if (refund.status !== "succeeded") {
+      webhookLog("info", `Refund ${refund.id} status is ${refund.status}, skipping`);
+      return;
+    }
+
+    // Find payment intent ID from refund
+    const paymentIntentId =
+      typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id;
+
+    if (!paymentIntentId) {
+      webhookLog("error", `No payment intent found in refund: ${refund.id}`);
+      return;
+    }
+
+    // Retrieve the charge to get customer info
+    if (!refund.charge) {
+      webhookLog("error", `No charge found in refund: ${refund.id}`);
+      return;
+    }
+
+    const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge.id;
+    const charge = await stripe.charges.retrieve(chargeId);
+
+    // Resolve invoice ID for subscription refunds (subscription payments use invoice_xxx format)
+    const invoiceId = await resolveInvoiceIdFromRefund(paymentIntentId, charge, refund);
+
+    // Find user by customer ID
+    let user;
+    if (charge.customer) {
+      const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer.id;
+      user = await User.findOne({ stripeCustomerId: customerId });
+    }
+
+    if (!user) {
+      webhookLog("error", `User not found for refund update: ${refund.id}`);
+      return;
+    }
+
+    // Get refund amount
+    const refundAmount = refund.amount || 0;
+    const chargeAmount = charge.amount || 0;
+    const isFullRefund = refundAmount >= chargeAmount;
+
+    // Process refund reversal - pass invoice ID if available (for subscription refunds)
+    const { processRefundReversal } = await import("@/utils/payment/refund-processing");
+    const result = await processRefundReversal(
+      paymentIntentId,
+      user._id.toString(),
+      refundAmount,
+      isFullRefund,
+      invoiceId
+    );
+
+    if (result.success) {
+      webhookLog("info", `✅ Refund reversal processed successfully for payment: ${paymentIntentId}`);
+    } else {
+      webhookLog("error", `❌ Refund reversal failed: ${result.error}`);
+    }
+  } catch (error) {
+    webhookLog("error", `Error handling charge refund updated: ${error}`);
+  }
+}
+
+/**
+ * Handle charge dispute created (chargeback initiated)
+ * For now, we just log it - the actual reversal happens when dispute is closed and lost
+ */
+async function handleChargeDisputeCreated(dispute: Stripe.Dispute) {
+  try {
+    webhookLog("warn", `Chargeback dispute created: ${dispute.id}, amount: ${dispute.amount}`);
+    webhookLog("info", `Dispute reason: ${dispute.reason}, status: ${dispute.status}`);
+    // No action needed - we'll handle reversal when dispute is closed and lost
+  } catch (error) {
+    webhookLog("error", `Error handling dispute created: ${error}`);
+  }
+}
+
+/**
+ * Handle charge dispute updated (dispute status changed)
+ * We just log it - actual reversal happens when dispute is closed
+ */
+async function handleChargeDisputeUpdated(dispute: Stripe.Dispute) {
+  try {
+    webhookLog("info", `Dispute updated: ${dispute.id}, status: ${dispute.status}`);
+    // No action needed - we'll handle reversal when dispute is closed and lost
+  } catch (error) {
+    webhookLog("error", `Error handling dispute updated: ${error}`);
+  }
+}
+
+/**
+ * Handle charge dispute closed (CRITICAL - handles based on outcome)
+ * If won: No refund needed, restore access if previously revoked
+ * If lost: Process as refund, reverse all benefits
+ */
+async function handleChargeDisputeClosed(dispute: Stripe.Dispute) {
+  try {
+    webhookLog("info", `Processing dispute closed: ${dispute.id}, status: ${dispute.status}`);
+
+    // Only process if dispute was lost (chargeback upheld)
+    if (dispute.status !== "lost") {
+      webhookLog("info", `Dispute ${dispute.id} was ${dispute.status}, no reversal needed`);
+      return;
+    }
+
+    webhookLog("warn", `Dispute ${dispute.id} was LOST - processing refund reversal`);
+
+    // Find payment intent ID from dispute charge
+    if (!dispute.charge) {
+      webhookLog("error", `No charge found in dispute: ${dispute.id}`);
+      return;
+    }
+
+    const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge.id;
+    const charge = await stripe.charges.retrieve(chargeId);
+
+    const paymentIntentId =
+      typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+
+    if (!paymentIntentId) {
+      webhookLog("error", `No payment intent found in charge: ${chargeId}`);
+      return;
+    }
+
+    // Find user by customer ID
+    let user;
+    if (charge.customer) {
+      const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer.id;
+      user = await User.findOne({ stripeCustomerId: customerId });
+    }
+
+    if (!user) {
+      webhookLog("error", `User not found for dispute: ${dispute.id}`);
+      return;
+    }
+
+    // Get dispute amount (full refund)
+    const refundAmount = dispute.amount || charge.amount || 0;
+    const isFullRefund = true; // Disputes are always full chargebacks
+
+    // Process refund reversal
+    const { processRefundReversal } = await import("@/utils/payment/refund-processing");
+    const result = await processRefundReversal(paymentIntentId, user._id.toString(), refundAmount, isFullRefund);
+
+    if (result.success) {
+      webhookLog("info", `✅ Dispute refund reversal processed successfully for payment: ${paymentIntentId}`);
+    } else {
+      webhookLog("error", `❌ Dispute refund reversal failed: ${result.error}`);
+    }
+  } catch (error) {
+    webhookLog("error", `Error handling dispute closed: ${error}`);
+  }
+}
+
+/**
+ * Handle payment intent canceled (payment canceled before completion)
+ * Just cleanup - no refund needed as payment never completed
+ */
+async function handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
+  try {
+    webhookLog("info", `Payment intent canceled: ${paymentIntent.id}`);
+    // No action needed - payment never completed, so no benefits to reverse
+    // This is just for logging/cleanup purposes
+  } catch (error) {
+    webhookLog("error", `Error handling payment intent canceled: ${error}`);
+  }
+}
+
+/**
  * POST /api/stripe/webhook-new
  * Simplified webhook handler with event-based idempotency
  */
@@ -1755,6 +2085,27 @@ export async function POST(request: NextRequest) {
         break;
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(event.data.object);
+        break;
+      // ✅ REFUND HANDLERS: React to refunds processed in Stripe Dashboard
+      // Note: invoice.refunded doesn't exist in Stripe - invoice refunds trigger charge.refunded instead
+      // So we only need to handle charge.refunded which covers both one-time and subscription refunds
+      case "charge.refunded":
+        await handleChargeRefunded(event.data.object);
+        break;
+      case "charge.refund.updated":
+        await handleChargeRefundUpdated(event.data.object);
+        break;
+      case "charge.dispute.created":
+        await handleChargeDisputeCreated(event.data.object);
+        break;
+      case "charge.dispute.updated":
+        await handleChargeDisputeUpdated(event.data.object);
+        break;
+      case "charge.dispute.closed":
+        await handleChargeDisputeClosed(event.data.object);
+        break;
+      case "payment_intent.canceled":
+        await handlePaymentIntentCanceled(event.data.object);
         break;
       default:
         webhookLog("warn", `Unhandled event type: ${event.type}`);
