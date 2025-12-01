@@ -16,6 +16,7 @@ import {
 } from "@/utils/tracking/facebook-helpers";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
+import { IUser } from "@/models/User";
 
 // Registration validation schema
 const registerSchema = z.object({
@@ -35,8 +36,19 @@ const registerSchema = z.object({
 });
 
 /**
+ * Determines if a user account is "plain" (never made purchases/participated)
+ * A plain account has accumulatedEntries === 0, meaning no successful conversions
+ * @param user - User document to check
+ * @returns true if account is plain and safe to update
+ */
+function isPlainAccount(user: IUser | null): boolean {
+  if (!user) return false;
+  return !user.accumulatedEntries || user.accumulatedEntries === 0;
+}
+
+/**
  * POST /api/auth/register
- * Register a new user account
+ * Register a new user account or update existing plain account
  */
 export async function POST(request: NextRequest) {
   try {
@@ -47,37 +59,364 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔄 Attempting to register user: ${validatedData.email}`);
 
-    // Check if user already exists by email
+    // Clean mobile number
+    const cleanedMobile = validatedData.mobile.replace(/\s+/g, "");
+
+    // Check for existing users by email and mobile separately
     const existingUserByEmail = await User.findOne({ email: validatedData.email.toLowerCase() });
-    if (existingUserByEmail) {
+    const existingUserByMobile = await User.findOne({ mobile: cleanedMobile });
+
+    // ✅ CRITICAL: Check for converted accounts first (security priority)
+    // If email belongs to a converted account, reject immediately
+    if (existingUserByEmail && !isPlainAccount(existingUserByEmail)) {
+      console.log(
+        `🚫 Email belongs to converted account (${existingUserByEmail.accumulatedEntries} entries) - cannot register: ${existingUserByEmail._id}`
+      );
       return NextResponse.json(
         {
           success: false,
           error: "Email already taken",
           field: "email",
-          message: "An account with this email address already exists. Please use a different email or try logging in.",
+          message:
+            "This email address is already associated with an account that has made purchases. Please log in or use a different email address.",
+          isExistingAccount: true,
         },
         { status: 400 }
       );
     }
 
-    // Check if user already exists by mobile number
-    const cleanedMobile = validatedData.mobile.replace(/\s+/g, "");
-    const existingUserByMobile = await User.findOne({ mobile: cleanedMobile });
-    if (existingUserByMobile) {
+    // If mobile belongs to a converted account, reject immediately
+    if (existingUserByMobile && !isPlainAccount(existingUserByMobile)) {
+      console.log(
+        `🚫 Mobile belongs to converted account (${existingUserByMobile.accumulatedEntries} entries) - cannot register: ${existingUserByMobile._id}`
+      );
       return NextResponse.json(
         {
           success: false,
           error: "Mobile number taken",
           field: "mobile",
           message:
-            "An account with this mobile number already exists. Please use a different mobile number or try logging in.",
+            "This mobile number is already associated with an account that has made purchases. Please log in or use a different mobile number.",
+          isExistingAccount: true,
         },
         { status: 400 }
       );
     }
 
-    // Create new user account (passwordless)
+    // ✅ Handle plain account scenarios
+    // If both email and mobile match the same plain account, update it
+    if (existingUserByEmail && existingUserByMobile) {
+      if (existingUserByEmail._id.toString() === existingUserByMobile._id.toString()) {
+        // Same user - both email and mobile match, update the account
+        const existingUser = existingUserByEmail;
+        if (isPlainAccount(existingUser)) {
+          // Plain account (no entries = no purchases/participation) - safe to update
+          console.log(`🔄 Updating plain account: ${existingUser._id} (no accumulated entries)`);
+
+          // Update account details with new registration data
+          existingUser.firstName = validatedData.firstName.trim();
+          existingUser.lastName = validatedData.lastName.trim();
+          existingUser.email = validatedData.email.toLowerCase().trim();
+          existingUser.mobile = cleanedMobile;
+
+          // Handle affiliate code update (only if provided and not already set)
+          if (
+            validatedData.affiliateCode &&
+            (!existingUser.affiliateReferral || !existingUser.affiliateReferral.affiliateId)
+          ) {
+            try {
+              await trackAffiliateSignup({
+                affiliateCode: validatedData.affiliateCode,
+                userId: existingUser._id.toString(),
+                userEmail: existingUser.email,
+              });
+              console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
+              // Refresh user to get updated affiliate data
+              await existingUser.save();
+              const refreshedUser = await User.findById(existingUser._id);
+              if (refreshedUser) {
+                Object.assign(existingUser, refreshedUser);
+              }
+            } catch (affiliateError) {
+              // Non-blocking - log but don't fail registration
+              console.error("Affiliate tracking error for updated account:", affiliateError);
+            }
+          }
+
+          await existingUser.save();
+
+          console.log(`✅ Plain account updated successfully: ${existingUser._id}`);
+
+          // Track registration update in Klaviyo (non-blocking)
+          klaviyo.trackEventBackground(createUserRegisteredEvent(existingUser, "email"));
+
+          // Extract brand interest from promotion slug (if provided)
+          const brandInterest = validatedData.promotionSlug
+            ? extractBrandFromSlug(validatedData.promotionSlug)
+            : extractBrandFromSlug(null);
+
+          // Update Klaviyo profile with brand interest
+          ensureUserProfileSynced(existingUser, brandInterest);
+
+          // Generate event ID for tracking (use existing user ID)
+          const eventID = generateEventID("registration", existingUser._id.toString());
+
+          // Track Facebook Pixel event for account update
+          try {
+            const eventTime = Math.floor(Date.now() / 1000);
+
+            const userData = prepareUserData({
+              email: existingUser.email,
+              phone: existingUser.mobile,
+              firstName: existingUser.firstName,
+              lastName: existingUser.lastName,
+            });
+
+            const fbc = extractFBCFromRequest(request);
+            const fbp = extractFBPFromRequest(request);
+
+            if (fbc) userData.fbc = fbc;
+            if (fbp) userData.fbp = fbp;
+
+            const facebookEvent: FacebookEvent = {
+              event_name: "CompleteRegistration",
+              event_time: eventTime,
+              event_id: eventID,
+              action_source: "website",
+              user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
+              event_source_url: request.headers.get("referer") || undefined,
+            };
+
+            const testEventCode =
+              process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+
+            const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
+            if (apiSuccess) {
+              console.log(
+                `📘 Facebook Conversions API: Registration update tracked for ${existingUser.email} (EventID: ${eventID})`
+              );
+            } else {
+              console.warn(
+                `⚠️ Facebook Conversions API: Failed to send CompleteRegistration event for update (EventID: ${eventID})`
+              );
+            }
+          } catch (pixelError) {
+            console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
+          }
+
+          // Return updated user data (same format as new registration)
+          return NextResponse.json({
+            success: true,
+            message: "Step 1 completed",
+            data: {
+              userId: existingUser._id,
+              email: existingUser.email,
+              firstName: existingUser.firstName,
+              lastName: existingUser.lastName,
+              mobile: existingUser.mobile,
+              role: existingUser.role,
+              isActive: existingUser.isActive,
+              createdAt: existingUser.createdAt,
+              pixelEventId: eventID,
+            },
+          });
+        }
+      } else {
+        // ✅ CRITICAL: Different users - email matches one account, mobile matches another
+        // This is a conflict - we cannot allow this as it would create duplicate data
+        console.log(
+          `🚫 Conflict detected: Email matches user ${existingUserByEmail._id}, Mobile matches different user ${existingUserByMobile._id}`
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Registration conflict",
+            field: "general",
+            message:
+              "The email and mobile number belong to different accounts. Please use matching credentials or contact support.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // If only email matches a plain account, update it
+    if (existingUserByEmail && isPlainAccount(existingUserByEmail)) {
+      const existingUser = existingUserByEmail;
+      console.log(`🔄 Updating plain account (email match): ${existingUser._id} (no accumulated entries)`);
+
+      // Update account details
+      existingUser.firstName = validatedData.firstName.trim();
+      existingUser.lastName = validatedData.lastName.trim();
+      existingUser.email = validatedData.email.toLowerCase().trim();
+      existingUser.mobile = cleanedMobile;
+
+      // Handle affiliate code update (only if provided and not already set)
+      if (
+        validatedData.affiliateCode &&
+        (!existingUser.affiliateReferral || !existingUser.affiliateReferral.affiliateId)
+      ) {
+        try {
+          await trackAffiliateSignup({
+            affiliateCode: validatedData.affiliateCode,
+            userId: existingUser._id.toString(),
+            userEmail: existingUser.email,
+          });
+          console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
+          await existingUser.save();
+          const refreshedUser = await User.findById(existingUser._id);
+          if (refreshedUser) {
+            Object.assign(existingUser, refreshedUser);
+          }
+        } catch (affiliateError) {
+          console.error("Affiliate tracking error for updated account:", affiliateError);
+        }
+      }
+
+      await existingUser.save();
+      console.log(`✅ Plain account updated successfully (email match): ${existingUser._id}`);
+
+      // Track events
+      klaviyo.trackEventBackground(createUserRegisteredEvent(existingUser, "email"));
+      const brandInterest = validatedData.promotionSlug
+        ? extractBrandFromSlug(validatedData.promotionSlug)
+        : extractBrandFromSlug(null);
+      ensureUserProfileSynced(existingUser, brandInterest);
+      const eventID = generateEventID("registration", existingUser._id.toString());
+
+      try {
+        const eventTime = Math.floor(Date.now() / 1000);
+        const userData = prepareUserData({
+          email: existingUser.email,
+          phone: existingUser.mobile,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+        });
+        const fbc = extractFBCFromRequest(request);
+        const fbp = extractFBPFromRequest(request);
+        if (fbc) userData.fbc = fbc;
+        if (fbp) userData.fbp = fbp;
+
+        const facebookEvent: FacebookEvent = {
+          event_name: "CompleteRegistration",
+          event_time: eventTime,
+          event_id: eventID,
+          action_source: "website",
+          user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
+          event_source_url: request.headers.get("referer") || undefined,
+        };
+        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+        await sendFacebookEvent(facebookEvent, testEventCode);
+      } catch (pixelError) {
+        console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "Step 1 completed",
+        data: {
+          userId: existingUser._id,
+          email: existingUser.email,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+          mobile: existingUser.mobile,
+          role: existingUser.role,
+          isActive: existingUser.isActive,
+          createdAt: existingUser.createdAt,
+          pixelEventId: eventID,
+        },
+      });
+    }
+
+    // If only mobile matches a plain account, update it
+    if (existingUserByMobile && isPlainAccount(existingUserByMobile)) {
+      const existingUser = existingUserByMobile;
+      console.log(`🔄 Updating plain account (mobile match): ${existingUser._id} (no accumulated entries)`);
+
+      // Update account details
+      existingUser.firstName = validatedData.firstName.trim();
+      existingUser.lastName = validatedData.lastName.trim();
+      existingUser.email = validatedData.email.toLowerCase().trim();
+      existingUser.mobile = cleanedMobile;
+
+      // Handle affiliate code update (only if provided and not already set)
+      if (
+        validatedData.affiliateCode &&
+        (!existingUser.affiliateReferral || !existingUser.affiliateReferral.affiliateId)
+      ) {
+        try {
+          await trackAffiliateSignup({
+            affiliateCode: validatedData.affiliateCode,
+            userId: existingUser._id.toString(),
+            userEmail: existingUser.email,
+          });
+          console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
+          await existingUser.save();
+          const refreshedUser = await User.findById(existingUser._id);
+          if (refreshedUser) {
+            Object.assign(existingUser, refreshedUser);
+          }
+        } catch (affiliateError) {
+          console.error("Affiliate tracking error for updated account:", affiliateError);
+        }
+      }
+
+      await existingUser.save();
+      console.log(`✅ Plain account updated successfully (mobile match): ${existingUser._id}`);
+
+      // Track events
+      klaviyo.trackEventBackground(createUserRegisteredEvent(existingUser, "email"));
+      const brandInterest = validatedData.promotionSlug
+        ? extractBrandFromSlug(validatedData.promotionSlug)
+        : extractBrandFromSlug(null);
+      ensureUserProfileSynced(existingUser, brandInterest);
+      const eventID = generateEventID("registration", existingUser._id.toString());
+
+      try {
+        const eventTime = Math.floor(Date.now() / 1000);
+        const userData = prepareUserData({
+          email: existingUser.email,
+          phone: existingUser.mobile,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+        });
+        const fbc = extractFBCFromRequest(request);
+        const fbp = extractFBPFromRequest(request);
+        if (fbc) userData.fbc = fbc;
+        if (fbp) userData.fbp = fbp;
+
+        const facebookEvent: FacebookEvent = {
+          event_name: "CompleteRegistration",
+          event_time: eventTime,
+          event_id: eventID,
+          action_source: "website",
+          user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
+          event_source_url: request.headers.get("referer") || undefined,
+        };
+        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+        await sendFacebookEvent(facebookEvent, testEventCode);
+      } catch (pixelError) {
+        console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "Step 1 completed",
+        data: {
+          userId: existingUser._id,
+          email: existingUser.email,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+          mobile: existingUser.mobile,
+          role: existingUser.role,
+          isActive: existingUser.isActive,
+          createdAt: existingUser.createdAt,
+          pixelEventId: eventID,
+        },
+      });
+    }
+
+    // No existing accounts found - create new user account (passwordless)
     const newUser = new User({
       firstName: validatedData.firstName.trim(),
       lastName: validatedData.lastName.trim(),
@@ -210,7 +549,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Account created successfully",
+      message: "Step 1 completed",
       data: {
         userId: newUser._id,
         email: newUser.email,

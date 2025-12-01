@@ -6,6 +6,7 @@ import { Check, Loader2 } from "lucide-react";
 import { top5Winners } from "@/data";
 import PackageSelectionModal from "./PackageSelectionModal";
 import PaymentMethodSelector from "./PaymentMethodSelector";
+import ExistingAccountModal from "./ExistingAccountModal";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
 import { useLoading } from "@/contexts/LoadingContext";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -142,6 +143,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // Original purchase context for combined invoice (invoice finalization)
   const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
+
+  // Existing account modal state (for non-plain accounts)
+  const [showExistingAccountModal, setShowExistingAccountModal] = useState(false);
+  const [existingAccountConflictField, setExistingAccountConflictField] = useState<"email" | "mobile">("email");
 
   // Payment confirmation state - now handled directly in handleSubmit
   // Removed showPaymentConfirmation and paymentData states
@@ -630,7 +635,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         // Show success toast notification
         showToast({
           type: "success",
-          title: "Account Created Successfully!",
+          title: "Step 1 Completed!",
           message: `Welcome ${formData.firstName}! Now let's set up your payment method to complete your membership.`,
           duration: 8000,
         });
@@ -678,16 +683,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         // Handle registration errors
         console.error("❌ Registration failed:", result.error);
 
-        if (result.field) {
-          // Field-specific error
-          setRegistrationErrors({
-            [result.field]: result.message,
-          });
+        // Check if this is an existing account with purchases (non-plain account)
+        if (result.isExistingAccount || result.message?.includes("has made purchases")) {
+          // Show existing account modal instead of field error
+          const conflictField = result.field === "email" ? "email" : "mobile";
+          setExistingAccountConflictField(conflictField);
+          setShowExistingAccountModal(true);
+          // Clear any field errors since we're showing a modal
+          setRegistrationErrors({});
         } else {
-          // General error
-          setRegistrationErrors({
-            general: result.message || "Registration failed. Please try again.",
-          });
+          // Regular validation or other errors
+          if (result.field) {
+            // Field-specific error
+            setRegistrationErrors({
+              [result.field]: result.message,
+            });
+          } else {
+            // General error
+            setRegistrationErrors({
+              general: result.message || "Registration failed. Please try again.",
+            });
+          }
         }
       }
     } catch (error) {
@@ -2978,6 +2994,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         onClose={() => setIsPackageSelectionOpen(false)}
         currentPlan={activePlan}
         onPlanSelect={handlePackageSelect}
+      />
+
+      {/* Existing Account Modal - shown when user tries to register with existing account that has purchases */}
+      <ExistingAccountModal
+        isOpen={showExistingAccountModal}
+        onClose={() => {
+          setShowExistingAccountModal(false);
+          onClose(); // Also close membership modal
+        }}
+        conflictField={existingAccountConflictField}
       />
 
       {/* Payment Processing Screen */}
