@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import Image from "next/image";
 import { type BrandLogo } from "@/data/brandLogos";
 
@@ -59,16 +59,51 @@ const getBreakpoint = (width: number): Breakpoint => {
   return "base";
 };
 
-const useViewportWidth = () => {
-  const [width, setWidth] = useState(() => (typeof window === "undefined" ? 1024 : window.innerWidth));
+/**
+ * Custom hook to get viewport width with proper SSR handling
+ * Uses best practices to prevent hydration mismatches and ensure correct
+ * breakpoint calculation on first render
+ *
+ * Returns both width and mounted state to allow components to defer
+ * rendering until after hydration is complete
+ */
+const useViewportWidth = (): { width: number; isMounted: boolean } => {
+  // Track if component has mounted on client to prevent hydration mismatches
+  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
+  // Initialize with actual window width if available (client-side)
+  // This ensures we start with the correct value on client, preventing
+  // incorrect scaling during the hydration phase
+  const [width, setWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 1024;
+    return window.innerWidth;
+  });
+
+  // Use useLayoutEffect to set mounted state synchronously before paint
+  // This ensures correct breakpoint calculation on first render without flash
+  useLayoutEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
+
+    // Set mounted state and ensure width is correct immediately before browser paint
+    // This fixes the issue where first load shows incorrect scaling on mobile
+    setMounted(true);
+    setWidth((prevWidth) => {
+      const actualWidth = window.innerWidth;
+      // Only update if different to avoid unnecessary re-renders
+      return actualWidth !== prevWidth ? actualWidth : prevWidth;
+    });
+  }, []); // Empty deps - only run once on mount to set mounted state
+
+  // Set up resize listener after component mounts
+  useEffect(() => {
+    if (typeof window === "undefined" || !mounted) {
+      return;
+    }
+
     const listener = (nextWidth: number) => setWidth(nextWidth);
     subscribers.add(listener);
-    setWidth(window.innerWidth);
     ensureResizeListener();
 
     return () => {
@@ -78,14 +113,14 @@ const useViewportWidth = () => {
         listenerAttached = false;
       }
     };
-  }, []);
+  }, [mounted]); // Only depend on mounted - listener doesn't need width
 
-  return width;
+  return { width, isMounted: mounted };
 };
 
-const useBreakpoint = (): Breakpoint => {
-  const width = useViewportWidth();
-  return getBreakpoint(width);
+const useBreakpoint = (): { breakpoint: Breakpoint; isMounted: boolean } => {
+  const { width, isMounted } = useViewportWidth();
+  return { breakpoint: getBreakpoint(width), isMounted };
 };
 
 export default function BrandLogoCard({
@@ -146,7 +181,7 @@ export default function BrandLogoCard({
 
   const splitGradientStyle = getSplitGradientStyle();
   const overlayScale = scaleOverride ?? brand.overlayScale ?? 1;
-  const breakpoint = useBreakpoint();
+  const { breakpoint, isMounted } = useBreakpoint();
 
   // Default to the desktop scale but allow each breakpoint to provide its own value so
   // wide logos, such as Warren & Brown, can breathe on small viewports.
@@ -164,7 +199,11 @@ export default function BrandLogoCard({
         return fallbackScale;
     }
   })();
-  const cardScale = scaleOverride ?? responsiveCardScale;
+
+  // Only apply scale after component has mounted to prevent hydration mismatches
+  // During SSR and initial hydration, use scale of 1 (no transform) to match server render
+  // This ensures the component renders correctly on first load without incorrect scaling
+  const cardScale = isMounted ? scaleOverride ?? responsiveCardScale : 1;
 
   if (overlayMode === "overlay") {
     const overlayWidth = OVERLAY_BASE_WIDTH * overlayScale;

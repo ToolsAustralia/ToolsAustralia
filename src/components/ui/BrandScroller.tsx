@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import AutoScroll from "embla-carousel-auto-scroll";
 import { brandLogos, BrandLogo } from "@/data/brandLogos";
@@ -16,13 +16,39 @@ interface BrandScrollerProps {
   className?: string;
 }
 
+/**
+ * Custom hook to get viewport width with proper SSR handling
+ * Uses best practices to prevent hydration mismatches and ensure correct
+ * breakpoint calculation on first render
+ */
 function useViewportWidth() {
-  const [w, setW] = useState<number>(typeof window === "undefined" ? 1024 : window.innerWidth);
+  // Initialize with actual window width if available (client-side)
+  // This ensures we start with the correct value on client, preventing
+  // incorrect calculations during the hydration phase
+  const [w, setW] = useState<number>(() => {
+    if (typeof window === "undefined") return 1024;
+    return window.innerWidth;
+  });
+
+  // Use useLayoutEffect to update width synchronously before paint
+  // This ensures correct breakpoint calculation on first render without flash
+  useLayoutEffect(() => {
+    // Update width immediately before browser paint to ensure correct calculations
+    // This fixes the issue where first load shows incorrect behavior on mobile
+    setW((prevW) => {
+      const actualWidth = window.innerWidth;
+      // Only update if different to avoid unnecessary re-renders
+      return actualWidth !== prevW ? actualWidth : prevW;
+    });
+  }, []); // Empty deps - only run once on mount to ensure correct initial width
+
+  // Set up resize listener
   useEffect(() => {
     const onResize = () => setW(window.innerWidth);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
   return w;
 }
 

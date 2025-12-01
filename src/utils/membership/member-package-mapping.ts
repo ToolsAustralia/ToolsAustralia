@@ -2,7 +2,7 @@
  * Member Package Mapping Utilities
  * Handles mapping between non-member and additional packages
  * Provides safety checks for users with access (subscription OR current draw entries)
- * 
+ *
  * Note: Additional packages are now accessible to users with:
  * - Active subscription, OR
  * - Entries in the current major draw

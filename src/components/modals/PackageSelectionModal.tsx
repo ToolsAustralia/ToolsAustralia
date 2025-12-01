@@ -560,7 +560,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   } else if (activeTab === "one-time") {
     // Check if user has access to additional packages (subscription OR current draw entries)
     const hasAccess = hasAdditionalPackageAccess(user, userMajorDrawStats);
-    
+
     if (hasAccess) {
       // If user has access (subscription OR entries), show additional packages
       finalMembershipPlans = finalMembershipPlans.filter((plan) => {
