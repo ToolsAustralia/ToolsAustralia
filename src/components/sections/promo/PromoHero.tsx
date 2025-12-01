@@ -75,8 +75,9 @@ export default function PromoHero() {
         <button
           onClick={handleEnterNow}
           className="group relative inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white 
-                      bg-gradient-to-br from-red-600 via-red-700 to-red-800 shadow-[0_0_40px_rgba(220,38,38,0.6)]
-                      border border-white/20 backdrop-blur-lg transition-all duration-300 hover:scale-110 hover:shadow-[0_0_60px_rgba(239,68,68,0.8)]"
+                      bg-gradient-to-br from-red-600 via-red-700 to-red-800
+                      backdrop-blur-lg transition-all duration-300 hover:scale-110 animate-pulse-button"
+          style={{ border: "3px solid #ee4927" }}
         >
           <span className="relative z-10">ENTER NOW</span>
 

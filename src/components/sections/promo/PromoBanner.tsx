@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { getNextMidnightAEST } from "@/utils/common/timezone";
@@ -26,6 +27,18 @@ export default function PromoBanner() {
   });
 
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  // Check if desktop viewport
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
 
   // Get promos for each type
   const { data: membershipPromo } = usePromoByType("membership-packages");
@@ -73,16 +86,33 @@ export default function PromoBanner() {
     };
   }, []);
 
-  // Handle scroll detection
+  // Handle scroll detection - show fixed banner when user scrolls past threshold, revert when back to top
   useEffect(() => {
+    let ticking = false;
+
     const handleScroll = () => {
-      const scrollY = window.scrollY;
-      // Trigger fixed position when user scrolls down 200px
-      setIsScrolled(scrollY > 200);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const scrollY = window.scrollY;
+          // Trigger fixed position with minimal scroll on mobile, more on desktop
+          const isMobile = window.innerWidth < 1024;
+          const scrollThreshold = isMobile ? 100 : 200;
+
+          // Toggle based on scroll position - can go back and forth
+          setIsScrolled(scrollY > scrollThreshold);
+
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll(); // Initial check
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   // Determine which promo to display based on active tab
@@ -108,110 +138,142 @@ export default function PromoBanner() {
   }
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
+  // Use wrapper to prevent layout shift when banner becomes fixed
+  const bgColorClass = "bg-gradient-to-r from-gray-900 via-gray-800 to-black";
+
   return (
-    <div
-      className={`${
-        isScrolled ? "fixed top-4 left-4 right-4 rounded-full z-50" : "relative w-full mt-0 z-30"
-      } bg-gradient-to-r from-gray-900 via-gray-800 to-black shadow-2xl border-b-2 border-red-500/50 transition-all duration-300`}
-    >
-      <div className="h-16 sm:h-20 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>
+    <>
+      {/* Placeholder div to maintain space and prevent layout shift when banner becomes fixed */}
+      {isScrolled && <div className="h-16 sm:h-20" aria-hidden="true" />}
 
-        {/* Main Content */}
-        <div className="relative z-10 flex items-center justify-between w-full">
-          {/* Left Side - Alert Message with Enhanced Styling */}
-          <div className="flex items-center gap-3">
-            <div className="text-left">
-              <div
-                className={`text-white font-black font-['Poppins'] tracking-wide ${
-                  isScrolled ? "text-xs sm:text-base lg:text-lg" : "text-sm sm:text-base lg:text-lg"
-                }`}
-              >
-                First 500 people
-              </div>
-              <div
-                className={`text-yellow-300 font-bold font-['Poppins'] ${
-                  isScrolled ? "text-[10px] sm:text-sm" : "text-xs sm:text-sm"
-                }`}
-              >
-                Get {multiplier}x entries
-              </div>
-            </div>
-          </div>
+      <motion.div
+        layout
+        className={`${
+          isScrolled
+            ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
+            : "relative w-full mt-0 z-30"
+        } ${bgColorClass} shadow-2xl border-b-2 border-red-500/50`}
+        animate={{
+          borderRadius: isScrolled ? "9999px" : "0px",
+          padding: isScrolled ? "0.5rem" : "0",
+        }}
+        transition={{
+          duration: 0.5,
+          ease: "easeInOut",
+          layout: { duration: 0.5, ease: "easeInOut" },
+        }}
+      >
+        <motion.div
+          className="h-16 sm:h-20 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden"
+          animate={{
+            paddingLeft: isScrolled ? "1rem" : "1rem",
+            paddingRight: isScrolled ? "1rem" : "1rem",
+          }}
+          transition={{ duration: 0.5, ease: "easeInOut" }}
+        >
+          {/* Background Pattern */}
+          <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>
 
-          {/* Right Side - Enhanced Countdown (24-hour looping timer) */}
-          <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-            {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
-            <div
-              className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center ${
-                isScrolled
-                  ? "px-1 py-0.5 w-8 sm:px-3 sm:py-2 sm:w-16 lg:w-18"
-                  : "px-1.5 py-0.5 sm:px-3 sm:py-2 w-10 sm:w-16 lg:w-18"
-              }`}
-            >
-              <div
-                className={`text-white font-black font-['Poppins'] drop-shadow-md ${
-                  isScrolled ? "text-[10px] sm:text-sm lg:text-base" : "text-xs sm:text-sm lg:text-base"
-                }`}
-              >
-                {timeLeft.hours.toString().padStart(2, "0")}
-              </div>
-              <div
-                className={`text-red-100 font-medium ${
-                  isScrolled ? "text-[8px] sm:text-[10px] lg:text-xs" : "text-[9px] sm:text-[10px] lg:text-xs"
-                }`}
-              >
-                HRS
-              </div>
+          {/* Main Content */}
+          <div className="relative z-10 flex items-center justify-between w-full">
+            {/* Left Side - Alert Message with Enhanced Styling */}
+            <div className="flex items-center gap-3">
+              <p className="text-left text-[15px] lg:text-[30px] font-['Poppins'] leading-tight">
+                <span className="text-white font-black tracking-wide uppercase">FIRST 500 PEOPLE</span>
+                <br />
+                <span className="text-yellow-300 font-bold uppercase">GET {multiplier}X ENTRIES</span>
+              </p>
             </div>
-            <div
-              className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center ${
-                isScrolled
-                  ? "px-1 py-0.5 w-8 sm:px-3 sm:py-2 sm:w-16 lg:w-18"
-                  : "px-1.5 py-0.5 sm:px-3 sm:py-2 w-10 sm:w-16 lg:w-18"
-              }`}
+
+            {/* Right Side - Enhanced Countdown (24-hour looping timer) */}
+            <motion.div
+              className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3"
+              layout
+              transition={{ duration: 0.5, ease: "easeInOut" }}
             >
-              <div
-                className={`text-white font-black font-['Poppins'] drop-shadow-md ${
-                  isScrolled ? "text-[10px] sm:text-sm lg:text-base" : "text-xs sm:text-sm lg:text-base"
-                }`}
+              {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
+              <motion.div
+                className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center"
+                animate={{
+                  width: isDesktop ? "5rem" : "3rem",
+                  paddingLeft: isDesktop ? "1rem" : "0.5rem",
+                  paddingRight: isDesktop ? "1rem" : "0.5rem",
+                  paddingTop: isDesktop ? "0.75rem" : "0.25rem",
+                  paddingBottom: isDesktop ? "0.75rem" : "0.25rem",
+                }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
               >
-                {timeLeft.minutes.toString().padStart(2, "0")}
-              </div>
-              <div
-                className={`text-red-100 font-medium ${
-                  isScrolled ? "text-[8px] sm:text-[10px] lg:text-xs" : "text-[9px] sm:text-[10px] lg:text-xs"
-                }`}
+                <div
+                  className={`text-white font-black font-['Poppins'] drop-shadow-md ${
+                    isScrolled ? "text-sm sm:text-sm lg:text-xl" : "text-sm sm:text-sm lg:text-xl"
+                  }`}
+                >
+                  {timeLeft.hours.toString().padStart(2, "0")}
+                </div>
+                <div
+                  className={`text-red-100 font-medium ${
+                    isScrolled ? "text-[10px] sm:text-[10px] lg:text-sm" : "text-[10px] sm:text-[10px] lg:text-sm"
+                  }`}
+                >
+                  HRS
+                </div>
+              </motion.div>
+              <motion.div
+                className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center"
+                animate={{
+                  width: isDesktop ? "5rem" : "3rem",
+                  paddingLeft: isDesktop ? "1rem" : "0.5rem",
+                  paddingRight: isDesktop ? "1rem" : "0.5rem",
+                  paddingTop: isDesktop ? "0.75rem" : "0.25rem",
+                  paddingBottom: isDesktop ? "0.75rem" : "0.25rem",
+                }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
               >
-                MINS
-              </div>
-            </div>
-            <div
-              className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center ${
-                isScrolled
-                  ? "px-1 py-0.5 w-8 sm:px-3 sm:py-2 sm:w-16 lg:w-18"
-                  : "px-1.5 py-0.5 sm:px-3 sm:py-2 w-10 sm:w-16 lg:w-18"
-              }`}
-            >
-              <div
-                className={`text-white font-black font-['Poppins'] drop-shadow-md ${
-                  isScrolled ? "text-[10px] sm:text-sm lg:text-base" : "text-xs sm:text-sm lg:text-base"
-                }`}
+                <div
+                  className={`text-white font-black font-['Poppins'] drop-shadow-md ${
+                    isScrolled ? "text-sm sm:text-sm lg:text-xl" : "text-sm sm:text-sm lg:text-xl"
+                  }`}
+                >
+                  {timeLeft.minutes.toString().padStart(2, "0")}
+                </div>
+                <div
+                  className={`text-red-100 font-medium ${
+                    isScrolled ? "text-[10px] sm:text-[10px] lg:text-sm" : "text-[10px] sm:text-[10px] lg:text-sm"
+                  }`}
+                >
+                  MINS
+                </div>
+              </motion.div>
+              <motion.div
+                className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center"
+                animate={{
+                  width: isDesktop ? "5rem" : "3rem",
+                  paddingLeft: isDesktop ? "1rem" : "0.5rem",
+                  paddingRight: isDesktop ? "1rem" : "0.5rem",
+                  paddingTop: isDesktop ? "0.75rem" : "0.25rem",
+                  paddingBottom: isDesktop ? "0.75rem" : "0.25rem",
+                }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
               >
-                {timeLeft.seconds.toString().padStart(2, "0")}
-              </div>
-              <div
-                className={`text-red-100 font-medium ${
-                  isScrolled ? "text-[8px] sm:text-[10px] lg:text-xs" : "text-[9px] sm:text-[10px] lg:text-xs"
-                }`}
-              >
-                SECS
-              </div>
-            </div>
+                <div
+                  className={`text-white font-black font-['Poppins'] drop-shadow-md ${
+                    isScrolled ? "text-sm sm:text-sm lg:text-xl" : "text-sm sm:text-sm lg:text-xl"
+                  }`}
+                >
+                  {timeLeft.seconds.toString().padStart(2, "0")}
+                </div>
+                <div
+                  className={`text-red-100 font-medium ${
+                    isScrolled ? "text-[10px] sm:text-[10px] lg:text-sm" : "text-[10px] sm:text-[10px] lg:text-sm"
+                  }`}
+                >
+                  SECS
+                </div>
+              </motion.div>
+            </motion.div>
           </div>
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </>
   );
 }

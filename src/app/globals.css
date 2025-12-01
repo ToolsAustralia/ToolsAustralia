@@ -1062,6 +1062,23 @@
   animation: border-glow-orange 2s ease-in-out infinite;
 }
 
+/* Pulsating animation for Enter Now button in PromoHero - Outward pulse with smooth fade out (milder) */
+@keyframes pulse-button {
+  0% {
+    box-shadow: rgba(238, 73, 39, 0) 0px 0px 0px 0px, 0 0 40px rgba(220, 38, 38, 0.5);
+  }
+  40% {
+    box-shadow: rgba(238, 73, 39, 0.25) 0px 0px 0px 6px, 0 0 50px rgba(239, 68, 68, 0.6);
+  }
+  100% {
+    box-shadow: rgba(238, 73, 39, 0) 0px 0px 0px 6px, 0 0 40px rgba(220, 38, 38, 0);
+  }
+}
+
+.animate-pulse-button {
+  animation: pulse-button 1.5s infinite;
+}
+
 /* NProgress Styles - Customized for Tools Australia brand */
 #nprogress {
   pointer-events: none;

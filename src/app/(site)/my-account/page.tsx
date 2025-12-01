@@ -607,7 +607,7 @@ export default function MyAccountPage() {
                     </div>
 
                     {/* Advanced Stats Grid */}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {/* Membership Entries */}
                       <div className="group relative bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30 hover:border-blue-400/50 transition-all duration-300 hover:scale-105">
                         <div className="relative z-10 text-center">
@@ -659,27 +659,32 @@ export default function MyAccountPage() {
                         </div>
                       </div>
 
-                      {/* Reward Points */}
-                      <div className="group relative bg-gradient-to-br from-yellow-500/20 via-amber-400/10 to-orange-500/20 backdrop-blur-sm rounded-xl p-3 border border-yellow-400/30 hover:border-yellow-400/50 transition-all duration-300 hover:scale-105">
-                        <div className="relative z-10 text-center">
-                          <div className="flex items-center justify-center gap-1 mb-1">
-                            <span className="text-white/90 text-xs font-semibold uppercase tracking-wide">Rewards</span>
-                          </div>
-                          {isRewardsFeatureEnabled ? (
-                            <>
-                              <div className="text-xl font-bold text-white mb-1 drop-shadow-lg">
-                                {user.rewardsPoints.toLocaleString()}
-                              </div>
-                              <div className="text-xs text-white/70 uppercase tracking-wide">Points</div>
-                            </>
-                          ) : (
-                            <div className="text-xs text-white/80 leading-relaxed">
-                              <div className="text-base font-semibold text-white mb-1">Paused</div>
-                              <p>{rewardsPauseMessage}</p>
+                      {/* Reward Points - TEMPORARILY HIDDEN */}
+                      {/* TODO: Re-enable reward card when needed */}
+                      {false && (
+                        <div className="group relative bg-gradient-to-br from-yellow-500/20 via-amber-400/10 to-orange-500/20 backdrop-blur-sm rounded-xl p-3 border border-yellow-400/30 hover:border-yellow-400/50 transition-all duration-300 hover:scale-105">
+                          <div className="relative z-10 text-center">
+                            <div className="flex items-center justify-center gap-1 mb-1">
+                              <span className="text-white/90 text-xs font-semibold uppercase tracking-wide">
+                                Rewards
+                              </span>
                             </div>
-                          )}
+                            {isRewardsFeatureEnabled ? (
+                              <>
+                                <div className="text-xl font-bold text-white mb-1 drop-shadow-lg">
+                                  {user.rewardsPoints.toLocaleString()}
+                                </div>
+                                <div className="text-xs text-white/70 uppercase tracking-wide">Points</div>
+                              </>
+                            ) : (
+                              <div className="text-xs text-white/80 leading-relaxed">
+                                <div className="text-base font-semibold text-white mb-1">Paused</div>
+                                <p>{rewardsPauseMessage}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
