@@ -121,6 +121,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const pathname = usePathname();
   const isRewardsFeatureEnabled = rewardsEnabled();
 
+  // Check if we're on an affiliate page or login page (hide top bar on these pages)
+  const isAffiliatePage = pathname?.startsWith("/affiliate");
+  const isLoginPage = pathname === "/login";
+  const shouldHideTopBar = isAffiliatePage || isLoginPage;
+
   // Get membership badge styling based on package ID - matches my-account page styling
   const getMembershipBadge = (
     packageData?: { name: string; type: "subscription" | "one-time" },
@@ -444,7 +449,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
     >
       {/* Top Bar - Promotional or Setup Reminder - Only show when authentication state is fully resolved */}
       {/* Hidden by default, only shows after auth state is confirmed (userData exists OR confirmed not authenticated) */}
-      {!isTopBarHidden && authStateResolved && (
+      {/* Also hidden on affiliate and login pages */}
+      {!isTopBarHidden && authStateResolved && !shouldHideTopBar && (
         <div
           data-top-bar
           className={`h-[24px] sm:h-[28px] w-full flex items-center justify-center relative animate-slideDown ${

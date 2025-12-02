@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Facebook, Instagram } from "lucide-react";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
 export default function Footer() {
   return (
@@ -72,7 +73,7 @@ export default function Footer() {
                     My Account
                   </Link>
                   <Link
-                    href="/promotional/giveaway"
+                    href={`/promotions/${DEFAULT_PRIZE_SLUG}`}
                     className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
                   >
                     Promotions

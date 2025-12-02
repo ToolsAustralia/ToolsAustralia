@@ -77,7 +77,7 @@ export default function HomeMiniDraws() {
   if (isLoading) {
     return (
       <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
-        <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
               MINI DRAWS
@@ -96,7 +96,7 @@ export default function HomeMiniDraws() {
 
   return (
     <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
-      <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">MINI DRAWS</h2>

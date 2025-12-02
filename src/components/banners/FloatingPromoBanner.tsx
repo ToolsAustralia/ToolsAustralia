@@ -37,6 +37,12 @@ const FloatingPromoBanner: React.FC = () => {
   // Check if we're on an admin page
   const isAdminPage = pathname?.startsWith("/admin");
 
+  // Check if we're on an affiliate page
+  const isAffiliatePage = pathname?.startsWith("/affiliate");
+
+  // Check if we're on a login page
+  const isLoginPage = pathname === "/login";
+
   // Listen for tab changes from MembershipSection
   useEffect(() => {
     const handleTabChange = (event: CustomEvent<{ activeTab: "membership" | "one-time" }>) => {
@@ -127,6 +133,8 @@ const FloatingPromoBanner: React.FC = () => {
   // - Sidebar is open
   // - On shop page (hide banner on all shop pages)
   // - On admin page (hide banner on all admin pages)
+  // - On affiliate page (hide banner on all affiliate pages)
+  // - On login page (hide banner on login page)
   // - On mini draw page but no active mini promo (hide if no promo available)
   // - No active promo for current context
   if (
@@ -134,6 +142,8 @@ const FloatingPromoBanner: React.FC = () => {
     isAnySidebarOpen ||
     isShopPage ||
     isAdminPage ||
+    isAffiliatePage ||
+    isLoginPage ||
     (isMiniDrawPage && !miniPromo) ||
     !activePromo
   ) {

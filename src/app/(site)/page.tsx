@@ -53,15 +53,16 @@ export default function HomePage() {
       <FloatingCountdownBanner />
       <main className="w-full overflow-hidden">
         <Hero />
-
-        <MembershipSection padding="pt-8 pb-4" />
-        <MajorDrawSection />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <MembershipSection padding="pt-8 pb-4" />
+          <MajorDrawSection />
+        </div>
 
         {/* Mini Draws Section - Client-side fetch */}
         <Suspense
           fallback={
             <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
-              <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center">
                   <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
                     MINI DRAWS
@@ -77,7 +78,7 @@ export default function HomePage() {
 
         {/* Keyword-rich internal linking block to guide crawlers and users toward priority brand pages */}
         <section className="bg-slate-950 py-12 text-gray-100">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto flex flex-col gap-6 px-4 sm:px-6 lg:px-8">
             <h2 className="text-2xl font-semibold text-white md:text-3xl">Trade-Ready Brands in One Place</h2>
             <p className="text-base text-gray-300 md:text-lg">
               Tools Australia curates professional-grade gear from trusted manufacturers so you can spec a full kit in
@@ -122,7 +123,7 @@ export default function HomePage() {
         <Suspense
           fallback={
             <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
-              <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center">
                   <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
                     BEST SELLERS
@@ -140,7 +141,7 @@ export default function HomePage() {
         <Suspense
           fallback={
             <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
-              <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center">
                   <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
                     NEW ARRIVALS
@@ -154,7 +155,9 @@ export default function HomePage() {
           <HomeProducts sectionType="newarrivals" title="NEW ARRIVALS" />
         </Suspense>
 
-        <ProductCategories showBackground={false} />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ProductCategories showBackground={false} />
+        </div>
         {/* Customer Testimonials - Temporarily disabled (no real reviews yet) */}
         {/* <CustomerTestimonials /> */}
       </main>

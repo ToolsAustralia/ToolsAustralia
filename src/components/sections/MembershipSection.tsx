@@ -519,7 +519,7 @@ export default function MembershipSection({
 
         {/* Mobile/Tablet: Vertical Stack Layout */}
         {!loading && !error && (
-          <div className="lg:hidden overflow-visible pt-8">
+          <div className="lg:hidden overflow-visible ">
             {(() => {
               // Determine if we should show 2 columns: when showing additional packages on one-time tab
               const showingMemberExclusive =
@@ -1412,7 +1412,7 @@ export default function MembershipSection({
 
       {/* Payment Methods Image */}
       <div className="flex justify-center mt-8 sm:mt-12 mb-4 sm:mb-6">
-        <div className="max-w-2xl w-full px-4 sm:max-w-xl lg:max-w-md">
+        <div className="max-w-2xl w-full lg:max-w-md">
           <Image
             src="/images/payment-methods-clean.webp"
             alt="Accepted Payment Methods"
@@ -1437,7 +1437,7 @@ export default function MembershipSection({
         const additionalPackages = membershipPlans.filter((plan) => plan.isMemberOnly === true);
 
         return (
-          <div className="lg:hidden px-4">
+          <div className="lg:hidden ">
             <button
               onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
               className="w-full py-3 px-4 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 rounded-2xl text-white font-semibold text-sm sm:text-base shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] border border-slate-700 flex items-center justify-center gap-2"

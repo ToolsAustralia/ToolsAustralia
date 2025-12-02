@@ -243,7 +243,7 @@ export default function ProductCategories({
       {showBackground && (
         <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 pointer-events-none"></div>
       )}
-      <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto relative z-10">
+      <div className="w-full lg:max-w-7xl lg:mx-auto relative z-10">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-10 lg:mb-12">
           <h2

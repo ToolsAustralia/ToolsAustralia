@@ -727,24 +727,7 @@ export default function PartnerDiscountQueue({
                 </div>
               </div>
             </div>
-          ) : (
-            !activePeriod.isActive && (
-              <div className="text-center py-6 sm:py-8 lg:py-10 px-4 sm:px-6">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 bg-gradient-to-br from-white/15 to-white/5 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-inner border border-white/20">
-                  <Gift className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-white" />
-                </div>
-                <h3 className="text-base sm:text-lg lg:text-xl font-bold text-white mb-2 sm:mb-3">
-                  No Queued Discounts
-                </h3>
-                <p className="text-xs sm:text-sm text-white/70 max-w-md mx-auto mb-4 sm:mb-6">
-                  Purchase packages to stack partner discount access!
-                </p>
-                <div className="inline-block px-4 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-black rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm uppercase tracking-wide shadow-lg">
-                  Browse Packages
-                </div>
-              </div>
-            )
-          )}
+          ) : null}
         </div>
       )}
     </div>

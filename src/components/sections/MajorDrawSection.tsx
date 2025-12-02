@@ -392,7 +392,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   return (
     <>
       <section className={`relative py-8 sm:py-12   w-full overflow-visible ${className}`}>
-        <div className="relative w-full px-2 sm:px-0 max-w-7xl mx-auto overflow-visible">
+        <div className="relative w-full max-w-7xl mx-auto overflow-visible">
           <div className="text-center mb-0 sm:mb-8">
             <h1 className="text-lg sm:text-xl font-bold tracking-[0.35em] text-red-600 uppercase">
               OUR CURRENT GIVEAWAY

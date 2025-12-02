@@ -10,11 +10,14 @@ import { useMyAccountData } from "@/hooks/queries";
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
+import { useMembershipModal } from "@/hooks/useMembershipModal";
+import MembershipModal from "@/components/modals/MembershipModal";
 
 export default function PartnerBenefitsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { data: accountData, isLoading, error } = useMyAccountData(session?.user?.id);
+  const membershipModal = useMembershipModal();
 
   // Redirect unauthenticated visitors back to login just like the main my-account page.
   React.useEffect(() => {
@@ -119,6 +122,14 @@ export default function PartnerBenefitsPage() {
           />
         </div>
       </section>
+
+      {/* Membership Modal */}
+      <MembershipModal
+        isOpen={membershipModal.isModalOpen}
+        onClose={membershipModal.closeModal}
+        selectedPlan={membershipModal.selectedPlan}
+        onPlanChange={membershipModal.selectPlan}
+      />
     </div>
   );
 }
