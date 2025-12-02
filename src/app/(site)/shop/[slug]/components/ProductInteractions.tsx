@@ -7,9 +7,6 @@ import { useCart } from "@/contexts/CartContext";
 import { useSession } from "next-auth/react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useUserContext } from "@/contexts/UserContext";
-import { getUserType } from "@/utils/tracking/user-type-helpers";
-import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
-import { usePathname } from "next/navigation";
 
 interface DatabaseProduct {
   _id: string;
@@ -30,9 +27,8 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   const [addedToCart, setAddedToCart] = useState(false);
   const { addToCart, isLoading } = useCart();
   const { data: session } = useSession();
-  const { trackButtonClick } = usePixelTracking();
+  const { trackAddToCart } = usePixelTracking();
   const { isAuthenticated } = useUserContext();
-  const pathname = usePathname();
 
   const handleQuantityChange = (change: number) => {
     setQuantity(Math.max(1, Math.min(product.stock || 999, quantity + change)));
@@ -47,25 +43,14 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
     try {
       setIsAddingToCart(true);
 
-      // Track button click before adding to cart
-      const pageMetadata = extractPageMetadata(pathname, typeof window !== "undefined" ? window.location.href : undefined);
-      const userType = getUserType(isAuthenticated);
+      // Track AddToCart event (standard Meta Pixel event)
+      // This replaces the non-standard ButtonClick event with the official AddToCart event
       const productId = "id" in product ? product.id : product._id;
 
-      trackButtonClick({
-        buttonName: "Add to Cart",
-        buttonLocation: "product-page",
-        actionType: "add-to-cart",
-        pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
-        pageType: pageMetadata.page_type,
+      trackAddToCart({
         value: (product.price as number) * quantity,
         currency: "AUD",
         productId: productId as string,
-        user_type: userType,
-        platform: "tools-australia-website",
-        quantity,
-        product_name: product.name,
-        brand: product.brand || "Unknown",
       });
 
       await addToCart({
@@ -98,7 +83,6 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       setIsAddingToCart(false);
     }
   };
-
 
   const isOutOfStock = product.stock === 0;
 

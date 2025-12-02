@@ -31,8 +31,6 @@ import { type PaymentStatusResponse } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
 import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
-import { getUserType } from "@/utils/tracking/user-type-helpers";
-import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useReferralCode } from "@/hooks/useReferralCode";
@@ -291,7 +289,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     return activePlan;
   }, [activePlan, oneTimePromo, miniPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
-  const { trackButtonClick } = usePixelTracking();
+  const { trackInitiateCheckout } = usePixelTracking();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { savePaymentMethod } = useSavedPaymentMethods();
   const purchaseMembership = usePurchaseMembership();
@@ -1448,28 +1446,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
     // Track button click before processing purchase
     try {
-      const pageMetadata = extractPageMetadata(
-        pathname,
-        typeof window !== "undefined" ? window.location.href : undefined
-      );
-      const userType = getUserType(isAuthenticated);
+      // Track InitiateCheckout event (standard Meta Pixel event)
+      // This replaces the non-standard ButtonClick event with the official InitiateCheckout event
+      // InitiateCheckout fires when a user starts the checkout process
       const packagePrice = activePlan?.price || 0;
-      const packageName = activePlan?.name || "Unknown Package";
 
-      trackButtonClick({
-        buttonName: "Purchase & Enter",
-        buttonLocation: "membership-modal",
-        actionType: isAuthenticated ? "purchase" : "purchase-and-register",
-        pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
-        pageType: pageMetadata.page_type,
+      trackInitiateCheckout({
         value: packagePrice,
         currency: "AUD",
-        user_type: userType,
-        platform: "tools-australia-website",
-        package_name: packageName,
-        package_id: activePlan?.id,
-        is_upsell: activePlan?.metadata?.isUpsellOffer === true,
-        is_mini_draw: activePlan?.id?.startsWith("mini-pack-") || false,
+        numItems: 1, // Single membership package
       });
     } catch (trackingError) {
       // Non-blocking - continue with purchase even if tracking fails

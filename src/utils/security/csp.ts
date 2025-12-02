@@ -29,16 +29,24 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   // Add Next.js inline script hashes to allow Next.js build chunks
   // These hashes are for Next.js runtime inline scripts that don't support nonces
   // When Next.js updates, new hashes may need to be added (monitor console for violations)
+  //
+  // External script sources allowed:
+  // - https://connect.facebook.net: Facebook Pixel script (fbevents.js)
+  // - https://js.stripe.com: Stripe.js library (required for payment forms)
+  // - https://analytics.tiktok.com: TikTok Pixel script (required for TikTok tracking)
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https:`;
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https:`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "block-all-mixed-content",
     "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https:",
     "font-src 'self' https: data:",
-    "form-action 'self'",
+    // form-action: Allow Facebook Pixel to submit tracking data via hidden forms
+    // This is required for Facebook Pixel's fallback tracking mechanism
+    // Only allows form submissions to self and Facebook's tracking endpoint
+    "form-action 'self' https://www.facebook.com",
     "frame-ancestors 'none'",
     "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live",
     "img-src 'self' https: data: blob:",

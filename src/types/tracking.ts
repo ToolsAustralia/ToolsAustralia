@@ -49,20 +49,4 @@ export interface TrackingParams {
   [key: string]: unknown;
 }
 
-/**
- * Parameters for button click tracking
- */
-export interface ButtonClickParams {
-  buttonName: string;
-  buttonLocation: string;
-  actionType: string;
-  pageUrl?: string;
-  pageType?: string;
-  value?: number;
-  currency?: string;
-  productId?: string;
-  user_type?: UserType;
-  platform?: string;
-  [key: string]: unknown;
-}
 

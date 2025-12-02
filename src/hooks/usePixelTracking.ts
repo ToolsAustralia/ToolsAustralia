@@ -13,7 +13,6 @@ import {
   trackSubscribe as fbTrackSubscribe,
   trackAddPaymentInfo as fbTrackAddPaymentInfo,
   trackRemoveFromCart as fbTrackRemoveFromCart,
-  trackButtonClick as fbTrackButtonClick,
 } from "@/components/FacebookPixel";
 import {
   trackTikTokEvent,
@@ -268,49 +267,6 @@ export function usePixelTracking() {
     });
   }, []);
 
-  // Button click tracking
-  const trackButtonClick = useCallback(
-    (
-      params: {
-        buttonName: string;
-        buttonLocation: string;
-        actionType: string;
-        pageUrl?: string;
-        pageType?: string;
-        value?: number;
-        currency?: string;
-        productId?: string;
-        user_type?: "guest" | "member";
-        platform?: string;
-        [key: string]: unknown;
-      },
-      platforms?: ("facebook" | "tiktok")[]
-    ) => {
-      const platformsToTrack = platforms || ["facebook", "tiktok"];
-
-      platformsToTrack.forEach((platform) => {
-        if (platform === "facebook") {
-          fbTrackButtonClick(params);
-        } else if (platform === "tiktok") {
-          // TikTok doesn't have a specific ButtonClick event, use custom event
-          trackTikTokEvent("ButtonClick", {
-            button_name: params.buttonName,
-            button_location: params.buttonLocation,
-            action_type: params.actionType,
-            ...(params.pageUrl && { page_url: params.pageUrl }),
-            ...(params.pageType && { page_type: params.pageType }),
-            ...(params.value !== undefined && { value: params.value }),
-            ...(params.currency && { currency: params.currency }),
-            ...(params.productId && { product_id: params.productId }),
-            ...(params.user_type && { user_type: params.user_type }),
-            platform: params.platform || "tools-australia-website",
-          });
-        }
-      });
-    },
-    []
-  );
-
   // Custom event tracking
   const trackCustomEvent = useCallback(
     (eventName: string, parameters?: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
@@ -341,7 +297,6 @@ export function usePixelTracking() {
     trackAddPaymentInfo,
     trackRemoveFromCart,
     trackPaymentFailed,
-    trackButtonClick,
     trackCustomEvent,
   };
 }
