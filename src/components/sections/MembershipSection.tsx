@@ -588,10 +588,16 @@ export default function MembershipSection({
                               />
                             </div>
                           )}
-                          {/* Best Chance Badge - Top Right (for boss/power packages) */}
+                          {/* Best Chance Badge - Top Right (for boss/power packages) - Smaller for additional packages in mobile */}
                           {(plan.id.includes("boss") || plan.id.includes("power")) && (
                             <div className="absolute top-1.5 right-1.5 z-20">
-                              <BestChanceBadge size="xs" />
+                              <BestChanceBadge
+                                size={
+                                  plan.isMemberOnly && plan.name.toLowerCase().includes("additional")
+                                    ? "small"
+                                    : "medium"
+                                }
+                              />
                             </div>
                           )}
 
@@ -608,14 +614,53 @@ export default function MembershipSection({
                                   CURRENT
                                 </div>
                               )}
-                              {/* Popular Badge - Show only if not current plan */}
+                              {/* Popular Badge - Show only if not current plan - With enhanced shine effect - Larger on mobile */}
                               {plan.isPopular && !isCurrentSubscription(plan) && (
                                 <div
-                                  className={`bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black ${
-                                    isTwoColumn ? "px-1.5 py-0.5 text-[6px]" : "px-2 py-1 text-[8px]"
-                                  } rounded-full font-bold shadow-lg shadow-yellow-500/50 border border-yellow-300`}
+                                  className={`relative overflow-hidden rounded-full font-bold shadow-lg border border-yellow-300 ${
+                                    isTwoColumn ? "px-2 py-1 text-[8px]" : "px-2.5 py-1 text-[10px]"
+                                  }`}
+                                  style={{
+                                    background: `linear-gradient(135deg, #facc15 0%, #eab308 25%, #ca8a04 50%, #a16207 75%, #facc15 100%)`,
+                                    boxShadow: `0 0 30px rgba(234, 179, 8, 1), 0 0 15px rgba(250, 204, 21, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6)`,
+                                  }}
                                 >
-                                  POPULAR
+                                  {/* Enhanced metallic shine effect - more prominent */}
+                                  <div
+                                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent transform -skew-x-12"
+                                    style={{
+                                      background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.5) 20%, rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 0.5) 80%, transparent 100%)`,
+                                      animation: "shimmer 2s infinite",
+                                    }}
+                                  />
+                                  {/* Secondary shine layer for depth */}
+                                  <div
+                                    className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-transparent opacity-60"
+                                    style={{
+                                      animation: "pulse 3s infinite",
+                                    }}
+                                  />
+                                  {/* Content */}
+                                  <div className="relative z-10 flex items-center text-black">
+                                    <span
+                                      className="font-black whitespace-nowrap"
+                                      style={{
+                                        textShadow:
+                                          "0 1px 3px rgba(0, 0, 0, 0.4), 0 0 10px rgba(255, 255, 255, 0.5), 0 0 5px rgba(250, 204, 21, 0.8)",
+                                      }}
+                                    >
+                                      POPULAR
+                                    </span>
+                                  </div>
+                                  {/* Enhanced metallic border highlight */}
+                                  <div
+                                    className="absolute inset-0 rounded-full"
+                                    style={{
+                                      background: `linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, transparent 30%, transparent 70%, rgba(255, 255, 255, 0.2) 100%)`,
+                                      border: "1px solid rgba(255, 255, 255, 0.6)",
+                                      boxShadow: "inset 0 1px 2px rgba(255, 255, 255, 0.4)",
+                                    }}
+                                  />
                                 </div>
                               )}
                             </div>
@@ -650,20 +695,30 @@ export default function MembershipSection({
                           >
                             {/* Plan Header - Centered */}
                             <div className="text-center ">
-                              <h3
-                                className={`${
-                                  isTwoColumn ? "text-[14px] sm:text-[18px]" : "text-[22px] sm:text-[28px]"
-                                } font-bold mb-1.5 ${colorScheme.text} tracking-wide`}
-                              >
-                                {isTwoColumn && plan.isMemberOnly && plan.name.includes("Additional") ? (
-                                  <>
-                                    <div>Additional</div>
-                                    <div>{plan.name.replace("Additional ", "")}</div>
-                                  </>
-                                ) : (
-                                  plan.name
-                                )}
-                              </h3>
+                              {(() => {
+                                const isAdditionalPackage =
+                                  plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
+                                const cleanedPlanName = isAdditionalPackage
+                                  ? plan.name.replace(/Additional\s*/i, "").trim()
+                                  : plan.name;
+
+                                return (
+                                  <h3
+                                    className={`${
+                                      isTwoColumn ? "text-[14px] sm:text-[18px]" : "text-[22px] sm:text-[28px]"
+                                    } font-bold mb-1.5 ${colorScheme.text} tracking-wide leading-tight`}
+                                  >
+                                    {isAdditionalPackage ? (
+                                      <>
+                                        <span className="block">Additional</span>
+                                        <span className="block">{cleanedPlanName}</span>
+                                      </>
+                                    ) : (
+                                      plan.name
+                                    )}
+                                  </h3>
+                                );
+                              })()}
                               {plan.subtitle && (
                                 <p
                                   className={`${
@@ -1068,10 +1123,15 @@ export default function MembershipSection({
                         />
                       </div>
                     )}
-                    {/* Best Chance Badge - Top Right (for boss/power packages) */}
+                    {/* Best Chance Badge - Top Right (for boss/power packages) - Larger on desktop */}
                     {(plan.id.includes("boss") || plan.id.includes("power")) && (
                       <div className="absolute top-1.5 right-1.5 z-10">
-                        <BestChanceBadge size="xs" />
+                        <div className="hidden lg:block">
+                          <BestChanceBadge size="medium" />
+                        </div>
+                        <div className="lg:hidden">
+                          <BestChanceBadge size="medium" />
+                        </div>
                       </div>
                     )}
 
@@ -1084,10 +1144,51 @@ export default function MembershipSection({
                             CURRENT
                           </div>
                         )}
-                        {/* Popular Badge - Show only if not current plan */}
+                        {/* Popular Badge - Show only if not current plan - Larger on desktop with enhanced shine effect */}
                         {plan.isPopular && !isCurrentSubscription(plan) && (
-                          <div className="bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black px-2 py-1 rounded-full font-bold text-[8px] shadow-lg shadow-yellow-500/50 border border-yellow-300">
-                            POPULAR
+                          <div
+                            className="relative overflow-hidden rounded-full font-bold shadow-lg border border-yellow-300"
+                            style={{
+                              background: `linear-gradient(135deg, #facc15 0%, #eab308 25%, #ca8a04 50%, #a16207 75%, #facc15 100%)`,
+                              boxShadow: `0 0 30px rgba(234, 179, 8, 1), 0 0 15px rgba(250, 204, 21, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6)`,
+                            }}
+                          >
+                            {/* Enhanced metallic shine effect - more prominent */}
+                            <div
+                              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent transform -skew-x-12"
+                              style={{
+                                background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.5) 20%, rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 0.5) 80%, transparent 100%)`,
+                                animation: "shimmer 2s infinite",
+                              }}
+                            />
+                            {/* Secondary shine layer for depth */}
+                            <div
+                              className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-transparent opacity-60"
+                              style={{
+                                animation: "pulse 3s infinite",
+                              }}
+                            />
+                            {/* Content */}
+                            <div className="relative z-10 flex items-center gap-1 px-2 py-1 text-[8px] lg:px-2.5 lg:py-1 lg:text-[10px] text-black">
+                              <span
+                                className="font-black whitespace-nowrap"
+                                style={{
+                                  textShadow:
+                                    "0 1px 3px rgba(0, 0, 0, 0.4), 0 0 10px rgba(255, 255, 255, 0.5), 0 0 5px rgba(250, 204, 21, 0.8)",
+                                }}
+                              >
+                                POPULAR
+                              </span>
+                            </div>
+                            {/* Enhanced metallic border highlight */}
+                            <div
+                              className="absolute inset-0 rounded-full"
+                              style={{
+                                background: `linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, transparent 30%, transparent 70%, rgba(255, 255, 255, 0.2) 100%)`,
+                                border: "1px solid rgba(255, 255, 255, 0.6)",
+                                boxShadow: "inset 0 1px 2px rgba(255, 255, 255, 0.4)",
+                              }}
+                            />
                           </div>
                         )}
                       </div>
@@ -1101,9 +1202,28 @@ export default function MembershipSection({
                       ></div>
                       {/* Plan Header - Centered */}
                       <div className="text-center ">
-                        <h3 className={`text-[20px] sm:text-[24px] font-bold mb-2 ${colorScheme.text} tracking-wide`}>
-                          {plan.name}
-                        </h3>
+                        {(() => {
+                          const isAdditionalPackage =
+                            plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
+                          const cleanedPlanName = isAdditionalPackage
+                            ? plan.name.replace(/Additional\s*/i, "").trim()
+                            : plan.name;
+
+                          return (
+                            <h3
+                              className={`text-[20px] sm:text-[24px] font-bold mb-2 ${colorScheme.text} tracking-wide leading-tight`}
+                            >
+                              {isAdditionalPackage ? (
+                                <>
+                                  <span className="block">Additional</span>
+                                  <span className="block">{cleanedPlanName}</span>
+                                </>
+                              ) : (
+                                plan.name
+                              )}
+                            </h3>
+                          );
+                        })()}
                         {plan.subtitle && (
                           <p className={`text-[12px] sm:text-[14px] font-medium mb-4 text-white/80`}>{plan.subtitle}</p>
                         )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { getNextMidnightAEST } from "@/utils/common/timezone";
@@ -144,7 +144,6 @@ export default function PromoBanner() {
   return (
     <>
       {/* Placeholder div to maintain space and prevent layout shift when banner becomes fixed */}
-      {isScrolled && <div className="h-16 sm:h-20" aria-hidden="true" />}
 
       <motion.div
         layout
