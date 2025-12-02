@@ -13,6 +13,7 @@ import {
   trackSubscribe as fbTrackSubscribe,
   trackAddPaymentInfo as fbTrackAddPaymentInfo,
   trackRemoveFromCart as fbTrackRemoveFromCart,
+  trackButtonClick as fbTrackButtonClick,
 } from "@/components/FacebookPixel";
 import {
   trackTikTokEvent,
@@ -105,7 +106,21 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackViewContent(params.value || 0, params.currency || "AUD", params.productId);
+        // Pass all parameters including custom ones (content_category, content_name, brand, page_type, user_type)
+        fbTrackViewContent(
+          params.value || 0,
+          params.currency || "AUD",
+          params.productId,
+          params as {
+            content_category?: string;
+            content_name?: string;
+            brand?: string;
+            page_type?: string;
+            user_type?: "guest" | "member";
+            platform?: string;
+            [key: string]: unknown;
+          }
+        );
       } else if (platform === "tiktok") {
         trackTikTokViewContent(params.value || 0, params.currency || "AUD", params.productId);
       }
@@ -131,7 +146,22 @@ export function usePixelTracking() {
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackCompleteRegistration(params.method);
+        // Pass all parameters (removed registration_method and content_type as per requirements)
+        fbTrackCompleteRegistration(
+          params as {
+            source?: string;
+            referrer?: string;
+            referrer_domain?: string;
+            utm_source?: string;
+            utm_medium?: string;
+            utm_campaign?: string;
+            signup_flow?: string;
+            initial_interest?: string;
+            platform?: string;
+            user_type?: "guest" | "member";
+            [key: string]: unknown;
+          }
+        );
       } else if (platform === "tiktok") {
         trackTikTokCompleteRegistration(params.method);
       }
@@ -238,6 +268,49 @@ export function usePixelTracking() {
     });
   }, []);
 
+  // Button click tracking
+  const trackButtonClick = useCallback(
+    (
+      params: {
+        buttonName: string;
+        buttonLocation: string;
+        actionType: string;
+        pageUrl?: string;
+        pageType?: string;
+        value?: number;
+        currency?: string;
+        productId?: string;
+        user_type?: "guest" | "member";
+        platform?: string;
+        [key: string]: unknown;
+      },
+      platforms?: ("facebook" | "tiktok")[]
+    ) => {
+      const platformsToTrack = platforms || ["facebook", "tiktok"];
+
+      platformsToTrack.forEach((platform) => {
+        if (platform === "facebook") {
+          fbTrackButtonClick(params);
+        } else if (platform === "tiktok") {
+          // TikTok doesn't have a specific ButtonClick event, use custom event
+          trackTikTokEvent("ButtonClick", {
+            button_name: params.buttonName,
+            button_location: params.buttonLocation,
+            action_type: params.actionType,
+            ...(params.pageUrl && { page_url: params.pageUrl }),
+            ...(params.pageType && { page_type: params.pageType }),
+            ...(params.value !== undefined && { value: params.value }),
+            ...(params.currency && { currency: params.currency }),
+            ...(params.productId && { product_id: params.productId }),
+            ...(params.user_type && { user_type: params.user_type }),
+            platform: params.platform || "tools-australia-website",
+          });
+        }
+      });
+    },
+    []
+  );
+
   // Custom event tracking
   const trackCustomEvent = useCallback(
     (eventName: string, parameters?: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
@@ -268,6 +341,7 @@ export function usePixelTracking() {
     trackAddPaymentInfo,
     trackRemoveFromCart,
     trackPaymentFailed,
+    trackButtonClick,
     trackCustomEvent,
   };
 }

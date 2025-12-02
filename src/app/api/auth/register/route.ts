@@ -14,6 +14,8 @@ import {
   extractFBCFromRequest,
   extractFBPFromRequest,
 } from "@/utils/tracking/facebook-helpers";
+import { extractUTMParams } from "@/utils/tracking/utm-helpers";
+import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
 import { IUser } from "@/models/User";
@@ -517,13 +519,53 @@ export async function POST(request: NextRequest) {
         if (fbc) userData.fbc = fbc;
         if (fbp) userData.fbp = fbp;
 
+        // Extract UTM parameters and referrer information for enhanced tracking
+        const requestUrl = request.url;
+        const utmParams = extractUTMParams(requestUrl);
+        const referrerHeader = request.headers.get("referer") || "";
+        const referrerInfo = parseReferrer(referrerHeader);
+
+        // Determine source based on referrer and UTM parameters
+        let source = "direct";
+        if (utmParams.utm_source) {
+          source = utmParams.utm_source;
+        } else if (referrerInfo.referrer_domain) {
+          // Determine source from referrer domain
+          const domain = referrerInfo.referrer_domain.toLowerCase();
+          if (domain.includes("google")) {
+            source = "organic";
+          } else if (domain.includes("facebook") || domain.includes("instagram")) {
+            source = "social";
+          } else if (domain.includes("bing") || domain.includes("yahoo")) {
+            source = "organic";
+          } else {
+            source = "referral";
+          }
+        }
+
+        // Build custom data with enhanced parameters (removed registration_method and content_type)
+        const customData: Record<string, unknown> = {
+          platform: "tools-australia-website",
+          source,
+          ...(referrerInfo.referrer && { referrer: referrerInfo.referrer }),
+          ...(referrerInfo.referrer_domain && { referrer_domain: referrerInfo.referrer_domain }),
+          ...(utmParams.utm_source && { utm_source: utmParams.utm_source }),
+          ...(utmParams.utm_medium && { utm_medium: utmParams.utm_medium }),
+          ...(utmParams.utm_campaign && { utm_campaign: utmParams.utm_campaign }),
+          // Add brand interest if available from promotion slug
+          ...(validatedData.promotionSlug && {
+            initial_interest: extractBrandFromSlug(validatedData.promotionSlug) || validatedData.promotionSlug,
+          }),
+        };
+
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
           event_time: eventTime,
           event_id: eventID,
           action_source: "website",
           user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
-          event_source_url: request.headers.get("referer") || undefined,
+          event_source_url: referrerInfo.referrer || request.headers.get("referer") || undefined,
+          custom_data: customData,
         };
 
         // Get test event code if in development

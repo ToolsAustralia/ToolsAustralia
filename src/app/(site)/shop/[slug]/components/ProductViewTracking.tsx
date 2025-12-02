@@ -2,6 +2,10 @@
 
 import { useEffect } from "react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useUserContext } from "@/contexts/UserContext";
+import { getUserType } from "@/utils/tracking/user-type-helpers";
+import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
+import { usePathname } from "next/navigation";
 
 interface ProductViewTrackingProps {
   product: {
@@ -19,8 +23,17 @@ interface ProductViewTrackingProps {
  */
 export default function ProductViewTracking({ product }: ProductViewTrackingProps) {
   const { trackViewContent } = usePixelTracking();
+  const { isAuthenticated } = useUserContext();
+  const pathname = usePathname();
 
   useEffect(() => {
+    // Extract page metadata and user type for enhanced tracking
+    const pageMetadata = extractPageMetadata(
+      pathname,
+      typeof window !== "undefined" ? window.location.href : undefined
+    );
+    const userType = getUserType(isAuthenticated);
+
     // Track ViewContent event when user views the product page
     trackViewContent({
       value: product.price,
@@ -28,13 +41,16 @@ export default function ProductViewTracking({ product }: ProductViewTrackingProp
       productId: product._id,
       content_name: product.name,
       content_category: product.brand,
-      content_type: "product",
+      brand: product.brand,
+      page_type: pageMetadata.page_type,
+      user_type: userType,
+      platform: "tools-australia-website",
     });
 
     if (process.env.NODE_ENV === "development") {
       console.log(`📘 Facebook Pixel: ViewContent tracked for product ${product.name}`);
     }
-  }, [product, trackViewContent]);
+  }, [product, trackViewContent, isAuthenticated, pathname]);
 
   // This component doesn't render anything
   return null;

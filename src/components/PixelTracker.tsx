@@ -9,6 +9,7 @@ interface PixelTrackerProps {
   tiktokPixelId?: string;
   disabled?: boolean;
   enableConsent?: boolean;
+  nonce?: string;
 }
 
 export default function PixelTracker({
@@ -16,6 +17,7 @@ export default function PixelTracker({
   tiktokPixelId,
   disabled = false,
   enableConsent = false,
+  nonce,
 }: PixelTrackerProps) {
   const [consentGiven, setConsentGiven] = useState(true); // Always true - auto-accept
 
@@ -42,7 +44,7 @@ export default function PixelTracker({
 
   return (
     <>
-      {facebookPixelId && <FacebookPixel pixelId={facebookPixelId} disabled={disabled} />}
+      {facebookPixelId && <FacebookPixel pixelId={facebookPixelId} disabled={disabled} nonce={nonce} />}
       {tiktokPixelId && <TikTokPixel pixelId={tiktokPixelId} disabled={disabled} />}
     </>
   );

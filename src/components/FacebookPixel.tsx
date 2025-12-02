@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
-import Script from "next/script";
+import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
 
 declare global {
   interface Window {
@@ -20,6 +20,11 @@ declare global {
 interface FacebookPixelProps {
   pixelId: string;
   disabled?: boolean;
+  /**
+   * CSP nonce for Content Security Policy compliance
+   * Required in production to allow inline script execution
+   */
+  nonce?: string;
   /**
    * Data Processing Options for GDPR/CCPA compliance
    * Format: [LDU, country, state] where:
@@ -52,6 +57,7 @@ const recentEvents = new Map<string, number>(); // eventKey -> timestamp
 export default function FacebookPixel({
   pixelId,
   disabled = false,
+  nonce,
   dataProcessingOptions,
   dataProcessingCountry,
   dataProcessingState,
@@ -60,9 +66,14 @@ export default function FacebookPixel({
   const [isInitialized, setIsInitialized] = useState(pixelInitialized); // Initialize from global state
   const hasTrackedInitialPageView = React.useRef(false); // Track if we've sent initial PageView
   const scriptLoadedRef = React.useRef(false); // Track if script has been loaded
+  const scriptInjectedRef = useRef(false); // Track if script has been injected to prevent duplicates
 
   // Store pixel ID globally for use in tracking functions
   globalPixelId = pixelId;
+
+  // Note: We don't use useUserContext here because FacebookPixel is rendered before UserProvider
+  // User type will default to "guest" for PageView events in this component
+  // Other components (ProductViewTracking, etc.) that have access to UserProvider will pass correct user_type
 
   // Check if script already exists in DOM to prevent duplicates
   useEffect(() => {
@@ -86,9 +97,23 @@ export default function FacebookPixel({
     }
 
     if (typeof window !== "undefined" && typeof window.fbq === "function") {
-      window.fbq("track", "PageView");
+      // Extract page metadata and build custom parameters
+      const pageMetadata = extractPageMetadata(pathname, window.location.href);
+      // Default to "guest" since UserProvider is not available at this level
+      // User type will be correctly determined in components that have context access
+      const currentUserType = "guest";
+
+      const pageViewParams = {
+        page_type: pageMetadata.page_type,
+        page_name: pageMetadata.page_name,
+        page_url: pageMetadata.page_url,
+        user_type: currentUserType,
+        platform: "tools-australia-website",
+      };
+
+      window.fbq("track", "PageView", pageViewParams);
       if (process.env.NODE_ENV === "development") {
-        console.log("✅ Facebook Pixel: PageView tracked on route change");
+        console.log("✅ Facebook Pixel: PageView tracked on route change", pageViewParams);
       }
     }
   }, [pathname, isInitialized]);
@@ -106,10 +131,23 @@ export default function FacebookPixel({
         // Try to manually trigger PageView if it didn't fire
         // This is a safety net in case the queued PageView didn't execute
         try {
-          window.fbq("track", "PageView");
+          // Extract page metadata and build custom parameters
+          const pageMetadata = extractPageMetadata(pathname, window.location.href);
+          // Default to "guest" since UserProvider is not available at this level
+          const currentUserType = "guest";
+
+          const pageViewParams = {
+            page_type: pageMetadata.page_type,
+            page_name: pageMetadata.page_name,
+            page_url: pageMetadata.page_url,
+            user_type: currentUserType,
+            platform: "tools-australia-website",
+          };
+
+          window.fbq("track", "PageView", pageViewParams);
           hasTrackedInitialPageView.current = true;
           if (process.env.NODE_ENV === "development") {
-            console.log("✅ Facebook Pixel: PageView verified/triggered (fallback)");
+            console.log("✅ Facebook Pixel: PageView verified/triggered (fallback)", pageViewParams);
           }
         } catch (error) {
           if (process.env.NODE_ENV === "development") {
@@ -120,90 +158,129 @@ export default function FacebookPixel({
     }, 2000);
 
     return () => clearTimeout(verifyPageView);
-  }, [isInitialized]);
+  }, [isInitialized, pathname]);
+
+  // Inject script with nonce support (replaces Next.js Script component for CSP compliance)
+  // Moved before early returns to satisfy React Hooks rules
+  useEffect(() => {
+    // Only inject in browser environment
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    // Don't inject if disabled, no pixel ID, already initialized, or already injected
+    if (disabled || !pixelId || pixelInitialized || scriptInjectedRef.current) {
+      return;
+    }
+
+    // Check if script already exists in DOM
+    const existingScript = document.getElementById("facebook-pixel-script");
+    if (existingScript) {
+      scriptInjectedRef.current = true;
+      return;
+    }
+
+    try {
+      // Create script element with inline Facebook Pixel code
+      const script = document.createElement("script");
+      script.id = "facebook-pixel-script";
+      script.async = true;
+
+      // Add nonce attribute if provided (required for CSP compliance in production)
+      if (nonce) {
+        script.setAttribute("nonce", nonce);
+      }
+
+      // Set inline script content
+      script.innerHTML = `
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        // Queue init and PageView only once - these will execute when fbevents.js loads
+        // Note: fbq function queues commands automatically if library not loaded yet
+        // Remove window.fbq check to avoid race condition - fbq is created in this script
+        if(typeof window !== 'undefined' && !window._fbPixelInit) {
+          window._fbPixelInit = true; // Global flag to prevent multiple inits
+          
+          // Initialize pixel with optional data processing options for GDPR/CCPA compliance
+          // fbq will queue these commands if fbevents.js hasn't loaded yet
+          ${
+            dataProcessingOptions
+              ? `window.fbq('init', '${pixelId}', ${JSON.stringify(dataProcessingOptions)});`
+              : dataProcessingCountry !== undefined
+              ? `window.fbq('init', '${pixelId}', null, ${dataProcessingCountry}, ${dataProcessingState || 0});`
+              : `window.fbq('init', '${pixelId}');`
+          }
+          // Track initial PageView with basic parameters (full parameters added on route changes)
+          const initialPageUrl = typeof window !== 'undefined' ? window.location.href : '';
+          const initialPathname = typeof window !== 'undefined' ? window.location.pathname : '';
+          const pageType = initialPathname === '/' ? 'home' : initialPathname.split('/').filter(Boolean)[0] || 'unknown';
+          window.fbq('track', 'PageView', {
+            page_type: pageType,
+            page_url: initialPageUrl,
+            platform: 'tools-australia-website'
+          });
+        }
+      `;
+
+      // Append script to document head
+      document.head.appendChild(script);
+      scriptInjectedRef.current = true;
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("✅ Facebook Pixel script injected with nonce:", nonce ? "yes" : "no");
+      }
+
+      // Mark script as loaded and check when pixel is ready
+      scriptLoadedRef.current = true;
+
+      // Wait for fbevents.js to load, then mark as initialized
+      const checkPixelReady = () => {
+        if (typeof window !== "undefined" && window.fbq) {
+          const fbqLoaded = (window.fbq as { loaded?: boolean }).loaded === true;
+          if (fbqLoaded && !pixelInitialized) {
+            pixelInitialized = true;
+            setIsInitialized(true);
+            hasTrackedInitialPageView.current = true; // PageView was queued in inline script
+            if (process.env.NODE_ENV === "development") {
+              console.log("✅ Facebook Pixel ready:", pixelId);
+            }
+          } else if (!fbqLoaded) {
+            // fbevents.js not loaded yet, check again
+            setTimeout(checkPixelReady, 100);
+          }
+        }
+      };
+
+      // Start checking after a short delay
+      setTimeout(checkPixelReady, 200);
+    } catch (error) {
+      // Handle script injection errors gracefully
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Facebook Pixel: Error injecting script:", error);
+      }
+    }
+  }, [pixelId, disabled, nonce, dataProcessingOptions, dataProcessingCountry, dataProcessingState]);
 
   // Don't load if disabled or no pixel ID
   if (disabled || !pixelId) {
     return null;
   }
 
-  // If pixel is already initialized globally, don't render script again
+  // If pixel is already initialized globally, don't render anything
   if (pixelInitialized && scriptLoadedRef.current) {
     return null; // Don't render script again
   }
 
-  // Mark pixel as ready when script loads
-  // The inline script queues init and PageView, which will execute when fbevents.js loads
-  const handleScriptLoad = () => {
-    // Prevent multiple calls
-    if (scriptLoadedRef.current) {
-      return;
-    }
-    scriptLoadedRef.current = true;
-
-    // Wait a bit for fbevents.js to load, then mark as initialized
-    const checkPixelReady = () => {
-      if (typeof window !== "undefined" && window.fbq) {
-        const fbqLoaded = (window.fbq as { loaded?: boolean }).loaded === true;
-        if (fbqLoaded && !pixelInitialized) {
-          pixelInitialized = true;
-          setIsInitialized(true);
-          hasTrackedInitialPageView.current = true; // PageView was queued in inline script
-          if (process.env.NODE_ENV === "development") {
-            console.log("✅ Facebook Pixel ready:", pixelId);
-          }
-        } else if (!fbqLoaded) {
-          // fbevents.js not loaded yet, check again
-          setTimeout(checkPixelReady, 100);
-        }
-      }
-    };
-
-    // Start checking after a short delay
-    setTimeout(checkPixelReady, 200);
-  };
-
   return (
     <>
-      {/* Use Next.js Script component for optimal loading performance */}
-      {/* Only render if not already initialized */}
-      {!pixelInitialized && (
-        <Script
-          id="facebook-pixel-script"
-          strategy="afterInteractive"
-          onLoad={handleScriptLoad}
-          dangerouslySetInnerHTML={{
-            __html: `
-              !function(f,b,e,v,n,t,s)
-              {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-              n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-              if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-              n.queue=[];t=b.createElement(e);t.async=!0;
-              t.src=v;s=b.getElementsByTagName(e)[0];
-              s.parentNode.insertBefore(t,s)}(window, document,'script',
-              'https://connect.facebook.net/en_US/fbevents.js');
-              // Queue init and PageView only once - these will execute when fbevents.js loads
-              // Note: fbq function queues commands automatically if library not loaded yet
-              // Remove window.fbq check to avoid race condition - fbq is created in this script
-              if(typeof window !== 'undefined' && !window._fbPixelInit) {
-                window._fbPixelInit = true; // Global flag to prevent multiple inits
-                
-                // Initialize pixel with optional data processing options for GDPR/CCPA compliance
-                // fbq will queue these commands if fbevents.js hasn't loaded yet
-                ${
-                  dataProcessingOptions
-                    ? `window.fbq('init', '${pixelId}', ${JSON.stringify(dataProcessingOptions)});`
-                    : dataProcessingCountry !== undefined
-                    ? `window.fbq('init', '${pixelId}', null, ${dataProcessingCountry}, ${dataProcessingState || 0});`
-                    : `window.fbq('init', '${pixelId}');`
-                }
-                window.fbq('track', 'PageView');
-              }
-            `,
-          }}
-        />
-      )}
       {/* Noscript fallback for users with JavaScript disabled */}
+      {/* Using img instead of Image component as this is a 1x1 tracking pixel that should not be optimized */}
       <noscript>
         <img
           height="1"
@@ -372,13 +449,53 @@ export const trackInitiateCheckout = (value: number, currency: string = "AUD", n
   });
 };
 
-export const trackViewContent = (value: number, currency: string = "AUD", productId?: string) => {
-  trackFacebookEvent("ViewContent", {
+/**
+ * Track ViewContent event with enhanced custom parameters
+ *
+ * @param value - Product/draw value
+ * @param currency - Currency code (default: "AUD")
+ * @param productId - Optional product/draw ID
+ * @param params - Optional additional parameters (content_category, content_name, brand, page_type, user_type)
+ */
+export const trackViewContent = (
+  value: number,
+  currency: string = "AUD",
+  productId?: string,
+  params?: {
+    content_category?: string;
+    content_name?: string;
+    brand?: string;
+    page_type?: string;
+    user_type?: "guest" | "member";
+    platform?: string;
+    [key: string]: unknown;
+  }
+) => {
+  // Build parameters with defaults and custom values
+  const viewContentParams: Record<string, unknown> = {
     value,
     currency,
     content_type: "product",
+    platform: "tools-australia-website",
     ...(productId && { content_ids: [productId] }),
-  });
+    ...(params?.content_category && { content_category: params.content_category }),
+    ...(params?.content_name && { content_name: params.content_name }),
+    ...(params?.brand && { brand: params.brand }),
+    ...(params?.page_type && { page_type: params.page_type }),
+    ...(params?.user_type && { user_type: params.user_type }),
+  };
+
+  // Add any additional custom parameters (excluding already handled ones)
+  if (params) {
+    const excludedKeys = ["content_category", "content_name", "brand", "page_type", "user_type", "platform"];
+    Object.keys(params).forEach((key) => {
+      if (!excludedKeys.includes(key)) {
+        viewContentParams[key] = params[key];
+      }
+    });
+  }
+
+  trackFacebookEvent("ViewContent", viewContentParams);
 };
 
 export const trackSearch = (searchString: string) => {
@@ -388,11 +505,61 @@ export const trackSearch = (searchString: string) => {
   });
 };
 
-export const trackCompleteRegistration = (method?: string) => {
-  trackFacebookEvent("CompleteRegistration", {
-    content_type: "user",
-    ...(method && { registration_method: method }),
-  });
+/**
+ * Track CompleteRegistration event with enhanced custom parameters
+ * Note: registration_method and content_type parameters removed as per requirements
+ *
+ * @param params - Optional parameters including source, referrer, referrer_domain, utm_source, utm_medium, utm_campaign, signup_flow, initial_interest, platform, user_type
+ */
+export const trackCompleteRegistration = (params?: {
+  source?: string;
+  referrer?: string;
+  referrer_domain?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  signup_flow?: string;
+  initial_interest?: string;
+  platform?: string;
+  user_type?: "guest" | "member";
+  [key: string]: unknown;
+}) => {
+  // Build parameters with defaults (removed registration_method and content_type)
+  const registrationParams: Record<string, unknown> = {
+    platform: "tools-australia-website",
+    ...(params?.source && { source: params.source }),
+    ...(params?.referrer && { referrer: params.referrer }),
+    ...(params?.referrer_domain && { referrer_domain: params.referrer_domain }),
+    ...(params?.utm_source && { utm_source: params.utm_source }),
+    ...(params?.utm_medium && { utm_medium: params.utm_medium }),
+    ...(params?.utm_campaign && { utm_campaign: params.utm_campaign }),
+    ...(params?.signup_flow && { signup_flow: params.signup_flow }),
+    ...(params?.initial_interest && { initial_interest: params.initial_interest }),
+    ...(params?.user_type && { user_type: params.user_type }),
+  };
+
+  // Add any additional custom parameters (excluding already handled ones)
+  if (params) {
+    const excludedKeys = [
+      "source",
+      "referrer",
+      "referrer_domain",
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "signup_flow",
+      "initial_interest",
+      "platform",
+      "user_type",
+    ];
+    Object.keys(params).forEach((key) => {
+      if (!excludedKeys.includes(key)) {
+        registrationParams[key] = params[key];
+      }
+    });
+  }
+
+  trackFacebookEvent("CompleteRegistration", registrationParams);
 };
 
 export const trackLead = (value?: number, currency: string = "AUD") => {
@@ -445,4 +612,69 @@ export const trackRemoveFromCart = (
     ...(productId && { content_ids: [productId] }),
     ...(contentName && { content_name: contentName }),
   });
+};
+
+/**
+ * Track button click event with custom parameters
+ * Useful for tracking user interactions with buttons throughout the application
+ *
+ * @param params - Button click parameters including buttonName, buttonLocation, actionType, and optional tracking data
+ *
+ * @example
+ * trackButtonClick({
+ *   buttonName: "Purchase",
+ *   buttonLocation: "product-page",
+ *   actionType: "purchase",
+ *   value: 99.99,
+ *   currency: "AUD",
+ *   productId: "product-123"
+ * });
+ */
+export const trackButtonClick = (params: {
+  buttonName: string;
+  buttonLocation: string;
+  actionType: string;
+  pageUrl?: string;
+  pageType?: string;
+  value?: number;
+  currency?: string;
+  productId?: string;
+  user_type?: "guest" | "member";
+  platform?: string;
+  [key: string]: unknown;
+}) => {
+  // Build parameters with defaults
+  const buttonParams: Record<string, unknown> = {
+    button_name: params.buttonName,
+    button_location: params.buttonLocation,
+    action_type: params.actionType,
+    platform: params.platform || "tools-australia-website",
+    ...(params.pageUrl && { page_url: params.pageUrl }),
+    ...(params.pageType && { page_type: params.pageType }),
+    ...(params.value !== undefined && { value: params.value }),
+    ...(params.currency && { currency: params.currency }),
+    ...(params.productId && { product_id: params.productId }),
+    ...(params.user_type && { user_type: params.user_type }),
+  };
+
+  // Add any additional custom parameters (excluding already handled ones)
+  const excludedKeys = [
+    "buttonName",
+    "buttonLocation",
+    "actionType",
+    "pageUrl",
+    "pageType",
+    "value",
+    "currency",
+    "productId",
+    "user_type",
+    "platform",
+  ];
+  Object.keys(params).forEach((key) => {
+    if (!excludedKeys.includes(key)) {
+      buttonParams[key] = params[key];
+    }
+  });
+
+  trackFacebookEvent("ButtonClick", buttonParams);
 };

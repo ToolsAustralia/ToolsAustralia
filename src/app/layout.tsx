@@ -94,6 +94,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           facebookPixelId={process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID}
           tiktokPixelId={process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID}
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
+          nonce={nonce}
         />
         <Providers>{children}</Providers>
         <MajorDrawTestControls />

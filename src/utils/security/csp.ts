@@ -30,14 +30,13 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   // These hashes are for Next.js runtime inline scripts that don't support nonces
   // When Next.js updates, new hashes may need to be added (monitor console for violations)
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https: 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https:`;
-
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https:`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "block-all-mixed-content",
-    "connect-src 'self' https:",
+    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https:",
     "font-src 'self' https: data:",
     "form-action 'self'",
     "frame-ancestors 'none'",
