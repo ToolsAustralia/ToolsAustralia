@@ -115,7 +115,14 @@ export async function processPaymentBenefits(
     price: number;
   },
   processedBy: "api" | "webhook",
-  paymentMetadata?: PaymentMetadata
+  paymentMetadata?: PaymentMetadata,
+  requestContext?: {
+    // Optional request context for improved Facebook CAPI match quality (backward compatible)
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+  }
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   // ✅ CRITICAL: Validate input parameters
   console.log(`🔍 processPaymentBenefits called with:`, {
@@ -123,6 +130,7 @@ export async function processPaymentBenefits(
     userId,
     packageData,
     processedBy,
+    hasRequestContext: !!requestContext,
   });
 
   if (!paymentIntentId || !userId || !packageData || !processedBy) {
@@ -158,7 +166,8 @@ export async function processPaymentBenefits(
     userId,
     packageData,
     processedBy,
-    paymentMetadata
+    paymentMetadata,
+    requestContext
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -182,7 +191,13 @@ async function processPaymentBenefitsInternal(
     price: number;
   },
   processedBy: "api" | "webhook",
-  paymentMetadata?: PaymentMetadata
+  paymentMetadata?: PaymentMetadata,
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+  }
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -347,7 +362,7 @@ async function processPaymentBenefitsInternal(
         type: packageData.packageType,
         packageType: packageData.packageType,
       };
-      await grantBenefits(user as UserDocument, packageData, finalPaymentMetadata, paymentIntentId);
+      await grantBenefits(user as UserDocument, packageData, finalPaymentMetadata, paymentIntentId, requestContext);
 
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
       // Store the payment ID as-is to match webhook expectations
@@ -511,7 +526,14 @@ async function grantBenefits(
     price: number;
   },
   paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string },
-  paymentIntentId?: string
+  paymentIntentId?: string,
+  requestContext?: {
+    // Optional request context for improved Facebook CAPI match quality (backward compatible)
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+  }
 ): Promise<void> {
   // ✅ DEBUG: Log function call with all parameters
   console.log(`🎯 grantBenefits called with:`, {
@@ -600,6 +622,7 @@ async function grantBenefits(
           : "product",
       content_ids: packageData.packageId ? [packageData.packageId] : [],
       num_items: 1,
+      requestContext: requestContext, // Pass request context for improved match quality
     });
     console.log(`📊 Pixel tracking completed for ${packageData.packageType} purchase`);
   } catch (pixelError) {

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUpsellPackageById, type StaticUpsellPackage } from "@/data/upsellPackages";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Benefits are now granted via webhook processing only
 
 const upsellPurchaseSchema = z.object({
@@ -137,6 +138,10 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Store in payment metadata so webhook can use it for improved match quality
+    const requestContext = extractRequestContext(request);
+
     // Get the authenticated user session
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -228,11 +233,12 @@ export async function POST(request: NextRequest) {
         user as unknown as Parameters<typeof handleOneClickPurchase>[0],
         offer,
         validatedData.paymentMethodId,
-        miniDrawInfo
+        miniDrawInfo,
+        requestContext
       );
     } else {
       // Create payment intent for manual confirmation
-      return await handlePaymentIntentCreation(user, offer, validatedData.paymentMethodId, miniDrawInfo);
+      return await handlePaymentIntentCreation(user, offer, validatedData.paymentMethodId, miniDrawInfo, requestContext);
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -264,8 +270,9 @@ async function handleOneClickPurchase(
     save: () => Promise<void>;
   },
   offer: StaticUpsellPackage,
-  paymentMethodId?: string,
-  miniDrawInfo?: { miniDrawId?: string; miniDrawName?: string }
+  paymentMethodId: string | undefined,
+  miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
 ) {
   try {
     if (!paymentMethodId) {
@@ -369,6 +376,11 @@ async function handleOneClickPurchase(
           offerTitle: offer.name, // Ensure offer title is included for webhook
           ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
           ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),
+          // Store request context for Facebook CAPI (webhook will extract and use)
+          ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+          ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+          ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
+          ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
         },
       });
     } catch (stripeError) {
@@ -494,8 +506,9 @@ async function handleOneClickPurchase(
 async function handlePaymentIntentCreation(
   user: { _id: string; stripeCustomerId?: string },
   offer: StaticUpsellPackage,
-  paymentMethodId?: string,
-  miniDrawInfo?: { miniDrawId?: string; miniDrawName?: string }
+  paymentMethodId: string | undefined,
+  miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
 ) {
   try {
     const paymentIntent = await stripe.paymentIntents.create({
@@ -517,6 +530,11 @@ async function handlePaymentIntentCreation(
         entriesCount: offer.entriesCount.toString(),
         ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
         ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),
+        // Store request context for Facebook CAPI (webhook will extract and use)
+        ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
       },
     });
 

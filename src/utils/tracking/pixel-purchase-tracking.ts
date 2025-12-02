@@ -18,8 +18,6 @@ import {
   getFBCFromURL,
   getFBPFromCookie,
   getEventSourceURL,
-  extractFBCFromRequest,
-  extractFBPFromRequest,
 } from "./facebook-helpers";
 
 export interface PixelPurchaseParams {
@@ -48,6 +46,16 @@ export interface PixelPurchaseParams {
   eventSourceUrl?: string; // Optional URL override
   fbc?: string; // Facebook Click ID (for server-side tracking)
   fbp?: string; // Facebook Browser ID (for server-side tracking)
+  // NEW: Optional request context for improved match quality (backward compatible)
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+  };
+  // Alternative: Direct parameters (for flexibility)
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }
 
 /**
@@ -82,6 +90,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       eventSourceUrl,
       fbc: providedFbc,
       fbp: providedFbp,
+      requestContext,
+      clientIpAddress,
+      clientUserAgent,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -130,10 +141,10 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
         country: userCountry,
       });
 
-      // Get fbc and fbp - prioritize provided values, then try to extract
+      // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract
       // For server-side tracking, these should be passed as parameters or extracted from request
-      let fbc = providedFbc;
-      let fbp = providedFbp;
+      let fbc = requestContext?.fbc || providedFbc;
+      let fbp = requestContext?.fbp || providedFbp;
 
       // If not provided, try to extract from browser (client-side) or request (server-side)
       if (!fbc) {
@@ -150,6 +161,19 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
         }
         // Note: For server-side, fbp should be passed as parameter or extracted from request
         // using extractFBPFromRequest() helper
+      }
+
+      // Extract IP address and user agent - CRITICAL for Event Match Quality
+      // Prioritize requestContext, then direct parameters
+      const clientIp = requestContext?.client_ip_address || clientIpAddress;
+      const userAgent = requestContext?.client_user_agent || clientUserAgent;
+
+      // Add IP address and user agent to user data (required by Meta for optimal match quality)
+      if (clientIp) {
+        userData.client_ip_address = clientIp;
+      }
+      if (userAgent) {
+        userData.client_user_agent = userAgent;
       }
 
       // Add fbc and fbp to user data if available
@@ -219,6 +243,15 @@ export async function trackPixelSubscription(
     entriesPerMonth?: number;
     paymentIntentId?: string;
     eventSourceUrl?: string;
+    // NEW: Optional request context for improved match quality (backward compatible)
+    requestContext?: {
+      client_ip_address?: string;
+      client_user_agent?: string;
+      fbc?: string;
+      fbp?: string;
+    };
+    clientIpAddress?: string;
+    clientUserAgent?: string;
   }
 ): Promise<void> {
   try {
@@ -236,6 +269,9 @@ export async function trackPixelSubscription(
       entriesPerMonth,
       paymentIntentId,
       eventSourceUrl,
+      requestContext,
+      clientIpAddress,
+      clientUserAgent,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -273,14 +309,25 @@ export async function trackPixelSubscription(
         lastName: userLastName,
       });
 
-      // Get fbc and fbp - try to extract from browser if in client context
-      // For server-side, these should be passed as parameters
-      let fbc: string | undefined;
-      let fbp: string | undefined;
+      // Get fbc and fbp - prioritize requestContext, then try to extract
+      let fbc = requestContext?.fbc;
+      let fbp = requestContext?.fbp;
 
       if (typeof window !== "undefined") {
-        fbc = getFBCFromURL();
-        fbp = getFBPFromCookie();
+        if (!fbc) fbc = getFBCFromURL();
+        if (!fbp) fbp = getFBPFromCookie();
+      }
+
+      // Extract IP address and user agent - CRITICAL for Event Match Quality
+      const clientIp = requestContext?.client_ip_address || clientIpAddress;
+      const userAgent = requestContext?.client_user_agent || clientUserAgent;
+
+      // Add IP address and user agent to user data (required by Meta for optimal match quality)
+      if (clientIp) {
+        userData.client_ip_address = clientIp;
+      }
+      if (userAgent) {
+        userData.client_user_agent = userAgent;
       }
 
       if (fbc) userData.fbc = fbc;
@@ -542,6 +589,15 @@ export async function trackPixelPaymentFailed(params: {
   eventSourceUrl?: string;
   fbc?: string; // Facebook Click ID (for server-side tracking)
   fbp?: string; // Facebook Browser ID (for server-side tracking)
+  // NEW: Optional request context for improved match quality (backward compatible)
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+  };
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }): Promise<void> {
   try {
     const {
@@ -563,6 +619,9 @@ export async function trackPixelPaymentFailed(params: {
       eventSourceUrl,
       fbc: providedFbc,
       fbp: providedFbp,
+      requestContext,
+      clientIpAddress,
+      clientUserAgent,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -602,14 +661,25 @@ export async function trackPixelPaymentFailed(params: {
         lastName: userLastName,
       });
 
-      // Get fbc and fbp - try to extract from browser if in client context
-      // For server-side, these should be passed as parameters
-      let fbc: string | undefined;
-      let fbp: string | undefined;
+      // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract
+      let fbc = requestContext?.fbc || providedFbc;
+      let fbp = requestContext?.fbp || providedFbp;
 
       if (typeof window !== "undefined") {
-        fbc = getFBCFromURL();
-        fbp = getFBPFromCookie();
+        if (!fbc) fbc = getFBCFromURL();
+        if (!fbp) fbp = getFBPFromCookie();
+      }
+
+      // Extract IP address and user agent - CRITICAL for Event Match Quality
+      const clientIp = requestContext?.client_ip_address || clientIpAddress;
+      const userAgent = requestContext?.client_user_agent || clientUserAgent;
+
+      // Add IP address and user agent to user data (required by Meta for optimal match quality)
+      if (clientIp) {
+        userData.client_ip_address = clientIp;
+      }
+      if (userAgent) {
+        userData.client_user_agent = userAgent;
       }
 
       if (fbc) userData.fbc = fbc;
@@ -675,6 +745,15 @@ export async function trackPixelSubscriptionRenewal(params: {
   eventSourceUrl?: string;
   fbc?: string; // Facebook Click ID (for server-side tracking)
   fbp?: string; // Facebook Browser ID (for server-side tracking)
+  // NEW: Optional request context for improved match quality (backward compatible)
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+  };
+  clientIpAddress?: string;
+  clientUserAgent?: string;
 }): Promise<void> {
   try {
     const {
@@ -693,6 +772,9 @@ export async function trackPixelSubscriptionRenewal(params: {
       eventSourceUrl,
       fbc: providedFbc,
       fbp: providedFbp,
+      requestContext,
+      clientIpAddress,
+      clientUserAgent,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -731,9 +813,9 @@ export async function trackPixelSubscriptionRenewal(params: {
         lastName: userLastName,
       });
 
-      // Get fbc and fbp - prioritize provided values, then try to extract
-      let fbc = providedFbc;
-      let fbp = providedFbp;
+      // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract
+      let fbc = requestContext?.fbc || providedFbc;
+      let fbp = requestContext?.fbp || providedFbp;
 
       if (!fbc && typeof window !== "undefined") {
         fbc = getFBCFromURL();
@@ -741,6 +823,18 @@ export async function trackPixelSubscriptionRenewal(params: {
 
       if (!fbp && typeof window !== "undefined") {
         fbp = getFBPFromCookie();
+      }
+
+      // Extract IP address and user agent - CRITICAL for Event Match Quality
+      const clientIp = requestContext?.client_ip_address || clientIpAddress;
+      const userAgent = requestContext?.client_user_agent || clientUserAgent;
+
+      // Add IP address and user agent to user data (required by Meta for optimal match quality)
+      if (clientIp) {
+        userData.client_ip_address = clientIp;
+      }
+      if (userAgent) {
+        userData.client_user_agent = userAgent;
       }
 
       if (fbc) userData.fbc = fbc;

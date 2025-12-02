@@ -7,6 +7,7 @@ import MiniDrawImageGallery from "./components/MiniDrawImageGallery";
 import MiniDrawInteractions from "./components/MiniDrawInteractions";
 import MiniDrawTabs from "./components/MiniDrawTabs";
 import ShareButton from "./components/ShareButton";
+import MiniDrawViewTracking from "./components/MiniDrawViewTracking";
 import { Trophy, ArrowLeft } from "lucide-react";
 import connectDB from "@/lib/mongodb";
 import MiniDraw, { IMiniDraw } from "@/models/MiniDraw";
@@ -229,6 +230,8 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
 
   return (
     <div className="min-h-screen-svh bg-white">
+      {/* Track ViewContent event for Facebook Pixel */}
+      <MiniDrawViewTracking miniDraw={miniDrawData} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Left Column - Images */}

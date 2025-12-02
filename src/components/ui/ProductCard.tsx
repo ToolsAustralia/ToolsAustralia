@@ -83,7 +83,7 @@ export default function ProductCard({
   viewMode = "grid",
 }: ProductCardProps) {
   const { items, addToCart, isAddingToCart, isUpdatingCart, hasFailedOperations, retryAllFailedOperations } = useCart();
-  const { trackAddToCart, trackViewContent } = usePixelTracking();
+  const { trackAddToCart } = usePixelTracking();
 
   // Local state for immediate UI feedback
   const [localAddedState, setLocalAddedState] = useState<Record<string, boolean>>({});
@@ -258,22 +258,20 @@ export default function ProductCard({
     await handleAddToCart();
   }, [handleAddToCart, productData.id]);
 
-  // Track view content when product card is rendered
-  const handleViewProduct = useCallback(() => {
-    trackViewContent({
-      value: productData.price,
-      currency: "AUD",
-      content_type: productData.isPrize ? "prize_draw" : "product",
-      content_ids: [productData.id],
-      content_name: productData.name,
-      content_category: productData.brand,
-    });
-  }, [productData, trackViewContent]);
-
-  // Track view content on component mount
-  React.useEffect(() => {
-    handleViewProduct();
-  }, [handleViewProduct]);
+  // NOTE: ViewContent tracking removed from ProductCard component mount
+  // ViewContent should only fire on product detail pages, not on card renders
+  // This prevents noise (was firing 37.4K events vs 3.1K PageView)
+  // Function kept commented for potential future use (e.g., click tracking)
+  // const handleViewProduct = useCallback(() => {
+  //   trackViewContent({
+  //     value: productData.price,
+  //     currency: "AUD",
+  //     content_type: productData.isPrize ? "prize_draw" : "product",
+  //     content_ids: [productData.id],
+  //     content_name: productData.name,
+  //     content_category: productData.brand,
+  //   });
+  // }, [productData, trackViewContent]);
 
   const renderStars = (rating: number) => {
     const validRating = getValidRating(rating);
@@ -480,7 +478,9 @@ export default function ProductCard({
                   <span className="hidden sm:inline">
                     {isPrizeCancelled ? "Cancelled" : isPrizeClosed ? "View Details" : "Enter Draw"}
                   </span>
-                  <span className="sm:hidden">{isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter Draw"}</span>
+                  <span className="sm:hidden">
+                    {isPrizeCancelled ? "Cancel" : isPrizeClosed ? "View" : "Enter Draw"}
+                  </span>
                 </Link>
               ) : (
                 <button

@@ -64,6 +64,20 @@ export default function FacebookPixel({
   // Store pixel ID globally for use in tracking functions
   globalPixelId = pixelId;
 
+  // Check if script already exists in DOM to prevent duplicates
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const existingScript = document.getElementById("facebook-pixel-script");
+      if (existingScript || pixelInitialized) {
+        // Script already exists or pixel initialized
+        if (pixelInitialized) {
+          setIsInitialized(true);
+          hasTrackedInitialPageView.current = true;
+        }
+      }
+    }
+  }, []);
+
   // Track page view on route change (only if pixel is loaded and not initial load)
   useEffect(() => {
     // Only track on route changes, not initial load (initial PageView is queued in inline script)
@@ -79,19 +93,34 @@ export default function FacebookPixel({
     }
   }, [pathname, isInitialized]);
 
-  // Check if script already exists in DOM to prevent duplicates
+  // Fallback: Verify PageView fired after pixel loads (safety net)
+  // Moved before early returns to satisfy React Hooks rules
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const existingScript = document.getElementById("facebook-pixel-script");
-      if (existingScript || pixelInitialized) {
-        // Script already exists or pixel initialized
-        if (pixelInitialized) {
-          setIsInitialized(true);
+    if (!isInitialized || hasTrackedInitialPageView.current) {
+      return;
+    }
+
+    // Check if PageView was actually sent (verify after 2 seconds)
+    const verifyPageView = setTimeout(() => {
+      if (typeof window !== "undefined" && window.fbq) {
+        // Try to manually trigger PageView if it didn't fire
+        // This is a safety net in case the queued PageView didn't execute
+        try {
+          window.fbq("track", "PageView");
           hasTrackedInitialPageView.current = true;
+          if (process.env.NODE_ENV === "development") {
+            console.log("✅ Facebook Pixel: PageView verified/triggered (fallback)");
+          }
+        } catch (error) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("⚠️ Facebook Pixel: Could not verify PageView", error);
+          }
         }
       }
-    }
-  }, []);
+    }, 2000);
+
+    return () => clearTimeout(verifyPageView);
+  }, [isInitialized]);
 
   // Don't load if disabled or no pixel ID
   if (disabled || !pixelId) {
@@ -154,10 +183,13 @@ export default function FacebookPixel({
               s.parentNode.insertBefore(t,s)}(window, document,'script',
               'https://connect.facebook.net/en_US/fbevents.js');
               // Queue init and PageView only once - these will execute when fbevents.js loads
-              if(typeof window !== 'undefined' && window.fbq && !window._fbPixelInit) {
+              // Note: fbq function queues commands automatically if library not loaded yet
+              // Remove window.fbq check to avoid race condition - fbq is created in this script
+              if(typeof window !== 'undefined' && !window._fbPixelInit) {
                 window._fbPixelInit = true; // Global flag to prevent multiple inits
                 
                 // Initialize pixel with optional data processing options for GDPR/CCPA compliance
+                // fbq will queue these commands if fbevents.js hasn't loaded yet
                 ${
                   dataProcessingOptions
                     ? `window.fbq('init', '${pixelId}', ${JSON.stringify(dataProcessingOptions)});`

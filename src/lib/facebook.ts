@@ -134,9 +134,50 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
         console.log(
           `✅ Facebook Conversions API: Event received - ${event.event_name} (EventID: ${event.event_id || "none"})`
         );
+
+        // ✅ ENHANCED: Check for Event Match Quality warnings and scores
+        if (responseData.events && responseData.events.length > 0) {
+          const eventResponse = responseData.events[0];
+
+          // Log warnings if present
+          if (eventResponse.messages && Array.isArray(eventResponse.messages)) {
+            eventResponse.messages.forEach((msg: { message?: string; type?: string; description?: string }) => {
+              if (msg.type === "warning") {
+                console.warn(
+                  `⚠️ Facebook CAPI Warning for ${event.event_name}: ${msg.message || msg.description || "Unknown warning"}`
+                );
+              } else if (msg.type === "error") {
+                console.error(
+                  `❌ Facebook CAPI Error for ${event.event_name}: ${msg.message || msg.description || "Unknown error"}`
+                );
+              }
+            });
+          }
+
+          // Log event match quality details if available
+          if (eventResponse.event_name && eventResponse.event_id) {
+            const matchQualityInfo: Record<string, unknown> = {
+              event_name: eventResponse.event_name,
+              event_id: eventResponse.event_id,
+            };
+
+            // Extract match quality score if available (Meta may provide this in different formats)
+            if (eventResponse.match_quality_score !== undefined) {
+              matchQualityInfo.match_quality_score = eventResponse.match_quality_score;
+            }
+
+            // Log match quality information
+            if (Object.keys(matchQualityInfo).length > 1) {
+              console.log(`📊 Event Match Quality for ${eventResponse.event_name}:`, matchQualityInfo);
+            }
+          }
+        }
       }
-    } catch {
+    } catch (parseError) {
       // Response parsing failed, but request was successful
+      if (process.env.NODE_ENV === "development") {
+        console.warn("⚠️ Failed to parse Facebook CAPI response:", parseError);
+      }
     }
 
     return true;

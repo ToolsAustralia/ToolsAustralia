@@ -7,6 +7,7 @@ import User from "@/models/User";
 import MiniDraw from "@/models/MiniDraw";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Benefits are now granted via webhook processing only
 
 const miniDrawPurchaseSchema = z.object({
@@ -43,6 +44,10 @@ const miniDrawPurchaseSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     console.log("🎯 Mini draw purchase request received");
+
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Store in payment metadata so webhook can use it for improved match quality
+    const requestContext = extractRequestContext(request);
 
     // Parse and validate request body
     const body = await request.json();
@@ -216,7 +221,8 @@ export async function POST(request: NextRequest) {
         user as unknown as Parameters<typeof handleOneClickPurchase>[0],
         miniDrawPackage,
         validatedData.miniDrawId,
-        validatedData.paymentMethodId
+        validatedData.paymentMethodId,
+        requestContext
       );
     } else {
       if (!user.stripeCustomerId) {
@@ -227,7 +233,8 @@ export async function POST(request: NextRequest) {
         user,
         miniDrawPackage,
         validatedData.miniDrawId,
-        validatedData.paymentMethodId
+        validatedData.paymentMethodId,
+        requestContext
       );
     }
   } catch (error) {
@@ -275,7 +282,8 @@ async function handleOneClickPurchase(
     partnerDiscountDays: number;
   },
   miniDrawId: string,
-  paymentMethodId: string
+  paymentMethodId: string,
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
 ) {
   try {
     console.log("🎯 handleOneClickPurchase called with:", {
@@ -428,6 +436,11 @@ async function handleOneClickPurchase(
           entriesCount: miniDrawPackage.entries.toString(),
           packageName: miniDrawPackage.name,
           price: Math.round(miniDrawPackage.price * 100).toString(), // Price in cents
+          // Store request context for Facebook CAPI (webhook will extract and use)
+          ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+          ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+          ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
+          ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
         },
       });
 
@@ -631,7 +644,8 @@ async function handlePaymentIntentCreation(
   user: { _id: string; stripeCustomerId?: string },
   miniDrawPackage: { _id: string; name: string; price: number; entries: number },
   miniDrawId: string,
-  paymentMethodId?: string
+  paymentMethodId: string | undefined,
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
 ) {
   try {
     const shouldConfirm = !!paymentMethodId;
@@ -651,6 +665,11 @@ async function handlePaymentIntentCreation(
         entriesCount: miniDrawPackage.entries.toString(),
         packageName: miniDrawPackage.name,
         price: Math.round(miniDrawPackage.price * 100).toString(), // Price in cents
+        // Store request context for Facebook CAPI (webhook will extract and use)
+        ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
       },
     };
 

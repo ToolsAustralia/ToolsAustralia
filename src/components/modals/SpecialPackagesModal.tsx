@@ -20,6 +20,7 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { generateEventID } from "@/utils/tracking/facebook-helpers";
 
 /**
  * SpecialPackagesModalProps Interface
@@ -249,7 +250,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         const packageId = selectedPackage?._id || "";
 
         // Generate EventID matching server-side format for deduplication
-        const eventID = `purchase_${finalPaymentIntentId}_${Date.now()}`;
+        // Use generateEventID helper to ensure consistency with server-side format
+        const eventID = generateEventID("purchase", finalPaymentIntentId);
 
         // Import trackFacebookEvent dynamically to avoid SSR issues
         const { trackFacebookEvent } = await import("@/components/FacebookPixel");

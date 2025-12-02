@@ -8,6 +8,7 @@ import ProductSection from "@/components/features/ProductSection";
 import ProductInteractions from "./components/ProductInteractions";
 import ProductTabs from "./components/ProductTabs";
 import ShareButton from "./components/ShareButton";
+import ProductViewTracking from "./components/ProductViewTracking";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { Product as ProductType } from "@/types/product";
@@ -171,6 +172,8 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
   return (
     <div className="min-h-screen-svh bg-white">
+      {/* Track ViewContent event for Facebook Pixel */}
+      <ProductViewTracking product={serializedProduct} />
       {/* JSON-LD structured data */}
       <ProductJsonLd
         name={`${product.brand} ${product.name}`}

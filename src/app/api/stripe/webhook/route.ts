@@ -61,6 +61,31 @@ async function markEventProcessed(paymentIntentId: string): Promise<void> {
 }
 
 /**
+ * Extract request context from payment intent metadata for Facebook CAPI
+ * This context was stored by API routes when creating payment intents
+ */
+function extractRequestContextFromMetadata(
+  metadata: Stripe.Metadata
+): { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined {
+  const clientIp = metadata.capi_client_ip;
+  const userAgent = metadata.capi_user_agent;
+  const fbc = metadata.capi_fbc;
+  const fbp = metadata.capi_fbp;
+
+  // Only return context if at least one field is present
+  if (clientIp || userAgent || fbc || fbp) {
+    return {
+      ...(clientIp && { client_ip_address: clientIp }),
+      ...(userAgent && { client_user_agent: userAgent }),
+      ...(fbc && { fbc }),
+      ...(fbp && { fbp }),
+    };
+  }
+
+  return undefined;
+}
+
+/**
  * Get active promo multiplier for a package type
  */
 async function getActivePromoMultiplier(packageType: "membership" | "one-time" | "mini-draw"): Promise<number> {
@@ -203,6 +228,9 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
     webhookLog("info", `Upsell ${offerId} is for mini-draw: ${miniDrawId}`);
   }
 
+  // Extract request context from payment intent metadata for improved Facebook CAPI match quality
+  const requestContext = extractRequestContextFromMetadata(paymentIntent.metadata);
+
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -222,7 +250,8 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
       packageType: "upsell",
       ...(miniDrawId && { miniDrawId: miniDrawId }), // Include miniDrawId if present
       affiliateCode: paymentIntent.metadata.affiliateCode,
-    }
+    },
+    requestContext // Pass request context for improved match quality
   );
 
   if (!result.success) {
@@ -255,6 +284,9 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     `One-time package ${packageId}: ${entriesCount} base entries × ${promoMultiplier} = ${finalEntriesCount} final entries`
   );
 
+  // Extract request context from payment intent metadata for improved Facebook CAPI match quality
+  const requestContext = extractRequestContextFromMetadata(paymentIntent.metadata);
+
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -273,7 +305,8 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       type: "one-time",
       packageType: "one-time",
       affiliateCode: paymentIntent.metadata.affiliateCode,
-    }
+    },
+    requestContext // Pass request context for improved match quality
   );
 
   if (!result.success) {
@@ -311,6 +344,9 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
   );
   webhookLog("info", `Mini-draw ID: ${miniDrawId}`);
 
+  // Extract request context from payment intent metadata for improved Facebook CAPI match quality
+  const requestContext = extractRequestContextFromMetadata(paymentIntent.metadata);
+
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -330,7 +366,8 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
       packageType: "mini-draw",
       miniDrawId: miniDrawId, // Pass MiniDraw ID to payment processing
       affiliateCode: paymentIntent.metadata.affiliateCode,
-    }
+    },
+    requestContext // Pass request context for improved match quality
   );
 
   if (!result.success) {
@@ -1423,6 +1460,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // This ensures entries route correctly during freeze period
     const paymentTimestamp = invoice.status_transitions?.paid_at || invoice.created;
 
+    // Extract request context from invoice metadata (if available)
+    // Note: For subscription renewals, original request context may not be available
+    const requestContext = invoice.metadata ? extractRequestContextFromMetadata(invoice.metadata) : undefined;
+
     const result = await processPaymentBenefits(
       invoicePaymentId,
       user._id.toString(),
@@ -1439,7 +1480,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         created: Math.floor(paymentTimestamp * 1000), // Use paid_at timestamp, not invoice creation time
         type: "subscription",
         packageType: "subscription",
-      }
+      },
+      requestContext // Pass request context if available (may be undefined for renewals)
     );
 
     if (result.success) {

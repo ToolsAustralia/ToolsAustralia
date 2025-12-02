@@ -15,6 +15,7 @@ import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { generateEventID } from "@/utils/tracking/facebook-helpers";
 
 /**
  * UpsellModal Component
@@ -367,7 +368,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         const currency = "AUD";
 
         // Generate EventID matching server-side format for deduplication
-        const eventID = `purchase_${finalPaymentIntentId}_${Date.now()}`;
+        // Use generateEventID helper to ensure consistency with server-side format
+        const eventID = generateEventID("purchase", finalPaymentIntentId);
 
         // Import trackFacebookEvent dynamically to avoid SSR issues
         const { trackFacebookEvent } = await import("@/components/FacebookPixel");

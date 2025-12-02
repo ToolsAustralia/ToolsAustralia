@@ -9,6 +9,7 @@ import { trackAffiliateSignup } from "@/lib/affiliate";
 import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 
@@ -81,6 +82,10 @@ function getBaseUrl(): string {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Store in payment metadata so webhook can use it for improved match quality
+    const requestContext = extractRequestContext(request);
 
     const body = await request.json();
     const validatedData = createOneTimePurchaseSchema.parse(body);
@@ -233,6 +238,11 @@ export async function POST(request: NextRequest) {
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
         ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
+        // Store request context for Facebook CAPI (webhook will extract and use)
+        ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
       },
     });
 
