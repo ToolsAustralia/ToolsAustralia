@@ -35,9 +35,10 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   // - https://js.stripe.com: Stripe.js library (required for payment forms)
   // - https://analytics.tiktok.com: TikTok Pixel script (required for TikTok tracking)
   // - https://js.hcaptcha.com: hCaptcha script (required for Stripe's fraud detection)
+  // - https://*.hcaptcha.com: hCaptcha wildcard (required for dynamic subdomains used by hCaptcha iframes)
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https:`;
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https://*.hcaptcha.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https://*.hcaptcha.com https:`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -56,7 +57,8 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     // - hCaptcha: Required for Stripe's fraud detection system
     //   * api.hcaptcha.com: hCaptcha authentication API
     //   * hcaptcha.com: hCaptcha main domain
-    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https:",
+    //   * *.hcaptcha.com: hCaptcha wildcard (required for dynamic subdomains and iframe contexts)
+    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https:",
     "font-src 'self' https: data:",
     // form-action: Allow Facebook Pixel to submit tracking data via hidden forms
     // This is required for Facebook Pixel's fallback tracking mechanism
@@ -72,8 +74,9 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     // - hCaptcha: Required for Stripe's fraud detection iframes
     //   * js.hcaptcha.com: hCaptcha widget iframe
     //   * hcaptcha.com: hCaptcha main iframe domain
+    //   * *.hcaptcha.com: hCaptcha wildcard (required for dynamic subdomains in iframe contexts)
     // - Vercel: For development feedback (staging only)
-    "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live https://js.hcaptcha.com https://hcaptcha.com",
+    "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com",
     // img-src: Allow images from Stripe CDN for payment form assets
     // - q.stripe.com: Stripe image assets (payment form icons, etc.)
     "img-src 'self' https: data: blob: https://q.stripe.com",
@@ -81,7 +84,11 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     "media-src 'self' https:",
     "object-src 'none'",
     scriptSrc,
-    "style-src 'self' 'unsafe-inline' https:",
+    // worker-src: Allow service workers from Stripe (if used for payment processing)
+    "worker-src 'self' https://js.stripe.com",
+    // style-src: Allow styles from hCaptcha iframes
+    // - *.hcaptcha.com: hCaptcha wildcard (required for styles in iframe contexts)
+    "style-src 'self' 'unsafe-inline' https: https://*.hcaptcha.com",
     "style-src-attr 'self' 'unsafe-inline'",
     "style-src-elem 'self' 'unsafe-inline' https:", // Allow unsafe-inline for inline style elements (React/Next.js)
     "upgrade-insecure-requests",
