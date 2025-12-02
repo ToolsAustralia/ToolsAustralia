@@ -44,9 +44,19 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     "block-all-mixed-content",
     // connect-src: Allow network requests to external APIs
     // - Facebook domains: For Facebook Pixel and Conversions API
-    // - Stripe domains: For payment processing and fraud detection
-    // - hCaptcha: Required for Stripe's fraud detection system (api.hcaptcha.com for authentication)
-    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://api.hcaptcha.com https://hcaptcha.com https:",
+    //   * www.facebook.com: Facebook tracking endpoint
+    //   * graph.facebook.com: Facebook Graph API (Conversions API)
+    //   * connect.facebook.net: Facebook Pixel network requests
+    // - Stripe domains: For payment processing, fraud detection, and analytics
+    //   * api.stripe.com: Stripe API calls (payment processing)
+    //   * r.stripe.com: Stripe reporting/analytics endpoint (required for fraud detection)
+    //   * b.stripecdn.com: Stripe CDN (fraud detection assets and hCaptcha integration)
+    //   * q.stripe.com: Stripe image assets
+    //   * m.stripe.com: Stripe additional services
+    // - hCaptcha: Required for Stripe's fraud detection system
+    //   * api.hcaptcha.com: hCaptcha authentication API
+    //   * hcaptcha.com: hCaptcha main domain
+    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https:",
     "font-src 'self' https: data:",
     // form-action: Allow Facebook Pixel to submit tracking data via hidden forms
     // This is required for Facebook Pixel's fallback tracking mechanism
@@ -55,10 +65,18 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     "frame-ancestors 'none'",
     // frame-src: Allow iframes from trusted sources
     // - Stripe: For payment forms and fraud detection
+    //   * js.stripe.com: Stripe Elements iframes (payment forms)
     // - Facebook: For social widgets
+    //   * connect.facebook.net: Facebook social widgets
+    //   * www.facebook.com: Facebook iframes
     // - hCaptcha: Required for Stripe's fraud detection iframes
+    //   * js.hcaptcha.com: hCaptcha widget iframe
+    //   * hcaptcha.com: hCaptcha main iframe domain
+    // - Vercel: For development feedback (staging only)
     "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live https://js.hcaptcha.com https://hcaptcha.com",
-    "img-src 'self' https: data: blob:",
+    // img-src: Allow images from Stripe CDN for payment form assets
+    // - q.stripe.com: Stripe image assets (payment form icons, etc.)
+    "img-src 'self' https: data: blob: https://q.stripe.com",
     "manifest-src 'self'",
     "media-src 'self' https:",
     "object-src 'none'",
