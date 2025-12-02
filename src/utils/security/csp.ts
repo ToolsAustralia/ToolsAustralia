@@ -34,21 +34,30 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   // - https://connect.facebook.net: Facebook Pixel script (fbevents.js)
   // - https://js.stripe.com: Stripe.js library (required for payment forms)
   // - https://analytics.tiktok.com: TikTok Pixel script (required for TikTok tracking)
+  // - https://js.hcaptcha.com: hCaptcha script (required for Stripe's fraud detection)
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https:`;
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https:`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "block-all-mixed-content",
-    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https:",
+    // connect-src: Allow network requests to external APIs
+    // - Facebook domains: For Facebook Pixel and Conversions API
+    // - Stripe domains: For payment processing and fraud detection
+    // - hCaptcha: Required for Stripe's fraud detection system (api.hcaptcha.com for authentication)
+    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://api.hcaptcha.com https://hcaptcha.com https:",
     "font-src 'self' https: data:",
     // form-action: Allow Facebook Pixel to submit tracking data via hidden forms
     // This is required for Facebook Pixel's fallback tracking mechanism
     // Only allows form submissions to self and Facebook's tracking endpoint
     "form-action 'self' https://www.facebook.com",
     "frame-ancestors 'none'",
-    "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live",
+    // frame-src: Allow iframes from trusted sources
+    // - Stripe: For payment forms and fraud detection
+    // - Facebook: For social widgets
+    // - hCaptcha: Required for Stripe's fraud detection iframes
+    "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live https://js.hcaptcha.com https://hcaptcha.com",
     "img-src 'self' https: data: blob:",
     "manifest-src 'self'",
     "media-src 'self' https:",
