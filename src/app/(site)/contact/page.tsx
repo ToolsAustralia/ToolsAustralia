@@ -4,7 +4,6 @@ import Image from "next/image";
 import ContactForm from "@/components/features/ContactForm";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import { Facebook, Instagram, Mail } from "lucide-react";
-import MembershipSection from "@/components/sections/MembershipSection";
 
 // SEO Metadata for Contact Page
 export const metadata: Metadata = {
@@ -30,7 +29,7 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <div className="min-h-screen-svh bg-white">
+    <div className="min-h-screen-svh bg-white pb-16 sm:pb-24">
       {/* Page Header - Metallic Industrial Design */}
       <div className="relative pt-[86px] sm:pt-[106px] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
         {/* Background Image with Dark Overlay */}
@@ -152,12 +151,6 @@ export default function ContactPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Membership Section */}
-      <div className="bg-gradient-to-b from-black via-slate-900 to-black">
-        {/* Membership Section */}
-        <MembershipSection title="UNLOCK THE DETAILS" padding="pt-8 pb-32" titleColor="text-white" />
       </div>
     </div>
   );

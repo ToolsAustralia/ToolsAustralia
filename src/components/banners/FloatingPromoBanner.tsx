@@ -43,6 +43,15 @@ const FloatingPromoBanner: React.FC = () => {
   // Check if we're on a login page
   const isLoginPage = pathname === "/login";
 
+  // Check if we're on a terms page
+  const isTermsPage = pathname === "/terms";
+
+  // Check if we're on a privacy page
+  const isPrivacyPage = pathname === "/privacy";
+
+  // Check if we're on a competition terms page
+  const isCompetitionTermsPage = pathname === "/competition-term-majordraw";
+
   // Listen for tab changes from MembershipSection
   useEffect(() => {
     const handleTabChange = (event: CustomEvent<{ activeTab: "membership" | "one-time" }>) => {
@@ -135,6 +144,9 @@ const FloatingPromoBanner: React.FC = () => {
   // - On admin page (hide banner on all admin pages)
   // - On affiliate page (hide banner on all affiliate pages)
   // - On login page (hide banner on login page)
+  // - On terms page (hide banner on terms page)
+  // - On privacy page (hide banner on privacy page)
+  // - On competition terms page (hide banner on competition terms page)
   // - On mini draw page but no active mini promo (hide if no promo available)
   // - No active promo for current context
   if (
@@ -144,6 +156,9 @@ const FloatingPromoBanner: React.FC = () => {
     isAdminPage ||
     isAffiliatePage ||
     isLoginPage ||
+    isTermsPage ||
+    isPrivacyPage ||
+    isCompetitionTermsPage ||
     (isMiniDrawPage && !miniPromo) ||
     !activePromo
   ) {

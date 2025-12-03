@@ -392,7 +392,6 @@ export default async function PrivacyPolicyPage() {
             <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-4 text-gray-200">
               <p className="font-semibold text-white">Tools Australia Pty Ltd</p>
               <p className="font-semibold text-white">Attention: Privacy Officer</p>
-              <p>Address: 6A Aylesbury Crescent, Gladstone Park, VIC 3043</p>
               <p>
                 Email:{" "}
                 <a

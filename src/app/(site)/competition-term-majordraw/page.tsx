@@ -86,8 +86,6 @@ export default async function MajorGiveawayTermsPage() {
                 <dl className="grid gap-2 text-gray-300 sm:grid-cols-[max-content,1fr]">
                   <dt className="font-semibold text-white">Name:</dt>
                   <dd>Tools Australia Pty Ltd</dd>
-                  <dt className="font-semibold text-white">Registered Address:</dt>
-                  <dd>6A Aylesbury Crescent, Gladstone Park, VIC 3043</dd>
                   <dt className="font-semibold text-white">Website:</dt>
                   <dd>
                     <a

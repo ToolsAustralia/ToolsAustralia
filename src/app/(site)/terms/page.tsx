@@ -44,8 +44,6 @@ export default async function TermsPage() {
             <div className="grid gap-2 text-gray-300 sm:grid-cols-[max-content,1fr]">
               <span className="font-semibold text-white">Name:</span>
               <span>Tools Australia Pty Ltd</span>
-              <span className="font-semibold text-white">Registered Address:</span>
-              <span>6A Aylesbury Crescent, Gladstone Park, VIC 3043</span>
               <span className="font-semibold text-white">Website:</span>
               <span>
                 <a className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline" href={baseUrl}>
