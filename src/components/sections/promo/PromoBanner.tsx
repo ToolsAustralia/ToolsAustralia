@@ -139,13 +139,13 @@ export default function PromoBanner() {
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
   // Use wrapper to prevent layout shift when banner becomes fixed
-  const bgColorClass = "bg-gradient-to-r from-gray-900 via-gray-800 to-black";
+  const bgColorClass = "bg-black";
 
   return (
     <>
       <motion.div
         layout
-        className={`fire ${
+        className={`${
           isScrolled
             ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
             : "relative w-full mt-0 z-30"
@@ -197,17 +197,17 @@ export default function PromoBanner() {
                     }}
                   />
 
-                  {/* Main badge container - Premium gradient with depth - Matches second line width */}
+                  {/* Main badge container - Gold gradient with depth - Matches second line width */}
                   <div
                     className="relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden"
                     style={{
                       background: `linear-gradient(135deg, 
-                      #fbbf24 0%, 
-                      #f59e0b 20%, 
-                      #d97706 40%, 
-                      #b45309 60%, 
-                      #92400e 80%, 
-                      #78350f 100%
+                      #ffd700 0%, 
+                      #ffed4e 20%, 
+                      #fbbf24 40%, 
+                      #f59e0b 60%, 
+                      #d97706 80%, 
+                      #b45309 100%
                     )`,
                       boxShadow: `
                       0 0 15px rgba(251, 191, 36, 0.6),
@@ -266,14 +266,14 @@ export default function PromoBanner() {
                 {/* Second Line - "GET 2x ENTRIES" - Matches width of first line */}
                 <div className="w-full flex items-center justify-center">
                   <span className="font-black uppercase text-[15px] sm:text-[15px] lg:text-[18px] tracking-wide text-center">
-                    {/* "GET" text - Yellow/Gold to match badge */}
-                    <span className="text-yellow-300">GET </span>
+                    {/* "GET" text - White */}
+                    <span className="text-white">GET </span>
 
                     {/* "2X" with fiery effect - readable on dark background */}
                     <span className="text-red-500">{multiplier}X</span>
 
-                    {/* "ENTRIES" text - Yellow/Gold to match badge */}
-                    <span className="text-yellow-300"> ENTRIES</span>
+                    {/* "ENTRIES" text - White */}
+                    <span className="text-white"> ENTRIES</span>
                   </span>
                 </div>
               </div>
