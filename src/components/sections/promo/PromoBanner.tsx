@@ -145,7 +145,7 @@ export default function PromoBanner() {
     <>
       <motion.div
         layout
-        className={`${
+        className={`fire ${
           isScrolled
             ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
             : "relative w-full mt-0 z-30"
@@ -183,7 +183,7 @@ export default function PromoBanner() {
             {/* Left Side - Vertical Stack Layout */}
             <div className="flex flex-col items-start">
               {/* Wrapper to match widths */}
-              <div className="flex flex-col items-start w-fit gap-1 sm:gap-4 lg:gap-2">
+              <div className="flex flex-col items-start w-fit gap-0 ">
                 {/* First Line - "FIRST 500 PEOPLE" Badge - Matches width of second line */}
                 <div className="relative w-full">
                   {/* Outer glow effect - pulsing animation */}
