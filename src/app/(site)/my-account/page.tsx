@@ -346,7 +346,7 @@ export default function MyAccountPage() {
       totalEntries,
       minimumEntries,
       entriesRemaining,
-      requiresMembership: true, // Mini draws require membership
+      requiresMembership: false, // ✅ AUTHENTICATION-ONLY: Mini draws available to all authenticated users
       hasActiveMembership,
       isParticipant, // Flag to indicate user is participating
     };

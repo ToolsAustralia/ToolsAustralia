@@ -136,10 +136,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Add membership requirement and status to each mini draw
+    // ✅ AUTHENTICATION-ONLY: Mini draws are now available to all authenticated users
+    // requiresMembership set to false - any logged-in user can participate
+    // hasActiveMembership kept for UI/analytics purposes
     const miniDrawsWithMembership = (miniDraws as Array<Record<string, unknown>>).map((draw) => ({
       ...draw,
-      requiresMembership: true,
+      requiresMembership: false,
       hasActiveMembership,
       entriesRemaining: Math.max((draw.minimumEntries as number) - (draw.totalEntries as number), 0),
     }));

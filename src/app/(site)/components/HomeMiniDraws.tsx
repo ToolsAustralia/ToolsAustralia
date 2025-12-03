@@ -61,7 +61,7 @@ export default function HomeMiniDraws() {
           totalEntries,
           minimumEntries,
           entriesRemaining,
-          requiresMembership: miniDraw.requiresMembership ?? true,
+          requiresMembership: miniDraw.requiresMembership ?? false, // ✅ AUTHENTICATION-ONLY: Default to false
           hasActiveMembership: miniDraw.hasActiveMembership ?? false,
           brandId: miniDraw.brandId,
           prize: {

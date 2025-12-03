@@ -82,8 +82,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             })()
           : undefined,
       userEntryCount, // Include user's entry count
-      hasActiveMembership, // Include membership status
-      requiresMembership: true, // Mini draws require membership
+      hasActiveMembership, // Include membership status (for UI/analytics)
+      requiresMembership: false, // ✅ AUTHENTICATION-ONLY: Mini draws available to all authenticated users
       createdAt: miniDraw.createdAt.toISOString(),
       updatedAt: miniDraw.updatedAt.toISOString(),
     };

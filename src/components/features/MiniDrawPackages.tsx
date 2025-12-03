@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { Package, Info } from "lucide-react";
 import { miniDrawPackages } from "@/data/miniDrawPackages";
 import { useToast } from "@/components/ui/Toast";
@@ -13,6 +12,7 @@ import type { PaymentStatusResponse } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
+import LoginPromptModal from "@/components/modals/LoginPromptModal";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -28,7 +28,6 @@ export default function MiniDrawPackages({
   userEntryCount = 0,
 }: MiniDrawPackagesProps) {
   const { data: session } = useSession();
-  const router = useRouter();
   const { showToast } = useToast();
   const { userData, isAuthenticated } = useUserContext();
   const { data: paymentMethods } = usePaymentMethods(userData?._id);
@@ -47,6 +46,7 @@ export default function MiniDrawPackages({
   const [upsellTriggered, setUpsellTriggered] = useState(false);
   const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
   const [successToastShown, setSuccessToastShown] = useState(false); // Guard to prevent duplicate toasts
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Get selected package for modal
   const selectedPackage = selectedPackageId ? miniDrawPackages.find((p) => p._id === selectedPackageId) : null;
@@ -59,12 +59,9 @@ export default function MiniDrawPackages({
   const isSoldOut = entriesRemaining !== undefined && entriesRemaining <= 0;
 
   const handlePurchase = async (packageId: string) => {
+    // ✅ AUTHENTICATION-ONLY: Check if user is authenticated (not membership)
     if (!session?.user) {
-      showToast({
-        type: "error",
-        title: "Please sign in to purchase packages",
-      });
-      router.push("/auth/signin");
+      setShowLoginModal(true);
       return;
     }
 
@@ -434,7 +431,6 @@ export default function MiniDrawPackages({
                 }}
                 disabled={
                   purchasingPackageId === pkg._id ||
-                  !session?.user ||
                   isSoldOut ||
                   (entriesRemaining !== undefined && pkg.entries > entriesRemaining)
                 }
@@ -520,7 +516,7 @@ export default function MiniDrawPackages({
             handlePurchase(selectedPackage._id);
           }}
           isPurchasing={purchasingPackageId === selectedPackage._id}
-          disabled={!session?.user}
+          disabled={false}
         />
       )}
 
@@ -536,6 +532,9 @@ export default function MiniDrawPackages({
           onTimeout={handlePaymentProcessingTimeout}
         />
       )}
+
+      {/* Login Prompt Modal */}
+      <LoginPromptModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
     </div>
   );
 }

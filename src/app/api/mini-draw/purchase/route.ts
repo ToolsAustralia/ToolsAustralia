@@ -82,18 +82,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user is a member (has active subscription or one-time packages)
-    const hasActiveMembership = user.subscription?.isActive === true;
-
-    if (!hasActiveMembership) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "An active membership is required to purchase mini draw packages",
-        },
-        { status: 403 }
-      );
-    }
+    // ✅ AUTHENTICATION-ONLY: Mini draws are now available to all authenticated users
+    // Membership check removed - any logged-in user can purchase mini draw packages
 
     // Create or retrieve Stripe customer ID
     let stripeCustomerId = user.stripeCustomerId;
@@ -143,7 +133,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate MiniDraw is in a valid state to accept entries
-    const now = new Date();
     if (miniDraw.status === "completed" || miniDraw.status === "cancelled") {
       return NextResponse.json(
         {

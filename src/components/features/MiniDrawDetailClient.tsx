@@ -54,9 +54,8 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
   const isActive = miniDraw.status === "active";
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
   const showPackages = isActive && !isSoldOut;
-  const requiresMembership = miniDraw.requiresMembership ?? true;
   const hasActiveMembership = miniDraw.hasActiveMembership ?? false;
-  const showMembershipWarning = requiresMembership && !hasActiveMembership;
+  const showMembershipWarning = false; // ✅ AUTHENTICATION-ONLY: No membership warning needed
   const brandMeta = getBrandMeta(miniDraw.brandId);
   const brandLabel = brandMeta?.name ?? "Mini Draw";
   const brandBadgeClass = brandMeta

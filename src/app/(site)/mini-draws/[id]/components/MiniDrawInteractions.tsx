@@ -1,8 +1,6 @@
 "use client";
 
-import { Lock } from "lucide-react";
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
-import Link from "next/link";
 
 interface MiniDrawInteractionsProps {
   miniDraw: {
@@ -29,37 +27,13 @@ export default function MiniDrawInteractions({ miniDraw }: MiniDrawInteractionsP
   const isActive = miniDraw.status === "active";
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
   const showPackages = isActive && !isSoldOut;
-  const requiresMembership = miniDraw.requiresMembership ?? true;
-  const hasActiveMembership = miniDraw.hasActiveMembership ?? false;
   const userEntryCount = miniDraw.userEntryCount ?? 0;
 
   return (
     <div className="space-y-6">
-      {/* Membership Requirement Warning */}
-      {requiresMembership && !hasActiveMembership && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <Lock className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="text-sm font-semibold text-yellow-800 mb-1">Membership Required</h3>
-                <p className="text-sm text-yellow-700">
-                  You need an active membership to purchase entries for this mini draw.
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/membership"
-              className="inline-flex w-full sm:w-auto justify-center bg-yellow-600 hover:bg-yellow-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm shadow-sm"
-            >
-              Get Membership
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Entry Packages (only show if draw is open and member is active) */}
-      {showPackages && hasActiveMembership && (
+      {/* Entry Packages - Show to all users (authenticated and unauthenticated) */}
+      {/* MiniDrawPackages component handles login modal for unauthenticated users */}
+      {showPackages && (
         <MiniDrawPackages
           miniDrawId={miniDraw._id}
           minimumEntries={miniDraw.minimumEntries}

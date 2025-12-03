@@ -83,7 +83,7 @@ export default function MiniDrawsContent({
   });
 
   // Transform React Query mini draws to match ProductCard's MiniDrawType interface (entry-based system)
-  // NOTE: Mini draws are membership-gated; defaulting to requiresMembership=true keeps UI messaging consistent.
+  // ✅ AUTHENTICATION-ONLY: Mini draws are now available to all authenticated users (not just members)
   const transformedMiniDraws: MiniDrawForCard[] =
     miniDrawsData?.miniDraws?.map(
       (
@@ -107,7 +107,7 @@ export default function MiniDrawsContent({
           totalEntries,
           minimumEntries,
           entriesRemaining,
-          requiresMembership: miniDraw.requiresMembership ?? true,
+          requiresMembership: miniDraw.requiresMembership ?? false, // ✅ AUTHENTICATION-ONLY: Default to false
           hasActiveMembership: miniDraw.hasActiveMembership ?? false,
           brandId: miniDraw.brandId,
           prize: {

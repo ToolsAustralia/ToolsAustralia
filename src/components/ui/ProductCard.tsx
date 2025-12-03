@@ -152,7 +152,7 @@ export default function ProductCard({
         minimumEntries: product.minimumEntries || 0,
         status: product.status,
         entriesRemaining: remainingEntries,
-        requiresMembership: product.requiresMembership ?? true,
+        requiresMembership: product.requiresMembership ?? false, // ✅ AUTHENTICATION-ONLY: Mini draws default to false
         hasActiveMembership: product.hasActiveMembership ?? false,
       };
     } else {

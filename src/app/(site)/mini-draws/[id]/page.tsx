@@ -185,8 +185,8 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     totalEntries,
     minimumEntries,
     entriesRemaining,
-    requiresMembership: true, // Mini draws require membership
-    hasActiveMembership,
+    requiresMembership: false, // ✅ AUTHENTICATION-ONLY: Mini draws available to all authenticated users
+    hasActiveMembership, // Kept for UI/analytics purposes
     userEntryCount,
     prize: miniDraw.prize,
     latestWinner: latestWinnerData,
@@ -208,7 +208,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
       minimumEntries: drawMinEntries,
       entriesRemaining: Math.max(drawMinEntries - drawTotalEntries, 0),
       isActive: draw.status === "active",
-      requiresMembership: true,
+      requiresMembership: false, // ✅ AUTHENTICATION-ONLY: Mini draws available to all authenticated users
       hasActiveMembership,
       prize: {
         name: draw.prize.name,
