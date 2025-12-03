@@ -95,7 +95,9 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
           <h1 className="text-4xl font-bold text-gray-900 mb-2">{miniDraw.name}</h1>
           <p className="text-lg text-gray-600 mb-4">{miniDraw.description}</p>
           <div className="flex items-center gap-3 flex-wrap mb-4">
-            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${brandBadgeClass}`}>
+            <span
+              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${brandBadgeClass}`}
+            >
               <Trophy className="w-4 h-4" />
               {brandLabel}
             </span>
@@ -136,7 +138,9 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">{miniDraw.prize.name}</h3>
               <p className="text-gray-600 mb-4">{miniDraw.prize.description}</p>
-              <div className="text-base font-semibold text-gray-700 mb-4">Exclusive reward details for members only</div>
+              <div className="text-base font-semibold text-gray-700 mb-4">
+                Exclusive reward details for members only
+              </div>
               {miniDraw.prize.images && miniDraw.prize.images.length > 0 && (
                 <div className="grid grid-cols-2 gap-4">
                   {miniDraw.prize.images.map((image, index) => (

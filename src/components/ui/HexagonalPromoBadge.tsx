@@ -4,7 +4,7 @@ import React from "react";
 
 interface HexagonalPromoBadgeProps {
   multiplier: 2 | 3 | 5 | 10;
-  size?: "xs" | "small" | "medium" | "large";
+  size?: "xs" | "small" | "medium" | "large" | "compact" | "tiny";
   className?: string;
 }
 
@@ -24,6 +24,16 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
     small: {
       container: "w-12 h-12",
       text: "text-xs",
+      clipPath: "polygon(29.3% 0%, 70.7% 0%, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0% 70.7%, 0% 29.3%)",
+    },
+    compact: {
+      container: "w-7 h-7",
+      text: "text-xs", // Keep same text size as "small"
+      clipPath: "polygon(29.3% 0%, 70.7% 0%, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0% 70.7%, 0% 29.3%)",
+    },
+    tiny: {
+      container: "w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9",
+      text: "text-[15px] sm:text-[15px] lg:text-[15px]", // Match GET and ENTRIES text size
       clipPath: "polygon(29.3% 0%, 70.7% 0%, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0% 70.7%, 0% 29.3%)",
     },
     medium: {
@@ -119,7 +129,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
           }}
         />
 
-        {/* Multiplier text - White with strong shadow for contrast */}
+        {/* Multiplier text - White with strong shadow for contrast - Perfectly centered */}
         <span
           className={`${config.text} font-black text-white relative z-10`}
           style={{
@@ -130,6 +140,9 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
               0 4px 8px rgba(0, 0, 0, 0.6)
             `,
             filter: "drop-shadow(0 0 8px rgba(255, 255, 255, 0.5))",
+            lineHeight: "1",
+            display: "block",
+            textAlign: "center",
           }}
         >
           {multiplier}x

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { getNextMidnightAEST } from "@/utils/common/timezone";
@@ -143,15 +143,23 @@ export default function PromoBanner() {
 
   return (
     <>
-      {/* Placeholder div to maintain space and prevent layout shift when banner becomes fixed */}
-
       <motion.div
         layout
-        className={`${
+        className={`fire ${
           isScrolled
             ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
             : "relative w-full mt-0 z-30"
-        } ${bgColorClass} shadow-2xl border-b-2 border-red-500/50`}
+        } ${bgColorClass}`}
+        style={{
+          boxShadow: `
+            0 10px 40px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.3)
+          `,
+          ...(isScrolled
+            ? { border: "2px solid rgba(251, 191, 36, 0.5)" }
+            : { borderBottom: "2px solid rgba(239, 68, 68, 0.6)" }),
+        }}
         animate={{
           borderRadius: isScrolled ? "9999px" : "0px",
           padding: isScrolled ? "0.5rem" : "0",
@@ -163,25 +171,112 @@ export default function PromoBanner() {
         }}
       >
         <motion.div
-          className="h-16 sm:h-20 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden"
+          className="min-h-16 sm:min-h-20 py-2 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden"
           animate={{
             paddingLeft: isScrolled ? "1rem" : "1rem",
             paddingRight: isScrolled ? "1rem" : "1rem",
           }}
           transition={{ duration: 0.5, ease: "easeInOut" }}
         >
-          {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>
-
           {/* Main Content */}
           <div className="relative z-10 flex items-center justify-between w-full">
-            {/* Left Side - Alert Message with Enhanced Styling */}
-            <div className="flex items-center gap-3">
-              <p className="text-left text-[15px] lg:text-[30px] font-['Poppins'] leading-tight">
-                <span className="text-white font-black tracking-wide uppercase">FIRST 500 PEOPLE</span>
-                <br />
-                <span className="text-yellow-300 font-bold uppercase">GET {multiplier}X ENTRIES</span>
-              </p>
+            {/* Left Side - Vertical Stack Layout */}
+            <div className="flex flex-col items-start">
+              {/* Wrapper to match widths */}
+              <div className="flex flex-col items-start w-fit gap-1 sm:gap-4 lg:gap-2">
+                {/* First Line - "FIRST 500 PEOPLE" Badge - Matches width of second line */}
+                <div className="relative w-full">
+                  {/* Outer glow effect - pulsing animation */}
+                  <div
+                    className="absolute inset-0 rounded-full animate-pulse"
+                    style={{
+                      background: `radial-gradient(circle, rgba(251, 191, 36, 0.5) 0%, rgba(245, 158, 11, 0.3) 40%, rgba(217, 119, 6, 0.15) 70%, transparent 100%)`,
+                      filter: "blur(5px)",
+                      transform: "scale(1.08)",
+                      zIndex: 0,
+                    }}
+                  />
+
+                  {/* Main badge container - Premium gradient with depth - Matches second line width */}
+                  <div
+                    className="relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden"
+                    style={{
+                      background: `linear-gradient(135deg, 
+                      #fbbf24 0%, 
+                      #f59e0b 20%, 
+                      #d97706 40%, 
+                      #b45309 60%, 
+                      #92400e 80%, 
+                      #78350f 100%
+                    )`,
+                      boxShadow: `
+                      0 0 15px rgba(251, 191, 36, 0.6),
+                      0 0 30px rgba(245, 158, 11, 0.3),
+                      0 4px 16px rgba(0, 0, 0, 0.4),
+                      inset 0 1px 4px rgba(255, 255, 255, 0.4),
+                      inset 0 -1px 4px rgba(0, 0, 0, 0.3)
+                    `,
+                      border: "1.5px solid rgba(255, 255, 255, 0.3)",
+                      zIndex: 1,
+                    }}
+                  >
+                    {/* Metallic shine effect - matching BestChanceBadge style */}
+                    <div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent transform -skew-x-12 rounded-full"
+                      style={{
+                        background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.4) 25%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.4) 75%, transparent 100%)`,
+                        animation: "shimmer 2s infinite",
+                        zIndex: 2,
+                      }}
+                    />
+
+                    {/* Hot edge highlight - top and left edges */}
+                    <div
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        background: `linear-gradient(135deg, 
+                        rgba(255, 255, 255, 0.7) 0%, 
+                        rgba(255, 240, 180, 0.6) 15%, 
+                        transparent 30%, 
+                        transparent 100%
+                      )`,
+                        zIndex: 2,
+                      }}
+                    />
+
+                    {/* Text content - centered */}
+                    <span
+                      className="relative z-10 text-white font-black tracking-wider uppercase text-[13px] sm:text-[13px] lg:text-[16px] whitespace-nowrap"
+                      style={{
+                        textShadow: `
+                        0 0 6px rgba(255, 255, 255, 0.8),
+                        0 0 12px rgba(255, 240, 180, 0.6),
+                        0 1px 3px rgba(0, 0, 0, 0.8),
+                        0 2px 6px rgba(0, 0, 0, 0.6)
+                      `,
+                        filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
+                      }}
+                    >
+                      FIRST 500 PEOPLE
+                    </span>
+                  </div>
+                </div>
+
+                {/* Second Line - "GET 2x ENTRIES" with Metallic Text */}
+                {/* Second Line - "GET 2x ENTRIES" - Matches width of first line */}
+                <div className="w-full flex items-center justify-center">
+                  <span className="font-black uppercase text-[15px] sm:text-[15px] lg:text-[18px] tracking-wide text-center">
+                    {/* "GET" text - Yellow/Gold to match badge */}
+                    <span className="text-yellow-300">GET </span>
+
+                    {/* "2X" with fiery effect - readable on dark background */}
+                    <span className="text-red-500">{multiplier}X</span>
+
+                    {/* "ENTRIES" text - Yellow/Gold to match badge */}
+                    <span className="text-yellow-300"> ENTRIES</span>
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Right Side - Enhanced Countdown (24-hour looping timer) */}

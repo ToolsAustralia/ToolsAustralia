@@ -194,6 +194,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Fire animation - grainy/noisy background image for glitter effect */
+  --glitter: url("https://assets.codepen.io/13471/silver-glitter-background.png");
 }
 
 @layer base {
@@ -1103,4 +1105,53 @@
   box-shadow: 0 0 10px #ee0000, 0 0 5px #ee0000;
   opacity: 1;
   transform: rotate(3deg) translate(0px, -4px);
+}
+
+/* Fire animation effect for promo banner background - mild/subtle version */
+/* Note: Position is handled by Tailwind classes (relative/fixed), ::before will work with any positioned parent */
+.fire {
+  overflow: hidden;
+}
+
+.fire::before,
+.fire::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.fire::before {
+  background-image: var(--glitter), var(--glitter),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.2) 0px, rgba(255, 137, 81, 0.3) 5px, rgba(220, 188, 22, 0.25) 30%);
+  background-size: 350px 500px, 400px 650px, 100% 100%;
+  background-blend-mode: overlay, overlay;
+  background-position: 0px 0px, 0px 0px, 50% 100%;
+  background-repeat: repeat, repeat, repeat;
+  /* Use overlay blend mode to blend naturally with dark background */
+
+  /* Reduced brightness and contrast to blend with dark banner background */
+  filter: brightness(1.5) blur(4px) contrast(2.5);
+  /* Slower animation for more subtle effect */
+  animation: fire 8s linear infinite;
+  /* Removed dark box-shadow to keep background transparent */
+  pointer-events: none;
+  z-index: 0;
+  /* Ensure no background color - let it blend with banner background */
+  background-color: transparent;
+  opacity: 0.7;
+}
+
+/* Ensure text appears above fire effect */
+.fire > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes fire {
+  0% {
+    background-position: center 0px, center 0px, 50% 100%;
+  }
+  100% {
+    background-position: center -500px, center -650px, 50% 100%;
+  }
 }
