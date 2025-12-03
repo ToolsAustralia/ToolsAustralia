@@ -235,6 +235,21 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     }
   };
 
+  // Helper function to get first prize text image path based on prize slug
+  const getFirstPrizeImagePath = (slug: string): string => {
+    switch (slug) {
+      case "dewalt-sidchrome":
+        return "/images/promotion/FirstPrizeText/1stprice-dewalt.png";
+      case "makita-sidchrome":
+        return "/images/promotion/FirstPrizeText/1stprice-makita.png";
+      case "cash-prize":
+        return "/images/promotion/FirstPrizeText/1stprice-cash.png";
+      case "milwaukee-sidchrome":
+      default:
+        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png";
+    }
+  };
+
   // Helper function to get formatted multi-line label for prize cards
   const getFormattedLabel = (label: string) => {
     if (label.includes("Milwaukee")) {
@@ -394,7 +409,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       <section className={`relative py-8 sm:py-12   w-full overflow-visible ${className}`}>
         <div className="relative w-full max-w-7xl mx-auto overflow-visible">
           <div className="text-center mb-0 sm:mb-8">
-            <h1 className="text-lg sm:text-xl font-bold tracking-[0.35em] text-red-600 uppercase">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold tracking-[0.35em] text-red-600 uppercase">
               OUR CURRENT GIVEAWAY
             </h1>
           </div>
@@ -421,6 +436,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
             {/* Mobile: Prize Gallery */}
             <div className="space-y-4">
+              {/* First Prize Image - Conditionally displayed based on selected prize */}
+              <div className="flex justify-center">
+                <Image
+                  src={getFirstPrizeImagePath(selectedPrizeSlug ?? activeSlug ?? defaultSlug)}
+                  alt="First Prize"
+                  width={800}
+                  height={200}
+                  className="w-full max-w-4xl h-auto object-contain"
+                  priority
+                />
+              </div>
               {renderPrizeToggle()}
               <div className="relative w-full max-w-sm mx-auto rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
@@ -737,7 +763,20 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
           {/* Desktop: Grid Layout */}
           <div className="hidden lg:grid grid-cols-2 gap-6 items-start min-h-[640px]">
-            <div className="col-span-2">{renderPrizeToggle("desktop")}</div>
+            <div className="col-span-2">
+              {/* First Prize Image - Conditionally displayed based on selected prize */}
+              <div className="flex justify-center">
+                <Image
+                  src={getFirstPrizeImagePath(selectedPrizeSlug ?? activeSlug ?? defaultSlug)}
+                  alt="First Prize"
+                  width={800}
+                  height={200}
+                  className="w-full max-w-4xl h-auto object-contain"
+                  priority
+                />
+              </div>
+              {renderPrizeToggle("desktop")}
+            </div>
             {/* Left Column - Gallery & Countdown */}
             <div className="flex flex-col space-y-6">
               <div className="relative rounded-3xl shadow-[0_12px_48px_rgba(15,23,42,0.25)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 overflow-hidden">

@@ -65,6 +65,21 @@ const getBrandLogoPath = (slug: string): string | null => {
   }
 };
 
+// Helper function to get first prize text image path based on prize slug
+const getFirstPrizeImagePath = (slug: string): string => {
+  switch (slug) {
+    case "dewalt-sidchrome":
+      return "/images/promotion/FirstPrizeText/1stprice-dewalt.png";
+    case "makita-sidchrome":
+      return "/images/promotion/FirstPrizeText/1stprice-makita.png";
+    case "cash-prize":
+      return "/images/promotion/FirstPrizeText/1stprice-cash.png";
+    case "milwaukee-sidchrome":
+    default:
+      return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png";
+  }
+};
+
 // Helper function to get formatted multi-line label for prize cards
 const getFormattedLabel = (label: string) => {
   if (label.includes("Milwaukee")) {
@@ -169,9 +184,20 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     : "Draw date TBA";
 
   return (
-    <section ref={prizeRef} className="py-8 sm:py-16 lg:py-20 relative">
+    <section ref={prizeRef} className="  relative">
       <div className="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-6 sm:mb-12">
+          {/* First Prize Image - Conditionally displayed based on selected prize */}
+          <div className="flex justify-center">
+            <Image
+              src={getFirstPrizeImagePath(activeSlug)}
+              alt="First Prize"
+              width={800}
+              height={200}
+              className="w-full max-w-4xl h-auto object-contain"
+              priority
+            />
+          </div>
           <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold text-gray-900 font-['Poppins'] mb-4 drop-shadow-lg">
             {activePrize.heroHeading}
           </h2>
@@ -188,7 +214,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
           {prizes.length > 1 && (
             <div className="mt-4 sm:mt-6">
-              <p className="text-xs sm:text-sm text-gray-500 font-['Inter'] uppercase tracking-wide mb-2 sm:mb-3 text-center">
+              <p className="text-lg sm:text-xl font-bold text-black font-['Poppins'] mb-2 sm:mb-3 text-center">
                 Pick Your Toolset
               </p>
               <div className="grid grid-cols-2 gap-2 sm:gap-4 max-w-3xl mx-auto">
