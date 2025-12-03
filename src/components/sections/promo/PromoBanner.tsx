@@ -145,7 +145,7 @@ export default function PromoBanner() {
     <>
       <motion.div
         layout
-        className={`fire ${
+        className={` ${
           isScrolled
             ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
             : "relative w-full mt-0 z-30"
@@ -162,7 +162,6 @@ export default function PromoBanner() {
         }}
         animate={{
           borderRadius: isScrolled ? "9999px" : "0px",
-          padding: isScrolled ? "0.5rem" : "0",
         }}
         transition={{
           duration: 0.5,
@@ -171,7 +170,7 @@ export default function PromoBanner() {
         }}
       >
         <motion.div
-          className="min-h-16 sm:min-h-20 py-2 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden"
+          className="min-h-16 sm:min-h-20 pt-2 pb-1.5 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden"
           animate={{
             paddingLeft: isScrolled ? "1rem" : "1rem",
             paddingRight: isScrolled ? "1rem" : "1rem",
@@ -264,8 +263,8 @@ export default function PromoBanner() {
 
                 {/* Second Line - "GET 2x ENTRIES" with Metallic Text */}
                 {/* Second Line - "GET 2x ENTRIES" - Matches width of first line */}
-                <div className="w-full flex items-center justify-center">
-                  <span className="font-black uppercase text-[15px] sm:text-[15px] lg:text-[18px] tracking-wide text-center">
+                <div className="w-full   ">
+                  <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
                     {/* "GET" text - White */}
                     <span className="text-white">GET </span>
 
