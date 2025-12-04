@@ -14,7 +14,7 @@ const jwtSecret = rawJwtSecret;
 
 const loginSessionCookie = {
   name: "ta_session_token",
-  maxAgeSeconds: 60 * 60 * 24 * 7,
+  maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days session duration
 };
 
 const allowedOrigins = [
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    // Create JWT token
+    // Create JWT token with 30 days expiration
     const token = sign(
       {
         userId: user._id,
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         role: user.role,
       },
       jwtSecret,
-      { expiresIn: "7d" }
+      { expiresIn: "30d" }
     );
 
     // Return user without password

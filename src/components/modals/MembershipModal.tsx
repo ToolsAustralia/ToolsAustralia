@@ -149,6 +149,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // Existing account modal state (for non-plain accounts)
   const [showExistingAccountModal, setShowExistingAccountModal] = useState(false);
   const [existingAccountConflictField, setExistingAccountConflictField] = useState<"email" | "mobile">("email");
+  const [existingAccountEmail, setExistingAccountEmail] = useState<string | undefined>(undefined);
 
   // Payment confirmation state - now handled directly in handleSubmit
   // Removed showPaymentConfirmation and paymentData states
@@ -691,6 +692,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           // Show existing account modal instead of field error
           const conflictField = result.field === "email" ? "email" : "mobile";
           setExistingAccountConflictField(conflictField);
+          // Use the existing account email if provided (for mobile conflicts), otherwise use form email
+          setExistingAccountEmail(result.existingAccountEmail || formData.email);
           setShowExistingAccountModal(true);
           // Clear any field errors since we're showing a modal
           setRegistrationErrors({});
@@ -3031,9 +3034,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         isOpen={showExistingAccountModal}
         onClose={() => {
           setShowExistingAccountModal(false);
+          setExistingAccountEmail(undefined); // Reset email when modal closes
           onClose(); // Also close membership modal
         }}
         conflictField={existingAccountConflictField}
+        email={existingAccountEmail || formData.email}
       />
 
       {/* Payment Processing Screen */}

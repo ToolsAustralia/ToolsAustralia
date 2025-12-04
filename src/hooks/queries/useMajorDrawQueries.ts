@@ -201,7 +201,7 @@ export const useUserMajorDrawStats = (userId?: string) => {
       return response.data.userStats;
     },
     enabled: !!userId,
-    staleTime: 30 * 1000, // 30 seconds - reduced for more real-time updates
+    staleTime: 0, // Always consider data stale to ensure fresh data after login
     gcTime: 5 * 60 * 1000, // 5 minutes - reduced for fresher data
     refetchInterval: 1 * 60 * 1000, // Refetch every 1 minute for real-time stats
     refetchIntervalInBackground: true, // Allow refetch in background

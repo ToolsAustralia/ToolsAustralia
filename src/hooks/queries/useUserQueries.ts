@@ -141,11 +141,12 @@ export const useMyAccountData = (userId?: string) => {
       return response.data;
     },
     enabled: !!userId,
-    staleTime: 30 * 1000, // 30 seconds - reduced for more real-time updates
+    staleTime: 0, // Always consider data stale to ensure fresh data after login
     gcTime: 3 * 60 * 1000, // 3 minutes - reduced for fresher data
     refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes for real-time updates
     refetchIntervalInBackground: true, // Allow refetch in background
     refetchOnWindowFocus: true,
+    refetchOnMount: true, // Always refetch on mount for fresh data
   });
 };
 

@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
           message:
             "This email address is already associated with an account that has made purchases. Please log in or use a different email address.",
           isExistingAccount: true,
+          existingAccountEmail: existingUserByEmail.email, // Return the actual email (same as provided)
         },
         { status: 400 }
       );
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
           message:
             "This mobile number is already associated with an account that has made purchases. Please log in or use a different mobile number.",
           isExistingAccount: true,
+          existingAccountEmail: existingUserByMobile.email, // Return the actual email associated with this mobile number
         },
         { status: 400 }
       );

@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Eye, EyeOff, Gift, Star, Zap, Shield } from "lucide-react";
 import Image from "next/image";
 import { useToast } from "@/components/ui/Toast";
+import { queryKeys } from "@/lib/queryKeys";
 
 // Google Icon Component
 function GoogleIcon() {
@@ -136,10 +138,18 @@ export default function LoginPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   // Redirect if user is already logged in based on their role
   useEffect(() => {
     if (status === "authenticated" && session) {
+      // Invalidate queries to ensure fresh data after login
+      if (session.user?.id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(session.user.id) });
+      }
+
       // Check user role and redirect accordingly
       if (session.user?.role === "admin") {
         router.push("/admin");
@@ -147,7 +157,7 @@ export default function LoginPage() {
         router.push("/my-account");
       }
     }
-  }, [status, session, router]);
+  }, [status, session, router, queryClient]);
 
   // Show loading while checking authentication status
   if (status === "loading") {
@@ -215,7 +225,19 @@ export default function LoginPage() {
           setError("Invalid email or password");
         }
       } else {
-        // Login successful - show success toast
+        // Login successful - invalidate queries to ensure fresh data
+        // Wait a moment for session to update, then invalidate
+        setTimeout(async () => {
+          const { getSession } = await import("next-auth/react");
+          const updatedSession = await getSession();
+          if (updatedSession?.user?.id) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.users.account(updatedSession.user.id) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(updatedSession.user.id) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(updatedSession.user.id) });
+          }
+        }, 500);
+
+        // Show success toast
         showToast({
           type: "success",
           title: "Login Successful",
@@ -282,8 +304,9 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      // Let NextAuth handle the redirect, the useEffect will handle role-based routing
+      // Use redirect for login page (popup is only for LoginModal)
       await signIn("google", { redirect: false });
+      // The useEffect will handle the redirect once the session updates
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An error occurred with Google sign-in";
       showToast({

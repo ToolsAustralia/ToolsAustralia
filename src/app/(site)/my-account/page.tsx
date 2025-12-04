@@ -4,8 +4,10 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { queryKeys } from "@/lib/queryKeys";
 import MembershipSection from "@/components/sections/MembershipSection";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
@@ -99,7 +101,13 @@ function CountdownDisplay({ targetDate }: { targetDate: string }) {
 export default function MyAccountPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { data: accountData, isLoading: loading, error } = useMyAccountData(session?.user?.id);
+  const queryClient = useQueryClient();
+  const {
+    data: accountData,
+    isLoading: loading,
+    error,
+    refetch: refetchAccountData,
+  } = useMyAccountData(session?.user?.id);
 
   // Add real-time major draw data
   const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
@@ -132,6 +140,21 @@ export default function MyAccountPage() {
       router.push("/login");
     }
   }, [session, status, router]);
+
+  // Invalidate and refetch queries when session becomes available (after login)
+  React.useEffect(() => {
+    if (status === "authenticated" && session?.user?.id) {
+      // Invalidate all user-related queries to ensure fresh data after login
+      const userId = session.user.id;
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+
+      // Also refetch account data immediately
+      refetchAccountData();
+    }
+  }, [status, session?.user?.id, queryClient, refetchAccountData]);
 
   // Add ref to prevent multiple triggers
   const modalTriggeredRef = React.useRef(false);
