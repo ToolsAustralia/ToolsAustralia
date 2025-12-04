@@ -90,7 +90,14 @@ export default async function FAQPage() {
           <div className="relative h-[400px] sm:h-[500px] rounded-2xl overflow-hidden">
             {/* Background Image with Dark Overlay */}
             <div className="absolute inset-0 z-0">
-              <Image src="/images/faqImage.png" alt="Tools Australia" fill className="object-cover" priority />
+              <Image
+                src="/images/faqImage.png"
+                alt="Tools Australia"
+                fill
+                className="object-cover"
+                priority
+                unoptimized
+              />
               <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/40" />
             </div>
 

@@ -39,6 +39,7 @@ export default async function MiniDrawsPage() {
             fill
             className="object-cover "
             priority
+            unoptimized
           />
           <div className="absolute inset-0 " />
         </div>

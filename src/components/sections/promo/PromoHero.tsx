@@ -79,9 +79,8 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
           alt={`Win Ford F-150 & Luxury Float - ${promo?.multiplier || 1}x Entries Active`}
           fill
           priority
-          quality={90}
+          unoptimized
           className="object-cover"
-          sizes="100vw"
           style={{
             objectPosition: "50%",
           }}

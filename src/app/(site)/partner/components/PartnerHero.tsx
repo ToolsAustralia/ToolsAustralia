@@ -61,8 +61,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
             alt="Partnership background"
             fill
             className="object-cover"
-            quality={90}
-            sizes="100vw"
+            unoptimized
           />
         </div>
         {/* Desktop Background */}
@@ -73,8 +72,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
             fill
             className="object-cover"
             priority
-            quality={90}
-            sizes="100vw"
+            unoptimized
           />
         </div>
         {/* Dark overlay for better text readability */}
