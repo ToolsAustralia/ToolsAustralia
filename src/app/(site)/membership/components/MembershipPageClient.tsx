@@ -130,7 +130,7 @@ export default function MembershipPageClient() {
       <section className="relative pt-[86px] sm:pt-[106px] pb-12 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden min-h-[100svh]">
         <div className="absolute inset-0 z-0">
           <Image
-            src="/images/background/memebership.png"
+            src="/images/background/memebership.webp"
             alt="Tools Australia Membership"
             fill
             className="object-cover opacity-20"

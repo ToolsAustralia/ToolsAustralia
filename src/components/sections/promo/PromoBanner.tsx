@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { getNextMidnightAEST } from "@/utils/common/timezone";
 import { useSidebar } from "@/contexts/SidebarContext";
+import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 
 /**
  * PromoBanner Component
@@ -13,8 +14,14 @@ import { useSidebar } from "@/contexts/SidebarContext";
  * - Syncs with MembershipSection active tab (membership or one-time)
  * - Shows appropriate promo based on active tab
  * - Hides when sidebar is open or on 404 page
+ * - Accepts initial data from server-side for faster initial render
  */
-export default function PromoBanner() {
+interface PromoBannerProps {
+  initialMembershipPromo?: ServerPromo | null;
+  initialOneTimePromo?: ServerPromo | null;
+}
+
+export default function PromoBanner({ initialMembershipPromo, initialOneTimePromo }: PromoBannerProps) {
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
@@ -27,22 +34,16 @@ export default function PromoBanner() {
   });
 
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const [bannerHeight, setBannerHeight] = useState<number | null>(null);
 
-  // Check if desktop viewport
-  useEffect(() => {
-    const checkDesktop = () => {
-      setIsDesktop(window.innerWidth >= 1024);
-    };
+  // Get promos for each type (use initial data if available, fallback to client-side fetch)
+  const { data: membershipPromoClient } = usePromoByType("membership-packages");
+  const { data: oneTimePromoClient } = usePromoByType("one-time-packages");
 
-    checkDesktop();
-    window.addEventListener("resize", checkDesktop);
-    return () => window.removeEventListener("resize", checkDesktop);
-  }, []);
-
-  // Get promos for each type
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
+  // Use initial data if available, otherwise use client-fetched data
+  const membershipPromo = initialMembershipPromo || membershipPromoClient;
+  const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
 
   // 24-hour looping countdown timer (resets at midnight AEST - Australian business day)
   useEffect(() => {
@@ -129,6 +130,23 @@ export default function PromoBanner() {
   // Get multiplier for dynamic text (default to 10x if no promo)
   const multiplier = activePromo?.multiplier || 10;
 
+  // Measure banner height to prevent layout shift when it becomes fixed
+  useEffect(() => {
+    const measureBanner = () => {
+      if (bannerRef.current) {
+        const height = bannerRef.current.offsetHeight;
+        setBannerHeight(height);
+      }
+    };
+
+    // Measure on mount and when scrolled state changes
+    measureBanner();
+
+    // Also measure on resize to handle responsive changes
+    window.addEventListener("resize", measureBanner);
+    return () => window.removeEventListener("resize", measureBanner);
+  }, [isScrolled, activePromo, multiplier]);
+
   // Don't render if:
   // - On 404 page
   // - Sidebar is open
@@ -143,7 +161,19 @@ export default function PromoBanner() {
 
   return (
     <>
+      {/* Spacer div to prevent layout shift when banner becomes fixed */}
+      {isScrolled && bannerHeight !== null && (
+        <div
+          style={{
+            height: `${bannerHeight}px`,
+            width: "100%",
+          }}
+          aria-hidden="true"
+        />
+      )}
+
       <motion.div
+        ref={bannerRef}
         layout
         className={` ${
           isScrolled
@@ -169,14 +199,7 @@ export default function PromoBanner() {
           layout: { duration: 0.5, ease: "easeInOut" },
         }}
       >
-        <motion.div
-          className="min-h-16 sm:min-h-20 pt-2 pb-1.5 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden"
-          animate={{
-            paddingLeft: isScrolled ? "1rem" : "1rem",
-            paddingRight: isScrolled ? "1rem" : "1rem",
-          }}
-          transition={{ duration: 0.5, ease: "easeInOut" }}
-        >
+        <motion.div className="min-h-16 sm:min-h-20 pt-2 pb-1.5 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
           {/* Main Content */}
           <div className="relative z-10 flex items-center justify-between w-full">
             {/* Left Side - Vertical Stack Layout */}
@@ -263,7 +286,7 @@ export default function PromoBanner() {
 
                 {/* Second Line - "GET 2x ENTRIES" with Metallic Text */}
                 {/* Second Line - "GET 2x ENTRIES" - Matches width of first line */}
-                <div className="w-full   ">
+                <div className="w-full">
                   <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
                     {/* "GET" text - White */}
                     <span className="text-white">GET </span>
@@ -279,91 +302,29 @@ export default function PromoBanner() {
             </div>
 
             {/* Right Side - Enhanced Countdown (24-hour looping timer) */}
-            <motion.div
-              className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3"
-              layout
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-            >
+            {/* Fixed sizes to prevent layout shift - use CSS classes instead of animated width */}
+            <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
               {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
-              <motion.div
-                className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center"
-                animate={{
-                  width: isDesktop ? "5rem" : "3rem",
-                  paddingLeft: isDesktop ? "1rem" : "0.5rem",
-                  paddingRight: isDesktop ? "1rem" : "0.5rem",
-                  paddingTop: isDesktop ? "0.75rem" : "0.25rem",
-                  paddingBottom: isDesktop ? "0.75rem" : "0.25rem",
-                }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-              >
-                <div
-                  className={`text-white font-black font-['Poppins'] drop-shadow-md ${
-                    isScrolled ? "text-sm sm:text-sm lg:text-xl" : "text-sm sm:text-sm lg:text-xl"
-                  }`}
-                >
+              {/* Fixed width classes to prevent size changes on load */}
+              <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                   {timeLeft.hours.toString().padStart(2, "0")}
                 </div>
-                <div
-                  className={`text-red-100 font-medium ${
-                    isScrolled ? "text-[10px] sm:text-[10px] lg:text-sm" : "text-[10px] sm:text-[10px] lg:text-sm"
-                  }`}
-                >
-                  HRS
-                </div>
-              </motion.div>
-              <motion.div
-                className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center"
-                animate={{
-                  width: isDesktop ? "5rem" : "3rem",
-                  paddingLeft: isDesktop ? "1rem" : "0.5rem",
-                  paddingRight: isDesktop ? "1rem" : "0.5rem",
-                  paddingTop: isDesktop ? "0.75rem" : "0.25rem",
-                  paddingBottom: isDesktop ? "0.75rem" : "0.25rem",
-                }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-              >
-                <div
-                  className={`text-white font-black font-['Poppins'] drop-shadow-md ${
-                    isScrolled ? "text-sm sm:text-sm lg:text-xl" : "text-sm sm:text-sm lg:text-xl"
-                  }`}
-                >
+                <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+              </div>
+              <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                   {timeLeft.minutes.toString().padStart(2, "0")}
                 </div>
-                <div
-                  className={`text-red-100 font-medium ${
-                    isScrolled ? "text-[10px] sm:text-[10px] lg:text-sm" : "text-[10px] sm:text-[10px] lg:text-sm"
-                  }`}
-                >
-                  MINS
-                </div>
-              </motion.div>
-              <motion.div
-                className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center"
-                animate={{
-                  width: isDesktop ? "5rem" : "3rem",
-                  paddingLeft: isDesktop ? "1rem" : "0.5rem",
-                  paddingRight: isDesktop ? "1rem" : "0.5rem",
-                  paddingTop: isDesktop ? "0.75rem" : "0.25rem",
-                  paddingBottom: isDesktop ? "0.75rem" : "0.25rem",
-                }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
-              >
-                <div
-                  className={`text-white font-black font-['Poppins'] drop-shadow-md ${
-                    isScrolled ? "text-sm sm:text-sm lg:text-xl" : "text-sm sm:text-sm lg:text-xl"
-                  }`}
-                >
+                <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+              </div>
+              <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                   {timeLeft.seconds.toString().padStart(2, "0")}
                 </div>
-                <div
-                  className={`text-red-100 font-medium ${
-                    isScrolled ? "text-[10px] sm:text-[10px] lg:text-sm" : "text-[10px] sm:text-[10px] lg:text-sm"
-                  }`}
-                >
-                  SECS
-                </div>
-              </motion.div>
-            </motion.div>
+                <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+              </div>
+            </div>
           </div>
         </motion.div>
       </motion.div>

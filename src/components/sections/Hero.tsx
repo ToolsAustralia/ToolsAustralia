@@ -50,7 +50,7 @@ export default function Hero() {
         {/* Note: priority removed to prevent preload warning on desktop where this image is hidden */}
         <div className="lg:hidden absolute inset-0">
           <Image
-            src="/images/background/mobileBg.jpg"
+            src="/images/background/mobileBg.webp"
             alt="Tools background"
             fill
             className="object-cover"
@@ -61,7 +61,7 @@ export default function Hero() {
         {/* Desktop Background */}
         <div className="hidden lg:block absolute inset-0">
           <Image
-            src="/images/background/desktopBg.jpg"
+            src="/images/background/desktopBg.webp"
             alt="Tools background"
             fill
             className="object-cover"

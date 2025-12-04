@@ -34,7 +34,7 @@ export default async function MiniDrawsPage() {
         {/* Background Image with Dark Overlay */}
         <div className="absolute inset-0 z-0">
           <Image
-            src="/images/background/miniDrawPage-bg.png"
+            src="/images/background/miniDrawPage-bg.webp"
             alt="Tools Australia"
             fill
             className="object-cover "

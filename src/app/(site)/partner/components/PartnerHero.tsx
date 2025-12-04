@@ -57,7 +57,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
         {/* Note: priority removed to prevent preload warning on desktop where this image is hidden */}
         <div className="lg:hidden absolute inset-0">
           <Image
-            src="/images/background/partnerBg.png"
+            src="/images/background/partnerBg.webp"
             alt="Partnership background"
             fill
             className="object-cover"
@@ -68,12 +68,13 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
         {/* Desktop Background */}
         <div className="hidden lg:block absolute inset-0">
           <Image
-            src="/images/background/partnerBg.png"
+            src="/images/background/partnerBg.webp"
             alt="Partnership background"
             fill
             className="object-cover"
             priority
             quality={90}
+            sizes="100vw"
           />
         </div>
         {/* Dark overlay for better text readability */}

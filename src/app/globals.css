@@ -217,11 +217,14 @@
 
   /* Specific focus outline removal for form inputs */
   input:focus,
-  textarea:focus,
-  select:focus,
-  button:focus {
+  /* Remove all focus styles from buttons globally */
+  button:focus,
+  button:focus-visible,
+  button:active {
     outline: none !important;
     box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+    -moz-box-shadow: none !important;
   }
 
   /* Remove focus rings and outlines from all interactive elements */
@@ -328,7 +331,7 @@
   }
 
   /* Hero Background - Uses background images from Hero component via Next.js Image */
-  /* Background color removed - now using desktopBg.jpg and mobileBg.jpg with dark overlay */
+  /* Background color removed - now using desktopBg.webp and mobileBg.webp with dark overlay */
 
   /* Hero section with dynamic top bar spacing */
   .hero-section {

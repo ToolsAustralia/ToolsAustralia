@@ -184,7 +184,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     : "Draw date TBA";
 
   return (
-    <section ref={prizeRef} className="  relative">
+    <section ref={prizeRef} className=" pb-8 sm:pb-12 relative">
       <div className="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-6 sm:mb-12">
           {/* First Prize Image - Conditionally displayed based on selected prize */}
@@ -227,10 +227,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     <button
                       key={prizeOption.slug}
                       onClick={() => handleSelectPrize(prizeOption.slug)}
+                      tabIndex={-1}
+                      style={{ outline: "none", boxShadow: "none" }}
                       className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
                         isActive
                           ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                          : `bg-white text-gray-700 border-slate-300 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
+                          : `bg-white text-gray-700 border-gray-700 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
                       }`}
                     >
                       {/* Brand logo watermark - only shown when active */}
@@ -287,7 +289,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-start">
           <div className="relative order-1 lg:order-1 space-y-3 sm:space-y-4">
-            <div className="relative rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm">
+            <div className="relative rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm">
               <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
 
               {activePrize.gallery.length > 1 ? (
@@ -302,7 +304,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 >
                   {activePrize.gallery.map((image, index) => (
                     <SwiperSlide key={`${image.src}-${index}`}>
-                      <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                      <div className="relative aspect-square lg:aspect-[4/3] bg-gray-900">
                         <Image
                           src={image.src}
                           alt={image.alt || `Prize view ${index + 1}`}
@@ -358,7 +360,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               >
                 {activePrize.gallery.map((image, index) => (
                   <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-16 sm:!w-24 sm:!h-24">
-                    <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80">
+                    <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-gray-700 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-gray-900 via-gray-800 to-black">
                       <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                       <Image
                         src={image.src}
@@ -409,7 +411,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 </div>
               </div>
             ) : (
-              <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-3xl p-4 shadow-2xl border-2 border-white/20 text-center">
+              <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-4 shadow-2xl border-2 border-white/20 text-center">
                 <p className="text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
                 <p className="text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
                 <div className="mt-3 text-center">
@@ -462,7 +464,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 return (
                   <div
                     key={`${highlight.title}-${index}`}
-                    className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+                    className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
                     <div className="absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg z-10">
@@ -473,7 +475,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                       <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">
                         {highlight.title}
                       </h3>
-                      <p className="text-[10px] sm:text-base text-slate-200 font-['Inter'] leading-tight sm:leading-relaxed">
+                      <p className="text-[10px] sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed">
                         {highlight.description}
                       </p>
                     </div>
@@ -482,12 +484,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               })}
             </div>
 
-            <div className="relative bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+            <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
               <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
               <h3 className="text-sm sm:text-lg font-bold text-white font-['Poppins'] mb-1.5 sm:mb-2 relative z-10 drop-shadow-md">
                 Prize Details
               </h3>
-              <p className="text-xs sm:text-base text-slate-200 font-['Inter'] leading-tight sm:leading-relaxed relative z-10">
+              <p className="text-xs sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed relative z-10">
                 {activePrize.detailedDescription}
               </p>
             </div>

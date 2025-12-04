@@ -99,7 +99,7 @@ export default function MetallicAccordion({
         return (
           <div
             key={item.id}
-            className={`relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 hover:border-[#ee0000]/50 ${hoverShadowClass} transition-all duration-300`}
+            className={`relative group bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 hover:border-[#ee0000]/50 ${hoverShadowClass} transition-all duration-300`}
           >
             {/* Glass-morphism overlay */}
             <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
@@ -128,11 +128,11 @@ export default function MetallicAccordion({
             {isExpanded && (
               <div
                 id={`accordion-content-${item.id}`}
-                className="px-4 sm:px-6 pb-4 sm:pb-5 border-t border-slate-500/30 animate-in slide-in-from-top-2 duration-300 relative z-20"
+                className="px-4 sm:px-6 pb-4 sm:pb-5 border-t border-gray-700 animate-in slide-in-from-top-2 duration-300 relative z-20"
                 role="region"
                 aria-labelledby={`accordion-button-${item.id}`}
               >
-                <div className="text-slate-200 leading-relaxed pt-3 sm:pt-4 font-['Poppins'] text-sm sm:text-base">
+                <div className="text-gray-300 leading-relaxed pt-3 sm:pt-4 font-['Poppins'] text-sm sm:text-base">
                   {typeof item.content === "string" ? <p>{item.content}</p> : item.content}
                 </div>
               </div>

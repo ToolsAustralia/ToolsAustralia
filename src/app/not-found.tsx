@@ -8,7 +8,7 @@ export default function NotFound() {
       {/* Background Image with Dark Overlay */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/images/background/404-bg.png"
+          src="/images/background/404-bg.webp"
           alt="404 Background"
           fill
           className="object-cover"

@@ -1,15 +1,27 @@
 "use client";
 
+import Image from "next/image";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import type { ServerPromo } from "@/utils/database/queries/promo-queries";
+import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 
-export default function PromoHero() {
+interface PromoHeroProps {
+  initialPromo?: ServerPromo | null;
+  initialMajorDraw?: ServerMajorDraw | null;
+}
+
+export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroProps) {
+  // Use initial data if available, but allow refetching for real-time updates
   const { isLoading } = useCurrentMajorDraw();
   const { data: activePromo } = usePromoByType("membership-packages");
   const heroRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
+
+  // Use initial data if available, otherwise fall back to fetched data
+  const promo = initialPromo || activePromo;
 
   const handleEnterNow = () => {
     // Shared handler ensures the membership modal opens via the global event.
@@ -17,15 +29,15 @@ export default function PromoHero() {
   };
 
   // Conditionally render hero image based on active promo multiplier
-  // 10x → x10 entries.png, 5x → x5 entries.png, 3x → x3 entries.png, no promo → $20.png
+  // 10x → x10 entries.webp, 5x → x5 entries.png, 3x → x3 entries.png, no promo → $20.png
   const getHeroImageSrc = () => {
-    if (!activePromo) {
+    if (!promo) {
       return "/images/background/promo/$20.png";
     }
 
-    switch (activePromo.multiplier) {
+    switch (promo.multiplier) {
       case 10:
-        return "/images/background/promo/x10 entries.png";
+        return "/images/background/promo/x10 entries.webp";
       case 5:
         return "/images/background/promo/x5 entries.png";
       case 3:
@@ -44,7 +56,7 @@ export default function PromoHero() {
       <section className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white pt-12 sm:pt-14">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600"> Are you our next winner?...</p>
+          <p className="text-gray-600"> Are you our next winner?...</p>
         </div>
       </section>
     );
@@ -56,15 +68,25 @@ export default function PromoHero() {
       className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 h-[50vh] min-h-[430px] lg:h-[83vh] lg:min-h-0"
     >
       {/* Background Banner Image with Ellipse Clip-Path */}
-      {/* Using background-image with clip-path for smooth rounded bottom effect */}
+      {/* Using Next.js Image with clip-path for smooth rounded bottom effect and better performance */}
       <div
         className="main-banner-image absolute inset-0 z-0"
-        style={{
-          backgroundImage: `url("${heroImageSrc}")`,
-        }}
         role="img"
-        aria-label={`Win Ford F-150 & Luxury Float - ${activePromo?.multiplier || 1}x Entries Active`}
-      />
+        aria-label={`Win Ford F-150 & Luxury Float - ${promo?.multiplier || 1}x Entries Active`}
+      >
+        <Image
+          src={heroImageSrc}
+          alt={`Win Ford F-150 & Luxury Float - ${promo?.multiplier || 1}x Entries Active`}
+          fill
+          priority
+          quality={90}
+          className="object-cover"
+          sizes="100vw"
+          style={{
+            objectPosition: "50%",
+          }}
+        />
+      </div>
 
       {/* Hero Content (optional title or info can go here) */}
       <div className="relative z-20 w-full text-center"></div>

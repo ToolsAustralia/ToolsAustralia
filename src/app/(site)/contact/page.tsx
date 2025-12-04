@@ -35,7 +35,7 @@ export default function ContactPage() {
         {/* Background Image with Dark Overlay */}
         <div className="absolute inset-0 z-0">
           <Image
-            src="/images/background/contact-bg.png"
+            src="/images/background/contact-bg.webp"
             alt="Tools Australia"
             fill
             className="object-cover "
@@ -73,7 +73,7 @@ export default function ContactPage() {
               {/* Background Image with Dark Overlay */}
               <div className="absolute inset-0 z-0">
                 <Image
-                  src="/images/background/contact-bg.png"
+                  src="/images/background/contact-bg.webp"
                   alt="Tools Australia Contact"
                   fill
                   className="object-cover opacity-30"

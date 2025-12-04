@@ -309,10 +309,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 onClick={() => {
                   handlePrizeSelect(prizeOption.slug);
                 }}
+                tabIndex={-1}
+                style={{ outline: "none", boxShadow: "none" }}
                 className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
                   isActive
                     ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                    : `bg-white text-gray-700 border-slate-300 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
+                    : `bg-white text-gray-700 border-gray-700 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
                 }`}
               >
                 {/* Brand logo watermark - only shown when active */}
@@ -374,7 +376,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         return (
           <div
             key={`${highlight.title}-${index}`}
-            className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+            className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
           >
             <div className="absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg z-10">
               <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -383,7 +385,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">
                 {highlight.title}
               </h3>
-              <p className="text-[10px] sm:text-sm text-slate-200 font-['Inter'] leading-tight sm:leading-relaxed">
+              <p className="text-[10px] sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed">
                 {highlight.description}
               </p>
             </div>
@@ -448,7 +450,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 />
               </div>
               {renderPrizeToggle()}
-              <div className="relative w-full max-w-sm mx-auto rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 overflow-hidden">
+              <div className="relative w-full max-w-sm mx-auto rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-800 to-black overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
                 <div className="absolute top-3 right-3 z-20">
                   <button
@@ -477,7 +479,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   >
                     {prizeImages.map((image, index) => (
                       <SwiperSlide key={`${image.src}-${index}`}>
-                        <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                        <div className="relative aspect-square lg:aspect-[4/3] bg-gray-900">
                           <Image
                             src={image.src}
                             alt={image.alt || `Prize image ${index + 1}`}
@@ -521,7 +523,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       className="!w-16 !h-16 sm:!w-20 sm:!h-20"
                       onClick={() => handleMobileThumbnailClick(index)}
                     >
-                      <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80">
+                      <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-gray-700 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-gray-900 via-gray-800 to-black">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
                         <Image
                           src={image.src}
@@ -626,7 +628,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </div>
               </div>
             ) : !isCompleted ? (
-              <div className="rounded-3xl p-4 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-slate-700 to-slate-800 text-center">
+              <div className="rounded-3xl p-4 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-gray-900 via-gray-800 to-black text-center">
                 <p className="text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
                 <p className="text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
                 <div className="mt-3 text-center">
@@ -779,7 +781,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             </div>
             {/* Left Column - Gallery & Countdown */}
             <div className="flex flex-col space-y-6">
-              <div className="relative rounded-3xl shadow-[0_12px_48px_rgba(15,23,42,0.25)] border border-slate-500/30 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 overflow-hidden">
+              <div className="relative rounded-3xl shadow-[0_12px_48px_rgba(15,23,42,0.25)] border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-800 to-black overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
                 <div className="absolute top-4 right-4 z-20">
                   <button
@@ -858,7 +860,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         className="!w-20 !h-20 xl:!w-24 xl:!h-24 flex items-center justify-center cursor-pointer"
                         onClick={() => handleDesktopThumbnailClick(index)}
                       >
-                        <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-slate-500/30 hover:border-red-500/40 transition-all duration-300 bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 cursor-pointer">
+                        <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-gray-700 hover:border-red-500/40 transition-all duration-300 bg-gradient-to-br from-gray-900 via-gray-800 to-black cursor-pointer">
                           <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
                           <Image
                             src={image.src}
@@ -896,7 +898,9 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               ) : shouldShowCountdown ? (
                 <div
                   className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 bg-gradient-to-br ${
-                    currentMajorDraw?.status === "frozen" ? "from-slate-600 to-slate-700" : "from-red-600 to-red-700"
+                    currentMajorDraw?.status === "frozen"
+                      ? "from-gray-900 via-gray-800 to-black"
+                      : "from-red-600 to-red-700"
                   }`}
                 >
                   {currentMajorDraw?.status === "frozen" && (
@@ -946,7 +950,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 </div>
               ) : !isCompleted ? (
-                <div className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-3xl p-6 shadow-2xl border border-white/10 text-center">
+                <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10 text-center">
                   <p className="text-white text-sm font-semibold uppercase tracking-[0.35em]">Draw Date</p>
                   <p className="text-white text-3xl font-bold mt-2">{drawDateLabel}</p>
                   <div className="mt-4 text-center">
@@ -964,7 +968,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 </div>
               ) : (
-                <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-3xl p-6 shadow-2xl border border-white/10">
+                <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10">
                   <div className="text-center space-y-4">
                     <div className="flex items-center justify-center">
                       <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/20">
