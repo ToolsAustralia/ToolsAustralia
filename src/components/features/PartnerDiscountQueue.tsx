@@ -15,7 +15,16 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package } from "lucide-react";
+import Image from "next/image";
+import { StaticImageData } from "next/image";
+
+// Import package icons (matching MembershipSection)
+import apprentice from "../../../public/images/packageIcons/apprentice.png";
+import tradie from "../../../public/images/packageIcons/tradie.png";
+import foreman from "../../../public/images/packageIcons/foreman.png";
+import boss from "../../../public/images/packageIcons/boss.png";
+import power from "../../../public/images/packageIcons/power.png";
 
 // Interface for active period data from API
 interface ActivePeriod {
@@ -276,7 +285,7 @@ export default function PartnerDiscountQueue({
     return () => clearInterval(interval);
   }, [queueData, fetchQueueData]);
 
-  // Get icon based on package type
+  // Get icon based on package type (for queued items)
   const getPackageIcon = (type: string) => {
     switch (type) {
       case "subscription":
@@ -290,6 +299,90 @@ export default function PartnerDiscountQueue({
       default:
         return <Package className="w-5 h-5 text-gray-600" />;
     }
+  };
+
+  // Helper function to get package icon image (for subscription badge)
+  const getPackageIconImage = (
+    packageName: string,
+    membershipType?: "subscription" | "one-time"
+  ): StaticImageData | null => {
+    const lowerName = packageName.toLowerCase();
+    const isSubscription = membershipType === "subscription";
+
+    // For subscriptions, use simple names
+    if (isSubscription) {
+      if (lowerName.includes("boss")) return boss;
+      if (lowerName.includes("foreman")) return foreman;
+      if (lowerName.includes("tradie")) return tradie;
+    }
+
+    // For one-time packages, check for pack names
+    if (!isSubscription) {
+      if (lowerName.includes("power pack") || lowerName.includes("power")) return power;
+      if (lowerName.includes("boss pack") || lowerName.includes("boss")) return boss;
+      if (lowerName.includes("foreman pack") || lowerName.includes("foreman")) return foreman;
+      if (lowerName.includes("tradie pack") || lowerName.includes("tradie")) return tradie;
+      if (lowerName.includes("apprentice pack") || lowerName.includes("apprentice")) return apprentice;
+    }
+
+    return null;
+  };
+
+  // Helper function to get package color scheme (matching MembershipBadge)
+  const getPackageColorScheme = (packageName: string) => {
+    const lowerName = packageName.toLowerCase();
+
+    if (lowerName.includes("apprentice")) {
+      return {
+        gradient: "from-gray-300 via-slate-400 to-gray-500",
+        text: "text-gray-300",
+        border: "border-gray-400/40",
+      };
+    } else if (lowerName.includes("tradie")) {
+      return {
+        gradient: "from-blue-500 via-blue-600 to-blue-700",
+        text: "text-blue-400",
+        border: "border-blue-500/50",
+      };
+    } else if (lowerName.includes("foreman")) {
+      return {
+        gradient: "from-green-500 via-green-600 to-green-700",
+        text: "text-green-300",
+        border: "border-green-500/50",
+      };
+    } else if (lowerName.includes("boss")) {
+      return {
+        gradient: "from-yellow-400 via-amber-500 to-yellow-600",
+        text: "text-yellow-400",
+        border: "border-yellow-400/50",
+      };
+    } else if (lowerName.includes("power")) {
+      return {
+        gradient: "from-orange-600 via-red-500 to-orange-700",
+        text: "text-orange-400",
+        border: "border-orange-500/50",
+      };
+    }
+
+    // Default fallback
+    return {
+      gradient: "from-slate-600 via-gray-700 to-slate-800",
+      text: "text-gray-400",
+      border: "border-gray-500/50",
+    };
+  };
+
+  // Helper function to extract gradient color for border
+  const getGradientColor = (gradient: string): string => {
+    if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
+    if (gradient.includes("blue")) return "#3b82f6";
+    if (gradient.includes("purple")) return "#9333ea";
+    if (gradient.includes("orange")) return "#f97316";
+    if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
+    if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
+    if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
+    if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
+    return "#6b7280";
   };
 
   // Get badge color based on package type and name
@@ -334,50 +427,6 @@ export default function PartnerDiscountQueue({
         default:
           return "bg-gray-100 text-gray-800 border-gray-300";
       }
-    }
-  };
-
-  // Get subscription badge colors based on package name
-  const getSubscriptionBadgeColors = (packageName?: string) => {
-    if (!packageName)
-      return {
-        background: "from-green-100 to-emerald-100",
-        border: "border-green-300",
-        text: "from-green-700 to-emerald-600",
-      };
-
-    const name = packageName.toLowerCase();
-
-    if (name.includes("tradie") || name.includes("apprentice")) {
-      return {
-        background: "from-blue-100 to-indigo-100",
-        border: "border-blue-300",
-        text: "from-blue-700 to-indigo-600",
-      };
-    } else if (name.includes("foreman")) {
-      return {
-        background: "from-purple-100 to-violet-100",
-        border: "border-purple-300",
-        text: "from-purple-700 to-violet-600",
-      };
-    } else if (name.includes("boss")) {
-      return {
-        background: "from-yellow-100 to-orange-100",
-        border: "border-yellow-400",
-        text: "from-yellow-700 to-orange-600",
-      };
-    } else if (name.includes("power")) {
-      return {
-        background: "from-yellow-100 to-orange-100",
-        border: "border-yellow-400",
-        text: "from-yellow-700 to-orange-600",
-      };
-    } else {
-      return {
-        background: "from-green-100 to-emerald-100",
-        border: "border-green-300",
-        text: "from-green-700 to-emerald-600",
-      };
     }
   };
 
@@ -439,7 +488,7 @@ export default function PartnerDiscountQueue({
   const queueSubtitle =
     subtitleOverride ??
     (summary.isActiveSubscription && summary.subscriptionBenefits
-      ? `${summary.subscriptionBenefits.shopDiscountPercent}% shop discount • Active subscription`
+      ? `100% partner discount • Active subscription`
       : summary.totalDaysOfAccessRemaining > 0
       ? `${summary.totalDaysOfAccessRemaining} days of access `
       : "You have no partner access yet");
@@ -467,9 +516,6 @@ export default function PartnerDiscountQueue({
         className="relative z-10 w-full flex items-center justify-between p-4 sm:p-5 lg:p-6 hover:bg-white/5 transition-all duration-200 cursor-pointer group"
       >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600 via-red-500 to-orange-600 rounded-xl flex items-center justify-center shadow-xl flex-shrink-0 group-hover:scale-110 transition-transform duration-200 ring-2 ring-white/20">
-            <Gift className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-          </div>
           <div className="min-w-0 flex-1 text-left">
             <h2 className="text-base sm:text-lg lg:text-2xl font-bold text-white font-['Poppins'] truncate drop-shadow-lg">
               {queueHeading}
@@ -480,21 +526,40 @@ export default function PartnerDiscountQueue({
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
           {summary.isActiveSubscription && summary.subscriptionBenefits ? (
             (() => {
-              const colors = getSubscriptionBadgeColors(summary.subscriptionBenefits.packageName);
+              const packageName = summary.subscriptionBenefits.packageName;
+              const packageIcon = getPackageIconImage(packageName, "subscription");
+              const colorScheme = getPackageColorScheme(packageName);
+              const borderGradientColor = getGradientColor(colorScheme.gradient);
+              const isPremiumPackage =
+                packageName.toLowerCase().includes("boss") || packageName.toLowerCase().includes("power");
+
+              if (!packageIcon) return null;
+
               return (
-                <div
-                  className={`bg-gradient-to-br ${
-                    colors.background
-                  } rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 border-2 ${colors.border} shadow-sm ${
+                <span
+                  className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden ${
                     isOptimisticUpdate ? "animate-pulse" : ""
-                  }`}
+                  } ${isPremiumPackage ? "animate-pulse" : ""}`}
+                  style={{
+                    border: `2px solid transparent`,
+                    backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
+                    backgroundOrigin: `border-box`,
+                    backgroundClip: `padding-box, border-box`,
+                    padding: "8px",
+                    minWidth: "48px",
+                    minHeight: "48px",
+                  }}
                 >
-                  <p
-                    className={`text-lg sm:text-2xl font-bold bg-gradient-to-r ${colors.text} bg-clip-text text-transparent leading-none`}
-                  >
-                    {summary.subscriptionBenefits.shopDiscountPercent}%
-                  </p>
-                </div>
+                  <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
+                    <Image
+                      src={packageIcon}
+                      alt={`${packageName} icon`}
+                      className="w-full h-full object-contain"
+                      width={40}
+                      height={40}
+                    />
+                  </div>
+                </span>
               );
             })()
           ) : summary.totalDaysOfAccessRemaining > 0 ? (
@@ -508,13 +573,6 @@ export default function PartnerDiscountQueue({
               </p>
             </div>
           ) : null}
-          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-colors border border-white/20">
-            {expanded ? (
-              <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            ) : (
-              <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            )}
-          </div>
         </div>
       </button>
 
@@ -588,7 +646,7 @@ export default function PartnerDiscountQueue({
                       </p>
                       {summary.isActiveSubscription && summary.subscriptionBenefits && (
                         <p className="text-emerald-200 font-bold text-xs sm:text-sm mt-1">
-                          {summary.subscriptionBenefits.shopDiscountPercent}% off all shop purchases
+                          100% partner discount on all purchases
                         </p>
                       )}
                     </div>

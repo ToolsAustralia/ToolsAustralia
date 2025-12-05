@@ -23,11 +23,15 @@ import ReferFriendModal from "@/components/modals/ReferFriendModal";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
-import { Clock, Share2, Info } from "lucide-react";
+import { Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
+import { getPackageById } from "@/data/membershipPackages";
+import { useMemberships } from "@/hooks/useMemberships";
+import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 
 // Partner Discounts Section Component
 // Conditionally renders UnlockDiscounts based on user's partner discount access
@@ -127,6 +131,11 @@ export default function MyAccountPage() {
     sortBy: "createdAt",
     sortOrder: "desc",
   });
+
+  // Get membership packages and promo for modal integration
+  const { subscriptionPackages } = useMemberships();
+  const { data: membershipPromo } = usePromoByType("membership-packages");
+  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
 
   const isRewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
@@ -393,6 +402,32 @@ export default function MyAccountPage() {
   const membershipPackage =
     user.subscriptionPackageData || user.enrichedOneTimePackages?.find((pkg) => pkg.isActive)?.packageData;
 
+  /**
+   * Check if user has active membership that includes "Mini Draws" feature
+   * This determines if user is automatically entered in all minidraws
+   */
+  const checkMembershipIncludesMiniDraws = (): boolean => {
+    // Check if user has active subscription
+    if (!user.subscription?.isActive || !user.subscription?.packageId) {
+      return false;
+    }
+
+    // Get package details
+    const packageId = user.subscription.packageId.toString();
+    const packageData = getPackageById(packageId);
+
+    if (!packageData) {
+      return false;
+    }
+
+    // Check if package features include "Mini Draws"
+    const includesMiniDraws = packageData.features.some((feature) => feature.toLowerCase().includes("mini draw"));
+
+    return includesMiniDraws;
+  };
+
+  const hasMembershipWithMiniDraws = checkMembershipIncludesMiniDraws();
+
   // Use lastMonthAccumulatedEntries for accuracy (shows user's actual accumulated entries)
   // Fallback to majorDrawStats if lastMonthAccumulatedEntries is not available
   const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
@@ -651,7 +686,7 @@ export default function MyAccountPage() {
                       )}
 
                       {/* Membership Entries */}
-                      <div className="group relative bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30 hover:border-blue-400/50 transition-all duration-300 hover:scale-105">
+                      <div className="group relative bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30">
                         {/* Info Button - Top Left */}
                         {hasActiveMembership &&
                           membershipPackage &&
@@ -712,7 +747,7 @@ export default function MyAccountPage() {
                       </div>
 
                       {/* One-time Entries */}
-                      <div className="group relative bg-gradient-to-br from-green-500/20 via-emerald-400/10 to-teal-500/20 backdrop-blur-sm rounded-xl p-3 border border-green-400/30 hover:border-green-400/50 transition-all duration-300 hover:scale-105">
+                      <div className="group relative bg-gradient-to-br from-green-500/20 via-emerald-400/10 to-teal-500/20 backdrop-blur-sm rounded-xl p-3 border border-green-400/30">
                         <div className="relative z-10 text-center">
                           <div className="flex items-center justify-center gap-1 mb-1">
                             <span className="text-white/90 text-xs font-semibold uppercase tracking-wide">
@@ -729,7 +764,7 @@ export default function MyAccountPage() {
                       {/* Reward Points - TEMPORARILY HIDDEN */}
                       {/* TODO: Re-enable reward card when needed */}
                       {false && (
-                        <div className="group relative bg-gradient-to-br from-yellow-500/20 via-amber-400/10 to-orange-500/20 backdrop-blur-sm rounded-xl p-3 border border-yellow-400/30 hover:border-yellow-400/50 transition-all duration-300 hover:scale-105">
+                        <div className="group relative bg-gradient-to-br from-yellow-500/20 via-amber-400/10 to-orange-500/20 backdrop-blur-sm rounded-xl p-3 border border-yellow-400/30">
                           <div className="relative z-10 text-center">
                             <div className="flex items-center justify-center gap-1 mb-1">
                               <span className="text-white/90 text-xs font-semibold uppercase tracking-wide">
@@ -855,6 +890,208 @@ export default function MyAccountPage() {
               </h2>
             </div>
 
+            {/* Membership Info Banner */}
+            {!miniDrawsLoading && activeMiniDraws.length > 0 && (
+              <div className="mb-8">
+                {hasMembershipWithMiniDraws ? (
+                  // Success Banner - User has membership with minidraws
+                  <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border-2 border-gray-700 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-md border-2 border-green-400/30">
+                          <CheckCircle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-base sm:text-xl font-bold text-white mb-1">
+                          You&apos;re Automatically Entered!
+                        </h3>
+                        <p className="text-xs sm:text-base text-gray-300">
+                          With your active membership, you&apos;re automatically entered in all mini draws. Your entries
+                          are calculated from your membership benefits plus any additional minidraw packages you&apos;ve
+                          purchased.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // CTA Banner - User doesn't have membership with minidraws
+                  <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border-2 border-gray-700 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
+                    <div className="flex items-start gap-3 sm:gap-4 mb-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-red-600 via-red-700 to-red-800 flex items-center justify-center shadow-md border-2 border-red-400/30">
+                          <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-base sm:text-xl font-bold text-white mb-1">Get Your Name in Every Draw</h3>
+                        <p className="text-xs sm:text-base text-gray-300">
+                          Subscribe to a membership package and automatically enter all mini draws! Your membership
+                          entries will be added to every active minidraw.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                      <button
+                        onClick={() => {
+                          // Get Tradie package for default selection
+                          const getTradiePackage = (): LocalMembershipPlan => {
+                            const targetPackageId = "tradie-subscription";
+                            const packageData = subscriptionPackages.find((pkg) => pkg.id === targetPackageId);
+
+                            if (!packageData) {
+                              // Fallback if package not found
+                              const baseEntries = 15; // Tradie subscription has 15 entries per month
+                              const promoEntries = baseEntries * membershipPromoMultiplier;
+
+                              return {
+                                id: targetPackageId,
+                                name: "Tradie",
+                                price: 20,
+                                period: "mo",
+                                features: [
+                                  {
+                                    text: `${promoEntries} Free Accumulated Entries${
+                                      membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
+                                    }`,
+                                  },
+                                  { text: "100% Access to Partner Discounts" },
+                                  { text: "Mini Draws" },
+                                ],
+                                buttonText: "Get Started",
+                                buttonStyle: "secondary",
+                                isMemberOnly: false,
+                                metadata: {
+                                  entriesCount: promoEntries,
+                                  promoMultiplier: membershipPromoMultiplier,
+                                  originalEntries: baseEntries,
+                                  isPromoActive: membershipPromoMultiplier > 1,
+                                },
+                              };
+                            }
+
+                            const localPlan = convertToLocalPlan(packageData);
+
+                            // Apply promo multiplier if active
+                            if (membershipPromoMultiplier <= 1) {
+                              return localPlan;
+                            }
+
+                            const originalEntries = localPlan.metadata?.entriesCount ?? 0;
+                            const promoEntries = originalEntries * membershipPromoMultiplier;
+
+                            return {
+                              ...localPlan,
+                              features: localPlan.features.map((feature) => {
+                                if (feature.text.toLowerCase().includes("entries")) {
+                                  return {
+                                    ...feature,
+                                    text: feature.text.replace(/\d+/, promoEntries.toString()),
+                                  };
+                                }
+                                return feature;
+                              }),
+                              metadata: {
+                                ...localPlan.metadata,
+                                entriesCount: promoEntries,
+                                originalEntries,
+                                promoMultiplier: membershipPromoMultiplier,
+                                isPromoActive: true,
+                              },
+                            };
+                          };
+
+                          const tradiePlan = getTradiePackage();
+                          membershipModal.setSelectedPlan(tradiePlan);
+                          membershipModal.openModal();
+                        }}
+                        className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl"
+                      >
+                        Get Your Name in Every Draw
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Get Tradie package for default selection
+                          const getTradiePackage = (): LocalMembershipPlan => {
+                            const targetPackageId = "tradie-subscription";
+                            const packageData = subscriptionPackages.find((pkg) => pkg.id === targetPackageId);
+
+                            if (!packageData) {
+                              // Fallback if package not found
+                              const baseEntries = 15; // Tradie subscription has 15 entries per month
+                              const promoEntries = baseEntries * membershipPromoMultiplier;
+
+                              return {
+                                id: targetPackageId,
+                                name: "Tradie",
+                                price: 20,
+                                period: "mo",
+                                features: [
+                                  {
+                                    text: `${promoEntries} Free Accumulated Entries${
+                                      membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
+                                    }`,
+                                  },
+                                  { text: "100% Access to Partner Discounts" },
+                                  { text: "Mini Draws" },
+                                ],
+                                buttonText: "Get Started",
+                                buttonStyle: "secondary",
+                                isMemberOnly: false,
+                                metadata: {
+                                  entriesCount: promoEntries,
+                                  promoMultiplier: membershipPromoMultiplier,
+                                  originalEntries: baseEntries,
+                                  isPromoActive: membershipPromoMultiplier > 1,
+                                },
+                              };
+                            }
+
+                            const localPlan = convertToLocalPlan(packageData);
+
+                            // Apply promo multiplier if active
+                            if (membershipPromoMultiplier <= 1) {
+                              return localPlan;
+                            }
+
+                            const originalEntries = localPlan.metadata?.entriesCount ?? 0;
+                            const promoEntries = originalEntries * membershipPromoMultiplier;
+
+                            return {
+                              ...localPlan,
+                              features: localPlan.features.map((feature) => {
+                                if (feature.text.toLowerCase().includes("entries")) {
+                                  return {
+                                    ...feature,
+                                    text: feature.text.replace(/\d+/, promoEntries.toString()),
+                                  };
+                                }
+                                return feature;
+                              }),
+                              metadata: {
+                                ...localPlan.metadata,
+                                entriesCount: promoEntries,
+                                originalEntries,
+                                promoMultiplier: membershipPromoMultiplier,
+                                isPromoActive: true,
+                              },
+                            };
+                          };
+
+                          const tradiePlan = getTradiePackage();
+                          membershipModal.setSelectedPlan(tradiePlan);
+                          membershipModal.openModal();
+                        }}
+                        className="flex-1 bg-white border-2 border-blue-600 text-blue-700 hover:bg-blue-50 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
+                      >
+                        Subscribe to Membership Package
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {miniDrawsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent"></div>
@@ -864,51 +1101,33 @@ export default function MyAccountPage() {
                 <p className="text-gray-600">No active mini-draws available at the moment.</p>
               </div>
             ) : (
-              <>
-                {/* Participant Mini Draws Section */}
-                {participantMiniDraws.length > 0 && (
-                  <div className="mb-8">
-                    <div className="mb-4">
-                      <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2">
-                        Your Mini Draws
-                      </h3>
-                      <p className="text-sm text-gray-600">Mini draws you&apos;re currently participating in</p>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                      {participantMiniDraws.map((miniDraw) => (
-                        <div key={miniDraw._id} className="relative">
-                          <div className="absolute -top-2 -right-2 z-10">
-                            <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg border-2 border-green-400/30">
-                              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
-                              <span className="relative z-10">Your Draw</span>
-                            </div>
-                          </div>
-                          <ProductCard product={miniDraw} viewMode="grid" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Other Active Mini Draws Section */}
-                {otherMiniDraws.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    {participantMiniDraws.length > 0 && (
-                      <div className="mb-4">
-                        <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2">
-                          Explore More Mini Draws
-                        </h3>
-                        <p className="text-sm text-gray-600">Join these exciting mini draws</p>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                      {otherMiniDraws.map((miniDraw) => (
-                        <ProductCard key={miniDraw._id} product={miniDraw} viewMode="grid" />
-                      ))}
-                    </div>
+                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2">
+                      {hasMembershipWithMiniDraws ? "Increase Your Chances of Winning" : "Explore More Mini Draws"}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {hasMembershipWithMiniDraws
+                        ? "Purchase additional entries to boost your odds!"
+                        : "Join these exciting mini draws"}
+                    </p>
                   </div>
-                )}
-              </>
+                  <Link
+                    href="/mini-draws"
+                    className="text-red-600 hover:text-red-700 font-medium flex items-center gap-1 text-sm sm:text-base"
+                  >
+                    <span className="hidden sm:inline">View All Mini Draws</span>
+                    <span className="sm:hidden">View All</span>
+                    <ArrowLeft className="w-4 h-4 rotate-180" />
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                  {activeMiniDraws.map((miniDraw) => (
+                    <ProductCard key={miniDraw._id} product={miniDraw} viewMode="grid" />
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

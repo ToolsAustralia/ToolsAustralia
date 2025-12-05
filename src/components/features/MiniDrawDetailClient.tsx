@@ -167,7 +167,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                   <div>
                     <div className="font-medium text-gray-900">Progress</div>
                     <div className="text-gray-700">
-                      {totalEntries.toLocaleString()} / {minimumEntries.toLocaleString()} entries
+                      {entriesRemaining.toLocaleString()} entries remaining
                     </div>
                   </div>
                 </div>

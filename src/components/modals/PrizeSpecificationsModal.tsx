@@ -7,6 +7,7 @@ import ModalContainer from "./ui/ModalContainer";
 import ModalHeader from "./ui/ModalHeader";
 import ModalContent from "./ui/ModalContent";
 import type { PrizeCatalogEntry, PrizeSpecItem, PrizeSpecSection } from "@/config/prizes";
+import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
 
 interface PrizeSpecificationsModalProps {
   isOpen: boolean;
@@ -15,9 +16,15 @@ interface PrizeSpecificationsModalProps {
 }
 
 const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecificationsModalProps) => {
-  // Memoise sections so we don’t recreate arrays on every render.
+  // Memoise sections so we don't recreate arrays on every render.
   const sections = useMemo<PrizeSpecSection[]>(() => prize?.specSections ?? [], [prize]);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+
+  // Get brand colors for the prize to match View Specs button styling
+  const brandColors = useMemo(() => {
+    if (!prize?.slug) return null;
+    return getPrizeBrandColors(prize.slug);
+  }, [prize?.slug]);
 
   // Whenever the prize (or its sections) changes we reset the active tab to the first section.
   useEffect(() => {
@@ -85,6 +92,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
         onClose={onClose}
         showLogo={false}
         variant="metallic-red"
+        className={brandColors ? `!bg-gradient-to-br ${brandColors.gradient}` : ""}
       />
 
       <ModalContent scrollbar="metallic" padding="lg" className="max-h-[80vh]">
@@ -108,13 +116,15 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
                     onClick={() => setActiveSectionId(section.id)}
                     className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all duration-200 border ${
                       isActive
-                        ? "bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
+                        ? brandColors
+                          ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-lg ${brandColors.shadowColor}`
+                          : "bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
                         : "bg-gray-100 text-gray-700 border-gray-200 hover:border-red-400 hover:text-red-600"
                     }`}
                   >
                     {section.label}
                     {section.items.length > 0 && (
-                      <span className={`ml-2 text-[11px] font-medium ${isActive ? "text-white/90" : "text-gray-500"}`}>
+                      <span className={`ml-2 text-[11px] font-medium ${isActive ? brandColors?.subtitleTextColor || "text-white/90" : "text-gray-500"}`}>
                         {section.items.length}
                       </span>
                     )}

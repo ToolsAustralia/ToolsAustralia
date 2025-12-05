@@ -85,7 +85,7 @@ export const brandLogos: BrandLogo[] = [
     imageScaleLg: 2.5,
     hasOverlay: true,
     textClass: "text-white",
-    overlayScale: 0.8,
+    overlayScale: 1.0,
   },
   {
     id: "gearwrench",
@@ -110,7 +110,7 @@ export const brandLogos: BrandLogo[] = [
     imageScaleLg: 3.1,
     hasOverlay: true,
     textClass: "text-gray-900",
-    overlayScale: 0.8,
+    overlayScale: 1.0,
   },
   {
     id: "knipex",

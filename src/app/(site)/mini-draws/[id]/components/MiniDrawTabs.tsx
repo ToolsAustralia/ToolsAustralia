@@ -123,20 +123,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                   </div>
                 </dl>
 
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-500 mb-1">
-                    <span>0%</span>
-                    <span>{capacityPercentage}%</span>
-                    <span>100%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="h-2 rounded-full bg-gradient-to-r from-red-500 to-red-700 transition-all duration-500"
-                      style={{ width: `${capacityPercentage}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-gray-500">Currently running cycle #{cycle}</div>
+                <div className="mt-3 text-xs text-gray-500">Currently running cycle #{cycle}</div>
               </div>
               <div>
                 <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">Prize Description</h3>

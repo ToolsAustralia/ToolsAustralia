@@ -213,6 +213,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const prizeSummary = selectedPrize.summary;
   const prizeDescription = selectedPrize.detailedDescription;
 
+  // Get brand colors for active prize to match View Specs button and other elements
+  const activePrizeSlug = activeSlug || defaultSlug;
+  const brandColors = getPrizeBrandColors(activePrizeSlug);
+
   // Preserve affiliate code from URL if present
   const affiliateCode = searchParams.get("aff");
   const detailsHref = affiliateCode
@@ -378,8 +382,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             key={`${highlight.title}-${index}`}
             className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
           >
-            <div className="absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg z-10">
-              <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <div
+              className={`absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br ${
+                brandColors.gradient
+              } rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 ${brandColors.borderColor
+                .replace("border-", "border-")
+                .replace("-500", "-400/30")} shadow-lg z-10`}
+            >
+              <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${brandColors.textColor}`} />
             </div>
             <div className="flex-1 relative z-10 pl-10 sm:pl-0">
               <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">
@@ -457,12 +467,26 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     onClick={() => setIsSpecsModalOpen(true)}
                     className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-700 to-red-800" />
+                    <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`} />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                    <div className="pointer-events-none absolute inset-0 rounded-full bg-red-500/25 blur-xl animate-ping" />
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-red-500/20 blur-xl" />
-                    <div className="relative z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 border-2 border-red-400/30 rounded-full">
-                      <span className="font-bold text-xs text-white drop-shadow-lg">VIEW SPECS</span>
+                    <div
+                      className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
+                        "/40",
+                        "/25"
+                      )} blur-xl animate-ping`}
+                    />
+                    <div
+                      className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace(
+                        "/40",
+                        "/20"
+                      )} blur-xl`}
+                    />
+                    <div
+                      className={`relative z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 border-2 ${brandColors.borderColor
+                        .replace("border-", "border-")
+                        .replace("-500", "-400/30")} rounded-full`}
+                    >
+                      <span className={`font-bold text-xs ${brandColors.textColor} drop-shadow-lg`}>VIEW SPECS</span>
                     </div>
                   </button>
                 </div>
@@ -788,12 +812,28 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     onClick={() => setIsSpecsModalOpen(true)}
                     className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-700 to-red-800" />
+                    <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`} />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                    <div className="pointer-events-none absolute inset-0 rounded-full bg-red-500/25 blur-xl animate-ping" />
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-red-500/20 blur-xl" />
-                    <div className="relative z-10 flex items-center justify-center gap-2 px-4 py-2 border-2 border-red-400/30 rounded-full">
-                      <span className="font-bold text-xs sm:text-sm text-white drop-shadow-lg whitespace-nowrap">
+                    <div
+                      className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
+                        "/40",
+                        "/25"
+                      )} blur-xl animate-ping`}
+                    />
+                    <div
+                      className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace(
+                        "/40",
+                        "/20"
+                      )} blur-xl`}
+                    />
+                    <div
+                      className={`relative z-10 flex items-center justify-center gap-2 px-4 py-2 border-2 ${brandColors.borderColor
+                        .replace("border-", "border-")
+                        .replace("-500", "-400/30")} rounded-full`}
+                    >
+                      <span
+                        className={`font-bold text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}
+                      >
                         VIEW SPECS
                       </span>
                     </div>
@@ -996,9 +1036,19 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="flex flex-col gap-6">
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-4xl font-bold text-gray-900 font-['Poppins'] leading-tight drop-shadow-sm">
-                    {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
-                  </h2>
+                  <div
+                    className={`inline-block bg-gradient-to-br ${
+                      brandColors.gradient
+                    } rounded-xl sm:rounded-2xl px-4 sm:px-6 py-2 sm:py-3 shadow-lg border-2 ${brandColors.borderColor
+                      .replace("border-", "border-")
+                      .replace("-500", "-400/30")} mb-2`}
+                  >
+                    <h2
+                      className={`text-4xl font-bold ${brandColors.textColor} font-['Poppins'] leading-tight drop-shadow-lg`}
+                    >
+                      {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
+                    </h2>
+                  </div>
                   {prizeLabel && (
                     <p className="text-sm uppercase tracking-[0.35em] text-red-600 font-semibold mt-1">{prizeLabel}</p>
                   )}

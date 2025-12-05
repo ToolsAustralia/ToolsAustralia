@@ -8,6 +8,7 @@ import { Types } from "mongoose";
 import { stringify } from "csv-stringify/sync";
 import ExcelJS from "exceljs";
 import { formatDateInAEST } from "@/utils/common/timezone";
+import { getPackageById } from "@/data/membershipPackages";
 
 /**
  * GET /api/admin/mini-draw/[id]/export
@@ -52,42 +53,127 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Get all users who have entries in this mini draw
     const userIds = miniDraw.entries.map((entry: { userId: Types.ObjectId }) => entry.userId);
-    const users = await User.find({ _id: { $in: userIds } })
+    const existingUsers = await User.find({ _id: { $in: userIds } })
       .select("firstName lastName email mobile state")
       .lean();
 
-    // Create a map of user data for quick lookup
-    const userMap = new Map(users.map((user) => [(user._id as unknown as Types.ObjectId).toString(), user]));
+    // Create a map of existing user data for quick lookup
+    const existingUserMap = new Map(
+      existingUsers.map((user) => [(user._id as unknown as Types.ObjectId).toString(), user])
+    );
 
-    // Prepare export data sorted by total entries (desc)
-    const exportData = miniDraw.entries
-      .map(
-        (entry: {
-          userId: Types.ObjectId;
-          totalEntries: number;
-          entriesBySource?: { "mini-draw-package"?: number; "free-entry"?: number };
-          firstAddedDate?: Date;
-          lastUpdatedDate?: Date;
-        }) => {
-          const user = userMap.get(entry.userId.toString());
-          const stateAbbr = (user?.state || "").toUpperCase().trim();
-          const stateName = STATE_NAMES[stateAbbr] || user?.state || "";
+    // Prepare export data from existing minidraw entries
+    const existingEntriesMap = new Map<string, MiniDrawExportRow>();
 
-          return {
+    miniDraw.entries.forEach(
+      (entry: {
+        userId: Types.ObjectId;
+        totalEntries: number;
+        entriesBySource?: { "mini-draw-package"?: number; "free-entry"?: number };
+        firstAddedDate?: Date;
+        lastUpdatedDate?: Date;
+      }) => {
+        const user = existingUserMap.get(entry.userId.toString());
+        if (!user) return; // Skip if user not found
+
+        const stateAbbr = (user?.state || "").toUpperCase().trim();
+        const stateName = STATE_NAMES[stateAbbr] || user?.state || "";
+
+        existingEntriesMap.set(entry.userId.toString(), {
+          firstName: user?.firstName || "",
+          lastName: user?.lastName || "",
+          email: user?.email || "",
+          mobile: user?.mobile || "",
+          state: stateName,
+          totalEntries: entry.totalEntries,
+        });
+      }
+    );
+
+    // Query all users with active subscriptions whose package includes "Mini Draws"
+    const usersWithActiveSubscriptions = await User.find({
+      "subscription.isActive": true,
+      "subscription.packageId": { $exists: true, $ne: null },
+    })
+      .select("firstName lastName email mobile state subscription miniDrawPackages")
+      .lean();
+
+    // Process membership-based entries
+    const membershipEntriesMap = new Map<string, MiniDrawExportRow>();
+
+    for (const user of usersWithActiveSubscriptions) {
+      // Check if user's subscription package includes "Mini Draws"
+      const packageId = user.subscription?.packageId?.toString();
+      if (!packageId) continue;
+
+      const membershipPackage = getPackageById(packageId);
+      if (!membershipPackage) continue;
+
+      // Check if package features include "Mini Draws"
+      const includesMiniDraws = membershipPackage.features.some((feature) =>
+        feature.toLowerCase().includes("mini draw")
+      );
+
+      if (!includesMiniDraws) continue;
+
+      // Calculate entries: lastMonthAccumulatedEntries + sum of active minidraw package entries for THIS specific minidraw
+      const lastMonthAccumulatedEntries = user.subscription?.lastMonthAccumulatedEntries || 0;
+
+      // Get the current minidraw ID for comparison
+      const currentMiniDrawId = (miniDraw._id as unknown as Types.ObjectId).toString();
+
+      // Sum active minidraw package entries ONLY for this specific minidraw
+      const activeMiniDrawPackageEntries =
+        user.miniDrawPackages?.reduce((sum, pkg) => {
+          if (!pkg.isActive) return sum;
+
+          // Check if this package belongs to the current minidraw
+          const pkgMiniDrawId = pkg.miniDrawId ? (pkg.miniDrawId as unknown as Types.ObjectId).toString() : null;
+
+          // Only count entries if miniDrawId matches (skip if null/undefined for backward compatibility)
+          if (pkgMiniDrawId && pkgMiniDrawId === currentMiniDrawId) {
+            return sum + (pkg.entriesGranted || 0);
+          }
+
+          return sum;
+        }, 0) || 0;
+
+      const totalEntries = lastMonthAccumulatedEntries + activeMiniDrawPackageEntries;
+
+      // Only include if user has entries (greater than 0)
+      if (totalEntries > 0) {
+        const stateAbbr = (user?.state || "").toUpperCase().trim();
+        const stateName = STATE_NAMES[stateAbbr] || user?.state || "";
+
+        const userId = (user._id as unknown as Types.ObjectId).toString();
+
+        // Only add if not already in existing entries (existing entries take precedence)
+        if (!existingEntriesMap.has(userId)) {
+          membershipEntriesMap.set(userId, {
             firstName: user?.firstName || "",
             lastName: user?.lastName || "",
             email: user?.email || "",
             mobile: user?.mobile || "",
             state: stateName,
-            totalEntries: entry.totalEntries,
-            entriesFromPackages: entry.entriesBySource?.["mini-draw-package"] || 0,
-            entriesFromFree: entry.entriesBySource?.["free-entry"] || 0,
-            firstAddedDate: entry.firstAddedDate ?? null,
-            lastUpdatedDate: entry.lastUpdatedDate ?? null,
-          };
+            totalEntries,
+          });
         }
-      )
-      .sort((a: MiniDrawExportRow, b: MiniDrawExportRow) => b.totalEntries - a.totalEntries);
+      }
+    }
+
+    // Merge existing entries with membership-based entries
+    // Existing entries take precedence (they already have entries in the minidraw)
+    const mergedEntriesMap = new Map<string, MiniDrawExportRow>(existingEntriesMap);
+
+    // Add membership entries for users not already in the minidraw
+    membershipEntriesMap.forEach((entry, userId) => {
+      if (!mergedEntriesMap.has(userId)) {
+        mergedEntriesMap.set(userId, entry);
+      }
+    });
+
+    // Convert to array and sort by total entries (descending)
+    const exportData = Array.from(mergedEntriesMap.values()).sort((a, b) => b.totalEntries - a.totalEntries);
 
     const safeName = miniDraw.name.replace(/[^a-z0-9]/gi, "-").toLowerCase();
     const dateStr = formatDateInAEST(new Date(), "yyyy-MM-dd");
@@ -111,6 +197,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+/**
+ * Export row type matching majordraw export structure
+ * Simplified to only include essential participant information
+ */
 type MiniDrawExportRow = {
   firstName: string;
   lastName: string;
@@ -118,26 +208,17 @@ type MiniDrawExportRow = {
   mobile: string;
   state: string;
   totalEntries: number;
-  entriesFromPackages: number;
-  entriesFromFree: number;
-  firstAddedDate: Date | null;
-  lastUpdatedDate: Date | null;
 };
 
+/**
+ * Export data to CSV format
+ * Matches majordraw export structure with simplified columns
+ */
 function generateCSVResponse(data: MiniDrawExportRow[], filename: string): NextResponse {
-  const headers = [
-    "First Name",
-    "Last Name",
-    "Email",
-    "Mobile",
-    "State",
-    "Total Entries",
-    "Entries from Packages",
-    "Entries from Free",
-    "First Added Date",
-    "Last Updated Date",
-  ];
+  // Define CSV headers matching majordraw export
+  const headers = ["First Name", "Last Name", "Email", "Mobile", "State", "Total Entries"];
 
+  // Convert data to CSV format
   const csvData = data.map((row) => [
     row.firstName,
     row.lastName,
@@ -145,18 +226,16 @@ function generateCSVResponse(data: MiniDrawExportRow[], filename: string): NextR
     row.mobile,
     row.state,
     row.totalEntries.toString(),
-    row.entriesFromPackages.toString(),
-    row.entriesFromFree.toString(),
-    row.firstAddedDate ? row.firstAddedDate.toISOString() : "",
-    row.lastUpdatedDate ? row.lastUpdatedDate.toISOString() : "",
   ]);
 
-  const csvContent = stringify([headers, ...csvData], {
+  // Generate CSV string
+  const csv = stringify([headers, ...csvData], {
     quoted: true,
     quoted_empty: true,
   });
 
-  return new NextResponse(csvContent, {
+  // Return CSV response with proper headers
+  return new NextResponse(csv, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
@@ -166,27 +245,30 @@ function generateCSVResponse(data: MiniDrawExportRow[], filename: string): NextR
   });
 }
 
+/**
+ * Export data to Excel format
+ * Matches majordraw export structure with simplified columns
+ */
 async function generateExcelResponse(
   data: MiniDrawExportRow[],
   miniDraw: { name: string; totalEntries?: number; minimumEntries?: number; entries: unknown[] },
   filename: string
 ): Promise<NextResponse> {
+  // Create workbook and worksheet
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Mini Draw Entries");
 
+  // Set column definitions with proper widths (matching majordraw export)
   worksheet.columns = [
     { header: "First Name", key: "firstName", width: 20 },
     { header: "Last Name", key: "lastName", width: 20 },
     { header: "Email", key: "email", width: 30 },
     { header: "Mobile", key: "mobile", width: 18 },
-    { header: "State", key: "state", width: 18 },
+    { header: "State", key: "state", width: 10 },
     { header: "Total Entries", key: "totalEntries", width: 15 },
-    { header: "Entries from Packages", key: "entriesFromPackages", width: 22 },
-    { header: "Entries from Free", key: "entriesFromFree", width: 20 },
-    { header: "First Added", key: "firstAddedDate", width: 24 },
-    { header: "Last Updated", key: "lastUpdatedDate", width: 24 },
   ];
 
+  // Style the header row
   worksheet.getRow(1).font = { bold: true, size: 12 };
   worksheet.getRow(1).fill = {
     type: "pattern",
@@ -198,41 +280,41 @@ async function generateExcelResponse(
     bottom: { style: "thin" },
   };
 
+  // Add data rows
   data.forEach((row) => {
-    worksheet.addRow({
-      ...row,
-      firstAddedDate: row.firstAddedDate ? formatDateInAEST(row.firstAddedDate, "MMM dd, yyyy h:mm a") : "",
-      lastUpdatedDate: row.lastUpdatedDate ? formatDateInAEST(row.lastUpdatedDate, "MMM dd, yyyy h:mm a") : "",
-    });
+    worksheet.addRow(row);
   });
 
-  const summaryStart = data.length + 3;
-  worksheet.getCell(`A${summaryStart}`).value = "Total Participants:";
-  worksheet.getCell(`A${summaryStart}`).font = { bold: true };
-  worksheet.getCell(`B${summaryStart}`).value = data.length;
+  // Add summary information at the bottom
+  const summaryRowNum = data.length + 3;
+  worksheet.getCell(`A${summaryRowNum}`).value = "Total Participants:";
+  worksheet.getCell(`A${summaryRowNum}`).font = { bold: true };
+  worksheet.getCell(`B${summaryRowNum}`).value = data.length;
 
-  worksheet.getCell(`A${summaryStart + 1}`).value = "Total Entries:";
-  worksheet.getCell(`A${summaryStart + 1}`).font = { bold: true };
-  worksheet.getCell(`B${summaryStart + 1}`).value =
+  worksheet.getCell(`A${summaryRowNum + 1}`).value = "Total Entries:";
+  worksheet.getCell(`A${summaryRowNum + 1}`).font = { bold: true };
+  worksheet.getCell(`B${summaryRowNum + 1}`).value =
     miniDraw.totalEntries ?? data.reduce((sum, row) => sum + row.totalEntries, 0);
 
-  worksheet.getCell(`A${summaryStart + 2}`).value = "Draw Name:";
-  worksheet.getCell(`A${summaryStart + 2}`).font = { bold: true };
-  worksheet.getCell(`B${summaryStart + 2}`).value = miniDraw.name;
+  worksheet.getCell(`A${summaryRowNum + 2}`).value = "Draw Name:";
+  worksheet.getCell(`A${summaryRowNum + 2}`).font = { bold: true };
+  worksheet.getCell(`B${summaryRowNum + 2}`).value = miniDraw.name;
 
-  worksheet.getCell(`A${summaryStart + 3}`).value = "Minimum Entries:";
-  worksheet.getCell(`A${summaryStart + 3}`).font = { bold: true };
-  worksheet.getCell(`B${summaryStart + 3}`).value = miniDraw.minimumEntries ?? "Not set";
+  worksheet.getCell(`A${summaryRowNum + 3}`).value = "Minimum Entries:";
+  worksheet.getCell(`A${summaryRowNum + 3}`).font = { bold: true };
+  worksheet.getCell(`B${summaryRowNum + 3}`).value = miniDraw.minimumEntries ?? "Not set";
 
-  worksheet.getCell(`A${summaryStart + 4}`).value = "Entries Remaining:";
-  worksheet.getCell(`A${summaryStart + 4}`).font = { bold: true };
-  worksheet.getCell(`B${summaryStart + 4}`).value = Math.max(
+  worksheet.getCell(`A${summaryRowNum + 4}`).value = "Entries Remaining:";
+  worksheet.getCell(`A${summaryRowNum + 4}`).font = { bold: true };
+  worksheet.getCell(`B${summaryRowNum + 4}`).value = Math.max(
     (miniDraw.minimumEntries ?? 0) - (miniDraw.totalEntries ?? 0),
     0
   );
 
+  // Generate Excel buffer
   const buffer = await workbook.xlsx.writeBuffer();
 
+  // Return Excel response with proper headers
   return new NextResponse(buffer, {
     status: 200,
     headers: {

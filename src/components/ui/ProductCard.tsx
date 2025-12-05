@@ -9,6 +9,8 @@ import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import type { BrandLogo } from "@/data/brandLogos";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
+import { useUserContext } from "@/contexts/UserContext";
+import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
 
 // Types
 interface ProductItem {
@@ -33,6 +35,7 @@ interface MiniDrawType {
   requiresMembership: boolean;
   hasActiveMembership?: boolean;
   brandId?: string;
+  userEntryCount?: number; // User's entry count in this specific minidraw
   prize: {
     name: string;
     value: number;
@@ -84,11 +87,7 @@ export default function ProductCard({
 }: ProductCardProps) {
   const { items, addToCart, isAddingToCart, isUpdatingCart, hasFailedOperations, retryAllFailedOperations } = useCart();
   const { trackAddToCart } = usePixelTracking();
-
-  // Local state for immediate UI feedback
-  const [localAddedState, setLocalAddedState] = useState<Record<string, boolean>>({});
-  const [localLoadingState, setLocalLoadingState] = useState<Record<string, boolean>>({});
-  const [localErrorState, setLocalErrorState] = useState<Record<string, boolean>>({});
+  const { userData, isAuthenticated } = useUserContext();
 
   // Helper functions
   const getValidRating = (rating: unknown): number => {
@@ -110,14 +109,70 @@ export default function ProductCard({
     return "prize" in item && "status" in item && "minimumEntries" in item;
   };
 
+  // Check if this is a minidraw product
+  const isMiniDraw = isMiniDrawProduct(product);
+
+  // Subscribe to minidraw query updates for real-time UI updates
+  const { data: miniDrawQueryData } = useMiniDraw(isMiniDraw ? product._id : undefined);
+
+  // Local state for immediate UI feedback
+  const [localAddedState, setLocalAddedState] = useState<Record<string, boolean>>({});
+  const [localLoadingState, setLocalLoadingState] = useState<Record<string, boolean>>({});
+  const [localErrorState, setLocalErrorState] = useState<Record<string, boolean>>({});
+
+  /**
+   * Calculate user's entry count for this specific minidraw
+   * Shows: lastMonthAccumulatedEntries + active minidraw package entries for THIS specific minidraw
+   */
+  const getUserEntryCount = (): number => {
+    if (!isMiniDraw || !isAuthenticated || !userData) return 0;
+
+    // Get lastMonthAccumulatedEntries from subscription (applies to all minidraws)
+    const userSubscription = userData.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+    const lastMonthAccumulatedEntries = userSubscription?.lastMonthAccumulatedEntries || 0;
+
+    // Get current minidraw ID (handle both string and ObjectId formats)
+    // Use String() to safely convert both string and ObjectId types to string
+    const currentMiniDrawId = String(product._id || "");
+
+    // Sum active minidraw package entries ONLY for this specific minidraw
+    const userMiniDrawPackages = (userData as { miniDrawPackages?: Array<{ isActive: boolean; miniDrawId?: string | { toString(): string }; entriesGranted?: number }> }).miniDrawPackages;
+    const activeMiniDrawPackageEntries =
+      userMiniDrawPackages?.reduce((sum, pkg) => {
+        if (!pkg.isActive) return sum;
+
+        // Check if this package belongs to the current minidraw
+        const pkgMiniDrawId = pkg.miniDrawId
+          ? typeof pkg.miniDrawId === "string"
+            ? pkg.miniDrawId
+            : pkg.miniDrawId.toString()
+          : null;
+
+        // Only count entries if miniDrawId matches (or if miniDrawId is null/undefined for backward compatibility, skip it)
+        if (pkgMiniDrawId && pkgMiniDrawId === currentMiniDrawId) {
+          return sum + (pkg.entriesGranted || 0);
+        }
+
+        return sum;
+      }, 0) || 0;
+
+    // Total entries = lastMonthAccumulatedEntries (for all) + activeMiniDrawPackageEntries (for this specific minidraw)
+    return lastMonthAccumulatedEntries + activeMiniDrawPackageEntries;
+  };
+
   const getProductData = (): NormalizedProductData => {
     if (isMiniDrawProduct(product)) {
+      // Use query data if available (for real-time updates), otherwise fall back to product prop
+      const totalEntries = miniDrawQueryData?.totalEntries ?? product.totalEntries ?? 0;
+      const minimumEntries = miniDrawQueryData?.minimumEntries ?? product.minimumEntries ?? 0;
+      const entriesRemainingData = miniDrawQueryData?.entriesRemaining ?? product.entriesRemaining;
+      
       const remainingEntries = Math.max(
         0,
-        product.entriesRemaining !== undefined
-          ? product.entriesRemaining
-          : product.minimumEntries > 0
-          ? product.minimumEntries - product.totalEntries
+        entriesRemainingData !== undefined
+          ? entriesRemainingData
+          : minimumEntries > 0
+          ? minimumEntries - totalEntries
           : 0
       );
       const brandMeta = getBrandMeta(product.brandId);
@@ -148,8 +203,8 @@ export default function ProductCard({
         endDate: null,
         startDate: null,
         isActive: product.status === "active" && remainingEntries > 0,
-        totalEntries: product.totalEntries || 0,
-        minimumEntries: product.minimumEntries || 0,
+        totalEntries,
+        minimumEntries,
         status: product.status,
         entriesRemaining: remainingEntries,
         requiresMembership: product.requiresMembership ?? false, // ✅ AUTHENTICATION-ONLY: Mini draws default to false
@@ -326,42 +381,26 @@ export default function ProductCard({
             </div>
           )}
 
-          {/* Entries Remaining Badge - Top Center */}
-          {productData.isPrize && (
+          {/* Your Entries Badge - Top Center (only shows if user has entries) */}
+          {productData.isPrize && isAuthenticated && getUserEntryCount() > 0 && (
             <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10 whitespace-nowrap group">
-              <div className="relative bg-gradient-to-r from-[#ee0000] to-[#cc0000] text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium shadow-lg shadow-[#ee0000]/50 overflow-hidden">
+              <div className="relative bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium shadow-lg shadow-green-500/50 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 opacity-40"></div>
-                <span className="relative z-10">
-                  {isPrizeCancelled
-                    ? "Cancelled"
-                    : isPrizeClosed
-                    ? "Entries Closed"
-                    : `${entriesRemaining ?? 0} entries left`}
+                <span className="relative z-10 flex items-center gap-1">
+                  <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  Your Entries: {getUserEntryCount()}
                 </span>
               </div>
             </div>
           )}
 
-          {/* Mini Draw Progress Bar (Entry-based) */}
+          {/* Mini Draw Entry Display */}
           {productData.isPrize && productData.minimumEntries && (
             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2">
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-xs mb-1">
-                  <span>
-                    {productData.totalEntries || 0} / {productData.minimumEntries} entries
-                  </span>
-                  <span className="text-white/80">
-                    {Math.round(((productData.totalEntries || 0) / productData.minimumEntries) * 100)}%
-                  </span>
-                </div>
-                <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-red-500 to-red-600 h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, ((productData.totalEntries || 0) / productData.minimumEntries) * 100)}%`,
-                    }}
-                  />
-                </div>
+              <div className="flex justify-center items-center text-xs">
+                <span>
+                  {productData.entriesRemaining || 0} entries remaining
+                </span>
               </div>
             </div>
           )}
@@ -597,23 +636,10 @@ export default function ProductCard({
 
             {/* Mini Draw Progress Bar (Entry-based) - List View */}
             {productData.isPrize && productData.minimumEntries && (
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-700">
-                    {productData.totalEntries || 0} / {productData.minimumEntries} entries
-                  </span>
-                  <span className="text-gray-500">
-                    {Math.round(((productData.totalEntries || 0) / productData.minimumEntries) * 100)}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-red-500 to-red-600 h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, ((productData.totalEntries || 0) / productData.minimumEntries) * 100)}%`,
-                    }}
-                  />
-                </div>
+              <div className="flex justify-center items-center text-xs">
+                <span className="text-gray-700">
+                  {productData.entriesRemaining || 0} entries remaining
+                </span>
               </div>
             )}
 

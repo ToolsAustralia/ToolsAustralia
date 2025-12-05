@@ -174,6 +174,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     return null;
   }
 
+  // Get brand colors for active prize to match View Specs button and prize header
+  const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-sidchrome");
   const highlights = activePrize.highlights ?? [];
   const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
   const msUntilDraw = drawDateObj ? drawDateObj.getTime() - Date.now() : null;
@@ -198,9 +200,11 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               priority
             />
           </div>
-          <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold text-gray-900 font-['Poppins'] mb-4 drop-shadow-lg">
-            {activePrize.heroHeading}
-          </h2>
+          <div className={`inline-block bg-gradient-to-br ${brandColors.gradient} rounded-xl sm:rounded-2xl px-4 sm:px-6 py-2 sm:py-3 mb-4 shadow-lg border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')}`}>
+            <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-bold ${brandColors.textColor} font-['Poppins'] drop-shadow-lg`}>
+              {activePrize.heroHeading}
+            </h2>
+          </div>
           {activePrize.heroSubheading && (
             <p className="hidden sm:block text-sm sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">
               {activePrize.heroSubheading}
@@ -335,12 +339,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   onClick={() => setIsSpecsModalOpen(true)}
                   className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-700 to-red-800"></div>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`}></div>
                   <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                  <div className="pointer-events-none absolute inset-0 rounded-full bg-red-500/25 blur-xl animate-ping"></div>
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-red-500/20 blur-xl"></div>
-                  <div className="relative z-10 flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2 border-2 border-red-400/30 rounded-full">
-                    <span className="font-bold text-xs sm:text-sm text-white drop-shadow-lg whitespace-nowrap">
+                  <div className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace('/40', '/25')} blur-xl animate-ping`}></div>
+                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace('/40', '/20')} blur-xl`}></div>
+                  <div className={`relative z-10 flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2 border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} rounded-full`}>
+                    <span className={`font-bold text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}>
                       VIEW SPECS
                     </span>
                   </div>
@@ -467,9 +471,9 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
-                    <div className="absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600/80 via-red-700/80 to-red-800/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 border-red-400/30 shadow-lg z-10">
+                    <div className={`absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br ${brandColors.gradient.replace('from-', 'from-').replace('via-', 'via-').replace('to-', 'to-')}/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} shadow-lg z-10`}>
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-lg sm:rounded-xl"></div>
-                      <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white relative z-10" />
+                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${brandColors.textColor} relative z-10`} />
                     </div>
                     <div className="flex-1 relative z-10 pl-10 sm:pl-0">
                       <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">

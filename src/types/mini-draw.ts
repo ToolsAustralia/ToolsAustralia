@@ -12,6 +12,7 @@ export interface MiniDrawType
   cycle: number;
   latestWinnerId?: string;
   winnerHistory?: string[];
+  userEntryCount?: number; // User's entry count in this specific minidraw
 }
 
 // Extended type for mini draw with all new fields for frontend use

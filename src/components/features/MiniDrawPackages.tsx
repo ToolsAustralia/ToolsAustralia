@@ -13,6 +13,9 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import type { MiniDrawType } from "@/types/mini-draw";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -31,6 +34,49 @@ export default function MiniDrawPackages({
   const { showToast } = useToast();
   const { userData, isAuthenticated } = useUserContext();
   const { data: paymentMethods } = usePaymentMethods(userData?._id);
+  const queryClient = useQueryClient();
+
+  /**
+   * Calculate user's entry count for this specific minidraw
+   * Shows: lastMonthAccumulatedEntries + active minidraw package entries for THIS specific minidraw
+   * Same calculation as ProductCard badge
+   */
+  const calculateUserEntryCount = (): number => {
+    if (!isAuthenticated || !userData) return userEntryCount || 0;
+
+    // Get lastMonthAccumulatedEntries from subscription (applies to all minidraws)
+    const userSubscription = userData.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+    const lastMonthAccumulatedEntries = userSubscription?.lastMonthAccumulatedEntries || 0;
+
+    // Get current minidraw ID for comparison
+    const currentMiniDrawId = miniDrawId;
+
+    // Sum active minidraw package entries ONLY for this specific minidraw
+    const userMiniDrawPackages = (userData as { miniDrawPackages?: Array<{ isActive: boolean; miniDrawId?: string | { toString(): string }; entriesGranted?: number }> }).miniDrawPackages;
+    const activeMiniDrawPackageEntries =
+      userMiniDrawPackages?.reduce((sum, pkg) => {
+        if (!pkg.isActive) return sum;
+
+        // Check if this package belongs to the current minidraw
+        const pkgMiniDrawId = pkg.miniDrawId
+          ? typeof pkg.miniDrawId === "string"
+            ? pkg.miniDrawId
+            : pkg.miniDrawId.toString()
+          : null;
+
+        // Only count entries if miniDrawId matches (skip if null/undefined for backward compatibility)
+        if (pkgMiniDrawId && pkgMiniDrawId === currentMiniDrawId) {
+          return sum + (pkg.entriesGranted || 0);
+        }
+
+        return sum;
+      }, 0) || 0;
+
+    // Total entries = lastMonthAccumulatedEntries (for all) + activeMiniDrawPackageEntries (for this specific minidraw)
+    return lastMonthAccumulatedEntries + activeMiniDrawPackageEntries;
+  };
+
+  const calculatedUserEntryCount = calculateUserEntryCount();
 
   // Extract default payment method from payment methods list
   const defaultPaymentMethod = paymentMethods?.find((pm) => pm.isDefault) || paymentMethods?.[0];
@@ -65,14 +111,60 @@ export default function MiniDrawPackages({
       return;
     }
 
+    // Get the package details
+    const pkg = miniDrawPackages.find((p) => p._id === packageId);
+    if (!pkg) {
+      showToast({
+        type: "error",
+        title: "Package Not Found",
+        message: "The selected package could not be found. Please try again.",
+      });
+      return;
+    }
+
+    const entryCount = pkg.entries;
+
+    // Cancel any outgoing refetches to prevent race conditions
+    await queryClient.cancelQueries({ queryKey: queryKeys.miniDraws.detail(miniDrawId) });
+    await queryClient.cancelQueries({ queryKey: queryKeys.miniDraws.entries(miniDrawId) });
+    await queryClient.cancelQueries({ queryKey: queryKeys.miniDraws.userEntries("current-user") });
+    await queryClient.cancelQueries({ queryKey: queryKeys.users.account("current-user") });
+
+    // Snapshot previous values for rollback
+    const previousMiniDraw = queryClient.getQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId));
+    const previousUserAccount = queryClient.getQueryData(queryKeys.users.account("current-user"));
+
+    // Optimistically update minidraw cache
+    queryClient.setQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId), (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        totalEntries: (old.totalEntries || 0) + entryCount,
+        entriesRemaining: Math.max(
+          (old.entriesRemaining ?? (old.minimumEntries ?? 0) - (old.totalEntries || 0)) - entryCount,
+          0
+        ),
+        userEntryCount: (old.userEntryCount || 0) + entryCount,
+        isProcessing: true,
+      };
+    });
+
+    // Optimistically update user account cache
+    queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
+      if (!old || typeof old !== "object") return old;
+      const oldData = old as Record<string, unknown>;
+      const oldUser = oldData.user as Record<string, unknown>;
+      return {
+        ...oldData,
+        user: {
+          ...oldUser,
+          isProcessing: true,
+        },
+      };
+    });
+
     try {
       setPurchasingPackageId(packageId);
-
-      // Get the package details
-      const pkg = miniDrawPackages.find((p) => p._id === packageId);
-      if (!pkg) {
-        throw new Error("Package not found");
-      }
 
       // Check if user has default payment method for automatic charging
       const hasDefaultPayment = !!defaultPaymentMethod?.paymentMethodId;
@@ -149,6 +241,14 @@ export default function MiniDrawPackages({
     } catch (error) {
       console.error("❌ Purchase error:", error);
       const errorMessage = error instanceof Error ? error.message : "Purchase failed";
+
+      // Rollback optimistic updates on error
+      if (previousMiniDraw) {
+        queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
+      }
+      if (previousUserAccount) {
+        queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
+      }
 
       // Close payment processing screen if it was open
       setShowPaymentProcessing(false);
@@ -230,6 +330,37 @@ export default function MiniDrawPackages({
           // Non-blocking - continue with success flow
         }
       })();
+
+      // Clear processing flags
+      queryClient.setQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId), (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          isProcessing: false,
+        };
+      });
+
+      queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
+        if (!old || typeof old !== "object") return old;
+        const oldData = old as Record<string, unknown>;
+        return {
+          ...oldData,
+          user: {
+            ...(oldData.user as Record<string, unknown>),
+            isProcessing: false,
+          },
+        };
+      });
+
+      // Invalidate queries to refetch fresh data after webhook processing
+      // Delay to allow webhook to complete processing
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.detail(miniDrawId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.entries(miniDrawId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.userEntries("current-user") });
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current-user") });
+        queryClient.refetchQueries({ queryKey: queryKeys.miniDraws.detail(miniDrawId) });
+      }, 2000); // Wait 2 seconds for webhook to complete
 
       // Show success message (only once)
       showToast({
@@ -396,7 +527,7 @@ export default function MiniDrawPackages({
         <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
           <span className="text-gray-600">Your Entries:</span>
           <span className="font-semibold text-[#ee0000]">
-            {userEntryCount.toLocaleString()} {userEntryCount === 1 ? "entry" : "entries"}
+            {calculatedUserEntryCount.toLocaleString()} {calculatedUserEntryCount === 1 ? "entry" : "entries"}
           </span>
         </div>
       </div>

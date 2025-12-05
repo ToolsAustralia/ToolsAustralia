@@ -280,18 +280,11 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
             </h1>
 
             {/* Entry Information */}
-            <div className="w-full max-w-md space-y-2">
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-gray-700">
+            <div className="w-full max-w-md">
+              <div className="flex items-center text-xs sm:text-sm font-semibold text-gray-700">
                 <span>
-                  {miniDrawData.totalEntries.toLocaleString()} / {miniDrawData.minimumEntries.toLocaleString()}
+                  {entriesRemaining.toLocaleString()} entries remaining
                 </span>
-                <span>{capacityPercentage}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300"
-                  style={{ width: `${capacityPercentage}%` }}
-                />
               </div>
             </div>
 
@@ -317,9 +310,10 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
         {serializedRelatedMiniDraws.length > 0 && (
           <section className="mt-16">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-bold text-gray-900">You May Also Like</h2>
-              <Link href="/mini-draws" className="text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
-                View All Mini Draws
+              <h2 className="text-base sm:text-xl font-bold text-gray-900">You May Also Like</h2>
+              <Link href="/mini-draws" className="text-red-600 hover:text-red-700 font-medium flex items-center gap-1 text-sm sm:text-base">
+                <span className="hidden sm:inline">View All Mini Draws</span>
+                <span className="sm:hidden">View All</span>
                 <ArrowLeft className="w-4 h-4 rotate-180" />
               </Link>
             </div>

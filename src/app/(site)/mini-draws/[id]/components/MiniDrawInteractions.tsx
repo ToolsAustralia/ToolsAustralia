@@ -1,6 +1,7 @@
 "use client";
 
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
+import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
 
 interface MiniDrawInteractionsProps {
   miniDraw: {
@@ -17,17 +18,22 @@ interface MiniDrawInteractionsProps {
 }
 
 export default function MiniDrawInteractions({ miniDraw }: MiniDrawInteractionsProps) {
-  const minimumEntries = miniDraw.minimumEntries ?? 0;
-  const totalEntries = miniDraw.totalEntries ?? 0;
+  // Subscribe to minidraw query updates for real-time UI updates
+  const { data: miniDrawQueryData } = useMiniDraw(miniDraw._id);
+
+  // Use query data if available (for optimistic updates), otherwise fall back to props
+  const minimumEntries = miniDrawQueryData?.minimumEntries ?? miniDraw.minimumEntries ?? 0;
+  const totalEntries = miniDrawQueryData?.totalEntries ?? miniDraw.totalEntries ?? 0;
+  const entriesRemainingData = miniDrawQueryData?.entriesRemaining ?? miniDraw.entriesRemaining;
   const computedRemaining = Math.max(minimumEntries - totalEntries, 0);
-  const entriesRemaining = miniDraw.entriesRemaining ?? computedRemaining;
+  const entriesRemaining = entriesRemainingData ?? computedRemaining;
+  const userEntryCount = miniDrawQueryData?.userEntryCount ?? miniDraw.userEntryCount ?? 0;
 
   const isCompleted = miniDraw.status === "completed";
   const isCancelled = miniDraw.status === "cancelled";
   const isActive = miniDraw.status === "active";
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
   const showPackages = isActive && !isSoldOut;
-  const userEntryCount = miniDraw.userEntryCount ?? 0;
 
   return (
     <div className="space-y-6">
