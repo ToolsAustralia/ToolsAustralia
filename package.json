@@ -9,6 +9,7 @@
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "mini-draw:order": "tsx scripts/update-mini-draw-order.ts",
+    "migrate:accumulated-entries": "tsx scripts/migrate-accumulated-entries.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

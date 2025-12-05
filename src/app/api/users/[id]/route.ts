@@ -84,10 +84,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // console.log(`⚠️ No package data returned for user subscription`);
         }
       } catch (error) {
-        // console.log(`⚠️ Could not resolve membership package for user:`, error);
+        console.error(`⚠️ Could not resolve membership package for user:`, error);
       }
     } else {
-      // console.log(`⚠️ No subscription packageId found for user`);
+      console.error(`⚠️ No subscription packageId found for user`);
     }
 
     // Get one-time package details from static data
@@ -106,10 +106,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             // console.log(`⚠️ One-time package ID not found in static data: ${packageIdStr}`);
           }
         } catch (error) {
-          // console.log(
-          //   `⚠️ Could not find one-time package ${oneTimePackage.packageId} (${typeof oneTimePackage.packageId}):`,
-          //   error
-          // );
+          console.error(
+            `⚠️ Could not find one-time package ${oneTimePackage.packageId} (${typeof oneTimePackage.packageId}):`,
+            error
+          );
         }
       }
     }
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return response;
   } catch (error) {
-    // console.error("Error fetching user:", error);
+    console.error("Error fetching user:", error);
     return NextResponse.json({ error: "Failed to fetch user data" }, { status: 500 });
   }
 }

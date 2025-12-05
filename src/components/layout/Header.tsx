@@ -16,6 +16,7 @@ import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
 import MetallicButton from "@/components/ui/MetallicButton";
+import MembershipBadge from "@/components/ui/MembershipBadge";
 import {
   Search,
   ShoppingCart,
@@ -126,85 +127,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const isLoginPage = pathname === "/login";
   const shouldHideTopBar = isAffiliatePage || isLoginPage;
 
-  // Get membership badge styling based on package ID - matches my-account page styling
-  const getMembershipBadge = (
-    packageData?: { name: string; type: "subscription" | "one-time" },
-    isActive?: boolean,
-    membershipType?: "subscription" | "one-time"
-  ) => {
-    if (!isActive || !packageData || !packageData.name) return null;
-
-    const packageName = packageData.name.toLowerCase();
-    const isSubscription = membershipType === "subscription" || packageData.type === "subscription";
-
-    // Priority 1: Subscription packages (recurring memberships)
-    if (isSubscription) {
-      if (packageName.includes("boss")) {
-        return {
-          text: "BOSS",
-          className:
-            "bg-gradient-to-r from-gray-900 to-black text-yellow-400 font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1 animate-pulse relative overflow-hidden",
-          icon: <Star className="w-3 h-3 text-yellow-400 animate-pulse" />,
-        };
-      } else if (packageName.includes("foreman")) {
-        return {
-          text: "FOREMAN",
-          className:
-            "bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1",
-          icon: <Crown className="w-3 h-3" />,
-        };
-      } else if (packageName.includes("tradie")) {
-        return {
-          text: "TRADIE",
-          className:
-            "bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1",
-          icon: <User className="w-3 h-3" />,
-        };
-      }
-    }
-
-    // Priority 2: One-time packages (only show if no active subscription)
-    if (!isSubscription) {
-      if (packageName.includes("power pack")) {
-        return {
-          text: "POWER",
-          className:
-            "bg-gradient-to-r from-gray-900 to-black text-yellow-400 font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1 animate-pulse relative overflow-hidden",
-          icon: <Star className="w-3 h-3 text-yellow-400 animate-pulse" />,
-        };
-      } else if (packageName.includes("foreman pack")) {
-        return {
-          text: "FOREMAN",
-          className:
-            "bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1",
-          icon: <Crown className="w-3 h-3" />,
-        };
-      } else if (packageName.includes("ultimate")) {
-        return {
-          text: "ULTIMATE",
-          className:
-            "bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1",
-          icon: <Trophy className="w-3 h-3" />,
-        };
-      } else if (packageName.includes("mega")) {
-        return {
-          text: "MEGA",
-          className:
-            "bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1",
-          icon: <Star className="w-3 h-3" />,
-        };
-      } else if (packageName.includes("apprentice pack")) {
-        return {
-          text: "APPRENTICE",
-          className:
-            "bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-xs px-2 py-1 rounded-full shadow-lg flex items-center gap-1",
-          icon: <User className="w-3 h-3" />,
-        };
-      }
-    }
-
-    return null;
-  };
 
   // Handle mobile menu close with animation
   const handleCloseMobileMenu = useCallback(() => {
@@ -700,12 +622,14 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             {userData?.firstName} {userData?.lastName}
                           </span>
                           {(() => {
-                            let badge = null;
+                            // Prioritize subscription over one-time packages
                             if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
-                              badge = getMembershipBadge(
-                                userData.subscriptionPackageData,
-                                userData.subscription.isActive,
-                                "subscription"
+                              return (
+                                <MembershipBadge
+                                  packageData={userData.subscriptionPackageData}
+                                  isActive={userData.subscription.isActive}
+                                  membershipType="subscription"
+                                />
                               );
                             } else if (
                               userData.enrichedOneTimePackages &&
@@ -717,19 +641,16 @@ export default function Header({ isFixed = true }: HeaderProps) {
                                   (a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
                                 )[0];
                               if (activePackage?.packageData) {
-                                badge = getMembershipBadge(
-                                  activePackage.packageData,
-                                  activePackage.isActive,
-                                  "one-time"
+                                return (
+                                  <MembershipBadge
+                                    packageData={activePackage.packageData}
+                                    isActive={activePackage.isActive}
+                                    membershipType="one-time"
+                                  />
                                 );
                               }
                             }
-                            return badge ? (
-                              <span className={badge.className}>
-                                {badge.icon}
-                                {badge.text}
-                              </span>
-                            ) : null;
+                            return null;
                           })()}
                         </div>
                         {/* Show preserved benefits countdown if user has downgraded */}
@@ -855,27 +776,29 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="lg:hidden flex items-center">
                 {(() => {
                   // Prioritize subscription over one-time packages
-                  let badge = null;
                   if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
-                    badge = getMembershipBadge(
-                      userData.subscriptionPackageData,
-                      userData.subscription.isActive,
-                      "subscription"
+                    return (
+                      <MembershipBadge
+                        packageData={userData.subscriptionPackageData}
+                        isActive={userData.subscription.isActive}
+                        membershipType="subscription"
+                      />
                     );
                   } else if (userData.enrichedOneTimePackages && userData.enrichedOneTimePackages.length > 0) {
                     const activePackage = userData.enrichedOneTimePackages
                       .filter((pkg) => pkg.isActive)
                       .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
                     if (activePackage?.packageData) {
-                      badge = getMembershipBadge(activePackage.packageData, activePackage.isActive, "one-time");
+                      return (
+                        <MembershipBadge
+                          packageData={activePackage.packageData}
+                          isActive={activePackage.isActive}
+                          membershipType="one-time"
+                        />
+                      );
                     }
                   }
-                  return badge ? (
-                    <span className={badge.className}>
-                      {badge.icon}
-                      {badge.text}
-                    </span>
-                  ) : null;
+                  return null;
                 })()}
               </div>
             )}
@@ -1139,27 +1062,29 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       </p>
                       {(() => {
                         // Prioritize subscription over one-time packages using enriched data
-                        let badge = null;
                         if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
-                          badge = getMembershipBadge(
-                            userData.subscriptionPackageData,
-                            userData.subscription.isActive,
-                            "subscription"
+                          return (
+                            <MembershipBadge
+                              packageData={userData.subscriptionPackageData}
+                              isActive={userData.subscription.isActive}
+                              membershipType="subscription"
+                            />
                           );
                         } else if (userData?.enrichedOneTimePackages && userData.enrichedOneTimePackages.length > 0) {
                           const activePackage = userData.enrichedOneTimePackages
                             .filter((pkg) => pkg.isActive)
                             .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
                           if (activePackage && activePackage.packageData) {
-                            badge = getMembershipBadge(activePackage.packageData, activePackage.isActive, "one-time");
+                            return (
+                              <MembershipBadge
+                                packageData={activePackage.packageData}
+                                isActive={activePackage.isActive}
+                                membershipType="one-time"
+                              />
+                            );
                           }
                         }
-                        return badge ? (
-                          <span className={badge.className}>
-                            {badge.icon}
-                            {badge.text}
-                          </span>
-                        ) : null;
+                        return null;
                       })()}
                     </div>
                     <div className="flex items-center gap-4 mt-1">

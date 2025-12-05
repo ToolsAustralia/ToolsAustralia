@@ -15,6 +15,7 @@ import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 
 // Import package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.png";
@@ -819,6 +820,13 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             );
           })}
         </div>
+
+        {/* Chart Section - Only for Membership Packages */}
+        {activeTab === "membership" && (
+          <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-700/50">
+            <VerticalAccumulationChart selectedPackageId={selectedPlan?.id} />
+          </div>
+        )}
       </ModalContent>
 
       {/* Fixed Confirm Selection Button */}

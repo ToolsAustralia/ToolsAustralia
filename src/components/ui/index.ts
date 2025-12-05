@@ -6,3 +6,7 @@ export { default as FAQSection } from "./FAQSection";
 export type { MetallicAccordionItem } from "./MetallicAccordion";
 export type { FAQItem } from "./FAQSection";
 
+// Tooltip Components
+export { default as MonthProjectionTooltip } from "./MonthProjectionTooltip";
+export type { MonthProjectionTooltipProps } from "./MonthProjectionTooltip";
+

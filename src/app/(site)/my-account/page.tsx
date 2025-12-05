@@ -23,9 +23,11 @@ import ReferFriendModal from "@/components/modals/ReferFriendModal";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
-import { Clock, Share2 } from "lucide-react";
+import { Clock, Share2, Info } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
+import MembershipBadge from "@/components/ui/MembershipBadge";
+import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 
 // Partner Discounts Section Component
 // Conditionally renders UnlockDiscounts based on user's partner discount access
@@ -132,6 +134,10 @@ export default function MyAccountPage() {
   // Local state for subscription management modal
   const [isSubscriptionManagementModalOpen, setIsSubscriptionManagementModalOpen] = useState(false);
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
+
+  // State for accumulation tooltip
+  const [showAccumulationTooltip, setShowAccumulationTooltip] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
 
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -382,50 +388,52 @@ export default function MyAccountPage() {
   // Combine: participant draws first, then others
   const activeMiniDraws = [...participantMiniDraws, ...otherMiniDraws];
 
-  // Get membership badge colors based on package type
-  const getMembershipBadgeColors = (packageName?: string) => {
-    if (!packageName) return "bg-gradient-to-r from-gray-500 to-slate-600 text-white";
-
-    if (packageName.toLowerCase().includes("tradie") || packageName.toLowerCase().includes("apprentice")) {
-      return "bg-gradient-to-r from-blue-500 to-indigo-600 text-white";
-    } else if (packageName.toLowerCase().includes("tradie")) {
-      return "bg-gradient-to-r from-emerald-500 to-green-600 text-white";
-    } else if (packageName.toLowerCase().includes("foreman")) {
-      return "bg-gradient-to-r from-purple-600 to-purple-700 text-white";
-    } else if (packageName.toLowerCase().includes("boss")) {
-      return "bg-gradient-to-r from-gray-900 to-black text-yellow-400 animate-pulse drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]";
-    } else if (packageName.toLowerCase().includes("power")) {
-      return "bg-gradient-to-r from-gray-900 to-black text-yellow-400 animate-pulse drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]";
-    } else {
-      return "bg-gradient-to-r from-gray-500 to-slate-600 text-white";
-    }
-  };
-
   // Determine membership info from real data
   // Use enriched package data for both subscription and one-time packages
   const membershipPackage =
     user.subscriptionPackageData || user.enrichedOneTimePackages?.find((pkg) => pkg.isActive)?.packageData;
-  const membershipName = membershipPackage?.name || "None";
 
-  // Use API data for current draw entries (which is already filtered to current major draw)
-  // This ensures we only show entries for the current active major draw, not accumulated totals
-  const displayMembershipEntries = majorDrawStats?.membershipEntries || 0;
+  // Use lastMonthAccumulatedEntries for accuracy (shows user's actual accumulated entries)
+  // Fallback to majorDrawStats if lastMonthAccumulatedEntries is not available
+  const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+  const displayMembershipEntries =
+    userSubscription?.lastMonthAccumulatedEntries ?? majorDrawStats?.membershipEntries ?? 0;
   const displayOneTimeEntries = majorDrawStats?.oneTimeEntries || 0;
   const displayTotalEntries = majorDrawStats?.currentDrawEntries || 0;
+
+  // Get projection data for tooltip
+  const getProjectionData = () => {
+    if (!hasActiveMembership || !membershipPackage || !userSubscription) return null;
+
+    // Only show for subscription packages
+    if (user.subscriptionPackageData !== membershipPackage) return null;
+
+    // Check if package has entriesPerMonth (subscription packages only)
+    if (membershipPackage.type !== "subscription" || !("entriesPerMonth" in membershipPackage)) return null;
+
+    const baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
+    const current = userSubscription.lastMonthAccumulatedEntries ?? baseEntries;
+
+    if (baseEntries === 0) return null;
+
+    // Calculate: Current, Next Month, Month 3
+    const nextMonth = current + baseEntries;
+    const month3 = nextMonth + baseEntries;
+
+    return {
+      current,
+      nextMonth,
+      month3,
+    };
+  };
+
+  const projectionData = getProjectionData();
 
   // Calculate draw status and timing information
   const isCompleted = currentMajorDraw?.status === "completed";
   const isFrozen = currentMajorDraw?.status === "frozen";
   const isActive = currentMajorDraw?.status === "active";
   const isQueued = currentMajorDraw?.status === "queued";
-
-  // Calculate days remaining for current draw
-  const daysRemaining = currentMajorDraw?.drawDate
-    ? Math.max(
-        0,
-        Math.ceil((new Date(currentMajorDraw.drawDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-      )
-    : 0;
 
   // Check if current user is the winner
   const isWinner = currentMajorDraw?.winner?.userId?.toString() === session?.user?.id;
@@ -630,9 +638,45 @@ export default function MyAccountPage() {
                     </div>
 
                     {/* Advanced Stats Grid */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 relative">
+                      {/* Accumulation Tooltip - Positioned relative to stats grid */}
+                      {showAccumulationTooltip && tooltipPosition && projectionData && (
+                        <MonthProjectionTooltip
+                          isVisible={showAccumulationTooltip}
+                          position={tooltipPosition}
+                          current={projectionData.current}
+                          nextMonth={projectionData.nextMonth}
+                          month3={projectionData.month3}
+                        />
+                      )}
+
                       {/* Membership Entries */}
                       <div className="group relative bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30 hover:border-blue-400/50 transition-all duration-300 hover:scale-105">
+                        {/* Info Button - Top Left */}
+                        {hasActiveMembership &&
+                          membershipPackage &&
+                          user.subscriptionPackageData === membershipPackage &&
+                          projectionData && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const statsGrid = e.currentTarget.closest(".grid.grid-cols-2") as HTMLElement;
+                                if (statsGrid) {
+                                  const gridRect = statsGrid.getBoundingClientRect();
+                                  setTooltipPosition({
+                                    top: rect.top - gridRect.top + rect.height / 2,
+                                    left: rect.right - gridRect.left + 8,
+                                  });
+                                  setShowAccumulationTooltip(true);
+                                }
+                              }}
+                              className="absolute top-2 left-2 z-20 w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full border border-white/30 text-white/80 hover:text-white transition-all duration-200 hover:scale-110"
+                              aria-label="View accumulation info"
+                            >
+                              <Info className="w-3 h-3 sm:w-4 sm:h-4" />
+                            </button>
+                          )}
                         <div className="relative z-10 text-center">
                           <div className="flex items-center justify-center gap-1 mb-1">
                             <span className="text-white/90 text-xs font-semibold uppercase tracking-wide">
@@ -644,13 +688,13 @@ export default function MyAccountPage() {
                           </div>
                           {membershipPackage && (
                             <div className="flex flex-col gap-1 items-center">
-                              <div
-                                className={`inline-block px-2 py-0.5 rounded-full font-bold text-xs shadow-lg ${getMembershipBadgeColors(
-                                  membershipPackage.name
-                                )}`}
-                              >
-                                {membershipName}
-                              </div>
+                              <MembershipBadge
+                                packageData={membershipPackage}
+                                isActive={true}
+                                membershipType={
+                                  user.subscriptionPackageData === membershipPackage ? "subscription" : "one-time"
+                                }
+                              />
                               {/* Show preserved benefits countdown */}
                               {user &&
                                 hasPreservedBenefits(user as unknown as Partial<import("@/models/User").IUser>) && (
@@ -896,6 +940,11 @@ export default function MyAccountPage() {
         userId={user._id}
         userFirstName={user.firstName}
       />
+
+      {/* Click outside to close accumulation tooltip */}
+      {showAccumulationTooltip && (
+        <div className="fixed inset-0 z-[9998]" onClick={() => setShowAccumulationTooltip(false)} />
+      )}
     </div>
   );
 }

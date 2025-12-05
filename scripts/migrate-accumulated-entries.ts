@@ -6,10 +6,17 @@
  * This script backfills the lastMonthAccumulatedEntries field for existing users
  * who have active subscriptions but are missing this field.
  *
- * Since the app is only 6 days old, this migration may not be necessary,
- * but it's provided as a safety measure for any edge cases.
+ * ASSUMPTION: All existing users registered during the 10x promo period,
+ * so we set lastMonthAccumulatedEntries = baseEntries × 10
+ *
+ * PRODUCTION USAGE:
+ * 1. Test on staging first: npx tsx scripts/migrate-accumulated-entries.ts
+ * 2. Backup database before running in production
+ * 3. Run in production: npx tsx scripts/migrate-accumulated-entries.ts
+ * 4. Verify results before deploying new code
  *
  * Usage: npx tsx scripts/migrate-accumulated-entries.ts
+ *        OR: npm run migrate:accumulated-entries
  */
 
 import mongoose from "mongoose";
@@ -23,6 +30,9 @@ config({ path: path.resolve(process.cwd(), ".env.local") });
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 
+// ✅ PROMO MULTIPLIER: All users registered during 10x promo
+const PROMO_MULTIPLIER = 10;
+
 interface MigrationStats {
   totalUsers: number;
   usersWithSubscriptions: number;
@@ -30,6 +40,12 @@ interface MigrationStats {
   usersMigrated: number;
   usersSkipped: number;
   errors: number;
+  migrationDetails: Array<{
+    email: string;
+    packageId: string;
+    baseEntries: number;
+    lastMonthAccumulatedEntries: number;
+  }>;
 }
 
 async function migrateAccumulatedEntries() {
@@ -40,10 +56,17 @@ async function migrateAccumulatedEntries() {
     usersMigrated: 0,
     usersSkipped: 0,
     errors: 0,
+    migrationDetails: [],
   };
 
   try {
     console.log("🔄 Starting Accumulated Entries Migration...\n");
+    console.log(`📊 Assumption: All users registered during ${PROMO_MULTIPLIER}x promo\n`);
+
+    // Detect environment
+    const isProduction = process.env.NODE_ENV === "production";
+    const environment = isProduction ? "PRODUCTION" : "STAGING/DEVELOPMENT";
+    console.log(`🌍 Environment: ${environment}\n`);
 
     // Connect to MongoDB
     await mongoose.connect(process.env.MONGODB_URI!);
@@ -74,6 +97,12 @@ async function migrateAccumulatedEntries() {
       return;
     }
 
+    // ✅ SAFETY CHECK: Confirm before proceeding
+    console.log("⚠️  WARNING: This will update database records!");
+    console.log(`   ${stats.usersNeedingMigration} users will be migrated.\n`);
+    console.log("   Press Ctrl+C to cancel, or wait 5 seconds to continue...\n");
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
     console.log("🔄 Starting migration process...\n");
 
     // Process each user
@@ -96,19 +125,15 @@ async function migrateAccumulatedEntries() {
 
         const baseEntries = membershipPackage.entriesPerMonth || 0;
 
-        // Calculate lastMonthAccumulatedEntries from current accumulatedEntries
-        // Strategy: Use current accumulatedEntries if available, otherwise use baseEntries
-        let lastMonthAccumulatedEntries: number;
-
-        if (user.accumulatedEntries && user.accumulatedEntries > 0) {
-          // If user has accumulated entries, use that as the last month's value
-          // This assumes they've had at least one renewal
-          lastMonthAccumulatedEntries = user.accumulatedEntries;
-        } else {
-          // If no accumulated entries, assume this is their first month
-          // Set to base entries (no promo applied in migration)
-          lastMonthAccumulatedEntries = baseEntries;
+        if (baseEntries === 0) {
+          console.log(`   ⚠️  Skipping user ${user.email}: Package has no base entries (${packageId})`);
+          stats.usersSkipped++;
+          continue;
         }
+
+        // ✅ CALCULATION: lastMonthAccumulatedEntries = baseEntries × 10 (10x promo)
+        // This represents what they accumulated in their first month with the promo
+        const lastMonthAccumulatedEntries = baseEntries * PROMO_MULTIPLIER;
 
         // Update user atomically
         await User.findByIdAndUpdate(
@@ -121,8 +146,16 @@ async function migrateAccumulatedEntries() {
           { new: false }
         );
 
+        // Store migration details for verification
+        stats.migrationDetails.push({
+          email: user.email,
+          packageId: packageId,
+          baseEntries: baseEntries,
+          lastMonthAccumulatedEntries: lastMonthAccumulatedEntries,
+        });
+
         console.log(
-          `   ✅ Migrated user ${user.email}: lastMonthAccumulatedEntries = ${lastMonthAccumulatedEntries} (package: ${membershipPackage.name}, baseEntries: ${baseEntries})`
+          `   ✅ Migrated user ${user.email}: lastMonthAccumulatedEntries = ${lastMonthAccumulatedEntries} (${baseEntries} base × ${PROMO_MULTIPLIER}x promo, package: ${membershipPackage.name})`
         );
         stats.usersMigrated++;
       } catch (error) {
@@ -140,8 +173,22 @@ async function migrateAccumulatedEntries() {
     console.log(`   Users skipped: ${stats.usersSkipped}`);
     console.log(`   Errors: ${stats.errors}`);
 
+    // Print detailed migration results
+    if (stats.migrationDetails.length > 0) {
+      console.log("\n📋 Migration Details:");
+      stats.migrationDetails.forEach((detail) => {
+        console.log(
+          `   ${detail.email}: ${detail.packageId} → ${detail.lastMonthAccumulatedEntries} (${detail.baseEntries} × ${PROMO_MULTIPLIER})`
+        );
+      });
+    }
+
     if (stats.errors === 0 && stats.usersMigrated > 0) {
       console.log("\n✅ Migration completed successfully!");
+      console.log("\n📝 Next Steps:");
+      console.log("   1. Verify the migration results above");
+      console.log("   2. Test a renewal for one of the migrated users");
+      console.log("   3. Deploy the updated code with accumulated entries logic");
     } else if (stats.errors > 0) {
       console.log("\n⚠️  Migration completed with errors. Please review the logs above.");
     } else {
