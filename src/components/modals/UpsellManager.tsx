@@ -80,7 +80,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
       };
 
       // You can integrate with your analytics service here
-      console.log("Upsell Analytics:", analyticsData);
+      // console.log("Upsell Analytics:", analyticsData);
 
       // Send to API for tracking
       fetch("/api/upsell/track", {
@@ -96,7 +96,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
 
   // Fallback function to redirect to full payment flow
   const redirectToFullPaymentFlow = useCallback((offer: UpsellOffer) => {
-    console.log("🔄 Redirecting to full payment flow for upsell:", offer.title);
+    // console.log("🔄 Redirecting to full payment flow for upsell:", offer.title);
 
     // Dispatch custom event to open MembershipModal with upsell data
     const event = new CustomEvent("showUpsellPayment", {
@@ -131,12 +131,12 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
       entries: number;
     }) => {
       if (invoiceFinalized || !originalPurchaseContext || !userContext.userId) {
-        console.log("📧 Invoice finalization skipped:", { invoiceFinalized, hasContext: !!originalPurchaseContext });
+        // console.log("📧 Invoice finalization skipped:", { invoiceFinalized, hasContext: !!originalPurchaseContext });
         return;
       }
 
       try {
-        console.log("📧 Finalizing invoice...", { withUpsell: !!upsellData });
+        // console.log("📧 Finalizing invoice...", { withUpsell: !!upsellData });
 
         const response = await fetch("/api/invoice/finalize", {
           method: "POST",
@@ -150,7 +150,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
 
         if (response.ok) {
           const result = await response.json();
-          console.log("✅ Invoice finalized:", result);
+          // console.log("✅ Invoice finalized:", result);
           setInvoiceFinalized(true);
 
           // Clear timeout if it exists
@@ -186,7 +186,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
       // Start 1-minute timeout for invoice finalization
       if (originalPurchaseContext && !invoiceFinalized) {
         const timeoutId = setTimeout(() => {
-          console.log("⏰ Invoice finalization timeout - sending original purchase only");
+          // console.log("⏰ Invoice finalization timeout - sending original purchase only");
           finalizeInvoice();
         }, 60000); // 1 minute = 60000ms
 
@@ -201,15 +201,15 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
    */
   const handleUpsellPurchase = useCallback(
     async (offer: UpsellOffer) => {
-      console.log("🛒 Starting upsell purchase:", {
-        isAuthenticated: userContext.isAuthenticated,
-        hasDefaultPayment: userContext.hasDefaultPayment,
-        offer: offer.title,
-      });
+      // console.log("🛒 Starting upsell purchase:", {
+      //   isAuthenticated: userContext.isAuthenticated,
+      //   hasDefaultPayment: userContext.hasDefaultPayment,
+      //   offer: offer.title,
+      // });
 
       try {
         if (userContext.isAuthenticated) {
-          console.log("💳 Attempting upsell purchase...");
+          // console.log("💳 Attempting upsell purchase...");
 
           // Try upsell purchase API first (works for both one-click and new payment methods)
           const response = await fetch("/api/upsell/purchase", {
@@ -230,22 +230,22 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
               setCurrentOffer(null);
               return;
             } else {
-              console.log("❌ Upsell purchase failed:", result.error);
+              // console.log("❌ Upsell purchase failed:", result.error);
               // If upsell API fails, fall back to MembershipModal
-              console.log("🔄 Falling back to MembershipModal for upsell purchase");
+              // console.log("🔄 Falling back to MembershipModal for upsell purchase");
               redirectToFullPaymentFlow(offer);
               return;
             }
           } else {
-            console.log("❌ Upsell API response not ok:", response.status);
+            // console.log("❌ Upsell API response not ok:", response.status);
             // If API call fails, fall back to MembershipModal
-            console.log("🔄 Falling back to MembershipModal for upsell purchase");
+            // console.log("🔄 Falling back to MembershipModal for upsell purchase");
             redirectToFullPaymentFlow(offer);
             return;
           }
         }
 
-        console.log("🔄 User not authenticated, showing login prompt...");
+        // console.log("🔄 User not authenticated, showing login prompt...");
         // For unauthenticated users, show a message to log in first
         alert("Please log in to your account to complete this purchase.");
         setIsModalOpen(false);

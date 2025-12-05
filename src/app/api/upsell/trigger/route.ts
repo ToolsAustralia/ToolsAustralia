@@ -11,6 +11,7 @@ const triggerUpsellSchema = z.object({
     .optional()
     .default("returning-user"),
   isMember: z.boolean().optional().default(false), // Add membership status
+  hasAccessToAdditionalPackages: z.boolean().optional().default(false), // ✅ NEW: Access to additional packages (subscription OR major draw entries)
   triggerEvent: z.enum(["membership-purchase", "one-time-purchase"]).optional(),
 });
 
@@ -24,39 +25,32 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = triggerUpsellSchema.parse(body);
 
-    console.log(`🎯 Triggering upsell for package: ${validatedData.packageId} (${validatedData.packageType})`);
-    console.log(`🔍 User context: userType=${validatedData.userType}, isMember=${validatedData.isMember}`);
+    // console.log(`🎯 Triggering upsell for package: ${validatedData.packageId} (${validatedData.packageType})`);
+    // console.log(`🔍 User context: userType=${validatedData.userType}, isMember=${validatedData.isMember}`);
 
     // Get the best upsell offer for this purchase, considering membership status
     const bestOffer = getBestUpsellOfferForUser(
       validatedData.packageId,
       validatedData.packageType,
       validatedData.userType,
-      validatedData.isMember
+      validatedData.isMember,
+      validatedData.hasAccessToAdditionalPackages // ✅ NEW: Pass access status
     );
 
-    console.log(`🔍 Upsell search result:`, {
-      packageId: validatedData.packageId,
-      packageType: validatedData.packageType,
-      userType: validatedData.userType,
-      foundOffer: !!bestOffer,
-      offerName: bestOffer?.name,
-    });
+    // console.log(`🔍 Upsell search result:`, {
+    //   packageId: validatedData.packageId,
+    //   packageType: validatedData.packageType,
+    //   userType: validatedData.userType,
+    //   foundOffer: !!bestOffer,
+    //   offerName: bestOffer?.name,
+    // });
 
-    // Debug: Log the filtering process
-    const relevantPackages = getUpsellPackagesForPurchase(validatedData.packageId, validatedData.packageType);
-    console.log(
-      `🔍 Relevant packages for ${validatedData.packageId}:`,
-      relevantPackages.map((p) => ({ id: p.id, name: p.name, userSegments: p.userSegments }))
-    );
-
-    const filteredPackages = relevantPackages.filter(
-      (pkg) => pkg.userSegments.includes("all") || pkg.userSegments.includes(validatedData.userType)
-    );
-    console.log(
-      `🔍 Filtered packages for userType ${validatedData.userType}:`,
-      filteredPackages.map((p) => ({ id: p.id, name: p.name }))
-    );
+    // Debug: Log the filtering process (commented out - filtering is handled in getBestUpsellOfferForUser)
+    // const relevantPackages = getUpsellPackagesForPurchase(validatedData.packageId, validatedData.packageType);
+    // console.log(
+    //   `🔍 Relevant packages for ${validatedData.packageId}:`,
+    //   relevantPackages.map((p) => ({ id: p.id, name: p.name, userSegments: p.userSegments }))
+    // );
 
     if (!bestOffer) {
       return NextResponse.json({
@@ -90,7 +84,7 @@ export async function POST(request: NextRequest) {
       showAfterDelay: bestOffer.showAfterDelay,
     };
 
-    console.log(`✅ Found upsell offer: ${bestOffer.name} for package ${validatedData.packageId}`);
+    // console.log(`✅ Found upsell offer: ${bestOffer.name} for package ${validatedData.packageId}`);
 
     return NextResponse.json({
       success: true,

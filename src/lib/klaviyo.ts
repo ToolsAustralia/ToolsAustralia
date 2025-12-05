@@ -72,13 +72,13 @@ class KlaviyoClient {
 
     // Environment-specific warnings
     if (isDevelopment && this.mode !== "development") {
-      console.warn("⚠️ In development but KLAVIYO_MODE is not 'development'. Events will not have [DEV] prefix.");
+      // console.warn("⚠️ In development but KLAVIYO_MODE is not 'development'. Events will not have [DEV] prefix.");
     }
 
     if (!isDevelopment && this.mode !== "production") {
-      console.warn(
-        "⚠️ In production but KLAVIYO_MODE is not 'production'. Consider updating for production deployment."
-      );
+      // console.warn(
+      //   "⚠️ In production but KLAVIYO_MODE is not 'production'. Consider updating for production deployment."
+      // );
     }
 
     // Production readiness check
@@ -87,7 +87,7 @@ class KlaviyoClient {
         console.error("❌ CRITICAL: KLAVIYO_PRIVATE_API_KEY is missing in production!");
       }
       if (!this.enabled) {
-        console.warn("⚠️ Klaviyo is disabled in production (KLAVIYO_ENABLED=false)");
+        // console.warn("⚠️ Klaviyo is disabled in production (KLAVIYO_ENABLED=false)");
       }
     }
   }
@@ -95,13 +95,13 @@ class KlaviyoClient {
   private isConfigured(): boolean {
     if (!this.enabled) {
       if (this.mode === "development") {
-        console.log("⚠️ Klaviyo is disabled (KLAVIYO_ENABLED=false)");
+        // console.log("⚠️ Klaviyo is disabled (KLAVIYO_ENABLED=false)");
       }
       return false;
     }
 
     if (!this.apiKey) {
-      console.warn("⚠️ Klaviyo API key is missing. Set KLAVIYO_PRIVATE_API_KEY in .env");
+      // console.warn("⚠️ Klaviyo API key is missing. Set KLAVIYO_PRIVATE_API_KEY in .env");
       return false;
     }
 
@@ -116,13 +116,13 @@ class KlaviyoClient {
     // Only add prefix in development mode and if event doesn't already have it
     if (this.mode === "development" && !eventName.startsWith("[DEV]")) {
       const devEventName = `[DEV] ${eventName}`;
-      console.log(`🎹 DEV Event Formatting: "${eventName}" → "${devEventName}"`);
+      // console.log(`🎹 DEV Event Formatting: "${eventName}" → "${devEventName}"`);
       return devEventName;
     }
 
     // In development mode, log if event already has prefix (for debugging)
     if (this.mode === "development" && eventName.startsWith("[DEV]")) {
-      console.log(`🎹 Event already has [DEV] prefix: "${eventName}"`);
+      // console.log(`🎹 Event already has [DEV] prefix: "${eventName}"`);
     }
 
     return eventName;
@@ -155,7 +155,7 @@ class KlaviyoClient {
 
         if (attempt < maxRetries) {
           const waitTime = delay * Math.pow(2, attempt - 1);
-          console.log(`⚠️ Klaviyo request failed (attempt ${attempt}/${maxRetries}). Retrying in ${waitTime}ms...`);
+          // console.log(`⚠️ Klaviyo request failed (attempt ${attempt}/${maxRetries}). Retrying in ${waitTime}ms...`);
           await new Promise((resolve) => setTimeout(resolve, waitTime));
         }
       }
@@ -195,7 +195,7 @@ class KlaviyoClient {
       // If we get a 409 conflict, it means the profile already exists
       if (response.status === 409) {
         if (this.mode === "development") {
-          console.log("🔄 Profile already exists, attempting to update:", { email: profile.email });
+          // console.log("🔄 Profile already exists, attempting to update:", { email: profile.email });
         }
 
         // Try to get the existing profile ID from the error response
@@ -261,7 +261,7 @@ class KlaviyoClient {
       const profileId = data.data?.id;
 
       if (this.mode === "development") {
-        console.log("✅ Klaviyo profile upserted:", { email: profile.email, profileId });
+        // console.log("✅ Klaviyo profile upserted:", { email: profile.email, profileId });
       }
 
       return {
@@ -292,10 +292,10 @@ class KlaviyoClient {
     };
 
     if (logToConsole) {
-      console.log(`📊 Tracking Klaviyo event: ${formattedEvent.event}`, {
-        email: formattedEvent.customer_properties.email,
-        properties: formattedEvent.properties,
-      });
+      // console.log(`📊 Tracking Klaviyo event: ${formattedEvent.event}`, {
+      //   email: formattedEvent.customer_properties.email,
+      //   properties: formattedEvent.properties,
+      // });
     }
 
     try {
@@ -346,12 +346,12 @@ class KlaviyoClient {
           eventId = data.data?.id || "event_tracked";
         } catch {
           // Empty response body is OK for events - it means success
-          console.log(`✅ Event accepted by Klaviyo (no response body)`);
+          // console.log(`✅ Event accepted by Klaviyo (no response body)`);
         }
       }
 
       if (logToConsole) {
-        console.log(`✅ Event tracked successfully: ${formattedEvent.event}`, { eventId });
+        // console.log(`✅ Event tracked successfully: ${formattedEvent.event}`, { eventId });
       }
 
       return {

@@ -50,7 +50,7 @@ interface MajorDrawDocument {
  */
 export async function GET() {
   try {
-    console.log("🎯 Fetching current major draw...");
+    // console.log("🎯 Fetching current major draw...");
 
     await connectDB();
 
@@ -77,9 +77,9 @@ export async function GET() {
       const { getUserMajorDrawStats } = await import("@/utils/database/queries/major-draw-queries");
       userStats = await getUserMajorDrawStats(session.user.id, majorDraw._id);
 
-      console.log(
-        `🎯 User ${session.user.id} stats for draw ${majorDraw.name}: ${userStats.totalEntries} total entries from ${userStats.totalDrawsEntered} sources`
-      );
+      // console.log(
+      //   `🎯 User ${session.user.id} stats for draw ${majorDraw.name}: ${userStats.totalEntries} total entries from ${userStats.totalDrawsEntered} sources`
+      // );
     }
 
     // Calculate days remaining and freeze information
@@ -129,7 +129,7 @@ export async function GET() {
       },
     };
 
-    console.log(`✅ Major draw fetched: ${majorDraw.name} (${majorDraw.totalEntries} entries)`);
+    // console.log(`✅ Major draw fetched: ${majorDraw.name} (${majorDraw.totalEntries} entries)`);
 
     // Dynamic caching: disable cache close to critical events
     const headers = new Headers();

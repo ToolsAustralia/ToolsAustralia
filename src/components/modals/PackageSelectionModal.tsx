@@ -164,14 +164,14 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
   // Debug logging
-  console.log("🔍 PackageSelectionModal Debug:", {
-    user: user?.email,
-    isMember,
-    subscription: user?.subscription,
-    currentPlan: currentPlan,
-    subscriptionPackages: subscriptionPackages.length,
-    oneTimePackages: oneTimePackages.length,
-  });
+  // console.log("🔍 PackageSelectionModal Debug:", {
+  //   user: user?.email,
+  //   isMember,
+  //   subscription: user?.subscription,
+  //   currentPlan: currentPlan,
+  //   subscriptionPackages: subscriptionPackages.length,
+  //   oneTimePackages: oneTimePackages.length,
+  // });
 
   // Get membership plans from API data
   const membershipPlans: LocalMembershipPlan[] = (() => {
@@ -493,7 +493,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
   const isCurrentPlan = (plan: LocalMembershipPlan) => {
     if (!isMember || !user?.subscription?.packageId) {
-      console.log("🔍 Not a member or no packageId:", { isMember, packageId: user?.subscription?.packageId });
+      // console.log("🔍 Not a member or no packageId:", { isMember, packageId: user?.subscription?.packageId });
       return false;
     }
 
@@ -502,56 +502,56 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     const packageIdString = user.subscription.packageId.toString();
     const currentApiPlan = allApiPlans.find((apiPlan) => apiPlan._id === packageIdString);
 
-    console.log("🔍 isCurrentPlan Debug:", {
-      checkingPlan: { id: plan.id, name: plan.name, period: plan.period },
-      userPackageId: packageIdString,
-      foundApiPlan: currentApiPlan ? { id: currentApiPlan.id, name: currentApiPlan.name } : null,
-      apiPlansCount: allApiPlans.length,
-      allApiPlans: allApiPlans.map((p) => ({ id: p.id, name: p.name, _id: p._id })),
-    });
+    // console.log("🔍 isCurrentPlan Debug:", {
+    //   checkingPlan: { id: plan.id, name: plan.name, period: plan.period },
+    //   userPackageId: packageIdString,
+    //   foundApiPlan: currentApiPlan ? { id: currentApiPlan.id, name: currentApiPlan.name } : null,
+    //   apiPlansCount: allApiPlans.length,
+    //   allApiPlans: allApiPlans.map((p) => ({ id: p.id, name: p.name, _id: p._id })),
+    // });
 
     if (currentApiPlan) {
       // Convert API plan to local format and compare
       const currentLocalPlan = convertToLocalPlan(currentApiPlan);
       const isCurrent = plan.id === currentLocalPlan.id && plan.period === currentLocalPlan.period;
 
-      console.log("🔍 Plan comparison:", {
-        planId: plan.id,
-        planName: plan.name,
-        currentLocalPlanId: currentLocalPlan.id,
-        currentLocalPlanName: currentLocalPlan.name,
-        planPeriod: plan.period,
-        currentLocalPlanPeriod: currentLocalPlan.period,
-        isCurrent,
-      });
+      // console.log("🔍 Plan comparison:", {
+      //   planId: plan.id,
+      //   planName: plan.name,
+      //   currentLocalPlanId: currentLocalPlan.id,
+      //   currentLocalPlanName: currentLocalPlan.name,
+      //   planPeriod: plan.period,
+      //   currentLocalPlanPeriod: currentLocalPlan.period,
+      //   isCurrent,
+      // });
 
       return isCurrent;
     } else {
-      console.log("🔍 No matching API plan found for packageId:", packageIdString);
+      // console.log("🔍 No matching API plan found for packageId:", packageIdString);
 
       // Fallback: Try to match by plan name if API data isn't available
       // This is a temporary fallback until API data loads properly
       if (loading || allApiPlans.length === 0) {
-        console.log("🔍 Using fallback name matching...");
+        // console.log("🔍 Using fallback name matching...");
 
         // Based on the user data, they have a Pro subscription
         // Check if this plan matches the expected Pro plan
         const isProPlan = plan.name.toLowerCase().includes("foreman") && plan.period === "mo";
-        console.log("🔍 Fallback check - isProPlan:", isProPlan, "for plan:", plan.name);
+        // console.log("🔍 Fallback check - isProPlan:", isProPlan, "for plan:", plan.name);
 
         return isProPlan;
       }
 
       // Additional fallback: Check if we can match by subscription packageId
       // This handles cases where the API data structure might be different
-      console.log("🔍 Trying additional fallback matching...");
+      // console.log("🔍 Trying additional fallback matching...");
 
       // Check if this is a subscription plan (monthly) and user has active subscription
       if (plan.period === "mo" && user.subscription?.isActive) {
         // For now, we'll assume Pro is the current plan based on user data
         // This is a temporary solution until we can properly match the API data
         const isCurrentSubscription = plan.name.toLowerCase().includes("foreman");
-        console.log("🔍 Additional fallback - isCurrentSubscription:", isCurrentSubscription, "for plan:", plan.name);
+        // console.log("🔍 Additional fallback - isCurrentSubscription:", isCurrentSubscription, "for plan:", plan.name);
         return isCurrentSubscription;
       }
 
@@ -562,14 +562,14 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   // Use API data if available, otherwise fallback to static data
   let finalMembershipPlans = membershipPlans.length > 0 ? membershipPlans : staticMembershipPlans;
 
-  console.log("🔍 Final membership plans:", {
-    usingApiData: membershipPlans.length > 0,
-    membershipPlansCount: membershipPlans.length,
-    staticPlansCount: staticMembershipPlans.length,
-    finalPlansCount: finalMembershipPlans.length,
-    loading,
-    error,
-  });
+  // console.log("🔍 Final membership plans:", {
+  //   usingApiData: membershipPlans.length > 0,
+  //   membershipPlansCount: membershipPlans.length,
+  //   staticPlansCount: staticMembershipPlans.length,
+  //   finalPlansCount: finalMembershipPlans.length,
+  //   loading,
+  //   error,
+  // });
 
   // Filter packages based on membership status and current plan
   if (activeTab === "membership") {

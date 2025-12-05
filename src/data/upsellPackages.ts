@@ -759,13 +759,15 @@ export const getBestUpsellOffer = (
  * @param packageId - The package ID that was purchased
  * @param packageType - The package type that was purchased
  * @param userSegment - User segment
- * @param isMember - Whether the user is a member
+ * @param isMember - Whether the user is a member (has active subscription)
+ * @param hasAccessToAdditionalPackages - Whether the user has access to additional packages (subscription OR major draw entries)
  */
 export const getBestUpsellOfferForUser = (
   packageId: string,
   packageType: "subscription" | "one-time",
   userSegment: string = "returning-user",
-  isMember: boolean = false
+  isMember: boolean = false,
+  hasAccessToAdditionalPackages: boolean = false // ✅ NEW parameter
 ): StaticUpsellPackage | null => {
   const relevantPackages = getUpsellPackagesForPurchase(packageId, packageType);
 
@@ -779,10 +781,11 @@ export const getBestUpsellOfferForUser = (
       // Check if this is a member-only upsell (additional-upgrade category)
       const isMemberOnlyUpsell = pkg.category === "additional-upgrade";
 
-      // Non-members should only see non-member upsells (one-time-plus category)
-      // Members can see both member and non-member upsells
-      if (!isMember && isMemberOnlyUpsell) {
-        return false; // Non-members shouldn't see member-only upsells
+      // ✅ FIX: Use hasAccessToAdditionalPackages instead of just isMember
+      // Users with access (subscription OR major draw entries) should see additional-upgrade upsells
+      // Non-members without access should only see non-member upsells (one-time-plus category)
+      if (!hasAccessToAdditionalPackages && isMemberOnlyUpsell) {
+        return false; // Users without access shouldn't see member-only upsells
       }
 
       return true;
@@ -793,6 +796,7 @@ export const getBestUpsellOfferForUser = (
 
   console.log(`🔍 Upsell filtering for ${packageId}:`, {
     isMember,
+    hasAccessToAdditionalPackages, // ✅ NEW: Log access status
     packageType,
     relevantPackages: relevantPackages.length,
     filteredBySegment: filterUpsellPackagesByUserSegment(relevantPackages, userSegment).length,

@@ -79,12 +79,12 @@ export default function MiniDrawPackages({
       const useDefaultPayment = hasDefaultPayment;
       const paymentMethodId = hasDefaultPayment ? defaultPaymentMethod.paymentMethodId : undefined;
 
-      console.log("🛒 Mini draw purchase:", {
-        packageId,
-        miniDrawId,
-        useDefaultPayment,
-        hasPaymentMethod: !!paymentMethodId,
-      });
+      // console.log("🛒 Mini draw purchase:", {
+      //   packageId,
+      //   miniDrawId,
+      //   useDefaultPayment,
+      //   hasPaymentMethod: !!paymentMethodId,
+      // });
 
       const response = await fetch("/api/mini-draw/purchase", {
         method: "POST",
@@ -168,7 +168,7 @@ export default function MiniDrawPackages({
 
   // Handle payment processing success - ONLY called when webhook confirms payment
   const handlePaymentProcessingSuccess = async (status: PaymentStatusResponse) => {
-    console.log("🎉 Payment processing completed successfully:", status);
+    // console.log("🎉 Payment processing completed successfully:", status);
 
     // ✅ CRITICAL: Prevent duplicate toast notifications
     // This function can be called multiple times:
@@ -176,7 +176,7 @@ export default function MiniDrawPackages({
     // 2. From fallback timer in PaymentProcessingScreen
     // We only want to show the toast once
     if (successToastShown) {
-      console.log("⏭️ Success toast already shown, skipping duplicate");
+      // console.log("⏭️ Success toast already shown, skipping duplicate");
       return;
     }
 
@@ -224,7 +224,7 @@ export default function MiniDrawPackages({
             platform: "tools-australia",
           });
 
-          console.log(`📘 Facebook Pixel: Mini-draw Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
+          // console.log(`📘 Facebook Pixel: Mini-draw Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
         } catch (pixelError) {
           console.error("❌ Error tracking Mini-draw Purchase client-side:", pixelError);
           // Non-blocking - continue with success flow
@@ -280,7 +280,7 @@ export default function MiniDrawPackages({
 
   // Handle payment processing timeout - payment may still be processing
   const handlePaymentProcessingTimeout = () => {
-    console.warn("⏰ Payment processing timed out - webhook may still be processing");
+    // console.warn("⏰ Payment processing timed out - webhook may still be processing");
     setShowPaymentProcessing(false);
 
     // Inform user that payment is being processed but may take longer
@@ -303,7 +303,7 @@ export default function MiniDrawPackages({
   ) => {
     try {
       if (packageId && packageType) {
-        console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
+        // console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
 
         const isMiniDrawPackage = packageId.startsWith("mini-pack-");
         const userType = isMiniDrawPackage ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";

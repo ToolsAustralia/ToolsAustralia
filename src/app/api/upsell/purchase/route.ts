@@ -38,8 +38,8 @@ async function handleUpsellPaymentSuccess(
   },
   paymentIntentId: string
 ) {
-  console.log(`✅ UPSELL PAYMENT SUCCESS: Payment ${paymentIntentId} created successfully`);
-  console.log(`📋 Benefits will be granted via webhook processing shortly`);
+  // console.log(`✅ UPSELL PAYMENT SUCCESS: Payment ${paymentIntentId} created successfully`);
+  // console.log(`📋 Benefits will be granted via webhook processing shortly`);
 
   // No benefit processing here - webhook will handle it
   return {
@@ -67,7 +67,7 @@ function getBaseUrl(): string {
     throw new Error("NEXT_PUBLIC_APP_URL must be set in production environment");
   }
 
-  console.warn(`⚠️ NEXT_PUBLIC_APP_URL not set, falling back to localhost:3000`);
+  // console.warn(`⚠️ NEXT_PUBLIC_APP_URL not set, falling back to localhost:3000`);
   return "http://localhost:3000";
 }
 
@@ -82,7 +82,7 @@ async function getMiniDrawIdForUpsell(
 ): Promise<{ miniDrawId?: string; miniDrawName?: string }> {
   // Primary: Check originalPurchaseContext if provided
   if (originalPurchaseContext?.miniDrawId) {
-    console.log(`📧 Found miniDrawId in originalPurchaseContext: ${originalPurchaseContext.miniDrawId}`);
+    // console.log(`📧 Found miniDrawId in originalPurchaseContext: ${originalPurchaseContext.miniDrawId}`);
     return {
       miniDrawId: originalPurchaseContext.miniDrawId,
       miniDrawName: originalPurchaseContext.miniDrawName,
@@ -118,7 +118,7 @@ async function getMiniDrawIdForUpsell(
           : matchingPackage.miniDrawId?.toString();
 
       if (miniDrawIdStr) {
-        console.log(`📧 Found miniDrawId from user's purchase history: ${miniDrawIdStr}`);
+        // console.log(`📧 Found miniDrawId from user's purchase history: ${miniDrawIdStr}`);
         return {
           miniDrawId: miniDrawIdStr,
         };
@@ -126,7 +126,7 @@ async function getMiniDrawIdForUpsell(
     }
   }
 
-  console.log(`⚠️ Could not find miniDrawId for upsell ${offerId}`);
+  // console.log(`⚠️ Could not find miniDrawId for upsell ${offerId}`);
   return {};
 }
 
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = upsellPurchaseSchema.parse(body);
 
-    console.log(`🛒 Processing upsell purchase for user: ${session.user.id}, offer: ${validatedData.offerId}`);
+    // console.log(`🛒 Processing upsell purchase for user: ${session.user.id}, offer: ${validatedData.offerId}`);
 
     // Get the user
     const user = await User.findById(session.user.id);
@@ -290,7 +290,7 @@ async function handleOneClickPurchase(
 
     // For development OR reuse prevention - create new payment method
     if (paymentMethodId === "pm_card_visa" || !paymentMethodId.startsWith("pm_")) {
-      console.log(`🔄 Creating fresh payment method for upsell (reuse pattern)`);
+      // console.log(`🔄 Creating fresh payment method for upsell (reuse pattern)`);
 
       // Create a new test/card payment method for this customer
       const newPaymentMethod = await stripe.paymentMethods.create({
@@ -306,7 +306,7 @@ async function handleOneClickPurchase(
       });
 
       finalPaymentMethodId = newPaymentMethod.id;
-      console.log(`💳 Created and attached NEW payment method: ${finalPaymentMethodId}`);
+      // console.log(`💳 Created and attached NEW payment method: ${finalPaymentMethodId}`);
     } else {
       // For existing payment methods, try reuse but with better checks
       try {
@@ -317,12 +317,12 @@ async function handleOneClickPurchase(
           await stripe.paymentMethods.attach(paymentMethodId, {
             customer: user.stripeCustomerId!,
           });
-          console.log(`💳 Reusing payment method attached to customer: ${paymentMethodId}`);
+          // console.log(`💳 Reusing payment method attached to customer: ${paymentMethodId}`);
         } else if (existingPaymentMethod.customer === user.stripeCustomerId) {
-          console.log(`💳 Payment method already attached to our customer: ${paymentMethodId}`);
+          // console.log(`💳 Payment method already attached to our customer: ${paymentMethodId}`);
         } else {
           // Payment method belongs to someone else - create new one instead of failing
-          console.log(`🔄 Payment method belongs to another customer. Creating new one...`);
+          // console.log(`🔄 Payment method belongs to another customer. Creating new one...`);
 
           const newPaymentMethod = await stripe.paymentMethods.create({
             type: "card",
@@ -334,7 +334,7 @@ async function handleOneClickPurchase(
           });
 
           finalPaymentMethodId = newPaymentMethod.id;
-          console.log(`💳 Created replacement payment method: ${finalPaymentMethodId}`);
+          // console.log(`💳 Created replacement payment method: ${finalPaymentMethodId}`);
         }
       } catch (stripeError: unknown) {
         console.error(`❌ Cannot reuse payment method, creating new one:`, stripeError);
@@ -350,7 +350,7 @@ async function handleOneClickPurchase(
         });
 
         finalPaymentMethodId = fallbackPaymentMethod.id;
-        console.log(`💳 Created fallback payment method: ${finalPaymentMethodId}`);
+        // console.log(`💳 Created fallback payment method: ${finalPaymentMethodId}`);
       }
     }
 
@@ -397,7 +397,7 @@ async function handleOneClickPurchase(
 
     // ✅ CRITICAL: Handle different payment statuses and wait for settlement
     if (paymentIntent.status === "succeeded") {
-      console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
+      // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
 
       // Wait for payment to be fully settled (not just authorized)
       await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
@@ -406,7 +406,7 @@ async function handleOneClickPurchase(
       const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
 
       if (verifiedPaymentIntent.status === "succeeded") {
-        console.log(`✅ Payment fully verified and settled - benefits will be granted via webhook`);
+        // console.log(`✅ Payment fully verified and settled - benefits will be granted via webhook`);
 
         // Payment successful - benefits will be granted via webhook
         await handleUpsellPaymentSuccess(
@@ -443,17 +443,17 @@ async function handleOneClickPurchase(
         );
       }
     } else if (paymentIntent.status === "requires_action" || paymentIntent.status === "processing") {
-      console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
+      // console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
 
       // Wait longer for payment to complete
       await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
 
       // Re-fetch payment intent to check final status
       const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      console.log(`🔍 Final payment status: ${finalPaymentIntent.status}`);
+      // console.log(`🔍 Final payment status: ${finalPaymentIntent.status}`);
 
       if (finalPaymentIntent.status === "succeeded") {
-        console.log(`✅ Payment completed successfully after waiting - benefits will be granted via webhook`);
+        // console.log(`✅ Payment completed successfully after waiting - benefits will be granted via webhook`);
 
         return NextResponse.json({
           success: true,

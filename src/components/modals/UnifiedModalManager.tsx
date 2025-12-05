@@ -58,7 +58,7 @@ const UnifiedModalManager: React.FC = () => {
    * Handle modal close with proper cleanup and queue progression
    */
   const handleModalClose = (modalType: "user-setup" | "upsell" | "special-packages" | "pixel-consent") => {
-    console.log(`🎭 Closing modal: ${modalType}`);
+    // console.log(`🎭 Closing modal: ${modalType}`);
 
     // Mark modal as shown in session (for one-time modals)
     markModalShown(modalType);
@@ -138,7 +138,7 @@ const UnifiedModalManager: React.FC = () => {
             packages={specialPackages}
             onPackageSelect={(pkg) => {
               // Handle package selection - this would typically trigger purchase flow
-              console.log("Special package selected:", pkg);
+              // console.log("Special package selected:", pkg);
             }}
           />
         );

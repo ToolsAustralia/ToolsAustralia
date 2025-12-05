@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    console.log(`🚀 Downgrading subscription for user: ${body.userId || "unknown"}`);
+    // console.log(`🚀 Downgrading subscription for user: ${body.userId || "unknown"}`);
     const { newPackageId } = body;
 
     // Validate required fields
@@ -39,25 +39,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    console.log(`🔍 DEBUG: Checking pending change for user: ${session.user.email}`);
-    console.log(`🔍 DEBUG: User subscription:`, {
-      pendingChange: user.subscription?.pendingChange || {},
-      packageId: user.subscription?.packageId,
-      startDate: user.subscription?.startDate,
-      isActive: user.subscription?.isActive,
-      autoRenew: user.subscription?.autoRenew,
-      status: user.subscription?.status,
-    });
+    // console.log(`🔍 DEBUG: Checking pending change for user: ${session.user.email}`);
+    // console.log(`🔍 DEBUG: User subscription:`, {
+    //   pendingChange: user.subscription?.pendingChange || {},
+    //   packageId: user.subscription?.packageId,
+    //   startDate: user.subscription?.startDate,
+    //   isActive: user.subscription?.isActive,
+    //   autoRenew: user.subscription?.autoRenew,
+    //   status: user.subscription?.status,
+    // });
 
     // Check if pendingChange is empty object
     const hasEmptyPendingChange =
       user.subscription?.pendingChange && Object.keys(user.subscription.pendingChange).length === 0;
-    console.log(`🔍 DEBUG: Has empty pendingChange: ${hasEmptyPendingChange}`);
-    console.log(
-      `🔍 DEBUG: pendingChange keys: ${
-        user.subscription?.pendingChange ? Object.keys(user.subscription.pendingChange) : "none"
-      }`
-    );
+    // console.log(`🔍 DEBUG: Has empty pendingChange: ${hasEmptyPendingChange}`);
+    // console.log(
+    //   `🔍 DEBUG: pendingChange keys: ${
+    //     user.subscription?.pendingChange ? Object.keys(user.subscription.pendingChange) : "none"
+    //   }`
+    // );
 
     // Check if user has pending changes (only block if there are actual pending changes)
     if (
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       user.subscription.pendingChange.changeType
     ) {
       const pendingChange = user.subscription.pendingChange;
-      console.log(`⚠️ User already has pending changes:`, pendingChange);
+      // console.log(`⚠️ User already has pending changes:`, pendingChange);
       return NextResponse.json(
         {
           error: "You already have a pending upgrade. Please complete or cancel it before downgrading.",
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`✅ DEBUG: No pending change found, proceeding with downgrade`);
+    // console.log(`✅ DEBUG: No pending change found, proceeding with downgrade`);
 
     // Validate user has active subscription
     if (!user.subscription?.isActive || !user.stripeSubscriptionId) {
@@ -101,9 +101,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "This is not a valid downgrade" }, { status: 400 });
     }
 
-    console.log(
-      `📊 Downgrading from ${currentPackage.name} ($${currentPackage.price}) to ${newPackage.name} ($${newPackage.price})`
-    );
+    // console.log(
+    //   `📊 Downgrading from ${currentPackage.name} ($${currentPackage.price}) to ${newPackage.name} ($${newPackage.price})`
+    // );
 
     // Get current subscription from Stripe
     const subscription = (await stripe.subscriptions.retrieve(
@@ -114,10 +114,10 @@ export async function POST(request: NextRequest) {
     let currentPeriodEnd: number;
     if (subscription.current_period_end) {
       currentPeriodEnd = subscription.current_period_end;
-      console.log(`📅 Current subscription period ends: ${new Date(currentPeriodEnd * 1000).toISOString()}`);
+      // console.log(`📅 Current subscription period ends: ${new Date(currentPeriodEnd * 1000).toISOString()}`);
     } else {
       console.error(`❌ Invalid current_period_end from Stripe:`, subscription.current_period_end);
-      console.log(`🔧 FALLBACK: Calculating period end from subscription start date`);
+      // console.log(`🔧 FALLBACK: Calculating period end from subscription start date`);
 
       // Calculate fallback: subscription start date + 30 days
       const subscriptionStartDate = user.subscription?.startDate;
@@ -132,12 +132,12 @@ export async function POST(request: NextRequest) {
       fallbackEndDate.setDate(fallbackEndDate.getDate() + 30);
       currentPeriodEnd = Math.floor(fallbackEndDate.getTime() / 1000);
 
-      console.log(`📅 Using fallback period end: ${fallbackEndDate.toISOString()}`);
+      // console.log(`📅 Using fallback period end: ${fallbackEndDate.toISOString()}`);
     }
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
     // This prevents creating duplicate products in Stripe dashboard
-    console.log(`✅ Using existing Stripe Price ID for ${newPackage.name}`);
+    // console.log(`✅ Using existing Stripe Price ID for ${newPackage.name}`);
 
     if (!newPackage.stripePriceId) {
       console.error(`❌ No Stripe Price ID configured for package: ${newPackage.name}`);
@@ -151,25 +151,25 @@ export async function POST(request: NextRequest) {
     }
 
     const stripePriceId = newPackage.stripePriceId;
-    console.log(`💰 Using Stripe Price: ${stripePriceId} ($${newPackage.price}/month)`);
+    // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${newPackage.price}/month)`);
 
     // 🎯 NEW APPROACH: Update Stripe subscription IMMEDIATELY with new price
     // User will be charged new (lower) price at next billing cycle
     // But we preserve old benefits until that date using previousSubscription
-    console.log(`🎯 NEW APPROACH: Update Stripe immediately, preserve benefits with previousSubscription`);
+    // console.log(`🎯 NEW APPROACH: Update Stripe immediately, preserve benefits with previousSubscription`);
 
     // 🎯 CRITICAL FIX: Replace subscription items instead of adding to them
     // Get current subscription items to replace them
     const currentSubscriptionItems = subscription.items.data;
 
-    console.log(
-      `🔍 Current subscription items:`,
-      currentSubscriptionItems.map((item: Stripe.SubscriptionItem) => ({
-        id: item.id,
-        price: item.price.id,
-        product: item.price.product,
-      }))
-    );
+    // console.log(
+    //   `🔍 Current subscription items:`,
+    //   currentSubscriptionItems.map((item: Stripe.SubscriptionItem) => ({
+    //     id: item.id,
+    //     price: item.price.id,
+    //     product: item.price.product,
+    //   }))
+    // );
 
     // Create subscription update with item replacements
     const subscriptionUpdateParams: Stripe.SubscriptionUpdateParams = {
@@ -200,8 +200,8 @@ export async function POST(request: NextRequest) {
 
     await stripe.subscriptions.update(user.stripeSubscriptionId, subscriptionUpdateParams);
 
-    console.log(`✅ Stripe subscription updated successfully - new price takes effect at next billing cycle`);
-    console.log(`📅 Current billing cycle ends: ${new Date(currentPeriodEnd * 1000).toISOString()}`);
+    // console.log(`✅ Stripe subscription updated successfully - new price takes effect at next billing cycle`);
+    // console.log(`📅 Current billing cycle ends: ${new Date(currentPeriodEnd * 1000).toISOString()}`);
 
     // 🎯 KEY: Store previous subscription for benefit preservation
     // User keeps OLD package benefits until original billing cycle ends
@@ -221,6 +221,10 @@ export async function POST(request: NextRequest) {
 
     // Track downgrade date for security (prevent gaming)
     user.subscription.lastDowngradeDate = new Date();
+
+    // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved during downgrade
+    // This allows accumulation to continue on next renewal: lastMonthAccumulatedEntries + newBaseEntries
+    // The field is NOT reset - accumulation continues from where user left off
 
     // 🎯 UPDATE: Set current subscription to new (downgraded) package
     // previousSubscription handles preserving old benefits until endDate
@@ -246,19 +250,19 @@ export async function POST(request: NextRequest) {
         prorationAmount: 0, // No immediate charge for downgrade
         entriesRemoved: (currentPackage.entriesPerMonth || 0) - (newPackage.entriesPerMonth || 0),
       });
-      console.log(`📊 Pixel subscription downgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
+      // console.log(`📊 Pixel subscription downgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
     } catch (pixelError) {
       console.error("❌ Pixel downgrade tracking failed (non-blocking):", pixelError);
     }
 
-    console.log(`✅ User subscription updated to ${newPackage.name} (current package)`);
+    // console.log(`✅ User subscription updated to ${newPackage.name} (current package)`);
 
-    console.log(
-      `✅ Previous subscription saved - user keeps ${currentPackage.name} benefits until ${effectiveDate.toISOString()}`
-    );
-    console.log(
-      `🎯 User will see ${newPackage.name} in Stripe, but gets ${currentPackage.name} benefits until end date`
-    );
+    // console.log(
+    //   `✅ Previous subscription saved - user keeps ${currentPackage.name} benefits until ${effectiveDate.toISOString()}`
+    // );
+    // console.log(
+    //   `🎯 User will see ${newPackage.name} in Stripe, but gets ${currentPackage.name} benefits until end date`
+    // );
 
     // Update Stripe customer metadata
     if (user.stripeCustomerId) {
@@ -291,21 +295,21 @@ export async function POST(request: NextRequest) {
       });
 
       klaviyo.trackEventBackground(downgradeEvent);
-      console.log(`✅ Klaviyo downgrade scheduled event sent for user: ${user._id}`);
+      // console.log(`✅ Klaviyo downgrade scheduled event sent for user: ${user._id}`);
     } catch (klaviyoError) {
-      console.log(`⚠️ Klaviyo downgrade event failed: ${klaviyoError}`);
+      // console.log(`⚠️ Klaviyo downgrade event failed: ${klaviyoError}`);
     }
 
     // Security audit trail
-    console.log(`🔒 SECURITY: Downgrade scheduled with audit trail:`, {
-      userId: user._id,
-      email: user.email,
-      fromPackage: currentPackage.name,
-      toPackage: newPackage.name,
-      effectiveDate: effectiveDate.toISOString(),
-      subscriptionId: user.stripeSubscriptionId,
-      timestamp: new Date().toISOString(),
-    });
+    // console.log(`🔒 SECURITY: Downgrade scheduled with audit trail:`, {
+    //   userId: user._id,
+    //   email: user.email,
+    //   fromPackage: currentPackage.name,
+    //   toPackage: newPackage.name,
+    //   effectiveDate: effectiveDate.toISOString(),
+    //   subscriptionId: user.stripeSubscriptionId,
+    //   timestamp: new Date().toISOString(),
+    // });
 
     return NextResponse.json({
       success: true,

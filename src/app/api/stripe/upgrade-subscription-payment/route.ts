@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     // console.log(`✅ Data validated:`, validatedData);
 
     const { newPackageId } = validatedData;
-    console.log(`📦 Upgrading to package: ${newPackageId}`);
+    // console.log(`📦 Upgrading to package: ${newPackageId}`);
 
     // Get the existing user
     const user = await User.findById(session.user.id);
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get payment method
-    console.log(`💳 Getting payment method...`);
+    // console.log(`💳 Getting payment method...`);
     let paymentMethod: Stripe.PaymentMethod;
 
     if (validatedData.paymentMethodId) {
@@ -188,11 +188,10 @@ export async function POST(request: NextRequest) {
     // console.log(`🔄 From Price: ${currentSubscriptionItem.price.id} ($${currentPackage.price})`);
     // console.log(`🔄 To Price: ${newPackage.stripePriceId} ($${newPackage.price})`);
     // console.log(`🔄 Strategy: always_invoice + unchanged billing cycle (accurate proration)`);
-    console.log(
-      `📅 Current billing period: ${new Date(
-        currentSubscription.current_period_start * 1000
-      ).toLocaleDateString()} - ${new Date(currentSubscription.current_period_end * 1000).toLocaleDateString()}`
-    );
+    // console.log(
+    //   `📅 Current billing period: ${new Date(
+    //     currentSubscription.current_period_start * 1000
+    //   ).toLocaleDateString()} - ${new Date(currentSubscription.current_period_end * 1000).toLocaleDateString()}`
     // );
 
     // ✅ STRIPE BEST PRACTICE: For immediate upgrade with payment collection
@@ -233,7 +232,7 @@ export async function POST(request: NextRequest) {
     const invoiceWithPaymentIntent = latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent };
     const paymentIntent = invoiceWithPaymentIntent?.payment_intent as Stripe.PaymentIntent;
     const invoiceWithPaid = latestInvoice as Stripe.Invoice & { paid?: boolean };
-    console.log(`💰 Invoice payment status: ${invoiceWithPaid.paid ? "Paid" : "Unpaid"}`);
+    // console.log(`💰 Invoice payment status: ${invoiceWithPaid.paid ? "Paid" : "Unpaid"}`);
 
     // console.log(`💳 Latest invoice:`, {
     //   id: latestInvoice?.id,
@@ -333,7 +332,7 @@ export async function POST(request: NextRequest) {
           prorationAmount: prorationAmount / 100,
           entriesAdded: (newPackage.entriesPerMonth || 0) - (currentPackage.entriesPerMonth || 0),
         });
-        console.log(`📊 Pixel subscription upgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
+        // console.log(`📊 Pixel subscription upgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
       } catch (pixelError) {
         console.error("❌ Pixel upgrade tracking failed (non-blocking):", pixelError);
       }

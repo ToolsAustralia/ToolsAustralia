@@ -63,11 +63,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   // Debug effect to track user menu state
   useEffect(() => {
-    console.log("🔍 Desktop user menu state changed:", isDesktopUserMenuOpen);
+    // console.log("🔍 Desktop user menu state changed:", isDesktopUserMenuOpen);
   }, [isDesktopUserMenuOpen]);
 
   useEffect(() => {
-    console.log("🔍 Mobile user menu state changed:", isMobileUserMenuOpen);
+    // console.log("🔍 Mobile user menu state changed:", isMobileUserMenuOpen);
   }, [isMobileUserMenuOpen]);
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false);
   const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
@@ -109,15 +109,15 @@ export default function Header({ isFixed = true }: HeaderProps) {
   };
 
   // Debug logging for header setup detection
-  console.log("🔍 Header - Setup detection:", {
-    isAuthenticated,
-    isSetupRequired,
-    hasUserData: !!userData,
-    profileSetupCompleted: userData?.profileSetupCompleted,
-    userId: userData?._id,
-    isTopBarHidden,
-    shouldShowSetupBar: isAuthenticated && isSetupRequired,
-  });
+  // console.log("🔍 Header - Setup detection:", {
+  //   isAuthenticated,
+  //   isSetupRequired,
+  //   hasUserData: !!userData,
+  //   profileSetupCompleted: userData?.profileSetupCompleted,
+  //   userId: userData?._id,
+  //   isTopBarHidden,
+  //   shouldShowSetupBar: isAuthenticated && isSetupRequired,
+  // });
   const pathname = usePathname();
   const isRewardsFeatureEnabled = rewardsEnabled();
 
@@ -208,7 +208,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   // Handle mobile menu close with animation
   const handleCloseMobileMenu = useCallback(() => {
-    console.log("🔍 Closing mobile menu - Saved scroll position:", scrollPositionRef.current);
+    // console.log("🔍 Closing mobile menu - Saved scroll position:", scrollPositionRef.current);
 
     setIsClosingMobileMenu(true);
     setTimeout(() => {
@@ -219,7 +219,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   // Handle cart close with animation
   const handleCloseCart = useCallback(() => {
-    console.log("🛒 Closing cart - Saved scroll position:", scrollPositionRef.current);
+    // console.log("🛒 Closing cart - Saved scroll position:", scrollPositionRef.current);
 
     setIsClosingCart(true);
     setTimeout(() => {
@@ -299,11 +299,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
       // If user is authenticated, only hide top bar if they don't need setup
       if (isAuthenticated) {
-        console.log("🔍 Header - Top bar visibility logic:", {
-          isAuthenticated,
-          isSetupRequired,
-          willHideTopBar: !isSetupRequired,
-        });
+        // console.log("🔍 Header - Top bar visibility logic:", {
+        //   isAuthenticated,
+        //   isSetupRequired,
+        //   willHideTopBar: !isSetupRequired,
+        // });
 
         // Only hide if user has completed profile setup
         if (!isSetupRequired) {
@@ -342,13 +342,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
       // Close desktop user menu if clicking outside
       if (isDesktopUserMenuOpen && desktopUserMenu && !desktopUserMenu.contains(target)) {
-        console.log("🖱️ Clicking outside desktop user menu, closing it");
+        // console.log("🖱️ Clicking outside desktop user menu, closing it");
         setIsDesktopUserMenuOpen(false);
       }
 
       // Close mobile user menu if clicking outside
       if (isMobileUserMenuOpen && mobileUserMenu && !mobileUserMenu.contains(target)) {
-        console.log("🖱️ Clicking outside mobile user menu, closing it");
+        // console.log("🖱️ Clicking outside mobile user menu, closing it");
         setIsMobileUserMenuOpen(false);
       }
     };
@@ -422,7 +422,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
       trackSearch(searchQuery.trim());
 
       // TODO: Implement search functionality
-      console.log("Searching for:", searchQuery);
+      // console.log("Searching for:", searchQuery);
       setIsSearchOpen(false);
       setSearchQuery("");
     }
@@ -908,8 +908,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="relative mobile-user-menu-container lg:hidden">
                 <button
                   onClick={() => {
-                    console.log("🖱️ Mobile user menu button clicked - isMobileUserMenuOpen:", isMobileUserMenuOpen);
-                    console.log("🖱️ Setting isMobileUserMenuOpen to:", !isMobileUserMenuOpen);
+                    // console.log("🖱️ Mobile user menu button clicked - isMobileUserMenuOpen:", isMobileUserMenuOpen);
+                    // console.log("🖱️ Setting isMobileUserMenuOpen to:", !isMobileUserMenuOpen);
                     setIsMobileUserMenuOpen(!isMobileUserMenuOpen);
                   }}
                   className="w-8 h-8 sm:w-10 sm:h-10 text-gray-700 hover:text-red-600 transition-colors duration-200 rounded-full hover:bg-gray-50 flex items-center justify-center touch-manipulation relative z-50"

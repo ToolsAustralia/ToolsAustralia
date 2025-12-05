@@ -47,29 +47,29 @@ async function ensureCriticalIndexes(): Promise<void> {
 
 async function ensurePaymentEventIndexes(): Promise<void> {
   try {
-    console.log("🔍 Ensuring PaymentEvent indexes are created...");
+    // console.log("🔍 Ensuring PaymentEvent indexes are created...");
 
     // ✅ CRITICAL FIX: Drop old non-unique index if it exists
     try {
       // Drop the old single-field index on paymentIntentId
       await PaymentEvent.collection.dropIndex("paymentIntentId_1");
-      console.log("✅ Dropped old paymentIntentId index");
+      // console.log("✅ Dropped old paymentIntentId index");
     } catch (error: unknown) {
       const err = error as { code?: number };
       // Error code 27 means index doesn't exist - that's fine
       if (err.code !== 27) {
-        console.log("ℹ️  Old index doesn't exist or already dropped");
+        // console.log("ℹ️  Old index doesn't exist or already dropped");
       }
     }
 
     // ✅ CRITICAL FIX: Drop old compound index if it exists without unique constraint
     try {
       await PaymentEvent.collection.dropIndex("paymentIntentId_1_eventType_1");
-      console.log("✅ Dropped old compound index (non-unique)");
+      // console.log("✅ Dropped old compound index (non-unique)");
     } catch (error: unknown) {
       const err = error as { code?: number };
       if (err.code !== 27) {
-        console.log("ℹ️  Old compound index doesn't exist");
+        // console.log("ℹ️  Old compound index doesn't exist");
       }
     }
 
@@ -80,29 +80,29 @@ async function ensurePaymentEventIndexes(): Promise<void> {
         { paymentIntentId: 1, eventType: 1 },
         { unique: true, name: "paymentIntentId_1_eventType_1_unique" }
       );
-      console.log("✅ Manually created unique compound index");
+      // console.log("✅ Manually created unique compound index");
     } catch (error: unknown) {
       const err = error as { code?: number; message?: string };
       // Code 85 or 86 means index already exists - that's fine if it's unique
       if (err.code === 85 || err.code === 86 || err.message?.includes("already exists")) {
-        console.log("ℹ️  Unique compound index already exists");
+        // console.log("ℹ️  Unique compound index already exists");
       } else {
         console.error("⚠️  Failed to create unique index:", error);
       }
     }
 
-    console.log("✅ PaymentEvent indexes ensured");
+    // console.log("✅ PaymentEvent indexes ensured");
 
     // List all indexes for verification
     const indexes = await PaymentEvent.collection.indexes();
-    console.log(
-      "📋 Current PaymentEvent indexes:",
-      indexes.map((idx) => ({
-        name: idx.name,
-        key: idx.key,
-        unique: idx.unique,
-      }))
-    );
+    // console.log(
+    //   "📋 Current PaymentEvent indexes:",
+    //   indexes.map((idx) => ({
+    //     name: idx.name,
+    //     key: idx.key,
+    //     unique: idx.unique,
+    //   }))
+    // );
 
     // ✅ Verify the unique compound index exists
     const uniqueIndex = indexes.find((idx) => {
@@ -111,7 +111,7 @@ async function ensurePaymentEventIndexes(): Promise<void> {
     });
 
     if (uniqueIndex) {
-      console.log("✅ VERIFIED: Unique compound index is active!");
+      // console.log("✅ VERIFIED: Unique compound index is active!");
     } else {
       console.error("⚠️  WARNING: Unique compound index NOT found! Duplicates may still occur.");
     }
@@ -122,15 +122,15 @@ async function ensurePaymentEventIndexes(): Promise<void> {
 }
 
 async function ensureUserIndexes(): Promise<void> {
-  console.log("🔍 Ensuring User indexes are created...");
+  // console.log("🔍 Ensuring User indexes are created...");
   await ensureIndex(User.collection, { stripeCustomerId: 1 }, { sparse: true });
-  console.log("✅ User indexes ensured");
+  // console.log("✅ User indexes ensured");
 }
 
 async function ensureOrderIndexes(): Promise<void> {
-  console.log("🔍 Ensuring Order indexes are created...");
+  // console.log("🔍 Ensuring Order indexes are created...");
   await ensureIndex(Order.collection, { paymentIntentId: 1 }, { sparse: true });
-  console.log("✅ Order indexes ensured");
+  // console.log("✅ Order indexes ensured");
 }
 
 type MongooseCollection = typeof User.collection;
@@ -150,12 +150,12 @@ async function ensureIndex(
   const alreadyExists = existingIndexes.some((idx) => idx.name === indexName);
 
   if (alreadyExists) {
-    console.log(`ℹ️  Index "${indexName}" already exists`);
+    // console.log(`ℹ️  Index "${indexName}" already exists`);
     return;
   }
 
   await collection.createIndex(indexSpec, options);
-  console.log(`✅ Created index "${indexName}"`);
+  // console.log(`✅ Created index "${indexName}"`);
 }
 
 // ✅ NOTE: Indexes are now ensured via ensureIndexesOnce() called from webhook handler

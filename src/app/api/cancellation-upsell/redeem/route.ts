@@ -21,7 +21,7 @@ export async function POST() {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    console.log(`🎁 Processing cancellation upsell redemption for user: ${session.user.id}`);
+    // console.log(`🎁 Processing cancellation upsell redemption for user: ${session.user.id}`);
 
     // Get the user
     const user = await User.findById(session.user.id);
@@ -62,7 +62,7 @@ export async function POST() {
       { new: false }
     );
 
-    console.log(`🎫 Added ${entriesToAdd} entries to user ${user._id} (cancellation upsell)`);
+    // console.log(`🎫 Added ${entriesToAdd} entries to user ${user._id} (cancellation upsell)`);
 
     // Add entries to major draw
     await addToMajorDraw(user._id.toString(), {
@@ -72,7 +72,7 @@ export async function POST() {
       packageName: "Cancellation Retention Offer",
     });
 
-    console.log(`🎯 Added ${entriesToAdd} entries to major draw for user ${user._id}`);
+    // console.log(`🎯 Added ${entriesToAdd} entries to major draw for user ${user._id}`);
 
     return NextResponse.json({
       success: true,
@@ -106,7 +106,7 @@ async function addToMajorDraw(
     // Find the active major draw
     const activeMajorDraw = await MajorDraw.findOne({ isActive: true });
     if (!activeMajorDraw) {
-      console.log("No active major draw found - skipping major draw entry addition");
+      // console.log("No active major draw found - skipping major draw entry addition");
       return;
     }
 
@@ -157,7 +157,7 @@ async function addToMajorDraw(
           },
         }
       );
-      console.log(`🎯 Updated existing major draw entry for user ${userId} (+${packageData.entries} ${sourceType})`);
+      // console.log(`🎯 Updated existing major draw entry for user ${userId} (+${packageData.entries} ${sourceType})`);
     } else {
       // Create new entry
       const newEntry = {
@@ -169,7 +169,7 @@ async function addToMajorDraw(
       };
 
       await MajorDraw.updateOne({ _id: activeMajorDraw._id }, { $push: { entries: newEntry } });
-      console.log(`🎯 Created new major draw entry for user ${userId} (+${packageData.entries} ${sourceType})`);
+      // console.log(`🎯 Created new major draw entry for user ${userId} (+${packageData.entries} ${sourceType})`);
     }
 
     // Get updated major draw for total calculation
@@ -183,7 +183,7 @@ async function addToMajorDraw(
       await MajorDraw.updateOne({ _id: activeMajorDraw._id }, { $set: { totalEntries } });
     }
 
-    console.log(`🎯 Major draw entries updated for user ${userId} (draw total: ${totalEntries})`);
+    // console.log(`🎯 Major draw entries updated for user ${userId} (draw total: ${totalEntries})`);
   } catch (error) {
     console.error(`❌ ERROR in addToMajorDraw for cancellation upsell:`, error);
     // Don't throw - allow redemption to continue even if major draw update fails

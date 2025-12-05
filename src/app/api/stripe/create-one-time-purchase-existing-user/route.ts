@@ -36,8 +36,8 @@ async function handleOneTimePaymentSuccess(
   },
   paymentIntentId: string
 ) {
-  console.log(`✅ ONE-TIME PAYMENT SUCCESS: Payment ${paymentIntentId} created successfully`);
-  console.log(`📋 Benefits will be granted via webhook processing shortly`);
+  // console.log(`✅ ONE-TIME PAYMENT SUCCESS: Payment ${paymentIntentId} created successfully`);
+  // console.log(`📋 Benefits will be granted via webhook processing shortly`);
 
   // No benefit processing here - webhook will handle it
   return {
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     const validatedData = createOneTimePurchaseExistingUserSchema.parse(body);
     const normalizedAffiliateCode = validatedData.affiliateCode?.trim().toUpperCase();
 
-    console.log(`🛒 Creating one-time purchase for existing user: ${session.user.id}`);
+    // console.log(`🛒 Creating one-time purchase for existing user: ${session.user.id}`);
 
     // Get the existing user
     let existingUser = await User.findById(session.user.id);
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date().toISOString(),
         };
         isMiniDrawPackage = true;
-        console.log("🎲 Mini draw package detected:", miniDrawPackage.name);
+        // console.log("🎲 Mini draw package detected:", miniDrawPackage.name);
       }
     }
 
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     // Create or retrieve Stripe customer
     let stripeCustomerId = existingUser.stripeCustomerId;
     if (!stripeCustomerId) {
-      console.log("Creating new Stripe customer for existing user");
+      // console.log("Creating new Stripe customer for existing user");
       const customer = await stripe.customers.create({
         email: existingUser.email,
         name: `${existingUser.firstName} ${existingUser.lastName}`,
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`💳 Using payment method ${paymentMethodId} for one-time purchase`);
+    // console.log(`💳 Using payment method ${paymentMethodId} for one-time purchase`);
 
     // Create payment intent for one-time purchase
     // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
@@ -238,11 +238,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`✅ Payment intent created: ${paymentIntent.id} with status: ${paymentIntent.status}`);
+    // console.log(`✅ Payment intent created: ${paymentIntent.id} with status: ${paymentIntent.status}`);
 
     // ✅ CRITICAL: Handle different payment statuses and wait for settlement
     if (paymentIntent.status === "succeeded") {
-      console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
+      // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
 
       // Wait for payment to be fully settled (not just authorized)
       await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
@@ -251,15 +251,13 @@ export async function POST(request: NextRequest) {
       const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
 
       if (verifiedPaymentIntent.status === "succeeded") {
-        console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
-
+        // console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
-        console.log(`✅ Payment completed successfully for user: ${existingUser.email}`);
-        console.log(`📦 Package: ${membershipPackage.name} ($${membershipPackage.price})`);
-        console.log(`📋 Benefits will be processed via webhook shortly`);
-
+        // console.log(`✅ Payment completed successfully for user: ${existingUser.email}`);
+        // console.log(`📦 Package: ${membershipPackage.name} ($${membershipPackage.price})`);
+        // console.log(`📋 Benefits will be processed via webhook shortly`);
         // ✅ Klaviyo integration handled by webhook for reliability and best practices
-        console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
+        // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
       } else {
         console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
         return NextResponse.json(
@@ -272,22 +270,21 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (paymentIntent.status === "requires_action" || paymentIntent.status === "processing") {
-      console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
+      // console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
 
       // Wait longer for payment to complete
       await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
 
       // Re-fetch payment intent to check final status
       const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      console.log(`🔍 Final payment status: ${finalPaymentIntent.status}`);
+      // console.log(`🔍 Final payment status: ${finalPaymentIntent.status}`);
 
       if (finalPaymentIntent.status === "succeeded") {
-        console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
-
+        // console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
-        console.log(`✅ Payment completed successfully for user: ${existingUser.email}`);
-        console.log(`📦 Package: ${membershipPackage.name} ($${membershipPackage.price})`);
-        console.log(`📋 Benefits will be processed via webhook shortly`);
+        // console.log(`✅ Payment completed successfully for user: ${existingUser.email}`);
+        // console.log(`📦 Package: ${membershipPackage.name} ($${membershipPackage.price})`);
+        // console.log(`📋 Benefits will be processed via webhook shortly`);
       } else {
         console.error(`❌ Payment failed after waiting: ${finalPaymentIntent.status}`);
         return NextResponse.json(

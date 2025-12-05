@@ -113,7 +113,7 @@ export default function FacebookPixel({
 
       window.fbq("track", "PageView", pageViewParams);
       if (process.env.NODE_ENV === "development") {
-        console.log("✅ Facebook Pixel: PageView tracked on route change", pageViewParams);
+        // console.log("✅ Facebook Pixel: PageView tracked on route change", pageViewParams);
       }
     }
   }, [pathname, isInitialized]);
@@ -147,11 +147,11 @@ export default function FacebookPixel({
           window.fbq("track", "PageView", pageViewParams);
           hasTrackedInitialPageView.current = true;
           if (process.env.NODE_ENV === "development") {
-            console.log("✅ Facebook Pixel: PageView verified/triggered (fallback)", pageViewParams);
+            // console.log("✅ Facebook Pixel: PageView verified/triggered (fallback)", pageViewParams);
           }
         } catch (error) {
           if (process.env.NODE_ENV === "development") {
-            console.warn("⚠️ Facebook Pixel: Could not verify PageView", error);
+            console.error("⚠️ Facebook Pixel: Could not verify PageView", error);
           }
         }
       }
@@ -233,7 +233,7 @@ export default function FacebookPixel({
       scriptInjectedRef.current = true;
 
       if (process.env.NODE_ENV === "development") {
-        console.log("✅ Facebook Pixel script injected with nonce:", nonce ? "yes" : "no");
+        // console.log("✅ Facebook Pixel script injected with nonce:", nonce ? "yes" : "no");
       }
 
       // Mark script as loaded and check when pixel is ready
@@ -248,7 +248,7 @@ export default function FacebookPixel({
             setIsInitialized(true);
             hasTrackedInitialPageView.current = true; // PageView was queued in inline script
             if (process.env.NODE_ENV === "development") {
-              console.log("✅ Facebook Pixel ready:", pixelId);
+              // console.log("✅ Facebook Pixel ready:", pixelId);
             }
           } else if (!fbqLoaded) {
             // fbevents.js not loaded yet, check again
@@ -317,7 +317,7 @@ export const trackFacebookEvent = (
   delay: number = 500
 ) => {
   if (typeof window === "undefined") {
-    console.warn("❌ Facebook Pixel: Window not available");
+    // console.warn("❌ Facebook Pixel: Window not available");
     return;
   }
 
@@ -329,7 +329,7 @@ export const trackFacebookEvent = (
       setTimeout(() => trackFacebookEvent(eventName, parameters, retries - 1, delay), delay);
       return;
     }
-    console.warn("❌ Facebook Pixel: Not loaded after retries");
+    // console.warn("❌ Facebook Pixel: Not loaded after retries");
     return;
   }
 
@@ -372,7 +372,7 @@ export const trackFacebookEvent = (
     // Prevent duplicate events within 1 second (unless it has a unique eventID)
     if (lastSent && now - lastSent < 1000 && !eventID) {
       if (process.env.NODE_ENV === "development") {
-        console.warn(`⚠️ Facebook Pixel: Duplicate ${eventName} event prevented (sent ${now - lastSent}ms ago)`);
+        // console.warn(`⚠️ Facebook Pixel: Duplicate ${eventName} event prevented (sent ${now - lastSent}ms ago)`);
       }
       return;
     }
@@ -381,9 +381,9 @@ export const trackFacebookEvent = (
     // Meta automatically handles deduplication when eventID matches between browser pixel and Conversions API
     if (process.env.NODE_ENV === "development") {
       if (eventID) {
-        console.log(`📘 Facebook Pixel: Sending ${eventName} with EventID: ${eventID}`, eventParams);
+        // console.log(`📘 Facebook Pixel: Sending ${eventName} with EventID: ${eventID}`, eventParams);
       } else {
-        console.log(`📘 Facebook Pixel: Sending ${eventName}`, eventParams);
+        // console.log(`📘 Facebook Pixel: Sending ${eventName}`, eventParams);
       }
     }
 
@@ -405,9 +405,9 @@ export const trackFacebookEvent = (
 
     if (process.env.NODE_ENV === "development") {
       if (eventID) {
-        console.log(`✅ Facebook Pixel: ${eventName} sent successfully with deduplication`);
+        // console.log(`✅ Facebook Pixel: ${eventName} sent successfully with deduplication`);
       } else {
-        console.log(`✅ Facebook Pixel: ${eventName} sent successfully`);
+        // console.log(`✅ Facebook Pixel: ${eventName} sent successfully`);
       }
     }
   } catch (error) {

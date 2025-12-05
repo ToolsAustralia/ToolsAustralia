@@ -85,7 +85,7 @@ export function generateEmailVerificationCode(): string {
 function createEmailTransporter() {
   // Check if SMTP is configured
   if (!process.env.SMTP_SERVER_HOST || !process.env.SMTP_SERVER_USER || !process.env.SMTP_SERVER_PASSWORD) {
-    console.warn("⚠️ SMTP not configured - Email verification disabled");
+    // console.warn("⚠️ SMTP not configured - Email verification disabled");
     return null;
   }
 
@@ -371,10 +371,10 @@ export async function sendEmailVerificationCode(
   userName?: string
 ): Promise<EmailResult> {
   try {
-    console.log(`Email verification attempt for: ${email}`);
-    console.log(
-      `SMTP Config - Host: ${process.env.SMTP_SERVER_HOST}, User: ${process.env.SMTP_SERVER_USER}, Port: ${process.env.SMTP_SERVER_PORT}`
-    );
+    // console.log(`Email verification attempt for: ${email}`);
+    // console.log(
+    //   `SMTP Config - Host: ${process.env.SMTP_SERVER_HOST}, User: ${process.env.SMTP_SERVER_USER}, Port: ${process.env.SMTP_SERVER_PORT}`
+    // );
 
     const transporter = createEmailTransporter();
 
@@ -401,16 +401,16 @@ export async function sendEmailVerificationCode(
       }! Your Tools Australia verification code is: ${verificationCode}. This code expires in 10 minutes.`,
     };
 
-    console.log(`Sending email with options:`, {
-      from: mailOptions.from,
-      to: mailOptions.to,
-      subject: mailOptions.subject,
-    });
+    // console.log(`Sending email with options:`, {
+    //   from: mailOptions.from,
+    //   to: mailOptions.to,
+    //   subject: mailOptions.subject,
+    // });
 
     const info = await transporter.sendMail(mailOptions);
 
-    console.log(`Email verification sent to ${email}: ${info.messageId}`);
-    console.log(`Email response:`, info);
+    // console.log(`Email verification sent to ${email}: ${info.messageId}`);
+    // console.log(`Email response:`, info);
 
     return {
       success: true,
@@ -455,7 +455,7 @@ export function checkFormSubmissionRateLimit(identifier: string): { allowed: boo
   if (!current) {
     // First submission - allow it and record the time
     formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
-    console.log(`✅ Rate limit check passed for ${identifier} - first submission`);
+    // console.log(`✅ Rate limit check passed for ${identifier} - first submission`);
     return { allowed: true };
   }
 
@@ -466,17 +466,17 @@ export function checkFormSubmissionRateLimit(identifier: string): { allowed: boo
     // Rate limited - calculate retry after time in seconds
     const retryAfter = Math.ceil((FORM_SUBMISSION_RATE_LIMIT_WINDOW - timeSinceLastSubmission) / 1000);
     const retryAfterMinutes = Math.ceil(retryAfter / 60);
-    console.warn(
-      `🚫 Rate limit BLOCKED for ${identifier} - Last submission was ${minutesSinceLastSubmission} minute(s) ago. Retry after ${retryAfterMinutes} minute(s) (${retryAfter} seconds)`
-    );
+    // console.warn(
+    //   `🚫 Rate limit BLOCKED for ${identifier} - Last submission was ${minutesSinceLastSubmission} minute(s) ago. Retry after ${retryAfterMinutes} minute(s) (${retryAfter} seconds)`
+    // );
     return { allowed: false, retryAfter };
   }
 
   // Enough time has passed - update last submission time and allow
   formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
-  console.log(
-    `✅ Rate limit check passed for ${identifier} - ${minutesSinceLastSubmission} minute(s) since last submission`
-  );
+  // console.log(
+  //   `✅ Rate limit check passed for ${identifier} - ${minutesSinceLastSubmission} minute(s) since last submission`
+  // );
   return { allowed: true };
 }
 
@@ -955,7 +955,7 @@ export async function sendContactSubmissionEmail(data: {
 
     const info = await transporter.sendMail(mailOptions);
 
-    console.log(`Contact form submission email sent to ${recipientEmail}: ${info.messageId}`);
+    // console.log(`Contact form submission email sent to ${recipientEmail}: ${info.messageId}`);
 
     return {
       success: true,
@@ -1020,7 +1020,7 @@ export async function sendPartnerApplicationEmail(data: {
 
     const info = await transporter.sendMail(mailOptions);
 
-    console.log(`Partner application email sent to ${recipientEmail}: ${info.messageId}`);
+    // console.log(`Partner application email sent to ${recipientEmail}: ${info.messageId}`);
 
     return {
       success: true,

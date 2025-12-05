@@ -163,7 +163,7 @@ export const usePurchaseMembership = () => {
     },
     onMutate: async ({ packageId, userId }) => {
       const actualUserId = userId;
-      console.log("🔥 ONMUTATE TRIGGERED: Membership purchase starting", { packageId });
+      // console.log("🔥 ONMUTATE TRIGGERED: Membership purchase starting", { packageId });
 
       // Cancel outgoing refetches and disable refetch intervals temporarily
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.current });
@@ -189,9 +189,9 @@ export const usePurchaseMembership = () => {
       // Use static data since membership packages are not loaded in React Query cache
       const packages = getOneTimePackages();
       const selectedPackage = packages?.find((pkg) => pkg._id === packageId);
-      console.log("🔍 DEBUG: Membership packages from static data:", packages);
-      console.log("🔍 DEBUG: Looking for packageId:", packageId);
-      console.log("🔍 DEBUG: Selected package found:", selectedPackage);
+      // console.log("🔍 DEBUG: Membership packages from static data:", packages);
+      // console.log("🔍 DEBUG: Looking for packageId:", packageId);
+      // console.log("🔍 DEBUG: Selected package found:", selectedPackage);
 
       if (selectedPackage) {
         // Get active promo from React Query cache
@@ -208,17 +208,17 @@ export const usePurchaseMembership = () => {
           selectedPackage.type === "subscription" ? selectedPackage.entriesPerMonth || 0 : selectedPackage.totalEntries || 0;
         const entryCount = baseEntries * promoMultiplier;
 
-        console.log(`🚀 OPTIMISTIC UPDATE: Adding ${entryCount} entries to major draw`, {
-          baseEntries,
-          promoMultiplier,
-          hasPromo: !!oneTimePromo,
-          finalEntries: entryCount,
-        });
+        // console.log(`🚀 OPTIMISTIC UPDATE: Adding ${entryCount} entries to major draw`, {
+        //   baseEntries,
+        //   promoMultiplier,
+        //   hasPromo: !!oneTimePromo,
+        //   finalEntries: entryCount,
+        // });
 
         // Optimistically update major draw data (useCurrentMajorDraw expects MajorDraw object)
         queryClient.setQueryData(queryKeys.majorDraw.current, (old: unknown) => {
           if (!old || typeof old !== "object") {
-            console.log("❌ No existing major draw data for optimistic update");
+            // console.log("❌ No existing major draw data for optimistic update");
             return old;
           }
           const oldData = old as Record<string, unknown>;
@@ -230,21 +230,21 @@ export const usePurchaseMembership = () => {
             isProcessing: true, // Add processing flag
           };
 
-          console.log(`✅ OPTIMISTIC UPDATE: Updated major draw data:`, {
-            oldTotalEntries: oldData.totalEntries,
-            newTotalEntries: newData.totalEntries,
-            entryCount,
-            isProcessing: true,
-          });
+          // console.log(`✅ OPTIMISTIC UPDATE: Updated major draw data:`, {
+          //   oldTotalEntries: oldData.totalEntries,
+          //   newTotalEntries: newData.totalEntries,
+          //   entryCount,
+          //   isProcessing: true,
+          // });
 
           return newData;
         });
 
         // Optimistically update user stats
-        console.log(
-          "🔍 OPTIMISTIC UPDATE: Updating user stats with query key:",
-          queryKeys.majorDraw.userStats(actualUserId)
-        );
+        // console.log(
+        //   "🔍 OPTIMISTIC UPDATE: Updating user stats with query key:",
+        //   queryKeys.majorDraw.userStats(actualUserId)
+        // );
         queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), (old: unknown) => {
           if (!old || typeof old !== "object") return old;
           const oldData = old as Record<string, unknown>;
@@ -256,11 +256,11 @@ export const usePurchaseMembership = () => {
             isProcessing: true,
             pendingEntries: entryCount,
           };
-          console.log(`✅ OPTIMISTIC UPDATE: Updated user stats:`, {
-            oldTotalEntries: oldData.totalEntries,
-            newTotalEntries: newData.totalEntries,
-            entryCount,
-          });
+          // console.log(`✅ OPTIMISTIC UPDATE: Updated user stats:`, {
+          //   oldTotalEntries: oldData.totalEntries,
+          //   newTotalEntries: newData.totalEntries,
+          //   entryCount,
+          // });
           return newData;
         });
 
@@ -278,11 +278,11 @@ export const usePurchaseMembership = () => {
               isProcessing: true,
             },
           };
-          console.log(`✅ OPTIMISTIC UPDATE: Updated user account:`, {
-            oldAccumulatedEntries: oldUser.accumulatedEntries,
-            newAccumulatedEntries: newData.user.accumulatedEntries,
-            entryCount,
-          });
+          // console.log(`✅ OPTIMISTIC UPDATE: Updated user account:`, {
+          //   oldAccumulatedEntries: oldUser.accumulatedEntries,
+          //   newAccumulatedEntries: newData.user.accumulatedEntries,
+          //   entryCount,
+          // });
           return newData;
         });
       }
@@ -290,7 +290,7 @@ export const usePurchaseMembership = () => {
       return { previousMajorDraw, previousUserStats, previousUserAccount, actualUserId };
     },
     onSuccess: (data, variables, context) => {
-      console.log(`🎉 PAYMENT SUCCESS: Membership purchase completed`);
+      // console.log(`🎉 PAYMENT SUCCESS: Membership purchase completed`);
 
       // Get the actual user ID from context
       const actualUserId = context?.actualUserId || "current-user";
@@ -339,7 +339,7 @@ export const usePurchaseMembership = () => {
 
       // HYBRID APPROACH: Set up webhook validation
       setTimeout(async () => {
-        console.log(`🔄 HYBRID VALIDATION: Checking server data after 3 seconds`);
+        // console.log(`🔄 HYBRID VALIDATION: Checking server data after 3 seconds`);
         try {
           // Fetch fresh data from server to validate optimistic updates
           const [majorDrawResponse, userStatsResponse] = await Promise.all([
@@ -350,12 +350,12 @@ export const usePurchaseMembership = () => {
           // Update cache with server data if different
           if (majorDrawResponse.success) {
             queryClient.setQueryData(queryKeys.majorDraw.current, majorDrawResponse.data.majorDraw);
-            console.log(`✅ HYBRID VALIDATION: Major draw data synced with server`);
+            // console.log(`✅ HYBRID VALIDATION: Major draw data synced with server`);
           }
 
           if (userStatsResponse.success) {
             queryClient.setQueryData(queryKeys.users.account("current-user"), userStatsResponse.data);
-            console.log(`✅ HYBRID VALIDATION: User account data synced with server`);
+            // console.log(`✅ HYBRID VALIDATION: User account data synced with server`);
           }
         } catch (error) {
           console.error(`❌ HYBRID VALIDATION: Failed to sync with server:`, error);

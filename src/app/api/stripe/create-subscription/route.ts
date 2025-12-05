@@ -39,24 +39,24 @@ const createSubscriptionSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔌 Connecting to database...");
+    // console.log("🔌 Connecting to database...");
     await connectDB();
-    console.log("✅ Database connected successfully");
+    // console.log("✅ Database connected successfully");
 
-    console.log("📥 Parsing request body...");
+    // console.log("📥 Parsing request body...");
     const body = await request.json();
-    console.log("📋 Request body received:", { ...body, password: "[HIDDEN]" });
+    // console.log("📋 Request body received:", { ...body, password: "[HIDDEN]" });
 
-    console.log("✅ Validating request data...");
+    // console.log("✅ Validating request data...");
     const validatedData = createSubscriptionSchema.parse(body);
-    console.log("✅ Data validation successful");
+    // console.log("✅ Data validation successful");
 
-    console.log(`🚀 Creating subscription for: ${validatedData.userEmail}`);
+    // console.log(`🚀 Creating subscription for: ${validatedData.userEmail}`);
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: validatedData.userEmail });
     if (existingUser) {
-      console.log(`👤 User already exists, proceeding with subscription: ${existingUser._id}`);
+      // console.log(`👤 User already exists, proceeding with subscription: ${existingUser._id}`);
       // User already exists (registered in step 1), proceed with subscription
     }
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists (from registration)
-    console.log("👤 Checking if user already exists...");
+    // console.log("👤 Checking if user already exists...");
     const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
 
     // Handle payment method creation following Stripe best practices
@@ -106,22 +106,22 @@ export async function POST(request: NextRequest) {
 
     // First, check if we have a registered user with an existing Stripe customer
     if (registeredUser && registeredUser.stripeCustomerId) {
-      console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
+      // console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
       customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
     } else {
       // For guest users or new users, get the customer ID from the payment method
-      console.log("🔍 Retrieving payment method to get customer ID...");
+      // console.log("🔍 Retrieving payment method to get customer ID...");
       try {
         const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
         if (paymentMethod.customer) {
-          console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
+          // console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
           customer = await stripe.customers.retrieve(paymentMethod.customer as string);
-          console.log(`✅ Using customer from payment method: ${customer.id}`);
+          // console.log(`✅ Using customer from payment method: ${customer.id}`);
 
           // Update the customer with proper details if it's a temporary guest customer
           const customerWithMetadata = customer as Stripe.Customer;
           if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
-            console.log("🔄 Updating temporary customer with proper details...");
+            // console.log("🔄 Updating temporary customer with proper details...");
             customer = await stripe.customers.update(customer.id, {
               email: validatedData.userEmail,
               name: `${validatedData.firstName} ${validatedData.lastName}`,
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
                 userId: registeredUser?._id?.toString() || "guest",
               },
             });
-            console.log(`✅ Updated customer details: ${customer.id}`);
+            // console.log(`✅ Updated customer details: ${customer.id}`);
           }
         } else {
           throw new Error("Payment method is not attached to any customer");
@@ -151,12 +151,12 @@ export async function POST(request: NextRequest) {
           default_payment_method: finalPaymentMethodId,
         },
       });
-      console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
+      // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
     }
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
     // This prevents creating duplicate products in Stripe dashboard
-    console.log(`✅ Using existing Stripe Price ID for ${membershipPackage.name}`);
+    // console.log(`✅ Using existing Stripe Price ID for ${membershipPackage.name}`);
 
     if (!membershipPackage.stripePriceId) {
       console.error(`❌ No Stripe Price ID configured for package: ${membershipPackage.name}`);
@@ -170,10 +170,10 @@ export async function POST(request: NextRequest) {
     }
 
     const stripePriceId = membershipPackage.stripePriceId;
-    console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
+    // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
     // Create subscription with payment method
-    console.log("📋 Creating Stripe subscription...");
+    // console.log("📋 Creating Stripe subscription...");
     let subscription;
     try {
       subscription = await stripe.subscriptions.create({
@@ -194,8 +194,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      console.log(`📋 Created subscription: ${subscription.id}`);
-      console.log(`📊 Subscription status: ${subscription.status}`);
+      // console.log(`📋 Created subscription: ${subscription.id}`);
+      // console.log(`📊 Subscription status: ${subscription.status}`);
     } catch (stripeError) {
       console.error("❌ Stripe subscription creation failed:", stripeError);
       throw new Error(
@@ -207,26 +207,26 @@ export async function POST(request: NextRequest) {
     const latestInvoice = subscription.latest_invoice as { payment_intent?: { client_secret?: string } };
     const paymentIntent = latestInvoice?.payment_intent;
 
-    console.log(`📄 Latest invoice:`, latestInvoice ? "Found" : "Not found");
-    console.log(`💳 Payment intent:`, paymentIntent ? "Found" : "Not found");
+    // console.log(`📄 Latest invoice:`, latestInvoice ? "Found" : "Not found");
+    // console.log(`💳 Payment intent:`, paymentIntent ? "Found" : "Not found");
 
     // For incomplete subscriptions, we might not have a payment intent yet
     // This is normal - the payment intent will be created when the customer confirms payment
     let clientSecret = null;
     if (paymentIntent && paymentIntent.client_secret) {
       clientSecret = paymentIntent.client_secret;
-      console.log(`💳 Payment intent status: ${(paymentIntent as PaymentIntentWithStatus).status}`);
+      // console.log(`💳 Payment intent status: ${(paymentIntent as PaymentIntentWithStatus).status}`);
     } else {
-      console.log(`⏳ No payment intent yet - will be created when customer confirms payment`);
+      // console.log(`⏳ No payment intent yet - will be created when customer confirms payment`);
     }
 
     let user;
 
     if (registeredUser) {
       // User already exists (registered in step 1), update their Stripe customer ID, subscription ID and payment method
-      console.log(
-        `🔄 Updating existing user with Stripe customer ID: ${customer.id} and subscription ID: ${subscription.id}`
-      );
+      // console.log(
+      //   `🔄 Updating existing user with Stripe customer ID: ${customer.id} and subscription ID: ${subscription.id}`
+      // );
 
       // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
       const savedPaymentMethodData = {
@@ -260,12 +260,12 @@ export async function POST(request: NextRequest) {
         throw new Error("Failed to update existing user");
       }
 
-      console.log(`✅ Updated existing user: ${user._id}`);
-      console.log(`⏳ Entries/points will be added via webhook upon payment confirmation`);
-      console.log(`📦 Membership will activate: ${membershipPackage.name}`);
+      // console.log(`✅ Updated existing user: ${user._id}`);
+      // console.log(`⏳ Entries/points will be added via webhook upon payment confirmation`);
+      // console.log(`📦 Membership will activate: ${membershipPackage.name}`);
 
       // ✅ Klaviyo integration handled by webhook for reliability and best practices
-      console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
+      // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
     } else {
       // Create new user account but DON'T activate benefits until payment is confirmed
       // Hash password only if provided (for backward compatibility with existing users)
@@ -273,9 +273,9 @@ export async function POST(request: NextRequest) {
 
       // Clean mobile number before saving (remove spaces)
       const cleanedMobile = validatedData.mobile?.replace(/\s+/g, "") || "";
-      console.log(`📱 Mobile number: "${validatedData.mobile}" -> cleaned: "${cleanedMobile}"`);
+      // console.log(`📱 Mobile number: "${validatedData.mobile}" -> cleaned: "${cleanedMobile}"`);
 
-      console.log("👤 Creating user account...");
+      // console.log("👤 Creating user account...");
 
       // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
       const savedPaymentMethodData = {
@@ -314,12 +314,12 @@ export async function POST(request: NextRequest) {
 
       try {
         await user.save();
-        console.log(`✅ Created user account: ${user._id}`);
-        console.log(`⏳ Entries/points will be added via webhook upon payment confirmation`);
-        console.log(`📦 Membership will activate: ${membershipPackage.name}`);
+        // console.log(`✅ Created user account: ${user._id}`);
+        // console.log(`⏳ Entries/points will be added via webhook upon payment confirmation`);
+        // console.log(`📦 Membership will activate: ${membershipPackage.name}`);
 
         // ✅ Klaviyo integration handled by webhook for reliability and best practices
-        console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
+        // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
       } catch (dbError) {
         console.error("❌ Database save failed:", dbError);
         throw new Error(`Failed to save user account: ${dbError instanceof Error ? dbError.message : "Unknown error"}`);

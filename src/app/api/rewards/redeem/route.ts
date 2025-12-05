@@ -17,10 +17,10 @@ async function addToMajorDraw(
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string }
 ): Promise<void> {
   try {
-    console.log(`🎯 Adding major draw entries for redemption:`, {
-      userId,
-      packageData,
-    });
+    // console.log(`🎯 Adding major draw entries for redemption:`, {
+    //   userId,
+    //   packageData,
+    // });
 
     // Find the current active major draw
     const activeMajorDraw = await MajorDraw.findOne({
@@ -29,11 +29,11 @@ async function addToMajorDraw(
     });
 
     if (!activeMajorDraw) {
-      console.log(`⚠️ No active major draw found - skipping major draw entry allocation`);
+      // console.log(`⚠️ No active major draw found - skipping major draw entry allocation`);
       return;
     }
 
-    console.log(`🎯 Adding entries to major draw: ${activeMajorDraw.name} (status: ${activeMajorDraw.status})`);
+    // console.log(`🎯 Adding entries to major draw: ${activeMajorDraw.name} (status: ${activeMajorDraw.status})`);
 
     // Determine source type
     let sourceType: "membership" | "one-time-package" | "upsell" | "mini-draw";
@@ -103,9 +103,9 @@ async function addToMajorDraw(
         activeMajorDraw.entries.reduce((sum: number, entry: { totalEntries: number }) => sum + entry.totalEntries, 0) ||
         0;
 
-      console.log(`🎯 Major draw entries updated for user ${userId} (draw total: ${totalEntries})`);
+      // console.log(`🎯 Major draw entries updated for user ${userId} (draw total: ${totalEntries})`);
     } else {
-      console.log(`🎯 No entries to add to major draw (package has 0 entries)`);
+      // console.log(`🎯 No entries to add to major draw (package has 0 entries)`);
     }
   } catch (error) {
     console.error(`❌ ERROR in addToMajorDraw for redemption:`, error);
@@ -224,11 +224,11 @@ export async function POST(request: NextRequest) {
       let partnerDiscountQueueItem = null;
 
       if ((partnerDiscountDays && partnerDiscountDays > 0) || (partnerDiscountHours && partnerDiscountHours > 0)) {
-        console.log(
-          `🎁 Preparing partner discount queue item for redeemed package: ${partnerDiscountDays || 0} days / ${
-            partnerDiscountHours || 0
-          } hours access`
-        );
+        // console.log(
+        //   `🎁 Preparing partner discount queue item for redeemed package: ${partnerDiscountDays || 0} days / ${
+        //     partnerDiscountHours || 0
+        //   } hours access`
+        // );
 
         // Determine package type based on the package data
         const packageId = (packageInfo as Record<string, unknown>)._id as string;
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
           queuePosition: 0, // Will be set properly by reorderQueue
         };
 
-        console.log(`📦 Created partner discount queue item:`, partnerDiscountQueueItem);
+        // console.log(`📦 Created partner discount queue item:`, partnerDiscountQueueItem);
       }
 
       // Prepare the update operation
@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
           // Call reorderQueue to set proper queue positions
           await reorderQueue(updatedUser);
           await updatedUser.save();
-          console.log(`✅ Partner discount queue positions updated for redeemed package`);
+          // console.log(`✅ Partner discount queue positions updated for redeemed package`);
         }
       }
 

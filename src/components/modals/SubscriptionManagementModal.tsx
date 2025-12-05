@@ -574,7 +574,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
         // TODO: Show setup intent modal or redirect to payment method page
         // For now, just show the message
-        console.log("Setup intent created:", result.data.setupIntent);
+        // console.log("Setup intent created:", result.data.setupIntent);
       } else {
         throw new Error(result.message || "Failed to reactivate subscription");
       }
@@ -602,7 +602,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
   // Handle Stripe payment confirmation for upgrades
   const handleStripePaymentConfirm = async () => {
-    console.log("✅ Payment confirmed, webhook will handle subscription activation");
+    // console.log("✅ Payment confirmed, webhook will handle subscription activation");
 
     // Set flag in localStorage to show enhanced success toast after page reload
     // Include comprehensive upgrade information for the toast
@@ -969,8 +969,17 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             <div className="bg-gray-50 rounded-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-2">No Active Subscription</h2>
               <p className="text-gray-600 mb-4">You don&apos;t have an active subscription to manage.</p>
-              <Button onClick={onClose} variant="primary" className="bg-[#ee0000] hover:bg-red-700">
-                View Membership Plans
+              <Button
+                onClick={() => {
+                  onClose(); // Close SubscriptionManagementModal
+                  const tradiePlan = getTradiePackage(); // Get Tradie package directly
+                  membershipModal.setSelectedPlan(tradiePlan);
+                  membershipModal.openModal(); // Open MembershipModal
+                }}
+                variant="primary"
+                className="mt-4 bg-[#ee0000] hover:bg-red-700"
+              >
+                Subscribe to Membership Packages
               </Button>
             </div>
           </div>

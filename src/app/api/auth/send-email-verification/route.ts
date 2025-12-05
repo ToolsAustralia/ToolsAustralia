@@ -19,13 +19,13 @@ const sendEmailVerificationSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log("Email verification request received");
+    // console.log("Email verification request received");
 
     // Parse and validate request body
     const body = await request.json();
     const validatedData = sendEmailVerificationSchema.parse(body);
 
-    console.log("Request validation successful");
+    // console.log("Request validation successful");
 
     // Check rate limiting
     const rateLimitResult = checkEmailRateLimit(validatedData.email);
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     user.emailVerificationAttempts = 0; // Reset attempts
     await user.save();
 
-    console.log(`Email verification code generated for user: ${user.email}`);
+    // console.log(`Email verification code generated for user: ${user.email}`);
 
     // Send email verification code
     const emailResult = await sendEmailVerificationCode(validatedData.email, verificationCode, user.firstName);
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`Email verification sent successfully to ${validatedData.email}`);
+    // console.log(`Email verification sent successfully to ${validatedData.email}`);
 
     return NextResponse.json({
       success: true,

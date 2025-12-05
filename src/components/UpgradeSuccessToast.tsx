@@ -57,7 +57,7 @@ export default function UpgradeSuccessToast() {
           // Add delay to ensure webhook has finished processing before refetching
           // Webhook needs time to update majorDraw.entries aggregation
           setTimeout(() => {
-            console.log("🔄 Refetching major draw data after webhook processing...");
+            // console.log("🔄 Refetching major draw data after webhook processing...");
 
             // Force refetch of major draw data for accurate entry counts
             queryClient.refetchQueries({ queryKey: queryKeys.majorDraw.current });
@@ -69,10 +69,10 @@ export default function UpgradeSuccessToast() {
               queryClient.refetchQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
             }
 
-            console.log("✅ All data refetched with latest entries from webhook");
+            // console.log("✅ All data refetched with latest entries from webhook");
           }, 2000); // Wait 2 seconds for webhook to complete
 
-          console.log("✅ Upgrade toast displayed, caches will refresh shortly");
+          // console.log("✅ Upgrade toast displayed, caches will refresh shortly");
         }
 
         // Clear the flag after showing the toast
@@ -108,7 +108,7 @@ export default function UpgradeSuccessToast() {
 
           // Force refetch user data to show preserved benefits immediately
           setTimeout(() => {
-            console.log("🔄 Refetching data for downgrade...");
+            // console.log("🔄 Refetching data for downgrade...");
             queryClient.refetchQueries({ queryKey: queryKeys.majorDraw.current });
 
             // Refetch user-specific data if session is available
@@ -118,10 +118,10 @@ export default function UpgradeSuccessToast() {
               queryClient.refetchQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
             }
 
-            console.log("✅ All data refetched for downgrade");
+            // console.log("✅ All data refetched for downgrade");
           }, 1000); // Small delay for data consistency
 
-          console.log("✅ Downgrade toast displayed, caches will refresh shortly");
+          // console.log("✅ Downgrade toast displayed, caches will refresh shortly");
         }
 
         // Clear the flag

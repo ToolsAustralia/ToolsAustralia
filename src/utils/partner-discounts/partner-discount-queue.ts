@@ -62,8 +62,8 @@ export async function addToPartnerDiscountQueue(
     stripePaymentIntentId?: string;
   }
 ): Promise<PartnerDiscountQueueItem> {
-  console.log(`🎯 Adding to partner discount queue for user: ${user.email}`);
-  console.log(`📦 Package: ${packageData.packageName} (${packageData.discountDays} days)`);
+  // console.log(`🎯 Adding to partner discount queue for user: ${user.email}`);
+  // console.log(`📦 Package: ${packageData.packageName} (${packageData.discountDays} days)`);
 
   // Initialize queue if it doesn't exist
   if (!user.partnerDiscountQueue) {
@@ -118,7 +118,7 @@ export async function addToPartnerDiscountQueue(
       queueItem.endDate = user.subscription.endDate;
     }
 
-    console.log(`✅ Subscription activated immediately with priority`);
+    // console.log(`✅ Subscription activated immediately with priority`);
   } else if (hasActiveSubscription || activeQueueItem) {
     // Queue this item behind the active period
     // Find the last item in queue to determine position
@@ -127,11 +127,11 @@ export async function addToPartnerDiscountQueue(
     queueItem.queuePosition = maxQueuePosition + 1;
     queueItem.status = "queued";
 
-    console.log(
-      `📋 Item queued at position ${queueItem.queuePosition} (behind ${
-        hasActiveSubscription ? "active subscription" : "active period"
-      })`
-    );
+    // console.log(
+    //   `📋 Item queued at position ${queueItem.queuePosition} (behind ${
+    //     hasActiveSubscription ? "active subscription" : "active period"
+    //   })`
+    // );
   } else {
     // No active subscription or period - activate immediately
     queueItem.status = "active";
@@ -142,8 +142,8 @@ export async function addToPartnerDiscountQueue(
     endDate.setHours(endDate.getHours() + queueItem.discountHours);
     queueItem.endDate = endDate;
 
-    console.log(`✅ Item activated immediately (no active periods)`);
-    console.log(`⏰ Active until: ${endDate.toISOString()}`);
+    // console.log(`✅ Item activated immediately (no active periods)`);
+    // console.log(`⏰ Active until: ${endDate.toISOString()}`);
   }
 
   // Add to queue
@@ -152,7 +152,7 @@ export async function addToPartnerDiscountQueue(
   // Reorder queue positions to maintain consistency
   await reorderQueue(user);
 
-  console.log(`✅ Partner discount queue updated. Total items: ${user.partnerDiscountQueue.length}`);
+  // console.log(`✅ Partner discount queue updated. Total items: ${user.partnerDiscountQueue.length}`);
 
   return queueItem;
 }
@@ -294,13 +294,13 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
   let hasChanges = false;
   const now = new Date();
 
-  console.log(`🔄 Processing partner discount queue for user: ${user.email}`);
+  // console.log(`🔄 Processing partner discount queue for user: ${user.email}`);
 
   // Step 1: Remove expired queue items (past 12-month purchase date)
   const beforeCount = user.partnerDiscountQueue.length;
   user.partnerDiscountQueue = user.partnerDiscountQueue.filter((item) => {
     if (item.status === "queued" && new Date(item.expiryDate) < now) {
-      console.log(`🗑️ Removing expired queued item: ${item.packageName} (purchased ${item.purchaseDate})`);
+      // console.log(`🗑️ Removing expired queued item: ${item.packageName} (purchased ${item.purchaseDate})`);
       return false;
     }
     return true;
@@ -313,7 +313,7 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
   // Step 2: Mark finished active periods as expired
   user.partnerDiscountQueue.forEach((item) => {
     if (item.status === "active" && item.endDate && new Date(item.endDate) <= now) {
-      console.log(`⏰ Marking active item as expired: ${item.packageName}`);
+      // console.log(`⏰ Marking active item as expired: ${item.packageName}`);
       item.status = "expired";
       hasChanges = true;
     }
@@ -333,7 +333,7 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
       .sort((a, b) => a.queuePosition - b.queuePosition)[0];
 
     if (nextQueued) {
-      console.log(`✅ Activating next queued item: ${nextQueued.packageName}`);
+      // console.log(`✅ Activating next queued item: ${nextQueued.packageName}`);
       nextQueued.status = "active";
       nextQueued.queuePosition = 0;
       nextQueued.startDate = new Date();
@@ -342,7 +342,7 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
       endDate.setHours(endDate.getHours() + nextQueued.discountHours);
       nextQueued.endDate = endDate;
 
-      console.log(`⏰ Active until: ${endDate.toISOString()}`);
+      // console.log(`⏰ Active until: ${endDate.toISOString()}`);
       hasChanges = true;
     }
   }
@@ -370,7 +370,7 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
   }
 
   if (hasChanges) {
-    console.log(`✅ Queue processing complete. Total items: ${user.partnerDiscountQueue.length}`);
+    // console.log(`✅ Queue processing complete. Total items: ${user.partnerDiscountQueue.length}`);
   }
 
   return hasChanges;
@@ -440,12 +440,12 @@ export async function handleSubscriptionQueueUpdate(
   }
 
   if (action === "start" && subscriptionData) {
-    console.log(`🎯 Activating subscription in partner discount queue: ${subscriptionData.packageName}`);
+    // console.log(`🎯 Activating subscription in partner discount queue: ${subscriptionData.packageName}`);
 
     // Pause any active non-subscription items
     user.partnerDiscountQueue.forEach((item) => {
       if (item.status === "active" && item.packageType !== "subscription") {
-        console.log(`⏸️ Pausing active item: ${item.packageName}`);
+        // console.log(`⏸️ Pausing active item: ${item.packageName}`);
         item.status = "queued";
         item.startDate = undefined;
         item.endDate = undefined;
@@ -481,14 +481,14 @@ export async function handleSubscriptionQueueUpdate(
     }
 
     await reorderQueue(user);
-    console.log(`✅ Subscription activated in queue`);
+    // console.log(`✅ Subscription activated in queue`);
   } else if (action === "end") {
-    console.log(`🛑 Ending subscription in partner discount queue`);
+    // console.log(`🛑 Ending subscription in partner discount queue`);
 
     // Mark subscription items as expired
     user.partnerDiscountQueue.forEach((item) => {
       if (item.packageType === "subscription" && item.status === "active") {
-        console.log(`⏰ Marking subscription as expired: ${item.packageName}`);
+        // console.log(`⏰ Marking subscription as expired: ${item.packageName}`);
         item.status = "expired";
       }
     });
@@ -496,7 +496,7 @@ export async function handleSubscriptionQueueUpdate(
     // Process queue to activate next item
     await processPartnerDiscountQueue(user);
 
-    console.log(`✅ Subscription ended in queue, next item activated if available`);
+    // console.log(`✅ Subscription ended in queue, next item activated if available`);
   }
 }
 
@@ -520,7 +520,7 @@ export async function cancelQueueItem(user: IUser, paymentIntentId: string): Pro
     return false;
   }
 
-  console.log(`❌ Cancelling queue item: ${itemToCancel.packageName} (refund)`);
+  // console.log(`❌ Cancelling queue item: ${itemToCancel.packageName} (refund)`);
 
   // Check if this was the active item before cancelling
   const wasActive = itemToCancel.queuePosition === 0 && itemToCancel.status === "active";

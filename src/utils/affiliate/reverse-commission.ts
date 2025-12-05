@@ -21,10 +21,10 @@ export async function reverseAffiliateCommissions(
   paymentIntentId: string,
   userId?: string
 ): Promise<{ success: boolean; reversed: number; alreadyPaid: number; error?: string }> {
-  console.log(`🔄 reverseAffiliateCommissions called:`, {
-    paymentIntentId,
-    userId,
-  });
+  // console.log(`🔄 reverseAffiliateCommissions called:`, {
+  //   paymentIntentId,
+  //   userId,
+  // });
 
   try {
     await connectDB();
@@ -44,7 +44,7 @@ export async function reverseAffiliateCommissions(
     const commissions = await AffiliateCommission.find(query);
 
     if (commissions.length === 0) {
-      console.log(`⚠️ No affiliate commissions found for payment intent: ${paymentIntentId}`);
+      // console.log(`⚠️ No affiliate commissions found for payment intent: ${paymentIntentId}`);
       return {
         success: true,
         reversed: 0,
@@ -52,7 +52,7 @@ export async function reverseAffiliateCommissions(
       };
     }
 
-    console.log(`📋 Found ${commissions.length} commission(s) to reverse`);
+    // console.log(`📋 Found ${commissions.length} commission(s) to reverse`);
 
     let reversedCount = 0;
     let alreadyPaidCount = 0;
@@ -61,17 +61,17 @@ export async function reverseAffiliateCommissions(
     for (const commission of commissions) {
       // Check if commission was already paid out
       if (commission.status === "paid") {
-        console.warn(`⚠️ Commission ${commission._id} was already paid out - cannot reverse automatically`);
-        console.warn(
-          `   Amount: $${(commission.commissionAmount / 100).toFixed(2)}, Payout ID: ${commission.payoutId}`
-        );
+        // console.warn(`⚠️ Commission ${commission._id} was already paid out - cannot reverse automatically`);
+        // console.warn(
+        //   `   Amount: $${(commission.commissionAmount / 100).toFixed(2)}, Payout ID: ${commission.payoutId}`
+        // );
         alreadyPaidCount++;
         continue; // Skip paid commissions - they require manual intervention
       }
 
       // Check if commission was already cancelled
       if (commission.status === "cancelled") {
-        console.log(`✅ Commission ${commission._id} already cancelled - skipping`);
+        // console.log(`✅ Commission ${commission._id} already cancelled - skipping`);
         continue;
       }
 
@@ -79,7 +79,7 @@ export async function reverseAffiliateCommissions(
       commission.status = "cancelled";
       await commission.save();
 
-      console.log(`✅ Reversed commission ${commission._id} (${commission.commissionType})`);
+      // console.log(`✅ Reversed commission ${commission._id} (${commission.commissionType})`);
 
       // Update affiliate totals (subtract from totals)
       await Affiliate.findByIdAndUpdate(commission.affiliateId, {
@@ -89,18 +89,18 @@ export async function reverseAffiliateCommissions(
         },
       });
 
-      console.log(`✅ Updated affiliate totals (subtracted $${(commission.commissionAmount / 100).toFixed(2)})`);
+      // console.log(`✅ Updated affiliate totals (subtracted $${(commission.commissionAmount / 100).toFixed(2)})`);
 
       reversedCount++;
     }
 
     // Log warning if any commissions were already paid
     if (alreadyPaidCount > 0) {
-      console.warn(`⚠️ ${alreadyPaidCount} commission(s) were already paid out and require manual reversal`);
-      console.warn(`   Please review and manually adjust affiliate payouts if needed`);
+      // console.warn(`⚠️ ${alreadyPaidCount} commission(s) were already paid out and require manual reversal`);
+      // console.warn(`   Please review and manually adjust affiliate payouts if needed`);
     }
 
-    console.log(`✅ Commission reversal complete: ${reversedCount} reversed, ${alreadyPaidCount} already paid`);
+    // console.log(`✅ Commission reversal complete: ${reversedCount} reversed, ${alreadyPaidCount} already paid`);
 
     return {
       success: true,

@@ -58,7 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
-    console.log(`🔧 Admin action: ${action} on user ${userId} by admin ${session.user.id}`);
+    // console.log(`🔧 Admin action: ${action} on user ${userId} by admin ${session.user.id}`);
 
     // Find the user
     const user = await User.findById(userId);
@@ -108,12 +108,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Log admin action (you might want to create an AdminActionLog model)
-    console.log(`✅ Admin action completed: ${action}`, {
-      adminId: session.user.id,
-      userId,
-      userEmail: user.email,
-      result: result.success,
-    });
+    // console.log(`✅ Admin action completed: ${action}`, {
+    //   adminId: session.user.id,
+    //   userId,
+    //   userEmail: user.email,
+    //   result: result.success,
+    // });
 
     return NextResponse.json({
       success: true,
@@ -151,7 +151,7 @@ async function handleResendVerification(user: any) {
 
     // Send verification email
     // TODO: Implement email sending functionality
-    console.log(`Would send verification email to ${user.email} with code: ${verificationCode}`);
+    // console.log(`Would send verification email to ${user.email} with code: ${verificationCode}`);
     // await sendEmail({
     //   to: user.email,
     //   subject: "Verify Your Email - Tools Australia",
@@ -197,7 +197,7 @@ async function handleResetPassword(user: any) {
     const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
 
     // TODO: Implement email sending functionality
-    console.log(`Would send password reset email to ${user.email} with URL: ${resetUrl}`);
+    // console.log(`Would send password reset email to ${user.email} with URL: ${resetUrl}`);
     // await sendEmail({
     //   to: user.email,
     //   subject: "Password Reset Request - Tools Australia",
@@ -236,7 +236,7 @@ async function handleToggleStatus(user: any, reason?: string) {
 
     // Send notification email to user
     // TODO: Implement email sending functionality
-    console.log(`Would send ${newStatus ? "reactivation" : "deactivation"} email to ${user.email}`);
+    // console.log(`Would send ${newStatus ? "reactivation" : "deactivation"} email to ${user.email}`);
     // if (newStatus) {
     //   await sendEmail({
     //     to: user.email,
@@ -339,7 +339,7 @@ async function handleResendSMSVerification(user: any) {
 
     // Send SMS
     // TODO: Implement SMS sending functionality
-    console.log(`Would send SMS to ${user.mobile} with code: ${otpCode}`);
+    // console.log(`Would send SMS to ${user.mobile} with code: ${otpCode}`);
     // await sendSMS({
     //   to: user.mobile,
     //   message: `Your Tools Australia verification code is: ${otpCode}. This code expires in 10 minutes.`,

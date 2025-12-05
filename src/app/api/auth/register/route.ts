@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = registerSchema.parse(body);
 
-    console.log(`🔄 Attempting to register user: ${validatedData.email}`);
+    // console.log(`🔄 Attempting to register user: ${validatedData.email}`);
 
     // Clean mobile number
     const cleanedMobile = validatedData.mobile.replace(/\s+/g, "");
@@ -71,9 +71,9 @@ export async function POST(request: NextRequest) {
     // ✅ CRITICAL: Check for converted accounts first (security priority)
     // If email belongs to a converted account, reject immediately
     if (existingUserByEmail && !isPlainAccount(existingUserByEmail)) {
-      console.log(
-        `🚫 Email belongs to converted account (${existingUserByEmail.accumulatedEntries} entries) - cannot register: ${existingUserByEmail._id}`
-      );
+      // console.log(
+      //   `🚫 Email belongs to converted account (${existingUserByEmail.accumulatedEntries} entries) - cannot register: ${existingUserByEmail._id}`
+      // );
       return NextResponse.json(
         {
           success: false,
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
 
     // If mobile belongs to a converted account, reject immediately
     if (existingUserByMobile && !isPlainAccount(existingUserByMobile)) {
-      console.log(
-        `🚫 Mobile belongs to converted account (${existingUserByMobile.accumulatedEntries} entries) - cannot register: ${existingUserByMobile._id}`
-      );
+      // console.log(
+      //   `🚫 Mobile belongs to converted account (${existingUserByMobile.accumulatedEntries} entries) - cannot register: ${existingUserByMobile._id}`
+      // );
       return NextResponse.json(
         {
           success: false,
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
         const existingUser = existingUserByEmail;
         if (isPlainAccount(existingUser)) {
           // Plain account (no entries = no purchases/participation) - safe to update
-          console.log(`🔄 Updating plain account: ${existingUser._id} (no accumulated entries)`);
+          // console.log(`🔄 Updating plain account: ${existingUser._id} (no accumulated entries)`);
 
           // Update account details with new registration data
           existingUser.firstName = validatedData.firstName.trim();
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
                 userId: existingUser._id.toString(),
                 userEmail: existingUser.email,
               });
-              console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
+              // console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
               // Refresh user to get updated affiliate data
               await existingUser.save();
               const refreshedUser = await User.findById(existingUser._id);
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
 
           await existingUser.save();
 
-          console.log(`✅ Plain account updated successfully: ${existingUser._id}`);
+          // console.log(`✅ Plain account updated successfully: ${existingUser._id}`);
 
           // Track registration update in Klaviyo (non-blocking)
           klaviyo.trackEventBackground(createUserRegisteredEvent(existingUser, "email"));
@@ -196,13 +196,13 @@ export async function POST(request: NextRequest) {
 
             const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
             if (apiSuccess) {
-              console.log(
-                `📘 Facebook Conversions API: Registration update tracked for ${existingUser.email} (EventID: ${eventID})`
-              );
+              // console.log(
+              //   `📘 Facebook Conversions API: Registration update tracked for ${existingUser.email} (EventID: ${eventID})`
+              // );
             } else {
-              console.warn(
-                `⚠️ Facebook Conversions API: Failed to send CompleteRegistration event for update (EventID: ${eventID})`
-              );
+              // console.warn(
+              //   `⚠️ Facebook Conversions API: Failed to send CompleteRegistration event for update (EventID: ${eventID})`
+              // );
             }
           } catch (pixelError) {
             console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
@@ -228,9 +228,9 @@ export async function POST(request: NextRequest) {
       } else {
         // ✅ CRITICAL: Different users - email matches one account, mobile matches another
         // This is a conflict - we cannot allow this as it would create duplicate data
-        console.log(
-          `🚫 Conflict detected: Email matches user ${existingUserByEmail._id}, Mobile matches different user ${existingUserByMobile._id}`
-        );
+        // console.log(
+        //   `🚫 Conflict detected: Email matches user ${existingUserByEmail._id}, Mobile matches different user ${existingUserByMobile._id}`
+        // );
         return NextResponse.json(
           {
             success: false,
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
     // If only email matches a plain account, update it
     if (existingUserByEmail && isPlainAccount(existingUserByEmail)) {
       const existingUser = existingUserByEmail;
-      console.log(`🔄 Updating plain account (email match): ${existingUser._id} (no accumulated entries)`);
+      // console.log(`🔄 Updating plain account (email match): ${existingUser._id} (no accumulated entries)`);
 
       // Update account details
       existingUser.firstName = validatedData.firstName.trim();
@@ -266,7 +266,7 @@ export async function POST(request: NextRequest) {
             userId: existingUser._id.toString(),
             userEmail: existingUser.email,
           });
-          console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
+          // console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
           await existingUser.save();
           const refreshedUser = await User.findById(existingUser._id);
           if (refreshedUser) {
@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
       }
 
       await existingUser.save();
-      console.log(`✅ Plain account updated successfully (email match): ${existingUser._id}`);
+      // console.log(`✅ Plain account updated successfully (email match): ${existingUser._id}`);
 
       // Track events
       klaviyo.trackEventBackground(createUserRegisteredEvent(existingUser, "email"));
@@ -335,7 +335,7 @@ export async function POST(request: NextRequest) {
     // If only mobile matches a plain account, update it
     if (existingUserByMobile && isPlainAccount(existingUserByMobile)) {
       const existingUser = existingUserByMobile;
-      console.log(`🔄 Updating plain account (mobile match): ${existingUser._id} (no accumulated entries)`);
+      // console.log(`🔄 Updating plain account (mobile match): ${existingUser._id} (no accumulated entries)`);
 
       // Update account details
       existingUser.firstName = validatedData.firstName.trim();
@@ -354,7 +354,7 @@ export async function POST(request: NextRequest) {
             userId: existingUser._id.toString(),
             userEmail: existingUser.email,
           });
-          console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
+          // console.log(`✅ Affiliate signup tracked for updated account: ${validatedData.affiliateCode}`);
           await existingUser.save();
           const refreshedUser = await User.findById(existingUser._id);
           if (refreshedUser) {
@@ -366,7 +366,7 @@ export async function POST(request: NextRequest) {
       }
 
       await existingUser.save();
-      console.log(`✅ Plain account updated successfully (mobile match): ${existingUser._id}`);
+      // console.log(`✅ Plain account updated successfully (mobile match): ${existingUser._id}`);
 
       // Track events
       klaviyo.trackEventBackground(createUserRegisteredEvent(existingUser, "email"));
@@ -462,10 +462,10 @@ export async function POST(request: NextRequest) {
     });
 
     await newUser.save();
-    console.log(`✅ User registered successfully: ${newUser._id}`, {
-      profileSetupCompleted: newUser.profileSetupCompleted,
-      needsSetup: !newUser.profileSetupCompleted,
-    });
+    // console.log(`✅ User registered successfully: ${newUser._id}`, {
+    //   profileSetupCompleted: newUser.profileSetupCompleted,
+    //   needsSetup: !newUser.profileSetupCompleted,
+    // });
 
     // Track affiliate signup if affiliate code is provided (non-blocking)
     if (validatedData.affiliateCode) {
@@ -475,7 +475,7 @@ export async function POST(request: NextRequest) {
           userId: newUser._id.toString(),
           userEmail: newUser.email,
         });
-        console.log(`✅ Affiliate signup tracked: ${validatedData.affiliateCode}`);
+        // console.log(`✅ Affiliate signup tracked: ${validatedData.affiliateCode}`);
       } catch (affiliateError) {
         // Non-blocking - log but don't fail registration
         console.error("Affiliate tracking error:", affiliateError);
@@ -575,9 +575,9 @@ export async function POST(request: NextRequest) {
 
         const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
         if (apiSuccess) {
-          console.log(`📘 Facebook Conversions API: Registration tracked for ${newUser.email} (EventID: ${eventID})`);
+          // console.log(`📘 Facebook Conversions API: Registration tracked for ${newUser.email} (EventID: ${eventID})`);
         } else {
-          console.warn(`⚠️ Facebook Conversions API: Failed to send CompleteRegistration event (EventID: ${eventID})`);
+          // console.warn(`⚠️ Facebook Conversions API: Failed to send CompleteRegistration event (EventID: ${eventID})`);
         }
       } catch (apiError) {
         console.error("❌ Error sending CompleteRegistration to Facebook Conversions API:", apiError);

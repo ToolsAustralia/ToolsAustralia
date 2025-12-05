@@ -69,7 +69,7 @@ export function extractUTMParams(urlOrParams: string | URLSearchParams): UTMPara
   } catch (error) {
     // Return empty object on error (graceful degradation)
     if (process.env.NODE_ENV === "development") {
-      console.warn("Error extracting UTM parameters:", error);
+      // console.warn("Error extracting UTM parameters:", error);
     }
     return {};
   }

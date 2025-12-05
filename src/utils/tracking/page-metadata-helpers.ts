@@ -105,7 +105,7 @@ export function extractPageMetadata(pathname: string, url?: string): PageMetadat
   } catch (error) {
     // Return safe defaults on error
     if (process.env.NODE_ENV === "development") {
-      console.warn("Error extracting page metadata:", error);
+      // console.warn("Error extracting page metadata:", error);
     }
     return {
       page_type: "unknown",

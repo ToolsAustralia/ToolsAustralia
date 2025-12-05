@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("🎯 Creating new major draw...");
+    // console.log("🎯 Creating new major draw...");
 
     // Parse and validate request body
     const body = await request.json();
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     // ========================================
     // MONTHLY RESTRICTION VALIDATION
     // ========================================
-    console.log(`🔍 Checking for existing draws in ${targetYear}-${targetMonth + 1}...`);
+    // console.log(`🔍 Checking for existing draws in ${targetYear}-${targetMonth + 1}...`);
 
     const existingDraw = await MajorDraw.findOne({
       drawDate: {
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingDraw) {
-      console.log(`❌ Draw conflict found: ${existingDraw.name} (${existingDraw._id})`);
+      // console.log(`❌ Draw conflict found: ${existingDraw.name} (${existingDraw._id})`);
       return NextResponse.json(
         {
           success: false,
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
 
     await newMajorDraw.save();
 
-    console.log(`✅ Major draw created successfully: ${newMajorDraw.name} (ID: ${newMajorDraw._id})`);
+    // console.log(`✅ Major draw created successfully: ${newMajorDraw.name} (ID: ${newMajorDraw._id})`);
 
     return NextResponse.json({
       success: true,

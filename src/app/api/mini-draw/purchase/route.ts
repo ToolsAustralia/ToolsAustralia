@@ -43,7 +43,7 @@ const miniDrawPurchaseSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log("🎯 Mini draw purchase request received");
+    // console.log("🎯 Mini draw purchase request received");
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = miniDrawPurchaseSchema.parse(body);
 
-    console.log("✅ Request validation successful:", validatedData);
+    // console.log("✅ Request validation successful:", validatedData);
 
     // Get user session
     const session = await getServerSession(authOptions);
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     // Create or retrieve Stripe customer ID
     let stripeCustomerId = user.stripeCustomerId;
     if (!stripeCustomerId) {
-      console.log("👤 Creating new Stripe customer for mini draw purchase");
+      // console.log("👤 Creating new Stripe customer for mini draw purchase");
       try {
         const customer = await stripe.customers.create({
           email: user.email,
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
         // Update user with Stripe customer ID
         user.stripeCustomerId = stripeCustomerId;
         await user.save();
-        console.log(`✅ Created and saved Stripe customer: ${stripeCustomerId}`);
+        // console.log(`✅ Created and saved Stripe customer: ${stripeCustomerId}`);
       } catch (stripeError) {
         console.error("❌ Stripe customer creation failed:", stripeError);
         return NextResponse.json(
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      console.log(`👤 Using existing Stripe customer: ${stripeCustomerId}`);
+      // console.log(`👤 Using existing Stripe customer: ${stripeCustomerId}`);
     }
 
     // Validate MiniDraw exists and is accepting entries
@@ -188,24 +188,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("📦 Processing mini draw package:", miniDrawPackage.name);
-    console.log("🎲 For MiniDraw:", miniDraw.name, `(${validatedData.miniDrawId})`);
-    console.log("🔍 User details:", {
-      userId: user._id,
-      stripeCustomerId: user.stripeCustomerId,
-      hasStripeCustomerId: !!user.stripeCustomerId,
-    });
-    console.log("🔍 Payment details:", {
-      useDefaultPayment: validatedData.useDefaultPayment,
-      paymentMethodId: validatedData.paymentMethodId,
-    });
+    // console.log("📦 Processing mini draw package:", miniDrawPackage.name);
+    // console.log("🎲 For MiniDraw:", miniDraw.name, `(${validatedData.miniDrawId})`);
+    // console.log("🔍 User details:", {
+    //   userId: user._id,
+    //   stripeCustomerId: user.stripeCustomerId,
+    //   hasStripeCustomerId: !!user.stripeCustomerId,
+    // });
+    // console.log("🔍 Payment details:", {
+    //   useDefaultPayment: validatedData.useDefaultPayment,
+    //   paymentMethodId: validatedData.paymentMethodId,
+    // });
 
     // Handle payment method and create payment intent
     if (validatedData.useDefaultPayment && validatedData.paymentMethodId) {
       if (!user.stripeCustomerId) {
         throw new Error("No Stripe customer ID found for user");
       }
-      console.log("🚀 Calling handleOneClickPurchase");
+      // console.log("🚀 Calling handleOneClickPurchase");
       return await handleOneClickPurchase(
         user as unknown as Parameters<typeof handleOneClickPurchase>[0],
         miniDrawPackage,
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
       if (!user.stripeCustomerId) {
         throw new Error("No Stripe customer ID found for user");
       }
-      console.log("🚀 Calling handlePaymentIntentCreation");
+      // console.log("🚀 Calling handlePaymentIntentCreation");
       return await handlePaymentIntentCreation(
         user,
         miniDrawPackage,
@@ -275,15 +275,15 @@ async function handleOneClickPurchase(
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
 ) {
   try {
-    console.log("🎯 handleOneClickPurchase called with:", {
-      userId: user._id,
-      packageName: miniDrawPackage.name,
-      packagePrice: miniDrawPackage.price,
-      paymentMethodId,
-    });
+    // console.log("🎯 handleOneClickPurchase called with:", {
+    //   userId: user._id,
+    //   packageName: miniDrawPackage.name,
+    //   packagePrice: miniDrawPackage.price,
+    //   paymentMethodId,
+    // });
 
     if (!paymentMethodId) {
-      console.log("❌ No payment method ID provided");
+      // console.log("❌ No payment method ID provided");
       return NextResponse.json(
         {
           success: false,
@@ -298,7 +298,7 @@ async function handleOneClickPurchase(
 
     // For development OR reuse prevention - create new payment method
     if (paymentMethodId === "pm_card_visa" || !paymentMethodId.startsWith("pm_")) {
-      console.log(`🔄 Creating fresh payment method for mini draw (reuse pattern)`);
+      // console.log(`🔄 Creating fresh payment method for mini draw (reuse pattern)`);
 
       try {
         // Create a new test/card payment method for this customer
@@ -321,7 +321,7 @@ async function handleOneClickPurchase(
         }
 
         finalPaymentMethodId = newPaymentMethod.id;
-        console.log(`✅ Created and attached NEW payment method: ${finalPaymentMethodId}`);
+        // console.log(`✅ Created and attached NEW payment method: ${finalPaymentMethodId}`);
       } catch (error) {
         console.error(`❌ Failed to create payment method:`, error);
         return NextResponse.json(
@@ -343,12 +343,12 @@ async function handleOneClickPurchase(
           await stripe.paymentMethods.attach(paymentMethodId, {
             customer: user.stripeCustomerId!,
           });
-          console.log(`✅ Reusing payment method attached to customer: ${paymentMethodId}`);
+          // console.log(`✅ Reusing payment method attached to customer: ${paymentMethodId}`);
         } else if (existingPaymentMethod.customer === user.stripeCustomerId) {
-          console.log(`✅ Payment method already attached to our customer: ${paymentMethodId}`);
+          // console.log(`✅ Payment method already attached to our customer: ${paymentMethodId}`);
         } else {
           // Payment method belongs to someone else - create new one instead of failing
-          console.log(`🔄 Payment method belongs to another customer. Creating new one...`);
+          // console.log(`🔄 Payment method belongs to another customer. Creating new one...`);
 
           const newPaymentMethod = await stripe.paymentMethods.create({
             type: "card",
@@ -360,7 +360,7 @@ async function handleOneClickPurchase(
           });
 
           finalPaymentMethodId = newPaymentMethod.id;
-          console.log(`✅ Created replacement payment method: ${finalPaymentMethodId}`);
+          // console.log(`✅ Created replacement payment method: ${finalPaymentMethodId}`);
         }
       } catch (stripeError: unknown) {
         console.error(`❌ Cannot reuse payment method, creating new one:`, stripeError);
@@ -377,7 +377,7 @@ async function handleOneClickPurchase(
           });
 
           finalPaymentMethodId = fallbackPaymentMethod.id;
-          console.log(`✅ Created fallback payment method: ${finalPaymentMethodId}`);
+          // console.log(`✅ Created fallback payment method: ${finalPaymentMethodId}`);
         } catch (fallbackError) {
           console.error(`❌ Fallback payment method creation failed:`, fallbackError);
           return NextResponse.json(
@@ -395,12 +395,12 @@ async function handleOneClickPurchase(
     // Create payment intent with automatic confirmation
     let paymentIntent;
     try {
-      console.log("💳 Creating payment intent with:", {
-        amount: Math.round(miniDrawPackage.price * 100),
-        currency: "aud",
-        customer: user.stripeCustomerId,
-        payment_method: finalPaymentMethodId,
-      });
+      // console.log("💳 Creating payment intent with:", {
+      //   amount: Math.round(miniDrawPackage.price * 100),
+      //   currency: "aud",
+      //   customer: user.stripeCustomerId,
+      //   payment_method: finalPaymentMethodId,
+      // });
 
       // ✅ FIXED: Match working flow pattern from create-one-time-purchase-existing-user
       // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
@@ -433,10 +433,10 @@ async function handleOneClickPurchase(
         },
       });
 
-      console.log("✅ Payment intent created successfully:", {
-        id: paymentIntent.id,
-        status: paymentIntent.status,
-      });
+      // console.log("✅ Payment intent created successfully:", {
+      //   id: paymentIntent.id,
+      //   status: paymentIntent.status,
+      // });
     } catch (stripeError) {
       console.error("❌ Stripe payment intent creation failed:", stripeError);
       return NextResponse.json(
@@ -451,7 +451,7 @@ async function handleOneClickPurchase(
 
     // ✅ CRITICAL: Handle different payment statuses and wait for settlement
     if (paymentIntent.status === "succeeded") {
-      console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
+      // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
 
       // Wait for payment to be fully settled (not just authorized)
       await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
@@ -460,11 +460,11 @@ async function handleOneClickPurchase(
       const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
 
       if (verifiedPaymentIntent.status === "succeeded") {
-        console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
+        // console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
 
         // ✅ CRITICAL: Don't call handleMiniDrawPaymentSuccess - webhook handles all benefit processing
         // This ensures single source of truth and prevents duplicate processing
-        console.log(`📋 Benefits will be processed via webhook shortly`);
+        // console.log(`📋 Benefits will be processed via webhook shortly`);
 
         // Return success with payment intent info - frontend will wait for webhook confirmation
         return NextResponse.json({
@@ -496,20 +496,20 @@ async function handleOneClickPurchase(
       }
     } else if (paymentIntent.status === "requires_action") {
       // Payment requires 3D Secure or other authentication
-      console.log(`⏳ Payment requires action (3D Secure), waiting for completion...`);
+      // console.log(`⏳ Payment requires action (3D Secure), waiting for completion...`);
 
       // Wait for payment to complete after authentication
       await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
 
       // Re-fetch payment intent to check final status
       const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      console.log(`🔍 Final payment status after requires_action: ${finalPaymentIntent.status}`);
+      // console.log(`🔍 Final payment status after requires_action: ${finalPaymentIntent.status}`);
 
       if (finalPaymentIntent.status === "succeeded") {
-        console.log(`✅ Payment completed successfully after authentication - benefits will be processed by webhook`);
+        // console.log(`✅ Payment completed successfully after authentication - benefits will be processed by webhook`);
 
         // ✅ CRITICAL: Don't call handleMiniDrawPaymentSuccess - webhook handles all benefit processing
-        console.log(`📋 Benefits will be processed via webhook shortly`);
+        // console.log(`📋 Benefits will be processed via webhook shortly`);
 
         // Return success with payment intent info - frontend will wait for webhook confirmation
         return NextResponse.json({
@@ -543,20 +543,20 @@ async function handleOneClickPurchase(
       }
     } else if (paymentIntent.status === "processing") {
       // Payment is processing (async payment methods like bank transfers)
-      console.log(`⏳ Payment is processing, waiting for completion...`);
+      // console.log(`⏳ Payment is processing, waiting for completion...`);
 
       // Wait longer for async payment to complete
       await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
 
       // Re-fetch payment intent to check final status
       const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      console.log(`🔍 Final payment status after processing: ${finalPaymentIntent.status}`);
+      // console.log(`🔍 Final payment status after processing: ${finalPaymentIntent.status}`);
 
       if (finalPaymentIntent.status === "succeeded") {
-        console.log(`✅ Payment completed successfully after processing - benefits will be processed by webhook`);
+        // console.log(`✅ Payment completed successfully after processing - benefits will be processed by webhook`);
 
         // ✅ CRITICAL: Don't call handleMiniDrawPaymentSuccess - webhook handles all benefit processing
-        console.log(`📋 Benefits will be processed via webhook shortly`);
+        // console.log(`📋 Benefits will be processed via webhook shortly`);
 
         // Return success with payment intent info - frontend will wait for webhook confirmation
         return NextResponse.json({
@@ -588,7 +588,7 @@ async function handleOneClickPurchase(
       }
     } else if (paymentIntent.status === "requires_payment_method") {
       // Payment method was invalid or not properly attached
-      console.error(`❌ Payment requires payment method - payment method may not be valid or attached`);
+      // console.error(`❌ Payment requires payment method - payment method may not be valid or attached`);
       return NextResponse.json(
         {
           success: false,
@@ -611,10 +611,10 @@ async function handleOneClickPurchase(
     }
   } catch (error) {
     console.error("❌ One-click purchase error:", error);
-    console.error("❌ Error details:", {
-      message: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    // console.error("❌ Error details:", {
+    //   message: error instanceof Error ? error.message : "Unknown error",
+    //   stack: error instanceof Error ? error.stack : undefined,
+    // });
     return NextResponse.json(
       {
         success: false,

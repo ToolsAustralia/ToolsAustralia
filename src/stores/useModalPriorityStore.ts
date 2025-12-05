@@ -72,18 +72,18 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
       requestModal: (modalType: ModalType, force: boolean = false, data?: ModalData) => {
         const { canShowModal, activeModal, modalQueue } = get();
 
-        console.log(`🎭 Modal request: ${modalType}`, { force, activeModal, queue: modalQueue });
+        // console.log(`🎭 Modal request: ${modalType}`, { force, activeModal, queue: modalQueue });
 
         // Check if modal can be shown
         if (!force && !canShowModal(modalType)) {
-          console.log(`🚫 Modal ${modalType} cannot be shown`);
+          // console.log(`🚫 Modal ${modalType} cannot be shown`);
           return false;
         }
 
         // If no active modal, show immediately
         if (!activeModal) {
           set({ activeModal: modalType, activeModalData: data || null }, false, `modalPriority/show${modalType}`);
-          console.log(`✅ Modal ${modalType} shown immediately`);
+          // console.log(`✅ Modal ${modalType} shown immediately`);
           return true;
         }
 
@@ -105,14 +105,14 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
             `modalPriority/replace${modalType}`
           );
 
-          console.log(`🔄 Higher priority modal ${modalType} replacing ${activeModal}`);
+          // console.log(`🔄 Higher priority modal ${modalType} replacing ${activeModal}`);
           return true;
         } else {
           // Lower or equal priority - add to queue
           const modalInQueue = modalQueue.find((item) => item.type === modalType);
           if (!modalInQueue) {
             set({ modalQueue: [...modalQueue, { type: modalType, data }] }, false, `modalPriority/queue${modalType}`);
-            console.log(`📋 Modal ${modalType} added to queue`);
+            // console.log(`📋 Modal ${modalType} added to queue`);
           }
           return false;
         }
@@ -137,11 +137,11 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
             `modalPriority/showNext${nextModal.type}`
           );
 
-          console.log(`➡️ Showing next modal: ${nextModal.type}`);
+          // console.log(`➡️ Showing next modal: ${nextModal.type}`);
         } else {
           // No more modals in queue
           set({ activeModal: null, activeModalData: null }, false, "modalPriority/closeAll");
-          console.log(`✅ All modals closed`);
+          // console.log(`✅ All modals closed`);
         }
       },
 
@@ -151,7 +151,7 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
 
         // Check if modal should only show once per session
         if (SESSION_ONCE_MODALS.has(modalType) && sessionShownModals.has(modalType)) {
-          console.log(`🚫 Modal ${modalType} already shown this session`);
+          // console.log(`🚫 Modal ${modalType} already shown this session`);
           return false;
         }
 
@@ -165,7 +165,7 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
         newShownModals.add(modalType);
 
         set({ sessionShownModals: newShownModals }, false, `modalPriority/markShown${modalType}`);
-        console.log(`📝 Modal ${modalType} marked as shown this session`);
+        // console.log(`📝 Modal ${modalType} marked as shown this session`);
       },
 
       // Clear session tracking (for testing or new sessions)
@@ -182,7 +182,7 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
           false,
           "modalPriority/clearSession"
         );
-        console.log(`🔄 Modal session cleared`);
+        // console.log(`🔄 Modal session cleared`);
       },
 
       // Clear specific modal from session tracking
@@ -192,7 +192,7 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
         newShownModals.delete(modalType);
 
         set({ sessionShownModals: newShownModals }, false, `modalPriority/clearModal${modalType}`);
-        console.log(`🔄 Modal ${modalType} cleared from session tracking`);
+        // console.log(`🔄 Modal ${modalType} cleared from session tracking`);
       },
 
       // Get next modal in queue
@@ -217,7 +217,7 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
           false,
           "modalPriority/setPendingUpsellAfterSetup"
         );
-        console.log(`🎯 Pending upsell after setup: ${pending}`, data ? "with data" : "no data");
+        // console.log(`🎯 Pending upsell after setup: ${pending}`, data ? "with data" : "no data");
 
         // CRITICAL: Immediately persist to sessionStorage to survive page navigation
         // This fixes the tab-switching bug by ensuring data is ALWAYS available
@@ -226,11 +226,11 @@ export const useModalPriorityStore = create<ModalPriorityState>()(
             if (pending && data) {
               sessionStorage.setItem("pendingUpsell", JSON.stringify(data));
               sessionStorage.setItem("pendingUpsellFlag", "true");
-              console.log("💾 Saved pending upsell to sessionStorage for immediate availability");
+              // console.log("💾 Saved pending upsell to sessionStorage for immediate availability");
             } else {
               sessionStorage.removeItem("pendingUpsell");
               sessionStorage.removeItem("pendingUpsellFlag");
-              console.log("🗑️ Cleared pending upsell from sessionStorage");
+              // console.log("🗑️ Cleared pending upsell from sessionStorage");
             }
           } catch (error) {
             console.error("Failed to save pending upsell:", error);
@@ -261,7 +261,7 @@ export const initializeModalSession = () => {
         markModalShown(modalType);
       });
 
-      console.log(`🔄 Restored modal session: ${shownModals.join(", ")}`);
+      // console.log(`🔄 Restored modal session: ${shownModals.join(", ")}`);
     }
 
     // CRITICAL: Restore pending upsell from sessionStorage
@@ -276,7 +276,7 @@ export const initializeModalSession = () => {
         // Use set directly to avoid recursion (don't call setPendingUpsellAfterSetup)
         store.pendingUpsellAfterSetup = true;
         store.pendingUpsellData = data;
-        console.log(`🔄 Restored pending upsell from sessionStorage (fixes tab-switching bug)`);
+        // console.log(`🔄 Restored pending upsell from sessionStorage (fixes tab-switching bug)`);
       } catch (e) {
         console.error("Failed to restore pending upsell:", e);
         sessionStorage.removeItem("pendingUpsell");

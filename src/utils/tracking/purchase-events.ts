@@ -59,11 +59,11 @@ export const dispatchPurchaseCompleted = (packageData: {
 
       window.dispatchEvent(event);
 
-      console.log(`🎁 Dispatched purchase event for ${packageData.packageName}:`, {
-        packageType: packageData.packageType,
-        partnerDiscountDays,
-        partnerDiscountHours,
-      });
+      // console.log(`🎁 Dispatched purchase event for ${packageData.packageName}:`, {
+      //   packageType: packageData.packageType,
+      //   partnerDiscountDays,
+      //   partnerDiscountHours,
+      // });
     }
   } catch (error) {
     console.error("Error dispatching purchase completed event:", error);

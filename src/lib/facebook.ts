@@ -73,12 +73,12 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
     const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
 
     if (!accessToken) {
-      console.warn("⚠️ Facebook Conversions API: FACEBOOK_ACCESS_TOKEN not configured");
+      // console.warn("⚠️ Facebook Conversions API: FACEBOOK_ACCESS_TOKEN not configured");
       return false;
     }
 
     if (!pixelId) {
-      console.warn("⚠️ Facebook Conversions API: NEXT_PUBLIC_FACEBOOK_PIXEL_ID not configured");
+      // console.warn("⚠️ Facebook Conversions API: NEXT_PUBLIC_FACEBOOK_PIXEL_ID not configured");
       return false;
     }
 
@@ -131,9 +131,9 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
     try {
       const responseData = await response.json();
       if (responseData.events_received !== undefined) {
-        console.log(
-          `✅ Facebook Conversions API: Event received - ${event.event_name} (EventID: ${event.event_id || "none"})`
-        );
+        // console.log(
+        //   `✅ Facebook Conversions API: Event received - ${event.event_name} (EventID: ${event.event_id || "none"})`
+        // );
 
         // ✅ ENHANCED: Check for Event Match Quality warnings and scores
         if (responseData.events && responseData.events.length > 0) {
@@ -143,9 +143,9 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
           if (eventResponse.messages && Array.isArray(eventResponse.messages)) {
             eventResponse.messages.forEach((msg: { message?: string; type?: string; description?: string }) => {
               if (msg.type === "warning") {
-                console.warn(
-                  `⚠️ Facebook CAPI Warning for ${event.event_name}: ${msg.message || msg.description || "Unknown warning"}`
-                );
+                // console.warn(
+                //   `⚠️ Facebook CAPI Warning for ${event.event_name}: ${msg.message || msg.description || "Unknown warning"}`
+                // );
               } else if (msg.type === "error") {
                 console.error(
                   `❌ Facebook CAPI Error for ${event.event_name}: ${msg.message || msg.description || "Unknown error"}`
@@ -168,7 +168,7 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
 
             // Log match quality information
             if (Object.keys(matchQualityInfo).length > 1) {
-              console.log(`📊 Event Match Quality for ${eventResponse.event_name}:`, matchQualityInfo);
+              // console.log(`📊 Event Match Quality for ${eventResponse.event_name}:`, matchQualityInfo);
             }
           }
         }
@@ -176,7 +176,7 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
     } catch (parseError) {
       // Response parsing failed, but request was successful
       if (process.env.NODE_ENV === "development") {
-        console.warn("⚠️ Failed to parse Facebook CAPI response:", parseError);
+        // console.warn("⚠️ Failed to parse Facebook CAPI response:", parseError);
       }
     }
 

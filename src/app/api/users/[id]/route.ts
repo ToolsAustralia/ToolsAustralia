@@ -56,35 +56,38 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const userData = user as any;
 
     // Get membership package details using smart benefit resolution
+    // ✅ FIX: Only return package data if subscription is ACTIVE
+    // This prevents showing package badges and membership status for cancelled subscriptions
+    // packageId is still stored in database (useful for resubscription), but not returned in API
     let subscriptionPackageData = null;
-    if (userData.subscription?.packageId) {
+    if (userData.subscription?.packageId && userData.subscription?.isActive) {
       try {
         // Use smart benefit resolution to get effective benefits
         const effectiveBenefits = getEffectiveBenefits(userData);
         if (effectiveBenefits) {
           subscriptionPackageData = effectiveBenefits.benefits; // Full package object
-          console.log(
-            `🔍 Using smart benefit resolution: ${effectiveBenefits.packageName} (preserved during downgrade: ${
-              effectiveBenefits.packageId !== userData.subscription.packageId
-            })`
-          );
+          // console.log(
+          //   `🔍 Using smart benefit resolution: ${effectiveBenefits.packageName} (preserved during downgrade: ${
+          //     effectiveBenefits.packageId !== userData.subscription.packageId
+          //   })`
+          // );
         } else {
           // Fallback to direct lookup
           const packageIdStr = String(userData.subscription.packageId);
           subscriptionPackageData = getPackageById(packageIdStr);
-          console.log(`🔍 Fallback to direct lookup: ${subscriptionPackageData?.name || "Not found"}`);
+          // console.log(`🔍 Fallback to direct lookup: ${subscriptionPackageData?.name || "Not found"}`);
         }
 
         if (subscriptionPackageData) {
-          console.log(`✅ Successfully retrieved subscription package data: ${subscriptionPackageData.name}`);
+          // console.log(`✅ Successfully retrieved subscription package data: ${subscriptionPackageData.name}`);
         } else {
-          console.log(`⚠️ No package data returned for user subscription`);
+          // console.log(`⚠️ No package data returned for user subscription`);
         }
       } catch (error) {
-        console.log(`⚠️ Could not resolve membership package for user:`, error);
+        // console.log(`⚠️ Could not resolve membership package for user:`, error);
       }
     } else {
-      console.log(`⚠️ No subscription packageId found for user`);
+      // console.log(`⚠️ No subscription packageId found for user`);
     }
 
     // Get one-time package details from static data
@@ -100,13 +103,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               packageData, // Include full package details, not just basic fields
             });
           } else {
-            console.log(`⚠️ One-time package ID not found in static data: ${packageIdStr}`);
+            // console.log(`⚠️ One-time package ID not found in static data: ${packageIdStr}`);
           }
         } catch (error) {
-          console.log(
-            `⚠️ Could not find one-time package ${oneTimePackage.packageId} (${typeof oneTimePackage.packageId}):`,
-            error
-          );
+          // console.log(
+          //   `⚠️ Could not find one-time package ${oneTimePackage.packageId} (${typeof oneTimePackage.packageId}):`,
+          //   error
+          // );
         }
       }
     }
@@ -117,24 +120,33 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       enrichedOneTimePackages: oneTimePackageData,
     };
 
-    console.log("🔍 User API - Profile setup check:", {
-      profileSetupCompleted: (userData as { profileSetupCompleted?: boolean }).profileSetupCompleted,
-      hasProfileSetupCompleted: "profileSetupCompleted" in userData,
-      userId: userData._id,
-    });
+    // console.log("🔍 User API - Profile setup check:", {
+    //   profileSetupCompleted: (userData as { profileSetupCompleted?: boolean }).profileSetupCompleted,
+    //   hasProfileSetupCompleted: "profileSetupCompleted" in userData,
+    //   userId: userData._id,
+    // });
 
-    console.log(`🔍 Returning enriched user data`, {
-      hasSubscriptionPackageData: !!subscriptionPackageData,
-      subscriptionPackageName: subscriptionPackageData?.name,
-      hasEnrichedOneTimePackages: oneTimePackageData.length > 0,
-    });
+    // console.log(`🔍 Returning enriched user data`, {
+    //   hasSubscriptionPackageData: !!subscriptionPackageData,
+    //   subscriptionPackageName: subscriptionPackageData?.name,
+    //   hasEnrichedOneTimePackages: oneTimePackageData.length > 0,
+    // });
 
-    return NextResponse.json({
+    // ✅ CRITICAL: Add cache control headers to ensure fresh data
+    // This prevents Next.js from caching subscription status changes
+    const response = NextResponse.json({
       success: true,
       data: responseData,
     });
+
+    // Set cache control headers to prevent caching of subscription status
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+
+    return response;
   } catch (error) {
-    console.error("Error fetching user:", error);
+    // console.error("Error fetching user:", error);
     return NextResponse.json({ error: "Failed to fetch user data" }, { status: 500 });
   }
 }

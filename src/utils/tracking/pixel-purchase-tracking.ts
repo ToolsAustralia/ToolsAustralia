@@ -124,7 +124,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
     // 1. Track Browser Pixel (client-side) - only if in browser context
     if (typeof window !== "undefined") {
       trackFacebookEvent("Purchase", commonParams);
-      console.log(`📘 Facebook Pixel (Browser): Purchase tracked - $${value} ${currency}`);
+      // console.log(`📘 Facebook Pixel (Browser): Purchase tracked - $${value} ${currency}`);
     }
 
     // 2. Track Conversions API (server-side) - CRITICAL for accurate revenue tracking
@@ -205,18 +205,18 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       // Send to Conversions API
       const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
-        console.log(`📘 Facebook Conversions API: Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
+        // console.log(`📘 Facebook Conversions API: Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
       } else {
-        console.warn(`⚠️ Facebook Conversions API: Failed to send Purchase event (EventID: ${eventID})`);
+        // console.warn(`⚠️ Facebook Conversions API: Failed to send Purchase event (EventID: ${eventID})`);
       }
     } catch (apiError) {
-      console.error("❌ Error sending to Facebook Conversions API:", apiError);
+      // console.error("❌ Error sending to Facebook Conversions API:", apiError);
       // Don't throw - continue with browser pixel tracking
     }
 
     // 3. Track TikTok Pixel Purchase
     await trackTikTokEvent("CompletePayment", commonParams);
-    console.log(`📱 TikTok Pixel: Purchase tracked for ${packageType} - $${value} ${currency}`);
+    // console.log(`📱 TikTok Pixel: Purchase tracked for ${packageType} - $${value} ${currency}`);
   } catch (error) {
     console.error("❌ Error tracking pixel purchase:", error);
     // Don't throw - pixel tracking should not break purchase flow
@@ -297,7 +297,7 @@ export async function trackPixelSubscription(
     // 1. Track Browser Pixel (if in browser context)
     if (typeof window !== "undefined") {
       trackFacebookEvent(action, commonParams);
-      console.log(`📘 Facebook Pixel (Browser): ${action} tracked - ${packageName} - $${value} ${currency}`);
+      // console.log(`📘 Facebook Pixel (Browser): ${action} tracked - ${packageName} - $${value} ${currency}`);
     }
 
     // 2. Track Conversions API (server-side)
@@ -354,21 +354,21 @@ export async function trackPixelSubscription(
 
       const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
-        console.log(
-          `📘 Facebook Conversions API: ${action} tracked - ${packageName} - $${value} ${currency} (EventID: ${eventID})`
-        );
+        // console.log(
+        //   `📘 Facebook Conversions API: ${action} tracked - ${packageName} - $${value} ${currency} (EventID: ${eventID})`
+        // );
       } else {
-        console.warn(`⚠️ Facebook Conversions API: Failed to send ${action} event (EventID: ${eventID})`);
+        // console.warn(`⚠️ Facebook Conversions API: Failed to send ${action} event (EventID: ${eventID})`);
       }
     } catch (apiError) {
-      console.error(`❌ Error sending ${action} to Facebook Conversions API:`, apiError);
+      // console.error(`❌ Error sending ${action} to Facebook Conversions API:`, apiError);
     }
 
     // 3. Track TikTok Pixel
     await trackTikTokEvent(action, commonParams);
-    console.log(`📱 TikTok Pixel: ${action} tracked - ${packageName} - $${value} ${currency}`);
+    // console.log(`📱 TikTok Pixel: ${action} tracked - ${packageName} - $${value} ${currency}`);
   } catch (error) {
-    console.error(`❌ Error tracking pixel ${action}:`, error);
+    // console.error(`❌ Error tracking pixel ${action}:`, error);
   }
 }
 
@@ -429,13 +429,13 @@ export async function trackPixelSubscriptionUpgrade(params: {
 
     // Track Facebook Pixel - Use Subscribe event for upgrade
     await trackFacebookEvent("Subscribe", commonParams);
-    console.log(`📘 Facebook Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
+    // console.log(`📘 Facebook Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
 
     // Track TikTok Pixel - Use Subscribe event for upgrade
     await trackTikTokEvent("Subscribe", commonParams);
-    console.log(`📱 TikTok Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
+    // console.log(`📱 TikTok Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
   } catch (error) {
-    console.error(`❌ Error tracking pixel subscription upgrade:`, error);
+    // console.error(`❌ Error tracking pixel subscription upgrade:`, error);
   }
 }
 
@@ -496,13 +496,13 @@ export async function trackPixelSubscriptionDowngrade(params: {
 
     // Track Facebook Pixel - Use Subscribe event for downgrade (still a subscription)
     await trackFacebookEvent("Subscribe", commonParams);
-    console.log(`📘 Facebook Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
+    // console.log(`📘 Facebook Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
 
     // Track TikTok Pixel - Use Subscribe event for downgrade (still a subscription)
     await trackTikTokEvent("Subscribe", commonParams);
-    console.log(`📱 TikTok Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
+    // console.log(`📱 TikTok Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
   } catch (error) {
-    console.error(`❌ Error tracking pixel subscription downgrade:`, error);
+    // console.error(`❌ Error tracking pixel subscription downgrade:`, error);
   }
 }
 
@@ -556,13 +556,13 @@ export async function trackPixelCancellation(params: {
 
     // Track Facebook Pixel
     await trackFacebookEvent("Unsubscribe", commonParams);
-    console.log(`📘 Facebook Pixel: Cancellation tracked - ${packageName}`);
+    // console.log(`📘 Facebook Pixel: Cancellation tracked - ${packageName}`);
 
     // Track TikTok Pixel
     await trackTikTokEvent("Unsubscribe", commonParams);
-    console.log(`📱 TikTok Pixel: Cancellation tracked - ${packageName}`);
+    // console.log(`📱 TikTok Pixel: Cancellation tracked - ${packageName}`);
   } catch (error) {
-    console.error("❌ Error tracking pixel cancellation:", error);
+    // console.error("❌ Error tracking pixel cancellation:", error);
   }
 }
 
@@ -649,7 +649,7 @@ export async function trackPixelPaymentFailed(params: {
     // 1. Track Browser Pixel (if in browser context)
     if (typeof window !== "undefined") {
       trackFacebookEvent("PaymentFailed", commonParams);
-      console.log(`📘 Facebook Pixel (Browser): Payment failed tracked - $${value} ${currency}`);
+      // console.log(`📘 Facebook Pixel (Browser): Payment failed tracked - $${value} ${currency}`);
     }
 
     // 2. Track Conversions API (server-side)
@@ -707,21 +707,21 @@ export async function trackPixelPaymentFailed(params: {
 
       const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
-        console.log(
-          `📘 Facebook Conversions API: Payment failed tracked - $${value} ${currency} (EventID: ${eventID})`
-        );
+        // console.log(
+        //   `📘 Facebook Conversions API: Payment failed tracked - $${value} ${currency} (EventID: ${eventID})`
+        // );
       } else {
-        console.warn(`⚠️ Facebook Conversions API: Failed to send PaymentFailed event (EventID: ${eventID})`);
+        // console.warn(`⚠️ Facebook Conversions API: Failed to send PaymentFailed event (EventID: ${eventID})`);
       }
     } catch (apiError) {
-      console.error("❌ Error sending PaymentFailed to Facebook Conversions API:", apiError);
+      // console.error("❌ Error sending PaymentFailed to Facebook Conversions API:", apiError);
     }
 
     // 3. Track TikTok Pixel
     await trackTikTokEvent("PaymentFailed", commonParams);
-    console.log(`📱 TikTok Pixel: Payment failed tracked - $${value} ${currency}`);
+    // console.log(`📱 TikTok Pixel: Payment failed tracked - $${value} ${currency}`);
   } catch (error) {
-    console.error("❌ Error tracking pixel payment failed:", error);
+    // console.error("❌ Error tracking pixel payment failed:", error);
   }
 }
 
@@ -801,7 +801,7 @@ export async function trackPixelSubscriptionRenewal(params: {
     // 1. Track Browser Pixel (if in browser context)
     if (typeof window !== "undefined") {
       trackFacebookEvent("Purchase", commonParams);
-      console.log(`📘 Facebook Pixel (Browser): Subscription renewal tracked - $${value} ${currency}`);
+      // console.log(`📘 Facebook Pixel (Browser): Subscription renewal tracked - $${value} ${currency}`);
     }
 
     // 2. Track Conversions API (server-side)
@@ -862,20 +862,20 @@ export async function trackPixelSubscriptionRenewal(params: {
 
       const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
-        console.log(
-          `📘 Facebook Conversions API: Subscription renewal tracked - $${value} ${currency} (EventID: ${eventID})`
-        );
+        // console.log(
+        //   `📘 Facebook Conversions API: Subscription renewal tracked - $${value} ${currency} (EventID: ${eventID})`
+        // );
       } else {
-        console.warn(`⚠️ Facebook Conversions API: Failed to send renewal event (EventID: ${eventID})`);
+        // console.warn(`⚠️ Facebook Conversions API: Failed to send renewal event (EventID: ${eventID})`);
       }
     } catch (apiError) {
-      console.error("❌ Error sending renewal to Facebook Conversions API:", apiError);
+      // console.error("❌ Error sending renewal to Facebook Conversions API:", apiError);
     }
 
     // 3. Track TikTok Pixel
     await trackTikTokEvent("CompletePayment", commonParams);
-    console.log(`📱 TikTok Pixel: Subscription renewal tracked - $${value} ${currency}`);
+    // console.log(`📱 TikTok Pixel: Subscription renewal tracked - $${value} ${currency}`);
   } catch (error) {
-    console.error("❌ Error tracking pixel subscription renewal:", error);
+    // console.error("❌ Error tracking pixel subscription renewal:", error);
   }
 }

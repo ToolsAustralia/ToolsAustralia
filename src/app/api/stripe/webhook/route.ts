@@ -3,6 +3,8 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 // import { Types } from "mongoose"; // No longer needed with Option 1
 import Order from "@/models/Order";
+import MajorDraw from "@/models/MajorDraw";
+import mongoose from "mongoose";
 import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import Stripe from "stripe";
@@ -10,6 +12,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { ensureIndexesOnce } from "@/utils/database/ensure-indexes";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
+import { calculateSubscriptionEntries } from "@/utils/payment/subscription-entries-calculator";
 import Promo from "@/models/Promo";
 // ✅ WEBHOOK-FIRST: Remove database dependency for event tracking
 import { klaviyo } from "@/lib/klaviyo";
@@ -40,7 +43,7 @@ function webhookLog(level: "info" | "warn" | "error", message: string, data?: un
   }
 
   const prefix = level === "error" ? "❌" : level === "warn" ? "⚠️" : "ℹ️";
-  console[level](`${prefix} WEBHOOK: ${message}`, data || "");
+  // console[level](`${prefix} WEBHOOK: ${message}`, data || "");
 }
 
 // ✅ WEBHOOK-FIRST: Use PaymentEvent-only idempotency (no additional infrastructure needed)
@@ -106,6 +109,46 @@ async function getActivePromoMultiplier(packageType: "membership" | "one-time" |
   } catch (error) {
     webhookLog("error", `Error fetching active promo for ${packageType}: ${error}`);
     return 1; // Default to no multiplier on error
+  }
+}
+
+/**
+ * Save user with verification to ensure cancellation actually persisted
+ * Retries once if verification fails
+ */
+async function saveUserWithVerification(
+  user: import("@/models/User").IUser,
+  expectedState: { isActive?: boolean; status?: string; stripeSubscriptionId?: string | undefined },
+  retryCount = 0
+): Promise<boolean> {
+  try {
+    // Mark subscription as modified so Mongoose detects changes
+    if (user.subscription) {
+      user.markModified("subscription");
+    }
+
+    await user.save();
+
+    // Verify the save actually worked
+    const savedUser = await User.findById(user._id);
+    const matches =
+      (expectedState.isActive === undefined || savedUser?.subscription?.isActive === expectedState.isActive) &&
+      (expectedState.status === undefined || savedUser?.subscription?.status === expectedState.status) &&
+      (expectedState.stripeSubscriptionId === undefined ||
+        (expectedState.stripeSubscriptionId === undefined && !savedUser?.stripeSubscriptionId) ||
+        (expectedState.stripeSubscriptionId !== undefined &&
+          savedUser?.stripeSubscriptionId === expectedState.stripeSubscriptionId));
+
+    if (!matches && retryCount < 1) {
+      console.warn(`⚠️ [SAVE VERIFICATION] Retry ${retryCount + 1} for user ${user.email}`);
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
+      return saveUserWithVerification(user, expectedState, retryCount + 1);
+    }
+
+    return matches;
+  } catch (error) {
+    console.error(`❌ [SAVE VERIFICATION] Error: ${error}`);
+    return false;
   }
 }
 
@@ -923,17 +966,60 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
       } else if (subscription.status === "canceled" || subscription.status === "past_due") {
         // Only update for explicit cancellations or past due
+        console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: ${subscription.status} for user ${user.email}`);
+
+        // ✅ Set endDate consistently - use subscription period end or current date
+        const subscriptionWithPeriod = subscription as Stripe.Subscription & { current_period_end?: number };
+        const endDate = subscriptionWithPeriod.current_period_end
+          ? new Date(subscriptionWithPeriod.current_period_end * 1000)
+          : new Date(); // Fallback to now
+
+        // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved when subscription is canceled
+        const preservedAccumulatedEntries = user.subscription.lastMonthAccumulatedEntries;
+
         user.subscription.isActive = false;
         user.subscription.status = subscription.status;
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
+        user.subscription.endDate = endDate; // ✅ Set endDate consistently
+
+        // Explicitly preserve lastMonthAccumulatedEntries
+        if (preservedAccumulatedEntries !== undefined) {
+          user.subscription.lastMonthAccumulatedEntries = preservedAccumulatedEntries;
+          console.log(
+            `✅ [SUBSCRIPTION UPDATED] Preserved lastMonthAccumulatedEntries: ${preservedAccumulatedEntries}`
+          );
+          webhookLog(
+            "info",
+            `✅ Preserved lastMonthAccumulatedEntries: ${preservedAccumulatedEntries} for user ${user.email} (subscription canceled via update)`
+          );
+        }
+
+        // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
+        user.markModified("subscription");
       } else {
         // For other statuses, let invoice.paid handle it
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
       }
     }
 
+    // ✅ Mark subscription as modified if we made changes
+    if (user.subscription) {
+      user.markModified("subscription");
+    }
+
     await user.save();
+
+    // ✅ Verify save for canceled/past_due status
+    if (subscription.status === "canceled" || subscription.status === "past_due") {
+      const savedUser = await User.findById(user._id);
+      console.log(
+        `✅ [SUBSCRIPTION UPDATED] Verified - isActive: ${savedUser?.subscription?.isActive}, status: ${
+          savedUser?.subscription?.status
+        }, endDate: ${savedUser?.subscription?.endDate?.toISOString() || "undefined"}`
+      );
+    }
   } catch (error) {
+    console.error(`❌ [SUBSCRIPTION UPDATED] Error: ${error}`);
     webhookLog("error", `Error handling subscription updated: ${error}`);
   }
 }
@@ -1049,37 +1135,32 @@ async function handleSubscriptionScheduleReleased(schedule: Stripe.SubscriptionS
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   try {
+    // ✅ ALWAYS LOG: Use console.log for critical subscription events (not filtered)
+    console.log(`🔄 [SUBSCRIPTION DELETED] Processing: ${subscription.id}`);
     webhookLog("info", `Processing subscription deleted: ${subscription.id}`);
+
     // Find user by customer ID
     let user;
     if (subscription.customer) {
       const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
       user = await User.findOne({ stripeCustomerId: customerId });
+      console.log(`🔍 [SUBSCRIPTION DELETED] Found user: ${user?.email || "NOT FOUND"} (customer: ${customerId})`);
     }
 
     if (!user) {
+      console.error(`❌ [SUBSCRIPTION DELETED] User not found for subscription: ${subscription.id}`);
       webhookLog("error", `User not found for subscription: ${subscription.id}`);
       return;
     }
 
-    // RESEARCH-BACKED APPROACH: Check if user has pending changes or recent upgrades
-    const hasPendingChange = user.subscription?.pendingChange;
-    const hasRecentUpgrade =
-      user.subscription?.lastUpgradeDate && Date.now() - user.subscription.lastUpgradeDate.getTime() < 60000; // 1 minute window
+    console.log(
+      `👤 [SUBSCRIPTION DELETED] User: ${user.email}, Current subscription ID: ${user.stripeSubscriptionId}, Deleted subscription ID: ${subscription.id}`
+    );
 
-    // If user has pending changes or recent upgrades, be extra cautious
-    if (hasPendingChange || hasRecentUpgrade) {
-      webhookLog(
-        "info",
-        `Skipping deletion of ${subscription.id} - user has pending changes or recent upgrade activity`
-      );
-      return;
-    }
-
-    // Only process deletion if this is the user's current subscription AND no recent activity
+    // ✅ BEST PRACTICE: Early return if not current subscription (check first)
     const isCurrentSubscription = user.stripeSubscriptionId === subscription.id;
-
     if (!isCurrentSubscription) {
+      console.log(`⚠️ [SUBSCRIPTION DELETED] Ignoring - not user's current subscription`);
       webhookLog(
         "info",
         `Ignoring deletion of old subscription ${subscription.id} - not user's current subscription ${user.stripeSubscriptionId}`
@@ -1087,21 +1168,132 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       return;
     }
 
+    // ✅ BEST PRACTICE: Verify subscription cancellation state
+    const isCanceled = user.subscription?.autoRenew === false;
+    const hasEndDate = user.subscription?.endDate !== undefined;
+    const periodHasEnded =
+      hasEndDate && user.subscription?.endDate ? new Date(user.subscription.endDate) <= new Date() : false;
+
+    // ✅ BEST PRACTICE: Check for relevant pending activity (only block if actually relevant)
+    const pendingChange = user.subscription?.pendingChange;
+    const hasRelevantPendingChange =
+      pendingChange !== undefined && pendingChange.stripeSubscriptionId === subscription.id; // Only relevant if for THIS subscription
+
+    // ✅ BEST PRACTICE: Check for recent upgrade activity (only block if very recent AND subscription still active)
+    const lastUpgradeDate = user.subscription?.lastUpgradeDate;
+    const upgradeAgeMs = lastUpgradeDate ? Date.now() - lastUpgradeDate.getTime() : Infinity;
+    const upgradeAgeSeconds = Math.floor(upgradeAgeMs / 1000);
+    const hasRecentUpgrade =
+      lastUpgradeDate !== undefined &&
+      upgradeAgeMs < 60000 && // Within 1 minute
+      !isCanceled; // Only block if subscription is still active (not canceled)
+
+    // ✅ BEST PRACTICE: Comprehensive logging for debugging
+    console.log(`🔍 [SUBSCRIPTION DELETED] State check:`, {
+      isCurrentSubscription,
+      isCanceled,
+      periodHasEnded,
+      hasRelevantPendingChange,
+      hasRecentUpgrade,
+      upgradeAgeSeconds: lastUpgradeDate ? upgradeAgeSeconds : "N/A",
+      pendingChangeSubscriptionId: pendingChange?.stripeSubscriptionId,
+      deletedSubscriptionId: subscription.id,
+    });
+
+    // ✅ BEST PRACTICE: Decision logic with period end override
+    // CRITICAL: If subscription is canceled and period has ended, ALWAYS process deletion
+    // This is the primary use case - user canceled, period ended, subscription should be deactivated
+    if (isCanceled && periodHasEnded) {
+      console.log(`✅ [SUBSCRIPTION DELETED] Subscription canceled and period ended - proceeding with deletion`);
+      // Continue to deletion processing below
+    }
+    // ✅ PROTECTION: Block only if there's actual conflicting activity AND subscription is not canceled
+    else if (hasRelevantPendingChange || hasRecentUpgrade) {
+      console.log(`⚠️ [SUBSCRIPTION DELETED] Skipping - conflicting activity detected`, {
+        reason: hasRelevantPendingChange ? "pending_change_for_this_subscription" : "recent_upgrade_within_60s",
+        hasRelevantPendingChange,
+        hasRecentUpgrade,
+        upgradeAgeSeconds: lastUpgradeDate ? upgradeAgeSeconds : "N/A",
+      });
+      webhookLog(
+        "info",
+        `Skipping deletion of ${subscription.id} - user has pending changes or recent upgrade activity`
+      );
+      return;
+    }
+    // ✅ DEFAULT: If no conflicts and subscription is current, process deletion
+    else {
+      console.log(`✅ [SUBSCRIPTION DELETED] No conflicts detected - proceeding with deletion`);
+    }
+
+    console.log(`✅ [SUBSCRIPTION DELETED] Processing deletion for user ${user.email}`);
+
+    // ✅ Set endDate consistently - use subscription period end or current date
+    const subscriptionWithPeriod = subscription as Stripe.Subscription & { current_period_end?: number };
+    const endDate = subscriptionWithPeriod.current_period_end
+      ? new Date(subscriptionWithPeriod.current_period_end * 1000)
+      : new Date(); // Fallback to now
+
     // Only deactivate if this is genuinely the user's current subscription
     if (user.subscription) {
+      // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved when subscription ends
+      // This allows resubscribe to continue from where user left off
+      // The field is NOT cleared - it persists for resubscribe continuation
+      const preservedAccumulatedEntries = user.subscription.lastMonthAccumulatedEntries;
+
       user.subscription.isActive = false;
       user.subscription.status = "canceled";
       user.subscription.autoRenew = false;
+      user.subscription.endDate = endDate; // ✅ Set endDate consistently
+
+      // Explicitly preserve lastMonthAccumulatedEntries
+      if (preservedAccumulatedEntries !== undefined) {
+        user.subscription.lastMonthAccumulatedEntries = preservedAccumulatedEntries;
+        console.log(`✅ [SUBSCRIPTION DELETED] Preserved lastMonthAccumulatedEntries: ${preservedAccumulatedEntries}`);
+        webhookLog(
+          "info",
+          `✅ Preserved lastMonthAccumulatedEntries: ${preservedAccumulatedEntries} for user ${user.email} (subscription ended at period end)`
+        );
+      }
     }
 
     // Clear subscription ID only if this was the user's current subscription
     user.stripeSubscriptionId = undefined;
 
     // Update partner discount queue - subscription has ended
+    console.log(`🎁 [SUBSCRIPTION DELETED] Ending subscription in partner discount queue`);
     webhookLog("info", `Ending subscription in partner discount queue for user ${user.email}`);
     await handleSubscriptionQueueUpdate(user as unknown as import("@/models/User").IUser, "end");
 
-    await user.save();
+    // ✅ Save with verification to ensure cancellation actually persisted
+    const saveSuccess = await saveUserWithVerification(
+      user,
+      { isActive: false, status: "canceled", stripeSubscriptionId: undefined },
+      0
+    );
+
+    if (!saveSuccess) {
+      console.error(`❌ [SUBSCRIPTION DELETED] Save verification failed for ${user.email} - retrying...`);
+      // Retry once more
+      if (user.subscription) {
+        user.subscription.isActive = false;
+        user.subscription.status = "canceled";
+        user.subscription.endDate = endDate;
+        user.markModified("subscription");
+      }
+      user.stripeSubscriptionId = undefined;
+      await user.save();
+    }
+
+    // ✅ Verify final state
+    const savedUser = await User.findById(user._id);
+    console.log(
+      `✅ [SUBSCRIPTION DELETED] Final state - isActive: ${savedUser?.subscription?.isActive}, status: ${
+        savedUser?.subscription?.status
+      }, stripeSubscriptionId: ${savedUser?.stripeSubscriptionId || "undefined"}, endDate: ${
+        savedUser?.subscription?.endDate?.toISOString() || "undefined"
+      }`
+    );
 
     // Track subscription cancellation in Klaviyo (non-blocking)
     if (user.subscription) {
@@ -1114,6 +1306,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       );
     }
   } catch (error) {
+    console.error(`❌ [SUBSCRIPTION DELETED] Error: ${error}`);
     webhookLog("error", `Error handling subscription deleted: ${error}`);
   }
 }
@@ -1145,10 +1338,38 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       if (user.subscription) {
         user.subscription.status = "past_due";
         user.subscription.isActive = false;
+
+        // ✅ If subscription will be canceled after max retries, set endDate
+        // Retrieve subscription from Stripe to check cancel_at_period_end
+        try {
+          const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const subscriptionWithPeriod = stripeSubscription as Stripe.Subscription & { current_period_end?: number };
+          if (stripeSubscription.cancel_at_period_end && subscriptionWithPeriod.current_period_end) {
+            const endDate = new Date(subscriptionWithPeriod.current_period_end * 1000);
+            user.subscription.endDate = endDate;
+            console.log(
+              `📅 [INVOICE PAYMENT FAILED] Set endDate to ${endDate.toISOString()} for subscription that will be canceled`
+            );
+          }
+        } catch (stripeError) {
+          console.error(`❌ [INVOICE PAYMENT FAILED] Error retrieving subscription: ${stripeError}`);
+          // Continue without endDate if we can't retrieve subscription
+        }
+
+        // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
+        user.markModified("subscription");
       }
     }
 
     await user.save();
+
+    // ✅ Verify save for payment failures
+    if (subscriptionId && user.subscription) {
+      const savedUser = await User.findById(user._id);
+      console.log(
+        `✅ [INVOICE PAYMENT FAILED] Verified - isActive: ${savedUser?.subscription?.isActive}, status: ${savedUser?.subscription?.status}`
+      );
+    }
 
     // Track failure in Klaviyo (for both initial and renewal failures)
     if (user.subscription && subscriptionId) {
@@ -1404,30 +1625,94 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       return;
     }
 
-    // ✅ CRITICAL: Check if this is an upgrade scenario to prevent double benefits
-    let entriesToGrant = membershipPackage.entriesPerMonth || 0;
-    const pointsToGrant = Math.floor(membershipPackage.price);
+    // ✅ DETECT RESUBSCRIBE SCENARIO
+    // User is resubscribing if: subscription is not active, has lastMonthAccumulatedEntries, and this is a new subscription
+    const isResubscribe =
+      invoice.billing_reason === "subscription_create" &&
+      !user.subscription?.isActive &&
+      user.subscription?.lastMonthAccumulatedEntries !== undefined;
 
-    // ✅ NEW: Apply promo multiplier for initial subscription purchases only
-    if (invoice.billing_reason === "subscription_create") {
-      try {
-        const promoMultiplier = await getActivePromoMultiplier("membership");
-        if (promoMultiplier > 1) {
-          const originalEntries = entriesToGrant;
-          entriesToGrant = entriesToGrant * promoMultiplier;
-          webhookLog(
-            "info",
-            `🎯 PROMO APPLIED: ${originalEntries} entries × ${promoMultiplier} = ${entriesToGrant} entries (initial subscription only)`
-          );
-        }
-      } catch (promoError) {
-        webhookLog("error", `Failed to apply promo for subscription: ${promoError}`);
-        // Continue with base entries if promo fails
-      }
+    // ✅ CONSOLE LOG: Resubscription detection
+    if (isResubscribe) {
+      console.log(`\n🔄 ========== RESUBSCRIPTION DETECTED ==========`);
+      console.log(`📧 User: ${user.email}`);
+      console.log(`📦 Package: ${membershipPackage.name} (${membershipPackage.entriesPerMonth} base entries/month)`);
+      console.log(`💾 Preserved lastMonthAccumulatedEntries: ${user.subscription?.lastMonthAccumulatedEntries}`);
+      console.log(`📊 Current accumulatedEntries: ${user.accumulatedEntries || 0}`);
     }
 
     // Check if this is an upgrade scenario by looking at subscription metadata
-    const isUpgrade = subscription.metadata?.upgradeFrom && subscription.metadata?.upgradeType === "no_proration";
+    const isUpgrade = Boolean(
+      subscription.metadata?.upgradeFrom && subscription.metadata?.upgradeType === "no_proration"
+    );
+
+    // ✅ NEW: Calculate entries using accumulated entries system
+    const baseEntries = membershipPackage.entriesPerMonth || 0;
+    const pointsToGrant = Math.floor(membershipPackage.price);
+
+    // Get promo multiplier for initial subscriptions and resubscribes
+    let promoMultiplier = 1;
+    if (invoice.billing_reason === "subscription_create" || isResubscribe) {
+      try {
+        promoMultiplier = await getActivePromoMultiplier("membership");
+      } catch (promoError) {
+        webhookLog("error", `Failed to fetch promo multiplier: ${promoError}`);
+        // Default to 1 if promo fetch fails
+        promoMultiplier = 1;
+      }
+    }
+
+    // ✅ CONSOLE LOG: Promo multiplier for resubscription
+    if (isResubscribe) {
+      console.log(`🎁 Active Promo Multiplier: ${promoMultiplier}x`);
+      console.log(
+        `📈 New promo entries to add: ${baseEntries} × ${promoMultiplier} = ${baseEntries * promoMultiplier}`
+      );
+    }
+
+    // Get current accumulated entries for upgrade calculation
+    const currentAccumulatedEntries = user.accumulatedEntries || 0;
+
+    // Calculate entries using the new system
+    const entryCalculation = calculateSubscriptionEntries({
+      billingReason: invoice.billing_reason as "subscription_create" | "subscription_cycle",
+      baseEntries,
+      lastMonthAccumulatedEntries: user.subscription?.lastMonthAccumulatedEntries,
+      isResubscribe,
+      promoMultiplier,
+      isUpgrade,
+      currentAccumulatedEntries,
+    });
+
+    const entriesToGrant = entryCalculation.entriesToGrant;
+    const newLastMonthAccumulatedEntries = entryCalculation.newLastMonthAccumulatedEntries;
+
+    // ✅ CONSOLE LOG: Calculation results for resubscription
+    if (isResubscribe) {
+      console.log(`\n📊 ========== RESUBSCRIPTION CALCULATION ==========`);
+      console.log(`💾 Preserved entries: ${user.subscription?.lastMonthAccumulatedEntries}`);
+      console.log(`➕ New promo entries: ${entriesToGrant} (${baseEntries} base × ${promoMultiplier}x promo)`);
+      console.log(
+        `🎯 Expected lastMonthAccumulatedEntries: ${newLastMonthAccumulatedEntries} (${user.subscription?.lastMonthAccumulatedEntries} + ${entriesToGrant})`
+      );
+      console.log(
+        `📈 Expected accumulatedEntries: ${currentAccumulatedEntries} + ${entriesToGrant} = ${
+          currentAccumulatedEntries + entriesToGrant
+        }`
+      );
+    }
+
+    webhookLog("info", `📊 Entry calculation:`, {
+      calculationType: entryCalculation.calculationType,
+      baseEntries,
+      entriesToGrant,
+      newLastMonthAccumulatedEntries,
+      isResubscribe,
+      isUpgrade,
+      promoMultiplier:
+        invoice.billing_reason === "subscription_create" || isResubscribe ? promoMultiplier : "N/A (renewal)",
+      previousAccumulated: user.subscription?.lastMonthAccumulatedEntries,
+    });
 
     if (isUpgrade) {
       webhookLog("info", `🎯 UPGRADE DETECTED: ${subscription.metadata.upgradeFromName} → ${membershipPackage.name}`);
@@ -1485,6 +1770,190 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     );
 
     if (result.success) {
+      // ✅ CRITICAL: For resubscription, set accumulatedEntries to newLastMonthAccumulatedEntries
+      // This ensures accumulated entries continue from where they left off, not double-counted
+      // processPaymentBenefits increments accumulatedEntries, but for resubscription we need to SET it
+      // because newLastMonthAccumulatedEntries already includes preserved entries + new promo entries
+      if (isResubscribe) {
+        try {
+          const accumulatedBefore = user.accumulatedEntries || 0;
+          const preservedEntries = newLastMonthAccumulatedEntries - entriesToGrant; // 400 (550 - 150)
+
+          // Step 1: Add preserved entries to Major Draw manually
+          if (preservedEntries > 0) {
+            try {
+              const { getTargetMajorDraw } = await import("@/utils/draws/major-draw-helpers");
+              const majorDrawResult = await getTargetMajorDraw({
+                created: Math.floor(paymentTimestamp * 1000),
+                type: "subscription",
+                packageType: "subscription",
+              });
+
+              if (majorDrawResult) {
+                const freshUserForDraw = await User.findById(user._id);
+                if (freshUserForDraw) {
+                  const now = new Date();
+                  const entriesBySource = {
+                    membership: preservedEntries,
+                    "one-time-package": 0,
+                    upsell: 0,
+                    "mini-draw": 0,
+                  };
+
+                  const existingUserEntry = majorDrawResult.entries.find(
+                    (entry: { userId: { toString(): string } }) =>
+                      entry.userId.toString() === freshUserForDraw._id.toString()
+                  );
+
+                  if (existingUserEntry) {
+                    // Update existing entry
+                    await MajorDraw.updateOne(
+                      {
+                        _id: majorDrawResult._id,
+                        "entries.userId": freshUserForDraw._id,
+                      },
+                      {
+                        $inc: {
+                          "entries.$.totalEntries": preservedEntries,
+                          "entries.$.entriesBySource.membership": preservedEntries,
+                        },
+                        $set: {
+                          "entries.$.lastUpdatedDate": now,
+                        },
+                      }
+                    );
+                  } else {
+                    // Create new entry
+                    const newEntry = {
+                      userId: new mongoose.Types.ObjectId(freshUserForDraw._id.toString()),
+                      totalEntries: preservedEntries,
+                      entriesBySource,
+                      firstAddedDate: now,
+                      lastUpdatedDate: now,
+                    };
+                    await MajorDraw.updateOne({ _id: majorDrawResult._id }, { $push: { entries: newEntry } });
+                  }
+
+                  // Update totalEntries
+                  const updatedMajorDraw = await MajorDraw.findById(majorDrawResult._id);
+                  if (updatedMajorDraw) {
+                    const totalEntries =
+                      updatedMajorDraw.entries.reduce(
+                        (sum: number, entry: { totalEntries: number }) => sum + entry.totalEntries,
+                        0
+                      ) || 0;
+                    if (totalEntries !== updatedMajorDraw.totalEntries) {
+                      await MajorDraw.updateOne({ _id: majorDrawResult._id }, { $set: { totalEntries } });
+                    }
+                  }
+
+                  console.log(`🎯 [RESUBSCRIBE] Added ${preservedEntries} preserved entries to Major Draw`);
+                  webhookLog("info", `Added ${preservedEntries} preserved entries to Major Draw for resubscription`);
+                }
+              }
+            } catch (majorDrawError) {
+              console.error(`❌ [RESUBSCRIBE] Failed to add preserved entries to Major Draw: ${majorDrawError}`);
+              webhookLog("error", `Failed to add preserved entries to Major Draw: ${majorDrawError}`);
+            }
+          }
+
+          // Step 2: Update lastMonthAccumulatedEntries with markModified
+          const userToUpdate = await User.findById(user._id);
+          if (userToUpdate && userToUpdate.subscription) {
+            userToUpdate.subscription.lastMonthAccumulatedEntries = newLastMonthAccumulatedEntries;
+            userToUpdate.markModified("subscription");
+            await userToUpdate.save();
+          } else {
+            // Fallback to findByIdAndUpdate
+            await User.findByIdAndUpdate(
+              user._id,
+              {
+                $set: {
+                  "subscription.lastMonthAccumulatedEntries": newLastMonthAccumulatedEntries,
+                },
+              },
+              { new: false }
+            );
+          }
+
+          // Step 3: Fetch ACTUAL user data and Major Draw entries
+          const actualUser = await User.findById(user._id).lean();
+          const { getTargetMajorDraw } = await import("@/utils/draws/major-draw-helpers");
+          const majorDrawResult = await getTargetMajorDraw({
+            created: Math.floor(paymentTimestamp * 1000),
+            type: "subscription",
+            packageType: "subscription",
+          });
+
+          let actualMajorDrawEntries = 0;
+          if (majorDrawResult) {
+            const userEntry = majorDrawResult.entries?.find(
+              (e: { userId: { toString(): string }; totalEntries?: number }) =>
+                e.userId?.toString() === user._id.toString()
+            );
+            actualMajorDrawEntries = userEntry?.totalEntries || 0;
+          }
+
+          // Step 4: Comprehensive logging with ACTUAL values
+          console.log(`\n✅ ========== RESUBSCRIPTION COMPLETED ==========`);
+          console.log(`📧 User: ${user.email}`);
+          console.log(`\n📊 EXPECTED VALUES:`);
+          console.log(`   💾 lastMonthAccumulatedEntries: ${newLastMonthAccumulatedEntries}`);
+          console.log(`   📈 accumulatedEntries: ${accumulatedBefore + entriesToGrant}`);
+          console.log(`   🎯 Major Draw entries: ${newLastMonthAccumulatedEntries}`);
+          console.log(`\n✅ ACTUAL VALUES (from database):`);
+          console.log(
+            `   💾 lastMonthAccumulatedEntries: ${actualUser?.subscription?.lastMonthAccumulatedEntries ?? "NOT SET"}`
+          );
+          console.log(`   📈 accumulatedEntries: ${actualUser?.accumulatedEntries ?? "NOT SET"}`);
+          console.log(`   🎯 Major Draw entries: ${actualMajorDrawEntries}`);
+          console.log(`\n🔍 VERIFICATION:`);
+          const lastMonthMatch =
+            actualUser?.subscription?.lastMonthAccumulatedEntries === newLastMonthAccumulatedEntries;
+          const accumulatedMatch = actualUser?.accumulatedEntries === accumulatedBefore + entriesToGrant;
+          const majorDrawMatch = actualMajorDrawEntries === newLastMonthAccumulatedEntries;
+          console.log(
+            `   ${lastMonthMatch ? "✅" : "❌"} lastMonthAccumulatedEntries: ${lastMonthMatch ? "MATCH" : "MISMATCH"}`
+          );
+          console.log(
+            `   ${accumulatedMatch ? "✅" : "❌"} accumulatedEntries: ${accumulatedMatch ? "MATCH" : "MISMATCH"}`
+          );
+          console.log(
+            `   ${majorDrawMatch ? "✅" : "❌"} Major Draw entries: ${majorDrawMatch ? "MATCH" : "MISMATCH"}`
+          );
+          console.log(`==========================================\n`);
+
+          webhookLog(
+            "info",
+            `✅ Resubscribe: Updated lastMonthAccumulatedEntries to ${newLastMonthAccumulatedEntries} for user ${user.email}`
+          );
+        } catch (updateError) {
+          console.error(`❌ [RESUBSCRIBE] Failed to update: ${updateError}`);
+          webhookLog("error", `Failed to update for resubscribe: ${updateError}`);
+        }
+      } else {
+        // For initial/renewal/upgrade, just update lastMonthAccumulatedEntries
+        // accumulatedEntries is already correctly updated by processPaymentBenefits ($inc)
+        try {
+          await User.findByIdAndUpdate(
+            user._id,
+            {
+              $set: {
+                "subscription.lastMonthAccumulatedEntries": newLastMonthAccumulatedEntries,
+              },
+            },
+            { new: false }
+          );
+          webhookLog(
+            "info",
+            `✅ Updated lastMonthAccumulatedEntries: ${newLastMonthAccumulatedEntries} for user ${user.email}`
+          );
+        } catch (updateError) {
+          webhookLog("error", `Failed to update lastMonthAccumulatedEntries: ${updateError}`);
+          // Don't throw - entry calculation is more critical than tracking field
+        }
+      }
+
       // Track in Klaviyo
       klaviyo.trackEventBackground(
         createSubscriptionStartedEvent(user as never, {
@@ -1928,22 +2397,22 @@ export async function POST(request: NextRequest) {
 
     // ✅ CRITICAL: Ensure PaymentEvent indexes are created BEFORE processing any webhooks
     // This is blocking and must complete before any payment processing happens
-    console.log("🔒 WEBHOOK (Old Handler): Ensuring indexes before processing...");
+    // console.log("🔒 WEBHOOK (Old Handler): Ensuring indexes before processing...");
     await ensureIndexesOnce();
-    console.log("✅ WEBHOOK (Old Handler): Indexes ensured, proceeding with webhook processing");
+    // console.log("✅ WEBHOOK (Old Handler): Indexes ensured, proceeding with webhook processing");
 
     const body = await request.text();
     const signature = (await headers()).get("stripe-signature");
 
     if (!signature) {
-      console.error("❌ Missing stripe-signature header");
+      // console.error("❌ Missing stripe-signature header");
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
 
     // ✅ CRITICAL: Validate webhook secret before using it
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
-      console.error("❌ CRITICAL: STRIPE_WEBHOOK_SECRET is not set - webhook processing disabled");
+      // console.error("❌ CRITICAL: STRIPE_WEBHOOK_SECRET is not set - webhook processing disabled");
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
     }
 

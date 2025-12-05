@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("🎲 Creating new mini draw...");
+    // console.log("🎲 Creating new mini draw...");
 
     // Parse FormData
     const formData = await request.formData();
@@ -151,14 +151,14 @@ export async function POST(request: NextRequest) {
     const validatedData = createMiniDrawSchema.parse(dataToValidate);
 
     // ✅ STEP 2: Upload images to Cloudinary ONLY AFTER validation passes
-    console.log(`📤 Uploading ${imageFiles.length} image(s) to Cloudinary...`);
+    // console.log(`📤 Uploading ${imageFiles.length} image(s) to Cloudinary...`);
     const imageUrls: string[] = [];
 
     try {
       for (const file of imageFiles) {
         const url = await uploadImageToCloudinary(file, "mini-draws");
         imageUrls.push(url);
-        console.log(`✅ Uploaded image: ${file.name} -> ${url}`);
+        // console.log(`✅ Uploaded image: ${file.name} -> ${url}`);
       }
     } catch (uploadError) {
       console.error("❌ Image upload failed:", uploadError);
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ✅ STEP 3: Create mini draw with uploaded image URLs
-    console.log(`📝 Creating mini draw with ${imageUrls.length} uploaded image(s)...`);
+    // console.log(`📝 Creating mini draw with ${imageUrls.length} uploaded image(s)...`);
     const newMiniDraw = new MiniDraw({
       name: validatedData.name.trim(),
       description: validatedData.description.trim(),
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
 
     await newMiniDraw.save();
 
-    console.log(`✅ Mini draw created successfully: ${newMiniDraw.name} (ID: ${newMiniDraw._id})`);
+    // console.log(`✅ Mini draw created successfully: ${newMiniDraw.name} (ID: ${newMiniDraw._id})`);
 
     return NextResponse.json({
       success: true,

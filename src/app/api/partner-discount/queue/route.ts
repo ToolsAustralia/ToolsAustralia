@@ -50,7 +50,7 @@ export async function GET() {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    console.log(`📊 Fetching partner discount queue for user: ${session.user.id}`);
+    // console.log(`📊 Fetching partner discount queue for user: ${session.user.id}`);
 
     // Get the user from database
     const user = await User.findById(session.user.id);
@@ -64,7 +64,7 @@ export async function GET() {
     // Save if queue was modified
     if (queueChanged) {
       await user.save();
-      console.log(`✅ Queue processed and saved for user: ${session.user.email}`);
+      // console.log(`✅ Queue processed and saved for user: ${session.user.email}`);
     }
 
     // Get queue summary for display
@@ -92,11 +92,11 @@ export async function GET() {
       }
     }
 
-    console.log(`📊 Active period:`, activePeriod);
-    console.log(`📊 Queued items: ${queueSummary.totalQueuedItems}`);
-    console.log(`📊 Total queued days: ${queueSummary.totalQueuedDays}`);
-    console.log(`📊 Is active subscription: ${isActiveSubscription}`);
-    console.log(`📊 Subscription benefits:`, subscriptionBenefits);
+    // console.log(`📊 Active period:`, activePeriod);
+    // console.log(`📊 Queued items: ${queueSummary.totalQueuedItems}`);
+    // console.log(`📊 Total queued days: ${queueSummary.totalQueuedDays}`);
+    // console.log(`📊 Is active subscription: ${isActiveSubscription}`);
+    // console.log(`📊 Subscription benefits:`, subscriptionBenefits);
 
     return NextResponse.json({
       success: true,
@@ -154,7 +154,7 @@ export async function POST() {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    console.log(`🔄 Manually processing partner discount queue for user: ${session.user.id}`);
+    // console.log(`🔄 Manually processing partner discount queue for user: ${session.user.id}`);
 
     // Get the user from database
     const user = await User.findById(session.user.id);
@@ -168,7 +168,7 @@ export async function POST() {
     // Save if queue was modified
     if (queueChanged) {
       await user.save();
-      console.log(`✅ Queue processed and saved for user: ${session.user.email}`);
+      // console.log(`✅ Queue processed and saved for user: ${session.user.email}`);
     }
 
     // Get queue summary

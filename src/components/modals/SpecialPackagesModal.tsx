@@ -88,7 +88,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   // Helper function to invalidate user-related caches
   const invalidateUserCaches = useCallback(
     (userId: string) => {
-      console.log("🔄 Invalidating user caches for:", userId);
+      // console.log("🔄 Invalidating user caches for:", userId);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
@@ -129,7 +129,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
   // Verify user is authenticated and has access to additional packages
   if (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
-    console.log("🚫 SpecialPackagesModal: User not authenticated or doesn't have access to additional packages");
+    // console.log("🚫 SpecialPackagesModal: User not authenticated or doesn't have access to additional packages");
     return null;
   }
 
@@ -163,12 +163,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         throw new Error("No default payment method found. Please select a payment method.");
       }
 
-      console.log(
-        "🛒 Processing special package purchase:",
-        pkg.name,
-        "with default payment method:",
-        defaultPaymentMethod.paymentMethodId
-      );
+      // console.log(
+      //   "🛒 Processing special package purchase:",
+      //   pkg.name,
+      //   "with default payment method:",
+      //   defaultPaymentMethod.paymentMethodId
+      // );
 
       // Use membership purchase hook (one-time package purchase)
       purchaseMembership(
@@ -178,9 +178,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         },
         {
           onSuccess: (result) => {
-            console.log("🔍 SpecialPackagesModal onSuccess called with result:", result);
+            // console.log("🔍 SpecialPackagesModal onSuccess called with result:", result);
             if (result.success) {
-              console.log("🔍 Purchase successful, setting up payment processing");
+              // console.log("🔍 Purchase successful, setting up payment processing");
               // Mark purchase as completed to prevent modal conflicts
               markPurchaseCompleted();
 
@@ -231,8 +231,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
   // Payment processing handlers
   const handlePaymentSuccess = async (status: PaymentStatusResponse) => {
-    console.log("🎉 Special package payment processing completed:", status);
-    console.log("🔍 handlePaymentSuccess called - about to trigger upsell");
+    // console.log("🎉 Special package payment processing completed:", status);
+    // console.log("🔍 handlePaymentSuccess called - about to trigger upsell");
     setShowPaymentProcessing(false);
 
     // Track Purchase event client-side for Meta Pixel Helper visibility
@@ -273,9 +273,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           platform: "tools-australia",
         });
 
-        console.log(
-          `📘 Facebook Pixel: Special Package Purchase tracked - $${value} ${currency} (EventID: ${eventID})`
-        );
+        // console.log(
+        //   `📘 Facebook Pixel: Special Package Purchase tracked - $${value} ${currency} (EventID: ${eventID})`
+        // );
       } catch (pixelError) {
         console.error("❌ Error tracking Special Package Purchase client-side:", pixelError);
         // Non-blocking - continue with success flow
@@ -292,7 +292,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         price: selectedPackage.price,
         entries: status.data?.entries || 0,
       });
-      console.log("📧 Stored original purchase context for invoice finalization (special package)");
+      // console.log("📧 Stored original purchase context for invoice finalization (special package)");
     }
 
     // Invalidate user caches to update UI immediately
@@ -329,17 +329,17 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits, 3000);
 
     // Trigger upsell modal for one-time purchase after success modal
-    console.log("🔍 About to check upsellTriggered:", upsellTriggered);
+    // console.log("🔍 About to check upsellTriggered:", upsellTriggered);
     if (!upsellTriggered) {
-      console.log("🔍 Setting upsellTriggered to true");
+      // console.log("🔍 Setting upsellTriggered to true");
       setUpsellTriggered(true); // Mark that we've triggered this once
 
       setTimeout(() => {
-        console.log("🎯 TRIGGERING UPSELL for special package purchase:", {
-          packageName: processingPackageName,
-          packagePrice: selectedPackage?.price,
-          packageId: selectedPackage?._id,
-        });
+        // console.log("🎯 TRIGGERING UPSELL for special package purchase:", {
+        //   packageName: processingPackageName,
+        //   packagePrice: selectedPackage?.price,
+        //   packageId: selectedPackage?._id,
+        // });
 
         // Use the EXACT same pattern as MembershipModal - call triggerUpsellModal function
         triggerUpsellModal(
@@ -352,7 +352,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         );
       }, 2000); // 2 second delay
     } else {
-      console.log("🔍 Upsell already triggered, skipping");
+      // console.log("🔍 Upsell already triggered, skipping");
     }
 
     // Close modal after triggering upsell (consistent with MembershipModal)
@@ -366,7 +366,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   };
 
   const handlePaymentTimeout = () => {
-    console.warn("⏰ Special package payment processing timed out");
+    // console.warn("⏰ Special package payment processing timed out");
     setShowPaymentProcessing(false);
     // Could show timeout message to user here
   };
@@ -386,7 +386,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     try {
       // If we have package information, use the new trigger API
       if (packageId && packageType) {
-        console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
+        // console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
 
         const response = await fetch("/api/upsell/trigger", {
           method: "POST",
@@ -402,11 +402,11 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
         if (response.ok) {
           const result = await response.json();
-          console.log("🔍 Upsell trigger API result:", result);
+          // console.log("🔍 Upsell trigger API result:", result);
 
           if (result.success && result.data?.offer) {
             const offer = result.data.offer;
-            console.log(`✅ Found targeted upsell offer: ${offer.name}`);
+            // console.log(`✅ Found targeted upsell offer: ${offer.name}`);
 
             // Show the targeted upsell with a delay
             setTimeout(() => {
@@ -448,10 +448,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
               // Use modal priority system to show upsell
               const { requestModal } = useModalPriorityStore.getState();
-              console.log("🎯 Requesting upsell modal via priority system:", {
-                upsellOffer: upsellOffer.title,
-                userContext,
-              });
+              // console.log("🎯 Requesting upsell modal via priority system:", {
+              //   upsellOffer: upsellOffer.title,
+              //   userContext,
+              // });
               requestModal("upsell", false, {
                 offer: upsellOffer,
                 userContext,
@@ -461,15 +461,15 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
             return;
           } else {
-            console.log("❌ No upsell offer found in API response:", result);
+            // console.log("❌ No upsell offer found in API response:", result);
           }
         } else {
-          console.log("❌ Upsell trigger API failed:", response.status, response.statusText);
+          // console.log("❌ Upsell trigger API failed:", response.status, response.statusText);
         }
       }
 
       // Fallback to modal priority system with default upsell
-      console.log(`🎯 Using fallback upsell system for: ${recentPurchase}`);
+      // console.log(`🎯 Using fallback upsell system for: ${recentPurchase}`);
 
       // Create a default upsell offer for fallback
       const defaultUpsellOffer: UpsellOffer = {
@@ -503,12 +503,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
       // Use modal priority system for fallback
       const { requestModal } = useModalPriorityStore.getState();
-      console.log("🎯 Requesting fallback upsell modal via priority system");
+      // console.log("🎯 Requesting fallback upsell modal via priority system");
       requestModal("upsell", false, { offer: defaultUpsellOffer, userContext: fallbackUserContext });
     } catch (error) {
       console.error("Error triggering upsell:", error);
       // Skip upsell on error to avoid blocking the user experience
-      console.log("🎯 Skipping upsell due to error");
+      // console.log("🎯 Skipping upsell due to error");
     }
   };
 
@@ -523,7 +523,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         detail: { package: selectedPackage },
       });
       window.dispatchEvent(event);
-      console.log("🔄 Redirecting to MembershipModal for card selection");
+      // console.log("🔄 Redirecting to MembershipModal for card selection");
     }, 100);
   };
 

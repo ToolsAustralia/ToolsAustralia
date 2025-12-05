@@ -69,7 +69,7 @@ export async function GET() {
                 : undefined,
           };
         } catch (error) {
-          console.warn(`Could not fetch payment method details for ${pm.paymentMethodId}:`, error);
+          // console.warn(`Could not fetch payment method details for ${pm.paymentMethodId}:`, error);
           // Return basic info without card details if Stripe fetch fails
           return {
             paymentMethodId: pm.paymentMethodId,
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { paymentMethodId, setAsDefault } = savePaymentMethodSchema.parse(body);
 
-    console.log(`💳 Saving payment method for user: ${session.user.id}`);
+    // console.log(`💳 Saving payment method for user: ${session.user.id}`);
 
     const user = await User.findById(session.user.id);
     if (!user) {
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
 
     await user.save();
 
-    console.log(`✅ Payment method saved successfully: ${paymentMethodId}`);
+    // console.log(`✅ Payment method saved successfully: ${paymentMethodId}`);
 
     return NextResponse.json({
       success: true,

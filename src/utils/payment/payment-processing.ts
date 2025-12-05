@@ -86,6 +86,7 @@ interface UserDocument {
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;
+    lastMonthAccumulatedEntries?: number;
   };
   upsellPurchases?: Array<{
     offerId: string;
@@ -125,21 +126,21 @@ export async function processPaymentBenefits(
   }
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   // ✅ CRITICAL: Validate input parameters
-  console.log(`🔍 processPaymentBenefits called with:`, {
-    paymentIntentId,
-    userId,
-    packageData,
-    processedBy,
-    hasRequestContext: !!requestContext,
-  });
+  // console.log(`🔍 processPaymentBenefits called with:`, {
+  //   paymentIntentId,
+  //   userId,
+  //   packageData,
+  //   processedBy,
+  //   hasRequestContext: !!requestContext,
+  // });
 
   if (!paymentIntentId || !userId || !packageData || !processedBy) {
-    console.error(`❌ processPaymentBenefits: Missing required parameters:`, {
-      paymentIntentId: !!paymentIntentId,
-      userId: !!userId,
-      packageData: !!packageData,
-      processedBy: !!processedBy,
-    });
+    // console.error(`❌ processPaymentBenefits: Missing required parameters:`, {
+    //   paymentIntentId: !!paymentIntentId,
+    //   userId: !!userId,
+    //   packageData: !!packageData,
+    //   processedBy: !!processedBy,
+    // });
     return {
       success: false,
       alreadyProcessed: false,
@@ -154,7 +155,7 @@ export async function processPaymentBenefits(
   const lockKey = `${paymentIntentId}-${userId}`;
 
   if (processingLocks.has(lockKey)) {
-    console.log(`🔒 Payment ${paymentIntentId} already being processed, waiting...`);
+    // console.log(`🔒 Payment ${paymentIntentId} already being processed, waiting...`);
     const existingPromise = processingLocks.get(lockKey);
     if (existingPromise) {
       return await existingPromise;
@@ -206,7 +207,7 @@ async function processPaymentBenefitsInternal(
     try {
       // Ensure database connection
       await connectDB();
-      console.log(`🔗 Database connected for payment processing: ${paymentIntentId} (attempt ${retryCount + 1})`);
+      // console.log(`🔗 Database connected for payment processing: ${paymentIntentId} (attempt ${retryCount + 1})`);
 
       const eventId = `BenefitsGranted-${paymentIntentId}`;
 
@@ -231,29 +232,29 @@ async function processPaymentBenefitsInternal(
           if (refreshedUser) {
             user = refreshedUser;
           }
-        } catch (affiliateError) {
-          console.error("Affiliate tracking fallback failed:", affiliateError);
+        } catch (_affiliateError) {
+          console.error("Affiliate tracking fallback failed:", _affiliateError);
         }
       }
 
-      console.log(`🎯 Processing benefits for payment ${paymentIntentId} via ${processedBy}`);
+      // console.log(`🎯 Processing benefits for payment ${paymentIntentId} via ${processedBy}`);
 
       // ✅ CRITICAL: Atomic check-and-create for PaymentEvent to prevent race conditions
       // This ensures that only one process can create the PaymentEvent, preventing duplicate processing
-      const webhookTimestamp = Date.now();
-      console.log(`🔒 [WEBHOOK ${webhookTimestamp}] Attempting atomic PaymentEvent creation for: ${eventId}`);
+      // const webhookTimestamp = Date.now();
+      // console.log(`🔒 [WEBHOOK ${webhookTimestamp}] Attempting atomic PaymentEvent creation for: ${eventId}`);
 
       // ✅ CRITICAL FIX: Use .create() with try/catch to leverage database constraints
       // The unique compound index on (paymentIntentId + eventType) prevents duplicate processing
       // This is more reliable than pre-checking, as it's atomic at the database level
       let paymentEventCreated = false;
       try {
-        console.log(`🔒 [WEBHOOK ${webhookTimestamp}] Attempting to create PaymentEvent with:`, {
-          eventId,
-          paymentIntentId,
-          eventType: "BenefitsGranted",
-          userId: user._id.toString(),
-        });
+        // console.log(`🔒 [WEBHOOK ${webhookTimestamp}] Attempting to create PaymentEvent with:`, {
+        //   eventId,
+        //   paymentIntentId,
+        //   eventType: "BenefitsGranted",
+        //   userId: user._id.toString(),
+        // });
 
         await PaymentEvent.create({
           _id: eventId,
@@ -272,18 +273,18 @@ async function processPaymentBenefitsInternal(
           timestamp: new Date(),
         });
         paymentEventCreated = true;
-        console.log(
-          `✅ [WEBHOOK ${webhookTimestamp}] [${
-            Date.now() - webhookTimestamp
-          }ms] PaymentEvent created successfully: ${eventId}`
-        );
-        console.log(`✅ PaymentEvent details:`, {
-          _id: eventId,
-          paymentIntentId,
-          eventType: "BenefitsGranted",
-          packageType: packageData.packageType,
-          packageId: packageData.packageId,
-        });
+        // console.log(
+        //   `✅ [WEBHOOK ${webhookTimestamp}] [${
+        //     Date.now() - webhookTimestamp
+        //   }ms] PaymentEvent created successfully: ${eventId}`
+        // );
+        // console.log(`✅ PaymentEvent details:`, {
+        //   _id: eventId,
+        //   paymentIntentId,
+        //   eventType: "BenefitsGranted",
+        //   packageType: packageData.packageType,
+        //   packageId: packageData.packageId,
+        // });
       } catch (error: unknown) {
         const mongoError = error as { code?: number; message?: string; name?: string };
         // MongoDB duplicate key error codes: 11000 or E11000
@@ -296,37 +297,37 @@ async function processPaymentBenefitsInternal(
           mongoError.message?.includes("duplicate key")
         ) {
           // Check which constraint was violated
-          const isDuplicatePayment = mongoError.message?.includes("paymentIntentId");
-          const reason = isDuplicatePayment
-            ? `PaymentIntent ${paymentIntentId} already processed`
-            : `Event ${eventId} already exists`;
+          // const isDuplicatePayment = mongoError.message?.includes("paymentIntentId");
+          // const reason = isDuplicatePayment
+          //   ? `PaymentIntent ${paymentIntentId} already processed`
+          //   : `Event ${eventId} already exists`;
 
-          console.log(
-            `🛑 [WEBHOOK ${webhookTimestamp}] [${
-              Date.now() - webhookTimestamp
-            }ms] ${reason} - DUPLICATE WEBHOOK DETECTED - SKIPPING`
-          );
+          // console.log(
+          //   `🛑 [WEBHOOK ${webhookTimestamp}] [${
+          //     Date.now() - webhookTimestamp
+          //   }ms] ${reason} - DUPLICATE WEBHOOK DETECTED - SKIPPING`
+          // );
           return { success: true, alreadyProcessed: true };
         }
         // If it's a different error, log and rethrow
-        console.error(`❌ [WEBHOOK ${webhookTimestamp}] Error creating PaymentEvent:`, mongoError);
+        // console.error(`❌ [WEBHOOK ${webhookTimestamp}] Error creating PaymentEvent:`, mongoError);
         throw error;
       }
 
       if (!paymentEventCreated) {
-        console.log(`⚠️ [WEBHOOK ${webhookTimestamp}] PaymentEvent not created but no error - this should not happen`);
+        // console.log(`⚠️ [WEBHOOK ${webhookTimestamp}] PaymentEvent not created but no error - this should not happen`);
         return { success: false, alreadyProcessed: false, error: "PaymentEvent creation failed silently" };
       }
 
-      console.log(`✅ PaymentEvent created successfully: ${eventId}`);
-      console.log(`🎯 Continuing to grant benefits for payment: ${paymentIntentId}`);
+      // console.log(`✅ PaymentEvent created successfully: ${eventId}`);
+      // console.log(`🎯 Continuing to grant benefits for payment: ${paymentIntentId}`);
 
       // ✅ CRITICAL: Check user's processedPayments but only if PaymentEvent exists
       // If payment is in processedPayments but no PaymentEvent exists, it means previous processing failed
       if (user.processedPayments && user.processedPayments.includes(paymentIntentId)) {
-        console.log(
-          `⚠️ Payment ${paymentIntentId} in user's processedPayments but no PaymentEvent found - previous processing failed, retrying`
-        );
+        // console.log(
+        //   `⚠️ Payment ${paymentIntentId} in user's processedPayments but no PaymentEvent found - previous processing failed, retrying`
+        // );
         // Remove from processedPayments array to allow retry
         user.processedPayments = user.processedPayments.filter((id) => id !== paymentIntentId);
         await user.save();
@@ -348,9 +349,9 @@ async function processPaymentBenefitsInternal(
         });
 
         if (duplicateInvoicePayment) {
-          console.log(
-            `⚠️ Found duplicate invoice payment: ${duplicateInvoicePayment} for invoice ${invoiceId}, skipping processing`
-          );
+          // console.log(
+          //   `⚠️ Found duplicate invoice payment: ${duplicateInvoicePayment} for invoice ${invoiceId}, skipping processing`
+          // );
           return { success: true, alreadyProcessed: true };
         }
       }
@@ -368,9 +369,9 @@ async function processPaymentBenefitsInternal(
       // Store the payment ID as-is to match webhook expectations
       // For invoice payments, keep the invoice_ prefix for consistency
       await User.updateOne({ _id: userId }, { $addToSet: { processedPayments: paymentIntentId } });
-      console.log(`✅ Added to processedPayments: ${paymentIntentId}`);
+      // console.log(`✅ Added to processedPayments: ${paymentIntentId}`);
 
-      console.log(`✅ Benefits granted and recorded for payment ${paymentIntentId} via ${processedBy}`);
+      // console.log(`✅ Benefits granted and recorded for payment ${paymentIntentId} via ${processedBy}`);
 
       // ✅ Check if this purchase has eligible upsells OR is an upsell itself
       // If it does, skip invoice generation (will be finalized after upsell decision)
@@ -378,7 +379,7 @@ async function processPaymentBenefitsInternal(
       if (packageData.packageType === "upsell") {
         // Always skip invoice for upsells - handled by finalization API
         shouldSkipInvoice = true;
-        console.log(`📊 Upsell purchase detected - invoice will be sent via finalization API`);
+        // console.log(`📊 Upsell purchase detected - invoice will be sent via finalization API`);
       } else if (
         packageData.packageId &&
         (packageData.packageType === "subscription" ||
@@ -390,7 +391,7 @@ async function processPaymentBenefitsInternal(
         const eligibleUpsells = getUpsellPackagesForPurchase(packageData.packageId, lookupPackageType);
         shouldSkipInvoice = eligibleUpsells.length > 0;
         if (shouldSkipInvoice) {
-          console.log(`📊 Package has ${eligibleUpsells.length} eligible upsells - invoice will be delayed`);
+          // console.log(`📊 Package has ${eligibleUpsells.length} eligible upsells - invoice will be delayed`);
         }
       }
 
@@ -400,7 +401,7 @@ async function processPaymentBenefitsInternal(
       // ✅ CRITICAL: Update Klaviyo profile with latest user data after benefits are granted
       try {
         const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
-        console.log(`📊 Updating Klaviyo profile after ${packageData.packageType} benefits granted`);
+        // console.log(`📊 Updating Klaviyo profile after ${packageData.packageType} benefits granted`);
 
         // ✅ CRITICAL: Wait a bit to ensure MongoDB has committed all changes (especially for atomic operations)
         await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms buffer for database consistency
@@ -411,16 +412,16 @@ async function processPaymentBenefitsInternal(
         if (freshUser) {
           // Verify we have the latest data by checking if arrays are populated
           const upsellCount = freshUser.upsellPurchases?.length || 0;
-          const oneTimeCount = freshUser.oneTimePackages?.length || 0;
-          const miniDrawCount = freshUser.miniDrawPackages?.length || 0;
+          // const oneTimeCount = freshUser.oneTimePackages?.length || 0;
+          // const miniDrawCount = freshUser.miniDrawPackages?.length || 0;
 
-          console.log(
-            `📊 Fresh user data - accumulatedEntries: ${freshUser.accumulatedEntries}, rewardsPoints: ${freshUser.rewardsPoints}, upsellPurchases: ${upsellCount}, oneTimePackages: ${oneTimeCount}, miniDrawPackages: ${miniDrawCount}`
-          );
+          // console.log(
+          //   `📊 Fresh user data - accumulatedEntries: ${freshUser.accumulatedEntries}, rewardsPoints: ${freshUser.rewardsPoints}, upsellPurchases: ${upsellCount}, oneTimePackages: ${oneTimeCount}, miniDrawPackages: ${miniDrawCount}`
+          // );
 
           // If we just processed an upsell but don't see it, wait a bit more and retry
           if (packageData.packageType === "upsell" && upsellCount === 0) {
-            console.warn(`⚠️ Upsell purchase not yet visible in user data, waiting and retrying...`);
+            // console.warn(`⚠️ Upsell purchase not yet visible in user data, waiting and retrying...`);
             // Retry up to 3 times with increasing delays
             let retryAttempts = 0;
             let finalUser = freshUser;
@@ -429,9 +430,9 @@ async function processPaymentBenefitsInternal(
               const retryUser = await User.findById(userId);
               if (retryUser) {
                 finalUser = retryUser;
-                console.log(
-                  `📊 Retry attempt ${retryAttempts + 1} - upsellPurchases: ${retryUser.upsellPurchases?.length || 0}`
-                );
+                // console.log(
+                //   `📊 Retry attempt ${retryAttempts + 1} - upsellPurchases: ${retryUser.upsellPurchases?.length || 0}`
+                // );
               }
               retryAttempts++;
             }
@@ -440,24 +441,24 @@ async function processPaymentBenefitsInternal(
             ensureUserProfileSynced(freshUser as never);
           }
         } else {
-          console.error(`❌ Could not refetch user ${userId} for profile sync`);
+          // console.error(`❌ Could not refetch user ${userId} for profile sync`);
         }
-      } catch (klaviyoError) {
-        console.error("Klaviyo profile sync error (non-critical):", klaviyoError);
+      } catch (_klaviyoError) {
+        console.error("Klaviyo profile sync error (non-critical):", _klaviyoError);
       }
 
       return { success: true, alreadyProcessed: false };
     } catch (error) {
-      console.error(`❌ Error processing payment ${paymentIntentId} (attempt ${retryCount + 1}):`, error);
-      console.error(`❌ Error details:`, {
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-        paymentIntentId,
-        userId,
-        packageData,
-        processedBy,
-        attempt: retryCount + 1,
-      });
+      // console.error(`❌ Error processing payment ${paymentIntentId} (attempt ${retryCount + 1}):`, error);
+      // console.error(`❌ Error details:`, {
+      //   error: error instanceof Error ? error.message : "Unknown error",
+      //   stack: error instanceof Error ? error.stack : undefined,
+      //   paymentIntentId,
+      //   userId,
+      //   packageData,
+      //   processedBy,
+      //   attempt: retryCount + 1,
+      // });
 
       // Log to file for debugging
       try {
@@ -467,8 +468,8 @@ async function processPaymentBenefitsInternal(
           retryCount + 1
         }): ${error instanceof Error ? error.message : "Unknown error"}\n`;
         fs.appendFileSync(logPath, logMessage);
-      } catch (logError) {
-        console.error("Failed to write to log file:", logError);
+      } catch (_logError) {
+        console.error("Failed to write to log file:", _logError);
       }
 
       // No transaction to abort since we're using atomic operations
@@ -482,9 +483,9 @@ async function processPaymentBenefitsInternal(
 
       if (isWriteConflict && retryCount < maxRetries - 1) {
         retryCount++;
-        console.log(
-          `🔄 Write conflict detected, retrying payment processing (attempt ${retryCount + 1}/${maxRetries})`
-        );
+        // console.log(
+        //   `🔄 Write conflict detected, retrying payment processing (attempt ${retryCount + 1}/${maxRetries})`
+        // );
         // Wait a bit before retrying (exponential backoff)
         await new Promise((resolve) => setTimeout(resolve, Math.pow(2, retryCount) * 100));
         continue; // Retry the while loop
@@ -536,13 +537,13 @@ async function grantBenefits(
   }
 ): Promise<void> {
   // ✅ DEBUG: Log function call with all parameters
-  console.log(`🎯 grantBenefits called with:`, {
-    userId: user._id.toString(),
-    userEmail: user.email,
-    packageData,
-    paymentMetadata,
-    paymentIntentId,
-  });
+  // console.log(`🎯 grantBenefits called with:`, {
+  //   userId: user._id.toString(),
+  //   userEmail: user.email,
+  //   packageData,
+  //   paymentMetadata,
+  //   paymentIntentId,
+  // });
 
   // ✅ CRITICAL FIX: Use atomic operations for concurrent payment safety
   // Update accumulated entries and rewards points atomically to prevent race conditions
@@ -561,8 +562,8 @@ async function grantBenefits(
   user.accumulatedEntries = (user.accumulatedEntries || 0) + packageData.entries;
   user.rewardsPoints = (user.rewardsPoints || 0) + packageData.points;
 
-  console.log(`🎫 Added ${packageData.entries} entries (total: ${user.accumulatedEntries})`);
-  console.log(`⭐ Added ${packageData.points} points (total: ${user.rewardsPoints})`);
+  // console.log(`🎫 Added ${packageData.entries} entries (total: ${user.accumulatedEntries})`);
+  // console.log(`⭐ Added ${packageData.points} points (total: ${user.rewardsPoints})`);
 
   // Handle package-specific tracking
   if (packageData.packageType === "one-time") {
@@ -572,11 +573,11 @@ async function grantBenefits(
   } else if (packageData.packageType === "upsell") {
     await handleUpsellPackage(user, packageData, paymentIntentId);
   } else if (packageData.packageType === "mini-draw") {
-    console.log(`🎲 Processing mini-draw package: ${packageData.packageName}`);
+    // console.log(`🎲 Processing mini-draw package: ${packageData.packageName}`);
     // Extract miniDrawId from paymentMetadata for package tracking
     const miniDrawId = paymentMetadata?.miniDrawId;
     await handleMiniDrawPackage(user, { ...packageData, miniDrawId }, paymentIntentId);
-    console.log(`🎲 Mini-draw package processed successfully`);
+    // console.log(`🎲 Mini-draw package processed successfully`);
   }
 
   // ✅ WEBHOOK-ONLY: Route entries to appropriate draw based on package type
@@ -588,7 +589,7 @@ async function grantBenefits(
     await addToMiniDraw(user, packageData, paymentMetadata);
   } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
     // Upsell for mini-draw: route to mini-draw instead of major draw
-    console.log(`🎲 Routing upsell entries to mini-draw: ${paymentMetadata.miniDrawId}`);
+    // console.log(`🎲 Routing upsell entries to mini-draw: ${paymentMetadata.miniDrawId}`);
     // addToMiniDraw is the ONLY function that grants entries to MiniDraw model
     await addToMiniDraw(user, packageData, paymentMetadata);
   } else {
@@ -624,9 +625,9 @@ async function grantBenefits(
       num_items: 1,
       requestContext: requestContext, // Pass request context for improved match quality
     });
-    console.log(`📊 Pixel tracking completed for ${packageData.packageType} purchase`);
-  } catch (pixelError) {
-    console.error("❌ Pixel tracking failed (non-blocking):", pixelError);
+    // console.log(`📊 Pixel tracking completed for ${packageData.packageType} purchase`);
+  } catch (_pixelError) {
+    console.error("❌ Pixel tracking failed (non-blocking):", _pixelError);
     // Don't throw - pixel tracking should not break purchase flow
   }
 
@@ -666,15 +667,15 @@ async function grantBenefits(
           subscriptionId,
         });
       }
-    } catch (commissionError) {
+    } catch (_commissionError) {
       // Non-blocking - log but don't fail payment processing
-      console.error("❌ Affiliate commission processing error (non-blocking):", commissionError);
+      console.error("❌ Affiliate commission processing error (non-blocking):", _commissionError);
     }
   }
 
   // Save user
   await user.save();
-  console.log(`💾 User ${user.email} saved with new benefits`);
+  // console.log(`💾 User ${user.email} saved with new benefits`);
 }
 
 /**
@@ -694,9 +695,9 @@ function trackKlaviyoEvent(
   skipInvoice: boolean = false
 ): void {
   try {
-    console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
-    console.log(`📊 Package data:`, packageData);
-    console.log(`📊 Skip invoice: ${skipInvoice}`);
+    // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
+    // console.log(`📊 Package data:`, packageData);
+    // console.log(`📊 Skip invoice: ${skipInvoice}`);
 
     const commonData = {
       packageId: packageData.packageId || "unknown",
@@ -789,16 +790,16 @@ function trackKlaviyoEvent(
           ],
         })
       );
-      console.log(`📊 Invoice sent for ${packageData.packageType} package`);
+      // console.log(`📊 Invoice sent for ${packageData.packageType} package`);
     } else {
-      console.log(
-        `📊 Invoice skipped for ${packageData.packageType} package - will be finalized after upsell decision`
-      );
+      // console.log(
+      //   `📊 Invoice skipped for ${packageData.packageType} package - will be finalized after upsell decision`
+      // );
     }
 
-    console.log(`📊 Klaviyo event tracked for ${packageData.packageType} package`);
-  } catch (error) {
-    console.error("Klaviyo event tracking failed:", error);
+    // console.log(`📊 Klaviyo event tracked for ${packageData.packageType} package`);
+  } catch (_error) {
+    console.error("Klaviyo event tracking failed:", _error);
   }
 }
 
@@ -834,17 +835,17 @@ async function handleOneTimePackage(
   // ✅ IMPORTANT: Don't push to local user object - we're using atomic operations
   // The package is already added to the database via $push above
   // If we push locally and then call user.save(), it will create a duplicate!
-  console.log(`📦 Added one-time package atomically: ${packageData.packageName}`);
+  // console.log(`📦 Added one-time package atomically: ${packageData.packageName}`);
 
   // Add to partner discount queue if package includes partner discount days
   const packageInfo = getPackageById(packageData.packageId);
   if (packageInfo && packageInfo.partnerDiscountDays && packageInfo.partnerDiscountDays > 0) {
-    console.log(`🎁 Adding one-time package to partner discount queue: ${packageInfo.partnerDiscountDays} days access`);
+    // console.log(`🎁 Adding one-time package to partner discount queue: ${packageInfo.partnerDiscountDays} days access`);
 
     // ✅ CRITICAL FIX: Ensure partnerDiscountQueue is initialized for existing users
     // This field might not exist for users created before this feature was added
     if (!user.partnerDiscountQueue) {
-      console.log(`🔧 Initializing partnerDiscountQueue for user (field didn't exist)`);
+      // console.log(`🔧 Initializing partnerDiscountQueue for user (field didn't exist)`);
       user.partnerDiscountQueue = [];
       // Mark field as modified to ensure Mongoose saves it
       user.markModified("partnerDiscountQueue");
@@ -861,7 +862,7 @@ async function handleOneTimePackage(
 
     // ✅ CRITICAL FIX: Mark as modified after queue update to ensure Mongoose saves it
     user.markModified("partnerDiscountQueue");
-    console.log(`✅ Partner discount queue updated and marked for save (${user.partnerDiscountQueue?.length} items)`);
+    // console.log(`✅ Partner discount queue updated and marked for save (${user.partnerDiscountQueue?.length} items)`);
 
     // Dispatch purchase event for optimistic updates
     dispatchPackagePurchase(packageData.packageId, "one-time");
@@ -870,6 +871,10 @@ async function handleOneTimePackage(
 
 /**
  * Handle subscription package tracking and partner discount queue
+ *
+ * Note: This function does NOT modify lastMonthAccumulatedEntries.
+ * That field is only updated in the webhook handler after successful payment processing.
+ * This ensures the accumulated entries tracking is preserved correctly.
  */
 async function handleSubscriptionPackage(
   user: UserDocument,
@@ -886,6 +891,8 @@ async function handleSubscriptionPackage(
     user.subscription.isActive = true;
     user.subscription.status = "active";
 
+    // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved here and only updated in webhook handler
+
     // 🚨 CRITICAL FIX: Don't update packageId if there's a pending downgrade
     // This prevents scheduled downgrades from being processed immediately
     const userSub = user.subscription as any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -896,18 +903,18 @@ async function handleSubscriptionPackage(
       new Date() < new Date(userSub.pendingChange.effectiveDate);
 
     if (hasPendingDowngrade) {
-      console.log(
-        `🚨 SCHEDULED DOWNGRADE PROTECTION: Not updating packageId from ${user.subscription.packageId} to ${packageData.packageId} - downgrade scheduled for ${userSub.pendingChange.effectiveDate}`
-      );
+      // console.log(
+      //   `🚨 SCHEDULED DOWNGRADE PROTECTION: Not updating packageId from ${user.subscription.packageId} to ${packageData.packageId} - downgrade scheduled for ${userSub.pendingChange.effectiveDate}`
+      // );
     } else {
       user.subscription.packageId = packageData.packageId; // Use string directly
-      console.log(`📦 Package ID updated to: ${packageData.packageId}`);
+      // console.log(`📦 Package ID updated to: ${packageData.packageId}`);
     }
 
     // Log status changes for debugging
     if (!wasActive || wasStatus !== "active") {
-      console.log(`📊 Subscription activated during benefit processing: ${packageData.packageName}`);
-      console.log(`📊 Status changed: ${wasStatus} → active, isActive: ${wasActive} → true`);
+      // console.log(`📊 Subscription activated during benefit processing: ${packageData.packageName}`);
+      // console.log(`📊 Status changed: ${wasStatus} → active, isActive: ${wasActive} → true`);
     }
   } else {
     user.subscription = {
@@ -917,15 +924,15 @@ async function handleSubscriptionPackage(
       autoRenew: true,
       status: "active",
     };
-    console.log(`📊 New subscription created during benefit processing: ${packageData.packageName}`);
+    // console.log(`📊 New subscription created during benefit processing: ${packageData.packageName}`);
   }
 
-  console.log(`🔄 Updated subscription: ${packageData.packageName} (isActive: true, status: active)`);
+  // console.log(`🔄 Updated subscription: ${packageData.packageName} (isActive: true, status: active)`);
 
   // Add subscription to partner discount queue (subscriptions always have 30 days recurring access)
   const packageInfo = getPackageById(packageData.packageId);
   if (packageInfo && user.subscription.endDate) {
-    console.log(`🎁 Adding subscription to partner discount queue: 30 days recurring access`);
+    // console.log(`🎁 Adding subscription to partner discount queue: 30 days recurring access`);
     await handleSubscriptionQueueUpdate(user as unknown as IUser, "start", {
       packageId: packageData.packageId,
       packageName: packageData.packageName || packageInfo.name,
@@ -965,7 +972,7 @@ async function handleUpsellPackage(
   );
 
   // ✅ IMPORTANT: Don't push to local user object - we're using atomic operations
-  console.log(`🛒 Added upsell purchase atomically: ${packageData.packageName}`);
+  // console.log(`🛒 Added upsell purchase atomically: ${packageData.packageName}`);
 
   // Note: Upsells typically don't include partner discount access in current implementation
   // If they do in the future, add logic here similar to one-time packages
@@ -981,9 +988,9 @@ async function handleMiniDrawPackage(
   packageData: { packageId?: string; packageName?: string; entries: number; price: number; miniDrawId?: string },
   paymentIntentId?: string
 ): Promise<void> {
-  console.log(`🎲 handleMiniDrawPackage called with:`, { packageData, userId: user._id.toString() });
+  // console.log(`🎲 handleMiniDrawPackage called with:`, { packageData, userId: user._id.toString() });
   if (!packageData.packageId) {
-    console.log(`🎲 No packageId provided, skipping mini-draw package tracking`);
+    // console.log(`🎲 No packageId provided, skipping mini-draw package tracking`);
     return;
   }
 
@@ -995,8 +1002,8 @@ async function handleMiniDrawPackage(
   if (packageData.miniDrawId) {
     try {
       miniDrawIdObjectId = new mongoose.Types.ObjectId(packageData.miniDrawId);
-    } catch (error) {
-      console.error(`❌ Invalid miniDrawId format: ${packageData.miniDrawId}`, error);
+    } catch (_error) {
+      console.error(`❌ Invalid miniDrawId format: ${packageData.miniDrawId}`, _error);
     }
   }
 
@@ -1025,17 +1032,17 @@ async function handleMiniDrawPackage(
   );
 
   // ✅ IMPORTANT: Don't push to local user object - we're using atomic operations
-  console.log(`🎲 Added mini draw package atomically:`, miniDrawPackage);
+  // console.log(`🎲 Added mini draw package atomically:`, miniDrawPackage);
 
   // Add to partner discount queue if package includes partner discount hours/days
   if (miniDrawInfo && (miniDrawInfo.partnerDiscountHours > 0 || miniDrawInfo.partnerDiscountDays > 0)) {
-    console.log(
-      `🎁 Adding mini-draw package to partner discount queue: ${miniDrawInfo.partnerDiscountHours} hours (${miniDrawInfo.partnerDiscountDays} days) access`
-    );
+    // console.log(
+    //   `🎁 Adding mini-draw package to partner discount queue: ${miniDrawInfo.partnerDiscountHours} hours (${miniDrawInfo.partnerDiscountDays} days) access`
+    // );
 
     // ✅ CRITICAL FIX: Ensure partnerDiscountQueue is initialized for existing users
     if (!user.partnerDiscountQueue) {
-      console.log(`🔧 Initializing partnerDiscountQueue for user (field didn't exist)`);
+      // console.log(`🔧 Initializing partnerDiscountQueue for user (field didn't exist)`);
       user.partnerDiscountQueue = [];
       user.markModified("partnerDiscountQueue");
     }
@@ -1051,9 +1058,9 @@ async function handleMiniDrawPackage(
 
     // ✅ CRITICAL FIX: Mark as modified after queue update to ensure Mongoose saves it
     user.markModified("partnerDiscountQueue");
-    console.log(
-      `✅ Partner discount queue updated and marked for save (${user.partnerDiscountQueue?.length || 0} items)`
-    );
+    // console.log(
+    //   `✅ Partner discount queue updated and marked for save (${user.partnerDiscountQueue?.length || 0} items)`
+    // );
 
     // Dispatch purchase event for optimistic updates
     dispatchPackagePurchase(packageData.packageId, "mini-draw");
@@ -1074,12 +1081,12 @@ async function addToMajorDraw(
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
-    console.log(`🎯 addToMajorDraw called with:`, {
-      userId: user._id.toString(),
-      userEmail: user.email,
-      packageData,
-      paymentMetadata,
-    });
+    // console.log(`🎯 addToMajorDraw called with:`, {
+    //   userId: user._id.toString(),
+    //   userEmail: user.email,
+    //   packageData,
+    //   paymentMetadata,
+    // });
 
     // Import helper function dynamically to avoid circular dependencies
     const { getTargetMajorDraw } = await import("../draws/major-draw-helpers");
@@ -1088,12 +1095,12 @@ async function addToMajorDraw(
     const majorDrawResult = await getTargetMajorDraw(paymentMetadata);
 
     if (!majorDrawResult) {
-      console.error(`❌ No valid major draw found - skipping major draw entry allocation`);
-      console.error(`❌ addToMajorDraw context:`, {
-        userId: user._id.toString(),
-        packageData,
-        paymentMetadata,
-      });
+      // console.error(`❌ No valid major draw found - skipping major draw entry allocation`);
+      // console.error(`❌ addToMajorDraw context:`, {
+      //   userId: user._id.toString(),
+      //   packageData,
+      //   paymentMetadata,
+      // });
       return;
     }
 
@@ -1101,10 +1108,10 @@ async function addToMajorDraw(
     const majorDraw: IMajorDraw = majorDrawResult as IMajorDraw;
 
     // Log which draw entries are being added to
-    console.log(`🎯 Adding entries to major draw: ${majorDraw.name} (status: ${majorDraw.status})`);
-    if (majorDraw.status === "queued") {
-      console.log(`⏰ Entries deferred to queued draw (activation: ${majorDraw.activationDate})`);
-    }
+    // console.log(`🎯 Adding entries to major draw: ${majorDraw.name} (status: ${majorDraw.status})`);
+    // if (majorDraw.status === "queued") {
+    //   console.log(`⏰ Entries deferred to queued draw (activation: ${majorDraw.activationDate})`);
+    // }
 
     // ✅ OPTION 1: Determine source type for major draw entries (single source of truth)
     let sourceType: "membership" | "one-time-package" | "upsell" | "mini-draw";
@@ -1125,7 +1132,7 @@ async function addToMajorDraw(
         sourceType = "membership"; // Default fallback
     }
 
-    console.log(`🎯 Processing major draw entries for package (source: ${sourceType})`);
+    // console.log(`🎯 Processing major draw entries for package (source: ${sourceType})`);
 
     // Add to major draw collection only if package has entries
     if (packageData.entries > 0) {
@@ -1164,13 +1171,13 @@ async function addToMajorDraw(
 
       if (existingUserEntry) {
         // ✅ Update existing user entry - accumulate entries
-        const currentTotal = existingUserEntry.totalEntries;
-        const currentSourceEntries = existingUserEntry.entriesBySource[sourceType] || 0;
+        // const currentTotal = existingUserEntry.totalEntries;
+        // const currentSourceEntries = existingUserEntry.entriesBySource[sourceType] || 0;
 
-        console.log(`🎯 UPDATING existing user entry: ${currentTotal} → ${currentTotal + packageData.entries} total`);
-        console.log(
-          `🎯 UPDATING ${sourceType} entries: ${currentSourceEntries} → ${currentSourceEntries + packageData.entries}`
-        );
+        // console.log(`🎯 UPDATING existing user entry: ${currentTotal} → ${currentTotal + packageData.entries} total`);
+        // console.log(
+        //   `🎯 UPDATING ${sourceType} entries: ${currentSourceEntries} → ${currentSourceEntries + packageData.entries}`
+        // );
 
         await MajorDraw.updateOne(
           {
@@ -1187,13 +1194,13 @@ async function addToMajorDraw(
             },
           }
         );
-        console.log(`🎯 Updated existing entry for user ${user._id} (+${packageData.entries} ${sourceType})`);
+        // console.log(`🎯 Updated existing entry for user ${user._id} (+${packageData.entries} ${sourceType})`);
       } else {
         // ✅ Create new user entry if doesn't exist
-        console.log(`🎯 CREATING new user entry: ${packageData.entries} ${sourceType}`);
+        // console.log(`🎯 CREATING new user entry: ${packageData.entries} ${sourceType}`);
 
         await MajorDraw.updateOne({ _id: majorDraw._id }, { $push: { entries: newEntry } });
-        console.log(`🎯 Created new entry for user ${user._id} (+${packageData.entries} ${sourceType})`);
+        // console.log(`🎯 Created new entry for user ${user._id} (+${packageData.entries} ${sourceType})`);
       }
 
       // Get updated major draw for total calculation
@@ -1209,7 +1216,7 @@ async function addToMajorDraw(
         await MajorDraw.updateOne({ _id: majorDraw._id }, { $set: { totalEntries } });
       }
 
-      console.log(`🎯 Major draw entries updated for user ${user._id} (draw total: ${totalEntries})`);
+      // console.log(`🎯 Major draw entries updated for user ${user._id} (draw total: ${totalEntries})`);
 
       // ✅ OPTION 1: Single source of truth - no need to update user.majorDrawEntries
       // All queries now use majordraws.entries directly
@@ -1227,25 +1234,25 @@ async function addToMajorDraw(
         })
       );
     } else {
-      console.log(`🎯 No entries to add to major draw (package has 0 entries)`);
+      // console.log(`🎯 No entries to add to major draw (package has 0 entries)`);
     }
   } catch (error) {
-    console.error(`❌ ERROR in addToMajorDraw:`, error);
+    // console.error(`❌ ERROR in addToMajorDraw:`, error);
     // Log the error details for debugging
     if (error instanceof Error) {
-      console.error(`❌ Error message: ${error.message}`);
-      console.error(`❌ Error stack: ${error.stack}`);
+      // console.error(`❌ Error message: ${error.message}`);
+      // console.error(`❌ Error stack: ${error.stack}`);
     }
 
     // Log context for debugging
-    console.error(`❌ Error context:`, {
-      userId: user._id,
-      userEmail: user.email,
-      packageType: packageData.packageType,
-      packageId: packageData.packageId,
-      entries: packageData.entries,
-      paymentMetadata,
-    });
+    // console.error(`❌ Error context:`, {
+    //   userId: user._id,
+    //   userEmail: user.email,
+    //   packageType: packageData.packageType,
+    //   packageId: packageData.packageId,
+    //   entries: packageData.entries,
+    //   paymentMetadata,
+    // });
 
     // Don't throw - allow payment processing to continue
     // User still gets accumulated entries, points, and subscription benefits
@@ -1274,22 +1281,22 @@ async function addToMiniDraw(
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
-    console.log(`🎲 addToMiniDraw called with:`, {
-      userId: user._id.toString(),
-      userEmail: user.email,
-      packageData,
-      paymentMetadata,
-    });
+    // console.log(`🎲 addToMiniDraw called with:`, {
+    //   userId: user._id.toString(),
+    //   userEmail: user.email,
+    //   packageData,
+    //   paymentMetadata,
+    // });
 
     // Extract miniDrawId from paymentMetadata
     const miniDrawId = paymentMetadata?.miniDrawId;
     if (!miniDrawId) {
-      console.error(`❌ No miniDrawId provided in paymentMetadata - skipping mini draw entry allocation`);
-      console.error(`❌ addToMiniDraw context:`, {
-        userId: user._id.toString(),
-        packageData,
-        paymentMetadata,
-      });
+      // console.error(`❌ No miniDrawId provided in paymentMetadata - skipping mini draw entry allocation`);
+      // console.error(`❌ addToMiniDraw context:`, {
+      //   userId: user._id.toString(),
+      //   packageData,
+      //   paymentMetadata,
+      // });
       return;
     }
 
@@ -1300,17 +1307,17 @@ async function addToMiniDraw(
     let miniDraw: IMiniDraw;
     try {
       miniDraw = await getTargetMiniDraw(miniDrawId, paymentMetadata);
-    } catch (error) {
-      console.error(`❌ Failed to get target mini draw:`, error);
+    } catch (_error) {
+      console.error(`❌ Failed to get target mini draw:`, _error);
       // Don't throw - allow payment processing to continue
       // User still gets accumulated entries, points, and package benefits
       return;
     }
 
     // Log which draw entries are being added to
-    console.log(`🎲 Adding entries to mini draw: ${miniDraw.name} (status: ${miniDraw.status})`);
+    // console.log(`🎲 Adding entries to mini draw: ${miniDraw.name} (status: ${miniDraw.status})`);
 
-    console.log(`🎲 Processing mini draw entries for package (source: mini-draw-package)`);
+    // console.log(`🎲 Processing mini draw entries for package (source: mini-draw-package)`);
 
     // Add to mini draw collection only if package has entries
     if (packageData.entries > 0) {
@@ -1318,14 +1325,14 @@ async function addToMiniDraw(
 
       const remainingEntries = Math.max(miniDraw.minimumEntries - miniDraw.totalEntries, 0);
       if (remainingEntries <= 0) {
-        console.warn(`⚠️ Mini draw ${miniDraw.name} already full. Skipping entry allocation.`);
+        // console.warn(`⚠️ Mini draw ${miniDraw.name} already full. Skipping entry allocation.`);
         return;
       }
 
       if (packageData.entries > remainingEntries) {
-        console.warn(
-          `⚠️ Mini draw ${miniDraw.name} only has ${remainingEntries} entries remaining. Skipping allocation of ${packageData.entries} entries.`
-        );
+        // console.warn(
+        //   `⚠️ Mini draw ${miniDraw.name} only has ${remainingEntries} entries remaining. Skipping allocation of ${packageData.entries} entries.`
+        // );
         return;
       }
 
@@ -1353,15 +1360,15 @@ async function addToMiniDraw(
 
       if (existingUserEntry) {
         // ✅ Update existing user entry - accumulate entries
-        const currentTotal = existingUserEntry.totalEntries;
-        const currentSourceEntries = existingUserEntry.entriesBySource["mini-draw-package"] || 0;
+        // const currentTotal = existingUserEntry.totalEntries;
+        // const currentSourceEntries = existingUserEntry.entriesBySource["mini-draw-package"] || 0;
 
-        console.log(`🎲 UPDATING existing user entry: ${currentTotal} → ${currentTotal + packageData.entries} total`);
-        console.log(
-          `🎲 UPDATING mini-draw-package entries: ${currentSourceEntries} → ${
-            currentSourceEntries + packageData.entries
-          }`
-        );
+        // console.log(`🎲 UPDATING existing user entry: ${currentTotal} → ${currentTotal + packageData.entries} total`);
+        // console.log(
+        //   `🎲 UPDATING mini-draw-package entries: ${currentSourceEntries} → ${
+        //     currentSourceEntries + packageData.entries
+        //   }`
+        // );
 
         await MiniDraw.updateOne(
           {
@@ -1378,13 +1385,13 @@ async function addToMiniDraw(
             },
           }
         );
-        console.log(`🎲 Updated existing entry for user ${user._id} (+${packageData.entries} mini-draw-package)`);
+        // console.log(`🎲 Updated existing entry for user ${user._id} (+${packageData.entries} mini-draw-package)`);
       } else {
         // ✅ Create new user entry if doesn't exist
-        console.log(`🎲 CREATING new user entry: ${packageData.entries} mini-draw-package`);
+        // console.log(`🎲 CREATING new user entry: ${packageData.entries} mini-draw-package`);
 
         await MiniDraw.updateOne({ _id: miniDraw._id }, { $push: { entries: newEntry } });
-        console.log(`🎲 Created new entry for user ${user._id} (+${packageData.entries} mini-draw-package)`);
+        // console.log(`🎲 Created new entry for user ${user._id} (+${packageData.entries} mini-draw-package)`);
       }
 
       // Get updated mini draw for total calculation
@@ -1400,13 +1407,13 @@ async function addToMiniDraw(
         await MiniDraw.updateOne({ _id: miniDraw._id }, { $set: { totalEntries } });
       }
 
-      console.log(`🎲 Mini draw entries updated for user ${user._id} (draw total: ${totalEntries})`);
+      // console.log(`🎲 Mini draw entries updated for user ${user._id} (draw total: ${totalEntries})`);
 
       // ✅ Check if minimum entries has been reached and auto-close draw
       if (updatedMiniDraw && totalEntries >= updatedMiniDraw.minimumEntries) {
-        console.log(
-          `🎲 Minimum entries reached (${totalEntries} >= ${updatedMiniDraw.minimumEntries}). Auto-closing mini draw...`
-        );
+        // console.log(
+        //   `🎲 Minimum entries reached (${totalEntries} >= ${updatedMiniDraw.minimumEntries}). Auto-closing mini draw...`
+        // );
         await MiniDraw.updateOne(
           { _id: miniDraw._id },
           {
@@ -1418,7 +1425,7 @@ async function addToMiniDraw(
             },
           }
         );
-        console.log(`✅ Mini draw "${miniDraw.name}" automatically closed due to reaching minimum entries`);
+        // console.log(`✅ Mini draw "${miniDraw.name}" automatically closed due to reaching minimum entries`);
       }
 
       // ✅ Update User.miniDrawParticipation array
@@ -1447,7 +1454,7 @@ async function addToMiniDraw(
               },
             }
           );
-          console.log(`🎲 Updated user mini draw participation for ${miniDraw.name}`);
+          // console.log(`🎲 Updated user mini draw participation for ${miniDraw.name}`);
         } else {
           // Create new participation entry
           const newParticipation = {
@@ -1468,7 +1475,7 @@ async function addToMiniDraw(
               $push: { miniDrawParticipation: newParticipation },
             }
           );
-          console.log(`🎲 Created new user mini draw participation for ${miniDraw.name}`);
+          // console.log(`🎲 Created new user mini draw participation for ${miniDraw.name}`);
         }
       }
 
@@ -1476,25 +1483,25 @@ async function addToMiniDraw(
       // Note: MiniDraw entry tracking can be added to klaviyoEvents.ts if needed
       // For now, using the existing createMiniDrawPurchasedEvent which is already tracked in handleMiniDrawPackage
     } else {
-      console.log(`🎲 No entries to add to mini draw (package has 0 entries)`);
+      // console.log(`🎲 No entries to add to mini draw (package has 0 entries)`);
     }
   } catch (error) {
-    console.error(`❌ ERROR in addToMiniDraw:`, error);
+    // console.error(`❌ ERROR in addToMiniDraw:`, error);
     // Log the error details for debugging
     if (error instanceof Error) {
-      console.error(`❌ Error message: ${error.message}`);
-      console.error(`❌ Error stack: ${error.stack}`);
+      // console.error(`❌ Error message: ${error.message}`);
+      // console.error(`❌ Error stack: ${error.stack}`);
     }
 
     // Log context for debugging
-    console.error(`❌ Error context:`, {
-      userId: user._id,
-      userEmail: user.email,
-      packageType: packageData.packageType,
-      packageId: packageData.packageId,
-      entries: packageData.entries,
-      paymentMetadata,
-    });
+    // console.error(`❌ Error context:`, {
+    //   userId: user._id,
+    //   userEmail: user.email,
+    //   packageType: packageData.packageType,
+    //   packageId: packageData.packageId,
+    //   entries: packageData.entries,
+    //   paymentMetadata,
+    // });
 
     // Don't throw - allow payment processing to continue
     // User still gets accumulated entries, points, and package benefits
@@ -1511,15 +1518,15 @@ export async function isPaymentProcessed(paymentIntentId: string): Promise<boole
     await connectDB();
 
     const eventId = `BenefitsGranted-${paymentIntentId}`;
-    console.log(`🔍 Checking if payment already processed: ${eventId}`);
+    // console.log(`🔍 Checking if payment already processed: ${eventId}`);
 
     const existingEvent = await PaymentEvent.findById(eventId);
     const isProcessed = !!existingEvent;
 
-    console.log(`🔍 Payment ${paymentIntentId} already processed: ${isProcessed}`);
+    // console.log(`🔍 Payment ${paymentIntentId} already processed: ${isProcessed}`);
     return isProcessed;
-  } catch (error) {
-    console.error(`❌ Error checking if payment processed:`, error);
+  } catch (_error) {
+    console.error(`❌ Error checking if payment processed:`, _error);
     return false; // If we can't check, assume not processed
   }
 }

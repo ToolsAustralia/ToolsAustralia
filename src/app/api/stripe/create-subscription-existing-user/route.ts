@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = createSubscriptionExistingUserSchema.parse(body);
 
-    console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
+    // console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
 
     // Get the existing user
     const existingUser = await User.findById(session.user.id);
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Create or retrieve Stripe customer
     let stripeCustomerId = existingUser.stripeCustomerId;
     if (!stripeCustomerId) {
-      console.log("Creating new Stripe customer for existing user");
+      // console.log("Creating new Stripe customer for existing user");
       const customer = await stripe.customers.create({
         email: existingUser.email,
         name: `${existingUser.firstName} ${existingUser.lastName}`,
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       await stripe.paymentMethods.attach(finalPaymentMethodId, {
         customer: stripeCustomerId,
       });
-      console.log(`💳 Attached payment method: ${finalPaymentMethodId}`);
+      // console.log(`💳 Attached payment method: ${finalPaymentMethodId}`);
 
       // Set as default payment method for the customer
       await stripe.customers.update(stripeCustomerId, {
@@ -103,12 +103,12 @@ export async function POST(request: NextRequest) {
           default_payment_method: finalPaymentMethodId,
         },
       });
-      console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${stripeCustomerId}`);
+      // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${stripeCustomerId}`);
     }
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
     // This prevents creating duplicate products in Stripe dashboard
-    console.log(`✅ Using existing Stripe Price ID for ${membershipPackage.name}`);
+    // console.log(`✅ Using existing Stripe Price ID for ${membershipPackage.name}`);
 
     if (!membershipPackage.stripePriceId) {
       console.error(`❌ No Stripe Price ID configured for package: ${membershipPackage.name}`);
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     }
 
     const stripePriceId = membershipPackage.stripePriceId;
-    console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
+    // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
     // Create the subscription with metadata for webhook processing
     // Use payment_behavior to match new user flow and ensure proper webhook processing
@@ -142,9 +142,22 @@ export async function POST(request: NextRequest) {
     });
 
     // Update user subscription info immediately but NO initial benefit allocation
-    console.log(
-      `📝 Saving subscription to user database: packageId=${membershipPackage._id}, subscriptionId=${subscription.id}`
-    );
+    // console.log(
+    //   `📝 Saving subscription to user database: packageId=${membershipPackage._id}, subscriptionId=${subscription.id}`
+    // );
+
+    // ✅ CRITICAL: Preserve lastMonthAccumulatedEntries when resubscribing
+    // Check if this is a resubscription (user had subscription before but it's not active)
+    const isResubscribe =
+      existingUser.subscription &&
+      !existingUser.subscription.isActive &&
+      existingUser.subscription.lastMonthAccumulatedEntries !== undefined;
+
+    // Preserve lastMonthAccumulatedEntries if this is a resubscription
+    const preservedLastMonthAccumulatedEntries = isResubscribe
+      ? existingUser.subscription!.lastMonthAccumulatedEntries
+      : undefined;
+
     existingUser.subscription = {
       packageId: membershipPackage._id,
       pendingChange: undefined, // Initialize pendingChange field for subscription management
@@ -153,21 +166,30 @@ export async function POST(request: NextRequest) {
       endDate: undefined, // Subscription doesn't have an end date
       autoRenew: true,
       status: subscription.status, // Track subscription status
+      // ✅ PRESERVE: Keep lastMonthAccumulatedEntries for resubscription continuation
+      lastMonthAccumulatedEntries: preservedLastMonthAccumulatedEntries,
     };
+
+    // Log resubscription detection
+    if (isResubscribe) {
+      console.log(
+        `✅ [RESUBSCRIBE] Preserved lastMonthAccumulatedEntries: ${preservedLastMonthAccumulatedEntries} for user ${existingUser.email}`
+      );
+    }
 
     existingUser.stripeSubscriptionId = subscription.id;
 
     // Ensure the save completes before responding (critical for webhook processing)
     await existingUser.save();
-    console.log(`✅ User subscription saved to database: packageId=${existingUser.subscription.packageId}`);
+    // console.log(`✅ User subscription saved to database: packageId=${existingUser.subscription.packageId}`);
 
     // ✅ Klaviyo integration handled by webhook for reliability and best practices
-    console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
+    // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
 
-    console.log(`✅ Subscription created successfully for user: ${existingUser.email}`);
-    console.log(`📦 Package: ${membershipPackage.name} ($${membershipPackage.price})`);
-    console.log(`⏳ Entries/points will be added via webhook upon first payment confirmation`);
-    console.log(`🔒 Subscription status: ${subscription.status} - benefits will activate on payment`);
+    // console.log(`✅ Subscription created successfully for user: ${existingUser.email}`);
+    // console.log(`📦 Package: ${membershipPackage.name} ($${membershipPackage.price})`);
+    // console.log(`⏳ Entries/points will be added via webhook upon first payment confirmation`);
+    // console.log(`🔒 Subscription status: ${subscription.status} - benefits will activate on payment`);
 
     if (validatedData.referralCode) {
       try {

@@ -40,9 +40,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = invoiceFinalizeSchema.parse(body);
 
-    console.log(`📧 Finalizing invoice for user: ${validatedData.userId}`);
-    console.log(`📧 Original purchase: ${validatedData.originalPurchase.packageName}`);
-    console.log(`📧 Upsell included: ${!!validatedData.upsellPurchase}`);
+    // console.log(`📧 Finalizing invoice for user: ${validatedData.userId}`);
+    // console.log(`📧 Original purchase: ${validatedData.originalPurchase.packageName}`);
+    // console.log(`📧 Upsell included: ${!!validatedData.upsellPurchase}`);
 
     // Fetch user from database
     const user = await User.findById(validatedData.userId);
@@ -108,10 +108,10 @@ export async function POST(request: NextRequest) {
 
     await klaviyo.trackEventBackground(invoiceEvent);
 
-    console.log(`✅ Combined invoice sent to Klaviyo`);
-    console.log(
-      `📊 Invoice #${invoiceNumber}: ${items.length} items, $${totalAmount.toFixed(2)}, ${totalEntries} entries`
-    );
+    // console.log(`✅ Combined invoice sent to Klaviyo`);
+    // console.log(
+    //   `📊 Invoice #${invoiceNumber}: ${items.length} items, $${totalAmount.toFixed(2)}, ${totalEntries} entries`
+    // );
 
     return NextResponse.json({
       success: true,

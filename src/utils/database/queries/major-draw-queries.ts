@@ -96,9 +96,9 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       };
     }
 
-    console.log(
-      `🔍 getUserMajorDrawStats - Using draw: ${majorDraw.name} (${majorDraw.status}) - ID: ${majorDraw._id}`
-    );
+    // console.log(
+    //   `🔍 getUserMajorDrawStats - Using draw: ${majorDraw.name} (${majorDraw.status}) - ID: ${majorDraw._id}`
+    // );
 
     // Get user's entry from the specified draw
     const userEntry = majorDraw.entries.find(
@@ -106,7 +106,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
     );
 
     if (!userEntry) {
-      console.log(`🔍 getUserMajorDrawStats - No user entry found in draw: ${majorDraw.name}`);
+      // console.log(`🔍 getUserMajorDrawStats - No user entry found in draw: ${majorDraw.name}`);
       return {
         totalEntries: 0,
         membershipEntries: 0,
@@ -117,7 +117,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       };
     }
 
-    console.log(`🔍 getUserMajorDrawStats - User entry found: ${userEntry.totalEntries} total entries`);
+    // console.log(`🔍 getUserMajorDrawStats - User entry found: ${userEntry.totalEntries} total entries`);
 
     // Calculate stats from aggregated entry data
     const totalEntries = userEntry.totalEntries;
@@ -192,9 +192,9 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       };
     }
 
-    console.log(
-      `🔍 getUserCurrentMajorDrawStats - Using draw: ${currentMajorDraw.name} (${currentMajorDraw.status}) - ID: ${currentMajorDraw._id}`
-    );
+    // console.log(
+    //   `🔍 getUserCurrentMajorDrawStats - Using draw: ${currentMajorDraw.name} (${currentMajorDraw.status}) - ID: ${currentMajorDraw._id}`
+    // );
 
     // Get user's entry from the current draw
     const userEntry = currentMajorDraw.entries.find(
@@ -202,7 +202,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
     );
 
     if (!userEntry) {
-      console.log(`🔍 getUserCurrentMajorDrawStats - No user entry found in draw: ${currentMajorDraw.name}`);
+      // console.log(`🔍 getUserCurrentMajorDrawStats - No user entry found in draw: ${currentMajorDraw.name}`);
       return {
         totalEntries: 0,
         membershipEntries: 0,
@@ -213,7 +213,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       };
     }
 
-    console.log(`🔍 getUserCurrentMajorDrawStats - User entry found: ${userEntry.totalEntries} total entries`);
+    // console.log(`🔍 getUserCurrentMajorDrawStats - User entry found: ${userEntry.totalEntries} total entries`);
 
     // Calculate stats from aggregated entry data
     const totalEntries = userEntry.totalEntries;

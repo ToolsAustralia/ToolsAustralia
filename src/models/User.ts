@@ -62,6 +62,11 @@ export interface IUser extends Document {
 
     // SECURITY: Track last upgrade date to prevent webhook interference
     lastUpgradeDate?: Date;
+
+    // Accumulated entries tracking for subscription renewals
+    // Tracks accumulated entries for next renewal calculation
+    // Persists even when subscription is cancelled (for resubscribe continuation)
+    lastMonthAccumulatedEntries?: number;
   };
 
   // One-time packages (can have multiple)
@@ -430,6 +435,15 @@ const UserSchema = new Schema<IUser>(
       lastUpgradeDate: {
         type: Date,
         required: false,
+      },
+
+      // Accumulated entries tracking for subscription renewals
+      // Tracks accumulated entries for next renewal calculation
+      // Persists even when subscription is cancelled (for resubscribe continuation)
+      lastMonthAccumulatedEntries: {
+        type: Number,
+        required: false,
+        min: [0, "Last month accumulated entries cannot be negative"],
       },
     },
 

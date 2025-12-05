@@ -73,24 +73,24 @@ export function convertToAPIPlan(
 
   // If only one match found
   if (nameMatches.length === 1) {
-    console.log("🔍 Single default match:", {
-      selected: { id: nameMatches[0].id, _id: nameMatches[0]._id, isMemberOnly: nameMatches[0].isMemberOnly },
-    });
+    // console.log("🔍 Single default match:", {
+    //   selected: { id: nameMatches[0].id, _id: nameMatches[0]._id, isMemberOnly: nameMatches[0].isMemberOnly },
+    // });
     return nameMatches[0];
   }
 
   // Multiple matches exist, need to choose based on membership status
-  console.log("🔍 Multiple API plans with same name found:", {
-    localPlan: { id: localPlan.id, name: localPlan.name, isMemberOnly: localPlan.isMemberOnly },
-    nameMatches: nameMatches.map((p) => ({ id: p.id, _id: p._id, name: p.name, isMemberOnly: p.isMemberOnly })),
-  });
+  // console.log("🔍 Multiple API plans with same name found:", {
+  //   localPlan: { id: localPlan.id, name: localPlan.name, isMemberOnly: localPlan.isMemberOnly },
+  //   nameMatches: nameMatches.map((p) => ({ id: p.id, _id: p._id, name: p.name, isMemberOnly: p.isMemberOnly })),
+  // });
 
   // Choose based on matching isMemberOnly flag
   const membershipMatch = nameMatches.find((plan) => plan.isMemberOnly === localPlan.isMemberOnly);
   if (membershipMatch) {
-    console.log("🔍 Found membership-status match:", {
-      selected: { id: membershipMatch.id, _id: membershipMatch._id, isMemberOnly: membershipMatch.isMemberOnly },
-    });
+    // console.log("🔍 Found membership-status match:", {
+    //   selected: { id: membershipMatch.id, _id: membershipMatch._id, isMemberOnly: membershipMatch.isMemberOnly },
+    // });
     return membershipMatch;
   }
 
@@ -98,9 +98,9 @@ export function convertToAPIPlan(
   if (localPlan.id.includes("-member")) {
     const memberVersion = nameMatches.find((p) => p.isMemberOnly === true);
     if (memberVersion) {
-      console.log("🔍 Fallback to member version due to -member in ID:", {
-        selected: { id: memberVersion.id, _id: memberVersion._id, isMemberOnly: memberVersion.isMemberOnly },
-      });
+      // console.log("🔍 Fallback to member version due to -member in ID:", {
+      //   selected: { id: memberVersion.id, _id: memberVersion._id, isMemberOnly: memberVersion.isMemberOnly },
+      // });
       return memberVersion;
     }
   }
@@ -108,17 +108,17 @@ export function convertToAPIPlan(
   // Look for exact non-member matches otherwise pass along to final
   const nonMemberVersion = nameMatches.find((p) => p.isMemberOnly === false);
   if (nonMemberVersion) {
-    console.log("🔍 Fallback to non-member version:", {
-      selected: { id: nonMemberVersion.id, _id: nonMemberVersion._id, isMemberOnly: nonMemberVersion.isMemberOnly },
-    });
+    // console.log("🔍 Fallback to non-member version:", {
+    //   selected: { id: nonMemberVersion.id, _id: nonMemberVersion._id, isMemberOnly: nonMemberVersion.isMemberOnly },
+    // });
     return nonMemberVersion;
   }
 
   // Final fallback: Default to the first match if status can't be determined
   const defaultMatch = nameMatches[0];
-  console.log("🔍 Final fallback - using first match:", {
-    selected: { id: defaultMatch.id, _id: defaultMatch._id, isMemberOnly: defaultMatch.isMemberOnly },
-  });
+  // console.log("🔍 Final fallback - using first match:", {
+  //   selected: { id: defaultMatch.id, _id: defaultMatch._id, isMemberOnly: defaultMatch.isMemberOnly },
+  // });
   return defaultMatch;
 }
 

@@ -49,7 +49,7 @@ export interface CascadeDeletionResult {
  * @returns Deletion result with cleanup report
  */
 export async function deleteUserWithCascade(userId: string): Promise<CascadeDeletionResult> {
-  console.log(`🗑️ Starting cascade deletion for user: ${userId}`);
+  // console.log(`🗑️ Starting cascade deletion for user: ${userId}`);
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -83,7 +83,7 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
     };
 
     // 1. Remove entries from Major Draw and clear winner if applicable
-    console.log(`🎯 Cleaning up Major Draw entries...`);
+    // console.log(`🎯 Cleaning up Major Draw entries...`);
     const majorDrawsWithEntries = await MajorDraw.find({
       "entries.userId": userObjectId,
     }).session(session);
@@ -128,7 +128,7 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
     }
 
     // 2. Remove entries from Mini Draw and clear winner if applicable
-    console.log(`🎲 Cleaning up Mini Draw entries...`);
+    // console.log(`🎲 Cleaning up Mini Draw entries...`);
     const miniDrawsWithEntries = await MiniDraw.find({
       "entries.userId": userObjectId,
     }).session(session);
@@ -173,7 +173,7 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
     }
 
     // 3. Delete affiliate commissions
-    console.log(`💰 Deleting affiliate commissions...`);
+    // console.log(`💰 Deleting affiliate commissions...`);
     const affiliateCommissionsResult = await AffiliateCommission.deleteMany(
       { referredUserId: userObjectId },
       { session }
@@ -181,39 +181,39 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
     cleanupReport.affiliateCommissionsDeleted = affiliateCommissionsResult.deletedCount || 0;
 
     // 4. Delete payment events
-    console.log(`💳 Deleting payment events...`);
+    // console.log(`💳 Deleting payment events...`);
     const paymentEventsResult = await PaymentEvent.deleteMany({ userId: userObjectId }, { session });
     cleanupReport.paymentEventsDeleted = paymentEventsResult.deletedCount || 0;
 
     // 5. Delete orders
-    console.log(`📦 Deleting orders...`);
+    // console.log(`📦 Deleting orders...`);
     const ordersResult = await Order.deleteMany({ user: userObjectId }, { session });
     cleanupReport.ordersDeleted = ordersResult.deletedCount || 0;
 
     // 6. Delete winners
-    console.log(`🏆 Deleting winners...`);
+    // console.log(`🏆 Deleting winners...`);
     const winnersResult = await Winner.deleteMany({ userId: userObjectId }, { session });
     cleanupReport.winnersDeleted = winnersResult.deletedCount || 0;
 
     // 7. Delete referral events (both as referrer and as invitee)
-    console.log(`🎁 Deleting referral events...`);
+    // console.log(`🎁 Deleting referral events...`);
     const referralEventsAsReferrerResult = await ReferralEvent.deleteMany({ referrerId: userObjectId }, { session });
     const referralEventsAsInviteeResult = await ReferralEvent.deleteMany({ inviteeUserId: userObjectId }, { session });
     cleanupReport.referralEventsDeleted =
       (referralEventsAsReferrerResult.deletedCount || 0) + (referralEventsAsInviteeResult.deletedCount || 0);
 
     // 8. Delete ticket entries
-    console.log(`🎫 Deleting ticket entries...`);
+    // console.log(`🎫 Deleting ticket entries...`);
     const ticketEntriesResult = await TicketEntry.deleteMany({ userId: userObjectId }, { session });
     cleanupReport.ticketEntriesDeleted = ticketEntriesResult.deletedCount || 0;
 
     // 9. Delete the user document (hard delete)
-    console.log(`👤 Deleting user document...`);
+    // console.log(`👤 Deleting user document...`);
     await User.deleteOne({ _id: userObjectId }, { session });
 
     // Commit transaction
     await session.commitTransaction();
-    console.log(`✅ Cascade deletion completed successfully for user: ${userId}`);
+    // console.log(`✅ Cascade deletion completed successfully for user: ${userId}`);
 
     // Build deletion summary for response
     const deletionSummary: DeletionSummary = {

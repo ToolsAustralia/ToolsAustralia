@@ -35,17 +35,17 @@ export async function removeMajorDrawEntries(
   entriesToRemove: number,
   sourceType: MajorDrawSourceType
 ): Promise<{ success: boolean; error?: string }> {
-  console.log(`🎯 removeMajorDrawEntries called:`, {
-    userId,
-    entriesToRemove,
-    sourceType,
-  });
+  // console.log(`🎯 removeMajorDrawEntries called:`, {
+  //   userId,
+  //   entriesToRemove,
+  //   sourceType,
+  // });
 
   try {
     await connectDB();
 
     if (entriesToRemove <= 0) {
-      console.log(`⚠️ No entries to remove (${entriesToRemove})`);
+      // console.log(`⚠️ No entries to remove (${entriesToRemove})`);
       return { success: true };
     }
 
@@ -55,7 +55,7 @@ export async function removeMajorDrawEntries(
     });
 
     if (majorDraws.length === 0) {
-      console.log(`⚠️ No major draws found with entries for user ${userId}`);
+      // console.log(`⚠️ No major draws found with entries for user ${userId}`);
       return { success: true };
     }
 
@@ -78,13 +78,13 @@ export async function removeMajorDrawEntries(
         continue; // No entries of this source type in this draw
       }
 
-      console.log(`🎯 Removing ${entriesToRemoveFromDraw} entries from ${majorDraw.name} (source: ${sourceType})`);
+      // console.log(`🎯 Removing ${entriesToRemoveFromDraw} entries from ${majorDraw.name} (source: ${sourceType})`);
 
       // Check if draw is frozen or completed
       // Policy decision: We'll still allow removal even if frozen/completed
       // This is for refund processing which should reverse benefits regardless
       if (majorDraw.status === "frozen" || majorDraw.status === "completed") {
-        console.log(`⚠️ Draw ${majorDraw.name} is ${majorDraw.status} - proceeding with removal anyway for refund`);
+        // console.log(`⚠️ Draw ${majorDraw.name} is ${majorDraw.status} - proceeding with removal anyway for refund`);
       }
 
       // Update the user's entry in this draw atomically
@@ -103,7 +103,7 @@ export async function removeMajorDrawEntries(
             },
           }
         );
-        console.log(`✅ Removed entire user entry from ${majorDraw.name}`);
+        // console.log(`✅ Removed entire user entry from ${majorDraw.name}`);
       } else {
         // Update the entry with reduced counts
         await MajorDraw.updateOne(
@@ -121,7 +121,7 @@ export async function removeMajorDrawEntries(
             },
           }
         );
-        console.log(`✅ Updated user entry in ${majorDraw.name}: removed ${entriesToRemoveFromDraw} ${sourceType} entries`);
+        // console.log(`✅ Updated user entry in ${majorDraw.name}: removed ${entriesToRemoveFromDraw} ${sourceType} entries`);
       }
 
       // Update totalEntries for the draw
@@ -135,7 +135,7 @@ export async function removeMajorDrawEntries(
           { _id: majorDraw._id },
           { $set: { totalEntries } }
         );
-        console.log(`✅ Updated total entries for ${majorDraw.name}: ${totalEntries}`);
+        // console.log(`✅ Updated total entries for ${majorDraw.name}: ${totalEntries}`);
       }
 
       // Reduce remaining entries to remove
@@ -145,7 +145,7 @@ export async function removeMajorDrawEntries(
       }
     }
 
-    console.log(`✅ Successfully removed major draw entries for user ${userId}`);
+    // console.log(`✅ Successfully removed major draw entries for user ${userId}`);
     return { success: true };
   } catch (error) {
     console.error(`❌ ERROR in removeMajorDrawEntries:`, error);
@@ -171,18 +171,18 @@ export async function removeMiniDrawEntries(
   entriesToRemove: number,
   sourceType: MiniDrawSourceType
 ): Promise<{ success: boolean; error?: string }> {
-  console.log(`🎲 removeMiniDrawEntries called:`, {
-    userId,
-    miniDrawId,
-    entriesToRemove,
-    sourceType,
-  });
+  // console.log(`🎲 removeMiniDrawEntries called:`, {
+  //   userId,
+  //   miniDrawId,
+  //   entriesToRemove,
+  //   sourceType,
+  // });
 
   try {
     await connectDB();
 
     if (entriesToRemove <= 0) {
-      console.log(`⚠️ No entries to remove (${entriesToRemove})`);
+      // console.log(`⚠️ No entries to remove (${entriesToRemove})`);
       return { success: true };
     }
 
@@ -214,7 +214,7 @@ export async function removeMiniDrawEntries(
     );
 
     if (!userEntry) {
-      console.log(`⚠️ User ${userId} has no entries in mini draw ${miniDrawId}`);
+      // console.log(`⚠️ User ${userId} has no entries in mini draw ${miniDrawId}`);
       return { success: true };
     }
 
@@ -223,17 +223,17 @@ export async function removeMiniDrawEntries(
     const entriesToRemoveFromDraw = Math.min(entriesToRemove, entriesFromSource);
 
     if (entriesToRemoveFromDraw <= 0) {
-      console.log(`⚠️ No entries of source type ${sourceType} to remove`);
+      // console.log(`⚠️ No entries of source type ${sourceType} to remove`);
       return { success: true };
     }
 
-    console.log(`🎲 Removing ${entriesToRemoveFromDraw} entries from ${miniDraw.name} (source: ${sourceType})`);
+    // console.log(`🎲 Removing ${entriesToRemoveFromDraw} entries from ${miniDraw.name} (source: ${sourceType})`);
 
     // Check if draw is completed or cancelled
     // Policy decision: We'll still allow removal even if completed/cancelled
     // This is for refund processing which should reverse benefits regardless
     if (miniDraw.status === "completed" || miniDraw.status === "cancelled") {
-      console.log(`⚠️ Mini draw ${miniDraw.name} is ${miniDraw.status} - proceeding with removal anyway for refund`);
+      // console.log(`⚠️ Mini draw ${miniDraw.name} is ${miniDraw.status} - proceeding with removal anyway for refund`);
     }
 
     const newTotalEntries = userEntry.totalEntries - entriesToRemoveFromDraw;
@@ -250,7 +250,7 @@ export async function removeMiniDrawEntries(
           },
         }
       );
-      console.log(`✅ Removed entire user entry from ${miniDraw.name}`);
+      // console.log(`✅ Removed entire user entry from ${miniDraw.name}`);
     } else {
       // Update the entry with reduced counts
       await MiniDraw.updateOne(
@@ -268,7 +268,7 @@ export async function removeMiniDrawEntries(
           },
         }
       );
-      console.log(`✅ Updated user entry in ${miniDraw.name}: removed ${entriesToRemoveFromDraw} ${sourceType} entries`);
+      // console.log(`✅ Updated user entry in ${miniDraw.name}: removed ${entriesToRemoveFromDraw} ${sourceType} entries`);
     }
 
     // Update totalEntries for the mini draw
@@ -282,13 +282,13 @@ export async function removeMiniDrawEntries(
         { _id: miniDrawObjectId },
         { $set: { totalEntries } }
       );
-      console.log(`✅ Updated total entries for ${miniDraw.name}: ${totalEntries}`);
+      // console.log(`✅ Updated total entries for ${miniDraw.name}: ${totalEntries}`);
     }
 
     // Update user's mini draw participation tracking
     await removeFromUserMiniDrawParticipation(userId, miniDrawObjectId, entriesToRemoveFromDraw, sourceType);
 
-    console.log(`✅ Successfully removed mini draw entries for user ${userId}`);
+    // console.log(`✅ Successfully removed mini draw entries for user ${userId}`);
     return { success: true };
   } catch (error) {
     console.error(`❌ ERROR in removeMiniDrawEntries:`, error);
@@ -334,7 +334,7 @@ async function removeFromUserMiniDrawParticipation(
       }
     );
 
-    console.log(`✅ Updated user mini draw participation tracking`);
+    // console.log(`✅ Updated user mini draw participation tracking`);
   } catch (error) {
     console.error(`❌ Error updating user mini draw participation:`, error);
     // Non-blocking - log but continue

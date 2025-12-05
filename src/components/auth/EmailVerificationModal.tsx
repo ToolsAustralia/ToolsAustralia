@@ -62,7 +62,7 @@ export default function EmailVerificationModal({
 
     try {
       sessionStorage.setItem(VERIFICATION_STATE_KEY, JSON.stringify(state));
-      console.log("💾 Saved verification modal state to sessionStorage");
+      // console.log("💾 Saved verification modal state to sessionStorage");
     } catch (error) {
       console.error("Failed to save verification modal state:", error);
     }
@@ -90,7 +90,7 @@ export default function EmailVerificationModal({
         state.timeLeft = 30;
       }
 
-      console.log("🔄 Restored verification modal state from sessionStorage");
+      // console.log("🔄 Restored verification modal state from sessionStorage");
       return state;
     } catch (error) {
       console.error("Failed to restore verification modal state:", error);
@@ -105,7 +105,7 @@ export default function EmailVerificationModal({
 
     try {
       sessionStorage.removeItem(VERIFICATION_STATE_KEY);
-      console.log("🗑️ Cleared verification modal state from sessionStorage");
+      // console.log("🗑️ Cleared verification modal state from sessionStorage");
     } catch (error) {
       console.error("Failed to clear verification modal state:", error);
     }
@@ -154,7 +154,7 @@ export default function EmailVerificationModal({
         setTimeLeft(Math.min(restoredTimeLeft, 30));
         setCanResend(savedState.canResend ?? false);
         setRemainingAttempts(savedState.remainingAttempts ?? 5);
-        console.log("✅ Restored verification modal state from sessionStorage");
+        // console.log("✅ Restored verification modal state from sessionStorage");
       } else {
         // Fresh start - reset to defaults
         setVerificationCode("");
@@ -162,7 +162,7 @@ export default function EmailVerificationModal({
         setTimeLeft(30);
         setCanResend(false);
         setRemainingAttempts(5);
-        console.log("🆕 Starting fresh verification session");
+        // console.log("🆕 Starting fresh verification session");
       }
 
       // Always reset these

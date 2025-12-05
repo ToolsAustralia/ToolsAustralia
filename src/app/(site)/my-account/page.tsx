@@ -174,24 +174,24 @@ export default function MyAccountPage() {
   React.useEffect(() => {
     // Prevent multiple triggers
     if (modalTriggeredRef.current) {
-      console.log("🚫 Modal already triggered this session, skipping");
+      // console.log("🚫 Modal already triggered this session, skipping");
       return;
     }
 
     if (status === "loading" || loading || !session || !accountData) {
-      console.log("⏳ Still loading data...", {
-        status,
-        loading,
-        hasSession: !!session,
-        hasAccountData: !!accountData,
-      });
+      // console.log("⏳ Still loading data...", {
+      //   status,
+      //   loading,
+      //   hasSession: !!session,
+      //   hasAccountData: !!accountData,
+      // });
       return;
     }
 
     // Check if setup was just completed (prevent re-triggering after page reload)
     const setupJustCompleted = sessionStorage.getItem("setupJustCompleted");
     if (setupJustCompleted) {
-      console.log("✅ Setup just completed, skipping modal trigger");
+      // console.log("✅ Setup just completed, skipping modal trigger");
       sessionStorage.removeItem("setupJustCompleted");
       return;
     }
@@ -201,19 +201,19 @@ export default function MyAccountPage() {
     const pendingUpsellFlag = sessionStorage.getItem("pendingUpsellFlag");
     const pendingUpsellDataStr = sessionStorage.getItem("pendingUpsell");
 
-    console.log("🔍 Checking for pending upsell:", {
-      sessionStorageFlag: pendingUpsellFlag,
-      hasSessionData: !!pendingUpsellDataStr,
-      allSessionStorageKeys: Object.keys(sessionStorage),
-      setupJustCompleted: sessionStorage.getItem("setupJustCompleted"),
-    });
+    // console.log("🔍 Checking for pending upsell:", {
+    //   sessionStorageFlag: pendingUpsellFlag,
+    //   hasSessionData: !!pendingUpsellDataStr,
+    //   allSessionStorageKeys: Object.keys(sessionStorage),
+    //   setupJustCompleted: sessionStorage.getItem("setupJustCompleted"),
+    // });
 
     // Parse upsell data from sessionStorage if available
     let upsellData = null;
     if (pendingUpsellDataStr) {
       try {
         upsellData = JSON.parse(pendingUpsellDataStr);
-        console.log("✅ Parsed upsell data from sessionStorage");
+        // console.log("✅ Parsed upsell data from sessionStorage");
       } catch (e) {
         console.error("❌ Failed to parse pending upsell data:", e);
         sessionStorage.removeItem("pendingUpsell");
@@ -224,22 +224,22 @@ export default function MyAccountPage() {
     // Determine modal to show
     if (pendingUpsellFlag === "true" && upsellData) {
       // CRITICAL: Show UPSELL FIRST for new users (matching development behavior)
-      console.log("🎯 Pending upsell detected, showing UPSELL FIRST");
+      // console.log("🎯 Pending upsell detected, showing UPSELL FIRST");
       requestModal("upsell", true, upsellData);
       modalTriggeredRef.current = true;
 
       // Queue user setup to show after upsell closes (if setup incomplete)
       if (!accountData.user.profileSetupCompleted) {
-        console.log("📋 User-setup queued to show AFTER upsell closes");
+        // console.log("📋 User-setup queued to show AFTER upsell closes");
         // UpsellModal's handleClose will trigger user-setup after upsell closes
       }
     } else if (!accountData.user.profileSetupCompleted) {
       // No pending upsell, show user setup modal directly
-      console.log("🎯 No pending upsell, showing user-setup directly");
+      // console.log("🎯 No pending upsell, showing user-setup directly");
       requestModal("user-setup", true);
       modalTriggeredRef.current = true;
     } else {
-      console.log("✅ User setup already completed, no modals needed");
+      // console.log("✅ User setup already completed, no modals needed");
     }
   }, [status, loading, session, accountData, requestModal]);
 
@@ -431,25 +431,25 @@ export default function MyAccountPage() {
   const isWinner = currentMajorDraw?.winner?.userId?.toString() === session?.user?.id;
 
   // Debug logging for entry calculation
-  console.log("📊 My Account - Entry Display Logic:", {
-    currentMajorDraw: currentMajorDraw,
-    majorDrawStats: majorDrawStats,
-    displaying: {
-      total: displayTotalEntries,
-      membership: displayMembershipEntries,
-      oneTime: displayOneTimeEntries,
-    },
-    drawStatus: {
-      status: currentMajorDraw?.status,
-      isCompleted,
-      isFrozen,
-      isActive,
-      isQueued,
-      daysRemaining,
-      isWinner,
-    },
-    note: "Now showing only current major draw entries (not accumulated total)",
-  });
+  // console.log("📊 My Account - Entry Display Logic:", {
+  //   currentMajorDraw: currentMajorDraw,
+  //   majorDrawStats: majorDrawStats,
+  //   displaying: {
+  //     total: displayTotalEntries,
+  //     membership: displayMembershipEntries,
+  //     oneTime: displayOneTimeEntries,
+  //   },
+  //   drawStatus: {
+  //     status: currentMajorDraw?.status,
+  //     isCompleted,
+  //     isFrozen,
+  //     isActive,
+  //     isQueued,
+  //     daysRemaining,
+  //     isWinner,
+  //   },
+  //   note: "Now showing only current major draw entries (not accumulated total)",
+  // });
 
   return (
     <div className="min-h-screen-svh bg-gray-50 w-full overflow-hidden">

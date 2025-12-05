@@ -17,7 +17,7 @@ export const markPurchaseCompleted = (): void => {
     // Ignore storage errors (e.g., private mode)
   }
 
-  console.log("🛒 Purchase completed - marked timestamp:", timestamp);
+  // console.log("🛒 Purchase completed - marked timestamp:", timestamp);
 };
 
 /**
@@ -41,12 +41,12 @@ export const hasRecentPurchase = (maxAgeMs: number = 15000): boolean => {
     const timeSincePurchase = Date.now() - purchaseTime;
     const isRecent = timeSincePurchase < maxAgeMs;
 
-    console.log("🔍 Recent purchase check:", {
-      purchaseTimestamp,
-      currentTime: Date.now(),
-      timeSincePurchase,
-      isRecent,
-    });
+    // console.log("🔍 Recent purchase check:", {
+    //   purchaseTimestamp,
+    //   currentTime: Date.now(),
+    //   timeSincePurchase,
+    //   isRecent,
+    // });
 
     if (!isRecent) {
       sessionStorage.removeItem("recentPurchaseTimestamp");

@@ -106,12 +106,12 @@ export async function GET(request: NextRequest) {
 
         // Debug log for first entry
         if (index === 0) {
-          console.log("🔍 Export Debug - First Entry:");
-          console.log("  - Raw state value:", user?.state);
-          console.log("  - State abbr (processed):", stateAbbr);
-          console.log("  - Mapped state name:", stateName);
-          console.log("  - STATE_NAMES object:", STATE_NAMES);
-          console.log("  - Lookup result:", STATE_NAMES[stateAbbr]);
+          // console.log("🔍 Export Debug - First Entry:");
+          // console.log("  - Raw state value:", user?.state);
+          // console.log("  - State abbr (processed):", stateAbbr);
+          // console.log("  - Mapped state name:", stateName);
+          // console.log("  - STATE_NAMES object:", STATE_NAMES);
+          // console.log("  - Lookup result:", STATE_NAMES[stateAbbr]);
         }
 
         return {

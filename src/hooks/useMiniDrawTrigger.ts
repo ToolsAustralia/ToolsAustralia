@@ -74,7 +74,7 @@ export const useMiniDrawTrigger = ({
     const isRecent = hasRecentPurchase();
 
     if (isRecent) {
-      console.log("🔍 Recent purchase detected - delaying mini draw");
+      // console.log("🔍 Recent purchase detected - delaying mini draw");
     }
 
     return isRecent;
@@ -85,32 +85,32 @@ export const useMiniDrawTrigger = ({
    * CRITICAL: Users with active subscriptions OR current draw entries are eligible
    */
   const isEligibleForMiniDraw = useCallback(() => {
-    console.log("🔍 Special packages eligibility check:", {
-      isAuthenticated,
-      userData: userData ? "exists" : "null",
-      currentDrawEntries: userMajorDrawStats?.currentDrawEntries,
-    });
+    // console.log("🔍 Special packages eligibility check:", {
+    //   isAuthenticated,
+    //   userData: userData ? "exists" : "null",
+    //   currentDrawEntries: userMajorDrawStats?.currentDrawEntries,
+    // });
 
     // Must be authenticated
     if (!isAuthenticated) {
-      console.log("🚫 Special packages trigger: User not authenticated");
+      // console.log("🚫 Special packages trigger: User not authenticated");
       return false;
     }
 
     // Check if user just completed a purchase - delay special packages
     if (checkRecentPurchase()) {
-      console.log("🚫 Special packages trigger: User just completed a purchase, delaying special packages");
+      // console.log("🚫 Special packages trigger: User just completed a purchase, delaying special packages");
       return false;
     }
 
     // CRITICAL: Must have access (active subscription OR current draw entries)
     const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
     if (!hasAccess) {
-      console.log("🚫 Special packages trigger: User doesn't have access (subscription OR current draw entries)");
+      // console.log("🚫 Special packages trigger: User doesn't have access (subscription OR current draw entries)");
       return false;
     }
 
-    console.log("✅ Special packages trigger: User is eligible");
+    // console.log("✅ Special packages trigger: User is eligible");
     return true;
   }, [isAuthenticated, userData, userMajorDrawStats, checkRecentPurchase]);
 
@@ -118,43 +118,43 @@ export const useMiniDrawTrigger = ({
    * Trigger special packages modal
    */
   const triggerMiniDrawModal = useCallback(() => {
-    console.log("🎯 Special packages trigger called with:", {
-      enabled,
-      isModalActive: isModalActive("special-packages"),
-      delay,
-      showOncePerSession,
-      hasModalBeenShown: hasModalBeenShown(),
-      triggerAttempted: triggerAttemptedRef.current,
-    });
+    // console.log("🎯 Special packages trigger called with:", {
+    //   enabled,
+    //   isModalActive: isModalActive("special-packages"),
+    //   delay,
+    //   showOncePerSession,
+    //   hasModalBeenShown: hasModalBeenShown(),
+    //   triggerAttempted: triggerAttemptedRef.current,
+    // });
 
     if (!enabled) {
-      console.log("🚫 Mini draw trigger: Disabled");
+      // console.log("🚫 Mini draw trigger: Disabled");
       return;
     }
 
     if (!isEligibleForMiniDraw()) {
-      console.log("🚫 Mini draw trigger: User not eligible");
+      // console.log("🚫 Mini draw trigger: User not eligible");
       return;
     }
 
     if (isModalActive("special-packages")) {
-      console.log("🚫 Special packages trigger: Modal already open");
+      // console.log("🚫 Special packages trigger: Modal already open");
       return;
     }
 
     // Don't show modal if it has already been shown in this session
     if (showOncePerSession && hasModalBeenShown()) {
-      console.log("🚫 Mini draw trigger: Modal already shown in this session");
+      // console.log("🚫 Mini draw trigger: Modal already shown in this session");
       return;
     }
 
     // Mark that we've attempted to trigger
     triggerAttemptedRef.current = true;
 
-    console.log("🎯 Triggering special packages modal after delay:", delay);
+    // console.log("🎯 Triggering special packages modal after delay:", delay);
 
     const timer = setTimeout(() => {
-      console.log("🎯 Opening special packages modal via priority system");
+      // console.log("🎯 Opening special packages modal via priority system");
       markModalAsShown(); // Mark as shown in session
       requestModal("special-packages", false); // Use priority system
     }, delay);
@@ -175,12 +175,12 @@ export const useMiniDrawTrigger = ({
    * Auto-trigger on component mount (only once per session)
    */
   useEffect(() => {
-    console.log("🎯 Mini draw useEffect triggered:", {
-      showOncePerSession,
-      isAuthenticated,
-      hasModalBeenShown: hasModalBeenShown(),
-      triggerAttempted: triggerAttemptedRef.current,
-    });
+    // console.log("🎯 Mini draw useEffect triggered:", {
+    //   showOncePerSession,
+    //   isAuthenticated,
+    //   hasModalBeenShown: hasModalBeenShown(),
+    //   triggerAttempted: triggerAttemptedRef.current,
+    // });
 
     // Only trigger if we haven't shown the modal yet in this session
     if (showOncePerSession && !hasModalBeenShown()) {
@@ -193,7 +193,7 @@ export const useMiniDrawTrigger = ({
    * Manual trigger function (bypasses session check for testing)
    */
   const manualTrigger = useCallback(() => {
-    console.log("🎯 Manual mini draw trigger");
+    // console.log("🎯 Manual mini draw trigger");
     // Reset session state for manual trigger
     triggerAttemptedRef.current = false;
 

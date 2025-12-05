@@ -79,31 +79,34 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     };
 
     // Get membership package details from static data for subscription
+    // ✅ FIX: Only return package data if subscription is ACTIVE
+    // This prevents showing package badges and membership status for cancelled subscriptions
+    // packageId is still stored in database (useful for resubscription), but not returned in API
     let subscriptionPackageData = null;
-    if (userData.subscription?.packageId) {
+    if (userData.subscription?.packageId && userData.subscription?.isActive) {
       try {
         // Use smart benefit resolution to get effective benefits
         const effectiveBenefits = getEffectiveBenefits(userData as unknown as import("@/models/User").IUser);
         if (effectiveBenefits) {
           subscriptionPackageData = effectiveBenefits.benefits; // Full package object
-          console.log(
-            `🔍 Using smart benefit resolution in my-account: ${
-              effectiveBenefits.packageName
-            } (preserved during downgrade: ${effectiveBenefits.packageId !== userData.subscription.packageId})`
-          );
+          // console.log(
+          //   `🔍 Using smart benefit resolution in my-account: ${
+          //     effectiveBenefits.packageName
+          //   } (preserved during downgrade: ${effectiveBenefits.packageId !== userData.subscription.packageId})`
+          // );
         } else {
           // Fallback to direct lookup
           const packageIdStr = String(userData.subscription.packageId);
           subscriptionPackageData = getPackageById(packageIdStr);
-          console.log(`🔍 Fallback to direct lookup in my-account: ${subscriptionPackageData?.name || "Not found"}`);
+          // console.log(`🔍 Fallback to direct lookup in my-account: ${subscriptionPackageData?.name || "Not found"}`);
         }
 
         if (subscriptionPackageData) {
-          console.log(
-            `✅ Successfully retrieved subscription package data in my-account: ${subscriptionPackageData.name}`
-          );
+          // console.log(
+          //   `✅ Successfully retrieved subscription package data in my-account: ${subscriptionPackageData.name}`
+          // );
         } else {
-          console.log(`⚠️ No package data returned for user subscription in my-account`);
+          // console.log(`⚠️ No package data returned for user subscription in my-account`);
         }
       } catch (error) {
         console.log(
@@ -127,7 +130,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               packageData: packageData, // Include full package details
             });
           } else {
-            console.log(`⚠️ One-time package ID not found in static data: ${packageIdStr}`);
+            // console.log(`⚠️ One-time package ID not found in static data: ${packageIdStr}`);
           }
         } catch (error) {
           console.log(
@@ -179,13 +182,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    console.log("🔍 My Account API - Profile setup check:", {
-      profileSetupCompleted: (userData as { profileSetupCompleted?: boolean }).profileSetupCompleted,
-      hasProfileSetupCompleted: "profileSetupCompleted" in userData,
-      userId: userData._id,
-    });
+    // console.log("🔍 My Account API - Profile setup check:", {
+    //   profileSetupCompleted: (userData as { profileSetupCompleted?: boolean }).profileSetupCompleted,
+    //   hasProfileSetupCompleted: "profileSetupCompleted" in userData,
+    //   userId: userData._id,
+    // });
 
-    return NextResponse.json({
+    // ✅ CRITICAL: Add cache control headers to ensure fresh data
+    // This prevents Next.js from caching subscription status changes
+    const response = NextResponse.json({
       success: true,
       data: {
         user: {
@@ -203,6 +208,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         },
       },
     });
+
+    // Set cache control headers to prevent caching of subscription status
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+
+    return response;
   } catch (error) {
     console.error("Error fetching user account data:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

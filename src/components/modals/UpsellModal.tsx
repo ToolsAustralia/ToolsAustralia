@@ -59,7 +59,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // Helper function to invalidate user-related caches
   const invalidateUserCaches = useCallback(
     (userId: string) => {
-      console.log("🔄 Invalidating user caches for:", userId);
+      // console.log("🔄 Invalidating user caches for:", userId);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
@@ -87,22 +87,22 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       entries: number;
     }) => {
       if (invoiceFinalized || !originalPurchaseContext || !userContext?.userId) {
-        console.log("📧 Invoice finalization skipped:", {
-          invoiceFinalized,
-          hasContext: !!originalPurchaseContext,
-          hasUserId: !!userContext?.userId,
-          contextDetails: originalPurchaseContext
-            ? {
-                paymentIntentId: originalPurchaseContext.paymentIntentId,
-                packageName: originalPurchaseContext.packageName,
-              }
-            : null,
-        });
+        // console.log("📧 Invoice finalization skipped:", {
+        //   invoiceFinalized,
+        //   hasContext: !!originalPurchaseContext,
+        //   hasUserId: !!userContext?.userId,
+        //   contextDetails: originalPurchaseContext
+        //     ? {
+        //         paymentIntentId: originalPurchaseContext.paymentIntentId,
+        //         packageName: originalPurchaseContext.packageName,
+        //       }
+        //     : null,
+        // });
         return;
       }
 
       try {
-        console.log("📧 Finalizing invoice...", { withUpsell: !!upsellData });
+        // console.log("📧 Finalizing invoice...", { withUpsell: !!upsellData });
 
         const response = await fetch("/api/invoice/finalize", {
           method: "POST",
@@ -116,7 +116,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
         if (response.ok) {
           const result = await response.json();
-          console.log("✅ Invoice finalized:", result);
+          // console.log("✅ Invoice finalized:", result);
           setInvoiceFinalized(true);
 
           // Clear timeout if it exists
@@ -148,7 +148,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     // ✅ CRITICAL: Finalize invoice if not already finalized
     // This ensures Klaviyo email is sent even if user closes modal without clicking decline
     if (!invoiceFinalized && originalPurchaseContext) {
-      console.log("📧 Modal closing - finalizing invoice with original purchase only");
+      // console.log("📧 Modal closing - finalizing invoice with original purchase only");
       finalizeInvoice();
     }
 
@@ -160,14 +160,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("pendingUpsell");
       sessionStorage.removeItem("pendingUpsellFlag");
-      console.log("🗑️ Cleared pending upsell from sessionStorage");
+      // console.log("🗑️ Cleared pending upsell from sessionStorage");
     }
 
     // Check if user needs to complete setup
     // Don't trigger if setup was just completed
     const setupJustCompleted = sessionStorage.getItem("setupJustCompleted");
     if (userData && !userData.profileSetupCompleted && !setupJustCompleted) {
-      console.log("🎯 Upsell closed, user needs setup - triggering user-setup modal");
+      // console.log("🎯 Upsell closed, user needs setup - triggering user-setup modal");
       setTimeout(() => {
         const { requestModal } = useModalPriorityStore.getState();
         requestModal("user-setup", true);
@@ -187,29 +187,29 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       setPaymentIntentId(null);
 
       // Debug logging to check context
-      console.log("🔍 UpsellModal opened:", {
-        hasContext: !!originalPurchaseContext,
-        contextDetails: originalPurchaseContext
-          ? {
-              paymentIntentId: originalPurchaseContext.paymentIntentId,
-              packageName: originalPurchaseContext.packageName,
-              packageType: originalPurchaseContext.packageType,
-            }
-          : null,
-        invoiceFinalized,
-      });
+      // console.log("🔍 UpsellModal opened:", {
+      //   hasContext: !!originalPurchaseContext,
+      //   contextDetails: originalPurchaseContext
+      //     ? {
+      //         paymentIntentId: originalPurchaseContext.paymentIntentId,
+      //         packageName: originalPurchaseContext.packageName,
+      //         packageType: originalPurchaseContext.packageType,
+      //       }
+      //     : null,
+      //   invoiceFinalized,
+      // });
 
       // Start 1-minute timeout for invoice finalization if we have purchase context
       if (originalPurchaseContext && !invoiceFinalized) {
         const timeoutId = setTimeout(() => {
-          console.log("⏰ Invoice finalization timeout - sending original purchase only");
+          // console.log("⏰ Invoice finalization timeout - sending original purchase only");
           finalizeInvoice();
         }, 60000); // 1 minute = 60000ms
 
         finalizationTimeoutIdRef.current = timeoutId;
-        console.log("⏰ Started 60-second timeout for invoice finalization");
+        // console.log("⏰ Started 60-second timeout for invoice finalization");
       } else {
-        console.log("⚠️ Invoice timeout NOT started - missing context or already finalized");
+        // console.log("⚠️ Invoice timeout NOT started - missing context or already finalized");
       }
 
       return () => {
@@ -281,12 +281,12 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         throw new Error("No default payment method found. Please select a payment method.");
       }
 
-      console.log(
-        "🛒 Processing upsell purchase:",
-        offer.title,
-        "with default payment method:",
-        defaultPaymentMethod.paymentMethodId
-      );
+      // console.log(
+      //   "🛒 Processing upsell purchase:",
+      //   offer.title,
+      //   "with default payment method:",
+      //   defaultPaymentMethod.paymentMethodId
+      // );
 
       // Use optimistic upsell purchase hook
       purchaseUpsell(
@@ -352,7 +352,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
   // Handle payment processing success
   const handlePaymentSuccess = async (status: PaymentStatusResponse) => {
-    console.log("Upsell payment processed successfully:", status);
+    // console.log("Upsell payment processed successfully:", status);
     setShowPaymentProcessing(false);
 
     // Track Purchase event client-side for Meta Pixel Helper visibility
@@ -391,7 +391,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           platform: "tools-australia",
         });
 
-        console.log(`📘 Facebook Pixel: Upsell Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
+        // console.log(`📘 Facebook Pixel: Upsell Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
       } catch (pixelError) {
         console.error("❌ Error tracking Upsell Purchase client-side:", pixelError);
         // Non-blocking - continue with success flow
@@ -512,7 +512,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
 
     // Fallback: return a default image or the offer's imageUrl if available
-    console.warn(`⚠️ No image mapping found for upsell ID: ${offer.id}`);
+    // console.warn(`⚠️ No image mapping found for upsell ID: ${offer.id}`);
     return offer.imageUrl || "/images/upsells/Tradie Plus.png";
   };
 
@@ -560,13 +560,13 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
             {/* Primary CTA - Purchase with Default Card */}
             <button
               onClick={() => {
-                console.log("🟢 Upsell primary CTA clicked", {
-                  offerId: offer.id,
-                  isProcessing,
-                  hasDefaultPaymentMethod: !!defaultPaymentMethod,
-                  paymentMethodId: defaultPaymentMethod?.paymentMethodId,
-                  hasOriginalPurchaseContext: !!originalPurchaseContext,
-                });
+                // console.log("🟢 Upsell primary CTA clicked", {
+                //   offerId: offer.id,
+                //   isProcessing,
+                //   hasDefaultPaymentMethod: !!defaultPaymentMethod,
+                //   paymentMethodId: defaultPaymentMethod?.paymentMethodId,
+                //   hasOriginalPurchaseContext: !!originalPurchaseContext,
+                // });
                 handleAccept();
               }}
               disabled={isProcessing || !defaultPaymentMethod}
@@ -598,11 +598,11 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
             {/* Secondary Action */}
             <button
               onClick={() => {
-                console.log("🟡 Upsell decline button clicked", {
-                  offerId: offer.id,
-                  invoiceFinalized,
-                  hasOriginalPurchaseContext: !!originalPurchaseContext,
-                });
+                // console.log("🟡 Upsell decline button clicked", {
+                //   offerId: offer.id,
+                //   invoiceFinalized,
+                //   hasOriginalPurchaseContext: !!originalPurchaseContext,
+                // });
                 handleDecline();
               }}
               className="w-full text-red-600 py-2 sm:py-2.5 px-4 sm:px-6 rounded-xl border border-red-300 hover:bg-red-50 transition-colors font-medium text-sm sm:text-base"

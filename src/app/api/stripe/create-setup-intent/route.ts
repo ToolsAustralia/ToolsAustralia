@@ -33,14 +33,14 @@ export async function POST() {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
 
-      console.log(`🔧 Creating SetupIntent for authenticated user: ${user.email}`);
+      // console.log(`🔧 Creating SetupIntent for authenticated user: ${user.email}`);
 
       stripeCustomerId = user.stripeCustomerId;
       userEmail = user.email;
       userId = user._id.toString();
     } else {
       // Guest user - create a temporary Stripe customer
-      console.log(`🔧 Creating SetupIntent for guest user`);
+      // console.log(`🔧 Creating SetupIntent for guest user`);
 
       // For guest users, we'll create a temporary customer
       // The actual customer will be created during the purchase process
@@ -53,7 +53,7 @@ export async function POST() {
       stripeCustomerId = customer.id;
       userId = "guest";
 
-      console.log(`✅ Created temporary Stripe customer for guest: ${stripeCustomerId}`);
+      // console.log(`✅ Created temporary Stripe customer for guest: ${stripeCustomerId}`);
     }
 
     // Get or create Stripe customer for authenticated users
@@ -74,7 +74,7 @@ export async function POST() {
         user.stripeCustomerId = stripeCustomerId;
         await user.save();
 
-        console.log(`✅ Created new Stripe customer: ${stripeCustomerId}`);
+        // console.log(`✅ Created new Stripe customer: ${stripeCustomerId}`);
       }
     }
 
@@ -91,7 +91,7 @@ export async function POST() {
       },
     });
 
-    console.log(`✅ SetupIntent created: ${setupIntent.id}`);
+    // console.log(`✅ SetupIntent created: ${setupIntent.id}`);
 
     return NextResponse.json({
       success: true,

@@ -45,7 +45,7 @@ export function getFBCFromURL(): string | undefined {
 
     return undefined;
   } catch (error) {
-    console.warn("Error extracting fbc from URL:", error);
+    // console.warn("Error extracting fbc from URL:", error);
     return undefined;
   }
 }
@@ -70,7 +70,7 @@ export function getFBPFromCookie(): string | undefined {
 
     return undefined;
   } catch (error) {
-    console.warn("Error extracting fbp from cookie:", error);
+    // console.warn("Error extracting fbp from cookie:", error);
     return undefined;
   }
 }
@@ -194,7 +194,7 @@ export function extractFBCFromRequest(request: { url?: string; headers?: Headers
 
     return undefined;
   } catch (error) {
-    console.warn("Error extracting fbc from request:", error);
+    // console.warn("Error extracting fbc from request:", error);
     return undefined;
   }
 }
@@ -218,7 +218,7 @@ export function extractFBPFromRequest(request: {
 
     return undefined;
   } catch (error) {
-    console.warn("Error extracting fbp from request:", error);
+    // console.warn("Error extracting fbp from request:", error);
     return undefined;
   }
 }

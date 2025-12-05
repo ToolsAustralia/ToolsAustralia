@@ -21,28 +21,28 @@ import type { IUser } from "@/models/User";
  */
 export async function syncUserProfileToKlaviyo(user: IUser, brandInterestFromSignup?: string | null): Promise<void> {
   try {
-    console.log(`📊 Syncing Klaviyo profile for user: ${user.email}`);
+    // console.log(`📊 Syncing Klaviyo profile for user: ${user.email}`);
 
     // ✅ VALIDATION: Log user data structure before processing
-    console.log(`📊 User data validation before sync:`, {
-      userId: user._id?.toString(),
-      email: user.email,
-      hasUpsellPurchases: !!user.upsellPurchases,
-      upsellPurchasesLength: user.upsellPurchases?.length || 0,
-      hasSubscription: !!user.subscription,
-      subscriptionIsActive: user.subscription?.isActive,
-      accumulatedEntries: user.accumulatedEntries,
-      rewardsPoints: user.rewardsPoints,
-    });
+    // console.log(`📊 User data validation before sync:`, {
+    //   userId: user._id?.toString(),
+    //   email: user.email,
+    //   hasUpsellPurchases: !!user.upsellPurchases,
+    //   upsellPurchasesLength: user.upsellPurchases?.length || 0,
+    //   hasSubscription: !!user.subscription,
+    //   subscriptionIsActive: user.subscription?.isActive,
+    //   accumulatedEntries: user.accumulatedEntries,
+    //   rewardsPoints: user.rewardsPoints,
+    // });
 
     // ✅ CRITICAL FIX: await the async userToKlaviyoProfile function
     const profile = await userToKlaviyoProfile(user, brandInterestFromSignup);
     const result = await klaviyo.upsertProfile(profile);
 
     if (result.success) {
-      console.log(`✅ Klaviyo profile synced successfully for: ${user.email}`);
+      // console.log(`✅ Klaviyo profile synced successfully for: ${user.email}`);
     } else {
-      console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
+      // console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
     }
   } catch (error) {
     console.error(`❌ Error syncing Klaviyo profile for ${user.email}:`, error);
@@ -67,13 +67,13 @@ export function syncUserProfileToKlaviyoBackground(user: IUser, brandInterestFro
  * Useful for bulk operations or data migration
  */
 export async function syncMultipleUserProfilesToKlaviyo(users: IUser[]): Promise<void> {
-  console.log(`📊 Starting bulk Klaviyo profile sync for ${users.length} users`);
+  // console.log(`📊 Starting bulk Klaviyo profile sync for ${users.length} users`);
 
   const syncPromises = users.map((user) => syncUserProfileToKlaviyo(user));
 
   try {
     await Promise.allSettled(syncPromises);
-    console.log(`✅ Bulk Klaviyo profile sync completed for ${users.length} users`);
+    // console.log(`✅ Bulk Klaviyo profile sync completed for ${users.length} users`);
   } catch (error) {
     console.error(`❌ Bulk Klaviyo profile sync failed:`, error);
   }
@@ -89,10 +89,10 @@ export async function syncMultipleUserProfilesToKlaviyo(users: IUser[]): Promise
 export function ensureUserProfileSynced(user: IUser, brandInterestFromSignup?: string | null): void {
   // Only sync if Klaviyo is enabled
   if (process.env.KLAVIYO_ENABLED !== "false") {
-    console.log(`📊 ensureUserProfileSynced called for user: ${user.email}`);
-    console.log(`📊 User data - accumulatedEntries: ${user.accumulatedEntries}, rewardsPoints: ${user.rewardsPoints}`);
+    // console.log(`📊 ensureUserProfileSynced called for user: ${user.email}`);
+    // console.log(`📊 User data - accumulatedEntries: ${user.accumulatedEntries}, rewardsPoints: ${user.rewardsPoints}`);
     syncUserProfileToKlaviyoBackground(user, brandInterestFromSignup);
   } else {
-    console.log(`📊 Klaviyo is disabled, skipping profile sync for: ${user.email}`);
+    // console.log(`📊 Klaviyo is disabled, skipping profile sync for: ${user.email}`);
   }
 }

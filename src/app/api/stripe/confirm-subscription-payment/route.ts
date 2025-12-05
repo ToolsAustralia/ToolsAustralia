@@ -45,22 +45,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { subscriptionId, clientSecret, userId } = confirmPaymentSchema.parse(body);
 
-    console.log(`💳 Confirming payment for subscription: ${subscriptionId}`);
-    console.log(`💳 Request body:`, { subscriptionId, clientSecret: clientSecret ? "provided" : "null", userId });
+    // console.log(`💳 Confirming payment for subscription: ${subscriptionId}`);
+    // console.log(`💳 Request body:`, { subscriptionId, clientSecret: clientSecret ? "provided" : "null", userId });
 
     let user;
 
     // Handle two cases: new user registration (with userId) or existing user (with session)
     if (userId) {
       // New user registration flow - find user by provided userId
-      console.log(`🆕 New user registration flow - userId: ${userId}`);
+      // console.log(`🆕 New user registration flow - userId: ${userId}`);
       user = await User.findById(userId);
       if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
     } else {
       // Existing user flow - use session authentication
-      console.log(`👤 Existing user flow - checking session`);
+      // console.log(`👤 Existing user flow - checking session`);
       const session = await getServerSession(authOptions);
       if (!session?.user?.id) {
         return NextResponse.json({ error: "Authentication required" }, { status: 401 });
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // If no payment intent exists for incomplete subscription, pay the invoice directly
     if (!paymentIntent && subscription.status === "incomplete") {
-      console.log("🔧 No payment intent found for incomplete subscription, paying invoice directly...");
+      // console.log("🔧 No payment intent found for incomplete subscription, paying invoice directly...");
       try {
         // Get the customer's default payment method
         const customer = await stripe.customers.retrieve(subscription.customer as string);
@@ -116,14 +116,14 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        console.log(`💳 Using default payment method: ${defaultPaymentMethod}`);
+        // console.log(`💳 Using default payment method: ${defaultPaymentMethod}`);
 
         // Pay the invoice directly - this will create a PaymentIntent and trigger webhook
         const paidInvoice = await stripe.invoices.pay(latestInvoice?.id || "", {
           payment_method: defaultPaymentMethod,
         });
 
-        console.log(`💳 Paid invoice: ${paidInvoice.id}, status: ${paidInvoice.status}`);
+        // console.log(`💳 Paid invoice: ${paidInvoice.id}, status: ${paidInvoice.status}`);
 
         // Get the payment intent from the paid invoice
         const invoice = paidInvoice as { payment_intent?: string | { id: string; status: string } };
@@ -132,9 +132,9 @@ export async function POST(request: NextRequest) {
             typeof invoice.payment_intent === "string"
               ? await stripe.paymentIntents.retrieve(invoice.payment_intent)
               : invoice.payment_intent;
-          console.log(`💳 Invoice payment intent: ${paymentIntent?.id}, status: ${paymentIntent?.status}`);
+          // console.log(`💳 Invoice payment intent: ${paymentIntent?.id}, status: ${paymentIntent?.status}`);
         } else {
-          console.log("⚠️ No payment intent found in paid invoice - webhook will process benefits");
+          // console.log("⚠️ No payment intent found in paid invoice - webhook will process benefits");
 
           // ✅ CRITICAL: Don't manually update subscription status here
           // Let the webhook handle ALL subscription processing to prevent duplicates
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
     if (paymentIntent && (paymentIntent.status === "requires_payment_method" || paymentIntent.status === "succeeded")) {
       // Check if payment is already succeeded (when we created and confirmed it in one step)
       if (paymentIntent.status === "succeeded") {
-        console.log("✅ Payment already succeeded - activating subscription");
+        // console.log("✅ Payment already succeeded - activating subscription");
 
         // Update user subscription status
         if (user.subscription) {
@@ -201,14 +201,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Verify payment is fully settled before proceeding
-        console.log(`🔍 Payment succeeded, verifying payment settlement...`);
+        // console.log(`🔍 Payment succeeded, verifying payment settlement...`);
         await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
 
         // Re-fetch payment intent to ensure it's fully settled
         const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
 
         if (verifiedPaymentIntent.status === "succeeded") {
-          console.log(`✅ Payment fully verified and settled`);
+          // console.log(`✅ Payment fully verified and settled`);
 
           // Get the membership package for logging
           const packageId = user.subscription?.packageId?.toString() || subscription.metadata?.packageId;
@@ -216,8 +216,8 @@ export async function POST(request: NextRequest) {
 
           if (membershipPackage) {
             // Payment successful - benefits will be granted via webhook
-            console.log(`✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${paymentIntent.id} confirmed successfully`);
-            console.log(`📋 Benefits will be granted via webhook processing shortly`);
+            // console.log(`✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${paymentIntent.id} confirmed successfully`);
+            // console.log(`📋 Benefits will be granted via webhook processing shortly`);
           } else {
             console.error(`❌ Membership package not found for packageId: ${packageId}`);
           }
@@ -268,7 +268,7 @@ export async function POST(request: NextRequest) {
           const confirmedPaymentIntent = await stripe.paymentIntents.confirm(clientSecret);
 
           if (confirmedPaymentIntent.status === "succeeded") {
-            console.log("✅ Payment confirmed successfully");
+            // console.log("✅ Payment confirmed successfully");
 
             // Update Stripe subscription status to active
             try {
@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
                   payment_confirmed: "true",
                 },
               });
-              console.log(`✅ Stripe subscription updated to status: ${updatedSubscription.status}`);
+              // console.log(`✅ Stripe subscription updated to status: ${updatedSubscription.status}`);
             } catch (stripeUpdateError) {
               console.error("❌ Failed to update Stripe subscription:", stripeUpdateError);
               // Continue with local update even if Stripe update fails
@@ -306,18 +306,18 @@ export async function POST(request: NextRequest) {
                 user.subscription.isActive = true;
                 user.subscription.status = "active";
               }
-              console.log(`📦 Set subscription packageId from metadata: ${subscription.metadata.packageId}`);
+              // console.log(`📦 Set subscription packageId from metadata: ${subscription.metadata.packageId}`);
             }
 
             // Verify payment is fully settled before proceeding
-            console.log(`🔍 Payment confirmed, verifying payment settlement...`);
+            // console.log(`🔍 Payment confirmed, verifying payment settlement...`);
             await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
 
             // Re-fetch payment intent to ensure it's fully settled
             const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(confirmedPaymentIntent.id);
 
             if (verifiedPaymentIntent.status === "succeeded") {
-              console.log(`✅ Payment fully verified and settled`);
+              // console.log(`✅ Payment fully verified and settled`);
 
               // Get the membership package for logging
               const membershipPackage = getPackageById(
@@ -326,13 +326,12 @@ export async function POST(request: NextRequest) {
 
               if (membershipPackage) {
                 // Payment successful - benefits will be granted via webhook
-                console.log(
-                  `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
-                );
-                console.log(`📋 Benefits will be granted via webhook processing shortly`);
-
+                // console.log(
+                //   `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
+                // );
+                // console.log(`📋 Benefits will be granted via webhook processing shortly`);
                 // ✅ Klaviyo integration handled by webhook for reliability and best practices
-                console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
+                // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
               } else {
                 console.error(`❌ Membership package not found for immediate processing`);
               }
@@ -409,21 +408,21 @@ export async function POST(request: NextRequest) {
       }
     } else if (subscription.status === "incomplete") {
       // Subscription is incomplete - this is expected for new subscriptions
-      console.log("⏳ Subscription is incomplete - this is normal for new subscriptions");
+      // console.log("⏳ Subscription is incomplete - this is normal for new subscriptions");
 
       // For incomplete subscriptions, we need to confirm the payment intent
       if (paymentIntent && paymentIntent.status === "requires_payment_method") {
         if (clientSecret) {
           try {
-            console.log("💳 Confirming payment intent for incomplete subscription");
+            // console.log("💳 Confirming payment intent for incomplete subscription");
             const confirmedPaymentIntent = await stripe.paymentIntents.confirm(clientSecret);
 
             if (confirmedPaymentIntent.status === "succeeded") {
-              console.log("✅ Payment confirmed successfully for incomplete subscription");
+              // console.log("✅ Payment confirmed successfully for incomplete subscription");
 
               // Note: Stripe will automatically update subscription status to active via webhook
               // when invoice.payment_succeeded event is processed
-              console.log(`✅ Payment confirmed - subscription will be activated via webhook`);
+              // console.log(`✅ Payment confirmed - subscription will be activated via webhook`);
 
               // Update user subscription status
               if (user.subscription) {
@@ -432,14 +431,14 @@ export async function POST(request: NextRequest) {
               }
 
               // Verify payment is fully settled before proceeding
-              console.log(`🔍 Payment confirmed, verifying payment settlement...`);
+              // console.log(`🔍 Payment confirmed, verifying payment settlement...`);
               await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
 
               // Re-fetch payment intent to ensure it's fully settled
               const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(confirmedPaymentIntent.id);
 
               if (verifiedPaymentIntent.status === "succeeded") {
-                console.log(`✅ Payment fully verified and settled`);
+                // console.log(`✅ Payment fully verified and settled`);
 
                 // Get the membership package for logging
                 const membershipPackage = getPackageById(
@@ -448,10 +447,10 @@ export async function POST(request: NextRequest) {
 
                 if (membershipPackage) {
                   // Payment successful - benefits will be granted via webhook
-                  console.log(
-                    `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
-                  );
-                  console.log(`📋 Benefits will be granted via webhook processing shortly`);
+                  // console.log(
+                  //   `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
+                  // );
+                  // console.log(`📋 Benefits will be granted via webhook processing shortly`);
                 } else {
                   console.error(`❌ Membership package not found for immediate processing`);
                 }
@@ -493,16 +492,16 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // No client secret provided - try to create one using the existing payment intent
-          console.log("🔑 No client secret provided, using existing payment intent");
+          // console.log("🔑 No client secret provided, using existing payment intent");
           try {
             const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntent.id);
 
             if (confirmedPaymentIntent.status === "succeeded") {
-              console.log("✅ Payment confirmed successfully using existing payment intent");
+              // console.log("✅ Payment confirmed successfully using existing payment intent");
 
               // Note: Stripe will automatically update subscription status to active via webhook
               // when invoice.payment_succeeded event is processed
-              console.log(`✅ Payment confirmed - subscription will be activated via webhook`);
+              // console.log(`✅ Payment confirmed - subscription will be activated via webhook`);
 
               // Update user subscription status
               if (user.subscription) {
@@ -511,14 +510,14 @@ export async function POST(request: NextRequest) {
               }
 
               // Verify payment is fully settled before proceeding
-              console.log(`🔍 Payment confirmed, verifying payment settlement...`);
+              // console.log(`🔍 Payment confirmed, verifying payment settlement...`);
               await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
 
               // Re-fetch payment intent to ensure it's fully settled
               const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(confirmedPaymentIntent.id);
 
               if (verifiedPaymentIntent.status === "succeeded") {
-                console.log(`✅ Payment fully verified and settled`);
+                // console.log(`✅ Payment fully verified and settled`);
 
                 // Get the membership package for logging
                 const membershipPackage = getPackageById(
@@ -527,10 +526,10 @@ export async function POST(request: NextRequest) {
 
                 if (membershipPackage) {
                   // Payment successful - benefits will be granted via webhook
-                  console.log(
-                    `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
-                  );
-                  console.log(`📋 Benefits will be granted via webhook processing shortly`);
+                  // console.log(
+                  //   `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
+                  // );
+                  // console.log(`📋 Benefits will be granted via webhook processing shortly`);
                 } else {
                   console.error(`❌ Membership package not found for immediate processing`);
                 }
@@ -597,9 +596,9 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // Payment intent not found or in wrong state
-        console.log(
-          `⚠️ Payment intent not found or wrong state. Found: ${paymentIntent ? paymentIntent.status : "null"}`
-        );
+        // console.log(
+        //   `⚠️ Payment intent not found or wrong state. Found: ${paymentIntent ? paymentIntent.status : "null"}`
+        // );
         return NextResponse.json(
           {
             success: false,
@@ -613,7 +612,7 @@ export async function POST(request: NextRequest) {
       }
     } else if (subscription.status === "active") {
       // Subscription is already active
-      console.log("✅ Subscription is already active");
+      // console.log("✅ Subscription is already active");
 
       return NextResponse.json({
         success: true,
@@ -625,7 +624,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Subscription is in an unexpected state
-      console.log(`⚠️ Unexpected subscription status: ${subscription.status}`);
+      // console.log(`⚠️ Unexpected subscription status: ${subscription.status}`);
       return NextResponse.json(
         {
           success: false,

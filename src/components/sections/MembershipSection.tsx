@@ -198,7 +198,7 @@ export default function MembershipSection({
   // Listen for upsell modal requests
   useEffect(() => {
     const handleOpenMembershipModal = (event: CustomEvent) => {
-      console.log("🎯 MembershipSection received openMembershipModal event:", event.detail);
+      // console.log("🎯 MembershipSection received openMembershipModal event:", event.detail);
       const { plan } = event.detail;
       if (plan) {
         membershipModal.setSelectedPlan(plan);
@@ -257,13 +257,13 @@ export default function MembershipSection({
 
     // Debug logging
     if (process.env.NODE_ENV === "development") {
-      console.log("Plan comparison:", {
-        planName: plan.name,
-        planPeriod: plan.period,
-        currentPlanName: currentName,
-        isCurrent,
-        isSubscriptionPlan: plan.period !== "one-time",
-      });
+      // console.log("Plan comparison:", {
+      //   planName: plan.name,
+      //   planPeriod: plan.period,
+      //   currentPlanName: currentName,
+      //   isCurrent,
+      //   isSubscriptionPlan: plan.period !== "one-time",
+      // });
     }
 
     return isCurrent;
@@ -322,20 +322,20 @@ export default function MembershipSection({
 
   // Get membership plans from API data and convert to local format
   const membershipPlans: LocalMembershipPlan[] = (() => {
-    console.log("🔍 MembershipSection Debug:", {
-      activeTab,
-      loading,
-      userLoading,
-      error,
-      hasActiveSubscription,
-      subscriptionPackages: subscriptionPackages.length,
-      oneTimePackages: oneTimePackages.length,
-      oneTimePackagesData: oneTimePackages.map((pkg) => ({
-        id: pkg.id,
-        name: pkg.name,
-        isMemberOnly: pkg.isMemberOnly,
-      })),
-    });
+    // console.log("🔍 MembershipSection Debug:", {
+    //   activeTab,
+    //   loading,
+    //   userLoading,
+    //   error,
+    //   hasActiveSubscription,
+    //   subscriptionPackages: subscriptionPackages.length,
+    //   oneTimePackages: oneTimePackages.length,
+    //   oneTimePackagesData: oneTimePackages.map((pkg) => ({
+    //     id: pkg.id,
+    //     name: pkg.name,
+    //     isMemberOnly: pkg.isMemberOnly,
+    //   })),
+    // });
 
     // For static membership data, don't wait for API loading but allow user filtering
     if (loading) return []; // Only return empty if membership data is actually loading
@@ -353,18 +353,18 @@ export default function MembershipSection({
     if (effectiveTab === "membership") {
       // Always show subscription packages
       apiPlans = subscriptionPackages;
-      console.log("🔍 Showing subscription packages:", apiPlans.length);
+      // console.log("🔍 Showing subscription packages:", apiPlans.length);
     } else {
       // For one-time packages, filter based on access (subscription OR current draw entries)
       if (userLoading) {
         apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
-        console.log("🔍 User loading - showing regular packages:", apiPlans.length);
+        // console.log("🔍 User loading - showing regular packages:", apiPlans.length);
       } else if (hasAccessToAdditionalPackages) {
         apiPlans = oneTimePackages.filter((pkg) => pkg.isMemberOnly === true);
-        console.log("🔍 User with access - showing additional packages:", apiPlans.length);
+        // console.log("🔍 User with access - showing additional packages:", apiPlans.length);
       } else {
         apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
-        console.log("🔍 User without access - showing regular packages:", apiPlans.length);
+        // console.log("🔍 User without access - showing regular packages:", apiPlans.length);
       }
     }
 
@@ -413,17 +413,17 @@ export default function MembershipSection({
       return plan;
     });
 
-    console.log(
-      "🔍 Final converted plans:",
-      finalPlans.length,
-      finalPlans.map((p) => ({
-        id: p.id,
-        name: p.name,
-        entries: p.metadata?.entriesCount,
-        isPromoActive: p.metadata?.isPromoActive,
-        promoMultiplier: p.metadata?.promoMultiplier,
-      }))
-    );
+    // console.log(
+    //   "🔍 Final converted plans:",
+    //   finalPlans.length,
+    //   finalPlans.map((p) => ({
+    //     id: p.id,
+    //     name: p.name,
+    //     entries: p.metadata?.entriesCount,
+    //     isPromoActive: p.metadata?.isPromoActive,
+    //     promoMultiplier: p.metadata?.promoMultiplier,
+    //   }))
+    // );
     return finalPlans;
   })();
 

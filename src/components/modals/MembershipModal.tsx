@@ -305,7 +305,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // Helper function to invalidate user-related caches
   const invalidateUserCaches = useCallback(
     (userId: string) => {
-      console.log("🔄 Invalidating user caches for:", userId);
+      // console.log("🔄 Invalidating user caches for:", userId);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
@@ -316,7 +316,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // Custom close handler that resets payment processing state
   const handleClose = useCallback(() => {
-    console.log("🔄 MembershipModal: Resetting payment processing state on close");
+    // console.log("🔄 MembershipModal: Resetting payment processing state on close");
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
     setProcessingPackageName("");
@@ -334,10 +334,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setProcessingPackageName("");
       setProcessingPackageType(undefined as unknown as "one-time" | "subscription" | "upsell" | "mini-draw");
       // Success state is now handled by global LoadingContext
-      console.log("🔄 Reset upsell trigger guard and payment processing state for new purchase");
+      // console.log("🔄 Reset upsell trigger guard and payment processing state for new purchase");
     } else {
       // Ensure payment processing is cancelled when modal closes
-      console.log("🔄 MembershipModal: Cancelling payment processing on modal close");
+      // console.log("🔄 MembershipModal: Cancelling payment processing on modal close");
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
       setProcessingPackageName("");
@@ -393,7 +393,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // Pre-populate form fields with user data when authenticated user opens modal
   useEffect(() => {
     if (isAuthenticated && userData && isOpen) {
-      console.log(`?? Pre-populating form for authenticated user:`, userData.email);
+      // console.log(`?? Pre-populating form for authenticated user:`, userData.email);
       setFormData((prevFormData) => ({
         firstName: userData.firstName || prevFormData.firstName,
         lastName: userData.lastName || prevFormData.lastName,
@@ -434,7 +434,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // Handle upsell payment events
   useEffect(() => {
     const handleUpsellPayment = (event: CustomEvent) => {
-      console.log("🎯 Received upsell payment event:", event.detail);
+      // console.log("🎯 Received upsell payment event:", event.detail);
       const { offer } = event.detail;
 
       if (!offer) {
@@ -444,7 +444,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
       // Convert upsell offer to LocalMembershipPlan format using the new helper
       const upsellPlan = convertUpsellToLocalPlan(offer);
-      console.log("🎯 Converted upsell offer to membership plan:", upsellPlan);
+      // console.log("🎯 Converted upsell offer to membership plan:", upsellPlan);
 
       // Set the upsell plan and notify parent component to change it
       if (onPlanChange) {
@@ -457,7 +457,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       });
       window.dispatchEvent(openModalEvent);
 
-      console.log("🎯 Upsell plan converted, selected and dispatched openMembershipModal");
+      // console.log("🎯 Upsell plan converted, selected and dispatched openMembershipModal");
     };
 
     window.addEventListener("showUpsellPayment", handleUpsellPayment as EventListener);
@@ -578,10 +578,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
       if (promotionsMatch && promotionsMatch[1]) {
         promotionSlug = promotionsMatch[1];
-        console.log(`📊 Captured promotion slug from URL: ${promotionSlug}`);
+        // console.log(`📊 Captured promotion slug from URL: ${promotionSlug}`);
       }
     } catch (error) {
-      console.warn("⚠️ Could not extract promotion slug from URL:", error);
+      // console.warn("⚠️ Could not extract promotion slug from URL:", error);
       // Non-blocking - continue without slug (will default to "milwaukee")
     }
 
@@ -604,7 +604,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       const result = await response.json();
 
       if (result.success) {
-        console.log("✅ User registered successfully:", result.data);
+        // console.log("✅ User registered successfully:", result.data);
 
         // Track CompleteRegistration event client-side for Meta Pixel Helper visibility
         // Use same EventID from server for deduplication
@@ -616,11 +616,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               content_type: "user",
               registration_method: "email",
             });
-            console.log(`📘 Facebook Pixel: CompleteRegistration tracked with EventID: ${result.data.pixelEventId}`);
+            // console.log(`📘 Facebook Pixel: CompleteRegistration tracked with EventID: ${result.data.pixelEventId}`);
           } else {
             // Fallback to standard tracking if EventID not available
             trackCompleteRegistration();
-            console.log("📘 Facebook Pixel: CompleteRegistration tracked");
+            // console.log("📘 Facebook Pixel: CompleteRegistration tracked");
           }
         } catch (pixelError) {
           console.error("❌ Error tracking CompleteRegistration client-side:", pixelError);
@@ -841,37 +841,37 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   }, [storedReferralCode, couponCode, couponApplied, isValidatingReferral, handleCouponApply]);
 
   const handlePackageChange = () => {
-    console.log("🔄 Package Change clicked:", {
-      activePlanId: activePlan.id,
-      activePlanName: activePlan.name,
-      isMiniDrawPackage: activePlan.id.startsWith("mini-pack-"),
-    });
+    // console.log("🔄 Package Change clicked:", {
+    //   activePlanId: activePlan.id,
+    //   activePlanName: activePlan.name,
+    //   isMiniDrawPackage: activePlan.id.startsWith("mini-pack-"),
+    // });
 
     // Check if current plan is a mini draw package
     const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
 
     if (isMiniDrawPackage) {
-      console.log("📦 Mini draw packages now use SpecialPackagesModal");
+      // console.log("📦 Mini draw packages now use SpecialPackagesModal");
       // Mini draw packages are handled through SpecialPackagesModal
       setIsPackageSelectionOpen(true);
     } else {
-      console.log("📦 Opening PackageSelectionModal");
+      // console.log("📦 Opening PackageSelectionModal");
       setIsPackageSelectionOpen(true);
     }
   };
 
   const handlePackageSelect = (newPlan: LocalMembershipPlan) => {
-    console.log("✅ Package selected:", {
-      newPlanId: newPlan.id,
-      newPlanName: newPlan.name,
-      onPlanChange: !!onPlanChange,
-    });
+    // console.log("✅ Package selected:", {
+    //   newPlanId: newPlan.id,
+    //   newPlanName: newPlan.name,
+    //   onPlanChange: !!onPlanChange,
+    // });
 
     // Update the selected plan by calling the parent callback
     if (onPlanChange) {
       onPlanChange(newPlan);
     } else {
-      console.warn("⚠️ onPlanChange callback is not provided!");
+      // console.warn("⚠️ onPlanChange callback is not provided!");
     }
 
     // Close package selection modal
@@ -954,7 +954,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // Payment processing handlers
   const handlePaymentProcessingSuccess = async (status: PaymentStatusResponse) => {
-    console.log("🎉 Payment processing completed:", status);
+    // console.log("🎉 Payment processing completed:", status);
     setShowPaymentProcessing(false);
 
     // Track Purchase event client-side for Meta Pixel Helper visibility
@@ -995,9 +995,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           platform: "tools-australia",
         });
 
-        console.log(
-          `📘 Facebook Pixel: Purchase tracked - $${value} ${currency} (EventID: ${eventID}, packageType: ${packageType})`
-        );
+        // console.log(
+        //   `📘 Facebook Pixel: Purchase tracked - $${value} ${currency} (EventID: ${eventID}, packageType: ${packageType})`
+        // );
       } catch (pixelError) {
         console.error("❌ Error tracking Purchase client-side:", pixelError);
         // Non-blocking - continue with success flow
@@ -1036,13 +1036,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     // CRITICAL FIX: Create local variable to avoid React state closure issue
     let contextToPass: OriginalPurchaseContext | null = null;
 
-    console.log("🔍 Checking invoice context storage:", {
-      hasPaymentIntentId: !!paymentIntentId,
-      hasProcessingPackageName: !!processingPackageName,
-      hasProcessingPackageType: !!processingPackageType,
-      processingPackageType,
-      isUpsell: processingPackageType === "upsell",
-    });
+    // console.log("🔍 Checking invoice context storage:", {
+    //   hasPaymentIntentId: !!paymentIntentId,
+    //   hasProcessingPackageName: !!processingPackageName,
+    //   hasProcessingPackageType: !!processingPackageType,
+    //   processingPackageType,
+    //   isUpsell: processingPackageType === "upsell",
+    // });
     if (paymentIntentId && processingPackageName && processingPackageType && processingPackageType !== "upsell") {
       const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
       const packageId = isMiniDrawPackage
@@ -1063,11 +1063,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             if (metadata.miniDrawId) {
               miniDrawId = metadata.miniDrawId;
               miniDrawName = metadata.miniDrawName;
-              console.log("📧 Retrieved miniDrawId from payment intent metadata:", miniDrawId);
+              // console.log("📧 Retrieved miniDrawId from payment intent metadata:", miniDrawId);
             }
           }
         } catch (error) {
-          console.warn("⚠️ Could not fetch miniDrawId from payment intent metadata:", error);
+          // console.warn("⚠️ Could not fetch miniDrawId from payment intent metadata:", error);
         }
       }
 
@@ -1085,12 +1085,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
       // Also update state for other component uses
       setOriginalPurchaseContext(contextToPass);
-      console.log("📧 Stored original purchase context for invoice finalization", {
-        miniDrawId,
-        miniDrawName,
-      });
+      // console.log("📧 Stored original purchase context for invoice finalization", {
+      //   miniDrawId,
+      //   miniDrawName,
+      // });
     } else {
-      console.log("⚠️ Invoice context NOT stored - condition failed");
+      // console.log("⚠️ Invoice context NOT stored - condition failed");
     }
 
     // Trigger upsell after successful payment processing
@@ -1110,13 +1110,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         const triggerType = activePlan.period === "one-time" ? "one-time-purchase" : "membership-purchase";
         const packageType = activePlan.period === "mo" ? "subscription" : "one-time";
 
-        console.log("🎯 Triggering upsell from PaymentProcessingScreen:", {
-          packageName: processingPackageName || activePlan.name,
-          packageType: processingPackageType || packageType,
-          packageId,
-          triggerType,
-          hasContext: !!finalContextToPass,
-        });
+        // console.log("🎯 Triggering upsell from PaymentProcessingScreen:", {
+        //   packageName: processingPackageName || activePlan.name,
+        //   packageType: processingPackageType || packageType,
+        //   packageId,
+        //   triggerType,
+        //   hasContext: !!finalContextToPass,
+        // });
 
         triggerUpsellModal(
           triggerType,
@@ -1139,7 +1139,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   };
 
   const handlePaymentProcessingTimeout = () => {
-    console.warn("⏰ Payment processing timed out - showing fallback success");
+    // console.warn("⏰ Payment processing timed out - showing fallback success");
     setShowPaymentProcessing(false);
 
     // Show fallback success message since payment was successful
@@ -1177,7 +1177,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
     // Check if this is a new user registration
     if (data?.user) {
-      console.log("🔄 New user registration completed:", data.user);
+      // console.log("🔄 New user registration completed:", data.user);
 
       try {
         // Get auto-login token from the API
@@ -1202,7 +1202,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           });
 
           if (signInResult?.ok) {
-            console.log("✅ Auto-login successful");
+            // console.log("✅ Auto-login successful");
             const triggerType = activePlan.period === "one-time" ? "one-time-purchase" : "membership-purchase";
 
             onClose();
@@ -1246,7 +1246,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
               // Also update state for other component uses
               setOriginalPurchaseContext(contextToPass);
-              console.log("📧 Stored original purchase context for invoice finalization (new user)");
+              // console.log("📧 Stored original purchase context for invoice finalization (new user)");
             }
 
             // Add delay to allow authentication to complete before triggering upsell
@@ -1256,7 +1256,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             setTimeout(() => {
               // Prevent duplicate upsell calls for new users too
               if (upsellTriggered) {
-                console.log("?? Upsell already triggered for new user, skipping to prevent duplicate API calls");
+                // console.log("?? Upsell already triggered for new user, skipping to prevent duplicate API calls");
                 return;
               }
               setUpsellTriggered(true); // Mark that we've triggered this once
@@ -1278,7 +1278,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             }, 1000); // 1 second delay for authentication
             return;
           } else {
-            console.log("❌ Auto-login failed:", signInResult?.error);
+            // console.log("❌ Auto-login failed:", signInResult?.error);
             // Show global success screen for account creation
             hideLoading();
             showSuccess(
@@ -1289,7 +1289,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             );
           }
         } else {
-          console.log("❌ Failed to get auto-login token:", autoLoginData.error);
+          // console.log("❌ Failed to get auto-login token:", autoLoginData.error);
           // Show global success screen for account creation
           hideLoading();
           showSuccess(
@@ -1386,7 +1386,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         };
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);
-        console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
+        // console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
       } else if (paymentIntentId && activePlan.period === "mo") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
         // Create context object in local variable to pass directly (avoids closure issue)
@@ -1400,7 +1400,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         };
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);
-        console.log("📧 Stored original purchase context for invoice finalization (subscription)");
+        // console.log("📧 Stored original purchase context for invoice finalization (subscription)");
       }
 
       // Trigger upsell modal for existing user after a delay with duplicate prevention
@@ -1410,20 +1410,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setTimeout(() => {
         // Prevent duplicate upsell calls
         if (upsellTriggered) {
-          console.log("?? Upsell already triggered for this purchase, skipping to prevent duplicate API calls");
+          // console.log("?? Upsell already triggered for this purchase, skipping to prevent duplicate API calls");
           return;
         }
 
-        console.log("?? TRIGGERING UPSELL for existing user:", {
-          triggerType,
-          activePlanName: activePlan.name,
-          activePlanPeriod: activePlan.period,
-          activePlanPrice: activePlan.price,
-          subscriptionPackagesCount: subscriptionPackages?.length || 0,
-          oneTimePackagesCount: oneTimePackages?.length || 0,
-          packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]),
-          hasContext: !!finalContextToPass,
-        });
+        // console.log("?? TRIGGERING UPSELL for existing user:", {
+        //   triggerType,
+        //   activePlanName: activePlan.name,
+        //   activePlanPeriod: activePlan.period,
+        //   activePlanPrice: activePlan.price,
+        //   subscriptionPackagesCount: subscriptionPackages?.length || 0,
+        //   oneTimePackagesCount: oneTimePackages?.length || 0,
+        //   packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]),
+        //   hasContext: !!finalContextToPass,
+        // });
 
         setUpsellTriggered(true); // Mark that we've triggered this once
 
@@ -1462,7 +1462,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     } catch (trackingError) {
       // Non-blocking - continue with purchase even if tracking fails
       if (process.env.NODE_ENV === "development") {
-        console.warn("Button click tracking failed:", trackingError);
+        // console.warn("Button click tracking failed:", trackingError);
       }
     }
 
@@ -1479,10 +1479,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
       if (isUpsellOffer) {
         // Handle upsell plan purchase via upsell API
-        console.log("🎯 Handling upsell purchase:", activePlan.name, {
-          entriesCount: activePlan.metadata?.entriesCount,
-          category: activePlan.metadata?.category,
-        });
+        // console.log("🎯 Handling upsell purchase:", activePlan.name, {
+        //   entriesCount: activePlan.metadata?.entriesCount,
+        //   category: activePlan.metadata?.category,
+        // });
 
         // Use optimistic upsell purchase hook
         const result = await purchaseUpsell.mutateAsync({
@@ -1521,7 +1521,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       if (isMiniDrawPackage) {
         // For mini draw packages, use the ID directly
         packageId = activePlan.id;
-        console.log("🎲 Mini draw package detected:", packageId);
+        // console.log("🎲 Mini draw package detected:", packageId);
       } else {
         // Get the real MongoDB ObjectId for regular membership packages
         const allPackages = [...subscriptionPackages, ...oneTimePackages];
@@ -1553,10 +1553,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
         const adjustedPackageId = packageMapping[packageId] || packageId;
         if (adjustedPackageId !== packageId) {
-          console.log(`🔄 Package auto-adjustment: ${packageId} → ${adjustedPackageId}`);
-          console.log(
-            `📢 User message: As a member, you've been upgraded to the member-exclusive package with better benefits!`
-          );
+          // console.log(`🔄 Package auto-adjustment: ${packageId} → ${adjustedPackageId}`);
+          // console.log(
+          //   `📢 User message: As a member, you've been upgraded to the member-exclusive package with better benefits!`
+          // );
 
           // Update the packageId to the adjusted one
           packageId = adjustedPackageId;
@@ -1574,14 +1574,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       } else if (showCardForm || !isAuthenticated) {
         // For new payment methods or new users, confirm the card form first
         if (showCardForm && cardFormRef.current) {
-          console.log("💳 Confirming card setup...");
+          // console.log("💳 Confirming card setup...");
           const result = await cardFormRef.current.confirmSetup();
 
           if (result.error) {
             throw new Error(result.error);
           } else if (result.paymentMethodId) {
             paymentMethodId = result.paymentMethodId;
-            console.log("✅ Card confirmed successfully:", paymentMethodId);
+            // console.log("✅ Card confirmed successfully:", paymentMethodId);
           } else {
             throw new Error("Failed to confirm card details.");
           }
@@ -1601,7 +1601,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
       // Handle mini draw package purchase
       if (isMiniDrawPackage) {
-        console.log("🎲 Processing mini draw package purchase:", activePlan.name);
+        // console.log("🎲 Processing mini draw package purchase:", activePlan.name);
 
         // Use the mini draw purchase hook
         const miniDrawResult = await purchaseMembership.mutateAsync({
@@ -1611,7 +1611,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         });
 
         if (miniDrawResult) {
-          console.log("✅ Mini draw purchase successful:", miniDrawResult);
+          // console.log("✅ Mini draw purchase successful:", miniDrawResult);
 
           // Check if we have paymentIntentId for PaymentProcessingScreen
           let paymentIntentId: string | null = null;
@@ -1635,7 +1635,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           }
 
           if (paymentIntentId) {
-            console.log("🎯 Using PaymentProcessingScreen for mini draw purchase");
+            // console.log("🎯 Using PaymentProcessingScreen for mini draw purchase");
 
             markPurchaseCompleted();
             hideLoading();
@@ -1686,7 +1686,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             // Trigger upsell modal after a delay with duplicate prevention
             setTimeout(() => {
               if (upsellTriggered) {
-                console.log("🎯 Upsell already triggered for mini draw purchase, skipping");
+                // console.log("🎯 Upsell already triggered for mini draw purchase, skipping");
                 return;
               }
 
@@ -1715,7 +1715,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
       if (isAuthenticated) {
         // Existing user purchase - no personal details needed
-        console.log("🚀 Creating purchase for existing user:", userData?.email);
+        // console.log("🚀 Creating purchase for existing user:", userData?.email);
 
         if (activePlan.period === "mo") {
           // Subscription for existing user
@@ -1736,21 +1736,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           });
         }
 
-        console.log("✅ Purchase successful for existing user:", result);
+        // console.log("✅ Purchase successful for existing user:", result);
 
         // Automatically save payment method if it's new and user is authenticated
         if (isNewPaymentMethod) {
           try {
             await savePaymentMethod(paymentMethodId, true); // Set as default
-            console.log("💾 Payment method saved automatically");
+            // console.log("💾 Payment method saved automatically");
           } catch (error) {
-            console.warn("Could not save payment method:", error);
+            // console.warn("Could not save payment method:", error);
           }
         }
 
         // Handle subscription payment confirmation directly for existing users
         if (activePlan.period === "mo") {
-          console.log("🚀 Confirming subscription payment directly for existing user");
+          // console.log("🚀 Confirming subscription payment directly for existing user");
 
           // Extract subscription ID and client secret
           let subscriptionId = "";
@@ -1769,18 +1769,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           if (resultAny.subscription?.id) {
             subscriptionId = resultAny.subscription.id;
             clientSecret = resultAny.subscription.clientSecret || "pending";
-            console.log("? Found subscription in existing user format");
+            // console.log("✅ Found subscription in existing user format");
           }
           // New user format: result.data.subscription.id or result.data.subscriptionId
           else if (resultAny.data) {
             if (resultAny.data.subscription?.id) {
               subscriptionId = resultAny.data.subscription.id;
               clientSecret = resultAny.data.subscription.clientSecret || "pending";
-              console.log("? Found subscription in nested data format");
+              // console.log("✅ Found subscription in nested data format");
             } else if (resultAny.data.subscriptionId) {
               subscriptionId = resultAny.data.subscriptionId;
               clientSecret = resultAny.data.clientSecret || "pending";
-              console.log("? Found subscriptionId in data format");
+              // console.log("✅ Found subscriptionId in data format");
             }
           }
 
@@ -1810,7 +1810,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               throw new Error(confirmResult.error || "Failed to confirm payment");
             }
 
-            console.log("? Subscription payment confirmed successfully");
+            // console.log("✅ Subscription payment confirmed successfully");
 
             // Extract paymentIntentId for invoice context
             let extractedPaymentIntentId: string | null = null;
@@ -1826,7 +1826,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             // Store for invoice finalization
             if (extractedPaymentIntentId) {
               setPaymentIntentId(extractedPaymentIntentId);
-              console.log("📧 Stored paymentIntentId from subscription confirmation");
+              // console.log("📧 Stored paymentIntentId from subscription confirmation");
             }
 
             // Handle success directly
@@ -1837,7 +1837,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             throw confirmError;
           }
         } else if (activePlan.period === "one-time") {
-          console.log("🚀 One-time purchase completed for existing user");
+          // console.log("🚀 One-time purchase completed for existing user");
 
           // Check if we have paymentIntentId for PaymentProcessingScreen
           let paymentIntentId: string | null = null;
@@ -1848,36 +1848,36 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             // Handle API response with paymentIntent at root level
             paymentIntentId =
               typeof result.paymentIntent === "string" ? result.paymentIntent : result.paymentIntent.id || null;
-            console.log("🔍 Extracted paymentIntentId from result.paymentIntent:", paymentIntentId);
+            // console.log("🔍 Extracted paymentIntentId from result.paymentIntent:", paymentIntentId);
           }
           // Priority 2: Check nested data.paymentIntent (some response formats)
           else if ("data" in result && result.data && "paymentIntent" in result.data) {
             paymentIntentId = result.data.paymentIntent?.id || null;
-            console.log("🔍 Extracted paymentIntentId from result.data.paymentIntent:", paymentIntentId);
+            // console.log("🔍 Extracted paymentIntentId from result.data.paymentIntent:", paymentIntentId);
           }
           // Priority 3: Check data.paymentIntentId (mini-draw packages)
           else if ("data" in result && result.data && "paymentIntentId" in result.data) {
             paymentIntentId = result.data.paymentIntentId as string;
-            console.log("🔍 Extracted paymentIntentId from result.data.paymentIntentId:", paymentIntentId);
+            // console.log("🔍 Extracted paymentIntentId from result.data.paymentIntentId:", paymentIntentId);
           }
           // Priority 4: Check root level paymentIntentId (legacy format)
           else if ("paymentIntentId" in result && result.paymentIntentId) {
             paymentIntentId = result.paymentIntentId as string;
-            console.log("🔍 Extracted paymentIntentId from result.paymentIntentId:", paymentIntentId);
+            // console.log("🔍 Extracted paymentIntentId from result.paymentIntentId:", paymentIntentId);
           } else {
-            console.log("⚠️ Could not extract paymentIntentId from result. Result structure:", {
-              hasPaymentIntent: "paymentIntent" in result,
-              hasData: "data" in result,
-              hasPaymentIntentId: "paymentIntentId" in result,
-              resultKeys: Object.keys(result || {}),
-            });
+            // console.log("⚠️ Could not extract paymentIntentId from result. Result structure:", {
+            //   hasPaymentIntent: "paymentIntent" in result,
+            //   hasData: "data" in result,
+            //   hasPaymentIntentId: "paymentIntentId" in result,
+            //   resultKeys: Object.keys(result || {}),
+            // });
           }
 
           if (paymentIntentId) {
-            console.log(
-              "🎯 Using PaymentProcessingScreen for one-time purchase with paymentIntentId:",
-              paymentIntentId
-            );
+            // console.log(
+            //   "🎯 Using PaymentProcessingScreen for one-time purchase with paymentIntentId:",
+            //   paymentIntentId
+            // );
 
             markPurchaseCompleted();
             hideLoading();
@@ -1955,9 +1955,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               };
 
               setOriginalPurchaseContext(fallbackContext);
-              console.log("📧 Stored original purchase context for invoice finalization (fallback path)");
+              // console.log("📧 Stored original purchase context for invoice finalization (fallback path)");
             } else {
-              console.warn("⚠️ Fallback path could not extract paymentIntentId - invoice finalization may be delayed");
+              // console.warn("⚠️ Fallback path could not extract paymentIntentId - invoice finalization may be delayed");
             }
 
             // Trigger upsell modal for existing user after a delay with duplicate prevention
@@ -1965,19 +1965,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             setTimeout(() => {
               // Prevent duplicate upsell calls
               if (upsellTriggered) {
-                console.log("?? Upsell already triggered for this purchase, skipping to prevent duplicate API calls");
+                // console.log("🎯 Upsell already triggered for this purchase, skipping to prevent duplicate API calls");
                 return;
               }
 
-              console.log("?? TRIGGERING UPSELL for existing user:", {
-                triggerType,
-                activePlanName: activePlan.name,
-                activePlanPeriod: activePlan.period,
-                activePlanPrice: activePlan.price,
-                subscriptionPackagesCount: subscriptionPackages?.length || 0,
-                oneTimePackagesCount: oneTimePackages?.length || 0,
-                packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]),
-              });
+              // console.log("🎯 TRIGGERING UPSELL for existing user:", {
+              //   triggerType,
+              //   activePlanName: activePlan.name,
+              //   activePlanPeriod: activePlan.period,
+              //   activePlanPrice: activePlan.price,
+              //   subscriptionPackagesCount: subscriptionPackages?.length || 0,
+              //   oneTimePackagesCount: oneTimePackages?.length || 0,
+              //   packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]),
+              // });
 
               setUpsellTriggered(true); // Mark that we've triggered this once
 
@@ -2024,7 +2024,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           throw new Error("User registration data not found. Please try registering again.");
         }
 
-        console.log("🚀 Creating purchase for newly registered user:", guestUserData.email);
+        // console.log("🚀 Creating purchase for newly registered user:", guestUserData.email);
 
         // Prepare subscription data for new user
         const subscriptionData = {
@@ -2038,7 +2038,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           affiliateCode: affiliateCode || undefined,
         };
 
-        console.log("📦 Subscription data:", subscriptionData);
+        // console.log("📦 Subscription data:", subscriptionData);
 
         // Create subscription or one-time purchase based on plan type
         result =
@@ -2047,17 +2047,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             : await createOneTimePurchase(subscriptionData);
 
         if (result) {
-          console.log("✅ Account created successfully:", result);
-          console.log("🔍 Debug - result.data:", result.data);
-          console.log("🔍 Debug - clientSecret:", result.data?.clientSecret);
-          console.log("🔍 Debug - activePlan.period:", activePlan.period);
+          // console.log("✅ Account created successfully:", result);
+          // console.log("🔍 Debug - result.data:", result.data);
+          // console.log("🔍 Debug - clientSecret:", result.data?.clientSecret);
+          // console.log("🔍 Debug - activePlan.period:", activePlan.period);
 
           // Payment method is automatically saved during user creation in the API
-          console.log("💾 Payment method saved automatically during user creation");
+          // console.log("💾 Payment method saved automatically during user creation");
 
           // Handle subscription payment confirmation directly for new users
           if (activePlan.period === "mo") {
-            console.log("🚀 Confirming subscription payment directly for new user");
+            // console.log("🚀 Confirming subscription payment directly for new user");
 
             const subscriptionId = result.data?.subscriptionId || "";
             const clientSecret = result.data?.clientSecret || "pending";
@@ -2089,7 +2089,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 throw new Error(confirmResult.error || "Failed to confirm payment");
               }
 
-              console.log("? New user subscription payment confirmed successfully");
+              // console.log("✅ New user subscription payment confirmed successfully");
 
               // Handle success directly with user data for auto-login
               await handlePaymentSuccess(confirmResult.data);
@@ -2102,7 +2102,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             // Check if we can handle one-time purchase with autologin directly first
             const oneTimeData = result.data as OneTimePurchaseData;
             if (oneTimeData?.user && (oneTimeData?.autoLogin || result.data?.userId)) {
-              console.log("?? One-time purchase with user data - handling autologin directly");
+              // console.log("🎯 One-time purchase with user data - handling autologin directly");
 
               try {
                 // Get auto-login token from the API
@@ -2130,7 +2130,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   });
 
                   if (signInResult?.ok) {
-                    console.log("? Auto-login successful for one-time purchase");
+                    // console.log("✅ Auto-login successful for one-time purchase");
                     const triggerType = "one-time-purchase";
 
                     onClose();
@@ -2209,21 +2209,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 }
 
                 // If autologin failed, continue to confirmation modal
-                console.log("?? Auto-login attempted but failed, continuing to payment confirmation");
+                // console.log("🎯 Auto-login attempted but failed, continuing to payment confirmation");
               } catch (authError) {
                 console.error("? Error in one-time autologin:", authError);
               }
             }
 
-            console.log("🚀 Showing payment confirmation modal for one-time purchase");
+            // console.log("🚀 Showing payment confirmation modal for one-time purchase");
             // Show payment confirmation modal for one-time purchases too
             // One-time purchase confirmation removed - handled directly in handleSubmit
           } else {
-            console.log("📦 One-time purchase - handling success");
+            // console.log("📦 One-time purchase - handling success");
             // One-time purchase - handle auto-login if user data is provided
             const oneTimeData = result.data as OneTimePurchaseData;
             if (oneTimeData?.user && oneTimeData?.autoLogin) {
-              console.log("🔄 One-time purchase with auto-login:", oneTimeData.user);
+              // console.log("🔄 One-time purchase with auto-login:", oneTimeData.user);
 
               try {
                 // Get auto-login token from the API
@@ -2248,7 +2248,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   });
 
                   if (signInResult?.ok) {
-                    console.log("✅ Auto-login successful for one-time purchase");
+                    // console.log("✅ Auto-login successful for one-time purchase");
                     // Show global success screen
                     hideLoading();
                     showSuccess(
@@ -2293,7 +2293,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     }, 1000); // 1 second delay for authentication
                     return;
                   } else {
-                    console.log("❌ Auto-login failed:", signInResult?.error);
+                    // console.log("❌ Auto-login failed:", signInResult?.error);
                     // Show global success screen for account creation
                     hideLoading();
                     showSuccess(
@@ -2304,7 +2304,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     );
                   }
                 } else {
-                  console.log("❌ Failed to get auto-login token:", autoLoginData.error);
+                  // console.log("❌ Failed to get auto-login token:", autoLoginData.error);
                   // Show global success screen for account creation
                   hideLoading();
                   showSuccess(
@@ -2395,16 +2395,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       }
 
       // Debug logging for error handling
-      console.log("🔍 Error handling debug:", {
-        error,
-        errorCode,
-        errorMessage,
-        errorTitle,
-        hasResponse: error && typeof error === "object" && "response" in error,
-        hasCode: error && typeof error === "object" && "code" in error,
-        errorKeys: error && typeof error === "object" ? Object.keys(error) : [],
-        errorStringified: JSON.stringify(error, null, 2),
-      });
+      // console.log("🔍 Error handling debug:", {
+      //   error,
+      //   errorCode,
+      //   errorMessage,
+      //   errorTitle,
+      //   hasResponse: error && typeof error === "object" && "response" in error,
+      //   hasCode: error && typeof error === "object" && "code" in error,
+      //   errorKeys: error && typeof error === "object" ? Object.keys(error) : [],
+      //   errorStringified: JSON.stringify(error, null, 2),
+      // });
 
       // Handle EXISTING_SUBSCRIPTION error with special toast and navigation
       if (errorCode === "EXISTING_SUBSCRIPTION") {
@@ -2454,7 +2454,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     try {
       // If we have package information, use the new trigger API
       if (packageId && packageType) {
-        console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
+        // console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
 
         // Determine correct userType based on package ID and type
         // Mini draw packages (mini-pack-1, mini-pack-2, etc.) should use "mini-draw-buyer"
@@ -2466,11 +2466,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
         // If user doesn't have access, skip upsell trigger for additional packages
         if (isAdditionalPackage && !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
-          console.log("⚠️ Skipping upsell trigger: User doesn't have access to additional packages");
+          // console.log("⚠️ Skipping upsell trigger: User doesn't have access to additional packages");
           return;
         }
 
         const userType = isMiniDrawPackage ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";
+
+        // ✅ FIX: Calculate if user has access to additional packages (subscription OR major draw entries)
+        const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
         const response = await fetch("/api/upsell/trigger", {
           method: "POST",
@@ -2479,7 +2482,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             packageId,
             packageType,
             userType, // Correctly determined based on package type
-            isMember: isMember, // Pass membership status
+            isMember: isMember, // Keep for backward compatibility
+            hasAccessToAdditionalPackages: hasAccessToAdditionalPackages, // ✅ NEW: Pass access status
             triggerEvent,
           }),
         });
@@ -2488,7 +2492,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           const result = await response.json();
           if (result.success && result.data?.offer) {
             const offer = result.data.offer;
-            console.log(`✅ Found targeted upsell offer: ${offer.name}`);
+            // console.log(`✅ Found targeted upsell offer: ${offer.name}`);
 
             // Convert offer to UpsellOffer format
             const upsellOffer: UpsellOffer = {
@@ -2536,7 +2540,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 userContext,
                 originalPurchaseContext: finalOriginalPurchaseContext || undefined,
               });
-              console.log("🎯 Set pending upsell IMMEDIATELY for first-time user (before navigation)");
+              // console.log("🎯 Set pending upsell IMMEDIATELY for first-time user (before navigation)");
             } else {
               // For existing users, show upsell with a delay
               setTimeout(() => {
@@ -2546,7 +2550,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   userContext,
                   originalPurchaseContext: finalOriginalPurchaseContext || undefined,
                 });
-                console.log("🎯 Showing upsell for existing user (after delay)");
+                // console.log("🎯 Showing upsell for existing user (after delay)");
               }, offer.showAfterDelay * 1000 || 2000);
             }
 
@@ -2556,7 +2560,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       }
 
       // Fallback: No upsell available
-      console.log(`🎯 No upsell available for: ${recentPurchase}`);
+      // console.log(`🎯 No upsell available for: ${recentPurchase}`);
     } catch (error) {
       console.error("Error triggering upsell:", error);
       // No fallback available - upsell system removed

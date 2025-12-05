@@ -28,14 +28,14 @@ export async function validateAndCleanupPaymentMethods(user: IUser): Promise<{
         // ✅ BEST PRACTICE: Try to fix the payment method by reattaching it
         if (process.env.NODE_ENV === "development" || process.env.STRIPE_ENVIRONMENT === "test") {
           try {
-            console.log(
-              `🔄 [TEST ENV] Attempting to fix payment method ${savedPm.paymentMethodId} - reattaching to correct customer`
-            );
+            // console.log(
+            //   `🔄 [TEST ENV] Attempting to fix payment method ${savedPm.paymentMethodId} - reattaching to correct customer`
+            // );
 
             // Detach from current customer first
             if (pm.customer) {
               await stripe.paymentMethods.detach(pm.id);
-              console.log(`🔓 Detached payment method from customer: ${pm.customer}`);
+              // console.log(`🔓 Detached payment method from customer: ${pm.customer}`);
             }
 
             // Attach to our customer
@@ -45,18 +45,18 @@ export async function validateAndCleanupPaymentMethods(user: IUser): Promise<{
 
             validPaymentMethods.push(savedPm);
             cleanedUp = true;
-            console.log(`✅ Successfully fixed payment method - now attached to correct customer`);
+            // console.log(`✅ Successfully fixed payment method - now attached to correct customer`);
           } catch {
-            console.log(`❌ Failed to fix payment method - removing from user profile`);
+            // console.log(`❌ Failed to fix payment method - removing from user profile`);
             cleanedUp = true;
           }
         } else {
-          console.log(`🗑️ Removing payment method ${savedPm.paymentMethodId} - not attached to customer (production)`);
+          // console.log(`🗑️ Removing payment method ${savedPm.paymentMethodId} - not attached to customer (production)`);
           cleanedUp = true;
         }
       }
     } catch {
-      console.log(`🗑️ Removing payment method ${savedPm.paymentMethodId} - no longer exists`);
+      // console.log(`🗑️ Removing payment method ${savedPm.paymentMethodId} - no longer exists`);
       cleanedUp = true;
     }
   }
@@ -65,11 +65,11 @@ export async function validateAndCleanupPaymentMethods(user: IUser): Promise<{
   if (cleanedUp) {
     user.savedPaymentMethods = validPaymentMethods;
     await user.save();
-    console.log(
-      `✅ Cleaned up payment methods: kept ${validPaymentMethods.length} valid, removed ${
-        user.savedPaymentMethods.length - validPaymentMethods.length
-      } invalid`
-    );
+    // console.log(
+    //   `✅ Cleaned up payment methods: kept ${validPaymentMethods.length} valid, removed ${
+    //     user.savedPaymentMethods.length - validPaymentMethods.length
+    //   } invalid`
+    // );
   }
 
   return { validPaymentMethods, cleanedUp };
@@ -101,7 +101,7 @@ export async function getValidPaymentMethod(
         return { paymentMethod: pm, requiresSetupIntent: false };
       }
     } catch {
-      console.log(`❌ Preferred payment method ${preferredPaymentMethodId} not valid`);
+      // console.log(`❌ Preferred payment method ${preferredPaymentMethodId} not valid`);
     }
   }
 
@@ -113,33 +113,33 @@ export async function getValidPaymentMethod(
         return { paymentMethod: pm, requiresSetupIntent: false };
       }
     } catch {
-      console.log(`❌ Payment method ${savedPm.paymentMethodId} not valid`);
+      // console.log(`❌ Payment method ${savedPm.paymentMethodId} not valid`);
     }
   }
 
   // ✅ BEST PRACTICE: Try to fix existing payment methods by reattaching them
   // Since users have unique payment methods, the issue is likely detachment/reattachment
-  console.log(`🔧 Attempting to fix existing payment methods for user`);
+  // console.log(`🔧 Attempting to fix existing payment methods for user`);
 
   for (const savedPm of user.savedPaymentMethods || []) {
     try {
-      console.log(`🔧 Checking payment method: ${savedPm.paymentMethodId}`);
+      // console.log(`🔧 Checking payment method: ${savedPm.paymentMethodId}`);
 
       const pm = await stripe.paymentMethods.retrieve(savedPm.paymentMethodId);
 
       // If payment method exists but is not attached to this customer
       if (pm.customer !== user.stripeCustomerId) {
-        console.log(
-          `🔄 Payment method ${savedPm.paymentMethodId} not attached to correct customer (${pm.customer} vs ${user.stripeCustomerId})`
-        );
+        // console.log(
+        //   `🔄 Payment method ${savedPm.paymentMethodId} not attached to correct customer (${pm.customer} vs ${user.stripeCustomerId})`
+        // );
 
         // Try to reattach it (this should work for both test and production)
-        console.log(`🔄 Reattaching payment method to correct customer`);
+        // console.log(`🔄 Reattaching payment method to correct customer`);
 
         // Detach from current customer (if any)
         if (pm.customer) {
           await stripe.paymentMethods.detach(pm.id);
-          console.log(`🔓 Detached payment method from customer: ${pm.customer}`);
+          // console.log(`🔓 Detached payment method from customer: ${pm.customer}`);
         }
 
         // Attach to our customer
@@ -147,7 +147,7 @@ export async function getValidPaymentMethod(
           customer: user.stripeCustomerId!,
         });
 
-        console.log(`✅ Successfully reattached payment method to correct customer`);
+        // console.log(`✅ Successfully reattached payment method to correct customer`);
 
         return {
           paymentMethod: reattachedPm,
@@ -155,7 +155,7 @@ export async function getValidPaymentMethod(
         };
       } else {
         // Payment method is correctly attached
-        console.log(`✅ Payment method ${savedPm.paymentMethodId} is correctly attached to customer`);
+        // console.log(`✅ Payment method ${savedPm.paymentMethodId} is correctly attached to customer`);
 
         return {
           paymentMethod: pm,
@@ -168,7 +168,7 @@ export async function getValidPaymentMethod(
     }
   }
 
-  console.log(`⚠️ Could not fix any existing payment methods, falling back to setup intent`);
+  // console.log(`⚠️ Could not fix any existing payment methods, falling back to setup intent`);
 
   // No valid payment methods found - create setup intent
   try {

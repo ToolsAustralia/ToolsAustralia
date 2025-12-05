@@ -32,20 +32,20 @@ export interface PaymentMetadata {
  * @throws Error if no valid draw found
  */
 export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Promise<IMajorDraw> {
-  console.log("🔍 getTargetMajorDraw called with metadata:", paymentMetadata);
+  // console.log("🔍 getTargetMajorDraw called with metadata:", paymentMetadata);
 
   // Step 1: Find currently active or frozen draw
   const currentDraw = await MajorDraw.findOne({
     status: { $in: ["active", "frozen"] },
   }).sort({ activationDate: -1 });
 
-  console.log(
-    `🔍 Step 1 - Current active/frozen draw: ${currentDraw ? `${currentDraw.name} (${currentDraw.status})` : "None"}`
-  );
+  // console.log(
+  //   `🔍 Step 1 - Current active/frozen draw: ${currentDraw ? `${currentDraw.name} (${currentDraw.status})` : "None"}`
+  // );
 
   // Step 2: Check if current draw is frozen
   if (currentDraw && currentDraw.status === "frozen") {
-    console.log("🔒 Current draw is frozen, routing to next queued draw");
+    // console.log("🔒 Current draw is frozen, routing to next queued draw");
     const nextDraw = await getNextQueuedDraw();
     if (!nextDraw) {
       throw new Error("No queued draw available during freeze period");
@@ -58,21 +58,21 @@ export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Pro
     const paymentDate = new Date(paymentMetadata.created);
     const freezeDate = currentDraw.freezeEntriesAt;
 
-    console.log(`🔍 Step 3 - Freeze period check:`);
-    console.log(`   Payment created: ${paymentDate.toISOString()}`);
-    console.log(`   Freeze starts at: ${freezeDate.toISOString()}`);
-    console.log(`   Payment before freeze? ${paymentDate < freezeDate}`);
+    // console.log(`🔍 Step 3 - Freeze period check:`);
+    // console.log(`   Payment created: ${paymentDate.toISOString()}`);
+    // console.log(`   Freeze starts at: ${freezeDate.toISOString()}`);
+    // console.log(`   Payment before freeze? ${paymentDate < freezeDate}`);
 
     if (!wasPaymentBeforeFreeze(paymentMetadata.created, currentDraw.freezeEntriesAt)) {
-      console.log("⏰ Payment created during freeze period, routing to next queued draw");
+      // console.log("⏰ Payment created during freeze period, routing to next queued draw");
       const nextDraw = await getNextQueuedDraw();
       if (!nextDraw) {
         throw new Error("No queued draw available for deferred entries");
       }
-      console.log(`✅ Routing to queued draw: ${nextDraw.name} (ID: ${nextDraw._id})`);
+      // console.log(`✅ Routing to queued draw: ${nextDraw.name} (ID: ${nextDraw._id})`);
       return nextDraw;
     } else {
-      console.log("✅ Payment created before freeze, using current active draw");
+      // console.log("✅ Payment created before freeze, using current active draw");
     }
   }
 
@@ -82,7 +82,7 @@ export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Pro
   }
 
   // Step 5: No active draw (gap period) - use next queued draw
-  console.log("⏳ No active draw found (gap period), using next queued draw");
+  // console.log("⏳ No active draw found (gap period), using next queued draw");
   const nextDraw = await getNextQueuedDraw();
   if (!nextDraw) {
     console.error("❌ CRITICAL: No queued draw found during gap period!");
@@ -90,7 +90,7 @@ export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Pro
     throw new Error("No active or queued major draw found for entry allocation");
   }
 
-  console.log(`✅ Found queued draw for gap period: ${nextDraw.name} (ID: ${nextDraw._id})`);
+  // console.log(`✅ Found queued draw for gap period: ${nextDraw.name} (ID: ${nextDraw._id})`);
   return nextDraw;
 }
 
@@ -125,26 +125,26 @@ export async function getCurrentMajorDrawForDisplay(
   // Step 2: If no active/frozen draw found, try to find the latest completed draw
   // This handles the gap period between completed and next active draw
   if (!draw) {
-    console.log("🔍 No active/frozen draw found, checking for latest completed draw...");
+    // console.log("🔍 No active/frozen draw found, checking for latest completed draw...");
     draw = await MajorDraw.findOne({
       status: "completed",
     }).sort({ drawDate: -1 }); // Most recent completed draw
 
     if (draw) {
-      console.log(`✅ Found completed draw for display: ${draw.name}`);
+      // console.log(`✅ Found completed draw for display: ${draw.name}`);
     }
   }
 
   // Step 3: If still no draw and we should show queued during gap
   if (!draw && includeQueuedDuringGap) {
-    console.log("🔍 No completed draw found, checking for queued draw...");
+    // console.log("🔍 No completed draw found, checking for queued draw...");
     draw = await MajorDraw.findOne({
       status: "queued",
       activationDate: { $gt: now }, // Future activation
     }).sort({ activationDate: 1 }); // Next queued draw
 
     if (draw) {
-      console.log(`✅ Found queued draw for display: ${draw.name}`);
+      // console.log(`✅ Found queued draw for display: ${draw.name}`);
     }
   }
 

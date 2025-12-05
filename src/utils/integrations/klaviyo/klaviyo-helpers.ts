@@ -57,9 +57,9 @@ export function calculateEntryBreakdown(user: IUser): {
   const upsellEntries = upsellPurchases.reduce((sum, purchase) => sum + (purchase.entriesAdded || 0), 0);
 
   if (upsellPurchases.length > 0 && upsellEntries === 0) {
-    console.warn(
-      `⚠️ User ${user.email} has ${upsellPurchases.length} upsell purchase(s) but total entries is 0. Check entriesAdded values.`
-    );
+    // console.warn(
+    //   `⚠️ User ${user.email} has ${upsellPurchases.length} upsell purchase(s) but total entries is 0. Check entriesAdded values.`
+    // );
   }
 
   // Calculate mini-draw entries
@@ -100,17 +100,17 @@ export async function userToKlaviyoProfile(
   brandInterestFromSignup?: string | null
 ): Promise<KlaviyoProfile> {
   // ✅ DEBUG: Log user data structure to identify sync issues
-  console.log(`🔍 userToKlaviyoProfile called for ${user.email}:`, {
-    hasSubscription: !!user.subscription,
-    subscriptionIsActive: user.subscription?.isActive,
-    subscriptionPackageId: user.subscription?.packageId,
-    upsellPurchasesLength: user.upsellPurchases?.length || 0,
-    upsellPurchases: user.upsellPurchases ? JSON.stringify(user.upsellPurchases) : "undefined",
-    oneTimePackagesLength: user.oneTimePackages?.length || 0,
-    miniDrawPackagesLength: user.miniDrawPackages?.length || 0,
-    accumulatedEntries: user.accumulatedEntries,
-    rewardsPoints: user.rewardsPoints,
-  });
+  // console.log(`🔍 userToKlaviyoProfile called for ${user.email}:`, {
+  //   hasSubscription: !!user.subscription,
+  //   subscriptionIsActive: user.subscription?.isActive,
+  //   subscriptionPackageId: user.subscription?.packageId,
+  //   upsellPurchasesLength: user.upsellPurchases?.length || 0,
+  //   upsellPurchases: user.upsellPurchases ? JSON.stringify(user.upsellPurchases) : "undefined",
+  //   oneTimePackagesLength: user.oneTimePackages?.length || 0,
+  //   miniDrawPackagesLength: user.miniDrawPackages?.length || 0,
+  //   accumulatedEntries: user.accumulatedEntries,
+  //   rewardsPoints: user.rewardsPoints,
+  // });
 
   // Format phone number - ensure it starts with +61 for Australian numbers
   const phone = user.mobile
@@ -145,12 +145,12 @@ export async function userToKlaviyoProfile(
   if (userHasPurchases) {
     // User has made purchases - explicitly set to null to remove tag from Klaviyo
     brandInterest = null;
-    console.log(
-      `🏷️ User ${user.email} has purchases - removing brand_interest tag. Has subscription: ${!!user.subscription
-        ?.isActive}, upsells: ${user.upsellPurchases?.length || 0}, one-time: ${
-        user.oneTimePackages?.length || 0
-      }, mini-draw: ${user.miniDrawPackages?.length || 0}`
-    );
+    // console.log(
+    //   `🏷️ User ${user.email} has purchases - removing brand_interest tag. Has subscription: ${!!user.subscription
+    //     ?.isActive}, upsells: ${user.upsellPurchases?.length || 0}, one-time: ${
+    //     user.oneTimePackages?.length || 0
+    //   }, mini-draw: ${user.miniDrawPackages?.length || 0}`
+    // );
   } else {
     // User hasn't purchased yet - set brand interest
     if (brandInterestFromSignup) {
@@ -159,7 +159,7 @@ export async function userToKlaviyoProfile(
       // Default to milwaukee if no brand provided
       brandInterest = "milwaukee";
     }
-    console.log(`🏷️ User ${user.email} has no purchases - setting brand_interest to: ${brandInterest}`);
+    // console.log(`🏷️ User ${user.email} has no purchases - setting brand_interest to: ${brandInterest}`);
   }
 
   const klaviyoProfile = {
@@ -251,34 +251,34 @@ export async function userToKlaviyoProfile(
   };
 
   // ✅ DEBUG: Log the profile data being sent to Klaviyo
-  console.log(`📊 Klaviyo Profile Data for ${user.email}:`, {
-    accumulated_entries: klaviyoProfile.properties.accumulated_entries,
-    rewards_points: klaviyoProfile.properties.rewards_points,
-    subscription: {
-      has_active_subscription: klaviyoProfile.properties.has_active_subscription,
-      subscription_tier: klaviyoProfile.properties.subscription_tier,
-      subscription_start_date: klaviyoProfile.properties.subscription_start_date,
-      subscription_end_date: klaviyoProfile.properties.subscription_end_date,
-      subscription_status: klaviyoProfile.properties.subscription_status,
-      subscription_auto_renew: klaviyoProfile.properties.subscription_auto_renew,
-      subscription_has_pending_upgrade: klaviyoProfile.properties.subscription_has_pending_upgrade,
-      subscription_previous_tier: klaviyoProfile.properties.subscription_previous_tier,
-      subscription_last_upgrade_date: klaviyoProfile.properties.subscription_last_upgrade_date,
-      subscription_last_downgrade_date: klaviyoProfile.properties.subscription_last_downgrade_date,
-    },
-    lifetime_value: klaviyoProfile.properties.lifetime_value,
-    total_spent: klaviyoProfile.properties.total_spent,
-    brand_interest: klaviyoProfile.properties.brand_interest,
-    has_purchases: hasUserMadePurchase(user),
-    referral_code: klaviyoProfile.properties.referral_code,
-    partner_discount_active: klaviyoProfile.properties.partner_discount_active,
-    entry_breakdown: {
-      member_entries: klaviyoProfile.properties.member_entries,
-      one_time_entries: klaviyoProfile.properties.one_time_entries,
-      upsell_entries: klaviyoProfile.properties.upsell_entries,
-      mini_draw_entries: klaviyoProfile.properties.mini_draw_entries,
-    },
-  });
+  // console.log(`📊 Klaviyo Profile Data for ${user.email}:`, {
+  //   accumulated_entries: klaviyoProfile.properties.accumulated_entries,
+  //   rewards_points: klaviyoProfile.properties.rewards_points,
+  //   subscription: {
+  //     has_active_subscription: klaviyoProfile.properties.has_active_subscription,
+  //     subscription_tier: klaviyoProfile.properties.subscription_tier,
+  //     subscription_start_date: klaviyoProfile.properties.subscription_start_date,
+  //     subscription_end_date: klaviyoProfile.properties.subscription_end_date,
+  //     subscription_status: klaviyoProfile.properties.subscription_status,
+  //     subscription_auto_renew: klaviyoProfile.properties.subscription_auto_renew,
+  //     subscription_has_pending_upgrade: klaviyoProfile.properties.subscription_has_pending_upgrade,
+  //     subscription_previous_tier: klaviyoProfile.properties.subscription_previous_tier,
+  //     subscription_last_upgrade_date: klaviyoProfile.properties.subscription_last_upgrade_date,
+  //     subscription_last_downgrade_date: klaviyoProfile.properties.subscription_last_downgrade_date,
+  //   },
+  //   lifetime_value: klaviyoProfile.properties.lifetime_value,
+  //   total_spent: klaviyoProfile.properties.total_spent,
+  //   brand_interest: klaviyoProfile.properties.brand_interest,
+  //   has_purchases: hasUserMadePurchase(user),
+  //   referral_code: klaviyoProfile.properties.referral_code,
+  //   partner_discount_active: klaviyoProfile.properties.partner_discount_active,
+  //   entry_breakdown: {
+  //     member_entries: klaviyoProfile.properties.member_entries,
+  //     one_time_entries: klaviyoProfile.properties.one_time_entries,
+  //     upsell_entries: klaviyoProfile.properties.upsell_entries,
+  //     mini_draw_entries: klaviyoProfile.properties.mini_draw_entries,
+  //   },
+  // });
 
   return klaviyoProfile;
 }
@@ -301,12 +301,12 @@ export function calculateLifetimeValue(user: IUser): number {
     upsellPurchases.forEach((purchase) => {
       const amount = purchase.amountPaid || 0;
       total += amount;
-      console.log(`💰 Adding upsell to lifetime value: ${purchase.offerTitle || purchase.offerId} - $${amount}`);
+      // console.log(`💰 Adding upsell to lifetime value: ${purchase.offerTitle || purchase.offerId} - $${amount}`);
     });
   } else {
-    console.log(
-      `⚠️ No upsell purchases found for user ${user.email} (upsellPurchases: ${user.upsellPurchases?.length || 0})`
-    );
+    // console.log(
+    //   `⚠️ No upsell purchases found for user ${user.email} (upsellPurchases: ${user.upsellPurchases?.length || 0})`
+    // );
   }
 
   // Add subscription prices (need to look up package and calculate based on duration)
@@ -329,21 +329,21 @@ export function calculateLifetimeValue(user: IUser): number {
         const totalMonths = monthsDiff + (user.subscription.isActive ? 1 : 0);
         const subscriptionTotal = subscriptionPackage.price * totalMonths;
         total += subscriptionTotal;
-        console.log(
-          `💰 Adding subscription to lifetime value: ${subscriptionPackage.name} - $${subscriptionPackage.price}/month × ${totalMonths} months = $${subscriptionTotal}`
-        );
+        // console.log(
+        //   `💰 Adding subscription to lifetime value: ${subscriptionPackage.name} - $${subscriptionPackage.price}/month × ${totalMonths} months = $${subscriptionTotal}`
+        // );
       } else {
-        console.warn(
-          `⚠️ Subscription package not found or has no price: ${user.subscription.packageId} for user ${user.email}`
-        );
+        // console.warn(
+        //   `⚠️ Subscription package not found or has no price: ${user.subscription.packageId} for user ${user.email}`
+        // );
       }
     } catch (error) {
       console.error(`Error calculating subscription lifetime value for user ${user._id}:`, error);
     }
   } else {
-    console.log(
-      `ℹ️ No active subscription for lifetime value calculation: isActive=${user.subscription?.isActive}, packageId=${user.subscription?.packageId}`
-    );
+    // console.log(
+    //   `ℹ️ No active subscription for lifetime value calculation: isActive=${user.subscription?.isActive}, packageId=${user.subscription?.packageId}`
+    // );
   }
 
   // Add one-time package prices (need to look up package price)
@@ -362,7 +362,7 @@ export function calculateLifetimeValue(user: IUser): number {
     }
   }
 
-  console.log(`💰 Total lifetime value calculated for ${user.email}: $${total.toFixed(2)}`);
+  // console.log(`💰 Total lifetime value calculated for ${user.email}: $${total.toFixed(2)}`);
   return total;
 }
 

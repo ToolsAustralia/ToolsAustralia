@@ -15,13 +15,13 @@ const verifyEmailSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log("Email verification code verification request received");
+    // console.log("Email verification code verification request received");
 
     // Parse and validate request body
     const body = await request.json();
     const validatedData = verifyEmailSchema.parse(body);
 
-    console.log("Request validation successful");
+    // console.log("Request validation successful");
 
     // Connect to database
     await connectDB();
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     // ✅ NEW: Update Klaviyo profile with email verification status
     try {
       const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
-      console.log(`📊 Updating Klaviyo profile after email verification`);
+      // console.log(`📊 Updating Klaviyo profile after email verification`);
       ensureUserProfileSynced(user);
     } catch (klaviyoError) {
       console.error("Klaviyo import/update error (non-critical):", klaviyoError);
@@ -135,17 +135,17 @@ export async function POST(request: NextRequest) {
     try {
       const referralResult = await completeReferralOnEmailVerification(user._id.toString());
       if (referralResult.completed > 0) {
-        console.log(
-          `🎉 Referral rewards granted for ${referralResult.completed} pending referral${
-            referralResult.completed > 1 ? "s" : ""
-          }`
-        );
+        // console.log(
+        //   `🎉 Referral rewards granted for ${referralResult.completed} pending referral${
+        //     referralResult.completed > 1 ? "s" : ""
+        //   }`
+        // );
       }
     } catch (referralError) {
       console.error("Referral completion error:", referralError);
     }
 
-    console.log(`Email verification successful for user: ${user.email}`);
+    // console.log(`Email verification successful for user: ${user.email}`);
 
     // Return success response with user data
     return NextResponse.json({

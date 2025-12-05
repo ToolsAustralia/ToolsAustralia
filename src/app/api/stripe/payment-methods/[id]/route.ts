@@ -20,7 +20,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     const { id: paymentMethodId } = await params;
-    console.log(`🗑️ Deleting payment method: ${paymentMethodId} for user: ${session.user.id}`);
+    // console.log(`🗑️ Deleting payment method: ${paymentMethodId} for user: ${session.user.id}`);
 
     const user = await User.findById(session.user.id);
     if (!user) {
@@ -40,7 +40,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     try {
       await stripe.paymentMethods.detach(paymentMethodId);
     } catch (stripeError) {
-      console.warn(`Warning: Could not detach payment method from Stripe: ${stripeError}`);
+      // console.warn(`Warning: Could not detach payment method from Stripe: ${stripeError}`);
       // Continue with deletion even if Stripe detachment fails
     }
 
@@ -49,7 +49,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     await user.save();
 
-    console.log(`✅ Payment method deleted successfully: ${paymentMethodId}`);
+    // console.log(`✅ Payment method deleted successfully: ${paymentMethodId}`);
 
     return NextResponse.json({
       success: true,

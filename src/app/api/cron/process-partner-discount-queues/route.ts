@@ -36,7 +36,7 @@ export async function POST() {
     // Vercel cron jobs are automatically protected by Vercel's infrastructure
     // No additional authentication needed as they can only be called internally
 
-    console.log("🕐 Starting partner discount queue processing cron job...");
+    // console.log("🕐 Starting partner discount queue processing cron job...");
     const startTime = Date.now();
 
     await connectDB();
@@ -47,7 +47,7 @@ export async function POST() {
       partnerDiscountQueue: { $exists: true, $ne: [] },
     }).limit(1000); // Process in batches to avoid timeout
 
-    console.log(`📊 Found ${users.length} users with partner discount queues`);
+    // console.log(`📊 Found ${users.length} users with partner discount queues`);
 
     let processedCount = 0;
     let changedCount = 0;
@@ -62,7 +62,7 @@ export async function POST() {
         if (queueChanged) {
           await user.save();
           changedCount++;
-          console.log(`✅ Queue processed and saved for user: ${user.email}`);
+          // console.log(`✅ Queue processed and saved for user: ${user.email}`);
         }
 
         processedCount++;
@@ -80,10 +80,10 @@ export async function POST() {
 
     const duration = Date.now() - startTime;
 
-    console.log(`✅ Cron job completed in ${duration}ms`);
-    console.log(`📊 Processed: ${processedCount} users`);
-    console.log(`📊 Changed: ${changedCount} users`);
-    console.log(`📊 Errors: ${errorCount} users`);
+    // console.log(`✅ Cron job completed in ${duration}ms`);
+    // console.log(`📊 Processed: ${processedCount} users`);
+    // console.log(`📊 Changed: ${changedCount} users`);
+    // console.log(`📊 Errors: ${errorCount} users`);
 
     return NextResponse.json({
       success: true,

@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = cancelSubscriptionSchema.parse(body);
 
-    console.log(`🚫 Canceling subscription for user: ${session.user.id}`);
+    // console.log(`🚫 Canceling subscription for user: ${session.user.id}`);
 
     // Get the user
     const user = await User.findById(session.user.id);
@@ -60,20 +60,20 @@ export async function POST(request: NextRequest) {
       canceledSubscription = (await stripe.subscriptions.update(user.stripeSubscriptionId, {
         cancel_at_period_end: true,
       })) as Stripe.Subscription;
-      console.log(`✅ Subscription set to cancel at period end: ${user.stripeSubscriptionId}`);
+      // console.log(`✅ Subscription set to cancel at period end: ${user.stripeSubscriptionId}`);
     } else {
       // Cancel immediately
       canceledSubscription = (await stripe.subscriptions.cancel(user.stripeSubscriptionId)) as Stripe.Subscription;
-      console.log(`✅ Subscription canceled immediately: ${user.stripeSubscriptionId}`);
+      // console.log(`✅ Subscription canceled immediately: ${user.stripeSubscriptionId}`);
     }
 
     // Debug: Log subscription details
-    console.log("📊 Subscription details:", {
-      id: canceledSubscription.id,
-      status: canceledSubscription.status,
-      current_period_end: (canceledSubscription as unknown as StripeSubscriptionWithPeriodEnd).current_period_end,
-      cancel_at_period_end: canceledSubscription.cancel_at_period_end,
-    });
+    // console.log("📊 Subscription details:", {
+    //   id: canceledSubscription.id,
+    //   status: canceledSubscription.status,
+    //   current_period_end: (canceledSubscription as unknown as StripeSubscriptionWithPeriodEnd).current_period_end,
+    //   cancel_at_period_end: canceledSubscription.cancel_at_period_end,
+    // });
 
     const latestSubscription = (await stripe.subscriptions.retrieve(user.stripeSubscriptionId)) as Stripe.Subscription;
 
@@ -100,14 +100,14 @@ export async function POST(request: NextRequest) {
 
     const stripeEndDate = resolvedEndTimestamp ? new Date(resolvedEndTimestamp * 1000) : null;
 
-    console.log("📅 Resolved subscription period end:", {
-      canceledCurrentPeriodEnd: getCurrentPeriodEnd(canceledSubscription),
-      latestCurrentPeriodEnd: getCurrentPeriodEnd(latestSubscription),
-      latestCancelAt: getCancelAt(latestSubscription),
-      resolvedEndTimestamp,
-      stripeEndDate,
-      cancelAtPeriodEnd: validatedData.cancelAtPeriodEnd,
-    });
+    // console.log("📅 Resolved subscription period end:", {
+    //   canceledCurrentPeriodEnd: getCurrentPeriodEnd(canceledSubscription),
+    //   latestCurrentPeriodEnd: getCurrentPeriodEnd(latestSubscription),
+    //   latestCancelAt: getCancelAt(latestSubscription),
+    //   resolvedEndTimestamp,
+    //   stripeEndDate,
+    //   cancelAtPeriodEnd: validatedData.cancelAtPeriodEnd,
+    // });
 
     // Update user's subscription status in database
     if (user.subscription) {
@@ -118,13 +118,25 @@ export async function POST(request: NextRequest) {
       } else if (stripeEndDate) {
         user.subscription.endDate = stripeEndDate;
       }
+
+      // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved during cancellation
+      // This allows resubscribe to continue from where user left off
+      // The field is NOT cleared - it persists for resubscribe continuation
+      if (user.subscription.lastMonthAccumulatedEntries !== undefined) {
+        console.log(
+          `📊 [CANCEL SUBSCRIPTION] Preserving lastMonthAccumulatedEntries: ${user.subscription.lastMonthAccumulatedEntries} for potential resubscribe`
+        );
+      }
+
+      // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
+      user.markModified("subscription");
     }
 
     // Update partner discount queue - subscription will end
     // This will mark the subscription period as expired and activate the next queued item
     if (!validatedData.cancelAtPeriodEnd) {
       // If canceled immediately, end subscription in queue now
-      console.log(`🎁 Ending subscription in partner discount queue immediately`);
+      console.log(`🎁 [CANCEL SUBSCRIPTION] Ending subscription in partner discount queue immediately`);
       await handleSubscriptionQueueUpdate(user as unknown as import("@/models/User").IUser, "end");
     }
     // If canceling at period end, the queue will be processed automatically by the cron job
@@ -132,9 +144,17 @@ export async function POST(request: NextRequest) {
 
     await user.save();
 
+    // ✅ Verify save worked
+    const savedUser = await User.findById(user._id);
+    console.log(
+      `✅ [CANCEL SUBSCRIPTION] Verified - isActive: ${savedUser?.subscription?.isActive}, endDate: ${
+        savedUser?.subscription?.endDate?.toISOString() || "undefined"
+      }, autoRenew: ${savedUser?.subscription?.autoRenew}`
+    );
+
     // ✅ Track subscription cancellation in Klaviyo (non-blocking)
     try {
-      console.log(`📊 Tracking subscription cancellation in Klaviyo for: ${user.email}`);
+      // console.log(`📊 Tracking subscription cancellation in Klaviyo for: ${user.email}`);
       klaviyo.trackEventBackground(
         createSubscriptionCancelledEvent(user, {
           packageId: user.subscription?.packageId || "unknown",
@@ -142,16 +162,16 @@ export async function POST(request: NextRequest) {
           tier: user.subscription?.packageId || "unknown",
         })
       );
-      console.log(`✅ Klaviyo subscription cancellation event tracked`);
+      // console.log(`✅ Klaviyo subscription cancellation event tracked`);
     } catch (klaviyoError) {
       console.error("❌ Klaviyo subscription cancellation event tracking failed:", klaviyoError);
     }
 
     // ✅ Sync user profile to Klaviyo with updated subscription status (non-blocking)
     try {
-      console.log(`📊 Syncing user profile to Klaviyo after subscription cancellation`);
+      // console.log(`📊 Syncing user profile to Klaviyo after subscription cancellation`);
       ensureUserProfileSynced(user);
-      console.log(`✅ Klaviyo profile sync initiated after cancellation`);
+      // console.log(`✅ Klaviyo profile sync initiated after cancellation`);
     } catch (klaviyoError) {
       console.error("❌ Klaviyo profile sync failed after cancellation:", klaviyoError);
     }

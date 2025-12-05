@@ -12,7 +12,7 @@ import { type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 // Debug: Log Stripe configuration
-console.log("Stripe publishable key:", process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? "✅ Set" : "❌ Missing");
+// console.log("Stripe publishable key:", process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? "✅ Set" : "❌ Missing");
 
 interface StripePaymentModalProps {
   isOpen: boolean;
@@ -101,11 +101,11 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
 
         // ✅ FIX: Create upgrade payment when payment is confirmed
         if (clientSecret && clientSecret.length > 0) {
-          console.log("✅ Using existing payment intent from modal opening");
+          // console.log("✅ Using existing payment intent from modal opening");
           finalClientSecret = clientSecret;
         } else {
           // ✅ FIX: Create upgrade payment when no existing payment intent
-          console.log("💰 Creating upgrade payment...");
+          // console.log("💰 Creating upgrade payment...");
           const response = await fetch("/api/stripe/upgrade-subscription-payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -122,7 +122,7 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
             throw new Error(result.error || result.details || "Failed to create upgrade payment");
           }
 
-          console.log("✅ Upgrade API response:", result);
+          // console.log("✅ Upgrade API response:", result);
 
           // ✅ UPDATE: Set upgrade info from API response
           if (result.data?.upgrade) {
@@ -135,7 +135,7 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
 
           // Check if payment was processed immediately (no PaymentIntent needed)
           if (result.data?.subscription && !result.data?.paymentIntent) {
-            console.log("✅ Payment processed immediately - webhook will handle activation");
+            // console.log("✅ Payment processed immediately - webhook will handle activation");
             // Payment processed, but webhook will handle final activation
             onPaymentSuccess("processing_upgrade");
             return;
@@ -156,7 +156,7 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
           },
         });
 
-        console.log("Payment confirmation result:", confirmResult);
+        // console.log("Payment confirmation result:", confirmResult);
 
         if (confirmResult.error) {
           console.error("Stripe payment error:", confirmResult.error);
@@ -282,9 +282,9 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
 
   // Debug logging and timeout
   React.useEffect(() => {
-    console.log("PaymentFormWithElements - Stripe loaded:", !!stripe);
-    console.log("PaymentFormWithElements - Elements loaded:", !!elements);
-    console.log("PaymentFormWithElements - ClientSecret:", clientSecret);
+    // console.log("PaymentFormWithElements - Stripe loaded:", !!stripe);
+    // console.log("PaymentFormWithElements - Elements loaded:", !!elements);
+    // console.log("PaymentFormWithElements - ClientSecret:", clientSecret);
 
     // Check if clientSecret is valid (but allow empty for dynamic creation)
     if (clientSecret && !clientSecret.includes("_secret_")) {
@@ -295,7 +295,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
     // Set a timeout to show error if Elements doesn't load within 10 seconds
     const timeout = setTimeout(() => {
       if (!stripe || !elements) {
-        console.warn("Elements taking too long to load");
+        // console.warn("Elements taking too long to load");
         setElementsError("Payment form is taking longer than expected to load. Please try again.");
       }
     }, 10000);
@@ -317,10 +317,10 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
     try {
       // ✅ NEW: Check if payment intent already exists (created when modal opened)
       if (clientSecret && clientSecret.length > 0) {
-        console.log("✅ Using existing payment intent from modal opening (Elements)");
+        // console.log("✅ Using existing payment intent from modal opening (Elements)");
       } else {
         // First, create the upgrade payment (API call)
-        console.log("💰 Creating upgrade payment (Elements)...");
+        // console.log("💰 Creating upgrade payment (Elements)...");
         const response = await fetch("/api/stripe/upgrade-subscription-payment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -334,7 +334,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
           throw new Error(result.error || result.details || "Failed to create upgrade payment");
         }
 
-        console.log("✅ Upgrade API response (Elements):", result);
+        // console.log("✅ Upgrade API response (Elements):", result);
 
         // ✅ UPDATE: Set upgrade info from API response
         if (result.data?.upgrade) {
@@ -347,7 +347,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
 
         // Check if payment was processed immediately (no PaymentIntent needed)
         if (result.data?.subscription && !result.data?.paymentIntent) {
-          console.log("✅ Payment processed immediately - webhook will handle activation");
+          // console.log("✅ Payment processed immediately - webhook will handle activation");
           // Payment processed, but webhook will handle final activation
           onPaymentSuccess("processing_upgrade");
           return;
@@ -389,7 +389,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
         redirect: "if_required",
       });
 
-      console.log("Elements payment confirmation result:", confirmResult);
+      // console.log("Elements payment confirmation result:", confirmResult);
 
       // For Elements, we need to check the payment intent status
       const paymentIntent = confirmResult.paymentIntent;
@@ -607,7 +607,7 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
 
   // Handle PaymentProcessingScreen timeout
   const handleProcessingTimeout = () => {
-    console.log("Payment processing timeout - showing success anyway");
+    // console.log("Payment processing timeout - showing success anyway");
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
     onPaymentSuccess(paymentIntentId || "");

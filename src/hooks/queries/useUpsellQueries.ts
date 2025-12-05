@@ -226,7 +226,7 @@ export const usePurchaseUpsell = () => {
     },
     onMutate: async ({ offerId, userId }) => {
       const actualUserId = userId;
-      console.log("🔥 ONMUTATE TRIGGERED: Upsell purchase starting", { offerId });
+      // console.log("🔥 ONMUTATE TRIGGERED: Upsell purchase starting", { offerId });
 
       // Cancel outgoing refetches and disable refetch intervals temporarily
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.current });
@@ -251,20 +251,20 @@ export const usePurchaseUpsell = () => {
       // Get the upsell package data to calculate optimistic updates
       // Use static data since upsell packages are not loaded in React Query cache
       const selectedPackage = upsellPackages.find((pkg) => pkg.id === offerId);
-      console.log("🔍 DEBUG: Upsell packages from static data:", upsellPackages);
-      console.log("🔍 DEBUG: Looking for offerId:", offerId);
-      console.log("🔍 DEBUG: Selected package found:", selectedPackage);
+      // console.log("🔍 DEBUG: Upsell packages from static data:", upsellPackages);
+      // console.log("🔍 DEBUG: Looking for offerId:", offerId);
+      // console.log("🔍 DEBUG: Selected package found:", selectedPackage);
 
       if (selectedPackage) {
         // Upsells are NOT included in the promo system
         // Only "one-time-packages" and "mini-packages" have promos
         const entryCount = selectedPackage.entriesCount || 0;
-        console.log(`🚀 OPTIMISTIC UPDATE: Adding ${entryCount} entries from upsell`);
+        // console.log(`🚀 OPTIMISTIC UPDATE: Adding ${entryCount} entries from upsell`);
 
         // Optimistically update major draw data (useCurrentMajorDraw expects MajorDraw object)
         queryClient.setQueryData(queryKeys.majorDraw.current, (old: unknown) => {
           if (!old || typeof old !== "object") {
-            console.log("❌ No existing major draw data for optimistic update");
+            // console.log("❌ No existing major draw data for optimistic update");
             return old;
           }
           const oldData = old as Record<string, unknown>;
@@ -276,21 +276,21 @@ export const usePurchaseUpsell = () => {
             isProcessing: true, // Add processing flag
           };
 
-          console.log(`✅ OPTIMISTIC UPDATE: Updated major draw data:`, {
-            oldTotalEntries: oldData.totalEntries,
-            newTotalEntries: newData.totalEntries,
-            entryCount,
-            isProcessing: true,
-          });
+          // console.log(`✅ OPTIMISTIC UPDATE: Updated major draw data:`, {
+          //   oldTotalEntries: oldData.totalEntries,
+          //   newTotalEntries: newData.totalEntries,
+          //   entryCount,
+          //   isProcessing: true,
+          // });
 
           return newData;
         });
 
         // Optimistically update user stats
-        console.log(
-          "🔍 OPTIMISTIC UPDATE: Updating user stats with query key:",
-          queryKeys.majorDraw.userStats(actualUserId)
-        );
+        // console.log(
+        //   "🔍 OPTIMISTIC UPDATE: Updating user stats with query key:",
+        //   queryKeys.majorDraw.userStats(actualUserId)
+        // );
         queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), (old: unknown) => {
           if (!old || typeof old !== "object") return old;
           const oldData = old as Record<string, unknown>;
@@ -302,11 +302,11 @@ export const usePurchaseUpsell = () => {
             isProcessing: true,
             pendingEntries: entryCount,
           };
-          console.log(`✅ OPTIMISTIC UPDATE: Updated user stats:`, {
-            oldTotalEntries: oldData.totalEntries,
-            newTotalEntries: newData.totalEntries,
-            entryCount,
-          });
+          // console.log(`✅ OPTIMISTIC UPDATE: Updated user stats:`, {
+          //   oldTotalEntries: oldData.totalEntries,
+          //   newTotalEntries: newData.totalEntries,
+          //   entryCount,
+          // });
           return newData;
         });
 
@@ -324,11 +324,11 @@ export const usePurchaseUpsell = () => {
               isProcessing: true,
             },
           };
-          console.log(`✅ OPTIMISTIC UPDATE: Updated user account:`, {
-            oldAccumulatedEntries: oldUser.accumulatedEntries,
-            newAccumulatedEntries: newData.user.accumulatedEntries,
-            entryCount,
-          });
+          // console.log(`✅ OPTIMISTIC UPDATE: Updated user account:`, {
+          //   oldAccumulatedEntries: oldUser.accumulatedEntries,
+          //   newAccumulatedEntries: newData.user.accumulatedEntries,
+          //   entryCount,
+          // });
           return newData;
         });
       }
@@ -336,7 +336,7 @@ export const usePurchaseUpsell = () => {
       return { previousMajorDraw, previousUserStats, previousUserAccount, actualUserId };
     },
     onSuccess: (data, variables, context) => {
-      console.log(`🎉 PAYMENT SUCCESS: Upsell purchase completed`);
+      // console.log(`🎉 PAYMENT SUCCESS: Upsell purchase completed`);
 
       // Get the actual user ID from context
       const actualUserId = context?.actualUserId || "current-user";
@@ -385,7 +385,7 @@ export const usePurchaseUpsell = () => {
 
       // HYBRID APPROACH: Set up webhook validation
       setTimeout(async () => {
-        console.log(`🔄 HYBRID VALIDATION: Checking server data after 3 seconds`);
+        // console.log(`🔄 HYBRID VALIDATION: Checking server data after 3 seconds`);
         try {
           // Fetch fresh data from server to validate optimistic updates
           const [majorDrawResponse, userStatsResponse] = await Promise.all([
@@ -396,12 +396,12 @@ export const usePurchaseUpsell = () => {
           // Update cache with server data if different
           if (majorDrawResponse.success) {
             queryClient.setQueryData(queryKeys.majorDraw.current, majorDrawResponse.data.majorDraw);
-            console.log(`✅ HYBRID VALIDATION: Major draw data synced with server`);
+            // console.log(`✅ HYBRID VALIDATION: Major draw data synced with server`);
           }
 
           if (userStatsResponse.success) {
             queryClient.setQueryData(queryKeys.users.account("current-user"), userStatsResponse.data);
-            console.log(`✅ HYBRID VALIDATION: User account data synced with server`);
+            // console.log(`✅ HYBRID VALIDATION: User account data synced with server`);
           }
         } catch (error) {
           console.error(`❌ HYBRID VALIDATION: Failed to sync with server:`, error);

@@ -15,6 +15,7 @@ import { stripe } from "@/lib/stripe";
 import { removeMajorDrawEntries } from "../draws/remove-draw-entries";
 import { removeMiniDrawEntries } from "../draws/remove-draw-entries";
 import { reverseAffiliateCommissions } from "../affiliate/reverse-commission";
+import { getPackageById } from "@/data/membershipPackages";
 
 /**
  * Result of refund processing
@@ -52,13 +53,13 @@ export async function processRefundReversal(
   isFullRefund: boolean = true,
   invoiceId?: string // Optional invoice ID for subscription refunds
 ): Promise<RefundProcessingResult> {
-  console.log(`🔄 processRefundReversal called with:`, {
-    paymentIntentId,
-    userId,
-    refundAmount,
-    isFullRefund,
-    invoiceId: invoiceId || "(not provided)",
-  });
+  // console.log(`🔄 processRefundReversal called with:`, {
+  //   paymentIntentId,
+  //   userId,
+  //   refundAmount,
+  //   isFullRefund,
+  //   invoiceId: invoiceId || "(not provided)",
+  // });
 
   // Validate input parameters
   if (!paymentIntentId || !userId || !refundAmount) {
@@ -72,7 +73,7 @@ export async function processRefundReversal(
 
   // Only process full refunds (as per requirements)
   if (!isFullRefund) {
-    console.log(`⚠️ Partial refund detected - skipping reversal (only full refunds are processed)`);
+    // console.log(`⚠️ Partial refund detected - skipping reversal (only full refunds are processed)`);
     return {
       success: false,
       alreadyProcessed: false,
@@ -82,7 +83,7 @@ export async function processRefundReversal(
 
   try {
     await connectDB();
-    console.log(`🔗 Database connected for refund processing: ${paymentIntentId}`);
+    // console.log(`🔗 Database connected for refund processing: ${paymentIntentId}`);
 
     // Find the original payment event to get benefit details
     // For subscriptions, PaymentEvent is stored with invoice ID format: invoice_${invoice.id}
@@ -101,7 +102,7 @@ export async function processRefundReversal(
       });
 
       if (originalPaymentEvent) {
-        console.log(`✅ Found payment event by invoice ID format: ${invoicePaymentId}`);
+        // console.log(`✅ Found payment event by invoice ID format: ${invoicePaymentId}`);
       }
     }
 
@@ -114,13 +115,13 @@ export async function processRefundReversal(
       });
 
       if (originalPaymentEvent) {
-        console.log(`✅ Found payment event by payment intent ID: ${paymentIntentId}`);
+        // console.log(`✅ Found payment event by payment intent ID: ${paymentIntentId}`);
       }
     }
 
     // Step 3: Fallback - if payment intent starts with pi_ and not found, search user's subscription events
     if (!originalPaymentEvent && paymentIntentId.startsWith("pi_")) {
-      console.log(`⚠️ Not found by ID lookup, searching user's subscription PaymentEvents as fallback...`);
+      // console.log(`⚠️ Not found by ID lookup, searching user's subscription PaymentEvents as fallback...`);
       const user = await User.findById(userId);
 
       if (user) {
@@ -133,12 +134,12 @@ export async function processRefundReversal(
           .sort({ timestamp: -1 })
           .limit(10);
 
-        console.log(`Found ${subscriptionEvents.length} subscription PaymentEvents for user`);
+        // console.log(`Found ${subscriptionEvents.length} subscription PaymentEvents for user`);
 
         // Use the most recent subscription event as fallback
         // Note: This is a best-effort match and may not be 100% accurate
         if (subscriptionEvents.length > 0) {
-          console.log(`⚠️ Using most recent subscription PaymentEvent as fallback (may not be exact match)`);
+          // console.log(`⚠️ Using most recent subscription PaymentEvent as fallback (may not be exact match)`);
           originalPaymentEvent = subscriptionEvents[0];
         }
       }
@@ -154,11 +155,11 @@ export async function processRefundReversal(
       };
     }
 
-    console.log(`📋 Found original payment event:`, {
-      packageType: originalPaymentEvent.packageType,
-      entries: originalPaymentEvent.data.entries,
-      points: originalPaymentEvent.data.points,
-    });
+    // console.log(`📋 Found original payment event:`, {
+    //   packageType: originalPaymentEvent.packageType,
+    //   entries: originalPaymentEvent.data.entries,
+    //   points: originalPaymentEvent.data.points,
+    // });
 
     // Get user document (needed for refund event creation)
     const user = await User.findById(userId);
@@ -186,7 +187,7 @@ export async function processRefundReversal(
     // Check if refund already processed (quick check before attempting insert)
     const existingRefundEvent = await PaymentEvent.findById(refundEventId);
     if (existingRefundEvent) {
-      console.log(`✅ Refund ${paymentIntentId} already processed (idempotency check)`);
+      // console.log(`✅ Refund ${paymentIntentId} already processed (idempotency check)`);
       return {
         success: true,
         alreadyProcessed: true,
@@ -217,7 +218,7 @@ export async function processRefundReversal(
 
       await refundEvent.save();
       refundEventCreated = true;
-      console.log(`✅ Created refund event for idempotency: ${refundEventId}`);
+      // console.log(`✅ Created refund event for idempotency: ${refundEventId}`);
     } catch (error: unknown) {
       // If duplicate key error, another webhook already created it
       const mongoError = error as { code?: number; codeName?: string; message?: string };
@@ -226,7 +227,7 @@ export async function processRefundReversal(
         mongoError?.codeName === "DuplicateKey" ||
         mongoError?.message?.includes("duplicate key")
       ) {
-        console.log(`✅ Refund ${paymentIntentId} already being processed by another webhook (duplicate key)`);
+        // console.log(`✅ Refund ${paymentIntentId} already being processed by another webhook (duplicate key)`);
         return {
           success: true,
           alreadyProcessed: true,
@@ -238,7 +239,7 @@ export async function processRefundReversal(
 
     // Only process reversals if we successfully created the refund event
     if (!refundEventCreated) {
-      console.log(`⚠️ Failed to create refund event, skipping processing`);
+      // console.log(`⚠️ Failed to create refund event, skipping processing`);
       return {
         success: false,
         alreadyProcessed: false,
@@ -246,11 +247,11 @@ export async function processRefundReversal(
       };
     }
 
-    console.log(`🔄 Processing refund reversal:`, {
-      entries: originalEntries,
-      points: originalPoints,
-      packageType,
-    });
+    // console.log(`🔄 Processing refund reversal:`, {
+    //   entries: originalEntries,
+    //   points: originalPoints,
+    //   packageType,
+    // });
 
     // Process reversal based on package type
     switch (packageType) {
@@ -289,7 +290,7 @@ export async function processRefundReversal(
       { new: false }
     );
 
-    console.log(`✅ Reversed ${originalEntries} entries and ${originalPoints} points from user`);
+    // console.log(`✅ Reversed ${originalEntries} entries and ${originalPoints} points from user`);
 
     // Reverse affiliate commissions (non-blocking)
     try {
@@ -299,7 +300,7 @@ export async function processRefundReversal(
       console.error("❌ Affiliate commission reversal error (non-blocking):", commissionError);
     }
 
-    console.log(`✅ Refund reversal completed successfully for payment: ${paymentIntentId}`);
+    // console.log(`✅ Refund reversal completed successfully for payment: ${paymentIntentId}`);
 
     return {
       success: true,
@@ -328,18 +329,18 @@ export async function processRefundReversal(
  * Reverse one-time package benefits
  */
 async function reverseOneTimePackage(user: IUser, originalEvent: IPaymentEvent): Promise<void> {
-  console.log(`🔄 Reversing one-time package benefits`);
+  // console.log(`🔄 Reversing one-time package benefits`);
 
   const packageId = originalEvent.packageId;
   if (!packageId) {
-    console.log(`⚠️ No packageId in original event, skipping package removal`);
+    // console.log(`⚠️ No packageId in original event, skipping package removal`);
     return;
   }
 
   // Get user document with packages to find the specific package
   const userDoc = await User.findById(user._id);
   if (!userDoc || !userDoc.oneTimePackages) {
-    console.log(`⚠️ User or one-time packages not found`);
+    // console.log(`⚠️ User or one-time packages not found`);
     return;
   }
 
@@ -349,7 +350,7 @@ async function reverseOneTimePackage(user: IUser, originalEvent: IPaymentEvent):
   const packagesToMatch = userDoc.oneTimePackages.filter((pkg) => pkg.packageId === packageId && pkg.isActive);
 
   if (packagesToMatch.length === 0) {
-    console.log(`⚠️ No active one-time package found for packageId: ${packageId}`);
+    // console.log(`⚠️ No active one-time package found for packageId: ${packageId}`);
     return;
   }
 
@@ -392,7 +393,7 @@ async function reverseOneTimePackage(user: IUser, originalEvent: IPaymentEvent):
     }
   );
 
-  console.log(`✅ Removed one-time package from user`);
+  // console.log(`✅ Removed one-time package from user`);
 
   // Remove entries from Major Draw
   const entriesToRemove = originalEvent.data.entries || 0;
@@ -405,7 +406,38 @@ async function reverseOneTimePackage(user: IUser, originalEvent: IPaymentEvent):
  * Reverse subscription package benefits
  */
 async function reverseSubscriptionPackage(user: IUser, originalEvent: IPaymentEvent): Promise<void> {
-  console.log(`🔄 Reversing subscription package benefits`);
+  console.log(`🔄 [REFUND] Reversing subscription package benefits for user ${user.email}`);
+
+  // ✅ Identify which month is being refunded
+  const originalBillingReason = originalEvent.data.billingReason as string | undefined; // "subscription_create" or "subscription_cycle"
+  const originalInvoiceId = originalEvent.data.invoiceId as string | undefined;
+
+  console.log(`📊 [REFUND] Billing reason: ${originalBillingReason}, Invoice: ${originalInvoiceId}`);
+
+  // ✅ Calculate entries to remove based on the specific month being refunded
+  let entriesToRemove = 0;
+
+  if (originalBillingReason === "subscription_create") {
+    // Initial subscription - remove base * promo multiplier (full initial amount)
+    entriesToRemove = originalEvent.data.entries || 0;
+    console.log(`📊 [REFUND] Initial subscription refund - removing ${entriesToRemove} entries`);
+  } else if (originalBillingReason === "subscription_cycle") {
+    // Renewal - remove only the base entries for that month (not accumulated)
+    const packageId = user.subscription?.packageId;
+    if (packageId) {
+      const membershipPackage = getPackageById(packageId);
+      entriesToRemove = membershipPackage?.entriesPerMonth || 0;
+      console.log(`📊 [REFUND] Renewal refund - removing ${entriesToRemove} base entries for month`);
+    } else {
+      // Fallback: use original event entries if package not found
+      entriesToRemove = originalEvent.data.entries || 0;
+      console.warn(`⚠️ [REFUND] Package ID not found, using original event entries: ${entriesToRemove}`);
+    }
+  } else {
+    // Fallback: use original event entries
+    entriesToRemove = originalEvent.data.entries || 0;
+    console.warn(`⚠️ [REFUND] Unknown billing reason, using original event entries: ${entriesToRemove}`);
+  }
 
   // Cancel subscription in Stripe if active
   if (user.stripeSubscriptionId) {
@@ -413,10 +445,10 @@ async function reverseSubscriptionPackage(user: IUser, originalEvent: IPaymentEv
       const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
       if (subscription.status === "active" || subscription.status === "trialing") {
         await stripe.subscriptions.cancel(user.stripeSubscriptionId);
-        console.log(`✅ Canceled active subscription in Stripe`);
+        console.log(`✅ [REFUND] Canceled active subscription in Stripe`);
       }
     } catch (stripeError) {
-      console.error(`❌ Error canceling subscription in Stripe:`, stripeError);
+      console.error(`❌ [REFUND] Error canceling subscription in Stripe:`, stripeError);
       // Continue processing - we'll update database regardless
     }
   }
@@ -427,20 +459,47 @@ async function reverseSubscriptionPackage(user: IUser, originalEvent: IPaymentEv
     user.subscription.autoRenew = false;
     user.subscription.endDate = new Date();
     user.subscription.status = "canceled";
-    await user.save();
+
+    // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
+    user.markModified("subscription");
   }
+
+  // ✅ Only decrement accumulated entries by the specific month's entries
+  if (entriesToRemove > 0) {
+    const currentAccumulated = user.accumulatedEntries || 0;
+    const newAccumulated = Math.max(0, currentAccumulated - entriesToRemove);
+    user.accumulatedEntries = newAccumulated;
+
+    // Update lastMonthAccumulatedEntries if this was the most recent payment
+    if (user.subscription?.lastMonthAccumulatedEntries) {
+      const currentLastMonth = user.subscription.lastMonthAccumulatedEntries;
+      const newLastMonth = Math.max(0, currentLastMonth - entriesToRemove);
+      user.subscription.lastMonthAccumulatedEntries = newLastMonth;
+      console.log(`📊 [REFUND] Updated lastMonthAccumulatedEntries: ${currentLastMonth} → ${newLastMonth}`);
+    }
+
+    console.log(`📊 [REFUND] Updated accumulated entries: ${currentAccumulated} → ${newAccumulated}`);
+  }
+
+  await user.save();
+
+  // ✅ Verify save worked
+  const savedUser = await User.findById(user._id);
+  console.log(
+    `✅ [REFUND] Verified - isActive: ${savedUser?.subscription?.isActive}, accumulatedEntries: ${savedUser?.accumulatedEntries}`
+  );
 
   // Update partner discount queue (if needed)
   // Note: This will be handled by the partner discount queue system
   // when subscription ends, but we should mark it as canceled
 
-  // Remove entries from Major Draw
-  const entriesToRemove = originalEvent.data.entries || 0;
+  // Remove entries from Major Draw (only the specific month's entries)
   if (entriesToRemove > 0) {
     await removeMajorDrawEntries(user._id.toString(), entriesToRemove, "membership");
+    console.log(`✅ [REFUND] Removed ${entriesToRemove} entries from Major Draw`);
   }
 
-  console.log(`✅ Reversed subscription package benefits`);
+  console.log(`✅ [REFUND] Reversed subscription package benefits - removed ${entriesToRemove} entries`);
 }
 
 /**
@@ -451,11 +510,11 @@ async function reverseUpsellPurchase(
   originalEvent: IPaymentEvent,
   paymentIntentId: string
 ): Promise<void> {
-  console.log(`🔄 Reversing upsell purchase benefits`);
+  // console.log(`🔄 Reversing upsell purchase benefits`);
 
   const offerId = originalEvent.packageId;
   if (!offerId) {
-    console.log(`⚠️ No offerId in original event, skipping upsell removal`);
+    // console.log(`⚠️ No offerId in original event, skipping upsell removal`);
     return;
   }
 
@@ -471,7 +530,7 @@ async function reverseUpsellPurchase(
     }
   );
 
-  console.log(`✅ Removed upsell purchase from user`);
+  // console.log(`✅ Removed upsell purchase from user`);
 
   // Determine which draw to remove entries from based on metadata
   // Check if there's a miniDrawId in the original payment metadata
@@ -507,32 +566,32 @@ async function reverseMiniDrawPackage(
   originalEvent: IPaymentEvent,
   paymentIntentId: string
 ): Promise<void> {
-  console.log(`🔄 Reversing mini-draw package benefits`);
+  // console.log(`🔄 Reversing mini-draw package benefits`);
 
   const packageId = originalEvent.packageId;
   if (!packageId) {
-    console.log(`⚠️ No packageId in original event, skipping mini-draw package removal`);
+    // console.log(`⚠️ No packageId in original event, skipping mini-draw package removal`);
     return;
   }
 
   // Find the mini-draw package in user's array
   const userDoc = await User.findById(user._id);
   if (!userDoc || !userDoc.miniDrawPackages) {
-    console.log(`⚠️ User or mini-draw packages not found`);
+    // console.log(`⚠️ User or mini-draw packages not found`);
     return;
   }
 
   const miniDrawPackage = userDoc.miniDrawPackages.find((pkg) => pkg.stripePaymentIntentId === paymentIntentId);
 
   if (!miniDrawPackage) {
-    console.log(`⚠️ Mini-draw package not found for payment intent: ${paymentIntentId}`);
+    // console.log(`⚠️ Mini-draw package not found for payment intent: ${paymentIntentId}`);
     return;
   }
 
   // Get miniDrawId from the package
   const miniDrawId = miniDrawPackage.miniDrawId;
   if (!miniDrawId) {
-    console.log(`⚠️ No miniDrawId in package, skipping mini-draw entry removal`);
+    // console.log(`⚠️ No miniDrawId in package, skipping mini-draw entry removal`);
   } else {
     // Remove entries from Mini Draw
     const entriesToRemove = originalEvent.data.entries || 0;
@@ -569,5 +628,5 @@ async function reverseMiniDrawPackage(
     );
   }
 
-  console.log(`✅ Removed mini-draw package and reversed entries`);
+  // console.log(`✅ Removed mini-draw package and reversed entries`);
 }

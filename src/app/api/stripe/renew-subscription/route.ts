@@ -31,7 +31,7 @@ const renewSubscriptionSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log(`🔄 [RENEWAL] Starting subscription renewal process`);
+    // console.log(`🔄 [RENEWAL] Starting subscription renewal process`);
 
     await connectDB();
 
@@ -50,22 +50,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    console.log(`👤 User found: ${user.email}`);
-    console.log(`📊 Current subscription state:`, {
-      hasSubscription: !!user.subscription,
-      isActive: user.subscription?.isActive,
-      status: user.subscription?.status,
-      stripeSubscriptionId: user.stripeSubscriptionId,
-      packageId: user.subscription?.packageId,
-    });
-    console.log(
-      `💳 Saved payment methods:`,
-      user.savedPaymentMethods?.map((pm) => ({
-        id: pm.paymentMethodId,
-        isDefault: pm.isDefault,
-        createdAt: pm.createdAt,
-      }))
-    );
+    // console.log(`👤 User found: ${user.email}`);
+    // console.log(`📊 Current subscription state:`, {
+    //   hasSubscription: !!user.subscription,
+    //   isActive: user.subscription?.isActive,
+    //   status: user.subscription?.status,
+    //   stripeSubscriptionId: user.stripeSubscriptionId,
+    //   packageId: user.subscription?.packageId,
+    // });
+    // console.log(
+    //   `💳 Saved payment methods:`,
+    //   user.savedPaymentMethods?.map((pm) => ({
+    //     id: pm.paymentMethodId,
+    //     isDefault: pm.isDefault,
+    //     createdAt: pm.createdAt,
+    //   }))
+    // );
 
     // Determine target package (use provided or current package)
     const targetPackageId = validatedData.packageId || user.subscription?.packageId;
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`📦 Target package: ${targetPackage.name} ($${targetPackage.price})`);
+    // console.log(`📦 Target package: ${targetPackage.name} ($${targetPackage.price})`);
 
     // Get or create Stripe customer
     let stripeCustomerId = user.stripeCustomerId;
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       stripeCustomerId = stripeCustomer.id;
       user.stripeCustomerId = stripeCustomerId;
       await user.save();
-      console.log(`✅ Created new Stripe customer: ${stripeCustomerId}`);
+      // console.log(`✅ Created new Stripe customer: ${stripeCustomerId}`);
     }
 
     // ✅ BEST PRACTICE: Use helper function to get valid payment method
@@ -153,30 +153,30 @@ export async function POST(request: NextRequest) {
     if (user.stripeSubscriptionId) {
       try {
         existingSubscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-        console.log(`📊 Existing subscription found:`, {
-          id: existingSubscription.id,
-          status: existingSubscription.status,
-          cancelAt: existingSubscription.cancel_at,
-          cancelAtPeriodEnd: existingSubscription.cancel_at_period_end,
-        });
+        // console.log(`📊 Existing subscription found:`, {
+        //   id: existingSubscription.id,
+        //   status: existingSubscription.status,
+        //   cancelAt: existingSubscription.cancel_at,
+        //   cancelAtPeriodEnd: existingSubscription.cancel_at_period_end,
+        // });
 
         // Determine renewal strategy based on subscription status
         if (existingSubscription.status === "past_due" || existingSubscription.status === "unpaid") {
           renewalStrategy = "retry_payment";
-          console.log(`🔄 Strategy: RETRY PAYMENT (status: ${existingSubscription.status})`);
+          // console.log(`🔄 Strategy: RETRY PAYMENT (status: ${existingSubscription.status})`);
         } else if (
           (existingSubscription.status === "canceled" || existingSubscription.cancel_at_period_end) &&
           existingSubscription.cancel_at &&
           Date.now() < existingSubscription.cancel_at * 1000 + 30 * 24 * 60 * 60 * 1000 // Within 30 days grace period
         ) {
           renewalStrategy = "reactivate";
-          console.log(`🔄 Strategy: REACTIVATE (canceled but within grace period)`);
+          // console.log(`🔄 Strategy: REACTIVATE (canceled but within grace period)`);
         } else if (existingSubscription.status === "incomplete") {
           renewalStrategy = "retry_payment";
-          console.log(`🔄 Strategy: RETRY PAYMENT (incomplete subscription)`);
+          // console.log(`🔄 Strategy: RETRY PAYMENT (incomplete subscription)`);
         } else if (existingSubscription.status === "active") {
           // Subscription is already active
-          console.log(`✅ Subscription is already active`);
+          // console.log(`✅ Subscription is already active`);
           return NextResponse.json({
             success: true,
             message: `Your ${targetPackage.name} subscription is already active!`,
@@ -191,8 +191,8 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (error) {
-        console.log(`⚠️ Could not retrieve existing subscription: ${error}`);
-        console.log(`🔄 Will create new subscription`);
+        // console.log(`⚠️ Could not retrieve existing subscription: ${error}`);
+        // console.log(`🔄 Will create new subscription`);
         renewalStrategy = "create_new";
       }
     }
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
     // ====================================
 
     if (renewalStrategy === "retry_payment" && existingSubscription) {
-      console.log(`💳 [RETRY_PAYMENT] Retrying payment for existing subscription`);
+      // console.log(`💳 [RETRY_PAYMENT] Retrying payment for existing subscription`);
 
       // Get the latest invoice
       const latestInvoice = existingSubscription.latest_invoice as Stripe.Invoice | string;
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "No invoice found for payment retry" }, { status: 500 });
       }
 
-      console.log(`💳 Retrying payment for invoice: ${invoiceId}`);
+      // console.log(`💳 Retrying payment for invoice: ${invoiceId}`);
 
       // Update subscription with new payment method
       await stripe.subscriptions.update(existingSubscription.id, {
@@ -230,11 +230,11 @@ export async function POST(request: NextRequest) {
           payment_method: paymentMethod.id,
         });
 
-        console.log(`✅ Payment successful:`, {
-          invoiceId: paidInvoice.id,
-          status: paidInvoice.status,
-          amountPaid: paidInvoice.amount_paid,
-        });
+        // console.log(`✅ Payment successful:`, {
+        //   invoiceId: paidInvoice.id,
+        //   status: paidInvoice.status,
+        //   amountPaid: paidInvoice.amount_paid,
+        // });
 
         // Update user subscription status
         if (user.subscription) {
@@ -299,7 +299,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (renewalStrategy === "reactivate" && existingSubscription) {
-      console.log(`🔄 [REACTIVATE] Reactivating canceled subscription`);
+      // console.log(`🔄 [REACTIVATE] Reactivating canceled subscription`);
 
       // Reactivate by removing cancel_at_period_end and updating payment method
       // ✅ FIX: Only set cancel_at_period_end: false (don't set cancel_at: null)
@@ -319,11 +319,11 @@ export async function POST(request: NextRequest) {
           }),
       });
 
-      console.log(`✅ Subscription reactivated:`, {
-        id: reactivatedSubscription.id,
-        status: reactivatedSubscription.status,
-        cancelAtPeriodEnd: reactivatedSubscription.cancel_at_period_end,
-      });
+      // console.log(`✅ Subscription reactivated:`, {
+      //   id: reactivatedSubscription.id,
+      //   status: reactivatedSubscription.status,
+      //   cancelAtPeriodEnd: reactivatedSubscription.cancel_at_period_end,
+      // });
 
       // Update user subscription
       if (user.subscription) {
@@ -355,7 +355,7 @@ export async function POST(request: NextRequest) {
     // CREATE NEW SUBSCRIPTION
     // ====================================
 
-    console.log(`🆕 [CREATE_NEW] Creating new subscription`);
+    // console.log(`🆕 [CREATE_NEW] Creating new subscription`);
 
     const newSubscription = await stripe.subscriptions.create({
       customer: stripeCustomerId,
@@ -373,10 +373,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`✅ New subscription created:`, {
-      id: newSubscription.id,
-      status: newSubscription.status,
-    });
+    // console.log(`✅ New subscription created:`, {
+    //   id: newSubscription.id,
+    //   status: newSubscription.status,
+    // });
 
     // Extract payment intent
     const latestInvoice = newSubscription.latest_invoice as Stripe.Invoice;
@@ -384,7 +384,7 @@ export async function POST(request: NextRequest) {
 
     // Check if payment completed immediately
     if (latestInvoice?.status === "paid" && newSubscription.status === "active") {
-      console.log(`✅ Payment completed immediately`);
+      // console.log(`✅ Payment completed immediately`);
 
       // Update user subscription
       user.subscription = {
@@ -433,7 +433,7 @@ export async function POST(request: NextRequest) {
 
     await user.save();
 
-    console.log(`💳 Payment confirmation required`);
+    // console.log(`💳 Payment confirmation required`);
 
     return NextResponse.json({
       success: true,
