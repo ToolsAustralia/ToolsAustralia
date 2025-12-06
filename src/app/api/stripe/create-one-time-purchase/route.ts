@@ -597,7 +597,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
     }
 
+    // ✅ Improved error logging to help debug issues
     console.error("❌ Error creating one-time purchase:", error);
-    return NextResponse.json({ error: "Failed to create one-time purchase" }, { status: 500 });
+    console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    console.error("❌ Error type:", typeof error);
+    console.error("❌ Error message:", error instanceof Error ? error.message : "No message");
+
+    // Return detailed error information for debugging
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorDetails = error instanceof Error ? error.stack : String(error);
+
+    return NextResponse.json(
+      {
+        error: "Failed to create one-time purchase",
+        details: errorMessage,
+        ...(process.env.NODE_ENV === "development" && { stack: errorDetails }),
+      },
+      { status: 500 }
+    );
   }
 }

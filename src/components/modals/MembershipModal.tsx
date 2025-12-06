@@ -124,6 +124,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
   const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null); // ✅ For wallet payments (Google Pay/Apple Pay)
+  const [paymentIntentPackageId, setPaymentIntentPackageId] = useState<string | null>(null); // ✅ Track which package the PaymentIntent is for
   const [isCreatingPaymentIntent, setIsCreatingPaymentIntent] = useState(false);
   const [cardFormError, setCardFormError] = useState<string | null>(null);
   const cardFormRef = useRef<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>(
@@ -473,22 +474,35 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // This ensures PaymentIntent exists with correct amount before PaymentElement mounts
   // Note: Only for one-time packages - subscriptions use a different flow (subscription.create)
   useEffect(() => {
+    // Get current package ID
+    const currentPackageId =
+      activePlan && activePlan.id !== "placeholder"
+        ? getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages])
+        : null;
+
+    // ✅ Clear PaymentIntent when package changes to ensure correct amount is shown
+    if (currentPackageId && paymentIntentPackageId && currentPackageId !== paymentIntentPackageId) {
+      setPaymentIntentClientSecret(null);
+      setPaymentIntentPackageId(null);
+    }
+
     // Only create PaymentIntent if:
     // 1. Card form is shown
     // 2. We have a selected plan with package info
     // 3. Plan is a one-time package (subscriptions use subscription.create flow)
-    // 4. We haven't already created one
+    // 4. We haven't already created one for this package
     // 5. We're not currently creating one
     if (
       showCardForm &&
       activePlan &&
       activePlan.id !== "placeholder" &&
       activePlan.period === "one-time" && // ✅ Only for one-time packages
-      !paymentIntentClientSecret &&
+      currentPackageId &&
+      (!paymentIntentClientSecret || paymentIntentPackageId !== currentPackageId) &&
       !isCreatingPaymentIntent
     ) {
       // Get package ID
-      const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+      const packageId = currentPackageId;
       if (!packageId) {
         return; // Can't create PaymentIntent without package ID
       }
@@ -524,6 +538,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         .then((result) => {
           if (result.success && result.data?.paymentIntent?.clientSecret) {
             setPaymentIntentClientSecret(result.data.paymentIntent.clientSecret);
+            setPaymentIntentPackageId(packageId); // ✅ Track which package this PaymentIntent is for
             setCardFormError(null);
           } else {
             console.error("Failed to create PaymentIntent:", result.error);
@@ -541,7 +556,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   }, [
     showCardForm,
     activePlan,
+    activePlan?.id,
     paymentIntentClientSecret,
+    paymentIntentPackageId,
     isCreatingPaymentIntent,
     isAuthenticated,
     userData,

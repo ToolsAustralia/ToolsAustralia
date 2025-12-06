@@ -9,12 +9,6 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 // Klaviyo integration handled by webhook for best practices
 
-// Interface for payment intent with status
-interface PaymentIntentWithStatus {
-  client_secret?: string;
-  status: string;
-}
-
 // Interface for Stripe errors
 interface StripeError {
   type: string;
@@ -173,6 +167,7 @@ export async function POST(request: NextRequest) {
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
     // Create subscription with payment method
+    // ✅ STRIPE BEST PRACTICE: Enable automatic_payment_methods for Google Pay/Apple Pay support
     // console.log("📋 Creating Stripe subscription...");
     let subscription;
     try {
@@ -204,18 +199,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the payment intent for confirmation
-    const latestInvoice = subscription.latest_invoice as { payment_intent?: { client_secret?: string } };
-    const paymentIntent = latestInvoice?.payment_intent;
+    // ✅ STRIPE BEST PRACTICE: PaymentElement automatically handles wallet payments (Google Pay/Apple Pay)
+    // for subscriptions when using the clientSecret from the subscription's invoice
+    // The invoice is expanded with payment_intent, so we can access it directly
+    const latestInvoice = subscription.latest_invoice as { payment_intent?: Stripe.PaymentIntent | string } | null;
+    let paymentIntent: Stripe.PaymentIntent | null = null;
+
+    // Extract PaymentIntent from invoice
+    if (latestInvoice?.payment_intent) {
+      if (typeof latestInvoice.payment_intent === "object") {
+        paymentIntent = latestInvoice.payment_intent;
+      } else if (typeof latestInvoice.payment_intent === "string") {
+        // If payment_intent is just an ID string, retrieve it
+        paymentIntent = await stripe.paymentIntents.retrieve(latestInvoice.payment_intent);
+      }
+    }
 
     // console.log(`📄 Latest invoice:`, latestInvoice ? "Found" : "Not found");
     // console.log(`💳 Payment intent:`, paymentIntent ? "Found" : "Not found");
 
     // For incomplete subscriptions, we might not have a payment intent yet
     // This is normal - the payment intent will be created when the customer confirms payment
+    // PaymentElement will automatically enable wallet payments when using this clientSecret
     let clientSecret = null;
     if (paymentIntent && paymentIntent.client_secret) {
       clientSecret = paymentIntent.client_secret;
-      // console.log(`💳 Payment intent status: ${(paymentIntent as PaymentIntentWithStatus).status}`);
+      // console.log(`💳 Payment intent status: ${paymentIntent.status}`);
     } else {
       // console.log(`⏳ No payment intent yet - will be created when customer confirms payment`);
     }

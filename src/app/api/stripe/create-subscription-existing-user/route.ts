@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
+import Stripe from "stripe";
 import { recordReferralPurchase } from "@/lib/referral";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
@@ -141,6 +142,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // ✅ STRIPE BEST PRACTICE: PaymentElement automatically handles wallet payments (Google Pay/Apple Pay)
+    // for subscriptions when using the clientSecret from the subscription's invoice
+    // The invoice is expanded with payment_intent, so we can access it directly
+    const latestInvoice = subscription.latest_invoice as { payment_intent?: Stripe.PaymentIntent | string } | null;
+    let paymentIntent: Stripe.PaymentIntent | null = null;
+
+    // Extract PaymentIntent from invoice
+    if (latestInvoice?.payment_intent) {
+      if (typeof latestInvoice.payment_intent === "object") {
+        paymentIntent = latestInvoice.payment_intent;
+      } else if (typeof latestInvoice.payment_intent === "string") {
+        // If payment_intent is just an ID string, retrieve it
+        paymentIntent = await stripe.paymentIntents.retrieve(latestInvoice.payment_intent);
+      }
+    }
+
     // Update user subscription info immediately but NO initial benefit allocation
     // console.log(
     //   `📝 Saving subscription to user database: packageId=${membershipPackage._id}, subscriptionId=${subscription.id}`
@@ -211,11 +228,7 @@ export async function POST(request: NextRequest) {
       subscription: {
         id: subscription.id,
         status: subscription.status,
-        clientSecret:
-          typeof subscription.latest_invoice === "object" && subscription.latest_invoice !== null
-            ? (subscription.latest_invoice as { payment_intent?: { client_secret?: string } }).payment_intent
-                ?.client_secret
-            : undefined,
+        clientSecret: paymentIntent?.client_secret || undefined,
       },
       user: {
         id: existingUser._id,

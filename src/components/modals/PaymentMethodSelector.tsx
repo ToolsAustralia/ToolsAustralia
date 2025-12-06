@@ -6,6 +6,7 @@ import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSave
 import SavedPaymentMethodsModal from "./SavedPaymentMethodsModal";
 import { PaymentElement, useStripe, useElements, Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
+import type Stripe from "stripe";
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -96,7 +97,8 @@ const StripeCardForm = React.forwardRef<
         if (isPaymentIntent) {
           // For PaymentIntent (wallet payments - Google Pay/Apple Pay)
           // ✅ STRIPE BEST PRACTICE: Use confirmPayment for PaymentIntent
-          const { paymentIntent, error } = await stripe.confirmPayment({
+          // Note: Wallet payments may have already confirmed the PaymentIntent, so we handle that error case
+          const confirmResult = await stripe.confirmPayment({
             elements,
             clientSecret,
             confirmParams: {
@@ -130,25 +132,64 @@ const StripeCardForm = React.forwardRef<
             redirect: "if_required",
           });
 
-          if (error) {
-            console.error("Stripe PaymentIntent error:", error);
-            return { error: error.message || "Payment confirmation failed." };
-          } else if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
+          // ✅ Handle error: Check if PaymentIntent is already confirmed (common with wallet payments)
+          if (confirmResult.error) {
+            // Check if error is due to PaymentIntent already being confirmed/succeeded
+            const errorCode = confirmResult.error.code;
+            const errorMessage = confirmResult.error.message || "";
+
+            if (
+              errorCode === "payment_intent_unexpected_state" ||
+              errorMessage.includes("already succeeded") ||
+              errorMessage.includes("already confirmed")
+            ) {
+              // ✅ PaymentIntent was already confirmed by wallet payment (Google Pay/Apple Pay)
+              // Stripe includes the PaymentIntent in the error response when it's already confirmed
+              // Type assertion: error object may contain payment_intent when already confirmed
+              const errorWithPaymentIntent = confirmResult.error as typeof confirmResult.error & {
+                payment_intent?: Stripe.PaymentIntent;
+              };
+              const errorPaymentIntent = errorWithPaymentIntent.payment_intent;
+
+              if (errorPaymentIntent && errorPaymentIntent.status === "succeeded") {
+                console.log("✅ PaymentIntent already succeeded (from wallet payment), using existing payment method");
+                const paymentMethodId =
+                  typeof errorPaymentIntent.payment_method === "string"
+                    ? errorPaymentIntent.payment_method
+                    : (errorPaymentIntent.payment_method as { id?: string })?.id;
+
+                if (paymentMethodId) {
+                  return { paymentMethodId };
+                }
+              }
+            }
+
+            console.error("Stripe PaymentIntent error:", confirmResult.error);
+            return { error: confirmResult.error.message || "Payment confirmation failed." };
+          }
+
+          // PaymentIntent confirmation succeeded
+          const confirmedPaymentIntent = confirmResult.paymentIntent;
+          if (
+            confirmedPaymentIntent &&
+            (confirmedPaymentIntent.status === "succeeded" || confirmedPaymentIntent.status === "processing")
+          ) {
             // PaymentIntent succeeded - extract payment method from payment intent
             // For wallet payments, the payment method is attached to the payment intent
-            const paymentMethodId = typeof paymentIntent.payment_method === "string" 
-              ? paymentIntent.payment_method 
-              : (paymentIntent.payment_method as { id?: string })?.id;
+            const paymentMethodId =
+              typeof confirmedPaymentIntent.payment_method === "string"
+                ? confirmedPaymentIntent.payment_method
+                : (confirmedPaymentIntent.payment_method as { id?: string })?.id;
 
             if (paymentMethodId) {
-              console.log("✅ PaymentIntent succeeded:", paymentIntent);
+              console.log("✅ PaymentIntent succeeded:", confirmedPaymentIntent);
               return { paymentMethodId };
             } else {
               // Payment succeeded but no payment method ID (shouldn't happen, but handle gracefully)
               return { error: "Payment succeeded but payment method not found." };
             }
           } else {
-            throw new Error(`Unexpected payment intent status: ${paymentIntent?.status}`);
+            throw new Error(`Unexpected payment intent status: ${confirmedPaymentIntent?.status}`);
           }
         } else {
           // For SetupIntent (card collection for future use)
