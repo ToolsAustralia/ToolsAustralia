@@ -94,6 +94,13 @@ export interface KlaviyoProfile {
   first_name?: string;
   last_name?: string;
   phone_number?: string;
+  /**
+   * SMS consent flag (boolean)
+   * When true and phone_number exists, SMS marketing subscription will be set to SUBSCRIBED
+   * Required by Klaviyo to enable SMS messaging
+   * Set when user has a phone number (treats all mobile numbers as having consent)
+   */
+  sms_consent?: boolean;
   properties?: Partial<KlaviyoProfileProperties>;
 }
 

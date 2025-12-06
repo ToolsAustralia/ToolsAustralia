@@ -303,6 +303,14 @@ MajorDrawSchema.pre("save", function (next) {
 
 // Pre-hook middleware that runs before any find query
 MajorDrawSchema.pre(/^find/, async function (next) {
+  // Check if MongoDB connection is ready before attempting database operations
+  // This prevents errors during build time when the connection might not be established
+  if (mongoose.connection.readyState !== 1) {
+    // Connection not ready (0 = disconnected, 2 = connecting, 3 = disconnecting)
+    // Skip middleware execution - the cron job backup will handle transitions
+    return next();
+  }
+
   const currentDate = new Date();
 
   try {
