@@ -471,16 +471,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // ✅ STRIPE BEST PRACTICE: Create PaymentIntent when payment form is shown (for Google Pay/Apple Pay)
   // This ensures PaymentIntent exists with correct amount before PaymentElement mounts
+  // Note: Only for one-time packages - subscriptions use a different flow (subscription.create)
   useEffect(() => {
     // Only create PaymentIntent if:
     // 1. Card form is shown
     // 2. We have a selected plan with package info
-    // 3. We haven't already created one
-    // 4. We're not currently creating one
+    // 3. Plan is a one-time package (subscriptions use subscription.create flow)
+    // 4. We haven't already created one
+    // 5. We're not currently creating one
     if (
       showCardForm &&
       activePlan &&
       activePlan.id !== "placeholder" &&
+      activePlan.period === "one-time" && // ✅ Only for one-time packages
       !paymentIntentClientSecret &&
       !isCreatingPaymentIntent
     ) {
@@ -504,6 +507,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setIsCreatingPaymentIntent(true);
 
       // Create PaymentIntent with createOnly: true for wallet payments
+      // ✅ This endpoint only handles one-time packages, not subscriptions
       fetch("/api/stripe/create-one-time-purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
