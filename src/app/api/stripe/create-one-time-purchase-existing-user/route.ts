@@ -4,6 +4,7 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
+import Stripe from "stripe";
 import { recordReferralPurchase } from "@/lib/referral";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { z } from "zod";

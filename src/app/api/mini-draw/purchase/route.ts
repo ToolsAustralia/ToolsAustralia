@@ -7,6 +7,7 @@ import User from "@/models/User";
 import MiniDraw from "@/models/MiniDraw";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
+import Stripe from "stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Benefits are now granted via webhook processing only
 
@@ -674,7 +675,9 @@ async function handlePaymentIntentCreation(
 
     // Include return_url only when confirming (required by Stripe when confirm=true)
     if (shouldConfirm) {
-      basePaymentIntentData.return_url = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/mini-draw-success`;
+      basePaymentIntentData.return_url = `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/mini-draw-success`;
     }
 
     const paymentIntent = await stripe.paymentIntents.create(basePaymentIntentData);
