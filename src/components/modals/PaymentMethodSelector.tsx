@@ -40,6 +40,7 @@ interface PaymentMethodSelectorProps {
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
+// ✅ Supports both SetupIntent and PaymentIntent (for wallet payments)
 const StripeCardForm = React.forwardRef<
   { confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> },
   {
@@ -69,7 +70,12 @@ const StripeCardForm = React.forwardRef<
     }
   }, [stripe, elements]);
 
-  // Expose confirmSetup function via ref
+  // ✅ Detect if clientSecret is for PaymentIntent or SetupIntent
+  // PaymentIntent secrets: pi_xxx_secret_xxx
+  // SetupIntent secrets: seti_xxx_secret_xxx
+  const isPaymentIntent = clientSecret.includes("pi_") || clientSecret.startsWith("pi_");
+
+  // Expose confirmSetup function via ref (handles both SetupIntent and PaymentIntent)
   React.useImperativeHandle(ref, () => ({
     confirmSetup: async () => {
       if (!stripe || !elements) {
@@ -77,7 +83,7 @@ const StripeCardForm = React.forwardRef<
       }
 
       try {
-        // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmSetup()
+        // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmation
         // This validates the form and prepares it for confirmation
         const { error: submitError } = await elements.submit();
 
@@ -86,54 +92,112 @@ const StripeCardForm = React.forwardRef<
           return { error: submitError.message || "Please complete all required fields." };
         }
 
-        // Now confirm the setup after successful submission
-        // ✅ CRITICAL: When billingDetails: "never" is set, we must provide billing details here
-        // Stripe requires billing_details.name and complete address fields (country, state, city, postal_code, line1)
-        const { setupIntent, error } = await stripe.confirmSetup({
-          elements,
-          clientSecret,
-          confirmParams: {
-            payment_method_data: {
-              billing_details: billingDetails?.name
-                ? {
-                    name: billingDetails.name,
-                    email: billingDetails.email,
-                    phone: billingDetails.phone,
-                    address: {
-                      country: billingDetails.country || "AU", // ✅ Required by Stripe, default to Australia
-                      state: billingDetails.state || "NSW", // ✅ Required by Stripe, default to New South Wales
-                      city: billingDetails.city || "Sydney", // ✅ Required by Stripe, default to Sydney
-                      postal_code: billingDetails.postalCode || "2000", // ✅ Required by Stripe, default to Sydney CBD
-                      line1: billingDetails.line1 || "1 Martin Place", // ✅ Required by Stripe, default address
+        // ✅ CRITICAL: Use correct confirmation method based on clientSecret type
+        if (isPaymentIntent) {
+          // For PaymentIntent (wallet payments - Google Pay/Apple Pay)
+          // ✅ STRIPE BEST PRACTICE: Use confirmPayment for PaymentIntent
+          const { paymentIntent, error } = await stripe.confirmPayment({
+            elements,
+            clientSecret,
+            confirmParams: {
+              payment_method_data: {
+                billing_details: billingDetails?.name
+                  ? {
+                      name: billingDetails.name,
+                      email: billingDetails.email,
+                      phone: billingDetails.phone,
+                      address: {
+                        country: billingDetails.country || "AU",
+                        state: billingDetails.state || "NSW",
+                        city: billingDetails.city || "Sydney",
+                        postal_code: billingDetails.postalCode || "2000",
+                        line1: billingDetails.line1 || "1 Martin Place",
+                      },
+                    }
+                  : {
+                      name: billingDetails?.email || "Customer",
+                      address: {
+                        country: billingDetails?.country || "AU",
+                        state: billingDetails?.state || "NSW",
+                        city: billingDetails?.city || "Sydney",
+                        postal_code: billingDetails?.postalCode || "2000",
+                        line1: billingDetails?.line1 || "1 Martin Place",
+                      },
                     },
-                  }
-                : {
-                    // Fallback: provide minimal required name and complete address fields if not provided
-                    name: billingDetails?.email || "Customer",
-                    address: {
-                      country: billingDetails?.country || "AU", // ✅ Default to Australia
-                      state: billingDetails?.state || "NSW", // ✅ Default to New South Wales
-                      city: billingDetails?.city || "Sydney", // ✅ Default to Sydney
-                      postal_code: billingDetails?.postalCode || "2000", // ✅ Default to Sydney CBD
-                      line1: billingDetails?.line1 || "1 Martin Place", // ✅ Default address
-                    },
-                  },
+              },
+              return_url: window.location.href,
             },
-          },
-          redirect: "if_required",
-        });
+            redirect: "if_required",
+          });
 
-        if (error) {
-          console.error("Stripe SetupIntent error:", error);
-          return { error: error.message || "Payment method setup failed." };
-        } else if (setupIntent?.payment_method) {
-          console.log("✅ SetupIntent succeeded:", setupIntent);
-          return { paymentMethodId: setupIntent.payment_method as string };
+          if (error) {
+            console.error("Stripe PaymentIntent error:", error);
+            return { error: error.message || "Payment confirmation failed." };
+          } else if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
+            // PaymentIntent succeeded - extract payment method from payment intent
+            // For wallet payments, the payment method is attached to the payment intent
+            const paymentMethodId = typeof paymentIntent.payment_method === "string" 
+              ? paymentIntent.payment_method 
+              : (paymentIntent.payment_method as { id?: string })?.id;
+
+            if (paymentMethodId) {
+              console.log("✅ PaymentIntent succeeded:", paymentIntent);
+              return { paymentMethodId };
+            } else {
+              // Payment succeeded but no payment method ID (shouldn't happen, but handle gracefully)
+              return { error: "Payment succeeded but payment method not found." };
+            }
+          } else {
+            throw new Error(`Unexpected payment intent status: ${paymentIntent?.status}`);
+          }
         } else {
-          throw new Error("Unexpected error during payment method setup.");
+          // For SetupIntent (card collection for future use)
+          // ✅ STRIPE BEST PRACTICE: Use confirmSetup for SetupIntent
+          const { setupIntent, error } = await stripe.confirmSetup({
+            elements,
+            clientSecret,
+            confirmParams: {
+              payment_method_data: {
+                billing_details: billingDetails?.name
+                  ? {
+                      name: billingDetails.name,
+                      email: billingDetails.email,
+                      phone: billingDetails.phone,
+                      address: {
+                        country: billingDetails.country || "AU",
+                        state: billingDetails.state || "NSW",
+                        city: billingDetails.city || "Sydney",
+                        postal_code: billingDetails.postalCode || "2000",
+                        line1: billingDetails.line1 || "1 Martin Place",
+                      },
+                    }
+                  : {
+                      name: billingDetails?.email || "Customer",
+                      address: {
+                        country: billingDetails?.country || "AU",
+                        state: billingDetails?.state || "NSW",
+                        city: billingDetails?.city || "Sydney",
+                        postal_code: billingDetails?.postalCode || "2000",
+                        line1: billingDetails?.line1 || "1 Martin Place",
+                      },
+                    },
+              },
+            },
+            redirect: "if_required",
+          });
+
+          if (error) {
+            console.error("Stripe SetupIntent error:", error);
+            return { error: error.message || "Payment method setup failed." };
+          } else if (setupIntent?.payment_method) {
+            console.log("✅ SetupIntent succeeded:", setupIntent);
+            return { paymentMethodId: setupIntent.payment_method as string };
+          } else {
+            throw new Error("Unexpected error during payment method setup.");
+          }
         }
       } catch (err: unknown) {
-        console.error("Error in confirmSetup:", err);
+        console.error("Error in confirmSetup/confirmPayment:", err);
         const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
         return { error: errorMessage };
       }

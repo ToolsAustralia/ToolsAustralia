@@ -9,13 +9,22 @@ import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 export default function GiveawayDetails() {
   const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
   const detailsRef = useScrollAnimation();
+  const [isMounted, setIsMounted] = useState(false);
   const [formattedDates, setFormattedDates] = useState({
-    entriesClose: "",
-    drawDate: "",
+    entriesClose: "TBA",
+    drawDate: "TBA",
     timezone: "",
   });
 
+  // Set mounted state after component mounts to prevent hydration mismatch
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Only format dates after component has mounted to prevent hydration mismatch
+    if (!isMounted) return;
+
     if (currentMajorDraw?.drawDate && currentMajorDraw?.freezeEntriesAt) {
       const drawDate = new Date(currentMajorDraw.drawDate);
       const freezeDate = new Date(currentMajorDraw.freezeEntriesAt);
@@ -49,21 +58,28 @@ export default function GiveawayDetails() {
         }),
         timezone: timezoneAbbr,
       });
+    } else {
+      // Reset to TBA if data is not available
+      setFormattedDates({
+        entriesClose: "TBA",
+        drawDate: "TBA",
+        timezone: "",
+      });
     }
-  }, [currentMajorDraw]);
+  }, [currentMajorDraw, isMounted]);
 
   const details = [
     {
       icon: Clock,
-      title: `Entries Close (${formattedDates.timezone || "Loading..."})`,
-      description: isLoading ? "Loading..." : formattedDates.entriesClose || "TBA",
+      title: `Entries Close (${formattedDates.timezone || ""})`,
+      description: !isMounted || isLoading ? "TBA" : formattedDates.entriesClose,
       color: "text-red-500",
       bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
     },
     {
       icon: Calendar,
-      title: `Draw Date (${formattedDates.timezone || "Loading..."})`,
-      description: isLoading ? "Loading..." : formattedDates.drawDate || "TBA",
+      title: `Draw Date (${formattedDates.timezone || ""})`,
+      description: !isMounted || isLoading ? "TBA" : formattedDates.drawDate,
       color: "text-red-500",
       bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
     },

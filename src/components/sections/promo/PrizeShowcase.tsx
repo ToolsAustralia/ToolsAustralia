@@ -123,11 +123,29 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
+  const [isMounted, setIsMounted] = useState(false);
   const { openEntryFlow } = useMajorDrawEntryCta();
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug });
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Set mounted state after component mounts to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Format draw date label after mount to prevent hydration mismatch
+  useEffect(() => {
+    if (currentMajorDraw?.drawDate) {
+      const drawDateObj = new Date(currentMajorDraw.drawDate);
+      const formatted = drawDateObj.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+      setDrawDateLabel(formatted);
+    } else {
+      setDrawDateLabel("Draw date TBA");
+    }
+  }, [currentMajorDraw]);
 
   // Countdown timer logic - matches FloatingCountdownBanner and MajorDrawSection
   useEffect(() => {
@@ -178,12 +196,9 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-sidchrome");
   const highlights = activePrize.highlights ?? [];
   const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
-  const msUntilDraw = drawDateObj ? drawDateObj.getTime() - Date.now() : null;
+  const msUntilDraw = isMounted && drawDateObj ? drawDateObj.getTime() - Date.now() : null;
   const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;
   const shouldShowCountdown = msUntilDraw !== null && msUntilDraw > 0 && daysUntilDraw !== null && daysUntilDraw <= 3;
-  const drawDateLabel = drawDateObj
-    ? drawDateObj.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
-    : "Draw date TBA";
 
   return (
     <section ref={prizeRef} className=" pb-8 sm:pb-12 relative">

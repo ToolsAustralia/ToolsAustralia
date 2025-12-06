@@ -23,25 +23,26 @@
  * const csp = buildContentSecurityPolicy(nonce);
  */
 export function buildContentSecurityPolicy(nonce?: string): string {
-  // Script sources: Facebook Pixel, Stripe.js, TikTok Pixel, hCaptcha (with wildcard for iframes)
+  // Script sources: Facebook Pixel, Stripe.js, TikTok Pixel, hCaptcha (with wildcard for iframes), Apple Pay
   // Next.js inline script hashes allow runtime scripts that don't support nonces
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https://*.hcaptcha.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https://*.hcaptcha.com https:`;
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "block-all-mixed-content",
-    // Network requests: Facebook (Pixel/CAPI), Stripe (payment/fraud), hCaptcha (fraud detection)
-    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https:",
-    "font-src 'self' https: data:",
+    // Network requests: Facebook (Pixel/CAPI), Stripe (payment/fraud), hCaptcha (fraud detection), Google Pay (payment manifest), Apple Pay (payment relay)
+    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com",
+    "font-src 'self' https: data: https://applepay.cdn-apple.com",
     // Form submissions: Facebook Pixel fallback tracking
     "form-action 'self' https://www.facebook.com",
-    "frame-ancestors 'none'",
-    // Iframes: Stripe payment forms, Facebook widgets, hCaptcha fraud detection
-    "frame-src 'self' https://js.stripe.com https://connect.facebook.net https://www.facebook.com https://vercel.live https://js.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com",
+    "frame-ancestors 'self' https://pay.google.com https://js.stripe.com",
+    // Iframes: Stripe payment forms, Facebook widgets, hCaptcha fraud detection, Google Pay, Apple Pay
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://*.google.com https://*.gstatic.com https://applepay.cdn-apple.com https://js.hcaptcha.com https://*.hcaptcha.com https://connect.facebook.net https://www.facebook.com https://vercel.live",
+
     "img-src 'self' https: data: blob: https://q.stripe.com",
-    "manifest-src 'self'",
+    "manifest-src 'self' https://pay.google.com",
     "media-src 'self' https:",
     "object-src 'none'",
     scriptSrc,
@@ -66,7 +67,6 @@ export function buildSecurityHeaders(nonce?: string) {
 
   return [
     { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-    { key: "X-Frame-Options", value: "DENY" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
@@ -102,7 +102,6 @@ export function buildSecurityHeadersForWebhook(nonce?: string) {
   // All other security headers remain in place
   return [
     { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-    { key: "X-Frame-Options", value: "DENY" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
