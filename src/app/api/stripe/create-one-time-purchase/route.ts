@@ -188,7 +188,9 @@ export async function POST(request: NextRequest) {
       // console.log("🔍 Retrieving payment method to get customer ID...");
       try {
         const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+
         if (paymentMethod.customer) {
+          // Payment method is already attached to a customer
           // console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
           customer = await stripe.customers.retrieve(paymentMethod.customer as string);
           // console.log(`✅ Using customer from payment method: ${customer.id}`);
@@ -210,10 +212,52 @@ export async function POST(request: NextRequest) {
             // console.log(`✅ Updated customer details: ${customer.id}`);
           }
         } else {
-          throw new Error("Payment method is not attached to any customer");
+          // Payment method exists but is not attached to any customer
+          // This can happen with Google Pay/Apple Pay - attach it to a customer
+          // console.log("⚠️ Payment method not attached to customer, creating/retrieving customer and attaching...");
+
+          // Create or retrieve customer
+          if (registeredUser && registeredUser.stripeCustomerId) {
+            customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
+          } else {
+            // Check if customer exists by email
+            const existingCustomers = await stripe.customers.list({
+              email: validatedData.userEmail.toLowerCase(),
+              limit: 1,
+            });
+
+            if (existingCustomers.data.length > 0) {
+              customer = existingCustomers.data[0];
+              // console.log(`✅ Found existing customer by email: ${customer.id}`);
+            } else {
+              // Create new customer
+              customer = await stripe.customers.create({
+                email: validatedData.userEmail,
+                name: `${validatedData.firstName} ${validatedData.lastName}`,
+                phone: validatedData.mobile,
+                metadata: {
+                  packageId: validatedData.packageId,
+                  packageName: membershipPackage.name,
+                  userId: registeredUser?._id?.toString() || "guest",
+                  type: "wallet_payment",
+                },
+              });
+              // console.log(`✅ Created new customer: ${customer.id}`);
+            }
+          }
+
+          // Attach payment method to customer
+          await stripe.paymentMethods.attach(finalPaymentMethodId, {
+            customer: customer.id,
+          });
+          // console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${customer.id}`);
         }
       } catch (error) {
-        console.error("❌ Failed to retrieve payment method:", error);
+        console.error("❌ Failed to retrieve/attach payment method:", error);
+        // Provide more specific error message
+        if (error instanceof Error) {
+          throw new Error(`Failed to retrieve payment method details: ${error.message}`);
+        }
         throw new Error("Failed to retrieve payment method details");
       }
     } else {
@@ -233,8 +277,7 @@ export async function POST(request: NextRequest) {
       // console.log(`✅ Created new customer: ${customer.id}`);
     }
 
-    // Payment method is already attached to customer via SetupIntent (for card payments)
-    // Set it as the default payment method if provided
+    // Set payment method as default if provided
     if (finalPaymentMethodId) {
       await stripe.customers.update(customer.id, {
         invoice_settings: {

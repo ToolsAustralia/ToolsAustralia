@@ -12,8 +12,9 @@ import { authOptions } from "@/lib/auth";
 
 const createSubscriptionExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
-  paymentMethodId: z.string().min(1, "Payment method is required"),
+  paymentMethodId: z.string().min(1, "Payment method is required").optional(), // Optional when createOnly is true
   referralCode: z.string().optional(),
+  createOnly: z.boolean().optional(), // Create subscription PaymentIntent early without processing payment
 });
 
 /**
@@ -77,6 +78,22 @@ export async function POST(request: NextRequest) {
 
     // Handle payment method creation following Stripe best practices
     const finalPaymentMethodId = validatedData.paymentMethodId;
+    const createOnly = validatedData.createOnly === true; // Create subscription PaymentIntent early without processing payment
+
+    // For wallet payments (createOnly=true), we don't need paymentMethodId upfront
+    // PaymentIntent will be created without payment_method and confirmed later
+    if (createOnly && !finalPaymentMethodId) {
+      // This is fine - we'll create subscription without payment_method for wallet payments
+    } else if (!createOnly && !finalPaymentMethodId) {
+      // For non-wallet payments, paymentMethodId is required
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment method is required for this payment type.",
+        },
+        { status: 400 }
+      );
+    }
 
     // Payment method should already be created via SetupIntent
     // If we receive "new_payment_method", it means the frontend didn't complete the setup
@@ -92,11 +109,30 @@ export async function POST(request: NextRequest) {
 
     // If we have a valid payment method ID, attach it to the customer
     if (finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
-      // Attach to customer
-      await stripe.paymentMethods.attach(finalPaymentMethodId, {
-        customer: stripeCustomerId,
-      });
-      // console.log(`💳 Attached payment method: ${finalPaymentMethodId}`);
+      try {
+        // Check if payment method is already attached
+        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+
+        if (!paymentMethod.customer) {
+          // Payment method exists but is not attached - attach it
+          await stripe.paymentMethods.attach(finalPaymentMethodId, {
+            customer: stripeCustomerId,
+          });
+          // console.log(`💳 Attached payment method: ${finalPaymentMethodId}`);
+        } else if (paymentMethod.customer !== stripeCustomerId) {
+          // Payment method is attached to a different customer - this shouldn't happen but handle it
+          console.warn(
+            `⚠️ Payment method ${finalPaymentMethodId} is attached to different customer ${paymentMethod.customer}`
+          );
+        }
+      } catch (error) {
+        console.error("❌ Failed to retrieve/attach payment method:", error);
+        // Provide more specific error message
+        if (error instanceof Error) {
+          throw new Error(`Failed to retrieve payment method details: ${error.message}`);
+        }
+        throw new Error("Failed to retrieve payment method details");
+      }
 
       // Set as default payment method for the customer
       await stripe.customers.update(stripeCustomerId, {
@@ -127,10 +163,9 @@ export async function POST(request: NextRequest) {
 
     // Create the subscription with metadata for webhook processing
     // Use payment_behavior to match new user flow and ensure proper webhook processing
-    const subscription = await stripe.subscriptions.create({
+    const subscriptionParams: Stripe.SubscriptionCreateParams = {
       customer: stripeCustomerId,
       items: [{ price: stripePriceId }], // ✅ Use existing Price ID
-      default_payment_method: finalPaymentMethodId,
       payment_behavior: "default_incomplete", // Creates incomplete subscription requiring payment confirmation
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
@@ -140,7 +175,14 @@ export async function POST(request: NextRequest) {
         packageName: membershipPackage.name,
         userEmail: existingUser.email,
       },
-    });
+    };
+
+    // Only set default_payment_method if we have one (not for createOnly wallet payments)
+    if (finalPaymentMethodId) {
+      subscriptionParams.default_payment_method = finalPaymentMethodId;
+    }
+
+    const subscription = await stripe.subscriptions.create(subscriptionParams);
 
     // ✅ STRIPE BEST PRACTICE: PaymentElement automatically handles wallet payments (Google Pay/Apple Pay)
     // for subscriptions when using the clientSecret from the subscription's invoice
@@ -156,6 +198,24 @@ export async function POST(request: NextRequest) {
         // If payment_intent is just an ID string, retrieve it
         paymentIntent = await stripe.paymentIntents.retrieve(latestInvoice.payment_intent);
       }
+    }
+
+    // Extract PaymentIntent clientSecret
+    let clientSecret = null;
+    if (paymentIntent && paymentIntent.client_secret) {
+      clientSecret = paymentIntent.client_secret;
+    }
+
+    // If createOnly is true, skip user update and return only clientSecret
+    if (createOnly) {
+      return NextResponse.json({
+        success: true,
+        subscription: {
+          id: subscription.id,
+          status: subscription.status,
+          clientSecret: clientSecret,
+        },
+      });
     }
 
     // Update user subscription info immediately but NO initial benefit allocation
@@ -228,7 +288,7 @@ export async function POST(request: NextRequest) {
       subscription: {
         id: subscription.id,
         status: subscription.status,
-        clientSecret: paymentIntent?.client_secret || undefined,
+        clientSecret: clientSecret || undefined,
       },
       user: {
         id: existingUser._id,

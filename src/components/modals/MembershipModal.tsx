@@ -123,9 +123,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
-  const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null); // ✅ For wallet payments (Google Pay/Apple Pay)
+  const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null); // ✅ For wallet payments (Google Pay/Apple Pay) - one-time packages
   const [paymentIntentPackageId, setPaymentIntentPackageId] = useState<string | null>(null); // ✅ Track which package the PaymentIntent is for
+  const [subscriptionClientSecret, setSubscriptionClientSecret] = useState<string | null>(null); // ✅ For wallet payments (Google Pay/Apple Pay) - subscription packages
+  const [subscriptionId, setSubscriptionId] = useState<string | null>(null); // ✅ Track which subscription the clientSecret is for
   const [isCreatingPaymentIntent, setIsCreatingPaymentIntent] = useState(false);
+  const [isCreatingSubscription, setIsCreatingSubscription] = useState(false);
   const [cardFormError, setCardFormError] = useState<string | null>(null);
   const cardFormRef = useRef<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>(
     null
@@ -560,6 +563,123 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     paymentIntentClientSecret,
     paymentIntentPackageId,
     isCreatingPaymentIntent,
+    isAuthenticated,
+    userData,
+    formData,
+    subscriptionPackages,
+    oneTimePackages,
+  ]);
+
+  // ✅ STRIPE BEST PRACTICE: Create Subscription PaymentIntent when payment form is shown (for Google Pay/Apple Pay)
+  // This ensures PaymentIntent exists with correct amount before PaymentElement mounts
+  // Similar to one-time packages, but uses subscription.create flow
+  useEffect(() => {
+    // Get current package ID
+    const currentPackageId =
+      activePlan && activePlan.id !== "placeholder"
+        ? getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages])
+        : null;
+
+    // ✅ Clear subscription PaymentIntent when package changes to ensure correct amount is shown
+    if (currentPackageId && subscriptionId && currentPackageId !== subscriptionId) {
+      setSubscriptionClientSecret(null);
+      setSubscriptionId(null);
+    }
+
+    // Only create Subscription PaymentIntent if:
+    // 1. Card form is shown
+    // 2. We have a selected plan with package info
+    // 3. Plan is a subscription package (period === "mo")
+    // 4. We haven't already created one for this package
+    // 5. We're not currently creating one
+    if (
+      showCardForm &&
+      activePlan &&
+      activePlan.id !== "placeholder" &&
+      activePlan.period === "mo" && // ✅ Only for subscription packages
+      currentPackageId &&
+      (!subscriptionClientSecret || subscriptionId !== currentPackageId) &&
+      !isCreatingSubscription
+    ) {
+      // Get package ID
+      const packageId = currentPackageId;
+      if (!packageId) {
+        return; // Can't create subscription without package ID
+      }
+
+      // For new users, we need user info from formData
+      // For existing users, we can use authenticated user data
+      const userEmail = isAuthenticated ? userData?.email : formData.email;
+      const firstName = isAuthenticated ? userData?.firstName : formData.firstName;
+      const lastName = isAuthenticated ? userData?.lastName : formData.lastName;
+
+      // Only proceed if we have required user info
+      if (!userEmail || !firstName || !lastName) {
+        return; // Wait for user info
+      }
+
+      setIsCreatingSubscription(true);
+
+      // Create Subscription PaymentIntent with createOnly: true for wallet payments
+      // Use the appropriate API based on authentication status
+      const apiEndpoint = isAuthenticated
+        ? "/api/stripe/create-subscription-existing-user"
+        : "/api/stripe/create-subscription";
+
+      const requestBody = isAuthenticated
+        ? {
+            packageId,
+            createOnly: true, // ✅ Create Subscription PaymentIntent without processing payment (for wallet payments)
+          }
+        : {
+            userEmail,
+            firstName,
+            lastName,
+            mobile: formData.phone,
+            packageId,
+            createOnly: true, // ✅ Create Subscription PaymentIntent without processing payment (for wallet payments)
+          };
+
+      fetch(apiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      })
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success) {
+            // Extract clientSecret from response
+            const clientSecret =
+              result.data?.clientSecret || result.subscription?.clientSecret || result.data?.subscription?.clientSecret;
+
+            if (clientSecret) {
+              setSubscriptionClientSecret(clientSecret);
+              setSubscriptionId(packageId); // ✅ Track which package this subscription is for
+              setCardFormError(null);
+            } else {
+              console.error("Failed to get subscription clientSecret:", result);
+              // Don't show error - fallback to SetupIntent flow
+            }
+          } else {
+            console.error("Failed to create subscription PaymentIntent:", result.error);
+            // Don't show error - fallback to SetupIntent flow
+          }
+        })
+        .catch((error) => {
+          console.error("Error creating subscription PaymentIntent:", error);
+          // Don't show error - fallback to SetupIntent flow
+        })
+        .finally(() => {
+          setIsCreatingSubscription(false);
+        });
+    }
+  }, [
+    showCardForm,
+    activePlan,
+    activePlan?.id,
+    subscriptionClientSecret,
+    subscriptionId,
+    isCreatingSubscription,
     isAuthenticated,
     userData,
     formData,
@@ -2806,11 +2926,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     isAuthenticated={isAuthenticated}
                     showCardForm={showCardForm}
                     setupIntentClientSecret={setupIntentClientSecret}
-                    paymentIntentClientSecret={paymentIntentClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay)
+                    paymentIntentClientSecret={paymentIntentClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay) - one-time packages
+                    subscriptionClientSecret={subscriptionClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay) - subscription packages
                     cardFormRef={cardFormRef}
                     onCardElementChange={handleCardElementChange}
                     cardFormError={cardFormError}
-                    isCreatingSetupIntent={createSetupIntent.isPending || isCreatingPaymentIntent}
+                    isCreatingSetupIntent={
+                      createSetupIntent.isPending || isCreatingPaymentIntent || isCreatingSubscription
+                    }
                     billingDetails={resolvedBillingDetails}
                   />
                 )}
@@ -2826,11 +2949,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                       isAuthenticated={isAuthenticated}
                       showCardForm={showCardForm}
                       setupIntentClientSecret={setupIntentClientSecret}
-                      paymentIntentClientSecret={paymentIntentClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay)
+                      paymentIntentClientSecret={paymentIntentClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay) - one-time packages
+                      subscriptionClientSecret={subscriptionClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay) - subscription packages
                       cardFormRef={cardFormRef}
                       onCardElementChange={handleCardElementChange}
                       cardFormError={cardFormError}
-                      isCreatingSetupIntent={createSetupIntent.isPending || isCreatingPaymentIntent}
+                      isCreatingSetupIntent={
+                        createSetupIntent.isPending || isCreatingPaymentIntent || isCreatingSubscription
+                      }
                       billingDetails={resolvedBillingDetails}
                     />
                   )}

@@ -22,7 +22,8 @@ interface PaymentMethodSelectorProps {
   // New props for Stripe Elements integration
   showCardForm?: boolean;
   setupIntentClientSecret?: string | null;
-  paymentIntentClientSecret?: string | null; // ✅ For wallet payments (Google Pay/Apple Pay)
+  paymentIntentClientSecret?: string | null; // ✅ For wallet payments (Google Pay/Apple Pay) - one-time packages
+  subscriptionClientSecret?: string | null; // ✅ For wallet payments (Google Pay/Apple Pay) - subscription packages
   cardFormRef: React.Ref<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>;
   onCardElementChange: (event: { error?: { message?: string } }) => void;
   cardFormError: string | null;
@@ -320,13 +321,17 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   isAuthenticated = false,
   showCardForm = false,
   setupIntentClientSecret = null,
-  paymentIntentClientSecret = null, // ✅ For wallet payments (Google Pay/Apple Pay)
+  paymentIntentClientSecret = null, // ✅ For wallet payments (Google Pay/Apple Pay) - one-time packages
+  subscriptionClientSecret = null, // ✅ For wallet payments (Google Pay/Apple Pay) - subscription packages
   cardFormRef,
   onCardElementChange,
   cardFormError,
   isCreatingSetupIntent = false,
   billingDetails,
 }) => {
+  // ✅ Prioritize subscriptionClientSecret over paymentIntentClientSecret for subscription packages
+  // Both are PaymentIntents, but subscription ones come from subscription invoices
+  const activeClientSecret = subscriptionClientSecret || paymentIntentClientSecret || setupIntentClientSecret;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
@@ -434,13 +439,14 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               </div>
             </div>
-          ) : paymentIntentClientSecret ? (
+          ) : subscriptionClientSecret || paymentIntentClientSecret ? (
             // ✅ STRIPE BEST PRACTICE: Use PaymentIntent for wallet payments (Google Pay/Apple Pay)
             // PaymentIntent ensures correct amount is displayed in Google Pay/Apple Pay
+            // Prioritize subscriptionClientSecret for subscription packages
             <Elements
               stripe={stripePromise}
               options={{
-                clientSecret: paymentIntentClientSecret,
+                clientSecret: activeClientSecret!,
                 locale: "en",
                 appearance: {
                   theme: "stripe",
@@ -458,7 +464,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             >
               <StripeCardForm
                 ref={cardFormRef}
-                clientSecret={paymentIntentClientSecret}
+                clientSecret={activeClientSecret!}
                 onCardElementChange={onCardElementChange}
                 cardError={cardFormError}
                 billingDetails={billingDetails}
@@ -666,12 +672,13 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     </div>
                   </div>
                 </div>
-              ) : paymentIntentClientSecret ? (
+              ) : subscriptionClientSecret || paymentIntentClientSecret ? (
                 // ✅ STRIPE BEST PRACTICE: Use PaymentIntent for wallet payments (Google Pay/Apple Pay)
+                // Prioritize subscriptionClientSecret for subscription packages
                 <Elements
                   stripe={stripePromise}
                   options={{
-                    clientSecret: paymentIntentClientSecret,
+                    clientSecret: activeClientSecret!,
                     appearance: {
                       theme: "stripe",
                       variables: {
@@ -688,7 +695,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 >
                   <StripeCardForm
                     ref={cardFormRef}
-                    clientSecret={paymentIntentClientSecret}
+                    clientSecret={activeClientSecret!}
                     onCardElementChange={onCardElementChange}
                     cardError={cardFormError}
                     billingDetails={billingDetails}
