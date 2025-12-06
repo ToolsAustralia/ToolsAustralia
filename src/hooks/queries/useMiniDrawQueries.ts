@@ -122,8 +122,9 @@ export const useMiniDraw = (miniDrawId?: string) => {
   return useQuery({
     queryKey: queryKeys.miniDraws.detail(miniDrawId!),
     queryFn: async () => {
-      const response = await apiGet<{ success: boolean; data: MiniDrawType }>(`/api/mini-draws/${miniDrawId}`);
-      return response.data;
+      const response = await apiGet<{ miniDraw?: MiniDrawType; error?: string }>(`/api/mini-draws/${miniDrawId}`);
+      // Return null instead of undefined if miniDraw is not found
+      return response.miniDraw ?? null;
     },
     enabled: !!miniDrawId,
     staleTime: 1 * 60 * 1000, // 1 minute
@@ -307,8 +308,9 @@ export const useMiniDrawPrefetch = () => {
     queryClient.prefetchQuery({
       queryKey: queryKeys.miniDraws.detail(miniDrawId),
       queryFn: async () => {
-        const response = await apiGet<{ success: boolean; data: MiniDrawType }>(`/api/mini-draws/${miniDrawId}`);
-        return response.data;
+        const response = await apiGet<{ miniDraw?: MiniDrawType; error?: string }>(`/api/mini-draws/${miniDrawId}`);
+        // Return null instead of undefined if miniDraw is not found
+        return response.miniDraw ?? null;
       },
       staleTime: 1 * 60 * 1000,
     });

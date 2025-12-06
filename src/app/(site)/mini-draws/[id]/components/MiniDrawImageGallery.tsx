@@ -32,7 +32,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
             fill
             className="object-contain"
             priority
-            quality={90}
+            sizes="(max-width: 1024px) 100vw, 50vw"
           />
         </div>
       </div>
@@ -66,7 +66,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
                   fill
                   className="object-contain"
                   priority={index === 0}
-                  quality={90}
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                 />
               </div>
             </SwiperSlide>
@@ -95,7 +95,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
                   alt={`${prizeName} thumbnail ${index + 1}`}
                   fill
                   className="object-contain"
-                  quality={60}
+                  sizes="64px"
                 />
               </div>
             </SwiperSlide>

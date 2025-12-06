@@ -215,7 +215,7 @@ export default function BrandLogoCard({
       >
         <div
           className={cx(
-            "flex items-center justify-center w-full h-full rounded-md shadow-lg overflow-hidden",
+            "relative flex items-center justify-center w-full h-full rounded-md shadow-lg overflow-hidden",
             splitGradientStyle ? "" : gradientClass // Don't apply class if using inline style
           )}
           style={splitGradientStyle}

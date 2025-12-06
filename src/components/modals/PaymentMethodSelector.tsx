@@ -21,6 +21,7 @@ interface PaymentMethodSelectorProps {
   // New props for Stripe Elements integration
   showCardForm?: boolean;
   setupIntentClientSecret?: string | null;
+  paymentIntentClientSecret?: string | null; // ✅ For wallet payments (Google Pay/Apple Pay)
   cardFormRef: React.Ref<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>;
   onCardElementChange: (event: { error?: { message?: string } }) => void;
   cardFormError: string | null;
@@ -214,6 +215,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   isAuthenticated = false,
   showCardForm = false,
   setupIntentClientSecret = null,
+  paymentIntentClientSecret = null, // ✅ For wallet payments (Google Pay/Apple Pay)
   cardFormRef,
   onCardElementChange,
   cardFormError,
@@ -327,7 +329,38 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               </div>
             </div>
+          ) : paymentIntentClientSecret ? (
+            // ✅ STRIPE BEST PRACTICE: Use PaymentIntent for wallet payments (Google Pay/Apple Pay)
+            // PaymentIntent ensures correct amount is displayed in Google Pay/Apple Pay
+            <Elements
+              stripe={stripePromise}
+              options={{
+                clientSecret: paymentIntentClientSecret,
+                locale: "en",
+                appearance: {
+                  theme: "stripe",
+                  variables: {
+                    colorPrimary: "#ee0000",
+                    colorBackground: "#ffffff",
+                    colorText: "#1f2937",
+                    colorDanger: "#dc2626",
+                    fontFamily: "system-ui, sans-serif",
+                    spacingUnit: "4px",
+                    borderRadius: "8px",
+                  },
+                },
+              }}
+            >
+              <StripeCardForm
+                ref={cardFormRef}
+                clientSecret={paymentIntentClientSecret}
+                onCardElementChange={onCardElementChange}
+                cardError={cardFormError}
+                billingDetails={billingDetails}
+              />
+            </Elements>
           ) : setupIntentClientSecret ? (
+            // Fallback to SetupIntent for backward compatibility
             <Elements
               stripe={stripePromise}
               options={{
@@ -528,7 +561,36 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     </div>
                   </div>
                 </div>
+              ) : paymentIntentClientSecret ? (
+                // ✅ STRIPE BEST PRACTICE: Use PaymentIntent for wallet payments (Google Pay/Apple Pay)
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: paymentIntentClientSecret,
+                    appearance: {
+                      theme: "stripe",
+                      variables: {
+                        colorPrimary: "#ee0000",
+                        colorBackground: "#ffffff",
+                        colorText: "#1f2937",
+                        colorDanger: "#dc2626",
+                        fontFamily: "system-ui, sans-serif",
+                        spacingUnit: "4px",
+                        borderRadius: "8px",
+                      },
+                    },
+                  }}
+                >
+                  <StripeCardForm
+                    ref={cardFormRef}
+                    clientSecret={paymentIntentClientSecret}
+                    onCardElementChange={onCardElementChange}
+                    cardError={cardFormError}
+                    billingDetails={billingDetails}
+                  />
+                </Elements>
               ) : setupIntentClientSecret ? (
+                // Fallback to SetupIntent for backward compatibility
                 <Elements
                   stripe={stripePromise}
                   options={{

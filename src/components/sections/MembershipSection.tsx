@@ -682,6 +682,7 @@ export default function MembershipSection({
                                   src={getPackageIcon(plan.id)!}
                                   alt={`${plan.name} icon`}
                                   className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                                  priority={index === 0 || plan.id.includes("foreman")}
                                 />
                                 {/* Promo Badge removed from mobile view - now shown on toggle instead */}
                               </div>
@@ -1072,8 +1073,8 @@ export default function MembershipSection({
               : "max-w-7xl mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5"
           }`}
         >
-          {membershipPlans.length > 0 ? (
-            membershipPlans.map((plan) => {
+                  {membershipPlans.length > 0 ? (
+            membershipPlans.map((plan, index) => {
               const colorScheme = getPackageColorScheme(plan.id);
               return (
                 <div
@@ -1094,6 +1095,7 @@ export default function MembershipSection({
                           src={getPackageIcon(plan.id)!}
                           alt={`${plan.name} icon`}
                           className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                          priority={index === 0 || plan.id.includes("foreman")}
                         />
                         {/* Promo Badge positioned on top of the image icon */}
                         {/* Promo badge on icon removed - now shown as hexagonal badge on card top-right */}

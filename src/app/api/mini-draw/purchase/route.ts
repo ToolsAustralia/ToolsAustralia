@@ -640,11 +640,16 @@ async function handlePaymentIntentCreation(
     const shouldConfirm = !!paymentMethodId;
 
     // Build payment intent data conditionally
-    const basePaymentIntentData = {
+    // ✅ STRIPE BEST PRACTICE: Always enable automatic_payment_methods for Google Pay/Apple Pay support
+    const basePaymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount: Math.round(miniDrawPackage.price * 100), // Convert to cents
       currency: "aud",
       customer: user.stripeCustomerId!,
       confirm: shouldConfirm,
+      automatic_payment_methods: {
+        enabled: true, // ✅ Always enable for wallet payments (Google Pay/Apple Pay)
+        allow_redirects: "never" as const, // PCI-COMPLIANT: Disable redirects for security
+      },
       description: `${miniDrawPackage.name}`, // Add meaningful description
       metadata: {
         type: "mini-draw",
@@ -664,22 +669,12 @@ async function handlePaymentIntentCreation(
 
     // Include payment_method if provided
     if (paymentMethodId) {
-      Object.assign(basePaymentIntentData, { payment_method: paymentMethodId });
+      basePaymentIntentData.payment_method = paymentMethodId;
     }
 
     // Include return_url only when confirming (required by Stripe when confirm=true)
     if (shouldConfirm) {
-      Object.assign(basePaymentIntentData, {
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/mini-draw-success`,
-      });
-    } else {
-      // When not confirming, use automatic payment methods
-      Object.assign(basePaymentIntentData, {
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never" as const,
-        },
-      });
+      basePaymentIntentData.return_url = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/mini-draw-success`;
     }
 
     const paymentIntent = await stripe.paymentIntents.create(basePaymentIntentData);

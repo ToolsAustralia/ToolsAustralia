@@ -136,6 +136,7 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                           alt={draw.prize.name}
                           fill
                           className="object-cover group-hover:scale-105 transition-transform duration-700"
+                          sizes="(max-width: 1024px) 100vw, 33vw"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                       </div>

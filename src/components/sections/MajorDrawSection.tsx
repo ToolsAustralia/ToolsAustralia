@@ -554,6 +554,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                           alt={image.alt || `Prize thumbnail ${index + 1}`}
                           fill
                           className="object-contain"
+                          sizes="64px"
                         />
                       </div>
                     </SwiperSlide>

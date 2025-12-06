@@ -315,7 +315,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                           fill
                           className="object-contain"
                           priority={index === 0}
-                          quality={90}
+                          sizes="(max-width: 1024px) 100vw, 50vw"
                         />
                       </div>
                     </SwiperSlide>
@@ -329,7 +329,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     fill
                     className="object-contain"
                     priority
-                    quality={90}
+                    sizes="(max-width: 1024px) 100vw, 50vw"
                   />
                 </div>
               )}
@@ -371,7 +371,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                         alt={image.alt || `Prize thumbnail ${index + 1}`}
                         fill
                         className="object-contain"
-                        quality={60}
+                        sizes="64px"
                       />
                     </div>
                   </SwiperSlide>
@@ -456,7 +456,6 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 width={600}
                 height={160}
                 className="w-full h-auto"
-                quality={90}
               />
             </div>
           </div>
@@ -520,7 +519,6 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 width={600}
                 height={160}
                 className="w-full h-auto"
-                quality={90}
               />
             </div>
           </div>

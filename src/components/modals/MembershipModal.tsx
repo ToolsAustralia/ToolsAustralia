@@ -123,6 +123,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
+  const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null); // ✅ For wallet payments (Google Pay/Apple Pay)
+  const [isCreatingPaymentIntent, setIsCreatingPaymentIntent] = useState(false);
   const [cardFormError, setCardFormError] = useState<string | null>(null);
   const cardFormRef = useRef<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>(
     null
@@ -466,6 +468,83 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       window.removeEventListener("showUpsellPayment", handleUpsellPayment as EventListener);
     };
   }, [onPlanChange]);
+
+  // ✅ STRIPE BEST PRACTICE: Create PaymentIntent when payment form is shown (for Google Pay/Apple Pay)
+  // This ensures PaymentIntent exists with correct amount before PaymentElement mounts
+  useEffect(() => {
+    // Only create PaymentIntent if:
+    // 1. Card form is shown
+    // 2. We have a selected plan with package info
+    // 3. We haven't already created one
+    // 4. We're not currently creating one
+    if (
+      showCardForm &&
+      activePlan &&
+      activePlan.id !== "placeholder" &&
+      !paymentIntentClientSecret &&
+      !isCreatingPaymentIntent
+    ) {
+      // Get package ID
+      const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+      if (!packageId) {
+        return; // Can't create PaymentIntent without package ID
+      }
+
+      // For new users, we need user info from formData
+      // For existing users, we can use authenticated user data
+      const userEmail = isAuthenticated ? userData?.email : formData.email;
+      const firstName = isAuthenticated ? userData?.firstName : formData.firstName;
+      const lastName = isAuthenticated ? userData?.lastName : formData.lastName;
+
+      // Only proceed if we have required user info
+      if (!userEmail || !firstName || !lastName) {
+        return; // Wait for user info
+      }
+
+      setIsCreatingPaymentIntent(true);
+
+      // Create PaymentIntent with createOnly: true for wallet payments
+      fetch("/api/stripe/create-one-time-purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userEmail,
+          firstName,
+          lastName,
+          mobile: isAuthenticated ? userData?.mobile : formData.phone,
+          packageId,
+          createOnly: true, // ✅ Create PaymentIntent without confirming (for wallet payments)
+        }),
+      })
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success && result.data?.paymentIntent?.clientSecret) {
+            setPaymentIntentClientSecret(result.data.paymentIntent.clientSecret);
+            setCardFormError(null);
+          } else {
+            console.error("Failed to create PaymentIntent:", result.error);
+            // Don't show error - fallback to SetupIntent flow
+          }
+        })
+        .catch((error) => {
+          console.error("Error creating PaymentIntent:", error);
+          // Don't show error - fallback to SetupIntent flow
+        })
+        .finally(() => {
+          setIsCreatingPaymentIntent(false);
+        });
+    }
+  }, [
+    showCardForm,
+    activePlan,
+    paymentIntentClientSecret,
+    isCreatingPaymentIntent,
+    isAuthenticated,
+    userData,
+    formData,
+    subscriptionPackages,
+    oneTimePackages,
+  ]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const formatCardNumber = (value: string) => {
@@ -2706,10 +2785,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     isAuthenticated={isAuthenticated}
                     showCardForm={showCardForm}
                     setupIntentClientSecret={setupIntentClientSecret}
+                    paymentIntentClientSecret={paymentIntentClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay)
                     cardFormRef={cardFormRef}
                     onCardElementChange={handleCardElementChange}
                     cardFormError={cardFormError}
-                    isCreatingSetupIntent={createSetupIntent.isPending}
+                    isCreatingSetupIntent={createSetupIntent.isPending || isCreatingPaymentIntent}
                     billingDetails={resolvedBillingDetails}
                   />
                 )}
@@ -2725,10 +2805,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                       isAuthenticated={isAuthenticated}
                       showCardForm={showCardForm}
                       setupIntentClientSecret={setupIntentClientSecret}
+                      paymentIntentClientSecret={paymentIntentClientSecret} // ✅ For wallet payments (Google Pay/Apple Pay)
                       cardFormRef={cardFormRef}
                       onCardElementChange={handleCardElementChange}
                       cardFormError={cardFormError}
-                      isCreatingSetupIntent={createSetupIntent.isPending}
+                      isCreatingSetupIntent={createSetupIntent.isPending || isCreatingPaymentIntent}
                       billingDetails={resolvedBillingDetails}
                     />
                   )}

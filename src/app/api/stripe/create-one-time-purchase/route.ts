@@ -20,9 +20,10 @@ const createOneTimePurchaseSchema = z.object({
   mobile: z.string().optional(),
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
-  paymentMethodId: z.string().min(1, "Payment method is required"),
+  paymentMethodId: z.string().optional(), // Made optional to support wallet payments (Google Pay/Apple Pay)
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
+  createOnly: z.boolean().optional(), // If true, create PaymentIntent with confirm: false for wallet payments
 });
 
 /**
@@ -144,15 +145,32 @@ export async function POST(request: NextRequest) {
     const affiliateMetadataCode = normalizedAffiliateCode || existingAffiliateCode;
 
     // Handle payment method creation following Stripe best practices
+    // For wallet payments (Google Pay/Apple Pay), paymentMethodId may not be provided initially
     const finalPaymentMethodId = validatedData.paymentMethodId;
+    const createOnly = validatedData.createOnly === true; // Create PaymentIntent without confirming (for wallet payments)
 
-    // Payment method should already be created via SetupIntent
+    // Payment method should already be created via SetupIntent for card payments
     // If we receive "new_payment_method", it means the frontend didn't complete the setup
     if (validatedData.paymentMethodId === "new_payment_method") {
       return NextResponse.json(
         {
           success: false,
           error: "Payment method not properly set up. Please complete card details first.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // For wallet payments (createOnly=true), we don't need paymentMethodId upfront
+    // PaymentIntent will be created without payment_method and confirmed later
+    if (createOnly && !finalPaymentMethodId) {
+      // This is fine - we'll create PaymentIntent without payment_method for wallet payments
+    } else if (!createOnly && !finalPaymentMethodId) {
+      // For non-wallet payments, paymentMethodId is required
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment method is required for this payment type.",
         },
         { status: 400 }
       );
@@ -165,7 +183,7 @@ export async function POST(request: NextRequest) {
     if (registeredUser && registeredUser.stripeCustomerId) {
       // console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
       customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
-    } else {
+    } else if (finalPaymentMethodId) {
       // For guest users or new users, get the customer ID from the payment method
       // console.log("🔍 Retrieving payment method to get customer ID...");
       try {
@@ -198,28 +216,47 @@ export async function POST(request: NextRequest) {
         console.error("❌ Failed to retrieve payment method:", error);
         throw new Error("Failed to retrieve payment method details");
       }
+    } else {
+      // For wallet payments without payment method, create a new customer
+      // console.log("👤 Creating new customer for wallet payment...");
+      customer = await stripe.customers.create({
+        email: validatedData.userEmail,
+        name: `${validatedData.firstName} ${validatedData.lastName}`,
+        phone: validatedData.mobile,
+        metadata: {
+          packageId: validatedData.packageId,
+          packageName: membershipPackage.name,
+          userId: registeredUser?._id?.toString() || "guest",
+          type: "wallet_payment",
+        },
+      });
+      // console.log(`✅ Created new customer: ${customer.id}`);
     }
 
-    // Payment method is already attached to customer via SetupIntent
-    // Just set it as the default payment method
-    await stripe.customers.update(customer.id, {
-      invoice_settings: {
-        default_payment_method: finalPaymentMethodId,
-      },
-    });
-    // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
+    // Payment method is already attached to customer via SetupIntent (for card payments)
+    // Set it as the default payment method if provided
+    if (finalPaymentMethodId) {
+      await stripe.customers.update(customer.id, {
+        invoice_settings: {
+          default_payment_method: finalPaymentMethodId,
+        },
+      });
+      // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
+    }
 
-    // Create payment intent with automatic confirmation for test mode
+    // Create payment intent following Stripe best practices
+    // For wallet payments (Google Pay/Apple Pay): create with confirm: false
+    // For saved payment methods: create with confirm: true (one-click purchase)
     // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-    const paymentIntent = await stripe.paymentIntents.create({
+    const shouldConfirm = !createOnly && !!finalPaymentMethodId; // Only confirm if we have payment method and not creating only
+
+    const paymentIntentData: Stripe.PaymentIntentCreateParams = {
       amount: Math.round(membershipPackage.price * 100), // Convert to cents
       currency: "aud",
       customer: customer.id,
-      payment_method: finalPaymentMethodId, // Use the final payment method ID
-      confirm: true, // Auto-confirm for testing
-      return_url: `${getBaseUrl()}/purchase-success`,
+      confirm: shouldConfirm, // ✅ STRIPE BEST PRACTICE: Don't confirm for wallet payments
       automatic_payment_methods: {
-        enabled: true,
+        enabled: true, // ✅ Required for Google Pay/Apple Pay
         allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
       },
       description: `${membershipPackage.name}`, // Add meaningful description
@@ -244,9 +281,117 @@ export async function POST(request: NextRequest) {
         ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
       },
-    });
+    };
 
-    // console.log(`💳 Created payment intent: ${paymentIntent.id}`);
+    // Only include payment_method and return_url if confirming immediately
+    if (shouldConfirm && finalPaymentMethodId) {
+      paymentIntentData.payment_method = finalPaymentMethodId;
+      paymentIntentData.return_url = `${getBaseUrl()}/purchase-success`;
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+
+    // console.log(`💳 Created payment intent: ${paymentIntent.id} with confirm: ${shouldConfirm}`);
+
+    // For wallet payments (createOnly=true), return early with clientSecret for frontend confirmation
+    if (createOnly) {
+      // Create or update user account (but don't process payment yet)
+      let user;
+      if (registeredUser) {
+        // Update existing user with Stripe customer ID
+        user = await User.findByIdAndUpdate(
+          registeredUser._id,
+          {
+            $set: {
+              stripeCustomerId: customer.id,
+            },
+          },
+          { new: true }
+        );
+        if (!user) {
+          throw new Error("Failed to update existing user");
+        }
+      } else if (existingUser) {
+        // User already exists (from earlier check), update with Stripe customer ID
+        user = await User.findByIdAndUpdate(
+          existingUser._id,
+          {
+            $set: {
+              stripeCustomerId: customer.id,
+            },
+          },
+          { new: true }
+        );
+        if (!user) {
+          throw new Error("Failed to update existing user");
+        }
+      } else {
+        // Create new user account (will be fully activated when payment is confirmed)
+        const hashedPassword = validatedData.password ? await bcrypt.hash(validatedData.password, 12) : undefined;
+        const cleanedMobile = validatedData.mobile?.replace(/\s+/g, "") || "";
+
+        user = new User({
+          firstName: validatedData.firstName,
+          lastName: validatedData.lastName,
+          email: validatedData.userEmail,
+          password: hashedPassword,
+          mobile: cleanedMobile,
+          role: "user",
+          stripeCustomerId: customer.id,
+          subscription: {
+            packageId: "",
+            startDate: new Date(),
+            isActive: false,
+            autoRenew: true,
+            status: "incomplete",
+            pendingChange: undefined,
+          },
+          oneTimePackages: [],
+          accumulatedEntries: 0,
+          entryWallet: 0,
+          rewardsPoints: 0,
+          isEmailVerified: false,
+          isActive: true,
+          savedPaymentMethods: [],
+        });
+
+        await user.save();
+      }
+
+      // Attach affiliate referral if provided
+      if (normalizedAffiliateCode && user && (!user.affiliateReferral || !user.affiliateReferral.affiliateId)) {
+        try {
+          await trackAffiliateSignup({
+            affiliateCode: normalizedAffiliateCode,
+            userId: user._id.toString(),
+            userEmail: user.email,
+          });
+          user = (await User.findById(user._id)) ?? user;
+        } catch (affiliateError) {
+          console.error("Affiliate tracking error during one-time purchase:", affiliateError);
+        }
+      }
+
+      // Return PaymentIntent with clientSecret for frontend confirmation
+      return NextResponse.json({
+        success: true,
+        message: "Payment intent created. Complete payment to proceed.",
+        data: {
+          paymentIntent: {
+            id: paymentIntent.id,
+            clientSecret: paymentIntent.client_secret,
+            amount: paymentIntent.amount,
+            currency: paymentIntent.currency,
+            status: paymentIntent.status,
+          },
+          packageName: membershipPackage.name,
+          packageId: validatedData.packageId,
+          userId: user._id,
+          customerId: customer.id,
+          requiresPayment: true, // Indicates payment needs to be confirmed
+        },
+      });
+    }
 
     let user;
 
@@ -338,6 +483,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ✅ CRITICAL: Handle different payment statuses and wait for settlement
+    // Note: This section only runs for confirmed payments (saved payment methods)
     if (paymentIntent.status === "succeeded") {
       // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
 
@@ -349,14 +495,12 @@ export async function POST(request: NextRequest) {
 
       if (verifiedPaymentIntent.status === "succeeded") {
         // console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
-
         // Benefits will be processed by webhook - just log success
         // console.log(
         //   `🎯 Payment verified - benefits will be processed by webhook: ${
         //     membershipPackage.totalEntries || 0
         //   } entries, ${Math.floor(membershipPackage.price)} points`
         // );
-
         // ✅ Klaviyo integration handled by webhook for reliability and best practices
         // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
       } else {
@@ -375,7 +519,6 @@ export async function POST(request: NextRequest) {
 
       if (finalPaymentIntent.status === "succeeded") {
         // console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
-
         // Benefits will be processed by webhook - just log success
         // console.log(
         //   `🎯 Payment verified - benefits will be processed by webhook: ${
