@@ -164,66 +164,6 @@ class KlaviyoClient {
     throw lastError || new Error("Request failed after retries");
   }
 
-  /**
-   * Build profile attributes object for Klaviyo API requests
-   * Centralizes attribute construction logic to ensure consistency across all API calls
-   * Includes SMS marketing subscription when phone number exists and consent is true
-   *
-   * @param profile - Klaviyo profile object containing user data
-   * @returns Attributes object ready for Klaviyo API payload
-   */
-  private buildProfileAttributes(profile: KlaviyoProfile): {
-    email: string;
-    first_name?: string;
-    last_name?: string;
-    phone_number?: string;
-    subscriptions?: {
-      sms: {
-        marketing: {
-          consent: string;
-        };
-      };
-    };
-    properties?: Partial<import("@/types/klaviyo").KlaviyoProfileProperties>;
-  } {
-    const attributes: {
-      email: string;
-      first_name?: string;
-      last_name?: string;
-      phone_number?: string;
-      subscriptions?: {
-        sms: {
-          marketing: {
-            consent: string;
-          };
-        };
-      };
-      properties?: Partial<import("@/types/klaviyo").KlaviyoProfileProperties>;
-    } = {
-      email: profile.email,
-      first_name: profile.first_name,
-      last_name: profile.last_name,
-      phone_number: profile.phone_number,
-      properties: profile.properties || {},
-    };
-
-    // Include SMS marketing subscription when phone number exists and consent is true
-    // Business logic: All mobile numbers are treated as having SMS consent
-    // Klaviyo requires subscriptions.sms.marketing.consent structure to enable SMS messaging
-    // This prevents "Missing SMS Consent" errors when sending SMS messages
-    if (profile.phone_number && profile.sms_consent === true) {
-      attributes.subscriptions = {
-        sms: {
-          marketing: {
-            consent: "SUBSCRIBED",
-          },
-        },
-      };
-    }
-
-    return attributes;
-  }
-
   async upsertProfile(profile: KlaviyoProfile): Promise<KlaviyoProfileResponse> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
@@ -236,14 +176,16 @@ class KlaviyoClient {
     }
 
     try {
-      // Build profile attributes using centralized helper method
-      // This ensures SMS consent is included consistently across all API calls
-      const attributes = this.buildProfileAttributes(profile);
-
       const payload = {
         data: {
           type: "profile",
-          attributes,
+          attributes: {
+            email: profile.email,
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            phone_number: profile.phone_number,
+            properties: profile.properties || {},
+          },
         },
       };
 
@@ -262,13 +204,16 @@ class KlaviyoClient {
 
         if (duplicateProfileId) {
           // Update the existing profile using PATCH
-          // Use centralized helper to ensure SMS consent is included
-          const updateAttributes = this.buildProfileAttributes(profile);
           const updatePayload = {
             data: {
               type: "profile",
               id: duplicateProfileId,
-              attributes: updateAttributes,
+              attributes: {
+                first_name: profile.first_name,
+                last_name: profile.last_name,
+                phone_number: profile.phone_number,
+                properties: profile.properties || {},
+              },
             },
           };
 
@@ -286,13 +231,16 @@ class KlaviyoClient {
             const existingProfile = searchData.data?.[0];
 
             if (existingProfile) {
-              // Use centralized helper to ensure SMS consent is included
-              const updateAttributes = this.buildProfileAttributes(profile);
               const updatePayload = {
                 data: {
                   type: "profile",
                   id: existingProfile.id,
-                  attributes: updateAttributes,
+                  attributes: {
+                    first_name: profile.first_name,
+                    last_name: profile.last_name,
+                    phone_number: profile.phone_number,
+                    properties: profile.properties || {},
+                  },
                 },
               };
 

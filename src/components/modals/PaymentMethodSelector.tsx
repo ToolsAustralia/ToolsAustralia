@@ -173,14 +173,16 @@ const StripeCardForm = React.forwardRef<
             layout: "tabs",
             wallets: {
               applePay: "auto",
+              googlePay: "auto",
             },
-            paymentMethodOrder: ["apple_pay", "card"],
+            paymentMethodOrder: ["apple_pay", "google_pay", "card"],
             fields: {
               billingDetails: "never", // Hide country, address, and postal code fields
             },
             terms: {
               card: "never", // Hide the "By providing your card information..." terms text
               applePay: "never",
+              googlePay: "never",
             },
           }}
           onChange={(event) => {

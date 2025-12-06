@@ -1,4 +1,18 @@
-<!-- 221057d1-0b5d-4f9a-9d48-48e960d4cab4 96aeb3e6-04e5-4dcf-8473-3fe0aba98067 -->
+---
+name: Cinematic Pricing Cards Redesign
+overview: ""
+todos:
+  - id: c9fbe789-3984-429c-834b-4549b7ba768f
+    content: Update MembershipSection.tsx with cinematic card design, metallic gradients, and package-specific colors
+    status: pending
+  - id: ed282af6-3165-4f65-86f5-ba1f7f6ec51f
+    content: Update PackageSelectionModal.tsx with matching cinematic design system
+    status: pending
+  - id: 353a3ce0-c101-4f8d-8038-847e678d7b60
+    content: Verify responsive grid layout works across all breakpoints (mobile, tablet, desktop)
+    status: pending
+---
+
 # Cinematic Pricing Cards Redesign
 
 ## Overview
@@ -74,9 +88,3 @@ Power:      bg-gradient-to-br from-orange-600 via-red-500 to-orange-700
 - Preserve all props and data flow
 - Update only visual styling, not business logic
 - Ensure accessibility (contrast ratios, focus states)
-
-### To-dos
-
-- [ ] Update MembershipSection.tsx with cinematic card design, metallic gradients, and package-specific colors
-- [ ] Update PackageSelectionModal.tsx with matching cinematic design system
-- [ ] Verify responsive grid layout works across all breakpoints (mobile, tablet, desktop)

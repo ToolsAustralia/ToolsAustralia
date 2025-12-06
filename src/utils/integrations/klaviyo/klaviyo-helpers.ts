@@ -119,11 +119,6 @@ export async function userToKlaviyoProfile(
       : `+61${user.mobile.replace(/^0/, "")}`
     : undefined;
 
-  // SMS Consent: All mobile numbers are treated as having SMS consent
-  // Set to true when phone number exists (boolean flag for Klaviyo subscriptions structure)
-  // This ensures Klaviyo can send SMS messages without "Missing SMS Consent" errors
-  const smsConsent = phone ? true : undefined;
-
   // Helper function to safely convert date to ISO string
   const safeDateToISO = (date: Date | undefined | null): string | undefined => {
     if (!date) return undefined;
@@ -172,7 +167,6 @@ export async function userToKlaviyoProfile(
     first_name: user.firstName,
     last_name: user.lastName,
     phone_number: phone,
-    sms_consent: smsConsent, // Boolean flag: true when phone number exists
     properties: {
       // Basic user info
       user_id: user._id.toString(),
