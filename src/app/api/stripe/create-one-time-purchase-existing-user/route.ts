@@ -4,7 +4,6 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
-import Stripe from "stripe";
 import { recordReferralPurchase } from "@/lib/referral";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { z } from "zod";
@@ -15,10 +14,9 @@ import { authOptions } from "@/lib/auth";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
-  paymentMethodId: z.string().optional(), // Made optional to support wallet payments (Google Pay/Apple Pay)
+  paymentMethodId: z.string().min(1, "Payment method ID is required").optional(),
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
-  createOnly: z.boolean().optional(), // If true, create PaymentIntent with confirm: false for wallet payments
 });
 
 /**
@@ -159,12 +157,9 @@ export async function POST(request: NextRequest) {
       await existingUser.save();
     }
 
-    const createOnly = validatedData.createOnly === true; // Create PaymentIntent without confirming (for wallet payments)
     let paymentMethodId = validatedData.paymentMethodId;
 
-    // For wallet payments (createOnly=true), paymentMethodId is optional
-    // For saved payment methods, try to find default or first available
-    if (!paymentMethodId && !createOnly) {
+    if (!paymentMethodId) {
       const defaultMethod = existingUser.savedPaymentMethods?.find((pm: Record<string, unknown>) => pm.isDefault);
       if (defaultMethod && typeof defaultMethod.paymentMethodId === "string") {
         paymentMethodId = defaultMethod.paymentMethodId;
@@ -183,44 +178,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Ensure payment method belongs to this customer (only if paymentMethodId is provided)
-    if (paymentMethodId) {
-      const stripePaymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+    // Ensure payment method belongs to this customer
+    const stripePaymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
 
-      if (!stripePaymentMethod) {
-        return NextResponse.json({ success: false, error: "Payment method not found" }, { status: 404 });
-      }
-
-      if (stripePaymentMethod.customer !== stripeCustomerId) {
-        try {
-          await stripe.paymentMethods.attach(paymentMethodId, {
-            customer: stripeCustomerId,
-          });
-        } catch (error) {
-          console.error("❌ Failed to attach payment method to customer:", error);
-          return NextResponse.json(
-            { success: false, error: "Unable to attach payment method to customer" },
-            { status: 400 }
-          );
-        }
-      }
-
-      // console.log(`💳 Using payment method ${paymentMethodId} for one-time purchase`);
+    if (!stripePaymentMethod) {
+      return NextResponse.json({ success: false, error: "Payment method not found" }, { status: 404 });
     }
 
-    // Create payment intent for one-time purchase following Stripe best practices
-    // For wallet payments (Google Pay/Apple Pay): create with confirm: false
-    // For saved payment methods: create with confirm: true (one-click purchase)
-    // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-    const shouldConfirm = !createOnly && !!paymentMethodId; // Only confirm if we have payment method and not creating only
+    if (stripePaymentMethod.customer !== stripeCustomerId) {
+      try {
+        await stripe.paymentMethods.attach(paymentMethodId, {
+          customer: stripeCustomerId,
+        });
+      } catch (error) {
+        console.error("❌ Failed to attach payment method to customer:", error);
+        return NextResponse.json(
+          { success: false, error: "Unable to attach payment method to customer" },
+          { status: 400 }
+        );
+      }
+    }
 
-    const paymentIntentData: Stripe.PaymentIntentCreateParams = {
+    // console.log(`💳 Using payment method ${paymentMethodId} for one-time purchase`);
+
+    // Create payment intent for one-time purchase
+    // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
+    const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(membershipPackage.price * 100), // Convert to cents
       currency: "aud",
       customer: stripeCustomerId,
-      confirm: shouldConfirm, // ✅ STRIPE BEST PRACTICE: Don't confirm for wallet payments
+      payment_method: paymentMethodId,
+      confirm: true,
+      return_url: `${getBaseUrl()}/purchase-success`,
       automatic_payment_methods: {
-        enabled: true, // ✅ Required for Google Pay/Apple Pay
+        enabled: true,
         allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
       },
       description: `${membershipPackage.name}`, // Add meaningful description
@@ -245,42 +236,11 @@ export async function POST(request: NextRequest) {
           ? { affiliateCode: existingUser.affiliateReferral.affiliateCode }
           : {}),
       },
-    };
+    });
 
-    // Only include payment_method and return_url if confirming immediately
-    if (shouldConfirm && paymentMethodId) {
-      paymentIntentData.payment_method = paymentMethodId;
-      paymentIntentData.return_url = `${getBaseUrl()}/purchase-success`;
-    }
-
-    const paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
-
-    // console.log(`✅ Payment intent created: ${paymentIntent.id} with confirm: ${shouldConfirm}, status: ${paymentIntent.status}`);
-
-    // For wallet payments (createOnly=true), return early with clientSecret for frontend confirmation
-    if (createOnly) {
-      return NextResponse.json({
-        success: true,
-        message: "Payment intent created. Complete payment to proceed.",
-        data: {
-          paymentIntent: {
-            id: paymentIntent.id,
-            clientSecret: paymentIntent.client_secret,
-            amount: paymentIntent.amount,
-            currency: paymentIntent.currency,
-            status: paymentIntent.status,
-          },
-          packageName: membershipPackage.name,
-          packageId: validatedData.packageId,
-          userId: existingUser._id.toString(),
-          customerId: stripeCustomerId,
-          requiresPayment: true, // Indicates payment needs to be confirmed
-        },
-      });
-    }
+    // console.log(`✅ Payment intent created: ${paymentIntent.id} with status: ${paymentIntent.status}`);
 
     // ✅ CRITICAL: Handle different payment statuses and wait for settlement
-    // Note: This section only runs for confirmed payments (saved payment methods)
     if (paymentIntent.status === "succeeded") {
       // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
 

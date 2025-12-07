@@ -6,7 +6,6 @@ import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSave
 import SavedPaymentMethodsModal from "./SavedPaymentMethodsModal";
 import { PaymentElement, useStripe, useElements, Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import type Stripe from "stripe";
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -22,8 +21,6 @@ interface PaymentMethodSelectorProps {
   // New props for Stripe Elements integration
   showCardForm?: boolean;
   setupIntentClientSecret?: string | null;
-  paymentIntentClientSecret?: string | null; // ✅ For wallet payments (Google Pay/Apple Pay) - one-time packages
-  subscriptionClientSecret?: string | null; // ✅ For wallet payments (Google Pay/Apple Pay) - subscription packages
   cardFormRef: React.Ref<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>;
   onCardElementChange: (event: { error?: { message?: string } }) => void;
   cardFormError: string | null;
@@ -39,10 +36,12 @@ interface PaymentMethodSelectorProps {
     postalCode?: string; // Postal/ZIP code
     line1?: string; // Address line 1
   };
+  // Amount and package name for wallet payment display (Apple Pay/Google Pay)
+  amount?: number; // Amount in cents
+  packageName?: string; // Package name for payment request label
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
-// ✅ Supports both SetupIntent and PaymentIntent (for wallet payments)
 const StripeCardForm = React.forwardRef<
   { confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> },
   {
@@ -59,8 +58,10 @@ const StripeCardForm = React.forwardRef<
       postalCode?: string; // Postal/ZIP code
       line1?: string; // Address line 1
     };
+    amount?: number; // Amount in cents for wallet payment display
+    packageName?: string; // Package name for payment request label
   }
->(({ clientSecret, onCardElementChange, cardError, billingDetails }, ref) => {
+>(({ clientSecret, onCardElementChange, cardError, billingDetails, amount, packageName }, ref) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isStripeLoading, setIsStripeLoading] = useState(true);
@@ -72,12 +73,7 @@ const StripeCardForm = React.forwardRef<
     }
   }, [stripe, elements]);
 
-  // ✅ Detect if clientSecret is for PaymentIntent or SetupIntent
-  // PaymentIntent secrets: pi_xxx_secret_xxx
-  // SetupIntent secrets: seti_xxx_secret_xxx
-  const isPaymentIntent = clientSecret.includes("pi_") || clientSecret.startsWith("pi_");
-
-  // Expose confirmSetup function via ref (handles both SetupIntent and PaymentIntent)
+  // Expose confirmSetup function via ref
   React.useImperativeHandle(ref, () => ({
     confirmSetup: async () => {
       if (!stripe || !elements) {
@@ -85,7 +81,7 @@ const StripeCardForm = React.forwardRef<
       }
 
       try {
-        // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmation
+        // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmSetup()
         // This validates the form and prepares it for confirmation
         const { error: submitError } = await elements.submit();
 
@@ -94,152 +90,54 @@ const StripeCardForm = React.forwardRef<
           return { error: submitError.message || "Please complete all required fields." };
         }
 
-        // ✅ CRITICAL: Use correct confirmation method based on clientSecret type
-        if (isPaymentIntent) {
-          // For PaymentIntent (wallet payments - Google Pay/Apple Pay)
-          // ✅ STRIPE BEST PRACTICE: Use confirmPayment for PaymentIntent
-          // Note: Wallet payments may have already confirmed the PaymentIntent, so we handle that error case
-          const confirmResult = await stripe.confirmPayment({
-            elements,
-            clientSecret,
-            confirmParams: {
-              payment_method_data: {
-                billing_details: billingDetails?.name
-                  ? {
-                      name: billingDetails.name,
-                      email: billingDetails.email,
-                      phone: billingDetails.phone,
-                      address: {
-                        country: billingDetails.country || "AU",
-                        state: billingDetails.state || "NSW",
-                        city: billingDetails.city || "Sydney",
-                        postal_code: billingDetails.postalCode || "2000",
-                        line1: billingDetails.line1 || "1 Martin Place",
-                      },
-                    }
-                  : {
-                      name: billingDetails?.email || "Customer",
-                      address: {
-                        country: billingDetails?.country || "AU",
-                        state: billingDetails?.state || "NSW",
-                        city: billingDetails?.city || "Sydney",
-                        postal_code: billingDetails?.postalCode || "2000",
-                        line1: billingDetails?.line1 || "1 Martin Place",
-                      },
+        // Now confirm the setup after successful submission
+        // ✅ CRITICAL: When billingDetails: "never" is set, we must provide billing details here
+        // Stripe requires billing_details.name and complete address fields (country, state, city, postal_code, line1)
+        const { setupIntent, error } = await stripe.confirmSetup({
+          elements,
+          clientSecret,
+          confirmParams: {
+            payment_method_data: {
+              billing_details: billingDetails?.name
+                ? {
+                    name: billingDetails.name,
+                    email: billingDetails.email,
+                    phone: billingDetails.phone,
+                    address: {
+                      country: billingDetails.country || "AU", // ✅ Required by Stripe, default to Australia
+                      state: billingDetails.state || "NSW", // ✅ Required by Stripe, default to New South Wales
+                      city: billingDetails.city || "Sydney", // ✅ Required by Stripe, default to Sydney
+                      postal_code: billingDetails.postalCode || "2000", // ✅ Required by Stripe, default to Sydney CBD
+                      line1: billingDetails.line1 || "1 Martin Place", // ✅ Required by Stripe, default address
                     },
-              },
-              return_url: window.location.href,
+                  }
+                : {
+                    // Fallback: provide minimal required name and complete address fields if not provided
+                    name: billingDetails?.email || "Customer",
+                    address: {
+                      country: billingDetails?.country || "AU", // ✅ Default to Australia
+                      state: billingDetails?.state || "NSW", // ✅ Default to New South Wales
+                      city: billingDetails?.city || "Sydney", // ✅ Default to Sydney
+                      postal_code: billingDetails?.postalCode || "2000", // ✅ Default to Sydney CBD
+                      line1: billingDetails?.line1 || "1 Martin Place", // ✅ Default address
+                    },
+                  },
             },
-            redirect: "if_required",
-          });
+          },
+          redirect: "if_required",
+        });
 
-          // ✅ Handle error: Check if PaymentIntent is already confirmed (common with wallet payments)
-          if (confirmResult.error) {
-            // Check if error is due to PaymentIntent already being confirmed/succeeded
-            const errorCode = confirmResult.error.code;
-            const errorMessage = confirmResult.error.message || "";
-
-            if (
-              errorCode === "payment_intent_unexpected_state" ||
-              errorMessage.includes("already succeeded") ||
-              errorMessage.includes("already confirmed")
-            ) {
-              // ✅ PaymentIntent was already confirmed by wallet payment (Google Pay/Apple Pay)
-              // Stripe includes the PaymentIntent in the error response when it's already confirmed
-              // Type assertion: error object may contain payment_intent when already confirmed
-              const errorWithPaymentIntent = confirmResult.error as typeof confirmResult.error & {
-                payment_intent?: Stripe.PaymentIntent;
-              };
-              const errorPaymentIntent = errorWithPaymentIntent.payment_intent;
-
-              if (errorPaymentIntent && errorPaymentIntent.status === "succeeded") {
-                console.log("✅ PaymentIntent already succeeded (from wallet payment), using existing payment method");
-                const paymentMethodId =
-                  typeof errorPaymentIntent.payment_method === "string"
-                    ? errorPaymentIntent.payment_method
-                    : (errorPaymentIntent.payment_method as { id?: string })?.id;
-
-                if (paymentMethodId) {
-                  return { paymentMethodId };
-                }
-              }
-            }
-
-            console.error("Stripe PaymentIntent error:", confirmResult.error);
-            return { error: confirmResult.error.message || "Payment confirmation failed." };
-          }
-
-          // PaymentIntent confirmation succeeded
-          const confirmedPaymentIntent = confirmResult.paymentIntent;
-          if (
-            confirmedPaymentIntent &&
-            (confirmedPaymentIntent.status === "succeeded" || confirmedPaymentIntent.status === "processing")
-          ) {
-            // PaymentIntent succeeded - extract payment method from payment intent
-            // For wallet payments, the payment method is attached to the payment intent
-            const paymentMethodId =
-              typeof confirmedPaymentIntent.payment_method === "string"
-                ? confirmedPaymentIntent.payment_method
-                : (confirmedPaymentIntent.payment_method as { id?: string })?.id;
-
-            if (paymentMethodId) {
-              console.log("✅ PaymentIntent succeeded:", confirmedPaymentIntent);
-              return { paymentMethodId };
-            } else {
-              // Payment succeeded but no payment method ID (shouldn't happen, but handle gracefully)
-              return { error: "Payment succeeded but payment method not found." };
-            }
-          } else {
-            throw new Error(`Unexpected payment intent status: ${confirmedPaymentIntent?.status}`);
-          }
+        if (error) {
+          console.error("Stripe SetupIntent error:", error);
+          return { error: error.message || "Payment method setup failed." };
+        } else if (setupIntent?.payment_method) {
+          console.log("✅ SetupIntent succeeded:", setupIntent);
+          return { paymentMethodId: setupIntent.payment_method as string };
         } else {
-          // For SetupIntent (card collection for future use)
-          // ✅ STRIPE BEST PRACTICE: Use confirmSetup for SetupIntent
-          const { setupIntent, error } = await stripe.confirmSetup({
-            elements,
-            clientSecret,
-            confirmParams: {
-              payment_method_data: {
-                billing_details: billingDetails?.name
-                  ? {
-                      name: billingDetails.name,
-                      email: billingDetails.email,
-                      phone: billingDetails.phone,
-                      address: {
-                        country: billingDetails.country || "AU",
-                        state: billingDetails.state || "NSW",
-                        city: billingDetails.city || "Sydney",
-                        postal_code: billingDetails.postalCode || "2000",
-                        line1: billingDetails.line1 || "1 Martin Place",
-                      },
-                    }
-                  : {
-                      name: billingDetails?.email || "Customer",
-                      address: {
-                        country: billingDetails?.country || "AU",
-                        state: billingDetails?.state || "NSW",
-                        city: billingDetails?.city || "Sydney",
-                        postal_code: billingDetails?.postalCode || "2000",
-                        line1: billingDetails?.line1 || "1 Martin Place",
-                      },
-                    },
-              },
-            },
-            redirect: "if_required",
-          });
-
-          if (error) {
-            console.error("Stripe SetupIntent error:", error);
-            return { error: error.message || "Payment method setup failed." };
-          } else if (setupIntent?.payment_method) {
-            console.log("✅ SetupIntent succeeded:", setupIntent);
-            return { paymentMethodId: setupIntent.payment_method as string };
-          } else {
-            throw new Error("Unexpected error during payment method setup.");
-          }
+          throw new Error("Unexpected error during payment method setup.");
         }
       } catch (err: unknown) {
-        console.error("Error in confirmSetup/confirmPayment:", err);
+        console.error("Error in confirmSetup:", err);
         const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
         return { error: errorMessage };
       }
@@ -283,6 +181,19 @@ const StripeCardForm = React.forwardRef<
               googlePay: "auto",
             },
             paymentMethodOrder: ["apple_pay", "google_pay", "card"],
+            // Add paymentRequest for wallet payments to display correct amount when using SetupIntent
+            ...(amount
+              ? {
+                  paymentRequest: {
+                    country: "AU",
+                    currency: "aud",
+                    total: {
+                      label: packageName || "Membership",
+                      amount: amount, // Amount in cents
+                    },
+                  },
+                }
+              : {}),
             fields: {
               billingDetails: "never", // Hide country, address, and postal code fields
             },
@@ -321,17 +232,14 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   isAuthenticated = false,
   showCardForm = false,
   setupIntentClientSecret = null,
-  paymentIntentClientSecret = null, // ✅ For wallet payments (Google Pay/Apple Pay) - one-time packages
-  subscriptionClientSecret = null, // ✅ For wallet payments (Google Pay/Apple Pay) - subscription packages
   cardFormRef,
   onCardElementChange,
   cardFormError,
   isCreatingSetupIntent = false,
   billingDetails,
+  amount,
+  packageName,
 }) => {
-  // ✅ Prioritize subscriptionClientSecret over paymentIntentClientSecret for subscription packages
-  // Both are PaymentIntents, but subscription ones come from subscription invoices
-  const activeClientSecret = subscriptionClientSecret || paymentIntentClientSecret || setupIntentClientSecret;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
@@ -439,39 +347,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               </div>
             </div>
-          ) : subscriptionClientSecret || paymentIntentClientSecret ? (
-            // ✅ STRIPE BEST PRACTICE: Use PaymentIntent for wallet payments (Google Pay/Apple Pay)
-            // PaymentIntent ensures correct amount is displayed in Google Pay/Apple Pay
-            // Prioritize subscriptionClientSecret for subscription packages
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret: activeClientSecret!,
-                locale: "en",
-                appearance: {
-                  theme: "stripe",
-                  variables: {
-                    colorPrimary: "#ee0000",
-                    colorBackground: "#ffffff",
-                    colorText: "#1f2937",
-                    colorDanger: "#dc2626",
-                    fontFamily: "system-ui, sans-serif",
-                    spacingUnit: "4px",
-                    borderRadius: "8px",
-                  },
-                },
-              }}
-            >
-              <StripeCardForm
-                ref={cardFormRef}
-                clientSecret={activeClientSecret!}
-                onCardElementChange={onCardElementChange}
-                cardError={cardFormError}
-                billingDetails={billingDetails}
-              />
-            </Elements>
           ) : setupIntentClientSecret ? (
-            // Fallback to SetupIntent for backward compatibility
             <Elements
               stripe={stripePromise}
               options={{
@@ -497,6 +373,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 onCardElementChange={onCardElementChange}
                 cardError={cardFormError}
                 billingDetails={billingDetails}
+                amount={amount}
+                packageName={packageName}
               />
             </Elements>
           ) : cardFormError ? (
@@ -672,37 +550,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     </div>
                   </div>
                 </div>
-              ) : subscriptionClientSecret || paymentIntentClientSecret ? (
-                // ✅ STRIPE BEST PRACTICE: Use PaymentIntent for wallet payments (Google Pay/Apple Pay)
-                // Prioritize subscriptionClientSecret for subscription packages
-                <Elements
-                  stripe={stripePromise}
-                  options={{
-                    clientSecret: activeClientSecret!,
-                    appearance: {
-                      theme: "stripe",
-                      variables: {
-                        colorPrimary: "#ee0000",
-                        colorBackground: "#ffffff",
-                        colorText: "#1f2937",
-                        colorDanger: "#dc2626",
-                        fontFamily: "system-ui, sans-serif",
-                        spacingUnit: "4px",
-                        borderRadius: "8px",
-                      },
-                    },
-                  }}
-                >
-                  <StripeCardForm
-                    ref={cardFormRef}
-                    clientSecret={activeClientSecret!}
-                    onCardElementChange={onCardElementChange}
-                    cardError={cardFormError}
-                    billingDetails={billingDetails}
-                  />
-                </Elements>
               ) : setupIntentClientSecret ? (
-                // Fallback to SetupIntent for backward compatibility
                 <Elements
                   stripe={stripePromise}
                   options={{
@@ -727,6 +575,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     onCardElementChange={onCardElementChange}
                     cardError={cardFormError}
                     billingDetails={billingDetails}
+                    amount={amount}
+                    packageName={packageName}
                   />
                 </Elements>
               ) : (

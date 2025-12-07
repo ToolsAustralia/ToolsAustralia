@@ -229,6 +229,8 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
           onCardElementChange={() => {}}
           cardFormError={null}
           isCreatingSetupIntent={false}
+          amount={amount}
+          packageName={packageName}
         />
       </div>
 

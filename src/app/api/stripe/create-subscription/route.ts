@@ -9,6 +9,12 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 // Klaviyo integration handled by webhook for best practices
 
+// Interface for payment intent with status
+interface PaymentIntentWithStatus {
+  client_secret?: string;
+  status: string;
+}
+
 // Interface for Stripe errors
 interface StripeError {
   type: string;
@@ -23,9 +29,8 @@ const createSubscriptionSchema = z.object({
   mobile: z.string().optional(),
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
-  paymentMethodId: z.string().min(1, "Payment method is required").optional(), // Optional when createOnly is true
+  paymentMethodId: z.string().min(1, "Payment method is required"),
   referralCode: z.string().optional(),
-  createOnly: z.boolean().optional(), // Create subscription PaymentIntent early without processing payment
 });
 
 /**
@@ -83,22 +88,6 @@ export async function POST(request: NextRequest) {
 
     // Handle payment method creation following Stripe best practices
     const finalPaymentMethodId = validatedData.paymentMethodId;
-    const createOnly = validatedData.createOnly === true; // Create subscription PaymentIntent early without processing payment
-
-    // For wallet payments (createOnly=true), we don't need paymentMethodId upfront
-    // PaymentIntent will be created without payment_method and confirmed later
-    if (createOnly && !finalPaymentMethodId) {
-      // This is fine - we'll create subscription without payment_method for wallet payments
-    } else if (!createOnly && !finalPaymentMethodId) {
-      // For non-wallet payments, paymentMethodId is required
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Payment method is required for this payment type.",
-        },
-        { status: 400 }
-      );
-    }
 
     // Payment method should already be created via SetupIntent
     // If we receive "new_payment_method", it means the frontend didn't complete the setup
@@ -119,14 +108,12 @@ export async function POST(request: NextRequest) {
     if (registeredUser && registeredUser.stripeCustomerId) {
       // console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
       customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
-    } else if (finalPaymentMethodId) {
+    } else {
       // For guest users or new users, get the customer ID from the payment method
       // console.log("🔍 Retrieving payment method to get customer ID...");
       try {
         const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-
         if (paymentMethod.customer) {
-          // Payment method is already attached to a customer
           // console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
           customer = await stripe.customers.retrieve(paymentMethod.customer as string);
           // console.log(`✅ Using customer from payment method: ${customer.id}`);
@@ -148,72 +135,16 @@ export async function POST(request: NextRequest) {
             // console.log(`✅ Updated customer details: ${customer.id}`);
           }
         } else {
-          // Payment method exists but is not attached to any customer
-          // This can happen with Google Pay/Apple Pay - attach it to a customer
-          // console.log("⚠️ Payment method not attached to customer, creating/retrieving customer and attaching...");
-
-          // Create or retrieve customer
-          if (registeredUser && registeredUser.stripeCustomerId) {
-            customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
-          } else {
-            // Check if customer exists by email
-            const existingCustomers = await stripe.customers.list({
-              email: validatedData.userEmail.toLowerCase(),
-              limit: 1,
-            });
-
-            if (existingCustomers.data.length > 0) {
-              customer = existingCustomers.data[0];
-              // console.log(`✅ Found existing customer by email: ${customer.id}`);
-            } else {
-              // Create new customer
-              customer = await stripe.customers.create({
-                email: validatedData.userEmail,
-                name: `${validatedData.firstName} ${validatedData.lastName}`,
-                phone: validatedData.mobile,
-                metadata: {
-                  packageId: validatedData.packageId,
-                  packageName: membershipPackage.name,
-                  userId: registeredUser?._id?.toString() || "guest",
-                  type: "wallet_payment",
-                },
-              });
-              // console.log(`✅ Created new customer: ${customer.id}`);
-            }
-          }
-
-          // Attach payment method to customer
-          await stripe.paymentMethods.attach(finalPaymentMethodId, {
-            customer: customer.id,
-          });
-          // console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${customer.id}`);
+          throw new Error("Payment method is not attached to any customer");
         }
       } catch (error) {
-        console.error("❌ Failed to retrieve/attach payment method:", error);
-        // Provide more specific error message
-        if (error instanceof Error) {
-          throw new Error(`Failed to retrieve payment method details: ${error.message}`);
-        }
+        console.error("❌ Failed to retrieve payment method:", error);
         throw new Error("Failed to retrieve payment method details");
       }
-    } else {
-      // For wallet payments without payment method (createOnly=true), create a new customer
-      // console.log("👤 Creating new customer for wallet payment...");
-      customer = await stripe.customers.create({
-        email: validatedData.userEmail,
-        name: `${validatedData.firstName} ${validatedData.lastName}`,
-        phone: validatedData.mobile,
-        metadata: {
-          packageId: validatedData.packageId,
-          packageName: membershipPackage.name,
-          userId: registeredUser?._id?.toString() || "guest",
-          type: "wallet_payment",
-        },
-      });
-      // console.log(`✅ Created new customer: ${customer.id}`);
     }
 
-    // Set payment method as default if provided
+    // Payment method is already attached to customer via SetupIntent
+    // Just set it as the default payment method
     if (finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
       await stripe.customers.update(customer.id, {
         invoice_settings: {
@@ -242,7 +173,6 @@ export async function POST(request: NextRequest) {
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
     // Create subscription with payment method
-    // ✅ STRIPE BEST PRACTICE: Enable automatic_payment_methods for Google Pay/Apple Pay support
     // console.log("📋 Creating Stripe subscription...");
     let subscription;
     try {
@@ -274,48 +204,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the payment intent for confirmation
-    // ✅ STRIPE BEST PRACTICE: PaymentElement automatically handles wallet payments (Google Pay/Apple Pay)
-    // for subscriptions when using the clientSecret from the subscription's invoice
-    // The invoice is expanded with payment_intent, so we can access it directly
-    const latestInvoice = subscription.latest_invoice as { payment_intent?: Stripe.PaymentIntent | string } | null;
-    let paymentIntent: Stripe.PaymentIntent | null = null;
-
-    // Extract PaymentIntent from invoice
-    if (latestInvoice?.payment_intent) {
-      if (typeof latestInvoice.payment_intent === "object") {
-        paymentIntent = latestInvoice.payment_intent;
-      } else if (typeof latestInvoice.payment_intent === "string") {
-        // If payment_intent is just an ID string, retrieve it
-        paymentIntent = await stripe.paymentIntents.retrieve(latestInvoice.payment_intent);
-      }
-    }
+    const latestInvoice = subscription.latest_invoice as { payment_intent?: { client_secret?: string } };
+    const paymentIntent = latestInvoice?.payment_intent;
 
     // console.log(`📄 Latest invoice:`, latestInvoice ? "Found" : "Not found");
     // console.log(`💳 Payment intent:`, paymentIntent ? "Found" : "Not found");
 
     // For incomplete subscriptions, we might not have a payment intent yet
     // This is normal - the payment intent will be created when the customer confirms payment
-    // PaymentElement will automatically enable wallet payments when using this clientSecret
     let clientSecret = null;
     if (paymentIntent && paymentIntent.client_secret) {
       clientSecret = paymentIntent.client_secret;
-      // console.log(`💳 Payment intent status: ${paymentIntent.status}`);
+      // console.log(`💳 Payment intent status: ${(paymentIntent as PaymentIntentWithStatus).status}`);
     } else {
       // console.log(`⏳ No payment intent yet - will be created when customer confirms payment`);
-    }
-
-    // If createOnly is true, skip user creation/update and return only clientSecret
-    if (createOnly) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          subscriptionId: subscription.id,
-          customerId: customer.id,
-          clientSecret: clientSecret,
-          status: subscription.status,
-          packageName: membershipPackage.name,
-        },
-      });
     }
 
     let user;
