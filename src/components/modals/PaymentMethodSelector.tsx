@@ -73,6 +73,75 @@ const StripeCardForm = React.forwardRef<
     }
   }, [stripe, elements]);
 
+  // Build paymentRequest configuration - always include it (even if amount is 0)
+  // This ensures PaymentElement always receives the option for wallet payments
+  const paymentRequestConfig = {
+    country: "AU",
+    currency: "aud",
+    total: {
+      label: packageName || "Membership",
+      amount: amount || 0, // Amount in cents, default to 0 if not provided
+    },
+  };
+
+  // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
+  const paymentElementOptions = {
+    layout: "tabs" as const,
+    wallets: {
+      applePay: "auto" as const,
+      googlePay: "auto" as const,
+    },
+    paymentMethodOrder: ["apple_pay", "google_pay", "card"] as const,
+    // Always include paymentRequest for wallet payments to display correct amount when using SetupIntent
+    paymentRequest: paymentRequestConfig,
+    fields: {
+      billingDetails: "never" as const, // Hide country, address, and postal code fields
+    },
+    terms: {
+      card: "never" as const, // Hide the "By providing your card information..." terms text
+      applePay: "never" as const,
+      googlePay: "never" as const,
+    },
+  };
+
+  // Debug logging for amount, packageName, and paymentRequest configuration
+  // IMPORTANT: All hooks must be called before any conditional returns
+  useEffect(() => {
+    console.log("🔍 StripeCardForm Debug:", {
+      amount,
+      packageName,
+      amountInCents: amount,
+      amountInDollars: amount ? (amount / 100).toFixed(2) : "N/A",
+      hasPaymentRequest: !!amount,
+      paymentRequestConfig,
+      elementKey: `payment-element-${amount || 0}-${packageName || "default"}`,
+    });
+  }, [amount, packageName]);
+
+  // Log PaymentElement options to verify paymentRequest is included
+  useEffect(() => {
+    console.log("🔍 PaymentElement Options:", {
+      layout: paymentElementOptions.layout,
+      wallets: paymentElementOptions.wallets,
+      paymentMethodOrder: paymentElementOptions.paymentMethodOrder,
+      paymentRequest: paymentRequestConfig,
+      fields: paymentElementOptions.fields,
+      terms: paymentElementOptions.terms,
+    });
+    
+    // Detailed log for paymentRequest structure verification
+    console.log("🔍 PaymentRequest Structure (for wallet payments):", {
+      country: paymentRequestConfig.country,
+      currency: paymentRequestConfig.currency,
+      total: {
+        label: paymentRequestConfig.total.label,
+        amount: paymentRequestConfig.total.amount,
+        amountInDollars: (paymentRequestConfig.total.amount / 100).toFixed(2),
+      },
+      isValid: paymentRequestConfig.total.amount > 0,
+    });
+  }, [amount, packageName]);
+
   // Expose confirmSetup function via ref
   React.useImperativeHandle(ref, () => ({
     confirmSetup: async () => {
@@ -145,6 +214,7 @@ const StripeCardForm = React.forwardRef<
   }));
 
   // Show skeleton loading while Stripe is loading
+  // IMPORTANT: Conditional return must come AFTER all hooks are called
   if (isStripeLoading) {
     return (
       <div className="space-y-4">
@@ -175,35 +245,7 @@ const StripeCardForm = React.forwardRef<
       <div className="p-3 border border-gray-300 rounded-lg bg-white">
         <PaymentElement
           key={`payment-element-${amount || 0}-${packageName || "default"}`}
-          options={{
-            layout: "tabs",
-            wallets: {
-              applePay: "auto",
-              googlePay: "auto",
-            },
-            paymentMethodOrder: ["apple_pay", "google_pay", "card"],
-            // Add paymentRequest for wallet payments to display correct amount when using SetupIntent
-            ...(amount
-              ? {
-                  paymentRequest: {
-                    country: "AU",
-                    currency: "aud",
-                    total: {
-                      label: packageName || "Membership",
-                      amount: amount, // Amount in cents
-                    },
-                  },
-                }
-              : {}),
-            fields: {
-              billingDetails: "never", // Hide country, address, and postal code fields
-            },
-            terms: {
-              card: "never", // Hide the "By providing your card information..." terms text
-              applePay: "never",
-              googlePay: "never",
-            },
-          }}
+          options={paymentElementOptions}
           onChange={(event) => {
             // Handle PaymentElement change events
             // PaymentElement onChange provides completion status
@@ -254,6 +296,17 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
       }
     }
   }, [paymentMethods, selectedPaymentMethod, onPaymentMethodSelect, hasUserInteracted]);
+
+  // Log Elements key value when it changes to verify remounting
+  useEffect(() => {
+    const elementsKey = `elements-${amount || 0}-${packageName || "default"}`;
+    console.log("🔍 Elements Key Debug:", {
+      elementsKey,
+      amount,
+      packageName,
+      keyChanged: true,
+    });
+  }, [amount, packageName]);
 
   const getCardBrandIcon = (brand: string) => {
     const brandLower = brand.toLowerCase();

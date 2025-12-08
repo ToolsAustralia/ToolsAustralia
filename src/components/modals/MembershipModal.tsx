@@ -467,6 +467,24 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     };
   }, [onPlanChange]);
 
+  // Debug logging for amount calculation before passing to PaymentMethodSelector
+  useEffect(() => {
+    const promoEnhancedPlanPrice = promoEnhancedPlan?.price;
+    const activePlanPrice = activePlan?.price;
+    const calculatedAmount = Math.round((promoEnhancedPlanPrice || activePlanPrice || 0) * 100);
+    const packageName = promoEnhancedPlan?.name || activePlan?.name;
+
+    console.log("🔍 MembershipModal Amount Calculation:", {
+      promoEnhancedPlanPrice,
+      activePlanPrice,
+      calculatedAmount,
+      calculatedAmountInDollars: (calculatedAmount / 100).toFixed(2),
+      packageName,
+      promoEnhancedPlanName: promoEnhancedPlan?.name,
+      activePlanName: activePlan?.name,
+    });
+  }, [promoEnhancedPlan, activePlan]);
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const formatCardNumber = (value: string) => {
     // Add null/undefined check to prevent runtime errors
