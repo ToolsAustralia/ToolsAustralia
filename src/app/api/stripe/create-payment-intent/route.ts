@@ -92,7 +92,8 @@ export async function POST(request: NextRequest) {
       metadata: {
         userId: userId,
         userEmail: userEmail || "guest",
-        type: session?.user?.id ? "authenticated" : "guest",
+        type: "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility (one-time purchase)
+        packageType: "one-time", // ✅ Also set 'packageType' for consistency
         ...(validatedData.packageId && { packageId: validatedData.packageId }),
         ...(validatedData.packageName && { packageName: validatedData.packageName }),
       },

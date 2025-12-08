@@ -331,6 +331,15 @@ export async function POST(request: NextRequest) {
           }, package price: ${Math.round(membershipPackage.price * 100)})`
         );
 
+        // ✅ DEBUG: Verify amount is correct for wallet display
+        if (invoiceAmount === 0) {
+          console.warn(
+            `⚠️ WARNING: PaymentIntent amount is 0! This will show $0.00 in Google Pay/Apple Pay. Using package price fallback: ${Math.round(
+              membershipPackage.price * 100
+            )}`
+          );
+        }
+
         // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
         // Don't confirm it - let PaymentElement handle confirmation
         const newPaymentIntent = await stripe.paymentIntents.create({

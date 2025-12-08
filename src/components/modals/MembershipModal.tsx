@@ -505,14 +505,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setPaymentIntentClientSecret(null);
       setPaymentIntentId(null);
       lastPaymentIntentAmountRef.current = null;
+      // ✅ CRITICAL: Also clear card form to force re-render
+      setShowCardForm(false);
     }
 
     // If switching to one-time and we have SetupIntent, clear it (will be recreated when needed)
-    if (!isSubscription && currentHasSetupIntent && showCardForm) {
+    if (!isSubscription && currentHasSetupIntent) {
       console.log("🔄 Package type changed to one-time - clearing SetupIntent");
       setSetupIntentClientSecret(null);
+      // ✅ CRITICAL: Also clear card form to force re-render
+      setShowCardForm(false);
     }
-  }, [activePlan?.period, showCardForm]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activePlan?.period]); // ✅ FIX: Remove showCardForm from dependencies
 
   // Recreate PaymentIntent/SetupIntent when package/amount changes
   useEffect(() => {
@@ -534,7 +538,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       if (isSubscription) {
         // For subscriptions: Use SetupIntent (subscription will create PaymentIntent automatically)
         if (!setupIntentClientSecret) {
-          createSetupIntent.mutate();
+          // ✅ FIX: Create SetupIntent immediately when switching to subscription
+          createSetupIntent.mutate(undefined, {
+            onSuccess: (result) => {
+              if (result.success && result.client_secret) {
+                setSetupIntentClientSecret(result.client_secret);
+                setPaymentIntentClientSecret(null);
+                setPaymentIntentId(null);
+                setCardFormError(null);
+              }
+            },
+            onError: (error) => {
+              console.error("Failed to create SetupIntent:", error);
+              setCardFormError("Failed to set up payment form. Please try again.");
+            },
+          });
         }
         // Clear any existing PaymentIntent client secret for subscriptions
         if (paymentIntentClientSecret) {
