@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
+import Stripe from "stripe";
 import { recordReferralPurchase } from "@/lib/referral";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
@@ -12,6 +13,7 @@ import { authOptions } from "@/lib/auth";
 const createSubscriptionExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   paymentMethodId: z.string().min(1, "Payment method is required"),
+  paymentIntentId: z.string().optional(), // ✅ NEW: Optional upfront PaymentIntent ID for wallet display
   referralCode: z.string().optional(),
 });
 
@@ -183,6 +185,150 @@ export async function POST(request: NextRequest) {
     await existingUser.save();
     // console.log(`✅ User subscription saved to database: packageId=${existingUser.subscription.packageId}`);
 
+    // ✅ STRIPE BEST PRACTICE: Get PaymentIntent from subscription's invoice for wallet display
+    // Similar logic to create-subscription route
+    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = null;
+    let latestInvoice: Stripe.Invoice | null = null;
+
+    // Check if PaymentIntent is already in the expanded subscription
+    if (subscription.latest_invoice) {
+      latestInvoice =
+        typeof subscription.latest_invoice === "string"
+          ? null // Will retrieve below
+          : (subscription.latest_invoice as Stripe.Invoice);
+
+      // If invoice is expanded, check for PaymentIntent
+      if (latestInvoice) {
+        paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
+          ?.payment_intent;
+      }
+    }
+
+    // If we don't have the invoice yet, retrieve it
+    const invoiceId =
+      typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice?.id;
+
+    if (invoiceId && !latestInvoice) {
+      latestInvoice = await stripe.invoices.retrieve(invoiceId as string, {
+        expand: ["payment_intent"],
+      });
+      paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
+        ?.payment_intent;
+    }
+
+    // ✅ CRITICAL: If invoice is draft, finalize it first
+    if (latestInvoice && latestInvoice.status === "draft") {
+      try {
+        latestInvoice = await stripe.invoices.finalizeInvoice(invoiceId as string, {
+          expand: ["payment_intent"],
+        });
+        paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
+          ?.payment_intent;
+        console.log(`✅ Invoice finalized: ${latestInvoice.id}, status: ${latestInvoice.status}`);
+      } catch (finalizeError) {
+        console.error("❌ Failed to finalize invoice:", finalizeError);
+      }
+    }
+
+    // ✅ STRIPE BEST PRACTICE: Check if upfront PaymentIntent was provided (for wallet display)
+    if (validatedData.paymentIntentId && !paymentIntent && latestInvoice && latestInvoice.status === "open") {
+      try {
+        const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
+
+        // Validate upfront PaymentIntent
+        const expectedAmount = Math.round(membershipPackage.price * 100);
+        if (
+          upfrontPaymentIntent.status === "requires_payment_method" &&
+          upfrontPaymentIntent.amount === expectedAmount &&
+          upfrontPaymentIntent.currency === "aud"
+        ) {
+          // Update upfront PaymentIntent with invoice/subscription metadata and description
+          await stripe.paymentIntents.update(upfrontPaymentIntent.id, {
+            // ✅ STRIPE BEST PRACTICE: Update description to package name for better tracking
+            description: membershipPackage.name,
+            metadata: {
+              ...upfrontPaymentIntent.metadata,
+              invoice_id: latestInvoice.id || "",
+              subscription_id: subscription.id,
+              packageId: validatedData.packageId,
+              packageName: membershipPackage.name,
+              userEmail: existingUser.email,
+              type: "subscription",
+              packageType: "subscription",
+              isUpfrontPayment: "true", // ✅ Mark so webhook skips it
+            },
+          });
+
+          paymentIntent = upfrontPaymentIntent;
+          console.log(`✅ Using upfront PaymentIntent: ${upfrontPaymentIntent.id} for subscription ${subscription.id}`);
+        }
+      } catch (retrieveError) {
+        console.warn(`⚠️ Failed to retrieve upfront PaymentIntent: ${retrieveError}`);
+      }
+    }
+
+    // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually
+    if (!paymentIntent && latestInvoice && latestInvoice.status === "open") {
+      try {
+        const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
+        const invoiceCurrency = (latestInvoice.currency as string) || "aud";
+
+        const newPaymentIntent = await stripe.paymentIntents.create({
+          amount: invoiceAmount,
+          currency: invoiceCurrency,
+          customer: stripeCustomerId,
+          payment_method: finalPaymentMethodId,
+          setup_future_usage: "off_session",
+          confirm: false,
+          automatic_payment_methods: {
+            enabled: true,
+            allow_redirects: "never",
+          },
+          // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+          description: membershipPackage.name,
+          metadata: {
+            invoice_id: latestInvoice.id || "",
+            subscription_id: subscription.id,
+            packageId: validatedData.packageId,
+            packageName: membershipPackage.name,
+            userEmail: existingUser.email,
+            type: "subscription",
+            packageType: "subscription",
+            isUpfrontPayment: "true",
+          },
+        });
+
+        if (latestInvoice.id) {
+          await stripe.invoices.update(latestInvoice.id, {
+            metadata: {
+              ...(latestInvoice.metadata || {}),
+              payment_intent_id: newPaymentIntent.id,
+            },
+          });
+        }
+
+        paymentIntent = newPaymentIntent;
+        console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`);
+      } catch (createError) {
+        console.error("❌ Failed to create PaymentIntent for invoice:", createError);
+      }
+    }
+
+    // Extract client_secret from PaymentIntent
+    let clientSecret: string | null = null;
+    if (paymentIntent) {
+      if (typeof paymentIntent === "string") {
+        try {
+          const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntent);
+          clientSecret = retrievedPI.client_secret || null;
+        } catch (retrieveError) {
+          console.error("❌ Failed to retrieve PaymentIntent:", retrieveError);
+        }
+      } else {
+        clientSecret = paymentIntent.client_secret || null;
+      }
+    }
+
     // ✅ Klaviyo integration handled by webhook for reliability and best practices
     // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
 
@@ -211,11 +357,11 @@ export async function POST(request: NextRequest) {
       subscription: {
         id: subscription.id,
         status: subscription.status,
-        clientSecret:
-          typeof subscription.latest_invoice === "object" && subscription.latest_invoice !== null
-            ? (subscription.latest_invoice as { payment_intent?: { client_secret?: string } }).payment_intent
-                ?.client_secret
-            : undefined,
+        clientSecret: clientSecret || undefined, // ✅ Return PaymentIntent client_secret for wallet display
+      },
+      data: {
+        subscriptionId: subscription.id,
+        clientSecret: clientSecret || undefined, // ✅ Also return in data for consistency
       },
       user: {
         id: existingUser._id,

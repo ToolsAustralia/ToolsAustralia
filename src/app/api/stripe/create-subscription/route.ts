@@ -23,7 +23,8 @@ const createSubscriptionSchema = z.object({
   mobile: z.string().optional(),
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
-  paymentMethodId: z.string().min(1, "Payment method is required"), // Payment method from SetupIntent (for saving)
+  paymentMethodId: z.string().min(1, "Payment method is required"), // Payment method from PaymentIntent/SetupIntent (for saving)
+  paymentIntentId: z.string().optional(), // ✅ NEW: Optional upfront PaymentIntent ID for wallet display (Google Pay/Apple Pay)
   referralCode: z.string().optional(),
 });
 
@@ -315,6 +316,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ✅ STRIPE BEST PRACTICE: Check if upfront PaymentIntent was provided (for wallet display)
+    // If valid, use it; otherwise create new PaymentIntent for invoice
+    if (validatedData.paymentIntentId && !paymentIntent && latestInvoice.status === "open") {
+      try {
+        const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
+
+        // Validate upfront PaymentIntent
+        const expectedAmount = Math.round(membershipPackage.price * 100);
+        if (
+          upfrontPaymentIntent.status === "requires_payment_method" &&
+          upfrontPaymentIntent.amount === expectedAmount &&
+          upfrontPaymentIntent.currency === "aud"
+        ) {
+          // Update upfront PaymentIntent with invoice/subscription metadata and description
+          await stripe.paymentIntents.update(upfrontPaymentIntent.id, {
+            // ✅ STRIPE BEST PRACTICE: Update description to package name for better tracking
+            description: membershipPackage.name,
+            metadata: {
+              ...upfrontPaymentIntent.metadata,
+              invoice_id: latestInvoice.id || "",
+              subscription_id: subscription.id,
+              packageId: validatedData.packageId,
+              packageName: membershipPackage.name,
+              userEmail: validatedData.userEmail,
+              type: "subscription",
+              packageType: "subscription",
+              isUpfrontPayment: "true", // ✅ Mark so webhook skips it
+            },
+          });
+
+          paymentIntent = upfrontPaymentIntent;
+          console.log(`✅ Using upfront PaymentIntent: ${upfrontPaymentIntent.id} for subscription ${subscription.id}`);
+        } else {
+          console.warn(`⚠️ Upfront PaymentIntent ${validatedData.paymentIntentId} is invalid, creating new one`);
+        }
+      } catch (retrieveError) {
+        console.warn(`⚠️ Failed to retrieve upfront PaymentIntent: ${retrieveError}`);
+      }
+    }
+
     // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually
     // With payment_behavior: "default_incomplete", Stripe doesn't create PaymentIntent automatically
     // We need to create it for wallet payments (Google Pay/Apple Pay) to show correct amount
@@ -353,6 +394,8 @@ export async function POST(request: NextRequest) {
             enabled: true,
             allow_redirects: "never",
           },
+          // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+          description: membershipPackage.name,
           metadata: {
             invoice_id: latestInvoice.id || "",
             subscription_id: subscription.id,

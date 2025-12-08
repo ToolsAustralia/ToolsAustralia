@@ -38,6 +38,7 @@ export interface OneTimePurchaseData {
 export interface ExistingUserSubscriptionData {
   packageId: string;
   paymentMethodId: string;
+  paymentIntentId?: string; // ✅ Optional upfront PaymentIntent ID for wallet display
   referralCode?: string;
   affiliateCode?: string;
 }

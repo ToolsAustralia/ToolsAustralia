@@ -516,7 +516,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       // ✅ CRITICAL: Also clear card form to force re-render
       setShowCardForm(false);
     }
-  }, [activePlan?.period]); // ✅ FIX: Remove showCardForm from dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlan?.period]); // ✅ Intentionally only depend on period - secrets are cleared, not used
 
   // Recreate PaymentIntent/SetupIntent when package/amount changes
   useEffect(() => {
@@ -546,6 +547,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 setPaymentIntentClientSecret(null);
                 setPaymentIntentId(null);
                 setCardFormError(null);
+                // ✅ CRITICAL: Set showCardForm to true so PaymentMethodSelector renders
+                setShowCardForm(true);
               }
             },
             onError: (error) => {
@@ -585,6 +588,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               currency: "aud",
               packageId: packageId || undefined,
               packageName: packageName,
+              userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
+              packageType: isSubscription ? "subscription" : "one-time",
             },
             {
               onSuccess: (result) => {
@@ -727,7 +732,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         promotionSlug = promotionsMatch[1];
         // console.log(`📊 Captured promotion slug from URL: ${promotionSlug}`);
       }
-    } catch (error) {
+    } catch {
       // console.warn("⚠️ Could not extract promotion slug from URL:", error);
       // Non-blocking - continue without slug (will default to "milwaukee")
     }
@@ -1109,18 +1114,31 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
       if (isSubscription) {
-        // For subscriptions: Use SetupIntent for payment method collection
-        // Subscription will be created when payment method is confirmed, which creates PaymentIntent automatically
-        const result = await createSetupIntent.mutateAsync();
+        // ✅ STRIPE BEST PRACTICE: Use PaymentIntent (not SetupIntent) for subscriptions to show correct amount in wallets
+        // Per Stripe docs: "Use PaymentIntent when you need to display amount in Google Pay/Apple Pay"
+        // Mark PaymentIntent with isUpfrontPayment so webhook skips it (subscription invoice will handle benefits)
+        const result = await createPaymentIntent.mutateAsync({
+          amount: amountInCents,
+          currency: "aud",
+          packageId: packageId || undefined,
+          packageName: packageName,
+          userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
+          packageType: "subscription", // ✅ Mark as subscription for proper metadata
+        });
 
         if (result.success && result.client_secret) {
-          setSetupIntentClientSecret(result.client_secret);
-          setPaymentIntentClientSecret(null); // Clear PaymentIntent
+          setPaymentIntentClientSecret(result.client_secret);
+          if (result.payment_intent_id) {
+            setPaymentIntentId(result.payment_intent_id);
+          }
+          setSetupIntentClientSecret(null); // Clear SetupIntent
           setUseSavedPaymentMethod(false);
           setSelectedPaymentMethod(null);
           setShowCardForm(true);
+          // Track the amount we created PaymentIntent for
+          lastPaymentIntentAmountRef.current = amountInCents;
         } else {
-          throw new Error(result.error || "Failed to create SetupIntent");
+          throw new Error(result.error || "Failed to create PaymentIntent");
         }
       } else if (amountInCents > 0) {
         // For one-time purchases: Use PaymentIntent (shows correct amount in wallets)
@@ -1129,6 +1147,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           currency: "aud",
           packageId: packageId || undefined,
           packageName: packageName,
+          userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
+          packageType: "one-time", // ✅ Mark as one-time for proper metadata
         });
 
         if (result.success && result.client_secret) {
@@ -1303,7 +1323,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               // console.log("📧 Retrieved miniDrawId from payment intent metadata:", miniDrawId);
             }
           }
-        } catch (error) {
+        } catch {
           // console.warn("⚠️ Could not fetch miniDrawId from payment intent metadata:", error);
         }
       }
@@ -1696,7 +1716,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         currency: "AUD",
         numItems: 1, // Single membership package
       });
-    } catch (trackingError) {
+    } catch {
       // Non-blocking - continue with purchase even if tracking fails
       if (process.env.NODE_ENV === "development") {
         // console.warn("Button click tracking failed:", trackingError);
@@ -1812,8 +1832,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         console.log("�'� Using saved payment method:", paymentMethodId);
       } else if (showCardForm || !isAuthenticated) {
         // For new payment methods or new users, confirm the card form first
-        if (showCardForm && cardFormRef.current) {
-          // console.log("💳 Confirming card setup...");
+        // ✅ FIX: Check if we have a client secret (SetupIntent or PaymentIntent) even if showCardForm is false
+        const hasClientSecret = setupIntentClientSecret || paymentIntentClientSecret;
+
+        if ((showCardForm || hasClientSecret) && cardFormRef.current) {
+          console.log("💳 Confirming card setup...", {
+            showCardForm,
+            hasClientSecret,
+            hasSetupIntent: !!setupIntentClientSecret,
+            hasPaymentIntent: !!paymentIntentClientSecret,
+          });
           const result = await cardFormRef.current.confirmSetup();
 
           if (result.error) {
@@ -1846,7 +1874,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   lastName: guestUserData.lastName,
                   mobile: guestUserData.mobile,
                   packageId: packageIdForSubscription,
-                  paymentMethodId: paymentMethodId, // From SetupIntent confirmation
+                  paymentMethodId: paymentMethodId, // From PaymentIntent confirmation
+                  paymentIntentId: confirmedPaymentIntentId, // ✅ Pass upfront PaymentIntent ID for wallet display
                   referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
                   affiliateCode: affiliateCode || undefined,
                 });
@@ -1870,6 +1899,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           }
         } else if (selectedPaymentMethod) {
           paymentMethodId = selectedPaymentMethod.paymentMethodId;
+        } else if (hasClientSecret && cardFormRef.current) {
+          // ✅ FIX: If we have a client secret but showCardForm is false, try to confirm anyway
+          console.log("💳 Attempting to confirm with client secret even though showCardForm is false");
+          const result = await cardFormRef.current.confirmSetup();
+
+          if (result.error) {
+            throw new Error(result.error);
+          } else if (result.paymentMethodId) {
+            paymentMethodId = result.paymentMethodId;
+            if (result.paymentIntentId) {
+              confirmedPaymentIntentId = result.paymentIntentId;
+              setPaymentIntentId(result.paymentIntentId);
+            }
+          } else {
+            throw new Error("Failed to confirm card details.");
+          }
         } else {
           throw new Error("Please complete the card details to add a new payment method.");
         }
@@ -2005,6 +2050,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           result = await createSubscriptionExistingUser({
             packageId,
             paymentMethodId,
+            paymentIntentId: confirmedPaymentIntentId, // ✅ Pass upfront PaymentIntent ID for wallet display
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
           });
@@ -2026,7 +2072,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           try {
             await savePaymentMethod(paymentMethodId, true); // Set as default
             // console.log("💾 Payment method saved automatically");
-          } catch (error) {
+          } catch {
             // console.warn("Could not save payment method:", error);
           }
         }
@@ -2331,7 +2377,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           };
         } else {
           // Prepare subscription data for new user
-          // ✅ STRIPE BEST PRACTICE: For subscriptions, don't pass paymentIntentId (Stripe creates it)
+          // ✅ STRIPE BEST PRACTICE: For subscriptions, pass upfront PaymentIntent ID for wallet display
           // ✅ For one-time purchases, pass paymentIntentId to reuse confirmed PaymentIntent (prevent double charge)
           const subscriptionData = {
             userEmail: guestUserData.email,
@@ -2339,11 +2385,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             lastName: guestUserData.lastName,
             mobile: guestUserData.mobile,
             packageId,
-            paymentMethodId, // Payment method from SetupIntent/PaymentIntent confirmation
-            // ✅ FIX: Include paymentIntentId for one-time purchases to prevent double charge
-            ...(activePlan.period !== "mo" && confirmedPaymentIntentId
-              ? { paymentIntentId: confirmedPaymentIntentId }
-              : {}),
+            paymentMethodId, // Payment method from PaymentIntent confirmation
+            // ✅ FIX: Include paymentIntentId for both subscriptions and one-time purchases
+            // For subscriptions: Upfront PaymentIntent for wallet display (Google Pay/Apple Pay)
+            // For one-time: Reuse confirmed PaymentIntent to prevent double charge
+            ...(confirmedPaymentIntentId ? { paymentIntentId: confirmedPaymentIntentId } : {}),
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
           };

@@ -43,7 +43,7 @@ function webhookLog(level: "info" | "warn" | "error", message: string, data?: un
   }
 
   const prefix = level === "error" ? "❌" : level === "warn" ? "⚠️" : "ℹ️";
-  // console[level](`${prefix} WEBHOOK: ${message}`, data || "");
+  console[level](`${prefix} WEBHOOK: ${message}`, data || "");
 }
 
 // ✅ WEBHOOK-FIRST: Use PaymentEvent-only idempotency (no additional infrastructure needed)
@@ -158,7 +158,30 @@ async function saveUserWithVerification(
  */
 async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promise<boolean | undefined> {
   try {
-    webhookLog("info", `Processing payment success: ${paymentIntent.id}`);
+    webhookLog("info", `🔄 Processing payment success: ${paymentIntent.id}`);
+
+    // ✅ CRITICAL: Retrieve fresh PaymentIntent to get latest metadata
+    // The webhook event might have stale data if metadata was updated after confirmation
+    let freshPaymentIntent: Stripe.PaymentIntent;
+    try {
+      freshPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
+        expand: ["customer", "payment_method", "latest_charge"],
+      });
+      webhookLog("info", `📋 Retrieved fresh PaymentIntent metadata:`, {
+        id: freshPaymentIntent.id,
+        customer: freshPaymentIntent.customer,
+        metadata: freshPaymentIntent.metadata,
+        status: freshPaymentIntent.status,
+        hasCharge: !!freshPaymentIntent.latest_charge,
+        hasPaymentMethod: !!freshPaymentIntent.payment_method,
+      });
+    } catch (retrieveError) {
+      webhookLog("warn", `Failed to retrieve fresh PaymentIntent, using event data: ${retrieveError}`);
+      freshPaymentIntent = paymentIntent;
+    }
+
+    // Use fresh PaymentIntent for all processing
+    paymentIntent = freshPaymentIntent;
 
     // Remove database connection tests - they're unnecessary overhead
 
@@ -167,31 +190,121 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     if (paymentIntent.customer) {
       const customerId =
         typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer.id;
+      webhookLog("info", `🔍 Looking up user by customer ID: ${customerId}`);
       user = await User.findOne({ stripeCustomerId: customerId });
+      if (user) {
+        webhookLog("info", `✅ Found user by customer ID: ${user._id.toString()}`);
+      } else {
+        webhookLog("warn", `❌ User not found by customer ID: ${customerId}`);
+      }
     }
 
     // ✅ FIX: Fallback to finding user by email if customer lookup fails
     // This handles cases where PaymentIntent was created without a customer initially
     if (!user && paymentIntent.metadata.userEmail) {
-      webhookLog("info", `Customer lookup failed, trying email fallback: ${paymentIntent.metadata.userEmail}`);
-      user = await User.findOne({ email: paymentIntent.metadata.userEmail.toLowerCase() });
+      const userEmail = paymentIntent.metadata.userEmail.toLowerCase();
+      webhookLog("info", `🔍 Customer lookup failed, trying email fallback: ${userEmail}`);
 
-      // If found, update PaymentIntent with customer ID for future lookups
-      if (user && user.stripeCustomerId) {
-        try {
-          await stripe.paymentIntents.update(paymentIntent.id, {
-            customer: user.stripeCustomerId,
-          });
-          webhookLog("info", `Updated PaymentIntent ${paymentIntent.id} with customer ${user.stripeCustomerId}`);
-        } catch (updateError) {
-          webhookLog("warn", `Failed to update PaymentIntent customer: ${updateError}`);
+      // Skip if email is "guest" - that means metadata hasn't been updated yet
+      if (userEmail !== "guest") {
+        user = await User.findOne({ email: userEmail });
+        if (user) {
+          webhookLog("info", `✅ Found user by email: ${user._id.toString()}`);
+        } else {
+          webhookLog("warn", `❌ User not found by email: ${userEmail}`);
         }
+
+        // If found, update PaymentIntent with customer ID for future lookups
+        if (user && user.stripeCustomerId) {
+          try {
+            await stripe.paymentIntents.update(paymentIntent.id, {
+              customer: user.stripeCustomerId,
+            });
+            webhookLog("info", `✅ Updated PaymentIntent ${paymentIntent.id} with customer ${user.stripeCustomerId}`);
+          } catch (updateError) {
+            webhookLog("warn", `Failed to update PaymentIntent customer: ${updateError}`);
+          }
+        }
+      } else {
+        webhookLog(
+          "warn",
+          `⚠️ PaymentIntent metadata has 'guest' email - metadata may not be updated yet. Will retry on next webhook.`
+        );
+      }
+    }
+
+    // ✅ FIX: If user still not found and customer is null, try to find user via charge/payment method
+    // This handles cases where PaymentIntent was confirmed before customer was set
+    if (!user && !paymentIntent.customer) {
+      webhookLog("info", `🔍 PaymentIntent has no customer, trying to find user via charge or payment method...`);
+
+      // Try to get the charge to find customer
+      if (paymentIntent.latest_charge) {
+        try {
+          const chargeId =
+            typeof paymentIntent.latest_charge === "string"
+              ? paymentIntent.latest_charge
+              : paymentIntent.latest_charge.id;
+          const charge = await stripe.charges.retrieve(chargeId);
+
+          if (charge.customer) {
+            const chargeCustomerId = typeof charge.customer === "string" ? charge.customer : charge.customer.id;
+            webhookLog("info", `🔍 Found customer from charge: ${chargeCustomerId}`);
+            user = await User.findOne({ stripeCustomerId: chargeCustomerId });
+            if (user) {
+              webhookLog("info", `✅ Found user via charge customer: ${user._id.toString()}`);
+            } else {
+              webhookLog("warn", `❌ User not found by charge customer ID: ${chargeCustomerId}`);
+            }
+          } else {
+            webhookLog("warn", `⚠️ Charge ${chargeId} also has no customer`);
+          }
+        } catch (chargeError) {
+          webhookLog("warn", `Failed to retrieve charge: ${chargeError}`);
+        }
+      } else {
+        webhookLog("warn", `⚠️ PaymentIntent has no latest_charge`);
+      }
+
+      // If still not found, try payment method
+      if (!user && paymentIntent.payment_method) {
+        try {
+          const pmId =
+            typeof paymentIntent.payment_method === "string"
+              ? paymentIntent.payment_method
+              : paymentIntent.payment_method.id;
+          const pm = await stripe.paymentMethods.retrieve(pmId);
+
+          if (pm.customer) {
+            const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer.id;
+            webhookLog("info", `🔍 Found customer from payment method: ${pmCustomerId}`);
+            user = await User.findOne({ stripeCustomerId: pmCustomerId });
+            if (user) {
+              webhookLog("info", `✅ Found user via payment method customer: ${user._id.toString()}`);
+            } else {
+              webhookLog("warn", `❌ User not found by payment method customer ID: ${pmCustomerId}`);
+            }
+          } else {
+            webhookLog("warn", `⚠️ Payment method ${pmId} also has no customer`);
+          }
+        } catch (pmError) {
+          webhookLog("warn", `Failed to retrieve payment method: ${pmError}`);
+        }
+      } else if (!paymentIntent.payment_method) {
+        webhookLog("warn", `⚠️ PaymentIntent has no payment_method`);
       }
     }
 
     if (!user) {
-      webhookLog("error", `User not found for payment intent: ${paymentIntent.id}`);
-      return;
+      webhookLog("error", `❌ User not found for payment intent: ${paymentIntent.id}`, {
+        customerId: paymentIntent.customer,
+        userEmail: paymentIntent.metadata.userEmail,
+        metadata: paymentIntent.metadata,
+        hasCharge: !!paymentIntent.latest_charge,
+        hasPaymentMethod: !!paymentIntent.payment_method,
+      });
+      webhookLog("warn", `⚠️ PaymentIntent ${paymentIntent.id} will be retried when metadata is updated`);
+      return; // Return undefined to indicate processing failed, webhook will retry
     }
 
     // ✅ NEW: Use event-based idempotency check
@@ -240,8 +353,21 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       webhookLog("info", `Processing mini-draw payment: ${paymentIntent.id}`);
       await handleMiniDrawWebhook(user, paymentIntent);
     } else if (paymentType === "one-time") {
-      webhookLog("info", `Processing one-time payment: ${paymentIntent.id}`);
+      webhookLog("info", `🔄 Processing one-time payment: ${paymentIntent.id}`);
+      webhookLog("info", `📋 One-time payment details:`, {
+        paymentIntentId: paymentIntent.id,
+        customerId: paymentIntent.customer,
+        userId: user._id.toString(),
+        userEmail: paymentIntent.metadata.userEmail,
+        packageId: paymentIntent.metadata.packageId,
+        packageName: paymentIntent.metadata.packageName,
+        entriesCount: paymentIntent.metadata.entriesCount,
+        price: paymentIntent.metadata.price,
+        amount: paymentIntent.amount,
+        status: paymentIntent.status,
+      });
       await handleOneTimeWebhook(user, paymentIntent);
+      webhookLog("info", `✅ One-time payment processing completed: ${paymentIntent.id}`);
     } else {
       // ✅ CRITICAL: Never process membership/subscription via PI here
       // Only explicit non-subscription types are allowed above
@@ -349,13 +475,22 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
  * Handle one-time package payments in webhook (backup processing)
  */
 async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, paymentIntent: Stripe.PaymentIntent) {
+  webhookLog("info", `🎯 handleOneTimeWebhook called for PaymentIntent: ${paymentIntent.id}`);
   const packageId = paymentIntent.metadata.packageId;
   const packageName = paymentIntent.metadata.packageName || `One-Time Package ${packageId}`;
   const entriesCount = parseInt(paymentIntent.metadata.entriesCount || "0");
   const price = parseInt(paymentIntent.metadata.price || "0");
 
+  webhookLog("info", `📦 One-time package details:`, {
+    packageId,
+    packageName,
+    entriesCount,
+    price,
+    userId: user._id.toString(),
+  });
+
   if (entriesCount <= 0) {
-    webhookLog("error", `No entries found for one-time package ${packageId}`);
+    webhookLog("error", `❌ No entries found for one-time package ${packageId}`);
     return;
   }
 
@@ -372,6 +507,15 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
   const requestContext = extractRequestContextFromMetadata(paymentIntent.metadata);
 
   // Process benefits using event-based system with payment metadata
+  webhookLog("info", `🔄 Calling processPaymentBenefits for one-time package:`, {
+    paymentIntentId: paymentIntent.id,
+    userId: user._id.toString(),
+    packageId,
+    entries: finalEntriesCount,
+    points: Math.floor(price / 100),
+    price: price / 100,
+  });
+
   const result = await processPaymentBenefits(
     paymentIntent.id,
     user._id.toString(),
@@ -393,8 +537,15 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     requestContext // Pass request context for improved match quality
   );
 
-  if (!result.success) {
-    webhookLog("error", `Failed to process one-time package ${packageId}: ${result.error}`);
+  if (result.success) {
+    webhookLog("info", `✅ Successfully processed one-time package ${packageId}:`, {
+      paymentIntentId: paymentIntent.id,
+      userId: user._id.toString(),
+      entriesAdded: finalEntriesCount,
+      pointsAdded: Math.floor(price / 100),
+    });
+  } else {
+    webhookLog("error", `❌ Failed to process one-time package ${packageId}: ${result.error}`);
   }
 }
 
@@ -2580,8 +2731,15 @@ export async function POST(request: NextRequest) {
 
     switch (event.type) {
       case "payment_intent.succeeded":
+        webhookLog("info", `📥 Received payment_intent.succeeded event for: ${event.data.object.id}`);
         const paymentProcessed = await handlePaymentSuccess(event.data.object);
         shouldMarkAsProcessed = paymentProcessed !== false; // Only if actually processed
+        webhookLog(
+          "info",
+          `📤 payment_intent.succeeded processing result: ${
+            paymentProcessed !== false ? "processed" : "skipped/failed"
+          } for ${event.data.object.id}`
+        );
         break;
       case "payment_intent.payment_failed":
         await handlePaymentFailure(event.data.object);
