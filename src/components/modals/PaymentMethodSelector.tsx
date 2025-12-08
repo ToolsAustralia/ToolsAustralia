@@ -20,11 +20,16 @@ interface PaymentMethodSelectorProps {
   isAuthenticated?: boolean;
   // New props for Stripe Elements integration
   showCardForm?: boolean;
-  setupIntentClientSecret?: string | null;
-  cardFormRef: React.Ref<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>;
+  setupIntentClientSecret?: string | null; // Backward compatibility - kept for fallback
+  paymentIntentClientSecret?: string | null; // NEW: PaymentIntent for wallet payments with amount
+  intentType?: "setup" | "payment"; // NEW: Type of intent being used
+  cardFormRef: React.Ref<{
+    confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }>;
+  } | null>;
   onCardElementChange: (event: { error?: { message?: string } }) => void;
   cardFormError: string | null;
   isCreatingSetupIntent?: boolean;
+  isCreatingPaymentIntent?: boolean; // NEW: Loading state for PaymentIntent creation
   // Billing details for when billingDetails: "never" is set
   billingDetails?: {
     name?: string;
@@ -42,10 +47,12 @@ interface PaymentMethodSelectorProps {
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
+// Supports both PaymentIntent (for wallet payments with amount) and SetupIntent (for backward compatibility)
 const StripeCardForm = React.forwardRef<
-  { confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> },
+  { confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }> },
   {
     clientSecret: string;
+    intentType: "setup" | "payment"; // Type of intent: "payment" for PaymentIntent, "setup" for SetupIntent
     onCardElementChange: (event: { error?: { message?: string } }) => void;
     cardError: string | null;
     billingDetails?: {
@@ -61,7 +68,7 @@ const StripeCardForm = React.forwardRef<
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
   }
->(({ clientSecret, onCardElementChange, cardError, billingDetails, amount, packageName }, ref) => {
+>(({ clientSecret, intentType, onCardElementChange, cardError, billingDetails, amount, packageName }, ref) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isStripeLoading, setIsStripeLoading] = useState(true);
@@ -91,7 +98,7 @@ const StripeCardForm = React.forwardRef<
       applePay: "auto" as const,
       googlePay: "auto" as const,
     },
-    paymentMethodOrder: ["apple_pay", "google_pay", "card"] as const,
+    paymentMethodOrder: ["apple_pay", "google_pay", "card"],
     // Always include paymentRequest for wallet payments to display correct amount when using SetupIntent
     paymentRequest: paymentRequestConfig,
     fields: {
@@ -116,6 +123,7 @@ const StripeCardForm = React.forwardRef<
       paymentRequestConfig,
       elementKey: `payment-element-${amount || 0}-${packageName || "default"}`,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount, packageName]);
 
   // Log PaymentElement options to verify paymentRequest is included
@@ -128,7 +136,7 @@ const StripeCardForm = React.forwardRef<
       fields: paymentElementOptions.fields,
       terms: paymentElementOptions.terms,
     });
-    
+
     // Detailed log for paymentRequest structure verification
     console.log("🔍 PaymentRequest Structure (for wallet payments):", {
       country: paymentRequestConfig.country,
@@ -140,9 +148,37 @@ const StripeCardForm = React.forwardRef<
       },
       isValid: paymentRequestConfig.total.amount > 0,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount, packageName]);
 
-  // Expose confirmSetup function via ref
+  // Build billing details object for confirmation
+  const buildBillingDetails = () => {
+    return billingDetails?.name
+      ? {
+          name: billingDetails.name,
+          email: billingDetails.email,
+          phone: billingDetails.phone,
+          address: {
+            country: billingDetails.country || "AU",
+            state: billingDetails.state || "NSW",
+            city: billingDetails.city || "Sydney",
+            postal_code: billingDetails.postalCode || "2000",
+            line1: billingDetails.line1 || "1 Martin Place",
+          },
+        }
+      : {
+          name: billingDetails?.email || "Customer",
+          address: {
+            country: billingDetails?.country || "AU",
+            state: billingDetails?.state || "NSW",
+            city: billingDetails?.city || "Sydney",
+            postal_code: billingDetails?.postalCode || "2000",
+            line1: billingDetails?.line1 || "1 Martin Place",
+          },
+        };
+  };
+
+  // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
   React.useImperativeHandle(ref, () => ({
     confirmSetup: async () => {
       if (!stripe || !elements) {
@@ -150,7 +186,7 @@ const StripeCardForm = React.forwardRef<
       }
 
       try {
-        // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmSetup()
+        // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmation
         // This validates the form and prepares it for confirmation
         const { error: submitError } = await elements.submit();
 
@@ -159,51 +195,55 @@ const StripeCardForm = React.forwardRef<
           return { error: submitError.message || "Please complete all required fields." };
         }
 
-        // Now confirm the setup after successful submission
-        // ✅ CRITICAL: When billingDetails: "never" is set, we must provide billing details here
-        // Stripe requires billing_details.name and complete address fields (country, state, city, postal_code, line1)
-        const { setupIntent, error } = await stripe.confirmSetup({
-          elements,
-          clientSecret,
-          confirmParams: {
-            payment_method_data: {
-              billing_details: billingDetails?.name
-                ? {
-                    name: billingDetails.name,
-                    email: billingDetails.email,
-                    phone: billingDetails.phone,
-                    address: {
-                      country: billingDetails.country || "AU", // ✅ Required by Stripe, default to Australia
-                      state: billingDetails.state || "NSW", // ✅ Required by Stripe, default to New South Wales
-                      city: billingDetails.city || "Sydney", // ✅ Required by Stripe, default to Sydney
-                      postal_code: billingDetails.postalCode || "2000", // ✅ Required by Stripe, default to Sydney CBD
-                      line1: billingDetails.line1 || "1 Martin Place", // ✅ Required by Stripe, default address
-                    },
-                  }
-                : {
-                    // Fallback: provide minimal required name and complete address fields if not provided
-                    name: billingDetails?.email || "Customer",
-                    address: {
-                      country: billingDetails?.country || "AU", // ✅ Default to Australia
-                      state: billingDetails?.state || "NSW", // ✅ Default to New South Wales
-                      city: billingDetails?.city || "Sydney", // ✅ Default to Sydney
-                      postal_code: billingDetails?.postalCode || "2000", // ✅ Default to Sydney CBD
-                      line1: billingDetails?.line1 || "1 Martin Place", // ✅ Default address
-                    },
-                  },
-            },
-          },
-          redirect: "if_required",
-        });
+        const billingDetailsData = buildBillingDetails();
 
-        if (error) {
-          console.error("Stripe SetupIntent error:", error);
-          return { error: error.message || "Payment method setup failed." };
-        } else if (setupIntent?.payment_method) {
-          console.log("✅ SetupIntent succeeded:", setupIntent);
-          return { paymentMethodId: setupIntent.payment_method as string };
+        // Handle PaymentIntent (for wallet payments with amount display)
+        if (intentType === "payment") {
+          const { paymentIntent, error } = await stripe.confirmPayment({
+            elements,
+            clientSecret,
+            confirmParams: {
+              payment_method_data: {
+                billing_details: billingDetailsData,
+              },
+            },
+            redirect: "if_required",
+          });
+
+          if (error) {
+            console.error("Stripe PaymentIntent error:", error);
+            return { error: error.message || "Payment confirmation failed." };
+          } else if (paymentIntent?.payment_method) {
+            console.log("✅ PaymentIntent succeeded:", paymentIntent);
+            return {
+              paymentMethodId: paymentIntent.payment_method as string,
+              paymentIntentId: paymentIntent.id,
+            };
+          } else {
+            throw new Error("Unexpected error during payment confirmation.");
+          }
         } else {
-          throw new Error("Unexpected error during payment method setup.");
+          // Handle SetupIntent (backward compatibility)
+          const { setupIntent, error } = await stripe.confirmSetup({
+            elements,
+            clientSecret,
+            confirmParams: {
+              payment_method_data: {
+                billing_details: billingDetailsData,
+              },
+            },
+            redirect: "if_required",
+          });
+
+          if (error) {
+            console.error("Stripe SetupIntent error:", error);
+            return { error: error.message || "Payment method setup failed." };
+          } else if (setupIntent?.payment_method) {
+            console.log("✅ SetupIntent succeeded:", setupIntent);
+            return { paymentMethodId: setupIntent.payment_method as string };
+          } else {
+            throw new Error("Unexpected error during payment method setup.");
+          }
         }
       } catch (err: unknown) {
         console.error("Error in confirmSetup:", err);
@@ -275,14 +315,23 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   isAuthenticated = false,
   showCardForm = false,
   setupIntentClientSecret = null,
+  paymentIntentClientSecret = null,
+  intentType,
   cardFormRef,
   onCardElementChange,
   cardFormError,
   isCreatingSetupIntent = false,
+  isCreatingPaymentIntent = false,
   billingDetails,
   amount,
   packageName,
 }) => {
+  // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
+  const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
+  // Use provided intentType or calculate from client secrets
+  const activeIntentType: "setup" | "payment" | undefined =
+    intentType || (paymentIntentClientSecret ? "payment" : setupIntentClientSecret ? "setup" : undefined);
+  const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
@@ -379,7 +428,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
       {/* Show card form directly for new users - no Payment Method section */}
       {!isAuthenticated && (
         <>
-          {isCreatingSetupIntent ? (
+          {isCreatingIntent ? (
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-red-600" />
@@ -401,12 +450,12 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               </div>
             </div>
-          ) : setupIntentClientSecret ? (
+          ) : activeClientSecret && activeIntentType ? (
             <Elements
-              key={`elements-${amount || 0}-${packageName || "default"}`}
+              key={`elements-${activeIntentType}-${amount || 0}-${packageName || "default"}`}
               stripe={stripePromise}
               options={{
-                clientSecret: setupIntentClientSecret,
+                clientSecret: activeClientSecret,
                 locale: "en",
                 appearance: {
                   theme: "stripe",
@@ -424,7 +473,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             >
               <StripeCardForm
                 ref={cardFormRef}
-                clientSecret={setupIntentClientSecret}
+                clientSecret={activeClientSecret}
+                intentType={activeIntentType}
                 onCardElementChange={onCardElementChange}
                 cardError={cardFormError}
                 billingDetails={billingDetails}
@@ -573,8 +623,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
           {/* Show card form when adding new payment method for authenticated users */}
           {showCardForm && (
             <div className="space-y-4">
-              {isCreatingSetupIntent ? (
-                // Setup Intent Loading Skeleton
+              {isCreatingIntent ? (
+                // Intent Loading Skeleton
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
@@ -605,12 +655,12 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     </div>
                   </div>
                 </div>
-              ) : setupIntentClientSecret ? (
+              ) : activeClientSecret && activeIntentType ? (
                 <Elements
-                  key={`elements-${amount || 0}-${packageName || "default"}`}
+                  key={`elements-${activeIntentType}-${amount || 0}-${packageName || "default"}`}
                   stripe={stripePromise}
                   options={{
-                    clientSecret: setupIntentClientSecret,
+                    clientSecret: activeClientSecret,
                     appearance: {
                       theme: "stripe",
                       variables: {
@@ -627,7 +677,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 >
                   <StripeCardForm
                     ref={cardFormRef}
-                    clientSecret={setupIntentClientSecret}
+                    clientSecret={activeClientSecret}
+                    intentType={activeIntentType}
                     onCardElementChange={onCardElementChange}
                     cardError={cardFormError}
                     billingDetails={billingDetails}

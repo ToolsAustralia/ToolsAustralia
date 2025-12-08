@@ -1,82 +1,123 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectDB from "@/lib/mongodb";
+import User from "@/models/User";
 import { z } from "zod";
-
-const createPaymentIntentSchema = z.object({
-  subscriptionId: z.string().min(1, "Subscription ID is required"),
-});
 
 /**
  * POST /api/stripe/create-payment-intent
- * Create a payment intent for an existing subscription
+ * Creates a PaymentIntent for payment method collection with amount display
+ * This ensures wallet payments (Google Pay/Apple Pay) show the correct amount
+ *
+ * Best Practices Applied:
+ * - Uses PaymentIntent for immediate payments (required for wallet payment amount display)
+ * - Automatically saves payment method via setup_future_usage
+ * - Handles 3D Secure authentication automatically
+ * - Includes proper error handling and validation
+ * - Follows PCI compliance guidelines
  */
+
+const createPaymentIntentSchema = z.object({
+  amount: z.number().int().positive("Amount must be greater than 0"),
+  currency: z.string().default("aud"),
+  packageId: z.string().optional(),
+  packageName: z.string().optional(),
+});
+
 export async function POST(request: NextRequest) {
   try {
-    console.log("💳 Creating payment intent for subscription...");
+    await connectDB();
 
+    // Parse and validate request body
     const body = await request.json();
-    const { subscriptionId } = createPaymentIntentSchema.parse(body);
+    const validatedData = createPaymentIntentSchema.parse(body);
 
-    console.log(`📋 Creating payment intent for subscription: ${subscriptionId}`);
+    // Get authenticated user session (optional for guest users)
+    const session = await getServerSession(authOptions);
 
-    // Retrieve the subscription to get the customer and price
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ["items.data.price", "customer"],
-    });
+    let stripeCustomerId: string | undefined;
+    let userEmail: string | undefined;
+    let userId: string | undefined;
 
-    if (!subscription) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Subscription not found",
+    if (session?.user?.id) {
+      // Authenticated user
+      const user = await User.findById(session.user.id);
+      if (!user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      stripeCustomerId = user.stripeCustomerId;
+      userEmail = user.email;
+      userId = user._id.toString();
+    } else {
+      // Guest user - create a temporary Stripe customer
+      // The actual customer will be created during the purchase process
+      const customer = await stripe.customers.create({
+        metadata: {
+          type: "guest",
+          temporary: "true",
         },
-        { status: 404 }
-      );
+      });
+      stripeCustomerId = customer.id;
+      userId = "guest";
     }
 
-    // Get the first item's price
-    const price = subscription.items.data[0]?.price;
-    if (!price) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "No price found for subscription",
-        },
-        { status: 400 }
-      );
+    // Get or create Stripe customer for authenticated users
+    if (session?.user?.id && !stripeCustomerId) {
+      const user = await User.findById(session.user.id);
+      if (user) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          phone: user.mobile || undefined,
+          metadata: {
+            userId: user._id.toString(),
+          },
+        });
+        stripeCustomerId = customer.id;
+
+        // Update user with Stripe customer ID
+        user.stripeCustomerId = stripeCustomerId;
+        await user.save();
+      }
     }
 
-    // Get subscription metadata to create meaningful description
-    const subscriptionMetadata = subscription.metadata || {};
-    const description = subscriptionMetadata.description || subscriptionMetadata.packageName || "Subscription Payment";
-
-    // Create a payment intent for the subscription amount
+    // Create PaymentIntent for payment method collection with amount
+    // This ensures wallet payments show the correct amount
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: price.unit_amount || 0,
-      currency: price.currency || "aud",
-      customer: subscription.customer as string,
-      description: description, // Use description from subscription metadata
+      amount: validatedData.amount, // Amount in cents
+      currency: validatedData.currency,
+      customer: stripeCustomerId,
+      setup_future_usage: "off_session", // Automatically save payment method for future use
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
+      },
       metadata: {
-        subscriptionId: subscriptionId,
-        type: "subscription_payment",
+        userId: userId,
+        userEmail: userEmail || "guest",
+        type: session?.user?.id ? "authenticated" : "guest",
+        ...(validatedData.packageId && { packageId: validatedData.packageId }),
+        ...(validatedData.packageName && { packageName: validatedData.packageName }),
       },
     });
 
-    console.log(`✅ Created payment intent: ${paymentIntent.id}`);
-
     return NextResponse.json({
       success: true,
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
+      client_secret: paymentIntent.client_secret,
+      payment_intent_id: paymentIntent.id,
     });
   } catch (error) {
-    console.error("❌ Payment intent creation failed:", error);
+    console.error("❌ PaymentIntent creation failed:", error);
 
+    // Handle Zod validation errors
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {
           success: false,
-          error: "Validation error",
+          error: "Invalid request data",
           details: error.issues,
         },
         { status: 400 }
@@ -87,7 +128,6 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: "Failed to create payment intent",
-        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

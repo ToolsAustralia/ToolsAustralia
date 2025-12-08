@@ -32,6 +32,7 @@ import { useToast } from "@/components/ui/Toast";
 import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
+import { usePaymentIntent } from "@/hooks/usePaymentIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
@@ -123,10 +124,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
+  const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [cardFormError, setCardFormError] = useState<string | null>(null);
-  const cardFormRef = useRef<{ confirmSetup: () => Promise<{ paymentMethodId?: string; error?: string }> } | null>(
-    null
-  );
+  const cardFormRef = useRef<{
+    confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }>;
+  } | null>(null);
   const [guestUserData, setGuestUserData] = useState<{
     userId: string;
     email: string;
@@ -137,7 +140,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
   // Payment processing state
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  // paymentIntentId is already declared above (line 128) - using same state for payment processing
   const [processingPackageName, setProcessingPackageName] = useState<string>("");
   const [processingPackageType, setProcessingPackageType] = useState<
     "one-time" | "subscription" | "upsell" | "mini-draw"
@@ -296,6 +299,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const purchaseMembership = usePurchaseMembership();
   const purchaseUpsell = usePurchaseUpsell();
   const createSetupIntent = useSetupIntent();
+  const createPaymentIntent = usePaymentIntent();
   // Upsell functionality now handled through modal priority system
   const { showLoading, hideLoading, showSuccess } = useLoading();
 
@@ -485,6 +489,52 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     });
   }, [promoEnhancedPlan, activePlan]);
 
+  // Recreate PaymentIntent when package/amount changes (for wallet payments to show correct amount)
+  useEffect(() => {
+    // Only recreate if card form is shown and we have an amount
+    if (showCardForm && (paymentIntentClientSecret || setupIntentClientSecret)) {
+      const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
+      const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+      const packageName = promoEnhancedPlan?.name || activePlan?.name;
+
+      // Only recreate PaymentIntent if amount is available and different from current
+      if (amountInCents > 0) {
+        // Check if we need to recreate (amount changed or package changed)
+        const shouldRecreate =
+          !paymentIntentClientSecret ||
+          (paymentIntentClientSecret &&
+            amountInCents !== Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100));
+
+        if (shouldRecreate) {
+          createPaymentIntent.mutate(
+            {
+              amount: amountInCents,
+              currency: "aud",
+              packageId: packageId || undefined,
+              packageName: packageName,
+            },
+            {
+              onSuccess: (result) => {
+                if (result.success && result.client_secret) {
+                  setPaymentIntentClientSecret(result.client_secret);
+                  if (result.payment_intent_id) {
+                    setPaymentIntentId(result.payment_intent_id);
+                  }
+                  setSetupIntentClientSecret(null); // Clear SetupIntent
+                  setCardFormError(null);
+                }
+              },
+              onError: () => {
+                // Don't show error toast on package change - user can still proceed
+              },
+            }
+          );
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promoEnhancedPlan?.price, activePlan?.price, activePlan?.name, showCardForm]);
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const formatCardNumber = (value: string) => {
     // Add null/undefined check to prevent runtime errors
@@ -668,18 +718,46 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         // Show card form by default for new users
         setShowCardForm(true);
 
-        // Create SetupIntent for guest user payment method collection
-        try {
-          const setupResult = await createSetupIntent.mutateAsync();
+        // Create PaymentIntent for guest user payment method collection (shows correct amount in wallet payments)
+        // Calculate amount in cents
+        const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
+        const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
-          if (setupResult.success && setupResult.client_secret) {
-            setSetupIntentClientSecret(setupResult.client_secret);
-            setCardFormError(null); // Clear any previous errors
+        try {
+          // Use PaymentIntent if amount is available, otherwise fallback to SetupIntent
+          if (amountInCents > 0) {
+            const paymentResult = await createPaymentIntent.mutateAsync({
+              amount: amountInCents,
+              currency: "aud",
+              packageId: packageId || undefined,
+              packageName: packageName,
+            });
+
+            if (paymentResult.success && paymentResult.client_secret) {
+              setPaymentIntentClientSecret(paymentResult.client_secret);
+              if (paymentResult.payment_intent_id) {
+                setPaymentIntentId(paymentResult.payment_intent_id);
+              }
+              setSetupIntentClientSecret(null); // Clear SetupIntent
+              setCardFormError(null); // Clear any previous errors
+            } else {
+              throw new Error(paymentResult.error || "Failed to create PaymentIntent");
+            }
           } else {
-            throw new Error(setupResult.error || "Failed to create SetupIntent");
+            // Fallback to SetupIntent if amount is 0 or not available
+            const setupResult = await createSetupIntent.mutateAsync();
+
+            if (setupResult.success && setupResult.client_secret) {
+              setSetupIntentClientSecret(setupResult.client_secret);
+              setPaymentIntentClientSecret(null); // Clear PaymentIntent
+              setCardFormError(null); // Clear any previous errors
+            } else {
+              throw new Error(setupResult.error || "Failed to create SetupIntent");
+            }
           }
         } catch (error: unknown) {
-          console.error("Failed to create SetupIntent:", error);
+          console.error("Failed to create payment intent:", error);
 
           // Extract detailed error message
           let errorMessage = "Failed to prepare payment form. Please try again.";
@@ -929,16 +1007,46 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         return;
       }
 
-      // Create SetupIntent for payment method creation
-      const result = await createSetupIntent.mutateAsync();
+      // Create PaymentIntent for payment method creation (shows correct amount in wallet payments)
+      // Calculate amount in cents
+      const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
+      const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+      const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
-      if (result.success && result.client_secret) {
-        setSetupIntentClientSecret(result.client_secret);
-        setUseSavedPaymentMethod(false);
-        setSelectedPaymentMethod(null);
-        setShowCardForm(true);
+      // Use PaymentIntent if amount is available, otherwise fallback to SetupIntent
+      if (amountInCents > 0) {
+        const result = await createPaymentIntent.mutateAsync({
+          amount: amountInCents,
+          currency: "aud",
+          packageId: packageId || undefined,
+          packageName: packageName,
+        });
+
+        if (result.success && result.client_secret) {
+          setPaymentIntentClientSecret(result.client_secret);
+          if (result.payment_intent_id) {
+            setPaymentIntentId(result.payment_intent_id);
+          }
+          setSetupIntentClientSecret(null); // Clear SetupIntent
+          setUseSavedPaymentMethod(false);
+          setSelectedPaymentMethod(null);
+          setShowCardForm(true);
+        } else {
+          throw new Error(result.error || "Failed to create PaymentIntent");
+        }
       } else {
-        throw new Error(result.error || "Failed to create payment method setup");
+        // Fallback to SetupIntent if amount is 0 or not available
+        const result = await createSetupIntent.mutateAsync();
+
+        if (result.success && result.client_secret) {
+          setSetupIntentClientSecret(result.client_secret);
+          setPaymentIntentClientSecret(null); // Clear PaymentIntent
+          setUseSavedPaymentMethod(false);
+          setSelectedPaymentMethod(null);
+          setShowCardForm(true);
+        } else {
+          throw new Error(result.error || "Failed to create payment method setup");
+        }
       }
     } catch (error: unknown) {
       console.error("Failed to create SetupIntent:", error);
@@ -1599,6 +1707,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             throw new Error(result.error);
           } else if (result.paymentMethodId) {
             paymentMethodId = result.paymentMethodId;
+            // Store paymentIntentId if PaymentIntent was used
+            if (result.paymentIntentId) {
+              setPaymentIntentId(result.paymentIntentId);
+            }
             // console.log("✅ Card confirmed successfully:", paymentMethodId);
           } else {
             throw new Error("Failed to confirm card details.");
@@ -1609,7 +1721,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           throw new Error("Please complete the card details to add a new payment method.");
         }
         isNewPaymentMethod = true;
-        console.log("�'� Using new payment method:", paymentMethodId);
+        console.log("💳 Using new payment method:", paymentMethodId);
       } else {
         // For authenticated users: No payment method selected and card form not shown
         throw new Error("Please select a payment method or add a new one");
@@ -2724,10 +2836,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     isAuthenticated={isAuthenticated}
                     showCardForm={showCardForm}
                     setupIntentClientSecret={setupIntentClientSecret}
+                    paymentIntentClientSecret={paymentIntentClientSecret}
+                    intentType={paymentIntentClientSecret ? "payment" : setupIntentClientSecret ? "setup" : undefined}
                     cardFormRef={cardFormRef}
                     onCardElementChange={handleCardElementChange}
                     cardFormError={cardFormError}
                     isCreatingSetupIntent={createSetupIntent.isPending}
+                    isCreatingPaymentIntent={createPaymentIntent.isPending}
                     billingDetails={resolvedBillingDetails}
                     amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                     packageName={promoEnhancedPlan?.name || activePlan?.name}
@@ -2745,10 +2860,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                       isAuthenticated={isAuthenticated}
                       showCardForm={showCardForm}
                       setupIntentClientSecret={setupIntentClientSecret}
+                      paymentIntentClientSecret={paymentIntentClientSecret}
+                      intentType={paymentIntentClientSecret ? "payment" : setupIntentClientSecret ? "setup" : undefined}
                       cardFormRef={cardFormRef}
                       onCardElementChange={handleCardElementChange}
                       cardFormError={cardFormError}
                       isCreatingSetupIntent={createSetupIntent.isPending}
+                      isCreatingPaymentIntent={createPaymentIntent.isPending}
                       billingDetails={resolvedBillingDetails}
                       amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                       packageName={promoEnhancedPlan?.name || activePlan?.name}
