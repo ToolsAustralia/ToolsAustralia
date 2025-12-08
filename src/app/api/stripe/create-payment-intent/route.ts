@@ -51,23 +51,9 @@ export async function POST(request: NextRequest) {
       stripeCustomerId = user.stripeCustomerId;
       userEmail = user.email;
       userId = user._id.toString();
-    } else {
-      // Guest user - create a temporary Stripe customer
-      // The actual customer will be created during the purchase process
-      const customer = await stripe.customers.create({
-        metadata: {
-          type: "guest",
-          temporary: "true",
-        },
-      });
-      stripeCustomerId = customer.id;
-      userId = "guest";
-    }
 
-    // Get or create Stripe customer for authenticated users
-    if (session?.user?.id && !stripeCustomerId) {
-      const user = await User.findById(session.user.id);
-      if (user) {
+      // Get or create Stripe customer for authenticated users
+      if (!stripeCustomerId) {
         const customer = await stripe.customers.create({
           email: user.email,
           name: `${user.firstName} ${user.lastName}`,
@@ -82,14 +68,22 @@ export async function POST(request: NextRequest) {
         user.stripeCustomerId = stripeCustomerId;
         await user.save();
       }
+    } else {
+      // ✅ FIX: Guest user - DON'T create customer upfront
+      // Customer will be created during the purchase process when payment is confirmed
+      // This prevents unnecessary customer creation and reduces Stripe API calls
+      stripeCustomerId = undefined; // No customer yet for guest users
+      userId = "guest";
     }
 
     // Create PaymentIntent for payment method collection with amount
     // This ensures wallet payments show the correct amount
+    // ✅ FIX: Only include customer if it exists (authenticated users)
+    // Guest users will have customer created during purchase process
     const paymentIntent = await stripe.paymentIntents.create({
       amount: validatedData.amount, // Amount in cents
       currency: validatedData.currency,
-      customer: stripeCustomerId,
+      ...(stripeCustomerId && { customer: stripeCustomerId }), // Only add customer if exists
       setup_future_usage: "off_session", // Automatically save payment method for future use
       automatic_payment_methods: {
         enabled: true,

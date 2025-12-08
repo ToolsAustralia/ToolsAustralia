@@ -21,6 +21,7 @@ const createOneTimePurchaseSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
   paymentMethodId: z.string().min(1, "Payment method is required"),
+  paymentIntentId: z.string().optional(), // Optional PaymentIntent ID if already confirmed upfront
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
 });
@@ -165,12 +166,28 @@ export async function POST(request: NextRequest) {
     if (registeredUser && registeredUser.stripeCustomerId) {
       // console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
       customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
+
+      // ✅ FIX: Attach payment method to customer if not already attached
+      // This handles cases where PaymentIntent was created without a customer
+      try {
+        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+        if (!paymentMethod.customer || paymentMethod.customer !== customer.id) {
+          await stripe.paymentMethods.attach(finalPaymentMethodId, {
+            customer: customer.id,
+          });
+          // console.log(`✅ Attached payment method to existing customer: ${customer.id}`);
+        }
+      } catch (attachError) {
+        console.error("❌ Failed to attach payment method to customer:", attachError);
+        // Continue - payment method might already be attached or error is non-critical
+      }
     } else {
       // For guest users or new users, get the customer ID from the payment method
       // console.log("🔍 Retrieving payment method to get customer ID...");
       try {
         const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
         if (paymentMethod.customer) {
+          // Payment method has a customer - use it
           // console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
           customer = await stripe.customers.retrieve(paymentMethod.customer as string);
           // console.log(`✅ Using customer from payment method: ${customer.id}`);
@@ -192,7 +209,34 @@ export async function POST(request: NextRequest) {
             // console.log(`✅ Updated customer details: ${customer.id}`);
           }
         } else {
-          throw new Error("Payment method is not attached to any customer");
+          // ✅ FIX: Payment method has no customer - create one and attach it
+          // This happens when PaymentIntent was created without a customer
+          // console.log("🆕 Payment method has no customer - creating new customer...");
+
+          customer = await stripe.customers.create({
+            email: validatedData.userEmail,
+            name: `${validatedData.firstName} ${validatedData.lastName}`,
+            phone: validatedData.mobile,
+            metadata: {
+              packageId: validatedData.packageId,
+              packageName: membershipPackage.name,
+              userId: registeredUser?._id?.toString() || "guest",
+            },
+          });
+
+          // Attach payment method to the newly created customer
+          await stripe.paymentMethods.attach(finalPaymentMethodId, {
+            customer: customer.id,
+          });
+
+          // console.log(`✅ Created customer ${customer.id} and attached payment method`);
+
+          // If registered user exists, update them with the customer ID
+          if (registeredUser) {
+            registeredUser.stripeCustomerId = customer.id;
+            await registeredUser.save();
+            // console.log(`✅ Linked customer ${customer.id} to registered user ${registeredUser._id}`);
+          }
         }
       } catch (error) {
         console.error("❌ Failed to retrieve payment method:", error);
@@ -209,44 +253,105 @@ export async function POST(request: NextRequest) {
     });
     // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
 
-    // Create payment intent with automatic confirmation for test mode
-    // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(membershipPackage.price * 100), // Convert to cents
-      currency: "aud",
-      customer: customer.id,
-      payment_method: finalPaymentMethodId, // Use the final payment method ID
-      confirm: true, // Auto-confirm for testing
-      return_url: `${getBaseUrl()}/purchase-success`,
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
-      },
-      description: `${membershipPackage.name}`, // Add meaningful description
-      metadata: {
-        items: JSON.stringify([
-          {
-            type: isMiniDrawPackage ? "mini-draw" : "membership",
-            id: validatedData.packageId,
-            name: membershipPackage.name,
-            price: membershipPackage.price,
-          },
-        ]),
-        packageId: validatedData.packageId,
-        userEmail: validatedData.userEmail,
-        packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
-        entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
-        price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
-        ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
-        // Store request context for Facebook CAPI (webhook will extract and use)
-        ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-        ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-        ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-        ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-      },
-    });
+    // ✅ SINGLE SOURCE OF TRUTH: Reuse confirmed PaymentIntent if provided, otherwise create new one
+    let paymentIntent: Stripe.PaymentIntent;
 
-    // console.log(`💳 Created payment intent: ${paymentIntent.id}`);
+    if (validatedData.paymentIntentId) {
+      // Validate the existing PaymentIntent
+      const existingPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
+
+      // Validate PaymentIntent status
+      // ✅ FIX: Accept "succeeded" OR "processing" status (wallet payments may be processing)
+      if (existingPaymentIntent.status !== "succeeded" && existingPaymentIntent.status !== "processing") {
+        return NextResponse.json(
+          {
+            error: "PaymentIntent must be succeeded or processing to reuse",
+            details: `Current status: ${existingPaymentIntent.status}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Validate amount matches
+      const expectedAmount = Math.round(membershipPackage.price * 100);
+      if (existingPaymentIntent.amount !== expectedAmount) {
+        return NextResponse.json({ error: "PaymentIntent amount mismatch" }, { status: 400 });
+      }
+
+      // ✅ FIX: Validate customer matches only if PaymentIntent has a customer
+      // PaymentIntents created without a customer (our new flow) will have customer as null
+      // In that case, we skip validation since we're creating/attaching the customer now
+      const customerId =
+        typeof existingPaymentIntent.customer === "string"
+          ? existingPaymentIntent.customer
+          : existingPaymentIntent.customer?.id;
+
+      if (customerId && customerId !== customer.id) {
+        return NextResponse.json({ error: "PaymentIntent customer mismatch" }, { status: 400 });
+      }
+
+      // Use existing PaymentIntent - DON'T CREATE NEW ONE
+      paymentIntent = existingPaymentIntent;
+
+      // ✅ FIX: Update PaymentIntent with customer and metadata
+      // This ensures webhook can find the user by customer ID
+      await stripe.paymentIntents.update(existingPaymentIntent.id, {
+        customer: customer.id, // ✅ Update customer field so webhook can find user
+        metadata: {
+          ...existingPaymentIntent.metadata,
+          packageId: validatedData.packageId,
+          userEmail: validatedData.userEmail,
+          packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
+          entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
+          price: Math.round(membershipPackage.price * 100).toString(),
+          ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
+          // Store request context for Facebook CAPI (webhook will extract and use)
+          ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+          ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+          ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+          ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        },
+      });
+    } else {
+      // Fallback: Create new PaymentIntent (for non-wallet payments)
+      // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(membershipPackage.price * 100), // Convert to cents
+        currency: "aud",
+        customer: customer.id,
+        payment_method: finalPaymentMethodId, // Use the final payment method ID
+        confirm: true, // Auto-confirm for testing
+        return_url: `${getBaseUrl()}/purchase-success`,
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
+        },
+        description: `${membershipPackage.name}`, // Add meaningful description
+        metadata: {
+          items: JSON.stringify([
+            {
+              type: isMiniDrawPackage ? "mini-draw" : "membership",
+              id: validatedData.packageId,
+              name: membershipPackage.name,
+              price: membershipPackage.price,
+            },
+          ]),
+          packageId: validatedData.packageId,
+          userEmail: validatedData.userEmail,
+          packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
+          entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
+          price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
+          ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
+          // Store request context for Facebook CAPI (webhook will extract and use)
+          ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+          ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+          ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+          ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        },
+      });
+    }
+
+    // console.log(`💳 Using payment intent: ${paymentIntent.id}`);
 
     let user;
 

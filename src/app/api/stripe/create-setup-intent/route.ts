@@ -39,21 +39,11 @@ export async function POST() {
       userEmail = user.email;
       userId = user._id.toString();
     } else {
-      // Guest user - create a temporary Stripe customer
-      // console.log(`🔧 Creating SetupIntent for guest user`);
-
-      // For guest users, we'll create a temporary customer
-      // The actual customer will be created during the purchase process
-      const customer = await stripe.customers.create({
-        metadata: {
-          type: "guest",
-          temporary: "true",
-        },
-      });
-      stripeCustomerId = customer.id;
+      // ✅ FIX: Guest user - DON'T create customer upfront
+      // Customer will be created during the purchase process when payment is confirmed
+      // This prevents unnecessary customer creation and reduces Stripe API calls
+      stripeCustomerId = undefined; // No customer yet for guest users
       userId = "guest";
-
-      // console.log(`✅ Created temporary Stripe customer for guest: ${stripeCustomerId}`);
     }
 
     // Get or create Stripe customer for authenticated users
@@ -80,8 +70,11 @@ export async function POST() {
 
     // Create SetupIntent for payment method creation
     // This is the Stripe-recommended approach for saving payment methods
+    // ✅ FIX: Only include customer if it exists (authenticated users)
+    // Guest users will have customer created during purchase process
+    // Note: SetupIntent can be created without customer - Stripe will create one when payment method is attached
     const setupIntent = await stripe.setupIntents.create({
-      customer: stripeCustomerId,
+      ...(stripeCustomerId && { customer: stripeCustomerId }), // Only add customer if exists
       payment_method_types: ["card"],
       usage: "off_session", // Payment method will be used for future payments
       metadata: {

@@ -170,6 +170,25 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       user = await User.findOne({ stripeCustomerId: customerId });
     }
 
+    // ✅ FIX: Fallback to finding user by email if customer lookup fails
+    // This handles cases where PaymentIntent was created without a customer initially
+    if (!user && paymentIntent.metadata.userEmail) {
+      webhookLog("info", `Customer lookup failed, trying email fallback: ${paymentIntent.metadata.userEmail}`);
+      user = await User.findOne({ email: paymentIntent.metadata.userEmail.toLowerCase() });
+
+      // If found, update PaymentIntent with customer ID for future lookups
+      if (user && user.stripeCustomerId) {
+        try {
+          await stripe.paymentIntents.update(paymentIntent.id, {
+            customer: user.stripeCustomerId,
+          });
+          webhookLog("info", `Updated PaymentIntent ${paymentIntent.id} with customer ${user.stripeCustomerId}`);
+        } catch (updateError) {
+          webhookLog("warn", `Failed to update PaymentIntent customer: ${updateError}`);
+        }
+      }
+    }
+
     if (!user) {
       webhookLog("error", `User not found for payment intent: ${paymentIntent.id}`);
       return;
@@ -188,10 +207,12 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
 
     // ✅ CRITICAL: Skip subscription payments - they're handled by invoice.payment_succeeded
     // This prevents duplicate processing when both payment_intent.succeeded and invoice.payment_succeeded fire
+    // Also skip upfront PaymentIntents marked for subscriptions (they're just for wallet display)
     const isSubscriptionPayment =
       paymentIntent.metadata.type === "subscription" ||
       paymentIntent.metadata.packageType === "subscription" ||
       paymentIntent.metadata.subscription_id ||
+      paymentIntent.metadata.isUpfrontPayment === "true" || // NEW: Skip upfront payments
       !!(paymentIntent as { invoice?: string | Stripe.Invoice }).invoice; // ✅ NEW: Also check if payment has an invoice (subscription payments always have invoices)
 
     if (isSubscriptionPayment) {

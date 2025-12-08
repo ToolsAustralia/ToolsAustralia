@@ -17,6 +17,7 @@ export interface SubscriptionData {
   packageId: string;
   password?: string; // Made optional for passwordless users
   paymentMethodId: string;
+  paymentIntentId?: string; // Optional PaymentIntent ID if already confirmed upfront
   referralCode?: string;
   affiliateCode?: string;
 }
@@ -29,6 +30,7 @@ export interface OneTimePurchaseData {
   packageId: string;
   password?: string; // Made optional for passwordless users
   paymentMethodId: string;
+  paymentIntentId?: string; // Optional PaymentIntent ID if already confirmed upfront
   referralCode?: string;
   affiliateCode?: string;
 }
@@ -36,7 +38,6 @@ export interface OneTimePurchaseData {
 export interface ExistingUserSubscriptionData {
   packageId: string;
   paymentMethodId: string;
-  paymentIntentId?: string; // If PaymentIntent was already confirmed upfront, use it to prevent double charging
   referralCode?: string;
   affiliateCode?: string;
 }

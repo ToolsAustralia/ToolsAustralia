@@ -15,7 +15,6 @@ import { authOptions } from "@/lib/auth";
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   paymentMethodId: z.string().min(1, "Payment method ID is required").optional(),
-  paymentIntentId: z.string().optional(), // If PaymentIntent was already confirmed upfront, use it instead of creating a new one
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
 });
@@ -202,103 +201,42 @@ export async function POST(request: NextRequest) {
 
     // console.log(`💳 Using payment method ${paymentMethodId} for one-time purchase`);
 
-    // ✅ CRITICAL: Prevent double charging
-    // If PaymentIntent was already confirmed upfront (for wallet payments), use it instead of creating a new one
-    let paymentIntent;
-    if (validatedData.paymentIntentId) {
-      // Retrieve the existing PaymentIntent
-      paymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
-
-      // Verify it belongs to this customer and has succeeded
-      if (paymentIntent.customer !== stripeCustomerId) {
-        return NextResponse.json(
-          { success: false, error: "PaymentIntent does not belong to this customer" },
-          { status: 400 }
-        );
-      }
-
-      if (paymentIntent.status !== "succeeded") {
-        return NextResponse.json(
-          { success: false, error: `PaymentIntent status is ${paymentIntent.status}, expected succeeded` },
-          { status: 400 }
-        );
-      }
-
-      // Verify the amount matches
-      const expectedAmount = Math.round(membershipPackage.price * 100);
-      if (paymentIntent.amount !== expectedAmount) {
-        console.warn(
-          `⚠️ PaymentIntent amount mismatch: PaymentIntent=${paymentIntent.amount}, Expected=${expectedAmount}. Using existing PaymentIntent.`
-        );
-      }
-
-      // Update metadata if needed (for webhook processing)
-      if (paymentIntent.metadata.packageId !== membershipPackage._id) {
-        await stripe.paymentIntents.update(validatedData.paymentIntentId, {
-          metadata: {
-            ...paymentIntent.metadata,
-            items: JSON.stringify([
-              {
-                type: isMiniDrawPackage ? "mini-draw" : "membership",
-                id: membershipPackage._id,
-                name: membershipPackage.name,
-                price: membershipPackage.price,
-              },
-            ]),
-            packageId: membershipPackage._id,
-            userId: existingUser._id.toString(),
-            packageName: membershipPackage.name,
-            packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
-            entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
-            price: Math.round(membershipPackage.price * 100).toString(),
-            ...(normalizedAffiliateCode
-              ? { affiliateCode: normalizedAffiliateCode }
-              : existingUser.affiliateReferral?.affiliateCode
-              ? { affiliateCode: existingUser.affiliateReferral.affiliateCode }
-              : {}),
+    // Create payment intent for one-time purchase
+    // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(membershipPackage.price * 100), // Convert to cents
+      currency: "aud",
+      customer: stripeCustomerId,
+      payment_method: paymentMethodId,
+      confirm: true,
+      return_url: `${getBaseUrl()}/purchase-success`,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
+      },
+      description: `${membershipPackage.name}`, // Add meaningful description
+      metadata: {
+        items: JSON.stringify([
+          {
+            type: isMiniDrawPackage ? "mini-draw" : "membership",
+            id: membershipPackage._id,
+            name: membershipPackage.name,
+            price: membershipPackage.price,
           },
-        });
-      }
-
-      console.log(`✅ Using existing PaymentIntent: ${validatedData.paymentIntentId} (already charged)`);
-    } else {
-      // Create new payment intent for one-time purchase
-      // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-      paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(membershipPackage.price * 100), // Convert to cents
-        currency: "aud",
-        customer: stripeCustomerId,
-        payment_method: paymentMethodId,
-        confirm: true,
-        return_url: `${getBaseUrl()}/purchase-success`,
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
-        },
-        description: `${membershipPackage.name}`, // Add meaningful description
-        metadata: {
-          items: JSON.stringify([
-            {
-              type: isMiniDrawPackage ? "mini-draw" : "membership",
-              id: membershipPackage._id,
-              name: membershipPackage.name,
-              price: membershipPackage.price,
-            },
-          ]),
-          packageId: membershipPackage._id,
-          userId: existingUser._id.toString(),
-          packageName: membershipPackage.name,
-          packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
-          entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
-          price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
-          ...(normalizedAffiliateCode
-            ? { affiliateCode: normalizedAffiliateCode }
-            : existingUser.affiliateReferral?.affiliateCode
-            ? { affiliateCode: existingUser.affiliateReferral.affiliateCode }
-            : {}),
-        },
-      });
-    }
+        ]),
+        packageId: membershipPackage._id,
+        userId: existingUser._id.toString(),
+        packageName: membershipPackage.name,
+        packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
+        entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
+        price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
+        ...(normalizedAffiliateCode
+          ? { affiliateCode: normalizedAffiliateCode }
+          : existingUser.affiliateReferral?.affiliateCode
+          ? { affiliateCode: existingUser.affiliateReferral.affiliateCode }
+          : {}),
+      },
+    });
 
     // console.log(`✅ Payment intent created: ${paymentIntent.id} with status: ${paymentIntent.status}`);
 

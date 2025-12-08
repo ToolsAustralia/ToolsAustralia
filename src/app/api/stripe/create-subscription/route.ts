@@ -9,12 +9,6 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 // Klaviyo integration handled by webhook for best practices
 
-// Interface for payment intent with status
-interface PaymentIntentWithStatus {
-  client_secret?: string;
-  status: string;
-}
-
 // Interface for Stripe errors
 interface StripeError {
   type: string;
@@ -29,7 +23,7 @@ const createSubscriptionSchema = z.object({
   mobile: z.string().optional(),
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
-  paymentMethodId: z.string().min(1, "Payment method is required"),
+  paymentMethodId: z.string().min(1, "Payment method is required"), // Payment method from SetupIntent (for saving)
   referralCode: z.string().optional(),
 });
 
@@ -108,12 +102,28 @@ export async function POST(request: NextRequest) {
     if (registeredUser && registeredUser.stripeCustomerId) {
       // console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
       customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
+
+      // ✅ FIX: Attach payment method to customer if not already attached
+      // This handles cases where PaymentIntent was created without a customer
+      try {
+        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+        if (!paymentMethod.customer || paymentMethod.customer !== customer.id) {
+          await stripe.paymentMethods.attach(finalPaymentMethodId, {
+            customer: customer.id,
+          });
+          // console.log(`✅ Attached payment method to existing customer: ${customer.id}`);
+        }
+      } catch (attachError) {
+        console.error("❌ Failed to attach payment method to customer:", attachError);
+        // Continue - payment method might already be attached or error is non-critical
+      }
     } else {
       // For guest users or new users, get the customer ID from the payment method
       // console.log("🔍 Retrieving payment method to get customer ID...");
       try {
         const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
         if (paymentMethod.customer) {
+          // Payment method has a customer - use it
           // console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
           customer = await stripe.customers.retrieve(paymentMethod.customer as string);
           // console.log(`✅ Using customer from payment method: ${customer.id}`);
@@ -135,7 +145,34 @@ export async function POST(request: NextRequest) {
             // console.log(`✅ Updated customer details: ${customer.id}`);
           }
         } else {
-          throw new Error("Payment method is not attached to any customer");
+          // ✅ FIX: Payment method has no customer - create one and attach it
+          // This happens when PaymentIntent was created without a customer
+          // console.log("🆕 Payment method has no customer - creating new customer...");
+
+          customer = await stripe.customers.create({
+            email: validatedData.userEmail,
+            name: `${validatedData.firstName} ${validatedData.lastName}`,
+            phone: validatedData.mobile,
+            metadata: {
+              packageId: validatedData.packageId,
+              packageName: membershipPackage.name,
+              userId: registeredUser?._id?.toString() || "guest",
+            },
+          });
+
+          // Attach payment method to the newly created customer
+          await stripe.paymentMethods.attach(finalPaymentMethodId, {
+            customer: customer.id,
+          });
+
+          // console.log(`✅ Created customer ${customer.id} and attached payment method`);
+
+          // If registered user exists, update them with the customer ID
+          if (registeredUser) {
+            registeredUser.stripeCustomerId = customer.id;
+            await registeredUser.save();
+            // console.log(`✅ Linked customer ${customer.id} to registered user ${registeredUser._id}`);
+          }
         }
       } catch (error) {
         console.error("❌ Failed to retrieve payment method:", error);
@@ -153,6 +190,10 @@ export async function POST(request: NextRequest) {
       });
       // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
     }
+
+    // ✅ STRIPE BEST PRACTICE: Let Stripe create PaymentIntent automatically
+    // We don't create upfront PaymentIntent - Stripe will create it when we create the subscription
+    // The PaymentIntent will have the correct amount and can be used for wallet payments (Google Pay/Apple Pay)
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
     // This prevents creating duplicate products in Stripe dashboard
@@ -172,7 +213,10 @@ export async function POST(request: NextRequest) {
     const stripePriceId = membershipPackage.stripePriceId;
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
-    // Create subscription with payment method
+    // ✅ STRIPE BEST PRACTICE: Create subscription first, let Stripe create PaymentIntent automatically
+    // Stripe will create Invoice + PaymentIntent with correct amount for wallet payments
+    // We include default_payment_method so Stripe creates PaymentIntent immediately
+    // The PaymentIntent will be confirmed via PaymentElement (not auto-paid)
     // console.log("📋 Creating Stripe subscription...");
     let subscription;
     try {
@@ -183,10 +227,13 @@ export async function POST(request: NextRequest) {
             price: stripePriceId, // ✅ Use existing Price ID
           },
         ],
-        payment_behavior: "default_incomplete",
+        // ✅ Include default_payment_method so Stripe creates PaymentIntent immediately
+        // Payment will still be collected via PaymentElement (not auto-paid)
+        default_payment_method: finalPaymentMethodId,
+        payment_behavior: "default_incomplete", // ✅ Stripe creates PaymentIntent automatically with correct amount
         payment_settings: { save_default_payment_method: "on_subscription" },
-        expand: ["latest_invoice.payment_intent"],
-        description: `${membershipPackage.name}`, // Set description directly on subscription
+        expand: ["latest_invoice.payment_intent"], // ✅ Get PaymentIntent from invoice
+        description: `${membershipPackage.name}`,
         metadata: {
           packageId: validatedData.packageId,
           packageName: membershipPackage.name,
@@ -203,21 +250,213 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the payment intent for confirmation
-    const latestInvoice = subscription.latest_invoice as { payment_intent?: { client_secret?: string } };
-    const paymentIntent = latestInvoice?.payment_intent;
+    // ✅ Get PaymentIntent from subscription's invoice (Stripe created it automatically with correct amount)
+    // First, try to get PaymentIntent from expanded subscription
+    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = null;
+    let latestInvoice: Stripe.Invoice | null = null;
 
-    // console.log(`📄 Latest invoice:`, latestInvoice ? "Found" : "Not found");
-    // console.log(`💳 Payment intent:`, paymentIntent ? "Found" : "Not found");
+    // Check if PaymentIntent is already in the expanded subscription
+    if (subscription.latest_invoice) {
+      latestInvoice =
+        typeof subscription.latest_invoice === "string"
+          ? null // Will retrieve below
+          : (subscription.latest_invoice as Stripe.Invoice);
 
-    // For incomplete subscriptions, we might not have a payment intent yet
-    // This is normal - the payment intent will be created when the customer confirms payment
-    let clientSecret = null;
-    if (paymentIntent && paymentIntent.client_secret) {
-      clientSecret = paymentIntent.client_secret;
-      // console.log(`💳 Payment intent status: ${(paymentIntent as PaymentIntentWithStatus).status}`);
-    } else {
-      // console.log(`⏳ No payment intent yet - will be created when customer confirms payment`);
+      // If invoice is expanded, check for PaymentIntent
+      if (latestInvoice) {
+        paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
+          ?.payment_intent;
+      }
+    }
+
+    // If we don't have the invoice yet, retrieve it
+    const invoiceId =
+      typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice?.id;
+
+    if (!invoiceId) {
+      console.error("❌ No invoice ID found in subscription");
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Failed to create invoice. Please try again.",
+        },
+        { status: 500 }
+      );
+    }
+
+    // Retrieve invoice with expansion if we don't have it yet
+    if (!latestInvoice) {
+      latestInvoice = await stripe.invoices.retrieve(invoiceId as string, {
+        expand: ["payment_intent"],
+      });
+      paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
+        ?.payment_intent;
+    }
+
+    // ✅ CRITICAL: If invoice is draft, finalize it first
+    // With payment_behavior: "default_incomplete", Stripe creates draft invoice
+    if (latestInvoice.status === "draft") {
+      try {
+        latestInvoice = await stripe.invoices.finalizeInvoice(invoiceId as string, {
+          expand: ["payment_intent"],
+        });
+        paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
+          ?.payment_intent;
+        console.log(`✅ Invoice finalized: ${latestInvoice.id}, status: ${latestInvoice.status}`);
+      } catch (finalizeError) {
+        console.error("❌ Failed to finalize invoice:", finalizeError);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to finalize invoice. Please try again.",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually
+    // With payment_behavior: "default_incomplete", Stripe doesn't create PaymentIntent automatically
+    // We need to create it for wallet payments (Google Pay/Apple Pay) to show correct amount
+    if (!paymentIntent && latestInvoice.status === "open" && latestInvoice.amount_due > 0) {
+      try {
+        console.log(
+          `⚠️ Invoice is open but has no PaymentIntent. Creating PaymentIntent for invoice amount: ${latestInvoice.amount_due}`
+        );
+
+        // Create PaymentIntent for the invoice amount
+        const invoiceAmount = latestInvoice.amount_due || 0;
+        const invoiceCurrency = (latestInvoice.currency as string) || "aud";
+
+        const newPaymentIntent = await stripe.paymentIntents.create({
+          amount: invoiceAmount,
+          currency: invoiceCurrency,
+          customer: customer.id,
+          payment_method: finalPaymentMethodId,
+          setup_future_usage: "off_session",
+          automatic_payment_methods: {
+            enabled: true,
+            allow_redirects: "never",
+          },
+          metadata: {
+            invoice_id: latestInvoice.id || "",
+            subscription_id: subscription.id,
+            packageId: validatedData.packageId,
+            packageName: membershipPackage.name,
+            userEmail: validatedData.userEmail,
+            packageType: "subscription",
+          },
+        });
+
+        // Update invoice metadata to track PaymentIntent (optional, but helps with tracking)
+        if (latestInvoice.id) {
+          await stripe.invoices.update(latestInvoice.id, {
+            metadata: {
+              ...(latestInvoice.metadata || {}),
+              payment_intent_id: newPaymentIntent.id,
+            },
+          });
+        }
+
+        paymentIntent = newPaymentIntent;
+        console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`);
+      } catch (createError) {
+        console.error("❌ Failed to create PaymentIntent for invoice:", createError);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to create payment intent. Please try again.",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // ✅ Extract client_secret from PaymentIntent (for frontend PaymentElement)
+    // PaymentElement will automatically show correct amount in wallets (Google Pay/Apple Pay)
+    let clientSecret: string | null = null;
+
+    if (paymentIntent) {
+      if (typeof paymentIntent === "string") {
+        // If it's a string ID, retrieve the PaymentIntent to get client_secret
+        try {
+          const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntent);
+          clientSecret = retrievedPI.client_secret || null;
+          console.log(
+            `✅ Retrieved PaymentIntent: ${retrievedPI.id}, status: ${
+              retrievedPI.status
+            }, has client_secret: ${!!clientSecret}`
+          );
+        } catch (retrieveError) {
+          console.error("❌ Failed to retrieve PaymentIntent:", retrieveError);
+        }
+      } else {
+        // If it's already expanded, use it directly
+        clientSecret = paymentIntent.client_secret || null;
+        console.log(
+          `✅ Using expanded PaymentIntent: ${paymentIntent.id}, status: ${
+            paymentIntent.status
+          }, has client_secret: ${!!clientSecret}`
+        );
+      }
+    }
+
+    // ✅ Fallback: If PaymentIntent still not found, try retrieving invoice again with expansion
+    if (!clientSecret && latestInvoice.id) {
+      try {
+        const expandedInvoice = await stripe.invoices.retrieve(latestInvoice.id, {
+          expand: ["payment_intent"],
+        });
+        const expandedPaymentIntent = (
+          expandedInvoice as Stripe.Invoice & {
+            payment_intent?: Stripe.PaymentIntent | string;
+          }
+        )?.payment_intent;
+
+        if (expandedPaymentIntent) {
+          if (typeof expandedPaymentIntent === "string") {
+            const retrievedPI = await stripe.paymentIntents.retrieve(expandedPaymentIntent);
+            clientSecret = retrievedPI.client_secret || null;
+            console.log(
+              `✅ Fallback: Retrieved PaymentIntent: ${retrievedPI.id}, has client_secret: ${!!clientSecret}`
+            );
+          } else {
+            clientSecret = expandedPaymentIntent.client_secret || null;
+            console.log(
+              `✅ Fallback: Using expanded PaymentIntent: ${
+                expandedPaymentIntent.id
+              }, has client_secret: ${!!clientSecret}`
+            );
+          }
+        }
+      } catch (retrieveError) {
+        console.error("❌ Failed to retrieve invoice with expansion:", retrieveError);
+      }
+    }
+
+    if (!clientSecret) {
+      console.error("❌ No PaymentIntent client_secret found in subscription invoice");
+      console.error("Debug details:", {
+        subscriptionId: subscription.id,
+        subscriptionStatus: subscription.status,
+        invoiceId: latestInvoice.id,
+        invoiceStatus: latestInvoice.status,
+        hasPaymentIntent: !!paymentIntent,
+        paymentIntentType: paymentIntent ? (typeof paymentIntent === "string" ? "string" : "object") : "null",
+        paymentIntentId: paymentIntent
+          ? typeof paymentIntent === "string"
+            ? paymentIntent
+            : paymentIntent.id
+          : "null",
+        paymentIntentStatus: paymentIntent && typeof paymentIntent === "object" ? paymentIntent.status : "N/A",
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Failed to get payment intent. Please try again.",
+        },
+        { status: 500 }
+      );
     }
 
     let user;

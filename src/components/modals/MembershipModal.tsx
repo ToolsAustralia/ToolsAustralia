@@ -129,6 +129,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const [cardFormError, setCardFormError] = useState<string | null>(null);
   // Track the last amount we created a PaymentIntent for (to detect changes)
   const lastPaymentIntentAmountRef = useRef<number | null>(null);
+  // ✅ FIX: Track if PaymentIntent creation is in progress to prevent double creation
+  const isCreatingPaymentIntentRef = useRef<boolean>(false);
   const cardFormRef = useRef<{
     confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }>;
   } | null>(null);
@@ -491,15 +493,37 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     });
   }, [promoEnhancedPlan, activePlan]);
 
-  // Recreate PaymentIntent when package/amount changes (for wallet payments to show correct amount)
+  // Recreate PaymentIntent/SetupIntent when package/amount changes
   useEffect(() => {
-    // Only recreate if card form is shown and we have an amount
+    // Only recreate if card form is shown
     if (showCardForm && (paymentIntentClientSecret || setupIntentClientSecret)) {
       const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
       const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
+      const isSubscription = activePlan?.period === "mo";
 
-      // Only recreate PaymentIntent if amount is available and different from last created amount
+      // ✅ FIX: Prevent double creation - skip if already creating
+      if (isCreatingPaymentIntentRef.current) {
+        return; // Already creating, skip to prevent duplicate API calls
+      }
+
+      // ✅ STRIPE BEST PRACTICE: For subscriptions, don't create PaymentIntent upfront
+      // Subscription API will create PaymentIntent automatically with correct amount
+      // For subscriptions, use SetupIntent for payment method collection only
+      if (isSubscription) {
+        // For subscriptions: Use SetupIntent (subscription will create PaymentIntent automatically)
+        if (!setupIntentClientSecret) {
+          createSetupIntent.mutate();
+        }
+        // Clear any existing PaymentIntent client secret for subscriptions
+        if (paymentIntentClientSecret) {
+          setPaymentIntentClientSecret(null);
+          setPaymentIntentId(null);
+        }
+        return;
+      }
+
+      // For one-time purchases: Create PaymentIntent for wallet display with correct amount
       if (amountInCents > 0) {
         // Check if we need to recreate (amount changed or no PaymentIntent exists yet)
         const lastAmount = lastPaymentIntentAmountRef.current;
@@ -512,6 +536,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             packageName,
             hasPaymentIntent: !!paymentIntentClientSecret,
           });
+
+          // ✅ FIX: Mark as creating to prevent duplicate calls
+          isCreatingPaymentIntentRef.current = true;
 
           createPaymentIntent.mutate(
             {
@@ -532,9 +559,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   // Update the ref to track the amount we just created PaymentIntent for
                   lastPaymentIntentAmountRef.current = amountInCents;
                 }
+                // ✅ FIX: Reset flag after successful creation
+                isCreatingPaymentIntentRef.current = false;
               },
               onError: () => {
                 // Don't show error toast on package change - user can still proceed
+                // ✅ FIX: Reset flag on error so user can retry
+                isCreatingPaymentIntentRef.current = false;
               },
             }
           );
@@ -542,7 +573,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promoEnhancedPlan?.price, activePlan?.price, activePlan?.name, showCardForm]);
+  }, [promoEnhancedPlan?.price, activePlan?.price, activePlan?.name, activePlan?.period, showCardForm]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const formatCardNumber = (value: string) => {
@@ -727,15 +758,28 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         // Show card form by default for new users
         setShowCardForm(true);
 
-        // Create PaymentIntent for guest user payment method collection (shows correct amount in wallet payments)
-        // Calculate amount in cents
+        // ✅ STRIPE BEST PRACTICE: For subscriptions, use SetupIntent (subscription will create PaymentIntent)
+        // For one-time purchases, use PaymentIntent (shows amount in wallets)
+        const isSubscription = activePlan?.period === "mo";
         const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
         const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
         try {
-          // Use PaymentIntent if amount is available, otherwise fallback to SetupIntent
-          if (amountInCents > 0) {
+          if (isSubscription) {
+            // For subscriptions: Use SetupIntent for payment method collection
+            // Subscription will be created when payment method is confirmed, which creates PaymentIntent automatically
+            const setupResult = await createSetupIntent.mutateAsync();
+
+            if (setupResult.success && setupResult.client_secret) {
+              setSetupIntentClientSecret(setupResult.client_secret);
+              setPaymentIntentClientSecret(null); // Clear PaymentIntent
+              setCardFormError(null); // Clear any previous errors
+            } else {
+              throw new Error(setupResult.error || "Failed to create SetupIntent");
+            }
+          } else if (amountInCents > 0) {
+            // For one-time purchases: Use PaymentIntent (shows correct amount in wallets)
             const paymentResult = await createPaymentIntent.mutateAsync({
               amount: amountInCents,
               currency: "aud",
@@ -1018,14 +1062,29 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         return;
       }
 
-      // Create PaymentIntent for payment method creation (shows correct amount in wallet payments)
-      // Calculate amount in cents
+      // ✅ STRIPE BEST PRACTICE: For subscriptions, use SetupIntent (subscription will create PaymentIntent)
+      // For one-time purchases, use PaymentIntent (shows amount in wallets)
+      const isSubscription = activePlan?.period === "mo";
       const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
       const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
-      // Use PaymentIntent if amount is available, otherwise fallback to SetupIntent
-      if (amountInCents > 0) {
+      if (isSubscription) {
+        // For subscriptions: Use SetupIntent for payment method collection
+        // Subscription will be created when payment method is confirmed, which creates PaymentIntent automatically
+        const result = await createSetupIntent.mutateAsync();
+
+        if (result.success && result.client_secret) {
+          setSetupIntentClientSecret(result.client_secret);
+          setPaymentIntentClientSecret(null); // Clear PaymentIntent
+          setUseSavedPaymentMethod(false);
+          setSelectedPaymentMethod(null);
+          setShowCardForm(true);
+        } else {
+          throw new Error(result.error || "Failed to create SetupIntent");
+        }
+      } else if (amountInCents > 0) {
+        // For one-time purchases: Use PaymentIntent (shows correct amount in wallets)
         const result = await createPaymentIntent.mutateAsync({
           amount: amountInCents,
           currency: "aud",
@@ -1705,6 +1764,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       // Determine payment method to use
       let paymentMethodId: string;
       let isNewPaymentMethod = false;
+      // ✅ SINGLE SOURCE OF TRUTH: Capture paymentIntentId from PaymentIntent confirmation
+      let confirmedPaymentIntentId: string | undefined = undefined;
 
       if (useSavedPaymentMethod && selectedPaymentMethod) {
         // Use saved payment method
@@ -1722,9 +1783,49 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             paymentMethodId = result.paymentMethodId;
             // Store paymentIntentId if PaymentIntent was used
             if (result.paymentIntentId) {
+              confirmedPaymentIntentId = result.paymentIntentId; // Capture for passing to backend
               setPaymentIntentId(result.paymentIntentId);
             }
             // console.log("✅ Card confirmed successfully:", paymentMethodId);
+
+            // ✅ STRIPE BEST PRACTICE: For subscriptions, create subscription immediately after payment method is confirmed
+            // This creates PaymentIntent automatically with correct amount for wallet display
+            if (activePlan.period === "mo" && !isAuthenticated && guestUserData) {
+              try {
+                // Create subscription immediately - Stripe will create PaymentIntent
+                const packageIdForSubscription = getPackageId(activePlan, [
+                  ...subscriptionPackages,
+                  ...oneTimePackages,
+                ]);
+                if (!packageIdForSubscription) {
+                  throw new Error("Package ID not found");
+                }
+
+                const subscriptionResult = await createSubscription({
+                  userEmail: guestUserData.email,
+                  firstName: guestUserData.firstName,
+                  lastName: guestUserData.lastName,
+                  mobile: guestUserData.mobile,
+                  packageId: packageIdForSubscription,
+                  paymentMethodId: paymentMethodId, // From SetupIntent confirmation
+                  referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+                  affiliateCode: affiliateCode || undefined,
+                });
+
+                if (subscriptionResult && subscriptionResult.success && subscriptionResult.data?.clientSecret) {
+                  // Use PaymentIntent client_secret from subscription for PaymentElement
+                  setPaymentIntentClientSecret(subscriptionResult.data.clientSecret);
+                  // Store subscription ID (not PaymentIntent ID) so we can detect it later
+                  setPaymentIntentId(subscriptionResult.data.subscriptionId || null);
+                  setSetupIntentClientSecret(null); // Clear SetupIntent
+                  // Now PaymentElement will show correct amount in wallets (Google Pay/Apple Pay)
+                  console.log("✅ Subscription created, PaymentIntent ready for wallet display");
+                }
+              } catch (subscriptionError) {
+                console.error("Failed to create subscription:", subscriptionError);
+                // Don't throw - let the normal flow handle it
+              }
+            }
           } else {
             throw new Error("Failed to confirm card details.");
           }
@@ -1865,7 +1966,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           result = await createSubscriptionExistingUser({
             packageId,
             paymentMethodId,
-            paymentIntentId: paymentIntentId || undefined, // Pass PaymentIntent ID if already confirmed to prevent double charging
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
           });
@@ -1875,7 +1975,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             packageId,
             userId: userData?._id || "",
             paymentMethodId,
-            paymentIntentId: paymentIntentId || undefined, // Pass PaymentIntent ID if already confirmed to prevent double charging
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
           });
@@ -1946,7 +2045,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 subscriptionId,
                 clientSecret: clientSecret === "pending" ? null : clientSecret,
                 userId: undefined, // Existing user - no userId needed
-                paymentIntentId: paymentIntentId || undefined, // Pass PaymentIntent ID if already confirmed to prevent double charging
               }),
             });
 
@@ -2172,25 +2270,53 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
         // console.log("🚀 Creating purchase for newly registered user:", guestUserData.email);
 
-        // Prepare subscription data for new user
-        const subscriptionData = {
-          userEmail: guestUserData.email,
-          firstName: guestUserData.firstName,
-          lastName: guestUserData.lastName,
-          mobile: guestUserData.mobile,
-          packageId,
-          paymentMethodId,
-          referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
-          affiliateCode: affiliateCode || undefined,
-        };
+        // ✅ STRIPE BEST PRACTICE: For subscriptions, check if subscription was already created
+        // (This happens when SetupIntent is confirmed - subscription is created to get PaymentIntent)
+        if (
+          activePlan.period === "mo" &&
+          paymentIntentClientSecret &&
+          paymentIntentId &&
+          !paymentIntentId.startsWith("pi_")
+        ) {
+          // Subscription was already created when SetupIntent was confirmed
+          // PaymentIntent is ready, just need to confirm it (skip subscription creation)
+          console.log("✅ Subscription already created, PaymentIntent ready for confirmation");
+          // result will be set below when we handle the PaymentIntent confirmation
+          // paymentIntentId contains the subscriptionId in this case
+          result = {
+            success: true,
+            data: {
+              clientSecret: paymentIntentClientSecret,
+              subscriptionId: paymentIntentId, // This is actually the subscriptionId
+            },
+          };
+        } else {
+          // Prepare subscription data for new user
+          // ✅ STRIPE BEST PRACTICE: For subscriptions, don't pass paymentIntentId (Stripe creates it)
+          // ✅ For one-time purchases, pass paymentIntentId to reuse confirmed PaymentIntent (prevent double charge)
+          const subscriptionData = {
+            userEmail: guestUserData.email,
+            firstName: guestUserData.firstName,
+            lastName: guestUserData.lastName,
+            mobile: guestUserData.mobile,
+            packageId,
+            paymentMethodId, // Payment method from SetupIntent/PaymentIntent confirmation
+            // ✅ FIX: Include paymentIntentId for one-time purchases to prevent double charge
+            ...(activePlan.period !== "mo" && confirmedPaymentIntentId
+              ? { paymentIntentId: confirmedPaymentIntentId }
+              : {}),
+            referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            affiliateCode: affiliateCode || undefined,
+          };
 
-        // console.log("📦 Subscription data:", subscriptionData);
+          // console.log("📦 Subscription data:", subscriptionData);
 
-        // Create subscription or one-time purchase based on plan type
-        result =
-          activePlan.period === "mo"
-            ? await createSubscription(subscriptionData)
-            : await createOneTimePurchase(subscriptionData);
+          // Create subscription or one-time purchase based on plan type
+          result =
+            activePlan.period === "mo"
+              ? await createSubscription(subscriptionData)
+              : await createOneTimePurchase(subscriptionData);
+        }
 
         if (result) {
           // console.log("✅ Account created successfully:", result);
@@ -2206,7 +2332,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             // console.log("🚀 Confirming subscription payment directly for new user");
 
             const subscriptionId = result.data?.subscriptionId || "";
-            const clientSecret = result.data?.clientSecret || "pending";
+            const clientSecret = result.data?.clientSecret; // ✅ PaymentIntent client_secret from Stripe's subscription invoice
             const userId = result.data?.userId;
 
             if (!subscriptionId) {
@@ -2214,6 +2340,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               throw new Error("Failed to get subscription ID. Please try again.");
             }
 
+            if (!clientSecret) {
+              console.error("? WARNING: No PaymentIntent client_secret found!");
+              throw new Error("Failed to get payment intent. Please try again.");
+            }
+
+            // ✅ STRIPE BEST PRACTICE: Use PaymentIntent client_secret from subscription's invoice
+            // This PaymentIntent was created by Stripe automatically with the correct amount
             // Confirm subscription payment directly
             try {
               const confirmResponse = await fetch("/api/stripe/confirm-subscription-payment", {
@@ -2224,7 +2357,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 credentials: "include",
                 body: JSON.stringify({
                   subscriptionId,
-                  clientSecret: clientSecret === "pending" ? null : clientSecret,
+                  clientSecret: clientSecret, // ✅ PaymentIntent client_secret from Stripe
                   userId: userId, // New user - include userId
                 }),
               });
