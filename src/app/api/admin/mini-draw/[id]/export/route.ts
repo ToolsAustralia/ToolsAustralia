@@ -52,9 +52,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Get all users who have entries in this mini draw
+    // Include subscription data to add lastMonthAccumulatedEntries to existing entries
     const userIds = miniDraw.entries.map((entry: { userId: Types.ObjectId }) => entry.userId);
     const existingUsers = await User.find({ _id: { $in: userIds } })
-      .select("firstName lastName email mobile state")
+      .select("firstName lastName email mobile state subscription")
       .lean();
 
     // Create a map of existing user data for quick lookup
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
 
     // Prepare export data from existing minidraw entries
+    // IMPORTANT: Add lastMonthAccumulatedEntries to entry.totalEntries to include membership benefits
     const existingEntriesMap = new Map<string, MiniDrawExportRow>();
 
     miniDraw.entries.forEach(
@@ -76,6 +78,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const user = existingUserMap.get(entry.userId.toString());
         if (!user) return; // Skip if user not found
 
+        // Get lastMonthAccumulatedEntries from subscription (applies to all minidraws)
+        const lastMonthAccumulatedEntries =
+          (user as { subscription?: { lastMonthAccumulatedEntries?: number } }).subscription
+            ?.lastMonthAccumulatedEntries || 0;
+
+        // Total entries = purchased entries from minidraw + subscription entries
+        // This ensures membership benefits are always included
+        const totalEntries = entry.totalEntries + lastMonthAccumulatedEntries;
+
         const stateAbbr = (user?.state || "").toUpperCase().trim();
         const stateName = STATE_NAMES[stateAbbr] || user?.state || "";
 
@@ -85,21 +96,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           email: user?.email || "",
           mobile: user?.mobile || "",
           state: stateName,
-          totalEntries: entry.totalEntries,
+          totalEntries: totalEntries,
         });
       }
     );
 
     // Query all users with active subscriptions whose package includes "Mini Draws"
+    // Also include miniDrawParticipation to get accurate entry counts
     const usersWithActiveSubscriptions = await User.find({
       "subscription.isActive": true,
       "subscription.packageId": { $exists: true, $ne: null },
     })
-      .select("firstName lastName email mobile state subscription miniDrawPackages")
+      .select("firstName lastName email mobile state subscription miniDrawPackages miniDrawParticipation")
       .lean();
 
     // Process membership-based entries
     const membershipEntriesMap = new Map<string, MiniDrawExportRow>();
+
+    // Get the current minidraw ID for comparison
+    const currentMiniDrawId = (miniDraw._id as unknown as Types.ObjectId).toString();
 
     for (const user of usersWithActiveSubscriptions) {
       // Check if user's subscription package includes "Mini Draws"
@@ -116,29 +131,63 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
       if (!includesMiniDraws) continue;
 
-      // Calculate entries: lastMonthAccumulatedEntries + sum of active minidraw package entries for THIS specific minidraw
+      // Get lastMonthAccumulatedEntries from subscription (applies to all minidraws)
       const lastMonthAccumulatedEntries = user.subscription?.lastMonthAccumulatedEntries || 0;
 
-      // Get the current minidraw ID for comparison
-      const currentMiniDrawId = (miniDraw._id as unknown as Types.ObjectId).toString();
+      // Try to find participation entry for this specific minidraw (single source of truth)
+      // This includes entries from packages AND upsells
+      const participationEntry = user.miniDrawParticipation?.find((p) => {
+        // Handle different ID formats (string, ObjectId, etc.)
+        const pkgMiniDrawId = p.miniDrawId;
 
-      // Sum active minidraw package entries ONLY for this specific minidraw
-      const activeMiniDrawPackageEntries =
-        user.miniDrawPackages?.reduce((sum, pkg) => {
-          if (!pkg.isActive) return sum;
+        // Convert to string for comparison
+        let idString: string | null = null;
 
-          // Check if this package belongs to the current minidraw
-          const pkgMiniDrawId = pkg.miniDrawId ? (pkg.miniDrawId as unknown as Types.ObjectId).toString() : null;
-
-          // Only count entries if miniDrawId matches (skip if null/undefined for backward compatibility)
-          if (pkgMiniDrawId && pkgMiniDrawId === currentMiniDrawId) {
-            return sum + (pkg.entriesGranted || 0);
+        if (pkgMiniDrawId instanceof Types.ObjectId) {
+          idString = pkgMiniDrawId.toString();
+        } else if (typeof pkgMiniDrawId === "string") {
+          idString = pkgMiniDrawId;
+        } else if (pkgMiniDrawId && typeof pkgMiniDrawId === "object") {
+          // Check if it has toString method (ObjectId-like)
+          const obj = pkgMiniDrawId as unknown as { toString?: () => string };
+          if (obj && typeof obj.toString === "function") {
+            idString = obj.toString();
           }
+        }
 
-          return sum;
-        }, 0) || 0;
+        return idString === currentMiniDrawId;
+      });
 
-      const totalEntries = lastMonthAccumulatedEntries + activeMiniDrawPackageEntries;
+      let participationEntries = 0;
+
+      // If participation entry exists, use it (includes packages + upsells)
+      // Use participation entry if it exists, regardless of totalEntries value
+      // This ensures we use the single source of truth for purchased entries
+      if (participationEntry) {
+        participationEntries = participationEntry.totalEntries || 0;
+      } else {
+        // Fallback to old calculation for backward compatibility (if participation entry doesn't exist)
+        // Sum active minidraw package entries ONLY for this specific minidraw
+        participationEntries =
+          user.miniDrawPackages?.reduce((sum, pkg) => {
+            if (!pkg.isActive) return sum;
+
+            // Check if this package belongs to the current minidraw
+            const pkgMiniDrawId = pkg.miniDrawId ? (pkg.miniDrawId as unknown as Types.ObjectId).toString() : null;
+
+            // Only count entries if miniDrawId matches (skip if null/undefined for backward compatibility)
+            if (pkgMiniDrawId && pkgMiniDrawId === currentMiniDrawId) {
+              return sum + (pkg.entriesGranted || 0);
+            }
+
+            return sum;
+          }, 0) || 0;
+      }
+
+      // Total entries = lastMonthAccumulatedEntries (subscription entries for all minidraws)
+      // + participationEntries (purchased entries specific to this minidraw)
+      // This ensures membership benefits are always included
+      const totalEntries = lastMonthAccumulatedEntries + participationEntries;
 
       // Only include if user has entries (greater than 0)
       if (totalEntries > 0) {

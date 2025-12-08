@@ -122,7 +122,8 @@ export default function ProductCard({
 
   /**
    * Calculate user's entry count for this specific minidraw
-   * Shows: lastMonthAccumulatedEntries + active minidraw package entries for THIS specific minidraw
+   * Uses miniDrawParticipation as the single source of truth (includes packages + upsells)
+   * Falls back to old calculation for backward compatibility
    */
   const getUserEntryCount = (): number => {
     if (!isMiniDraw || !isAuthenticated || !userData) return 0;
@@ -135,8 +136,58 @@ export default function ProductCard({
     // Use String() to safely convert both string and ObjectId types to string
     const currentMiniDrawId = String(product._id || "");
 
+    // Type assertion to access miniDrawParticipation (may not be in UserData type)
+    const userWithParticipation = userData as unknown as {
+      miniDrawParticipation?: Array<{
+        miniDrawId: string | { toString(): string } | { _id: string | { toString(): string } };
+        totalEntries: number;
+        isActive?: boolean;
+      }>;
+    };
+
+    // Try to find participation entry for this specific minidraw (single source of truth)
+    const participationEntry = userWithParticipation?.miniDrawParticipation?.find((p) => {
+      // Handle different ID formats (string, ObjectId, etc.)
+      const pkgMiniDrawId = p.miniDrawId;
+      if (typeof pkgMiniDrawId === "string") {
+        return pkgMiniDrawId === currentMiniDrawId;
+      }
+      if (pkgMiniDrawId && typeof pkgMiniDrawId === "object") {
+        // Check if it has toString method (ObjectId-like)
+        if ("toString" in pkgMiniDrawId && typeof pkgMiniDrawId.toString === "function") {
+          return pkgMiniDrawId.toString() === currentMiniDrawId;
+        }
+        // Check if it has _id property
+        if ("_id" in pkgMiniDrawId) {
+          const idValue = (pkgMiniDrawId as { _id: unknown })._id;
+          if (typeof idValue === "string") {
+            return idValue === currentMiniDrawId;
+          }
+          if (idValue && typeof idValue === "object" && "toString" in idValue) {
+            return (idValue as { toString: () => string }).toString() === currentMiniDrawId;
+          }
+        }
+      }
+      return false;
+    });
+
+    // If participation entry exists, use it (includes packages + upsells)
+    if (participationEntry && participationEntry.totalEntries > 0) {
+      // Total entries = lastMonthAccumulatedEntries (for all) + participationEntries (for this specific minidraw)
+      return lastMonthAccumulatedEntries + participationEntry.totalEntries;
+    }
+
+    // Fallback to old calculation for backward compatibility (if participation entry doesn't exist)
     // Sum active minidraw package entries ONLY for this specific minidraw
-    const userMiniDrawPackages = (userData as { miniDrawPackages?: Array<{ isActive: boolean; miniDrawId?: string | { toString(): string }; entriesGranted?: number }> }).miniDrawPackages;
+    const userMiniDrawPackages = (
+      userData as {
+        miniDrawPackages?: Array<{
+          isActive: boolean;
+          miniDrawId?: string | { toString(): string };
+          entriesGranted?: number;
+        }>;
+      }
+    ).miniDrawPackages;
     const activeMiniDrawPackageEntries =
       userMiniDrawPackages?.reduce((sum, pkg) => {
         if (!pkg.isActive) return sum;
@@ -166,7 +217,7 @@ export default function ProductCard({
       const totalEntries = miniDrawQueryData?.totalEntries ?? product.totalEntries ?? 0;
       const minimumEntries = miniDrawQueryData?.minimumEntries ?? product.minimumEntries ?? 0;
       const entriesRemainingData = miniDrawQueryData?.entriesRemaining ?? product.entriesRemaining;
-      
+
       const remainingEntries = Math.max(
         0,
         entriesRemainingData !== undefined
@@ -398,9 +449,7 @@ export default function ProductCard({
           {productData.isPrize && productData.minimumEntries && (
             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2">
               <div className="flex justify-center items-center text-xs">
-                <span>
-                  {productData.entriesRemaining || 0} entries remaining
-                </span>
+                <span>{productData.entriesRemaining || 0} entries remaining</span>
               </div>
             </div>
           )}
@@ -637,9 +686,7 @@ export default function ProductCard({
             {/* Mini Draw Progress Bar (Entry-based) - List View */}
             {productData.isPrize && productData.minimumEntries && (
               <div className="flex justify-center items-center text-xs">
-                <span className="text-gray-700">
-                  {productData.entriesRemaining || 0} entries remaining
-                </span>
+                <span className="text-gray-700">{productData.entriesRemaining || 0} entries remaining</span>
               </div>
             )}
 

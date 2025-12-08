@@ -127,6 +127,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [cardFormError, setCardFormError] = useState<string | null>(null);
+  // Track the last amount we created a PaymentIntent for (to detect changes)
+  const lastPaymentIntentAmountRef = useRef<number | null>(null);
   const cardFormRef = useRef<{
     confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }>;
   } | null>(null);
@@ -497,15 +499,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
-      // Only recreate PaymentIntent if amount is available and different from current
+      // Only recreate PaymentIntent if amount is available and different from last created amount
       if (amountInCents > 0) {
-        // Check if we need to recreate (amount changed or package changed)
-        const shouldRecreate =
-          !paymentIntentClientSecret ||
-          (paymentIntentClientSecret &&
-            amountInCents !== Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100));
+        // Check if we need to recreate (amount changed or no PaymentIntent exists yet)
+        const lastAmount = lastPaymentIntentAmountRef.current;
+        const shouldRecreate = !paymentIntentClientSecret || lastAmount === null || lastAmount !== amountInCents;
 
         if (shouldRecreate) {
+          console.log("🔄 Recreating PaymentIntent for package change:", {
+            oldAmount: lastAmount,
+            newAmount: amountInCents,
+            packageName,
+            hasPaymentIntent: !!paymentIntentClientSecret,
+          });
+
           createPaymentIntent.mutate(
             {
               amount: amountInCents,
@@ -522,6 +529,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   }
                   setSetupIntentClientSecret(null); // Clear SetupIntent
                   setCardFormError(null);
+                  // Update the ref to track the amount we just created PaymentIntent for
+                  lastPaymentIntentAmountRef.current = amountInCents;
                 }
               },
               onError: () => {
@@ -741,6 +750,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               }
               setSetupIntentClientSecret(null); // Clear SetupIntent
               setCardFormError(null); // Clear any previous errors
+              // Track the amount we created PaymentIntent for
+              lastPaymentIntentAmountRef.current = amountInCents;
             } else {
               throw new Error(paymentResult.error || "Failed to create PaymentIntent");
             }
@@ -1031,6 +1042,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           setUseSavedPaymentMethod(false);
           setSelectedPaymentMethod(null);
           setShowCardForm(true);
+          // Track the amount we created PaymentIntent for
+          lastPaymentIntentAmountRef.current = amountInCents;
         } else {
           throw new Error(result.error || "Failed to create PaymentIntent");
         }

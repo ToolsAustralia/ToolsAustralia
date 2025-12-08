@@ -38,7 +38,8 @@ export default function MiniDrawPackages({
 
   /**
    * Calculate user's entry count for this specific minidraw
-   * Shows: lastMonthAccumulatedEntries + active minidraw package entries for THIS specific minidraw
+   * Uses miniDrawParticipation as the single source of truth (includes packages + upsells)
+   * Falls back to old calculation for backward compatibility
    * Same calculation as ProductCard badge
    */
   const calculateUserEntryCount = (): number => {
@@ -48,11 +49,61 @@ export default function MiniDrawPackages({
     const userSubscription = userData.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
     const lastMonthAccumulatedEntries = userSubscription?.lastMonthAccumulatedEntries || 0;
 
-    // Get current minidraw ID for comparison
+    // Get current minidraw ID for comparison (normalize to string)
     const currentMiniDrawId = miniDrawId;
 
+    // Type assertion to access miniDrawParticipation (may not be in UserData type)
+    const userWithParticipation = userData as unknown as {
+      miniDrawParticipation?: Array<{
+        miniDrawId: string | { toString(): string } | { _id: string | { toString(): string } };
+        totalEntries: number;
+        isActive?: boolean;
+      }>;
+    };
+
+    // Try to find participation entry for this specific minidraw (single source of truth)
+    const participationEntry = userWithParticipation?.miniDrawParticipation?.find((p) => {
+      // Handle different ID formats (string, ObjectId, etc.)
+      const pkgMiniDrawId = p.miniDrawId;
+      if (typeof pkgMiniDrawId === "string") {
+        return pkgMiniDrawId === currentMiniDrawId;
+      }
+      if (pkgMiniDrawId && typeof pkgMiniDrawId === "object") {
+        // Check if it has toString method (ObjectId-like)
+        if ("toString" in pkgMiniDrawId && typeof pkgMiniDrawId.toString === "function") {
+          return pkgMiniDrawId.toString() === currentMiniDrawId;
+        }
+        // Check if it has _id property
+        if ("_id" in pkgMiniDrawId) {
+          const idValue = (pkgMiniDrawId as { _id: unknown })._id;
+          if (typeof idValue === "string") {
+            return idValue === currentMiniDrawId;
+          }
+          if (idValue && typeof idValue === "object" && "toString" in idValue) {
+            return (idValue as { toString: () => string }).toString() === currentMiniDrawId;
+          }
+        }
+      }
+      return false;
+    });
+
+    // If participation entry exists, use it (includes packages + upsells)
+    if (participationEntry && participationEntry.totalEntries > 0) {
+      // Total entries = lastMonthAccumulatedEntries (for all) + participationEntries (for this specific minidraw)
+      return lastMonthAccumulatedEntries + participationEntry.totalEntries;
+    }
+
+    // Fallback to old calculation for backward compatibility (if participation entry doesn't exist)
     // Sum active minidraw package entries ONLY for this specific minidraw
-    const userMiniDrawPackages = (userData as { miniDrawPackages?: Array<{ isActive: boolean; miniDrawId?: string | { toString(): string }; entriesGranted?: number }> }).miniDrawPackages;
+    const userMiniDrawPackages = (
+      userData as {
+        miniDrawPackages?: Array<{
+          isActive: boolean;
+          miniDrawId?: string | { toString(): string };
+          entriesGranted?: number;
+        }>;
+      }
+    ).miniDrawPackages;
     const activeMiniDrawPackageEntries =
       userMiniDrawPackages?.reduce((sum, pkg) => {
         if (!pkg.isActive) return sum;
