@@ -174,6 +174,7 @@ const StripeCardForm = React.forwardRef<
       </h4>
       <div className="p-3 border border-gray-300 rounded-lg bg-white">
         <PaymentElement
+          key={`payment-element-${amount || 0}-${packageName || "default"}`}
           options={{
             layout: "tabs",
             wallets: {
@@ -349,6 +350,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             </div>
           ) : setupIntentClientSecret ? (
             <Elements
+              key={`elements-${amount || 0}-${packageName || "default"}`}
               stripe={stripePromise}
               options={{
                 clientSecret: setupIntentClientSecret,
@@ -552,6 +554,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               ) : setupIntentClientSecret ? (
                 <Elements
+                  key={`elements-${amount || 0}-${packageName || "default"}`}
                   stripe={stripePromise}
                   options={{
                     clientSecret: setupIntentClientSecret,
