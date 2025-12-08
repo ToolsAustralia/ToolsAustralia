@@ -32,6 +32,7 @@ const confirmPaymentSchema = z.object({
   subscriptionId: z.string().min(1, "Subscription ID is required"),
   clientSecret: z.string().optional().nullable(),
   userId: z.string().optional(), // For new user registration flow
+  paymentIntentId: z.string().optional(), // If PaymentIntent was already confirmed upfront, use it instead of confirming subscription's PaymentIntent
 });
 
 /**
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { subscriptionId, clientSecret, userId } = confirmPaymentSchema.parse(body);
+    const { subscriptionId, clientSecret, userId, paymentIntentId } = confirmPaymentSchema.parse(body);
 
     // console.log(`💳 Confirming payment for subscription: ${subscriptionId}`);
     // console.log(`💳 Request body:`, { subscriptionId, clientSecret: clientSecret ? "provided" : "null", userId });
@@ -86,6 +87,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Subscription not found in Stripe" }, { status: 404 });
     }
 
+    // ✅ CRITICAL: Prevent double charging
+    // If PaymentIntent was already confirmed upfront (for wallet payments), use it instead of confirming subscription's PaymentIntent
+    let existingPaymentIntent = null;
+    if (paymentIntentId) {
+      try {
+        existingPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+        // Verify it belongs to this customer and has succeeded
+        if (existingPaymentIntent.customer !== subscription.customer) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "PaymentIntent does not belong to this subscription's customer",
+            },
+            { status: 400 }
+          );
+        }
+
+        if (existingPaymentIntent.status !== "succeeded") {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `PaymentIntent status is ${existingPaymentIntent.status}, expected succeeded`,
+            },
+            { status: 400 }
+          );
+        }
+
+        console.log(`✅ Found existing PaymentIntent: ${paymentIntentId} (already charged)`);
+      } catch (error) {
+        console.error("❌ Failed to retrieve existing PaymentIntent:", error);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to retrieve existing PaymentIntent",
+            details: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Check if there's a payment intent that needs confirmation
     const latestInvoice = subscription.latest_invoice as {
       payment_intent?: { status: string; id: string };
@@ -94,6 +137,53 @@ export async function POST(request: NextRequest) {
       id?: string;
     } | null;
     let paymentIntent = latestInvoice?.payment_intent;
+
+    // If we have an existing PaymentIntent that was already confirmed, use it instead
+    if (existingPaymentIntent && latestInvoice) {
+      // Verify the amounts match
+      const invoiceAmount = latestInvoice.amount_due || 0;
+      if (existingPaymentIntent.amount === invoiceAmount && existingPaymentIntent.currency === latestInvoice.currency) {
+        console.log(`✅ Using existing PaymentIntent for subscription invoice (amounts match)`);
+
+        // Pay the invoice using the payment method from the existing PaymentIntent
+        // This prevents double charging since the PaymentIntent was already confirmed
+        try {
+          // Get the payment method from the existing PaymentIntent
+          const paymentMethodId =
+            typeof existingPaymentIntent.payment_method === "string"
+              ? existingPaymentIntent.payment_method
+              : existingPaymentIntent.payment_method?.id;
+
+          if (paymentMethodId && latestInvoice.id) {
+            // Pay the invoice using the payment method from the already-confirmed PaymentIntent
+            await stripe.invoices.pay(latestInvoice.id, {
+              payment_method: paymentMethodId,
+            });
+
+            console.log(`✅ Invoice paid using existing PaymentIntent's payment method`);
+
+            // Update the paymentIntent reference to use the existing one
+            paymentIntent = {
+              id: existingPaymentIntent.id,
+              status: "succeeded",
+            } as { status: string; id: string };
+          } else {
+            console.warn(
+              "⚠️ Could not extract payment method from existing PaymentIntent, falling back to normal flow"
+            );
+            // Fall through to normal flow
+          }
+        } catch (error) {
+          console.error("❌ Failed to pay invoice with existing PaymentIntent:", error);
+          // Fall through to normal flow
+        }
+      } else {
+        console.warn(
+          `⚠️ PaymentIntent amount mismatch: PaymentIntent=${existingPaymentIntent.amount}, Invoice=${invoiceAmount}. Using subscription's PaymentIntent.`
+        );
+        // Fall through to normal flow - use subscription's PaymentIntent
+      }
+    }
 
     // If no payment intent exists for incomplete subscription, pay the invoice directly
     if (!paymentIntent && subscription.status === "incomplete") {

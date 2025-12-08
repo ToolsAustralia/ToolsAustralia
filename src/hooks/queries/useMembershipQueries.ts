@@ -74,6 +74,7 @@ export interface OneTimeMembership {
 export interface MembershipPurchaseData {
   packageId: string;
   paymentMethodId?: string;
+  paymentIntentId?: string; // If PaymentIntent was already confirmed upfront, use it to prevent double charging
   referralCode?: string;
   affiliateCode?: string;
   userId: string; // Add userId parameter
@@ -152,10 +153,11 @@ export const usePurchaseMembership = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ packageId, paymentMethodId, referralCode, affiliateCode }: MembershipPurchaseData) => {
+    mutationFn: async ({ packageId, paymentMethodId, paymentIntentId, referralCode, affiliateCode }: MembershipPurchaseData) => {
       const response = await apiPost<MembershipResponse>("/api/stripe/create-one-time-purchase-existing-user", {
         packageId,
         paymentMethodId,
+        paymentIntentId,
         referralCode,
         affiliateCode,
       });

@@ -1865,6 +1865,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           result = await createSubscriptionExistingUser({
             packageId,
             paymentMethodId,
+            paymentIntentId: paymentIntentId || undefined, // Pass PaymentIntent ID if already confirmed to prevent double charging
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
           });
@@ -1874,6 +1875,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             packageId,
             userId: userData?._id || "",
             paymentMethodId,
+            paymentIntentId: paymentIntentId || undefined, // Pass PaymentIntent ID if already confirmed to prevent double charging
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
           });
@@ -1944,6 +1946,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 subscriptionId,
                 clientSecret: clientSecret === "pending" ? null : clientSecret,
                 userId: undefined, // Existing user - no userId needed
+                paymentIntentId: paymentIntentId || undefined, // Pass PaymentIntent ID if already confirmed to prevent double charging
               }),
             });
 
