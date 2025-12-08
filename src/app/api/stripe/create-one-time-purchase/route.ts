@@ -295,13 +295,15 @@ export async function POST(request: NextRequest) {
 
       // ✅ FIX: Update PaymentIntent with customer and metadata
       // This ensures webhook can find the user by customer ID
+      const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
       await stripe.paymentIntents.update(existingPaymentIntent.id, {
         customer: customer.id, // ✅ Update customer field so webhook can find user
         metadata: {
           ...existingPaymentIntent.metadata,
           packageId: validatedData.packageId,
           userEmail: validatedData.userEmail,
-          packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
+          type: packageTypeValue, // ✅ CRITICAL: Set 'type' for webhook compatibility
+          packageType: packageTypeValue, // ✅ Also set 'packageType' for consistency
           entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
           price: Math.round(membershipPackage.price * 100).toString(),
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
@@ -338,7 +340,8 @@ export async function POST(request: NextRequest) {
           ]),
           packageId: validatedData.packageId,
           userEmail: validatedData.userEmail,
-          packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
+          type: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
+          packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
           entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
           price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),

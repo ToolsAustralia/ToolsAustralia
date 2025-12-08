@@ -493,6 +493,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     });
   }, [promoEnhancedPlan, activePlan]);
 
+  // ✅ FIX: Clear client secrets when package type changes to ensure PaymentMethodSelector remounts
+  useEffect(() => {
+    const isSubscription = activePlan?.period === "mo";
+    const currentHasPaymentIntent = !!paymentIntentClientSecret;
+    const currentHasSetupIntent = !!setupIntentClientSecret;
+
+    // If switching to subscription and we have PaymentIntent, clear it
+    if (isSubscription && currentHasPaymentIntent) {
+      console.log("🔄 Package type changed to subscription - clearing PaymentIntent");
+      setPaymentIntentClientSecret(null);
+      setPaymentIntentId(null);
+      lastPaymentIntentAmountRef.current = null;
+    }
+
+    // If switching to one-time and we have SetupIntent, clear it (will be recreated when needed)
+    if (!isSubscription && currentHasSetupIntent && showCardForm) {
+      console.log("🔄 Package type changed to one-time - clearing SetupIntent");
+      setSetupIntentClientSecret(null);
+    }
+  }, [activePlan?.period, showCardForm]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Recreate PaymentIntent/SetupIntent when package/amount changes
   useEffect(() => {
     // Only recreate if card form is shown
@@ -3004,6 +3025,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 {/* Payment Section - Always show package info and payment button */}
                 <div className="space-y-2 sm:space-y-3 border-t border-gray-200 pt-3 sm:pt-4">
                   {/* Payment Method Selector for non-authenticated users */}
+                  {/* ✅ VERIFIED: Amount is correctly calculated from activePlan (from PackageSelectionModal) 
+                      Flow: PackageSelectionModal -> onPlanSelect -> handlePackageSelect -> onPlanChange -> 
+                      Parent updates selectedPlan -> activePlan -> amount calculation -> PaymentMethodSelector */}
                   {!isAuthenticated && (
                     <PaymentMethodSelector
                       onPaymentMethodSelect={handlePaymentMethodSelect}

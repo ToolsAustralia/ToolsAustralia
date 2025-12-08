@@ -205,6 +205,18 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     // ✅ WEBHOOK-FIRST: Process only explicit non-subscription payments here
     const paymentType = paymentIntent.metadata.type || paymentIntent.metadata.packageType;
 
+    // ✅ DEBUG: Log payment metadata for troubleshooting
+    webhookLog("info", `PaymentIntent metadata:`, {
+      paymentIntentId: paymentIntent.id,
+      customerId: paymentIntent.customer,
+      type: paymentIntent.metadata.type,
+      packageType: paymentIntent.metadata.packageType,
+      packageId: paymentIntent.metadata.packageId,
+      userEmail: paymentIntent.metadata.userEmail,
+      resolvedPaymentType: paymentType,
+      hasInvoice: !!(paymentIntent as { invoice?: string | Stripe.Invoice }).invoice,
+    });
+
     // ✅ CRITICAL: Skip subscription payments - they're handled by invoice.payment_succeeded
     // This prevents duplicate processing when both payment_intent.succeeded and invoice.payment_succeeded fire
     // Also skip upfront PaymentIntents marked for subscriptions (they're just for wallet display)
@@ -222,15 +234,23 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
 
     // Process ONLY non-subscription payments (explicit types)
     if (paymentType === "upsell") {
+      webhookLog("info", `Processing upsell payment: ${paymentIntent.id}`);
       await handleUpsellWebhook(user, paymentIntent);
     } else if (paymentType === "mini-draw") {
+      webhookLog("info", `Processing mini-draw payment: ${paymentIntent.id}`);
       await handleMiniDrawWebhook(user, paymentIntent);
     } else if (paymentType === "one-time") {
+      webhookLog("info", `Processing one-time payment: ${paymentIntent.id}`);
       await handleOneTimeWebhook(user, paymentIntent);
     } else {
       // ✅ CRITICAL: Never process membership/subscription via PI here
       // Only explicit non-subscription types are allowed above
-      webhookLog("info", `Skipping payment_intent.succeeded for non-explicit type. Handled elsewhere if needed.`);
+      webhookLog(
+        "warn",
+        `Skipping payment_intent.succeeded for non-explicit type: ${paymentType || "undefined"}. PaymentIntent ID: ${
+          paymentIntent.id
+        }`
+      );
       return false;
     }
 

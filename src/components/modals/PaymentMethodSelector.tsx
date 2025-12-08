@@ -331,6 +331,9 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   // Use provided intentType or calculate from client secrets
   const activeIntentType: "setup" | "payment" | undefined =
     intentType || (paymentIntentClientSecret ? "payment" : setupIntentClientSecret ? "setup" : undefined);
+  // ✅ FIX: Derive package type from intentType and amount for proper Elements remounting
+  // PaymentIntent with amount = one-time, SetupIntent = subscription
+  const packageType = paymentIntentClientSecret && amount && amount > 0 ? "one-time" : "subscription";
   const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
@@ -452,7 +455,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             </div>
           ) : activeClientSecret && activeIntentType ? (
             <Elements
-              key={`elements-${activeIntentType}-${amount || 0}-${packageName || "default"}`}
+              key={`elements-${activeIntentType}-${packageType}-${amount || 0}-${packageName || "default"}`}
               stripe={stripePromise}
               options={{
                 clientSecret: activeClientSecret,
@@ -657,7 +660,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               ) : activeClientSecret && activeIntentType ? (
                 <Elements
-                  key={`elements-${activeIntentType}-${amount || 0}-${packageName || "default"}`}
+                  key={`elements-${activeIntentType}-${packageType}-${amount || 0}-${packageName || "default"}`}
                   stripe={stripePromise}
                   options={{
                     clientSecret: activeClientSecret,

@@ -318,22 +318,28 @@ export async function POST(request: NextRequest) {
     // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually
     // With payment_behavior: "default_incomplete", Stripe doesn't create PaymentIntent automatically
     // We need to create it for wallet payments (Google Pay/Apple Pay) to show correct amount
-    if (!paymentIntent && latestInvoice.status === "open" && latestInvoice.amount_due > 0) {
+    if (!paymentIntent && latestInvoice.status === "open") {
       try {
-        console.log(
-          `⚠️ Invoice is open but has no PaymentIntent. Creating PaymentIntent for invoice amount: ${latestInvoice.amount_due}`
-        );
-
-        // Create PaymentIntent for the invoice amount
-        const invoiceAmount = latestInvoice.amount_due || 0;
+        // ✅ FIX: Use invoice amount_due, but fallback to subscription price if amount_due is 0
+        // This handles edge cases where invoice might have 0 amount due to prorations or trials
+        const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
         const invoiceCurrency = (latestInvoice.currency as string) || "aud";
 
+        console.log(
+          `⚠️ Invoice is open but has no PaymentIntent. Creating PaymentIntent for amount: ${invoiceAmount} (invoice amount_due: ${
+            latestInvoice.amount_due
+          }, package price: ${Math.round(membershipPackage.price * 100)})`
+        );
+
+        // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
+        // Don't confirm it - let PaymentElement handle confirmation
         const newPaymentIntent = await stripe.paymentIntents.create({
           amount: invoiceAmount,
           currency: invoiceCurrency,
           customer: customer.id,
           payment_method: finalPaymentMethodId,
           setup_future_usage: "off_session",
+          confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
           automatic_payment_methods: {
             enabled: true,
             allow_redirects: "never",
@@ -344,7 +350,9 @@ export async function POST(request: NextRequest) {
             packageId: validatedData.packageId,
             packageName: membershipPackage.name,
             userEmail: validatedData.userEmail,
+            type: "subscription", // ✅ Set 'type' for webhook compatibility
             packageType: "subscription",
+            isUpfrontPayment: "true", // ✅ Mark as upfront payment so webhook skips it
           },
         });
 
@@ -383,10 +391,16 @@ export async function POST(request: NextRequest) {
           const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntent);
           clientSecret = retrievedPI.client_secret || null;
           console.log(
-            `✅ Retrieved PaymentIntent: ${retrievedPI.id}, status: ${
-              retrievedPI.status
+            `✅ Retrieved PaymentIntent: ${retrievedPI.id}, status: ${retrievedPI.status}, amount: ${
+              retrievedPI.amount
             }, has client_secret: ${!!clientSecret}`
           );
+
+          // ✅ DEBUG: Verify amount matches subscription price
+          const expectedAmount = Math.round(membershipPackage.price * 100);
+          if (retrievedPI.amount !== expectedAmount) {
+            console.warn(`⚠️ PaymentIntent amount mismatch: expected ${expectedAmount}, got ${retrievedPI.amount}`);
+          }
         } catch (retrieveError) {
           console.error("❌ Failed to retrieve PaymentIntent:", retrieveError);
         }
@@ -394,10 +408,16 @@ export async function POST(request: NextRequest) {
         // If it's already expanded, use it directly
         clientSecret = paymentIntent.client_secret || null;
         console.log(
-          `✅ Using expanded PaymentIntent: ${paymentIntent.id}, status: ${
-            paymentIntent.status
+          `✅ Using expanded PaymentIntent: ${paymentIntent.id}, status: ${paymentIntent.status}, amount: ${
+            paymentIntent.amount
           }, has client_secret: ${!!clientSecret}`
         );
+
+        // ✅ DEBUG: Verify amount matches subscription price
+        const expectedAmount = Math.round(membershipPackage.price * 100);
+        if (paymentIntent.amount !== expectedAmount) {
+          console.warn(`⚠️ PaymentIntent amount mismatch: expected ${expectedAmount}, got ${paymentIntent.amount}`);
+        }
       }
     }
 
