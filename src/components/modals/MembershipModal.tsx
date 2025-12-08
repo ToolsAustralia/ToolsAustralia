@@ -2698,17 +2698,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   };
 
   const isFormValid = () => {
+    // Check if we have either PaymentIntent or SetupIntent client secret
+    const hasIntentClientSecret = paymentIntentClientSecret !== null || setupIntentClientSecret !== null;
+
     if (isAuthenticated) {
       // For authenticated users, need either saved payment method or new card details (when card form is shown)
       return useSavedPaymentMethod
         ? selectedPaymentMethod !== null
         : showCardForm
-        ? !cardFormError && setupIntentClientSecret !== null // Card form is valid if no errors and SetupIntent is ready
+        ? !cardFormError && hasIntentClientSecret // Card form is valid if no errors and PaymentIntent/SetupIntent is ready
         : false; // If no saved payment method and card form is not shown, form is invalid
     } else {
       // For new users (guest checkout), check if registration is complete and card form is ready
       const registrationComplete = currentStep === 2 && guestUserData !== null;
-      const cardFormReady = !cardFormError && setupIntentClientSecret !== null;
+      const cardFormReady = !cardFormError && hasIntentClientSecret;
       return Boolean(registrationComplete && cardFormReady);
     }
   };
