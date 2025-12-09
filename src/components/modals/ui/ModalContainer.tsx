@@ -226,7 +226,8 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     document.body.style.top = `-${savedScrollPosition.current}px`;
     document.body.style.width = "100%";
 
-        return () => {
+    // Cleanup: Restore body scroll and position when modal closes
+    return () => {
       // Restore body styles
       document.body.style.overflow = "";
       document.body.style.position = "";
