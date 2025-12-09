@@ -109,6 +109,10 @@ export async function POST(request: NextRequest) {
         enabled: true,
         allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
       },
+      // ✅ STRIPE BEST PRACTICE: For subscription upfront PaymentIntents, use manual capture
+      // This allows us to cancel the PaymentIntent before it's captured, preventing double charge
+      // The PaymentIntent will be in "requires_capture" status after confirmation, giving us time to cancel it
+      ...(validatedData.packageType === "subscription" && { capture_method: "manual" }), // ✅ Manual capture for subscriptions
       // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
       ...(validatedData.packageName && { description: validatedData.packageName }),
       metadata: {

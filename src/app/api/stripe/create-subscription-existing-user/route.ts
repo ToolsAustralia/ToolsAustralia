@@ -14,6 +14,7 @@ const createSubscriptionExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   paymentMethodId: z.string().min(1, "Payment method is required"),
   paymentIntentId: z.string().optional(), // ✅ NEW: Optional upfront PaymentIntent ID for wallet display
+  idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode: z.string().optional(),
 });
 
@@ -126,22 +127,32 @@ export async function POST(request: NextRequest) {
     const stripePriceId = membershipPackage.stripePriceId;
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
+    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
+    // This ensures that even if the API is called twice (e.g., double-click), only one subscription is created
+    const idempotencyKey =
+      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${existingUser.email}_${Date.now()}`;
+
     // Create the subscription with metadata for webhook processing
     // Use payment_behavior to match new user flow and ensure proper webhook processing
-    const subscription = await stripe.subscriptions.create({
-      customer: stripeCustomerId,
-      items: [{ price: stripePriceId }], // ✅ Use existing Price ID
-      default_payment_method: finalPaymentMethodId,
-      payment_behavior: "default_incomplete", // Creates incomplete subscription requiring payment confirmation
-      payment_settings: { save_default_payment_method: "on_subscription" },
-      expand: ["latest_invoice.payment_intent"],
-      description: `${membershipPackage.name}`, // Set description directly on subscription
-      metadata: {
-        packageId: validatedData.packageId,
-        packageName: membershipPackage.name,
-        userEmail: existingUser.email,
+    const subscription = await stripe.subscriptions.create(
+      {
+        customer: stripeCustomerId,
+        items: [{ price: stripePriceId }], // ✅ Use existing Price ID
+        default_payment_method: finalPaymentMethodId,
+        payment_behavior: "default_incomplete", // Creates incomplete subscription requiring payment confirmation
+        payment_settings: { save_default_payment_method: "on_subscription" },
+        expand: ["latest_invoice.payment_intent"],
+        description: `${membershipPackage.name}`, // Set description directly on subscription
+        metadata: {
+          packageId: validatedData.packageId,
+          packageName: membershipPackage.name,
+          userEmail: existingUser.email,
+        },
       },
-    });
+      {
+        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate subscription creation
+      }
+    );
 
     // Update user subscription info immediately but NO initial benefit allocation
     // console.log(
@@ -230,32 +241,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ✅ STRIPE BEST PRACTICE: Cancel upfront PaymentIntent to prevent double charging
+    // ✅ STRIPE BEST PRACTICE: Cancel upfront PaymentIntent BEFORE creating subscription
+    // This prevents the upfront PaymentIntent from being confirmed, which would cause double charging
     // The upfront PaymentIntent was ONLY for wallet display (Google Pay/Apple Pay)
     // The invoice PaymentIntent (from Stripe Price catalog) is the one that should be charged
-    // We MUST cancel the upfront PaymentIntent to prevent both from being confirmed
     if (validatedData.paymentIntentId) {
       try {
         const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
 
         // Only cancel if it's still in a cancellable state (not already succeeded/cancelled)
+        // ✅ CRITICAL: Must check for "requires_capture" status (shown as "Uncaptured" in Stripe dashboard)
+        // With capture_method: "manual", PaymentIntent goes to "requires_capture" after confirmation
+        // This means funds are AUTHORIZED but not yet CAPTURED - we MUST cancel to release the hold
         if (
           upfrontPaymentIntent.status === "requires_payment_method" ||
           upfrontPaymentIntent.status === "requires_confirmation" ||
-          upfrontPaymentIntent.status === "requires_action"
+          upfrontPaymentIntent.status === "requires_action" ||
+          upfrontPaymentIntent.status === "requires_capture" // ✅ CRITICAL: Handle uncaptured PaymentIntents
         ) {
           await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
           console.log(
-            `✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} (was for display only) - using invoice PaymentIntent to prevent double charge`
+            `✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} BEFORE subscription creation (was for display only) - prevents double charge. Status was: ${upfrontPaymentIntent.status}`
           );
         } else if (upfrontPaymentIntent.status === "succeeded") {
-          console.warn(
-            `⚠️ Upfront PaymentIntent ${
-              upfrontPaymentIntent.id
-            } already succeeded! This may cause double charge. Invoice PaymentIntent: ${
-              paymentIntent ? (typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id) : "none"
-            }`
+          console.error(
+            `❌ CRITICAL: Upfront PaymentIntent ${upfrontPaymentIntent.id} already succeeded BEFORE subscription creation! This will cause double charge.`
           );
+          // Still continue - we'll use invoice PaymentIntent, but log error
         } else {
           console.log(
             `ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, no action needed`

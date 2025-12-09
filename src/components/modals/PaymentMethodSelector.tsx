@@ -44,6 +44,8 @@ interface PaymentMethodSelectorProps {
   // Amount and package name for wallet payment display (Apple Pay/Google Pay)
   amount?: number; // Amount in cents
   packageName?: string; // Package name for payment request label
+  // ✅ NEW: Flag to indicate if this is an upfront PaymentIntent for subscriptions (should be cancelled after payment method extraction)
+  isUpfrontPaymentIntent?: boolean;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
@@ -67,264 +69,311 @@ const StripeCardForm = React.forwardRef<
     };
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
+    isUpfrontPaymentIntent?: boolean; // ✅ NEW: Flag to indicate if this is an upfront PaymentIntent for subscriptions
   }
->(({ clientSecret, intentType, onCardElementChange, cardError, billingDetails, amount, packageName }, ref) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isStripeLoading, setIsStripeLoading] = useState(true);
-
-  // Handle Stripe loading state
-  useEffect(() => {
-    if (stripe && elements) {
-      setIsStripeLoading(false);
-    }
-  }, [stripe, elements]);
-
-  // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
-  // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
-  // For subscriptions: PaymentIntent must be created before wallets can show correct amount
-  // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
-  // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
-  const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
-
-  // Build paymentRequest configuration - only include if amount is valid
-  // This ensures PaymentElement shows correct amount in wallet UIs
-  const paymentRequestConfig:
-    | { country: string; currency: string; total: { label: string; amount: number } }
-    | undefined = shouldEnableWallets
-    ? {
-        country: "AU",
-        currency: "aud",
-        total: {
-          label: packageName || "Membership",
-          amount: amount, // Amount in cents - only set when valid
-        },
-      }
-    : undefined;
-
-  // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
-  const paymentElementOptions = {
-    layout: "tabs" as const,
-    // ✅ CRITICAL: Only enable wallets when PaymentIntent is ready with correct amount
-    // This prevents $0.00 display in Google Pay/Apple Pay wallet sheets
-    wallets: shouldEnableWallets
-      ? {
-          applePay: "auto" as const,
-          googlePay: "auto" as const,
-        }
-      : undefined, // Disable wallets until PaymentIntent is ready
-    paymentMethodOrder: shouldEnableWallets ? ["apple_pay", "google_pay", "card"] : ["card"],
-    // Only include paymentRequest when amount is valid to prevent $0.00 display
-    ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
-    fields: {
-      billingDetails: "never" as const, // Hide country, address, and postal code fields
-    },
-    terms: {
-      card: "never" as const, // Hide the "By providing your card information..." terms text
-      applePay: "never" as const,
-      googlePay: "never" as const,
-    },
-  };
-
-  // Debug logging for amount, packageName, and paymentRequest configuration
-  // IMPORTANT: All hooks must be called before any conditional returns
-  useEffect(() => {
-    console.log("🔍 StripeCardForm Debug:", {
+>(
+  (
+    {
+      clientSecret,
+      intentType,
+      onCardElementChange,
+      cardError,
+      billingDetails,
       amount,
       packageName,
-      amountInCents: amount,
-      amountInDollars: amount ? (amount / 100).toFixed(2) : "N/A",
-      hasPaymentRequest: !!amount,
-      paymentRequestConfig,
-      elementKey: `payment-element-${amount || 0}-${packageName || "default"}`,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, packageName]);
-
-  // Log PaymentElement options to verify paymentRequest is included
-  useEffect(() => {
-    console.log("🔍 PaymentElement Options:", {
-      layout: paymentElementOptions.layout,
-      wallets: paymentElementOptions.wallets,
-      paymentMethodOrder: paymentElementOptions.paymentMethodOrder,
-      paymentRequest: paymentRequestConfig,
-      hasPaymentRequest: !!paymentRequestConfig,
-      shouldEnableWallets,
-      fields: paymentElementOptions.fields,
-      terms: paymentElementOptions.terms,
-    });
-
-    // Detailed log for paymentRequest structure verification (only if paymentRequest exists)
-    if (paymentRequestConfig) {
-      console.log("🔍 PaymentRequest Structure (for wallet payments):", {
-        country: paymentRequestConfig.country,
-        currency: paymentRequestConfig.currency,
-        total: {
-          label: paymentRequestConfig.total.label,
-          amount: paymentRequestConfig.total.amount,
-          amountInDollars: (paymentRequestConfig.total.amount / 100).toFixed(2),
-        },
-        isValid: paymentRequestConfig.total.amount > 0,
-      });
-    } else {
-      console.log("⚠️ PaymentRequest not configured - wallets disabled until PaymentIntent is ready");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, packageName, shouldEnableWallets]);
-
-  // Build billing details object for confirmation
-  const buildBillingDetails = () => {
-    return billingDetails?.name
-      ? {
-          name: billingDetails.name,
-          email: billingDetails.email,
-          phone: billingDetails.phone,
-          address: {
-            country: billingDetails.country || "AU",
-            state: billingDetails.state || "NSW",
-            city: billingDetails.city || "Sydney",
-            postal_code: billingDetails.postalCode || "2000",
-            line1: billingDetails.line1 || "1 Martin Place",
-          },
-        }
-      : {
-          name: billingDetails?.email || "Customer",
-          address: {
-            country: billingDetails?.country || "AU",
-            state: billingDetails?.state || "NSW",
-            city: billingDetails?.city || "Sydney",
-            postal_code: billingDetails?.postalCode || "2000",
-            line1: billingDetails?.line1 || "1 Martin Place",
-          },
-        };
-  };
-
-  // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
-  React.useImperativeHandle(ref, () => ({
-    confirmSetup: async () => {
-      if (!stripe || !elements) {
-        return { error: "Stripe not loaded" };
-      }
-
-      try {
-        // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmation
-        // This validates the form and prepares it for confirmation
-        const { error: submitError } = await elements.submit();
-
-        if (submitError) {
-          console.error("PaymentElement validation error:", submitError);
-          return { error: submitError.message || "Please complete all required fields." };
-        }
-
-        const billingDetailsData = buildBillingDetails();
-
-        // Handle PaymentIntent (for wallet payments with amount display)
-        if (intentType === "payment") {
-          const { paymentIntent, error } = await stripe.confirmPayment({
-            elements,
-            clientSecret,
-            confirmParams: {
-              payment_method_data: {
-                billing_details: billingDetailsData,
-              },
-            },
-            redirect: "if_required",
-          });
-
-          if (error) {
-            console.error("Stripe PaymentIntent error:", error);
-            return { error: error.message || "Payment confirmation failed." };
-          } else if (paymentIntent?.payment_method) {
-            console.log("✅ PaymentIntent succeeded:", paymentIntent);
-            return {
-              paymentMethodId: paymentIntent.payment_method as string,
-              paymentIntentId: paymentIntent.id,
-            };
-          } else {
-            throw new Error("Unexpected error during payment confirmation.");
-          }
-        } else {
-          // Handle SetupIntent (backward compatibility)
-          const { setupIntent, error } = await stripe.confirmSetup({
-            elements,
-            clientSecret,
-            confirmParams: {
-              payment_method_data: {
-                billing_details: billingDetailsData,
-              },
-            },
-            redirect: "if_required",
-          });
-
-          if (error) {
-            console.error("Stripe SetupIntent error:", error);
-            return { error: error.message || "Payment method setup failed." };
-          } else if (setupIntent?.payment_method) {
-            console.log("✅ SetupIntent succeeded:", setupIntent);
-            return { paymentMethodId: setupIntent.payment_method as string };
-          } else {
-            throw new Error("Unexpected error during payment method setup.");
-          }
-        }
-      } catch (err: unknown) {
-        console.error("Error in confirmSetup:", err);
-        const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
-        return { error: errorMessage };
-      }
+      isUpfrontPaymentIntent,
     },
-  }));
+    ref
+  ) => {
+    const stripe = useStripe();
+    const elements = useElements();
+    const [isStripeLoading, setIsStripeLoading] = useState(true);
 
-  // Show skeleton loading while Stripe is loading
-  // IMPORTANT: Conditional return must come AFTER all hooks are called
-  if (isStripeLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
-        </div>
-        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-          {/* Card Element Skeleton */}
-          <div className="h-12 bg-gray-200 rounded animate-pulse flex items-center px-3">
-            <div className="flex items-center space-x-2 w-full">
-              <div className="w-6 h-4 bg-gray-300 rounded animate-pulse"></div>
-              <div className="flex-1 h-4 bg-gray-300 rounded animate-pulse"></div>
-              <div className="w-8 h-4 bg-gray-300 rounded animate-pulse"></div>
+    // Handle Stripe loading state
+    useEffect(() => {
+      if (stripe && elements) {
+        setIsStripeLoading(false);
+      }
+    }, [stripe, elements]);
+
+    // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
+    // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
+    // For subscriptions: PaymentIntent must be created before wallets can show correct amount
+    // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
+    // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
+    const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
+
+    // Build paymentRequest configuration - only include if amount is valid
+    // This ensures PaymentElement shows correct amount in wallet UIs
+    const paymentRequestConfig:
+      | { country: string; currency: string; total: { label: string; amount: number } }
+      | undefined = shouldEnableWallets
+      ? {
+          country: "AU",
+          currency: "aud",
+          total: {
+            label: packageName || "Membership",
+            amount: amount, // Amount in cents - only set when valid
+          },
+        }
+      : undefined;
+
+    // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
+    const paymentElementOptions = {
+      layout: "tabs" as const,
+      // ✅ CRITICAL: Only enable wallets when PaymentIntent is ready with correct amount
+      // This prevents $0.00 display in Google Pay/Apple Pay wallet sheets
+      wallets: shouldEnableWallets
+        ? {
+            applePay: "auto" as const,
+            googlePay: "auto" as const,
+          }
+        : undefined, // Disable wallets until PaymentIntent is ready
+      paymentMethodOrder: shouldEnableWallets ? ["apple_pay", "google_pay", "card"] : ["card"],
+      // Only include paymentRequest when amount is valid to prevent $0.00 display
+      ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
+      fields: {
+        billingDetails: "never" as const, // Hide country, address, and postal code fields
+      },
+      terms: {
+        card: "never" as const, // Hide the "By providing your card information..." terms text
+        applePay: "never" as const,
+        googlePay: "never" as const,
+      },
+    };
+
+    // Debug logging for amount, packageName, and paymentRequest configuration
+    // IMPORTANT: All hooks must be called before any conditional returns
+    useEffect(() => {
+      console.log("🔍 StripeCardForm Debug:", {
+        amount,
+        packageName,
+        amountInCents: amount,
+        amountInDollars: amount ? (amount / 100).toFixed(2) : "N/A",
+        hasPaymentRequest: !!amount,
+        paymentRequestConfig,
+        elementKey: `payment-element-${amount || 0}-${packageName || "default"}`,
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [amount, packageName]);
+
+    // Log PaymentElement options to verify paymentRequest is included
+    useEffect(() => {
+      console.log("🔍 PaymentElement Options:", {
+        layout: paymentElementOptions.layout,
+        wallets: paymentElementOptions.wallets,
+        paymentMethodOrder: paymentElementOptions.paymentMethodOrder,
+        paymentRequest: paymentRequestConfig,
+        hasPaymentRequest: !!paymentRequestConfig,
+        shouldEnableWallets,
+        fields: paymentElementOptions.fields,
+        terms: paymentElementOptions.terms,
+      });
+
+      // Detailed log for paymentRequest structure verification (only if paymentRequest exists)
+      if (paymentRequestConfig) {
+        console.log("🔍 PaymentRequest Structure (for wallet payments):", {
+          country: paymentRequestConfig.country,
+          currency: paymentRequestConfig.currency,
+          total: {
+            label: paymentRequestConfig.total.label,
+            amount: paymentRequestConfig.total.amount,
+            amountInDollars: (paymentRequestConfig.total.amount / 100).toFixed(2),
+          },
+          isValid: paymentRequestConfig.total.amount > 0,
+        });
+      } else {
+        console.log("⚠️ PaymentRequest not configured - wallets disabled until PaymentIntent is ready");
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [amount, packageName, shouldEnableWallets]);
+
+    // Build billing details object for confirmation
+    const buildBillingDetails = () => {
+      return billingDetails?.name
+        ? {
+            name: billingDetails.name,
+            email: billingDetails.email,
+            phone: billingDetails.phone,
+            address: {
+              country: billingDetails.country || "AU",
+              state: billingDetails.state || "NSW",
+              city: billingDetails.city || "Sydney",
+              postal_code: billingDetails.postalCode || "2000",
+              line1: billingDetails.line1 || "1 Martin Place",
+            },
+          }
+        : {
+            name: billingDetails?.email || "Customer",
+            address: {
+              country: billingDetails?.country || "AU",
+              state: billingDetails?.state || "NSW",
+              city: billingDetails?.city || "Sydney",
+              postal_code: billingDetails?.postalCode || "2000",
+              line1: billingDetails?.line1 || "1 Martin Place",
+            },
+          };
+    };
+
+    // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
+    React.useImperativeHandle(ref, () => ({
+      confirmSetup: async () => {
+        if (!stripe || !elements) {
+          return { error: "Stripe not loaded" };
+        }
+
+        try {
+          // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmation
+          // This validates the form and prepares it for confirmation
+          const { error: submitError } = await elements.submit();
+
+          if (submitError) {
+            console.error("PaymentElement validation error:", submitError);
+            return { error: submitError.message || "Please complete all required fields." };
+          }
+
+          const billingDetailsData = buildBillingDetails();
+
+          // Handle PaymentIntent (for wallet payments with amount display)
+          if (intentType === "payment") {
+            const { paymentIntent, error } = await stripe.confirmPayment({
+              elements,
+              clientSecret,
+              confirmParams: {
+                payment_method_data: {
+                  billing_details: billingDetailsData,
+                },
+              },
+              redirect: "if_required",
+            });
+
+            if (error) {
+              console.error("Stripe PaymentIntent error:", error);
+              return { error: error.message || "Payment confirmation failed." };
+            } else if (paymentIntent?.payment_method) {
+              // ✅ STRIPE BEST PRACTICE: For upfront PaymentIntents (subscriptions), cancel immediately after getting payment method
+              // This prevents double charging - the upfront PaymentIntent is ONLY for wallet display
+              // The invoice PaymentIntent (from Stripe Price catalog) is the one that should be charged
+              if (isUpfrontPaymentIntent && paymentIntent.id) {
+                try {
+                  // Cancel the upfront PaymentIntent immediately to prevent it from being charged
+                  // This must happen BEFORE the payment succeeds
+                  const cancelResponse = await fetch("/api/stripe/cancel-payment-intent", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      paymentIntentId: paymentIntent.id,
+                    }),
+                  });
+
+                  if (cancelResponse.ok) {
+                    console.log(
+                      `✅ Cancelled upfront PaymentIntent ${paymentIntent.id} immediately after payment method extraction`
+                    );
+                  } else {
+                    console.warn(
+                      `⚠️ Failed to cancel upfront PaymentIntent ${paymentIntent.id} - may cause double charge`
+                    );
+                  }
+                } catch (cancelError) {
+                  console.error(`❌ Error cancelling upfront PaymentIntent: ${cancelError}`);
+                  // Continue - backend will also try to cancel it
+                }
+              }
+
+              console.log("✅ PaymentIntent succeeded:", paymentIntent);
+              return {
+                paymentMethodId: paymentIntent.payment_method as string,
+                paymentIntentId: paymentIntent.id,
+              };
+            } else {
+              throw new Error("Unexpected error during payment confirmation.");
+            }
+          } else {
+            // Handle SetupIntent (backward compatibility)
+            const { setupIntent, error } = await stripe.confirmSetup({
+              elements,
+              clientSecret,
+              confirmParams: {
+                payment_method_data: {
+                  billing_details: billingDetailsData,
+                },
+              },
+              redirect: "if_required",
+            });
+
+            if (error) {
+              console.error("Stripe SetupIntent error:", error);
+              return { error: error.message || "Payment method setup failed." };
+            } else if (setupIntent?.payment_method) {
+              console.log("✅ SetupIntent succeeded:", setupIntent);
+              return { paymentMethodId: setupIntent.payment_method as string };
+            } else {
+              throw new Error("Unexpected error during payment method setup.");
+            }
+          }
+        } catch (err: unknown) {
+          console.error("Error in confirmSetup:", err);
+          const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+          return { error: errorMessage };
+        }
+      },
+    }));
+
+    // Show skeleton loading while Stripe is loading
+    // IMPORTANT: Conditional return must come AFTER all hooks are called
+    if (isStripeLoading) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
+          </div>
+          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+            {/* Card Element Skeleton */}
+            <div className="h-12 bg-gray-200 rounded animate-pulse flex items-center px-3">
+              <div className="flex items-center space-x-2 w-full">
+                <div className="w-6 h-4 bg-gray-300 rounded animate-pulse"></div>
+                <div className="flex-1 h-4 bg-gray-300 rounded animate-pulse"></div>
+                <div className="w-8 h-4 bg-gray-300 rounded animate-pulse"></div>
+              </div>
             </div>
           </div>
         </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <CreditCard className="w-4 h-4 text-red-600" />
+          Payment Details
+        </h4>
+        <div className="p-3 border border-gray-300 rounded-lg bg-white">
+          <PaymentElement
+            key={`payment-element-${amount || 0}-${packageName || "default"}`}
+            options={paymentElementOptions}
+            onChange={(event) => {
+              // Handle PaymentElement change events
+              // PaymentElement onChange provides completion status
+              // Errors are handled separately via onReady callback or element state
+              if (!event.complete) {
+                // Payment method is incomplete - clear any previous errors
+                onCardElementChange({});
+              } else {
+                // Payment method is complete
+                onCardElementChange({});
+              }
+            }}
+          />
+        </div>
+        {cardError && <p className="text-red-500 text-sm mt-2">{cardError}</p>}
       </div>
     );
   }
-
-  return (
-    <div className="space-y-4">
-      <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-        <CreditCard className="w-4 h-4 text-red-600" />
-        Payment Details
-      </h4>
-      <div className="p-3 border border-gray-300 rounded-lg bg-white">
-        <PaymentElement
-          key={`payment-element-${amount || 0}-${packageName || "default"}`}
-          options={paymentElementOptions}
-          onChange={(event) => {
-            // Handle PaymentElement change events
-            // PaymentElement onChange provides completion status
-            // Errors are handled separately via onReady callback or element state
-            if (!event.complete) {
-              // Payment method is incomplete - clear any previous errors
-              onCardElementChange({});
-            } else {
-              // Payment method is complete
-              onCardElementChange({});
-            }
-          }}
-        />
-      </div>
-      {cardError && <p className="text-red-500 text-sm mt-2">{cardError}</p>}
-    </div>
-  );
-});
+);
 
 StripeCardForm.displayName = "StripeCardForm";
 
