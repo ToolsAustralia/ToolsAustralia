@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 
 interface ModalContainerProps {
   isOpen: boolean;
@@ -37,10 +37,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   const savedScrollPosition = useRef<number>(0);
   // Ref to modal content container for scroll handling
   const modalContentRef = useRef<HTMLDivElement>(null);
-  // Track visual viewport height for keyboard handling
-  const [visualViewportHeight, setVisualViewportHeight] = useState<number | null>(null);
-  // Track if keyboard is visible
-  const keyboardVisible = useRef(false);
 
   // Size variants
   const sizeStyles = {
@@ -54,85 +50,12 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     full: "max-w-full",
   };
 
-  // Height variants - adjust for keyboard when visible
-  const getHeightStyles = () => {
-    const baseHeight =
-      height === "auto" ? "max-h-[95dvh]" : height === "screen" ? "h-screen-dvh" : fixedHeight || "h-[90dvh]";
-
-    // When keyboard is visible, use visual viewport height instead
-    if (visualViewportHeight && keyboardVisible.current) {
-      return `max-h-[${visualViewportHeight}px]`;
-    }
-
-    return baseHeight;
+  // Height variants
+  const heightStyles = {
+    auto: "max-h-[95dvh]",
+    screen: "h-screen-dvh",
+    fixed: fixedHeight || "h-[90dvh]",
   };
-
-  /**
-   * Handle Visual Viewport changes (keyboard show/hide on mobile)
-   * This ensures smooth scrolling when keyboard appears/disappears
-   */
-  useEffect(() => {
-    if (!isOpen) return;
-
-    // Check if Visual Viewport API is available (modern browsers)
-    if (typeof window !== "undefined" && window.visualViewport) {
-      const handleViewportResize = () => {
-        const viewport = window.visualViewport;
-        if (!viewport) return;
-
-        const viewportHeight = viewport.height;
-        const windowHeight = window.innerHeight;
-
-        // Keyboard is visible if viewport is significantly smaller than window
-        // Threshold: 150px difference (accounts for browser UI)
-        const isKeyboardVisible = windowHeight - viewportHeight > 150;
-
-        keyboardVisible.current = isKeyboardVisible;
-
-        if (isKeyboardVisible) {
-          setVisualViewportHeight(viewportHeight);
-        } else {
-          setVisualViewportHeight(null);
-        }
-      };
-
-      // Listen for viewport resize (keyboard show/hide)
-      window.visualViewport.addEventListener("resize", handleViewportResize);
-      window.visualViewport.addEventListener("scroll", handleViewportResize);
-
-      // Initial check
-      handleViewportResize();
-
-      return () => {
-        window.visualViewport?.removeEventListener("resize", handleViewportResize);
-        window.visualViewport?.removeEventListener("scroll", handleViewportResize);
-      };
-    } else {
-      // Fallback for browsers without Visual Viewport API
-      // Use window resize as fallback
-      const handleResize = () => {
-        const windowHeight = window.innerHeight;
-        const screenHeight = window.screen.height;
-
-        // Estimate keyboard visibility (less accurate but works)
-        const isKeyboardVisible = windowHeight < screenHeight * 0.75;
-        keyboardVisible.current = isKeyboardVisible;
-
-        if (isKeyboardVisible) {
-          setVisualViewportHeight(windowHeight);
-        } else {
-          setVisualViewportHeight(null);
-        }
-      };
-
-      window.addEventListener("resize", handleResize);
-      handleResize();
-
-      return () => {
-        window.removeEventListener("resize", handleResize);
-      };
-    }
-  }, [isOpen]);
 
   /**
    * Handle input focus to ensure smooth scrolling into view
@@ -164,82 +87,78 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
           block: "center",
           inline: "nearest",
         });
-
-        // Additional check: if input is still not fully visible after scroll,
-        // adjust the scroll position manually
-        setTimeout(() => {
-          const rect = target.getBoundingClientRect();
-          const viewportHeight = window.visualViewport?.height || window.innerHeight;
-
-          // Check if input is cut off at bottom
-          if (rect.bottom > viewportHeight - 20) {
-            const scrollOffset = rect.bottom - viewportHeight + 40; // 40px padding
-            modalContent.scrollBy({
-              top: scrollOffset,
-              behavior: "smooth",
-            });
-          }
-        }, 100);
-      }, 300); // Wait for keyboard animation (typically 250-300ms)
-    };
-
-    /**
-     * Prevent body scroll when modal reaches scroll boundaries
-     * This prevents overscroll from propagating to the body
-     */
-    const handleModalScroll = (e: Event) => {
-      const target = e.target as HTMLElement;
-      if (!target || target !== modalContent) return;
-
-      const { scrollTop, scrollHeight, clientHeight } = modalContent;
-      const isAtTop = scrollTop <= 0;
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1; // 1px tolerance
-
-      // If at boundaries, prevent default to stop overscroll
-      if ((isAtTop && e.type === "wheel") || (isAtBottom && e.type === "wheel")) {
-        // For wheel events, prevent if at boundaries
-        const wheelEvent = e as WheelEvent;
-        if ((isAtTop && wheelEvent.deltaY < 0) || (isAtBottom && wheelEvent.deltaY > 0)) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-      }
-    };
-
-    /**
-     * Prevent touch overscroll on mobile
-     */
-    const handleTouchMove = (e: TouchEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target || !modalContent.contains(target)) return;
-
-      const { scrollTop, scrollHeight, clientHeight } = modalContent;
-      const isAtTop = scrollTop <= 0;
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-      // Get touch direction
-      const touch = e.touches[0];
-      if (!touch) return;
-
-      // Check if trying to scroll past boundaries
-      if (isAtTop && touch.clientY > (e.target as HTMLElement).getBoundingClientRect().top) {
-        e.preventDefault();
-      }
-      if (isAtBottom && touch.clientY < (e.target as HTMLElement).getBoundingClientRect().bottom) {
-        e.preventDefault();
-      }
+      }, 100); // Small delay for keyboard animation
     };
 
     // Listen for focus events on all inputs within modal
     modalContent.addEventListener("focusin", handleInputFocus);
-    // Listen for scroll events to prevent overscroll
-    modalContent.addEventListener("wheel", handleModalScroll, { passive: false });
-    // Listen for touch events to prevent overscroll on mobile
-    modalContent.addEventListener("touchmove", handleTouchMove, { passive: false });
 
     return () => {
       modalContent.removeEventListener("focusin", handleInputFocus);
-      modalContent.removeEventListener("wheel", handleModalScroll);
+    };
+  }, [isOpen]);
+
+  /**
+   * Prevent body scroll and handle modal scroll boundaries
+   * This ensures that when modal reaches top/bottom, body doesn't scroll
+   */
+  useEffect(() => {
+    if (!isOpen || !modalContentRef.current) return;
+
+    const modalContent = modalContentRef.current;
+
+    /**
+     * Prevent scroll propagation when modal is at boundaries
+     * This stops the body from scrolling when user tries to scroll past modal limits
+     */
+    const handleWheel = (e: WheelEvent) => {
+      const { scrollTop, scrollHeight, clientHeight } = modalContent;
+      const isAtTop = scrollTop === 0;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+      // If at top and scrolling up, or at bottom and scrolling down, prevent default
+      if ((isAtTop && e.deltaY < 0) || (isAtBottom && e.deltaY > 0)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    /**
+     * Prevent touch scroll propagation when modal is at boundaries
+     * This is crucial for mobile devices
+     */
+    let touchStartY = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!modalContent) return;
+
+      const touchY = e.touches[0].clientY;
+      const deltaY = touchStartY - touchY;
+      const { scrollTop, scrollHeight, clientHeight } = modalContent;
+
+      const isAtTop = scrollTop === 0;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+      // If at top and trying to scroll up, or at bottom and trying to scroll down, prevent
+      if ((isAtTop && deltaY < 0) || (isAtBottom && deltaY > 0)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+
+    // Add event listeners
+    modalContent.addEventListener("wheel", handleWheel, { passive: false });
+    modalContent.addEventListener("touchstart", handleTouchStart, { passive: true });
+    modalContent.addEventListener("touchmove", handleTouchMove, { passive: false });
+
+    return () => {
+      modalContent.removeEventListener("wheel", handleWheel);
+      modalContent.removeEventListener("touchstart", handleTouchStart);
       modalContent.removeEventListener("touchmove", handleTouchMove);
     };
   }, [isOpen]);
@@ -294,7 +213,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   /**
    * Prevent body scrolling when modal is open
    * Saves and restores scroll position to prevent visual jump
-   * Re-applies lock when viewport changes (keyboard show/hide)
    */
   useEffect(() => {
     if (!isOpen) return;
@@ -303,46 +221,23 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     savedScrollPosition.current = window.scrollY;
 
     // Lock body scroll and maintain visual position
-    const lockBodyScroll = () => {
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${savedScrollPosition.current}px`;
-      document.body.style.width = "100%";
-      // Prevent overscroll behavior
-      document.body.style.overscrollBehavior = "none";
-    };
-
-    lockBodyScroll();
-
-    // Re-apply lock when viewport changes (keyboard show/hide)
-    const handleViewportChange = () => {
-      lockBodyScroll();
-    };
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", handleViewportChange);
-      window.visualViewport.addEventListener("scroll", handleViewportChange);
-    }
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${savedScrollPosition.current}px`;
+    document.body.style.width = "100%";
 
     // Cleanup: Restore body scroll and position when modal closes
     return () => {
-      // Remove viewport listeners
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener("resize", handleViewportChange);
-        window.visualViewport.removeEventListener("scroll", handleViewportChange);
-      }
-
       // Restore body styles
       document.body.style.overflow = "";
       document.body.style.position = "";
       document.body.style.top = "";
       document.body.style.width = "";
-      document.body.style.overscrollBehavior = "";
 
       // Restore scroll position
       window.scrollTo(0, savedScrollPosition.current);
     };
-  }, [isOpen, visualViewportHeight]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -352,10 +247,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
-      style={{
-        // Use visual viewport height when keyboard is visible
-        height: visualViewportHeight && keyboardVisible.current ? `${visualViewportHeight}px` : "100%",
-      }}
     >
       {/* Backdrop with touch-action to prevent scrolling on mobile */}
       <div
@@ -371,7 +262,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         className={`
         relative bg-white rounded-2xl shadow-2xl w-full mx-auto overflow-y-auto overflow-x-hidden flex flex-col
         ${sizeStyles[size]}
-        ${getHeightStyles()}
+        ${heightStyles[height]}
         ${className}
       `}
         role="document"
@@ -379,14 +270,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         style={{
           // Smooth scrolling for better UX
           scrollBehavior: "smooth",
-          // Ensure modal doesn't exceed viewport when keyboard is visible
-          maxHeight:
-            visualViewportHeight && keyboardVisible.current
-              ? `${visualViewportHeight - 16}px` // 16px for padding (8px top + 8px bottom)
-              : undefined,
-          // Prevent overscroll from propagating to body
-          overscrollBehavior: "contain",
-          // Prevent pull-to-refresh and overscroll on mobile
+          // Prevent body scroll when modal is scrolling
           touchAction: "pan-y",
         }}
       >
