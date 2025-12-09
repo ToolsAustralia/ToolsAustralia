@@ -10,6 +10,8 @@ import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
+import Promo from "@/models/Promo";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 
@@ -165,7 +167,28 @@ export async function POST(request: NextRequest) {
     // First, check if we have a registered user with an existing Stripe customer
     if (registeredUser && registeredUser.stripeCustomerId) {
       console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
-      customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
+      const retrievedCustomer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
+
+      // ✅ FIX: Check if customer was deleted
+      if ("deleted" in retrievedCustomer && retrievedCustomer.deleted) {
+        // Customer was deleted, create a new one
+        console.log("⚠️ Existing customer was deleted, creating new customer...");
+        customer = await stripe.customers.create({
+          email: validatedData.userEmail,
+          name: `${validatedData.firstName} ${validatedData.lastName}`,
+          phone: validatedData.mobile,
+          metadata: {
+            packageId: validatedData.packageId,
+            packageName: membershipPackage.name,
+            userId: registeredUser._id.toString(),
+          },
+        });
+        registeredUser.stripeCustomerId = customer.id;
+        await registeredUser.save();
+        console.log(`✅ Created new customer ${customer.id} to replace deleted one`);
+      } else {
+        customer = retrievedCustomer as Stripe.Customer;
+      }
 
       // ✅ FIX: Attach payment method to customer if not already attached
       // This handles cases where PaymentIntent was created without a customer
@@ -189,14 +212,13 @@ export async function POST(request: NextRequest) {
         if (paymentMethod.customer) {
           // Payment method has a customer - use it
           console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
-          customer = await stripe.customers.retrieve(paymentMethod.customer as string);
-          console.log(`✅ Using customer from payment method: ${customer.id}`);
+          const retrievedCustomer = await stripe.customers.retrieve(paymentMethod.customer as string);
 
-          // Update the customer with proper details if it's a temporary guest customer
-          const customerWithMetadata = customer as Stripe.Customer;
-          if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
-            console.log("🔄 Updating temporary customer with proper details...");
-            customer = await stripe.customers.update(customer.id, {
+          // ✅ FIX: Check if customer was deleted
+          if ("deleted" in retrievedCustomer && retrievedCustomer.deleted) {
+            // Customer was deleted, create a new one
+            console.log("⚠️ Customer from payment method was deleted, creating new customer...");
+            customer = await stripe.customers.create({
               email: validatedData.userEmail,
               name: `${validatedData.firstName} ${validatedData.lastName}`,
               phone: validatedData.mobile,
@@ -206,7 +228,30 @@ export async function POST(request: NextRequest) {
                 userId: registeredUser?._id?.toString() || "guest",
               },
             });
-            console.log(`✅ Updated customer details: ${customer.id}`);
+            // Attach payment method to new customer
+            await stripe.paymentMethods.attach(finalPaymentMethodId, {
+              customer: customer.id,
+            });
+            console.log(`✅ Created new customer ${customer.id} and attached payment method`);
+          } else {
+            customer = retrievedCustomer as Stripe.Customer;
+            console.log(`✅ Using customer from payment method: ${customer.id}`);
+
+            // Update the customer with proper details if it's a temporary guest customer
+            if (customer.metadata?.type === "guest" || customer.metadata?.temporary === "true") {
+              console.log("🔄 Updating temporary customer with proper details...");
+              customer = await stripe.customers.update(customer.id, {
+                email: validatedData.userEmail,
+                name: `${validatedData.firstName} ${validatedData.lastName}`,
+                phone: validatedData.mobile,
+                metadata: {
+                  packageId: validatedData.packageId,
+                  packageName: membershipPackage.name,
+                  userId: registeredUser?._id?.toString() || "guest",
+                },
+              });
+              console.log(`✅ Updated customer details: ${customer.id}`);
+            }
           }
         } else {
           // ✅ FIX: Payment method has no customer - create one and attach it
@@ -246,11 +291,31 @@ export async function POST(request: NextRequest) {
 
     // Payment method is already attached to customer via SetupIntent
     // Just set it as the default payment method
-    await stripe.customers.update(customer.id, {
-      invoice_settings: {
-        default_payment_method: finalPaymentMethodId,
-      },
-    });
+    // ✅ SYNC: Also update customer email if it differs from form email
+    // ✅ FIX: Ensure customer is not deleted before accessing email
+    if ("deleted" in customer && customer.deleted) {
+      throw new Error("Stripe customer was deleted - cannot proceed with purchase");
+    }
+
+    const customerEmail = customer.email || "";
+    const needsEmailUpdate = customerEmail.toLowerCase() !== validatedData.userEmail.toLowerCase();
+
+    if (needsEmailUpdate) {
+      console.log(`🔄 Syncing customer email: ${customerEmail} → ${validatedData.userEmail}`);
+      await stripe.customers.update(customer.id, {
+        email: validatedData.userEmail,
+        invoice_settings: {
+          default_payment_method: finalPaymentMethodId,
+        },
+      });
+      console.log(`✅ Customer email synced: ${customer.id}`);
+    } else {
+      await stripe.customers.update(customer.id, {
+        invoice_settings: {
+          default_payment_method: finalPaymentMethodId,
+        },
+      });
+    }
     console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
 
     // ✅ SINGLE SOURCE OF TRUTH: Reuse confirmed PaymentIntent if provided, otherwise create new one
@@ -324,7 +389,34 @@ export async function POST(request: NextRequest) {
         metadata: updatedMetadata,
       });
 
+      // ✅ SYNC: Ensure customer email matches form email (in case user changed email in form)
+      // ✅ FIX: Ensure customer is not deleted before accessing email
+      if ("deleted" in customer && customer.deleted) {
+        throw new Error("Stripe customer was deleted - cannot proceed with purchase");
+      }
+
+      const customerEmail = customer.email || "";
+      if (customerEmail.toLowerCase() !== validatedData.userEmail.toLowerCase()) {
+        console.log(
+          `🔄 Syncing customer email after PaymentIntent update: ${customerEmail} → ${validatedData.userEmail}`
+        );
+        customer = await stripe.customers.update(customer.id, {
+          email: validatedData.userEmail,
+        });
+        console.log(`✅ Customer email synced: ${customer.id}`);
+      }
+
       console.log(`✅ PaymentIntent ${existingPaymentIntent.id} updated with customer ${customer.id} and metadata`);
+
+      // ✅ CRITICAL: Re-fetch PaymentIntent to get fresh metadata after update
+      // This ensures fallback processing uses the correct metadata with entriesCount
+      paymentIntent = await stripe.paymentIntents.retrieve(existingPaymentIntent.id);
+      console.log(`🔄 Re-fetched PaymentIntent with updated metadata:`, {
+        id: paymentIntent.id,
+        entriesCount: paymentIntent.metadata.entriesCount,
+        price: paymentIntent.metadata.price,
+        userEmail: paymentIntent.metadata.userEmail,
+      });
     } else {
       // Fallback: Create new PaymentIntent (for non-wallet payments)
       // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
@@ -460,6 +552,105 @@ export async function POST(request: NextRequest) {
         user = (await User.findById(user._id)) ?? user;
       } catch (affiliateError) {
         console.error("Affiliate tracking error during one-time purchase:", affiliateError);
+      }
+    }
+
+    // ✅ CRITICAL FIX: Race condition fallback - Check if webhook already processed this payment
+    // If webhook fired before metadata was updated, it would have failed to find the user
+    // We need to process it here as a fallback (only for reused PaymentIntents)
+    if (
+      validatedData.paymentIntentId &&
+      user &&
+      (paymentIntent.status === "succeeded" || paymentIntent.status === "processing")
+    ) {
+      const alreadyProcessed = await isPaymentProcessed(paymentIntent.id);
+
+      if (!alreadyProcessed) {
+        console.log(
+          `🔄 Webhook hasn't processed payment yet (race condition), processing as fallback: ${paymentIntent.id}`
+        );
+
+        // Get promo multiplier for one-time packages
+        let promoMultiplier = 1;
+        try {
+          const activePromo = await Promo.findOne({
+            type: "one-time-packages",
+            isActive: true,
+          }).sort({ createdAt: -1 });
+          promoMultiplier = activePromo?.multiplier || 1;
+        } catch (promoError) {
+          console.error("Failed to fetch promo multiplier:", promoError);
+          // Default to 1 if promo fetch fails
+        }
+
+        const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
+
+        // ✅ CRITICAL: Use fresh metadata from re-fetched PaymentIntent OR fallback to package data
+        // Re-fetch to ensure we have the latest metadata after update
+        const freshPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
+        const entriesCountFromMetadata = parseInt(freshPaymentIntent.metadata.entriesCount || "0");
+
+        // If metadata still doesn't have entriesCount, use package data directly
+        const baseEntries =
+          entriesCountFromMetadata > 0
+            ? entriesCountFromMetadata
+            : membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0;
+
+        const finalEntriesCount = baseEntries * promoMultiplier;
+
+        // Extract request context from fresh metadata
+        const requestContext = {
+          client_ip_address: freshPaymentIntent.metadata.capi_client_ip,
+          client_user_agent: freshPaymentIntent.metadata.capi_user_agent,
+          fbc: freshPaymentIntent.metadata.capi_fbc,
+          fbp: freshPaymentIntent.metadata.capi_fbp,
+        };
+
+        // Use price from fresh metadata or fallback to package price
+        const priceFromMetadata = parseInt(freshPaymentIntent.metadata.price || "0");
+        const finalPrice = priceFromMetadata > 0 ? priceFromMetadata / 100 : membershipPackage.price;
+
+        console.log(`📊 Fallback processing details:`, {
+          baseEntries,
+          promoMultiplier,
+          finalEntriesCount,
+          finalPrice,
+          entriesCountFromMetadata,
+          priceFromMetadata,
+        });
+
+        // Process benefits as fallback
+        const processResult = await processPaymentBenefits(
+          paymentIntent.id,
+          user._id.toString(),
+          {
+            packageType: packageTypeValue,
+            packageId: validatedData.packageId,
+            packageName: membershipPackage.name,
+            entries: finalEntriesCount,
+            points: Math.floor(finalPrice),
+            price: finalPrice,
+          },
+          "api", // Mark as processed by API (fallback)
+          {
+            created: Math.floor(paymentIntent.created * 1000), // Convert Stripe timestamp (seconds) to milliseconds
+            type: packageTypeValue,
+            packageType: packageTypeValue,
+            affiliateCode: freshPaymentIntent.metadata.affiliateCode,
+          },
+          Object.keys(requestContext).length > 0 ? requestContext : undefined
+        );
+
+        if (processResult.success) {
+          console.log(`✅ Fallback processing successful: ${finalEntriesCount} entries granted`);
+        } else if (processResult.alreadyProcessed) {
+          console.log(`ℹ️ Payment already processed by webhook (race condition resolved)`);
+        } else {
+          console.error(`❌ Fallback processing failed: ${processResult.error}`);
+          // Don't throw - webhook will retry on next event
+        }
+      } else {
+        console.log(`✅ Payment already processed by webhook: ${paymentIntent.id}`);
       }
     }
 

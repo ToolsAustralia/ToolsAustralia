@@ -57,7 +57,10 @@ export const dispatchPurchaseCompleted = (packageData: {
         },
       });
 
-      window.dispatchEvent(event);
+      // ✅ FIX: Only dispatch on client-side (browser environment)
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(event);
+      }
 
       // console.log(`🎁 Dispatched purchase event for ${packageData.packageName}:`, {
       //   packageType: packageData.packageType,
