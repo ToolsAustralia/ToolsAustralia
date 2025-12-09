@@ -4,14 +4,11 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
-import Stripe from "stripe";
 import { recordReferralPurchase } from "@/lib/referral";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
-import Promo from "@/models/Promo";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 
@@ -146,11 +143,9 @@ export async function POST(request: NextRequest) {
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = existingUser.stripeCustomerId;
-    let customer: Stripe.Customer | Stripe.DeletedCustomer;
-
     if (!stripeCustomerId) {
       // console.log("Creating new Stripe customer for existing user");
-      customer = await stripe.customers.create({
+      const customer = await stripe.customers.create({
         email: existingUser.email,
         name: `${existingUser.firstName} ${existingUser.lastName}`,
         phone: existingUser.mobile || undefined,
@@ -160,41 +155,6 @@ export async function POST(request: NextRequest) {
       // Update user with Stripe customer ID
       existingUser.stripeCustomerId = stripeCustomerId;
       await existingUser.save();
-    } else {
-      // ✅ SYNC: Retrieve customer and ensure email is in sync
-      const retrievedCustomer = await stripe.customers.retrieve(stripeCustomerId);
-
-      // Check if customer was deleted
-      if (retrievedCustomer.deleted) {
-        // Customer was deleted, create a new one
-        customer = await stripe.customers.create({
-          email: existingUser.email,
-          name: `${existingUser.firstName} ${existingUser.lastName}`,
-          phone: existingUser.mobile || undefined,
-        });
-        stripeCustomerId = customer.id;
-        existingUser.stripeCustomerId = stripeCustomerId;
-        await existingUser.save();
-      } else {
-        customer = retrievedCustomer as Stripe.Customer;
-        const customerEmail = customer.email || "";
-
-        // Update customer email if it differs from user's current email
-        if (customerEmail.toLowerCase() !== existingUser.email.toLowerCase()) {
-          console.log(`🔄 Syncing customer email: ${customerEmail} → ${existingUser.email}`);
-          customer = await stripe.customers.update(stripeCustomerId, {
-            email: existingUser.email,
-            name: `${existingUser.firstName} ${existingUser.lastName}`,
-            phone: existingUser.mobile || undefined,
-          });
-          console.log(`✅ Customer email synced: ${stripeCustomerId}`);
-        }
-      }
-    }
-
-    // Ensure customer is not deleted before using customer.id
-    if ("deleted" in customer && customer.deleted) {
-      throw new Error("Stripe customer was deleted");
     }
 
     let paymentMethodId = validatedData.paymentMethodId;
@@ -225,10 +185,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Payment method not found" }, { status: 404 });
     }
 
-    if (stripePaymentMethod.customer !== customer.id) {
+    if (stripePaymentMethod.customer !== stripeCustomerId) {
       try {
         await stripe.paymentMethods.attach(paymentMethodId, {
-          customer: customer.id,
+          customer: stripeCustomerId,
         });
       } catch (error) {
         console.error("❌ Failed to attach payment method to customer:", error);
@@ -246,7 +206,7 @@ export async function POST(request: NextRequest) {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(membershipPackage.price * 100), // Convert to cents
       currency: "aud",
-      customer: customer.id,
+      customer: stripeCustomerId,
       payment_method: paymentMethodId,
       confirm: true,
       return_url: `${getBaseUrl()}/purchase-success`,
@@ -266,10 +226,8 @@ export async function POST(request: NextRequest) {
         ]),
         packageId: membershipPackage._id,
         userId: existingUser._id.toString(),
-        userEmail: existingUser.email, // ✅ CRITICAL: Add userEmail for webhook fallback lookup
         packageName: membershipPackage.name,
-        type: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
-        packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
+        packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
         ...(normalizedAffiliateCode
@@ -350,103 +308,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ CRITICAL FIX: Race condition fallback - Check if webhook already processed this payment
-    // If webhook fired before metadata was updated, it would have failed to find the user
-    // We need to process it here as a fallback
-    if (paymentIntent.status === "succeeded" || (paymentIntent.status === "processing" && existingUser)) {
-      const alreadyProcessed = await isPaymentProcessed(paymentIntent.id);
-
-      if (!alreadyProcessed) {
-        console.log(
-          `🔄 Webhook hasn't processed payment yet (race condition), processing as fallback: ${paymentIntent.id}`
-        );
-
-        // Get promo multiplier for one-time packages
-        let promoMultiplier = 1;
-        try {
-          const activePromo = await Promo.findOne({
-            type: "one-time-packages",
-            isActive: true,
-          }).sort({ createdAt: -1 });
-          promoMultiplier = activePromo?.multiplier || 1;
-        } catch (promoError) {
-          console.error("Failed to fetch promo multiplier:", promoError);
-          // Default to 1 if promo fetch fails
-        }
-
-        const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
-
-        // ✅ CRITICAL: Re-fetch PaymentIntent to get fresh metadata after any updates
-        const freshPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-        const entriesCountFromMetadata = parseInt(freshPaymentIntent.metadata.entriesCount || "0");
-
-        // If metadata still doesn't have entriesCount, use package data directly
-        const baseEntries =
-          entriesCountFromMetadata > 0
-            ? entriesCountFromMetadata
-            : membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0;
-
-        const finalEntriesCount = baseEntries * promoMultiplier;
-
-        // Use price from fresh metadata or fallback to package price
-        const priceFromMetadata = parseInt(freshPaymentIntent.metadata.price || "0");
-        const finalPrice = priceFromMetadata > 0 ? priceFromMetadata / 100 : membershipPackage.price;
-
-        console.log(`📊 Fallback processing details:`, {
-          baseEntries,
-          promoMultiplier,
-          finalEntriesCount,
-          finalPrice,
-          entriesCountFromMetadata,
-          priceFromMetadata,
-        });
-
-        // Extract request context from fresh metadata
-        const requestContext = {
-          client_ip_address: freshPaymentIntent.metadata.capi_client_ip,
-          client_user_agent: freshPaymentIntent.metadata.capi_user_agent,
-          fbc: freshPaymentIntent.metadata.capi_fbc,
-          fbp: freshPaymentIntent.metadata.capi_fbp,
-        };
-
-        // Process benefits as fallback
-        const processResult = await processPaymentBenefits(
-          paymentIntent.id,
-          existingUser._id.toString(),
-          {
-            packageType: packageTypeValue,
-            packageId: membershipPackage._id,
-            packageName: membershipPackage.name,
-            entries: finalEntriesCount,
-            points: Math.floor(finalPrice),
-            price: finalPrice,
-          },
-          "api", // Mark as processed by API (fallback)
-          {
-            created: Math.floor(paymentIntent.created * 1000), // Convert Stripe timestamp (seconds) to milliseconds
-            type: packageTypeValue,
-            packageType: packageTypeValue,
-            affiliateCode: freshPaymentIntent.metadata.affiliateCode,
-          },
-          Object.keys(requestContext).length > 0 ? requestContext : undefined
-        );
-
-        if (processResult.success) {
-          console.log(`✅ Fallback processing successful: ${finalEntriesCount} entries granted`);
-          // Refresh user data to get updated entries
-          existingUser = await User.findById(existingUser._id);
-        } else if (processResult.alreadyProcessed) {
-          console.log(`ℹ️ Payment already processed by webhook (race condition resolved)`);
-        } else {
-          console.error(`❌ Fallback processing failed: ${processResult.error}`);
-          // Don't throw - webhook will retry on next event
-        }
-      } else {
-        console.log(`✅ Payment already processed by webhook: ${paymentIntent.id}`);
-      }
-    }
-
-    if (validatedData.referralCode && existingUser) {
+    if (validatedData.referralCode) {
       try {
         await recordReferralPurchase({
           referralCode: validatedData.referralCode,
@@ -459,10 +321,6 @@ export async function POST(request: NextRequest) {
       } catch (referralError) {
         console.error("Referral purchase capture failed:", referralError);
       }
-    }
-
-    if (!existingUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     return NextResponse.json({

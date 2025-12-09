@@ -1,38 +1,33 @@
 /**
- * Subscription Type Definitions
+ * Subscription Types
  *
- * Type definitions for subscription-related data structures,
- * including accumulated entries tracking.
+ * Type definitions for subscription-related functionality.
+ *
+ * @module types/subscription
  */
 
-export interface SubscriptionWithAccumulatedEntries {
+/**
+ * Subscription status
+ */
+export type SubscriptionStatus =
+  | 'active'
+  | 'canceled'
+  | 'incomplete'
+  | 'incomplete_expired'
+  | 'past_due'
+  | 'trialing'
+  | 'unpaid';
+
+/**
+ * Subscription data
+ */
+export interface SubscriptionData {
+  subscriptionId: string;
+  customerId: string;
+  status: SubscriptionStatus;
   packageId: string;
-  startDate: Date;
-  endDate?: Date;
-  isActive: boolean;
-  autoRenew?: boolean;
-  status?: string;
-  lastMonthAccumulatedEntries?: number;
-  previousSubscription?: {
-    packageId: string;
-    packageName: string;
-    benefits: {
-      entriesPerMonth: number;
-      discountPercentage: number;
-    };
-    startDate: Date;
-    endDate: Date;
-    downgradeDate: Date;
-  };
-  pendingChange?: {
-    newPackageId: string;
-    changeType: "upgrade";
-    stripeSubscriptionId?: string;
-    paymentIntentId?: string;
-    upgradeAmount?: number;
-  };
-  lastDowngradeDate?: Date;
-  lastUpgradeDate?: Date;
+  packageName: string;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  cancelAtPeriodEnd?: boolean;
 }
-
-

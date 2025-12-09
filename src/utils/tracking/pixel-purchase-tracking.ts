@@ -214,17 +214,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       // Don't throw - continue with browser pixel tracking
     }
 
-    // 3. Track TikTok Pixel Purchase (client-side only)
-    // ✅ FIX: Skip TikTok tracking on server-side - it's a client component function
-    if (typeof window !== "undefined") {
-      try {
-        await trackTikTokEvent("CompletePayment", commonParams);
-        // console.log(`📱 TikTok Pixel: Purchase tracked for ${packageType} - $${value} ${currency}`);
-      } catch (tiktokError) {
-        // Silently fail - TikTok tracking is optional and client-side only
-        console.warn("⚠️ TikTok Pixel tracking skipped (server-side execution)");
-      }
-    }
+    // 3. Track TikTok Pixel Purchase
+    await trackTikTokEvent("CompletePayment", commonParams);
+    // console.log(`📱 TikTok Pixel: Purchase tracked for ${packageType} - $${value} ${currency}`);
   } catch (error) {
     console.error("❌ Error tracking pixel purchase:", error);
     // Don't throw - pixel tracking should not break purchase flow

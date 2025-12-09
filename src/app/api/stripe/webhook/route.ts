@@ -333,13 +333,11 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     // ✅ CRITICAL: Skip subscription payments - they're handled by invoice.payment_succeeded
     // This prevents duplicate processing when both payment_intent.succeeded and invoice.payment_succeeded fire
     // Also skip upfront PaymentIntents marked for subscriptions (they're just for wallet display)
-    // ✅ IMPORTANT: Only skip if it's actually a subscription - never skip one-time purchases
     const isSubscriptionPayment =
       paymentIntent.metadata.type === "subscription" ||
       paymentIntent.metadata.packageType === "subscription" ||
       paymentIntent.metadata.subscription_id ||
-      (paymentIntent.metadata.isUpfrontPayment === "true" &&
-        (paymentIntent.metadata.type === "subscription" || paymentIntent.metadata.packageType === "subscription")) || // ✅ Only skip upfront payments for subscriptions
+      paymentIntent.metadata.isUpfrontPayment === "true" || // NEW: Skip upfront payments
       !!(paymentIntent as { invoice?: string | Stripe.Invoice }).invoice; // ✅ NEW: Also check if payment has an invoice (subscription payments always have invoices)
 
     if (isSubscriptionPayment) {
@@ -356,17 +354,6 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       await handleMiniDrawWebhook(user, paymentIntent);
     } else if (paymentType === "one-time") {
       webhookLog("info", `🔄 Processing one-time payment: ${paymentIntent.id}`);
-
-      // ✅ CRITICAL: Validate required metadata for one-time purchases
-      if (!paymentIntent.metadata.packageId) {
-        webhookLog("error", `❌ Missing packageId in one-time payment metadata: ${paymentIntent.id}`);
-        return false;
-      }
-      if (!paymentIntent.metadata.entriesCount) {
-        webhookLog("error", `❌ Missing entriesCount in one-time payment metadata: ${paymentIntent.id}`);
-        return false;
-      }
-
       webhookLog("info", `📋 One-time payment details:`, {
         paymentIntentId: paymentIntent.id,
         customerId: paymentIntent.customer,
@@ -378,8 +365,6 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         price: paymentIntent.metadata.price,
         amount: paymentIntent.amount,
         status: paymentIntent.status,
-        type: paymentIntent.metadata.type,
-        packageType: paymentIntent.metadata.packageType,
       });
       await handleOneTimeWebhook(user, paymentIntent);
       webhookLog("info", `✅ One-time payment processing completed: ${paymentIntent.id}`);
