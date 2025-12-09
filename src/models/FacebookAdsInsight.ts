@@ -173,3 +173,4 @@ export default mongoose.model<IFacebookAdsInsight>(modelName, FacebookAdsInsight
 
 
 
+
