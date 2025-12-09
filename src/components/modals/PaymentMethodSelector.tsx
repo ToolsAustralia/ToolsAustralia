@@ -80,27 +80,42 @@ const StripeCardForm = React.forwardRef<
     }
   }, [stripe, elements]);
 
-  // Build paymentRequest configuration - always include it (even if amount is 0)
-  // This ensures PaymentElement always receives the option for wallet payments
-  const paymentRequestConfig = {
-    country: "AU",
-    currency: "aud",
-    total: {
-      label: packageName || "Membership",
-      amount: amount || 0, // Amount in cents, default to 0 if not provided
-    },
-  };
+  // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
+  // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
+  // For subscriptions: PaymentIntent must be created before wallets can show correct amount
+  // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
+  // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
+  const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
+
+  // Build paymentRequest configuration - only include if amount is valid
+  // This ensures PaymentElement shows correct amount in wallet UIs
+  const paymentRequestConfig:
+    | { country: string; currency: string; total: { label: string; amount: number } }
+    | undefined = shouldEnableWallets
+    ? {
+        country: "AU",
+        currency: "aud",
+        total: {
+          label: packageName || "Membership",
+          amount: amount, // Amount in cents - only set when valid
+        },
+      }
+    : undefined;
 
   // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
   const paymentElementOptions = {
     layout: "tabs" as const,
-    wallets: {
-      applePay: "auto" as const,
-      googlePay: "auto" as const,
-    },
-    paymentMethodOrder: ["apple_pay", "google_pay", "card"],
-    // Always include paymentRequest for wallet payments to display correct amount when using SetupIntent
-    paymentRequest: paymentRequestConfig,
+    // ✅ CRITICAL: Only enable wallets when PaymentIntent is ready with correct amount
+    // This prevents $0.00 display in Google Pay/Apple Pay wallet sheets
+    wallets: shouldEnableWallets
+      ? {
+          applePay: "auto" as const,
+          googlePay: "auto" as const,
+        }
+      : undefined, // Disable wallets until PaymentIntent is ready
+    paymentMethodOrder: shouldEnableWallets ? ["apple_pay", "google_pay", "card"] : ["card"],
+    // Only include paymentRequest when amount is valid to prevent $0.00 display
+    ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
     fields: {
       billingDetails: "never" as const, // Hide country, address, and postal code fields
     },
@@ -133,23 +148,29 @@ const StripeCardForm = React.forwardRef<
       wallets: paymentElementOptions.wallets,
       paymentMethodOrder: paymentElementOptions.paymentMethodOrder,
       paymentRequest: paymentRequestConfig,
+      hasPaymentRequest: !!paymentRequestConfig,
+      shouldEnableWallets,
       fields: paymentElementOptions.fields,
       terms: paymentElementOptions.terms,
     });
 
-    // Detailed log for paymentRequest structure verification
-    console.log("🔍 PaymentRequest Structure (for wallet payments):", {
-      country: paymentRequestConfig.country,
-      currency: paymentRequestConfig.currency,
-      total: {
-        label: paymentRequestConfig.total.label,
-        amount: paymentRequestConfig.total.amount,
-        amountInDollars: (paymentRequestConfig.total.amount / 100).toFixed(2),
-      },
-      isValid: paymentRequestConfig.total.amount > 0,
-    });
+    // Detailed log for paymentRequest structure verification (only if paymentRequest exists)
+    if (paymentRequestConfig) {
+      console.log("🔍 PaymentRequest Structure (for wallet payments):", {
+        country: paymentRequestConfig.country,
+        currency: paymentRequestConfig.currency,
+        total: {
+          label: paymentRequestConfig.total.label,
+          amount: paymentRequestConfig.total.amount,
+          amountInDollars: (paymentRequestConfig.total.amount / 100).toFixed(2),
+        },
+        isValid: paymentRequestConfig.total.amount > 0,
+      });
+    } else {
+      console.log("⚠️ PaymentRequest not configured - wallets disabled until PaymentIntent is ready");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, packageName]);
+  }, [amount, packageName, shouldEnableWallets]);
 
   // Build billing details object for confirmation
   const buildBillingDetails = () => {
