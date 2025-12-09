@@ -197,6 +197,9 @@ export async function POST(request: NextRequest) {
     // ✅ STRIPE BEST PRACTICE: For immediate upgrade with payment collection
     // Use 'always_invoice' to create invoice and attempt immediate payment
     // Use 'unchanged' billing cycle to maintain consistent billing dates and accurate proration
+    // Format description: (UPGRADE) PreviousPackage(Previous) to NewPackage(New)
+    const upgradeDescription = `(UPGRADE) ${currentPackage.name} to ${newPackage.name}`;
+
     const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
       items: [
         {
@@ -210,6 +213,7 @@ export async function POST(request: NextRequest) {
       payment_behavior: "error_if_incomplete", // ✅ CRITICAL: Force payment collection, error if payment fails
       default_payment_method: paymentMethod.id,
       expand: ["latest_invoice.payment_intent"], // ✅ Get payment intent for frontend
+      description: upgradeDescription, // ✅ Formatted upgrade description for Stripe dashboard
       metadata: {
         ...currentSubscription.metadata,
         packageId: newPackage._id,

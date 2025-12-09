@@ -81,6 +81,11 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [remainingTime, setRemainingTime] = useState(duration);
   const [pausedAt, setPausedAt] = useState<number | null>(null);
+  // Swipe-to-dismiss state
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [swipeDistance, setSwipeDistance] = useState(0);
+  const minSwipeDistance = 100; // Minimum distance in pixels to trigger swipe
 
   useEffect(() => {
     // Show toast with animation after a slight delay
@@ -196,6 +201,38 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
     setTimeout(onRemove, 300);
   };
 
+  // Swipe-to-dismiss handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null); // Reset touch end
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchStart === null) return;
+    const currentTouch = e.targetTouches[0].clientX;
+    const distance = currentTouch - touchStart;
+    setSwipeDistance(distance);
+    setTouchEnd(currentTouch);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd; // Positive = swipe left (dismiss)
+
+    // If swipe right (negative distance) exceeds threshold, dismiss toast
+    if (distance > minSwipeDistance) {
+      handleClose();
+    }
+
+    // Reset swipe state
+    setTouchStart(null);
+    setTouchEnd(null);
+    setSwipeDistance(0);
+  };
+
+  // Calculate transform for swipe animation
+  const swipeTransform = swipeDistance > 0 ? Math.min(swipeDistance, 200) : 0;
+
   return (
     <div
       className={`max-w-[calc(100vw-1rem)] sm:max-w-sm w-full transform transition-all duration-300 ease-in-out ${
@@ -203,9 +240,14 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
       }`}
       style={{
         marginTop: index * 4 + "px", // Stack toasts with compact spacing on mobile
+        transform: swipeDistance > 0 ? `translateX(${swipeTransform}px)` : undefined,
+        opacity: swipeDistance > 0 ? Math.max(0.3, 1 - swipeDistance / 200) : undefined,
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
     >
       <div
         className={`${styles.bg} ${styles.border} ${styles.shadow} border-2 rounded-lg sm:rounded-xl p-2 sm:p-4 backdrop-blur-sm`}
@@ -237,13 +279,13 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
             )}
           </div>
 
-          {/* Close Button */}
+          {/* Close Button - Increased size on mobile for easier tapping */}
           <button
             onClick={handleClose}
-            className="flex-shrink-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md sm:rounded-lg transition-all p-0.5 sm:p-1 -m-0.5 sm:-m-1"
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md sm:rounded-lg transition-all p-1.5 sm:p-1 -m-0.5 sm:-m-1"
             aria-label="Close toast"
           >
-            <X className="w-3 h-3 sm:w-4 sm:h-4" />
+            <X className="w-5 h-5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </div>

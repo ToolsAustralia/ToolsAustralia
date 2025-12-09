@@ -325,14 +325,39 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   );
 
   // Custom close handler that resets payment processing state
-  const handleClose = useCallback(() => {
+  const handleClose = useCallback(async () => {
     // console.log("🔄 MembershipModal: Resetting payment processing state on close");
-    setShowPaymentProcessing(false);
+
+    // ✅ FIX: Cancel any pending/incomplete PaymentIntents when modal closes
+    // This prevents accumulation of incomplete PaymentIntents in Stripe dashboard
+    if (paymentIntentId) {
+      try {
+        await fetch("/api/stripe/cancel-payment-intent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ paymentIntentId }),
+        });
+        console.log("✅ Cancelled PaymentIntent on modal close:", paymentIntentId);
+      } catch (error) {
+        console.error("❌ Failed to cancel PaymentIntent on modal close:", error);
+        // Non-blocking - continue with modal close even if cancellation fails
+      }
+    }
+
+    // Clear PaymentIntent state
+    setPaymentIntentClientSecret(null);
     setPaymentIntentId(null);
+    setSetupIntentClientSecret(null);
+    lastPaymentIntentAmountRef.current = null;
+    isCreatingPaymentIntentRef.current = false;
+
+    setShowPaymentProcessing(false);
     setProcessingPackageName("");
     setProcessingPackageType(undefined as unknown as "one-time" | "subscription" | "upsell" | "mini-draw");
     onClose();
-  }, [onClose]);
+  }, [onClose, paymentIntentId]);
 
   // Reset upsell trigger guard and payment processing state when modal reopens for a new purchase
   useEffect(() => {
@@ -537,29 +562,46 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // This handles both scenarios:
   // 1. Direct opening with membership package - PaymentIntent ready before user clicks "Add Payment Method"
   // 2. Switching from one-time to membership - PaymentIntent created when package type changes
-  // This ensures Google Pay always shows correct amount, never $0.00
+  // ✅ FIX: Only create PaymentIntent during actual payment flows
+  // This prevents unnecessary PaymentIntent creation on modal open/page load
   useEffect(() => {
     const isSubscription = activePlan?.period === "mo";
     const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
 
-    // For subscriptions: Create PaymentIntent proactively (even if card form not shown yet)
-    // This ensures PaymentIntent is ready when user clicks "Add Payment Method"
+    // ✅ CRITICAL: Only create PaymentIntent when:
+    // 1. User is in payment step (step 2)
+    // 2. User has completed registration (authenticated OR guestUserData exists)
+    // 3. User is viewing payment form OR has selected a plan (not placeholder)
+    const isInPaymentFlow = currentStep >= 2;
+    const hasCompletedRegistration = isAuthenticated || guestUserData !== null;
+    const isActualPlan = activePlan && activePlan.id !== "placeholder";
+    const shouldCreatePaymentIntent =
+      isInPaymentFlow && hasCompletedRegistration && isActualPlan && (showCardForm || isSubscription); // Only for subscriptions or when card form is shown
+
+    // For subscriptions: Create PaymentIntent only when in payment flow
     // ✅ CRITICAL: Also recreate if amount changed (switching between membership packages)
     const lastAmount = lastPaymentIntentAmountRef.current;
     const amountChanged = lastAmount !== null && lastAmount !== amountInCents;
     const needsPaymentIntent = !paymentIntentClientSecret || amountChanged;
 
-    if (isSubscription && amountInCents > 0 && needsPaymentIntent && !isCreatingPaymentIntentRef.current) {
+    if (
+      isSubscription &&
+      amountInCents > 0 &&
+      needsPaymentIntent &&
+      !isCreatingPaymentIntentRef.current &&
+      shouldCreatePaymentIntent
+    ) {
       const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
-      console.log("🔄 Creating PaymentIntent proactively for subscription package:", {
+      console.log("🔄 Creating PaymentIntent for subscription package (in payment flow):", {
         packageName,
         amountInCents,
         lastAmount,
         amountChanged,
-        isDirectOpen: !showCardForm,
-        reason: !paymentIntentClientSecret ? "new" : "amount_changed",
+        currentStep,
+        hasCompletedRegistration,
+        showCardForm,
       });
 
       isCreatingPaymentIntentRef.current = true;
@@ -582,12 +624,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 setPaymentIntentId(result.payment_intent_id);
               }
               lastPaymentIntentAmountRef.current = amountInCents;
-              console.log("✅ PaymentIntent created proactively for subscription");
+              console.log("✅ PaymentIntent created for subscription");
             }
           },
           onError: (error) => {
             isCreatingPaymentIntentRef.current = false;
-            console.error("Failed to create PaymentIntent proactively:", error);
+            console.error("Failed to create PaymentIntent:", error);
           },
         }
       );
@@ -712,11 +754,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     activePlan?.period,
     activePlan?.price,
     activePlan?.name,
+    activePlan?.id, // ✅ Added to detect placeholder plan changes
     promoEnhancedPlan?.price,
     promoEnhancedPlan?.name,
     paymentIntentClientSecret,
     setupIntentClientSecret,
     showCardForm,
+    currentStep, // ✅ Added to track payment flow step
+    isAuthenticated, // ✅ Added to track registration completion
+    guestUserData, // ✅ Added to track guest registration completion
     isAuthenticated,
     userData?.email,
     guestUserData?.email,
@@ -3585,7 +3631,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         onClose={() => {
           setShowExistingAccountModal(false);
           setExistingAccountEmail(undefined); // Reset email when modal closes
-          onClose(); // Also close membership modal
+          // ✅ FIX: Don't close main modal when sub-modal closes
         }}
         conflictField={existingAccountConflictField}
         email={existingAccountEmail || formData.email}
