@@ -316,43 +316,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ✅ STRIPE BEST PRACTICE: Check if upfront PaymentIntent was provided (for wallet display)
-    // If valid, use it; otherwise create new PaymentIntent for invoice
-    if (validatedData.paymentIntentId && !paymentIntent && latestInvoice.status === "open") {
+    // ✅ STRIPE BEST PRACTICE: Cancel upfront PaymentIntent to prevent double charging
+    // The upfront PaymentIntent was ONLY for wallet display (Google Pay/Apple Pay)
+    // The invoice PaymentIntent (from Stripe Price catalog) is the one that should be charged
+    // We MUST cancel the upfront PaymentIntent to prevent both from being confirmed
+    if (validatedData.paymentIntentId) {
       try {
         const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
 
-        // Validate upfront PaymentIntent
-        const expectedAmount = Math.round(membershipPackage.price * 100);
+        // Only cancel if it's still in a cancellable state (not already succeeded/cancelled)
         if (
-          upfrontPaymentIntent.status === "requires_payment_method" &&
-          upfrontPaymentIntent.amount === expectedAmount &&
-          upfrontPaymentIntent.currency === "aud"
+          upfrontPaymentIntent.status === "requires_payment_method" ||
+          upfrontPaymentIntent.status === "requires_confirmation" ||
+          upfrontPaymentIntent.status === "requires_action"
         ) {
-          // Update upfront PaymentIntent with invoice/subscription metadata and description
-          await stripe.paymentIntents.update(upfrontPaymentIntent.id, {
-            // ✅ STRIPE BEST PRACTICE: Update description to package name for better tracking
-            description: membershipPackage.name,
-            metadata: {
-              ...upfrontPaymentIntent.metadata,
-              invoice_id: latestInvoice.id || "",
-              subscription_id: subscription.id,
-              packageId: validatedData.packageId,
-              packageName: membershipPackage.name,
-              userEmail: validatedData.userEmail,
-              type: "subscription",
-              packageType: "subscription",
-              isUpfrontPayment: "true", // ✅ Mark so webhook skips it
-            },
-          });
-
-          paymentIntent = upfrontPaymentIntent;
-          console.log(`✅ Using upfront PaymentIntent: ${upfrontPaymentIntent.id} for subscription ${subscription.id}`);
+          await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
+          console.log(
+            `✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} (was for display only) - using invoice PaymentIntent to prevent double charge`
+          );
+        } else if (upfrontPaymentIntent.status === "succeeded") {
+          console.warn(
+            `⚠️ Upfront PaymentIntent ${
+              upfrontPaymentIntent.id
+            } already succeeded! This may cause double charge. Invoice PaymentIntent: ${
+              paymentIntent ? (typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id) : "none"
+            }`
+          );
         } else {
-          console.warn(`⚠️ Upfront PaymentIntent ${validatedData.paymentIntentId} is invalid, creating new one`);
+          console.log(
+            `ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, no action needed`
+          );
         }
-      } catch (retrieveError) {
-        console.warn(`⚠️ Failed to retrieve upfront PaymentIntent: ${retrieveError}`);
+      } catch (cancelError) {
+        console.error(`❌ Failed to cancel upfront PaymentIntent: ${cancelError}`);
+        // Continue - invoice PaymentIntent will be used anyway, but log error for investigation
       }
     }
 

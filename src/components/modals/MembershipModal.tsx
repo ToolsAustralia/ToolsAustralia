@@ -493,20 +493,30 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     });
   }, [promoEnhancedPlan, activePlan]);
 
-  // ✅ FIX: Clear client secrets when package type changes to ensure PaymentMethodSelector remounts
+  // ✅ FIX: Clear client secrets when package type OR amount changes to ensure PaymentMethodSelector remounts
   useEffect(() => {
     const isSubscription = activePlan?.period === "mo";
     const currentHasPaymentIntent = !!paymentIntentClientSecret;
     const currentHasSetupIntent = !!setupIntentClientSecret;
+    const newAmount = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
+    const lastAmount = lastPaymentIntentAmountRef.current;
 
-    // If switching to subscription and we have PaymentIntent, clear it
+    // ✅ CRITICAL: Clear PaymentIntent if:
+    // 1. Switching TO subscription (from one-time)
+    // 2. Switching BETWEEN subscription packages (amount changed)
     if (isSubscription && currentHasPaymentIntent) {
-      console.log("🔄 Package type changed to subscription - clearing PaymentIntent");
-      setPaymentIntentClientSecret(null);
-      setPaymentIntentId(null);
-      lastPaymentIntentAmountRef.current = null;
-      // ✅ CRITICAL: Also clear card form to force re-render
-      setShowCardForm(false);
+      if (lastAmount === null || lastAmount !== newAmount) {
+        console.log("🔄 Package/amount changed - clearing PaymentIntent for recreation:", {
+          oldAmount: lastAmount,
+          newAmount,
+          packageName: promoEnhancedPlan?.name || activePlan?.name,
+        });
+        setPaymentIntentClientSecret(null);
+        setPaymentIntentId(null);
+        lastPaymentIntentAmountRef.current = null;
+        // ✅ CRITICAL: Also clear card form to force re-render
+        setShowCardForm(false);
+      }
     }
 
     // If switching to one-time and we have SetupIntent, clear it (will be recreated when needed)
@@ -517,7 +527,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setShowCardForm(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePlan?.period]); // ✅ Intentionally only depend on period - secrets are cleared, not used
+  }, [activePlan?.period, activePlan?.price, promoEnhancedPlan?.price]); // ✅ Also depend on price to detect amount changes
 
   // ✅ STRIPE BEST PRACTICE: Create PaymentIntent proactively for subscriptions
   // This handles both scenarios:
@@ -530,14 +540,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
     // For subscriptions: Create PaymentIntent proactively (even if card form not shown yet)
     // This ensures PaymentIntent is ready when user clicks "Add Payment Method"
-    if (isSubscription && amountInCents > 0 && !paymentIntentClientSecret && !isCreatingPaymentIntentRef.current) {
+    // ✅ CRITICAL: Also recreate if amount changed (switching between membership packages)
+    const lastAmount = lastPaymentIntentAmountRef.current;
+    const amountChanged = lastAmount !== null && lastAmount !== amountInCents;
+    const needsPaymentIntent = !paymentIntentClientSecret || amountChanged;
+
+    if (isSubscription && amountInCents > 0 && needsPaymentIntent && !isCreatingPaymentIntentRef.current) {
       const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
       console.log("🔄 Creating PaymentIntent proactively for subscription package:", {
         packageName,
         amountInCents,
+        lastAmount,
+        amountChanged,
         isDirectOpen: !showCardForm,
+        reason: !paymentIntentClientSecret ? "new" : "amount_changed",
       });
 
       isCreatingPaymentIntentRef.current = true;
