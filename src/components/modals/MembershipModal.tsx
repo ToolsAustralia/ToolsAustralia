@@ -3178,7 +3178,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           </p>
         </div>
         <div className="w-full max-w-sm mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl">
-          <div className="bg-white rounded-lg sm:rounded-xl shadow-xl p-3 sm:p-6">
+          <div className="bg-white rounded-lg sm:rounded-xl shadow-xl p-2 sm:p-3">
             {/* Step 1: Personal Details for new users */}
             {currentStep === 1 && (
               <div className="space-y-3 sm:space-y-4">
