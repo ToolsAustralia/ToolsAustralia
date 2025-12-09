@@ -37,6 +37,10 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   const savedScrollPosition = useRef<number>(0);
   // Ref to modal content container for scroll handling
   const modalContentRef = useRef<HTMLDivElement>(null);
+  // Unique identifier for this modal instance to track history state
+  const modalId = useRef<string>(`modal-${Date.now()}-${Math.random()}`);
+  // Track if we're currently handling a popstate event to prevent infinite loops
+  const isHandlingPopState = useRef(false);
 
   // Size variants
   const sizeStyles = {
@@ -195,28 +199,118 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   /**
    * Handle browser back button press
    * This prevents accidental navigation when modal is open on mobile devices
+   *
+   * Works in:
+   * - Regular mobile browsers (Chrome, Safari, Firefox, etc.)
+   * - In-app browsers (Facebook, Instagram, Twitter, LinkedIn, etc.)
+   * - WebViews and embedded browsers
+   *
+   * Strategy:
+   * 1. When modal opens, push a history state with a unique identifier
+   * 2. When back button is pressed, popstate event fires
+   * 3. Immediately push the state back to prevent navigation
+   * 4. Close the modal
+   * 5. Clean up history state when modal closes normally
+   *
+   * Uses standard Web APIs (popstate, pushState, replaceState) that are
+   * supported across all modern browsers and WebView environments.
    */
   useEffect(() => {
-    if (!isOpen || !preventBackButton) return;
+    if (!isOpen || !preventBackButton) {
+      // Reset flags when modal is closed or preventBackButton is disabled
+      historyStatePushed.current = false;
+      backButtonPressed.current = false;
+      isHandlingPopState.current = false;
+      return;
+    }
+
+    // Generate a unique identifier for this modal instance
+    modalId.current = `modal-${Date.now()}-${Math.random()}`;
 
     // Push a history state when modal opens to intercept back button
     // This creates a history entry that we can listen for
-    window.history.pushState({ modalOpen: true }, "");
+    // Use a unique identifier to track this specific modal instance
+    // Preserve Next.js internal state if it exists to avoid conflicts
+    const currentState = window.history.state || {};
+    const historyState = {
+      ...currentState, // Preserve existing state (including Next.js internal state)
+      modalOpen: true,
+      modalId: modalId.current,
+      timestamp: Date.now(),
+    };
+
+    // Use replaceState if we're already on a modal state (prevents history stack buildup)
+    // Otherwise use pushState to create a new entry
+    if (currentState?.modalOpen) {
+      window.history.replaceState(historyState, "");
+    } else {
+      window.history.pushState(historyState, "");
+    }
+
     historyStatePushed.current = true;
+    backButtonPressed.current = false;
+    isHandlingPopState.current = false;
 
     /**
      * Handle popstate event (triggered by back button)
-     * When user presses back button, close modal instead of navigating away
+     * When user presses back button, prevent navigation and close modal instead
      */
-    const handlePopState = () => {
-      // Mark that back button was pressed (state was already popped by browser)
-      backButtonPressed.current = true;
-      historyStatePushed.current = false;
-      // Close the modal when back button is pressed
-      onClose();
+    const handlePopState = (event: PopStateEvent) => {
+      // Prevent infinite loops - if we're already handling a popstate, ignore it
+      if (isHandlingPopState.current) {
+        return;
+      }
+
+      // Check if this popstate is for our modal
+      // If the state is null or doesn't have our modalId, it might be a different navigation
+      const currentState = event.state;
+      const isOurModalState =
+        currentState?.modalId === modalId.current ||
+        (historyStatePushed.current && (!currentState || !currentState.modalOpen));
+
+      if (isOurModalState && historyStatePushed.current) {
+        // Mark that we're handling this popstate to prevent infinite loops
+        isHandlingPopState.current = true;
+
+        // Mark that back button was pressed
+        backButtonPressed.current = true;
+
+        try {
+          // Immediately push the state back to prevent navigation
+          // This must happen synchronously to prevent the browser from navigating away
+          // Preserve Next.js internal state from the event state (the state we're navigating to)
+          // This ensures Next.js router stays in sync
+          const targetState = event.state || {};
+          const newHistoryState = {
+            ...targetState, // Preserve state from event (including Next.js internal state)
+            modalOpen: true,
+            modalId: modalId.current,
+            timestamp: Date.now(),
+            preventNavigation: true,
+          };
+
+          // Push state back immediately (synchronously) to prevent navigation
+          window.history.pushState(newHistoryState, "");
+          historyStatePushed.current = true;
+
+          // Close the modal after preventing navigation
+          // Use setTimeout to ensure this happens after the current execution context
+          // This allows the history state to be properly set
+          setTimeout(() => {
+            isHandlingPopState.current = false;
+            onClose();
+          }, 0);
+        } catch (error) {
+          // If history manipulation fails, just close the modal
+          console.warn("Could not prevent navigation on back button:", error);
+          isHandlingPopState.current = false;
+          onClose();
+        }
+      }
     };
 
     // Listen for back button press
+    // Use capture phase to ensure we handle it before other listeners
     window.addEventListener("popstate", handlePopState);
 
     // Cleanup: Remove event listener and history state if modal closes normally
@@ -225,17 +319,44 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
       // If modal closes normally (not via back button), remove the history state we added
       // Only clean up if back button wasn't pressed (which already popped the state)
-      if (historyStatePushed.current && !backButtonPressed.current) {
+      if (historyStatePushed.current && !backButtonPressed.current && !isHandlingPopState.current) {
         // Check if current state is the one we pushed
-        if (window.history.state?.modalOpen) {
-          // Replace current state to remove our modal state without navigating
-          window.history.replaceState(null, "");
+        const currentState = window.history.state;
+        if (currentState?.modalId === modalId.current || currentState?.modalOpen) {
+          // Remove our modal properties but preserve Next.js internal state
+          try {
+            // Create a new state without our modal properties
+            // Preserve Next.js internal properties (__NA, __PRIVATE_NEXTJS_INTERNALS_TREE, etc.)
+            const cleanedState: Record<string, unknown> = {};
+
+            // Preserve Next.js internal state properties
+            if (currentState?.__NA !== undefined) cleanedState.__NA = currentState.__NA;
+            if (currentState?._N !== undefined) cleanedState._N = currentState._N;
+            if (currentState?.__PRIVATE_NEXTJS_INTERNALS_TREE !== undefined) {
+              cleanedState.__PRIVATE_NEXTJS_INTERNALS_TREE = currentState.__PRIVATE_NEXTJS_INTERNALS_TREE;
+            }
+
+            // Replace state with cleaned version (or null if no Next.js state to preserve)
+            const finalState = Object.keys(cleanedState).length > 0 ? cleanedState : null;
+            window.history.replaceState(finalState, "");
+          } catch (error) {
+            // If history manipulation fails, just replace the state
+            // This can happen in some edge cases with Next.js router
+            console.warn("Could not clean up modal history state:", error);
+            try {
+              window.history.replaceState(null, "");
+            } catch (e) {
+              // If even this fails, just log and continue
+              console.warn("Failed to replace history state:", e);
+            }
+          }
         }
         historyStatePushed.current = false;
       }
 
-      // Reset back button flag for next time
+      // Reset flags for next time
       backButtonPressed.current = false;
+      isHandlingPopState.current = false;
     };
   }, [isOpen, preventBackButton, onClose]);
 
