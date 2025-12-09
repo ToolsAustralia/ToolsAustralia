@@ -97,16 +97,13 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
           onClick={handleEnterNow}
           className="group relative inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white 
                       bg-gradient-to-br from-red-600 via-red-700 to-red-800
-                      backdrop-blur-lg transition-all duration-300 hover:scale-110 animate-pulse-button"
+                      backdrop-blur-lg transition-all duration-300 hover:scale-110"
           style={{ border: "3px solid #ee4927" }}
         >
           <span className="relative z-10">ENTER NOW</span>
 
-          {/* glowing ring animation */}
-          <span
-            className="absolute inset-0 rounded-full border border-red-400/40 opacity-0 group-hover:opacity-100 animate-pulse
-                        group-hover:animate-[pulse_2s_infinite]"
-          ></span>
+          {/* Ring animation with background - expands and fades out like a ripple */}
+          <span className="absolute inset-0 rounded-full border-2 border-red-500/60 bg-red-500/30 animate-ring-pulse"></span>
         </button>
       </div>
     </section>

@@ -1004,16 +1004,8 @@ export default function MembershipSection({
                                 (() => {
                                   const hierarchy = getPlanHierarchy(plan);
                                   let buttonText = "Enter Now";
-                                  // Reduce height for additional packages (one-time packages)
-                                  const isAdditionalPackage =
-                                    plan.id.includes("additional-") || plan.period === "one-time";
-                                  const buttonHeight = isAdditionalPackage
-                                    ? isTwoColumn && plan.isMemberOnly
-                                      ? "h-[32px] sm:h-[36px]"
-                                      : isTwoColumn
-                                      ? "h-[35px] sm:h-[40px]"
-                                      : "h-[40px] sm:h-[45px]"
-                                    : isTwoColumn
+                                  // Use same button size for all packages (membership and one-time)
+                                  const buttonHeight = isTwoColumn
                                     ? "h-[35px] sm:h-[40px]"
                                     : "h-[50px] sm:h-[55px]";
                                   let buttonClass = `w-full ${buttonHeight} rounded-2xl flex items-center justify-center font-bold ${

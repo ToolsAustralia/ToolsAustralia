@@ -183,11 +183,64 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }, 300); // Wait for keyboard animation (typically 250-300ms)
     };
 
+    /**
+     * Prevent body scroll when modal reaches scroll boundaries
+     * This prevents overscroll from propagating to the body
+     */
+    const handleModalScroll = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (!target || target !== modalContent) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = modalContent;
+      const isAtTop = scrollTop <= 0;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1; // 1px tolerance
+
+      // If at boundaries, prevent default to stop overscroll
+      if ((isAtTop && e.type === "wheel") || (isAtBottom && e.type === "wheel")) {
+        // For wheel events, prevent if at boundaries
+        const wheelEvent = e as WheelEvent;
+        if ((isAtTop && wheelEvent.deltaY < 0) || (isAtBottom && wheelEvent.deltaY > 0)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    /**
+     * Prevent touch overscroll on mobile
+     */
+    const handleTouchMove = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target || !modalContent.contains(target)) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = modalContent;
+      const isAtTop = scrollTop <= 0;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+      // Get touch direction
+      const touch = e.touches[0];
+      if (!touch) return;
+
+      // Check if trying to scroll past boundaries
+      if (isAtTop && touch.clientY > (e.target as HTMLElement).getBoundingClientRect().top) {
+        e.preventDefault();
+      }
+      if (isAtBottom && touch.clientY < (e.target as HTMLElement).getBoundingClientRect().bottom) {
+        e.preventDefault();
+      }
+    };
+
     // Listen for focus events on all inputs within modal
     modalContent.addEventListener("focusin", handleInputFocus);
+    // Listen for scroll events to prevent overscroll
+    modalContent.addEventListener("wheel", handleModalScroll, { passive: false });
+    // Listen for touch events to prevent overscroll on mobile
+    modalContent.addEventListener("touchmove", handleTouchMove, { passive: false });
 
     return () => {
       modalContent.removeEventListener("focusin", handleInputFocus);
+      modalContent.removeEventListener("wheel", handleModalScroll);
+      modalContent.removeEventListener("touchmove", handleTouchMove);
     };
   }, [isOpen]);
 
@@ -241,6 +294,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   /**
    * Prevent body scrolling when modal is open
    * Saves and restores scroll position to prevent visual jump
+   * Re-applies lock when viewport changes (keyboard show/hide)
    */
   useEffect(() => {
     if (!isOpen) return;
@@ -249,23 +303,46 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     savedScrollPosition.current = window.scrollY;
 
     // Lock body scroll and maintain visual position
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${savedScrollPosition.current}px`;
-    document.body.style.width = "100%";
+    const lockBodyScroll = () => {
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${savedScrollPosition.current}px`;
+      document.body.style.width = "100%";
+      // Prevent overscroll behavior
+      document.body.style.overscrollBehavior = "none";
+    };
+
+    lockBodyScroll();
+
+    // Re-apply lock when viewport changes (keyboard show/hide)
+    const handleViewportChange = () => {
+      lockBodyScroll();
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleViewportChange);
+      window.visualViewport.addEventListener("scroll", handleViewportChange);
+    }
 
     // Cleanup: Restore body scroll and position when modal closes
     return () => {
+      // Remove viewport listeners
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleViewportChange);
+        window.visualViewport.removeEventListener("scroll", handleViewportChange);
+      }
+
       // Restore body styles
       document.body.style.overflow = "";
       document.body.style.position = "";
       document.body.style.top = "";
       document.body.style.width = "";
+      document.body.style.overscrollBehavior = "";
 
       // Restore scroll position
       window.scrollTo(0, savedScrollPosition.current);
     };
-  }, [isOpen]);
+  }, [isOpen, visualViewportHeight]);
 
   if (!isOpen) return null;
 
@@ -307,6 +384,10 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
             visualViewportHeight && keyboardVisible.current
               ? `${visualViewportHeight - 16}px` // 16px for padding (8px top + 8px bottom)
               : undefined,
+          // Prevent overscroll from propagating to body
+          overscrollBehavior: "contain",
+          // Prevent pull-to-refresh and overscroll on mobile
+          touchAction: "pan-y",
         }}
       >
         {children}
