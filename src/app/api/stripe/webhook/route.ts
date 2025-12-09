@@ -1834,8 +1834,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     // Check if this is an upgrade scenario by looking at subscription metadata
+    // ✅ FIX: Only treat as upgrade for the actual upgrade payment, not renewals
+    // Renewals after upgrade should use renewal calculation (lastMonthAccumulatedEntries + baseEntries)
+    // not upgrade calculation (which only grants newBaseEntries)
     const isUpgrade = Boolean(
-      subscription.metadata?.upgradeFrom && subscription.metadata?.upgradeType === "no_proration"
+      subscription.metadata?.upgradeFrom &&
+        subscription.metadata?.upgradeType === "no_proration" &&
+        invoice.billing_reason !== "subscription_cycle" // ✅ CRITICAL: Renewals should NOT be treated as upgrades
     );
 
     // ✅ NEW: Calculate entries using accumulated entries system
@@ -1866,6 +1871,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const currentAccumulatedEntries = user.accumulatedEntries || 0;
 
     // Calculate entries using the new system
+    // ✅ NOTE: For downgrades, lastMonthAccumulatedEntries is preserved during downgrade
+    // Renewals after downgrade will correctly use: lastMonthAccumulatedEntries + newBaseEntries
+    // (e.g., if user had 500 accumulated, downgrades to package with 40 base, next renewal = 500 + 40 = 540)
     const entryCalculation = calculateSubscriptionEntries({
       billingReason: invoice.billing_reason as "subscription_create" | "subscription_cycle",
       baseEntries,

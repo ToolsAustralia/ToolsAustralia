@@ -108,6 +108,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ✅ NEW: Check for users with savedPaymentMethods (indicates account activity)
+    // If email belongs to a user with saved payment methods, reject registration
+    if (
+      existingUserByEmail &&
+      existingUserByEmail.savedPaymentMethods &&
+      existingUserByEmail.savedPaymentMethods.length > 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Email already taken",
+          field: "email",
+          message:
+            "This email address is already associated with an account that has saved payment methods. Please log in or use a different email address.",
+          isExistingAccount: true,
+          existingAccountEmail: existingUserByEmail.email,
+        },
+        { status: 400 }
+      );
+    }
+
+    // If mobile belongs to a user with saved payment methods, reject registration
+    if (
+      existingUserByMobile &&
+      existingUserByMobile.savedPaymentMethods &&
+      existingUserByMobile.savedPaymentMethods.length > 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Mobile number taken",
+          field: "mobile",
+          message:
+            "This mobile number is already associated with an account that has saved payment methods. Please log in or use a different mobile number.",
+          isExistingAccount: true,
+          existingAccountEmail: existingUserByMobile.email,
+        },
+        { status: 400 }
+      );
+    }
+
     // ✅ Handle plain account scenarios
     // If both email and mobile match the same plain account, update it
     if (existingUserByEmail && existingUserByMobile) {

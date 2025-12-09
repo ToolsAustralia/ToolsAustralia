@@ -17,6 +17,7 @@ import {
   Users,
   Zap,
   UserCheck,
+  TrendingUp,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -38,6 +39,11 @@ const adminTabs = [
     id: "overview",
     label: "Overview",
     icon: BarChart3,
+  },
+  {
+    id: "facebook-ads",
+    label: "Facebook Ads",
+    icon: TrendingUp,
   },
   // Temporarily hidden - no content yet
   // {

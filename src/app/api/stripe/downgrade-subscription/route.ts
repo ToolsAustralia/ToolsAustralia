@@ -171,6 +171,9 @@ export async function POST(request: NextRequest) {
     //   }))
     // );
 
+    // Format description: (DOWNGRADE) PreviousPackage(Previous) to NewPackage(New)
+    const downgradeDescription = `(DOWNGRADE) ${currentPackage.name} to ${newPackage.name}`;
+
     // Create subscription update with item replacements
     const subscriptionUpdateParams: Stripe.SubscriptionUpdateParams = {
       items: currentSubscriptionItems.map((item: Stripe.SubscriptionItem) => ({
@@ -179,6 +182,7 @@ export async function POST(request: NextRequest) {
       })),
       proration_behavior: "none", // No immediate charge - user pays current price until cycle ends
       billing_cycle_anchor: "unchanged", // Keep current billing cycle - new price at next cycle
+      description: downgradeDescription, // ✅ Formatted downgrade description for Stripe dashboard
       metadata: {
         userId: user._id.toString(),
         userEmail: user.email,
