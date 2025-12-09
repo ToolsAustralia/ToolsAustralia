@@ -278,19 +278,22 @@ export async function processRefundReversal(
         };
     }
 
-    // Reverse user benefits (entries and points) - common for all types
-    await User.findByIdAndUpdate(
-      user._id,
-      {
-        $inc: {
-          accumulatedEntries: -originalEntries,
-          rewardsPoints: -originalPoints,
+    // Reverse user benefits (entries and points) - common for all types EXCEPT subscriptions
+    // Subscriptions handle their own reversal in reverseSubscriptionPackage() with correct entriesToRemove calculation
+    if (packageType !== "subscription") {
+      await User.findByIdAndUpdate(
+        user._id,
+        {
+          $inc: {
+            accumulatedEntries: -originalEntries,
+            rewardsPoints: -originalPoints,
+          },
         },
-      },
-      { new: false }
-    );
+        { new: false }
+      );
 
-    // console.log(`✅ Reversed ${originalEntries} entries and ${originalPoints} points from user`);
+      // console.log(`✅ Reversed ${originalEntries} entries and ${originalPoints} points from user`);
+    }
 
     // Reverse affiliate commissions (non-blocking)
     try {

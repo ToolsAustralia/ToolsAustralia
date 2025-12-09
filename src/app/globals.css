@@ -1084,22 +1084,6 @@
   animation: pulse-button 1.5s infinite;
 }
 
-/* Ring pulse animation - expands and fades out like a ripple */
-@keyframes ring-pulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(1.3);
-    opacity: 0;
-  }
-}
-
-.animate-ring-pulse {
-  animation: ring-pulse 2s ease-out infinite;
-}
-
 /* NProgress Styles - Customized for Tools Australia brand */
 #nprogress {
   pointer-events: none;
