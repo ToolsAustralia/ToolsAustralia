@@ -1067,21 +1067,45 @@
   animation: border-glow-orange 2s ease-in-out infinite;
 }
 
-/* Pulsating animation for Enter Now button in PromoHero - Outward pulse with smooth fade out (milder) */
-@keyframes pulse-button {
+/* Expanding and fading pulse animation for Enter Now button in PromoHero */
+/* Animation expands outward and fades out completely, then restarts */
+/* Uses complementary red gradient background that matches the button */
+@keyframes pulse-expand-fade {
   0% {
-    box-shadow: rgba(238, 73, 39, 0) 0px 0px 0px 0px, 0 0 40px rgba(220, 38, 38, 0.5);
-  }
-  40% {
-    box-shadow: rgba(238, 73, 39, 0.25) 0px 0px 0px 6px, 0 0 50px rgba(239, 68, 68, 0.6);
+    transform: scale(1);
+    opacity: 0.7;
   }
   100% {
-    box-shadow: rgba(238, 73, 39, 0) 0px 0px 0px 6px, 0 0 40px rgba(220, 38, 38, 0);
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.animate-pulse-expand-fade {
+  animation: pulse-expand-fade 2s ease-out infinite;
+}
+
+/* Second pulse animation - follows the first with a delay */
+.animate-pulse-expand-fade-delayed {
+  animation: pulse-expand-fade 2s ease-out infinite;
+  animation-delay: 1.5s; /* Starts 1.5 seconds after the first pulse for more spacing */
+}
+
+/* Subtle button shadow animation - no red glow */
+@keyframes pulse-button {
+  0% {
+    box-shadow: 0 0 0px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0px rgba(0, 0, 0, 0.2);
   }
 }
 
 .animate-pulse-button {
-  animation: pulse-button 1.5s infinite;
+  animation: pulse-button 2s ease-in-out infinite;
 }
 
 /* NProgress Styles - Customized for Tools Australia brand */

@@ -102,11 +102,11 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
         >
           <span className="relative z-10">ENTER NOW</span>
 
-          {/* glowing ring animation */}
-          <span
-            className="absolute inset-0 rounded-full border border-red-400/40 opacity-0 group-hover:opacity-100 animate-pulse
-                        group-hover:animate-[pulse_2s_infinite]"
-          ></span>
+          {/* Expanding and fading pulse animation rings with complementary background */}
+          {/* First pulse */}
+          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-red-400/40 via-red-500/30 to-red-600/20 animate-pulse-expand-fade"></span>
+          {/* Second pulse - follows the first with a delay */}
+          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-red-400/40 via-red-500/30 to-red-600/20 animate-pulse-expand-fade-delayed"></span>
         </button>
       </div>
     </section>
