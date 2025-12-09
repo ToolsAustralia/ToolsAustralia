@@ -26,7 +26,19 @@ const ModalContent: React.FC<ModalContentProps> = ({
   const scrollbarClass = scrollbar === "metallic" ? "modal-scrollbar" : scrollbar === "none" ? "scrollbar-hide" : "";
 
   return (
-    <div className={`flex-1 overflow-y-auto ${scrollbarClass} ${paddingStyles[padding]} ${className}`}>{children}</div>
+    <div
+      className={`flex-1 overflow-y-auto ${scrollbarClass} ${paddingStyles[padding]} ${className}`}
+      style={{
+        // Ensure proper scrolling with flexbox
+        minHeight: 0,
+        // Smooth scrolling for better UX
+        scrollBehavior: "smooth",
+        // Enable touch scrolling on mobile
+        touchAction: "pan-y",
+      }}
+    >
+      {children}
+    </div>
   );
 };
 

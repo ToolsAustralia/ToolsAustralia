@@ -58,13 +58,39 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   };
 
   /**
+   * Find the scrollable element within the modal
+   * This searches for the element with overflow-y-auto (typically ModalContent)
+   */
+  const findScrollableElement = (container: HTMLElement): HTMLElement | null => {
+    // Check if container itself is scrollable
+    const style = window.getComputedStyle(container);
+    if (style.overflowY === "auto" || style.overflowY === "scroll") {
+      return container;
+    }
+
+    // Search for scrollable child element
+    const scrollableChild = container.querySelector(
+      '[class*="overflow-y-auto"], [class*="overflow-y-scroll"]'
+    ) as HTMLElement;
+    if (scrollableChild) {
+      const childStyle = window.getComputedStyle(scrollableChild);
+      if (childStyle.overflowY === "auto" || childStyle.overflowY === "scroll") {
+        return scrollableChild;
+      }
+    }
+
+    // Fallback: return container if no scrollable child found
+    return container;
+  };
+
+  /**
    * Handle input focus to ensure smooth scrolling into view
    * When an input is focused, scroll it into view smoothly
    */
   useEffect(() => {
     if (!isOpen || !modalContentRef.current) return;
 
-    const modalContent = modalContentRef.current;
+    const modalContainer = modalContentRef.current;
 
     /**
      * Handle focus events on input elements
@@ -91,10 +117,10 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     };
 
     // Listen for focus events on all inputs within modal
-    modalContent.addEventListener("focusin", handleInputFocus);
+    modalContainer.addEventListener("focusin", handleInputFocus);
 
     return () => {
-      modalContent.removeEventListener("focusin", handleInputFocus);
+      modalContainer.removeEventListener("focusin", handleInputFocus);
     };
   }, [isOpen]);
 
@@ -105,14 +131,17 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   useEffect(() => {
     if (!isOpen || !modalContentRef.current) return;
 
-    const modalContent = modalContentRef.current;
+    const modalContainer = modalContentRef.current;
+    const scrollableElement = findScrollableElement(modalContainer);
+
+    if (!scrollableElement) return;
 
     /**
      * Prevent scroll propagation when modal is at boundaries
      * This stops the body from scrolling when user tries to scroll past modal limits
      */
     const handleWheel = (e: WheelEvent) => {
-      const { scrollTop, scrollHeight, clientHeight } = modalContent;
+      const { scrollTop, scrollHeight, clientHeight } = scrollableElement;
       const isAtTop = scrollTop === 0;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
 
@@ -134,11 +163,11 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!modalContent) return;
+      if (!scrollableElement) return;
 
       const touchY = e.touches[0].clientY;
       const deltaY = touchStartY - touchY;
-      const { scrollTop, scrollHeight, clientHeight } = modalContent;
+      const { scrollTop, scrollHeight, clientHeight } = scrollableElement;
 
       const isAtTop = scrollTop === 0;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
@@ -151,15 +180,15 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }
     };
 
-    // Add event listeners
-    modalContent.addEventListener("wheel", handleWheel, { passive: false });
-    modalContent.addEventListener("touchstart", handleTouchStart, { passive: true });
-    modalContent.addEventListener("touchmove", handleTouchMove, { passive: false });
+    // Add event listeners to the scrollable element
+    scrollableElement.addEventListener("wheel", handleWheel, { passive: false });
+    scrollableElement.addEventListener("touchstart", handleTouchStart, { passive: true });
+    scrollableElement.addEventListener("touchmove", handleTouchMove, { passive: false });
 
     return () => {
-      modalContent.removeEventListener("wheel", handleWheel);
-      modalContent.removeEventListener("touchstart", handleTouchStart);
-      modalContent.removeEventListener("touchmove", handleTouchMove);
+      scrollableElement.removeEventListener("wheel", handleWheel);
+      scrollableElement.removeEventListener("touchstart", handleTouchStart);
+      scrollableElement.removeEventListener("touchmove", handleTouchMove);
     };
   }, [isOpen]);
 
@@ -260,7 +289,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       <div
         ref={modalContentRef}
         className={`
-        relative bg-white rounded-2xl shadow-2xl w-full mx-auto overflow-y-auto overflow-x-hidden flex flex-col
+        relative bg-white rounded-2xl shadow-2xl w-full mx-auto overflow-hidden flex flex-col
         ${sizeStyles[size]}
         ${heightStyles[height]}
         ${className}
@@ -268,10 +297,8 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         role="document"
         onClick={(e) => e.stopPropagation()}
         style={{
-          // Smooth scrolling for better UX
-          scrollBehavior: "smooth",
-          // Prevent body scroll when modal is scrolling
-          touchAction: "pan-y",
+          // Ensure proper height constraint for flex children
+          minHeight: 0,
         }}
       >
         {children}
