@@ -41,6 +41,8 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   const modalId = useRef<string>(`modal-${Date.now()}-${Math.random()}`);
   // Track if we're currently handling a popstate event to prevent infinite loops
   const isHandlingPopState = useRef(false);
+  // Track if we're in an in-app browser (Facebook, Instagram, etc.)
+  const isInAppBrowser = useRef<boolean | null>(null);
 
   // Size variants
   const sizeStyles = {
@@ -197,6 +199,53 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   }, [isOpen]);
 
   /**
+   * Detect if we're in an in-app browser (Facebook, Instagram, etc.)
+   * In-app browsers have different navigation behavior and need special handling
+   */
+  const detectInAppBrowser = (): boolean => {
+    if (isInAppBrowser.current !== null) {
+      return isInAppBrowser.current;
+    }
+
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    const userAgent = window.navigator.userAgent || "";
+    const isStandalone = (window.navigator as { standalone?: boolean }).standalone;
+
+    // Check for in-app browser indicators
+    const isFacebook = userAgent.includes("FBAN") || userAgent.includes("FBAV");
+    const isInstagram = userAgent.includes("Instagram");
+    const isTwitter = userAgent.includes("Twitter");
+    const isLinkedIn = userAgent.includes("LinkedInApp");
+    const isLine = userAgent.includes("Line");
+    const isWeChat = userAgent.includes("MicroMessenger");
+    const isWebView = userAgent.includes("wv");
+
+    // Check if referrer suggests we came from an external app
+    const referrer = document.referrer || "";
+    const fromExternalApp =
+      referrer.includes("facebook.com") ||
+      referrer.includes("instagram.com") ||
+      referrer.includes("twitter.com") ||
+      referrer.includes("linkedin.com");
+
+    isInAppBrowser.current =
+      isFacebook ||
+      isInstagram ||
+      isTwitter ||
+      isLinkedIn ||
+      isLine ||
+      isWeChat ||
+      isWebView ||
+      fromExternalApp ||
+      (isStandalone === false && window.history.length <= 1);
+
+    return isInAppBrowser.current;
+  };
+
+  /**
    * Handle browser back button press
    * This prevents accidental navigation when modal is open on mobile devices
    *
@@ -205,15 +254,25 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
    * - In-app browsers (Facebook, Instagram, Twitter, LinkedIn, etc.)
    * - WebViews and embedded browsers
    *
-   * Strategy:
-   * 1. When modal opens, push a history state with a unique identifier
-   * 2. When back button is pressed, popstate event fires
-   * 3. Immediately push the state back to prevent navigation
-   * 4. Close the modal
-   * 5. Clean up history state when modal closes normally
+   * Strategy (Best Practice):
+   * 1. Detect if we're in an in-app browser
+   * 2. When modal opens, push a SINGLE history state with a unique identifier
+   * 3. When back button is pressed, popstate event fires
+   * 4. Immediately push the state back to prevent navigation
+   * 5. Close the modal
+   * 6. Clean up history state when modal closes normally
    *
-   * Uses standard Web APIs (popstate, pushState, replaceState) that are
-   * supported across all modern browsers and WebView environments.
+   * Important Limitations:
+   * - Uses standard Web APIs (popstate, pushState, replaceState)
+   * - Cannot prevent cross-origin navigation (e.g., back to Facebook from Facebook browser)
+   * - This is a browser security feature and cannot be bypassed
+   * - Works best when user navigated within your site (not directly from external link)
+   *
+   * Best Practices Applied:
+   * - Single history state push (avoids history stack pollution)
+   * - Preserves Next.js router state
+   * - Proper cleanup on modal close
+   * - Graceful error handling
    */
   useEffect(() => {
     if (!isOpen || !preventBackButton) {
@@ -224,23 +283,26 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       return;
     }
 
+    // Detect if we're in an in-app browser
+    const inAppBrowser = detectInAppBrowser();
+
     // Generate a unique identifier for this modal instance
     modalId.current = `modal-${Date.now()}-${Math.random()}`;
 
-    // Push a history state when modal opens to intercept back button
-    // This creates a history entry that we can listen for
-    // Use a unique identifier to track this specific modal instance
-    // Preserve Next.js internal state if it exists to avoid conflicts
+    // Push a single history state when modal opens
+    // This creates a history entry that we can intercept when back button is pressed
     const currentState = window.history.state || {};
     const historyState = {
       ...currentState, // Preserve existing state (including Next.js internal state)
       modalOpen: true,
       modalId: modalId.current,
       timestamp: Date.now(),
+      ...(inAppBrowser && { inAppBrowser: true }), // Mark for in-app browser handling
     };
 
     // Use replaceState if we're already on a modal state (prevents history stack buildup)
     // Otherwise use pushState to create a new entry
+    // Note: We use a single state push - best practice is to avoid polluting history
     if (currentState?.modalOpen) {
       window.history.replaceState(historyState, "");
     } else {
@@ -262,13 +324,21 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }
 
       // Check if this popstate is for our modal
-      // If the state is null or doesn't have our modalId, it might be a different navigation
+      // For in-app browsers, we intercept any back navigation when modal is open
+      // For regular browsers, we only intercept if it's our modal state
       const currentState = event.state;
       const isOurModalState =
         currentState?.modalId === modalId.current ||
         (historyStatePushed.current && (!currentState || !currentState.modalOpen));
 
-      if (isOurModalState && historyStatePushed.current) {
+      // Determine if we should intercept this navigation
+      // In in-app browsers, intercept any back navigation when modal is open
+      // In regular browsers, only intercept if it's our modal state
+      const shouldIntercept = inAppBrowser
+        ? historyStatePushed.current // In-app browser: intercept any back navigation
+        : isOurModalState && historyStatePushed.current; // Regular browser: only our modal
+
+      if (shouldIntercept) {
         // Mark that we're handling this popstate to prevent infinite loops
         isHandlingPopState.current = true;
 
@@ -287,9 +357,11 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
             modalId: modalId.current,
             timestamp: Date.now(),
             preventNavigation: true,
+            ...(inAppBrowser && { inAppBrowser: true }),
           };
 
           // Push state back immediately (synchronously) to prevent navigation
+          // Best practice: Use a single pushState, not multiple (avoids history pollution)
           window.history.pushState(newHistoryState, "");
           historyStatePushed.current = true;
 
@@ -302,6 +374,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
           }, 0);
         } catch (error) {
           // If history manipulation fails, just close the modal
+          // Note: In some in-app browsers, cross-origin navigation cannot be prevented
           console.warn("Could not prevent navigation on back button:", error);
           isHandlingPopState.current = false;
           onClose();
@@ -311,11 +384,11 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
     // Listen for back button press
     // Use capture phase to ensure we handle it before other listeners
-    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("popstate", handlePopState, { capture: true });
 
     // Cleanup: Remove event listener and history state if modal closes normally
     return () => {
-      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("popstate", handlePopState, { capture: true });
 
       // If modal closes normally (not via back button), remove the history state we added
       // Only clean up if back button wasn't pressed (which already popped the state)
