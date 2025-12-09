@@ -200,32 +200,26 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     label: profession.label,
   }));
 
-  // ModalContainer handles mount/unmount visuals; explicit visibility state removed
+  // ModalContainer handles mount/unmount visuals, body scroll prevention, and back button handling
+  // Only escape key handling remains here as it's specific to this modal's requirements
 
-  // Handle escape key and body scroll
+  // Handle escape key (body scroll prevention is now handled by ModalContainer)
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
+    if (!isOpen) return;
 
-      // Only allow escape key to close in development
-      if (environmentFlags.userSetupModalClosable()) {
-        const handleEscape = (e: KeyboardEvent) => {
-          if (e.key === "Escape") {
-            handleClose();
-          }
-        };
+    // Only allow escape key to close in development
+    if (environmentFlags.userSetupModalClosable()) {
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          handleClose();
+        }
+      };
 
-        document.addEventListener("keydown", handleEscape);
-        return () => {
-          document.removeEventListener("keydown", handleEscape);
-          document.body.style.overflow = "unset";
-        };
-      }
+      document.addEventListener("keydown", handleEscape);
+      return () => {
+        document.removeEventListener("keydown", handleEscape);
+      };
     }
-
-    return () => {
-      document.body.style.overflow = "unset";
-    };
   }, [isOpen, handleClose]);
 
   // Initialize current email when modal opens or userData changes
