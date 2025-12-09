@@ -99,7 +99,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   }, [isOpen]);
 
   /**
-   * Prevent body scroll and handle modal scroll boundaries
+   * Prevent body scroll when modal reaches scroll boundaries
    * This ensures that when modal reaches top/bottom, body doesn't scroll
    */
   useEffect(() => {
@@ -113,10 +113,11 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
      */
     const handleWheel = (e: WheelEvent) => {
       const { scrollTop, scrollHeight, clientHeight } = modalContent;
-      const isAtTop = scrollTop === 0;
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+      const isAtTop = scrollTop <= 1; // Allow small tolerance
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1; // Allow small tolerance
 
-      // If at top and scrolling up, or at bottom and scrolling down, prevent default
+      // Only prevent if at boundary AND trying to scroll in that direction
+      // deltaY < 0 means scrolling up, deltaY > 0 means scrolling down
       if ((isAtTop && e.deltaY < 0) || (isAtBottom && e.deltaY > 0)) {
         e.preventDefault();
         e.stopPropagation();
@@ -140,26 +141,27 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       const deltaY = touchStartY - touchY;
       const { scrollTop, scrollHeight, clientHeight } = modalContent;
 
-      const isAtTop = scrollTop === 0;
+      const isAtTop = scrollTop <= 1;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
 
-      // If at top and trying to scroll up, or at bottom and trying to scroll down, prevent
+      // deltaY > 0 means scrolling down (finger moved up)
+      // deltaY < 0 means scrolling up (finger moved down)
+      // Only prevent if at boundary AND trying to scroll in that direction
       if ((isAtTop && deltaY < 0) || (isAtBottom && deltaY > 0)) {
         e.preventDefault();
         e.stopPropagation();
-        return false;
       }
     };
 
-    // Add event listeners
-    modalContent.addEventListener("wheel", handleWheel, { passive: false });
+    // Add event listeners - use capture phase to catch events before they bubble
+    modalContent.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     modalContent.addEventListener("touchstart", handleTouchStart, { passive: true });
-    modalContent.addEventListener("touchmove", handleTouchMove, { passive: false });
+    modalContent.addEventListener("touchmove", handleTouchMove, { passive: false, capture: true });
 
     return () => {
-      modalContent.removeEventListener("wheel", handleWheel);
+      modalContent.removeEventListener("wheel", handleWheel, { capture: true } as EventListenerOptions);
       modalContent.removeEventListener("touchstart", handleTouchStart);
-      modalContent.removeEventListener("touchmove", handleTouchMove);
+      modalContent.removeEventListener("touchmove", handleTouchMove, { capture: true } as EventListenerOptions);
     };
   }, [isOpen]);
 
@@ -270,8 +272,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         style={{
           // Smooth scrolling for better UX
           scrollBehavior: "smooth",
-          // Prevent body scroll when modal is scrolling
-          touchAction: "pan-y",
         }}
       >
         {children}
