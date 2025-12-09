@@ -92,12 +92,12 @@ export async function POST(request: NextRequest) {
     const validatedData = createOneTimePurchaseSchema.parse(body);
     const normalizedAffiliateCode = validatedData.affiliateCode?.trim().toUpperCase();
 
-    // console.log(`🛒 Creating one-time purchase for: ${validatedData.userEmail}`);
+    console.log(`🛒 Creating one-time purchase for: ${validatedData.userEmail}`);
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: validatedData.userEmail });
     if (existingUser) {
-      // console.log(`👤 User already exists, proceeding with purchase: ${existingUser._id}`);
+      console.log(`👤 User already exists, proceeding with purchase: ${existingUser._id}`);
       // User already exists (registered in step 1), proceed with purchase
     }
 
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date().toISOString(),
         };
         isMiniDrawPackage = true;
-        // console.log("🎲 Mini draw package detected for new user:", miniDrawPackage.name);
+        console.log("🎲 Mini draw package detected for new user:", miniDrawPackage.name);
       }
     }
 
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists (from registration)
-    // console.log("👤 Checking if user already exists...");
+    console.log("👤 Checking if user already exists...");
     const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
     const existingAffiliateCode = registeredUser?.affiliateReferral?.affiliateCode;
     const affiliateMetadataCode = normalizedAffiliateCode || existingAffiliateCode;
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
 
     // First, check if we have a registered user with an existing Stripe customer
     if (registeredUser && registeredUser.stripeCustomerId) {
-      // console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
+      console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
       customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
 
       // ✅ FIX: Attach payment method to customer if not already attached
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
           await stripe.paymentMethods.attach(finalPaymentMethodId, {
             customer: customer.id,
           });
-          // console.log(`✅ Attached payment method to existing customer: ${customer.id}`);
+          console.log(`✅ Attached payment method to existing customer: ${customer.id}`);
         }
       } catch (attachError) {
         console.error("❌ Failed to attach payment method to customer:", attachError);
@@ -183,19 +183,19 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // For guest users or new users, get the customer ID from the payment method
-      // console.log("🔍 Retrieving payment method to get customer ID...");
+      console.log("🔍 Retrieving payment method to get customer ID...");
       try {
         const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
         if (paymentMethod.customer) {
           // Payment method has a customer - use it
-          // console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
+          console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
           customer = await stripe.customers.retrieve(paymentMethod.customer as string);
-          // console.log(`✅ Using customer from payment method: ${customer.id}`);
+          console.log(`✅ Using customer from payment method: ${customer.id}`);
 
           // Update the customer with proper details if it's a temporary guest customer
           const customerWithMetadata = customer as Stripe.Customer;
           if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
-            // console.log("🔄 Updating temporary customer with proper details...");
+            console.log("🔄 Updating temporary customer with proper details...");
             customer = await stripe.customers.update(customer.id, {
               email: validatedData.userEmail,
               name: `${validatedData.firstName} ${validatedData.lastName}`,
@@ -206,12 +206,12 @@ export async function POST(request: NextRequest) {
                 userId: registeredUser?._id?.toString() || "guest",
               },
             });
-            // console.log(`✅ Updated customer details: ${customer.id}`);
+            console.log(`✅ Updated customer details: ${customer.id}`);
           }
         } else {
           // ✅ FIX: Payment method has no customer - create one and attach it
           // This happens when PaymentIntent was created without a customer
-          // console.log("🆕 Payment method has no customer - creating new customer...");
+          console.log("🆕 Payment method has no customer - creating new customer...");
 
           customer = await stripe.customers.create({
             email: validatedData.userEmail,
@@ -229,13 +229,13 @@ export async function POST(request: NextRequest) {
             customer: customer.id,
           });
 
-          // console.log(`✅ Created customer ${customer.id} and attached payment method`);
+          console.log(`✅ Created customer ${customer.id} and attached payment method`);
 
           // If registered user exists, update them with the customer ID
           if (registeredUser) {
             registeredUser.stripeCustomerId = customer.id;
             await registeredUser.save();
-            // console.log(`✅ Linked customer ${customer.id} to registered user ${registeredUser._id}`);
+            console.log(`✅ Linked customer ${customer.id} to registered user ${registeredUser._id}`);
           }
         }
       } catch (error) {
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
         default_payment_method: finalPaymentMethodId,
       },
     });
-    // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
+    console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${customer.id}`);
 
     // ✅ SINGLE SOURCE OF TRUTH: Reuse confirmed PaymentIntent if provided, otherwise create new one
     let paymentIntent: Stripe.PaymentIntent;
@@ -295,23 +295,36 @@ export async function POST(request: NextRequest) {
 
       // ✅ FIX: Update PaymentIntent with customer and metadata
       // This ensures webhook can find the user by customer ID
+      const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
+      console.log(`🔄 Updating PaymentIntent ${existingPaymentIntent.id} with metadata for webhook processing...`);
+      console.log(`📋 Original metadata:`, existingPaymentIntent.metadata);
+
+      const updatedMetadata = {
+        ...existingPaymentIntent.metadata,
+        packageId: validatedData.packageId,
+        userEmail: validatedData.userEmail,
+        type: packageTypeValue, // ✅ CRITICAL: Set 'type' for webhook compatibility
+        packageType: packageTypeValue, // ✅ Also set 'packageType' for consistency
+        entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
+        price: Math.round(membershipPackage.price * 100).toString(),
+        ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
+        // Store request context for Facebook CAPI (webhook will extract and use)
+        ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      };
+
+      console.log(`📋 Updated metadata:`, updatedMetadata);
+
       await stripe.paymentIntents.update(existingPaymentIntent.id, {
         customer: customer.id, // ✅ Update customer field so webhook can find user
-        metadata: {
-          ...existingPaymentIntent.metadata,
-          packageId: validatedData.packageId,
-          userEmail: validatedData.userEmail,
-          packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
-          entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
-          price: Math.round(membershipPackage.price * 100).toString(),
-          ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
-          // Store request context for Facebook CAPI (webhook will extract and use)
-          ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-          ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-          ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-          ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-        },
+        // ✅ STRIPE BEST PRACTICE: Update description to package name for better tracking
+        description: membershipPackage.name,
+        metadata: updatedMetadata,
       });
+
+      console.log(`✅ PaymentIntent ${existingPaymentIntent.id} updated with customer ${customer.id} and metadata`);
     } else {
       // Fallback: Create new PaymentIntent (for non-wallet payments)
       // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
@@ -338,7 +351,8 @@ export async function POST(request: NextRequest) {
           ]),
           packageId: validatedData.packageId,
           userEmail: validatedData.userEmail,
-          packageType: isMiniDrawPackage ? "mini-draw" : "one-time",
+          type: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
+          packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
           entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
           price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
@@ -351,13 +365,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // console.log(`💳 Using payment intent: ${paymentIntent.id}`);
+    console.log(`💳 Using payment intent: ${paymentIntent.id}`);
+    console.log(`📋 PaymentIntent metadata:`, {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      customer: paymentIntent.customer,
+      amount: paymentIntent.amount,
+      metadata: paymentIntent.metadata,
+    });
 
     let user;
 
     if (existingUser) {
       // User already exists (registered in step 1), update their Stripe customer ID and payment method
-      // console.log(`🔄 Updating existing user with Stripe customer ID: ${customer.id}`);
+      console.log(`🔄 Updating existing user with Stripe customer ID: ${customer.id}`);
 
       // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
       const savedPaymentMethodData = {
@@ -382,7 +403,7 @@ export async function POST(request: NextRequest) {
         throw new Error("Failed to update existing user");
       }
 
-      // console.log(`✅ Updated existing user: ${user._id}`);
+      console.log(`✅ Updated existing user: ${user._id}`);
     } else {
       // Create new user account (will be fully activated when webhook confirms payment)
       // Hash password only if provided (for backward compatibility with existing users)
@@ -390,7 +411,7 @@ export async function POST(request: NextRequest) {
 
       // Clean mobile number before saving (remove spaces)
       const cleanedMobile = validatedData.mobile?.replace(/\s+/g, "") || "";
-      // console.log(`📱 Mobile number: "${validatedData.mobile}" -> cleaned: "${cleanedMobile}"`);
+      console.log(`📱 Mobile number: "${validatedData.mobile}" -> cleaned: "${cleanedMobile}"`);
 
       // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
       const savedPaymentMethodData = {
@@ -425,7 +446,7 @@ export async function POST(request: NextRequest) {
       });
 
       await user.save();
-      // console.log(`✅ Created user account: ${user._id}`);
+      console.log(`✅ Created user account: ${user._id}`);
     }
 
     // ✅ Attach affiliate referral if provided and not already set
@@ -444,46 +465,56 @@ export async function POST(request: NextRequest) {
 
     // ✅ CRITICAL: Handle different payment statuses and wait for settlement
     if (paymentIntent.status === "succeeded") {
-      // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
+      console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
 
       // Wait for payment to be fully settled (not just authorized)
       await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
 
       // Re-fetch payment intent to ensure it's fully settled
       const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
+      console.log(
+        `🔍 Verified PaymentIntent status: ${verifiedPaymentIntent.status}, metadata:`,
+        verifiedPaymentIntent.metadata
+      );
 
       if (verifiedPaymentIntent.status === "succeeded") {
-        // console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
+        console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
-        // console.log(
-        //   `🎯 Payment verified - benefits will be processed by webhook: ${
-        //     membershipPackage.totalEntries || 0
-        //   } entries, ${Math.floor(membershipPackage.price)} points`
-        // );
+        console.log(
+          `🎯 Payment verified - benefits will be processed by webhook: ${
+            membershipPackage.totalEntries || 0
+          } entries, ${Math.floor(membershipPackage.price)} points`
+        );
+        console.log(`📋 PaymentIntent ID for webhook: ${verifiedPaymentIntent.id}`);
+        console.log(`👤 Customer ID for webhook lookup: ${verifiedPaymentIntent.customer}`);
+        console.log(`📧 User email for webhook lookup: ${verifiedPaymentIntent.metadata.userEmail}`);
         // ✅ Klaviyo integration handled by webhook for reliability and best practices
-        // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
+        console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
       } else {
         console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
         // Still return success but log the verification failure
       }
     } else if (paymentIntent.status === "requires_action" || paymentIntent.status === "processing") {
-      // console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
+      console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
 
       // Wait longer for payment to complete
       await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
 
       // Re-fetch payment intent to check final status
       const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      // console.log(`🔍 Final payment status: ${finalPaymentIntent.status}`);
+      console.log(`🔍 Final payment status: ${finalPaymentIntent.status}, metadata:`, finalPaymentIntent.metadata);
 
       if (finalPaymentIntent.status === "succeeded") {
-        // console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
+        console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
-        // console.log(
-        //   `🎯 Payment verified - benefits will be processed by webhook: ${
-        //     membershipPackage.totalEntries || 0
-        //   } entries, ${Math.floor(membershipPackage.price)} points`
-        // );
+        console.log(
+          `🎯 Payment verified - benefits will be processed by webhook: ${
+            membershipPackage.totalEntries || 0
+          } entries, ${Math.floor(membershipPackage.price)} points`
+        );
+        console.log(`📋 PaymentIntent ID for webhook: ${finalPaymentIntent.id}`);
+        console.log(`👤 Customer ID for webhook lookup: ${finalPaymentIntent.customer}`);
+        console.log(`📧 User email for webhook lookup: ${finalPaymentIntent.metadata.userEmail}`);
       } else {
         console.error(`❌ Payment failed after waiting: ${finalPaymentIntent.status}`);
         return NextResponse.json(

@@ -13,6 +13,8 @@ interface CreatePaymentIntentParams {
   currency?: string; // Defaults to "aud"
   packageId?: string;
   packageName?: string;
+  userEmail?: string; // ✅ NEW: User email for finding registered user's customer
+  packageType?: "one-time" | "subscription"; // ✅ NEW: Package type for proper metadata
 }
 
 /**
@@ -34,6 +36,8 @@ export const usePaymentIntent = () => {
           currency: params.currency || "aud",
           packageId: params.packageId,
           packageName: params.packageName,
+          userEmail: params.userEmail,
+          packageType: params.packageType,
         }),
       });
 

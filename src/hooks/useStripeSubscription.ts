@@ -18,6 +18,7 @@ export interface SubscriptionData {
   password?: string; // Made optional for passwordless users
   paymentMethodId: string;
   paymentIntentId?: string; // Optional PaymentIntent ID if already confirmed upfront
+  idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;
 }
@@ -38,6 +39,8 @@ export interface OneTimePurchaseData {
 export interface ExistingUserSubscriptionData {
   packageId: string;
   paymentMethodId: string;
+  paymentIntentId?: string; // ✅ Optional upfront PaymentIntent ID for wallet display
+  idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;
 }

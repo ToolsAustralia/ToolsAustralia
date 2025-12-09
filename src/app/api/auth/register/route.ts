@@ -19,6 +19,7 @@ import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
 import { IUser } from "@/models/User";
+import { stripe } from "@/lib/stripe";
 
 // Registration validation schema
 const registerSchema = z.object({
@@ -466,6 +467,28 @@ export async function POST(request: NextRequest) {
     //   profileSetupCompleted: newUser.profileSetupCompleted,
     //   needsSetup: !newUser.profileSetupCompleted,
     // });
+
+    // ✅ STRIPE BEST PRACTICE: Create Stripe customer upfront during registration
+    // This ensures PaymentIntent can have customer set BEFORE confirmation, enabling proper webhook processing
+    try {
+      const stripeCustomer = await stripe.customers.create({
+        email: newUser.email,
+        name: `${newUser.firstName} ${newUser.lastName}`,
+        phone: newUser.mobile || undefined,
+        metadata: {
+          userId: newUser._id.toString(),
+        },
+      });
+
+      // Link Stripe customer to user account
+      newUser.stripeCustomerId = stripeCustomer.id;
+      await newUser.save();
+      console.log(`✅ Created Stripe customer ${stripeCustomer.id} for user ${newUser._id}`);
+    } catch (stripeError) {
+      // Non-blocking - log but don't fail registration
+      // Customer can be created later during purchase if needed
+      console.error("Failed to create Stripe customer during registration:", stripeError);
+    }
 
     // Track affiliate signup if affiliate code is provided (non-blocking)
     if (validatedData.affiliateCode) {

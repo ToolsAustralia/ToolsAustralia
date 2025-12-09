@@ -24,6 +24,8 @@ const createPaymentIntentSchema = z.object({
   currency: z.string().default("aud"),
   packageId: z.string().optional(),
   packageName: z.string().optional(),
+  userEmail: z.string().email().optional(), // ✅ NEW: Accept userEmail to find registered user's customer
+  packageType: z.enum(["one-time", "subscription"]).optional(), // ✅ NEW: Specify package type for proper metadata
 });
 
 export async function POST(request: NextRequest) {
@@ -69,11 +71,29 @@ export async function POST(request: NextRequest) {
         await user.save();
       }
     } else {
-      // ✅ FIX: Guest user - DON'T create customer upfront
-      // Customer will be created during the purchase process when payment is confirmed
-      // This prevents unnecessary customer creation and reduces Stripe API calls
-      stripeCustomerId = undefined; // No customer yet for guest users
-      userId = "guest";
+      // ✅ STRIPE BEST PRACTICE: For guest users, check if they registered in step 1
+      // If user exists from registration, they should have a Stripe customer already
+      // This ensures customer is set BEFORE PaymentIntent confirmation for proper webhook processing
+      if (validatedData.userEmail) {
+        const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
+        if (registeredUser?.stripeCustomerId) {
+          stripeCustomerId = registeredUser.stripeCustomerId;
+          userEmail = registeredUser.email;
+          userId = registeredUser._id.toString();
+          console.log(`✅ Found registered user's Stripe customer: ${stripeCustomerId}`);
+        } else {
+          // User registered but no customer yet (shouldn't happen, but handle gracefully)
+          console.log(`⚠️ Registered user found but no Stripe customer: ${registeredUser?._id}`);
+          stripeCustomerId = undefined;
+          userId = registeredUser?._id.toString() || "guest";
+          userEmail = validatedData.userEmail;
+        }
+      } else {
+        // True guest - no registration yet, customer will be created during purchase
+        stripeCustomerId = undefined;
+        userId = "guest";
+        userEmail = undefined;
+      }
     }
 
     // Create PaymentIntent for payment method collection with amount
@@ -89,10 +109,18 @@ export async function POST(request: NextRequest) {
         enabled: true,
         allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
       },
+      // ✅ STRIPE BEST PRACTICE: For subscription upfront PaymentIntents, use manual capture
+      // This allows us to cancel the PaymentIntent before it's captured, preventing double charge
+      // The PaymentIntent will be in "requires_capture" status after confirmation, giving us time to cancel it
+      ...(validatedData.packageType === "subscription" && { capture_method: "manual" }), // ✅ Manual capture for subscriptions
+      // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+      ...(validatedData.packageName && { description: validatedData.packageName }),
       metadata: {
         userId: userId,
-        userEmail: userEmail || "guest",
-        type: session?.user?.id ? "authenticated" : "guest",
+        userEmail: userEmail || validatedData.userEmail || "guest",
+        type: validatedData.packageType || "one-time", // ✅ Use provided packageType or default to one-time
+        packageType: validatedData.packageType || "one-time", // ✅ Also set 'packageType' for consistency
+        ...(validatedData.packageType === "subscription" && { isUpfrontPayment: "true" }), // ✅ Mark subscription PaymentIntent so webhook skips it
         ...(validatedData.packageId && { packageId: validatedData.packageId }),
         ...(validatedData.packageName && { packageName: validatedData.packageName }),
       },

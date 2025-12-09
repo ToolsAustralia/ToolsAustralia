@@ -23,7 +23,9 @@ const createSubscriptionSchema = z.object({
   mobile: z.string().optional(),
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
-  paymentMethodId: z.string().min(1, "Payment method is required"), // Payment method from SetupIntent (for saving)
+  paymentMethodId: z.string().min(1, "Payment method is required"), // Payment method from PaymentIntent/SetupIntent (for saving)
+  paymentIntentId: z.string().optional(), // ✅ NEW: Optional upfront PaymentIntent ID for wallet display (Google Pay/Apple Pay)
+  idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode: z.string().optional(),
 });
 
@@ -213,6 +215,49 @@ export async function POST(request: NextRequest) {
     const stripePriceId = membershipPackage.stripePriceId;
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
+    // ✅ STRIPE BEST PRACTICE: Cancel upfront PaymentIntent BEFORE creating subscription
+    // This prevents the upfront PaymentIntent from being confirmed, which would cause double charging
+    // The upfront PaymentIntent was ONLY for wallet display (Google Pay/Apple Pay)
+    // The invoice PaymentIntent (from Stripe Price catalog) is the one that should be charged
+    if (validatedData.paymentIntentId) {
+      try {
+        const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
+
+        // Only cancel if it's still in a cancellable state (not already succeeded/cancelled)
+        // ✅ CRITICAL: Must check for "requires_capture" status (shown as "Uncaptured" in Stripe dashboard)
+        // With capture_method: "manual", PaymentIntent goes to "requires_capture" after confirmation
+        // This means funds are AUTHORIZED but not yet CAPTURED - we MUST cancel to release the hold
+        if (
+          upfrontPaymentIntent.status === "requires_payment_method" ||
+          upfrontPaymentIntent.status === "requires_confirmation" ||
+          upfrontPaymentIntent.status === "requires_action" ||
+          upfrontPaymentIntent.status === "requires_capture" // ✅ CRITICAL: Handle uncaptured PaymentIntents
+        ) {
+          await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
+          console.log(
+            `✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} BEFORE subscription creation (was for display only) - prevents double charge. Status was: ${upfrontPaymentIntent.status}`
+          );
+        } else if (upfrontPaymentIntent.status === "succeeded") {
+          console.error(
+            `❌ CRITICAL: Upfront PaymentIntent ${upfrontPaymentIntent.id} already succeeded BEFORE subscription creation! This will cause double charge.`
+          );
+          // Still continue - we'll use invoice PaymentIntent, but log error
+        } else {
+          console.log(
+            `ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, no action needed`
+          );
+        }
+      } catch (cancelError) {
+        console.error(`❌ Failed to cancel upfront PaymentIntent: ${cancelError}`);
+        // Continue - invoice PaymentIntent will be used anyway, but log error for investigation
+      }
+    }
+
+    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
+    // This ensures that even if the API is called twice (e.g., double-click), only one subscription is created
+    const idempotencyKey =
+      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${validatedData.userEmail}_${Date.now()}`;
+
     // ✅ STRIPE BEST PRACTICE: Create subscription first, let Stripe create PaymentIntent automatically
     // Stripe will create Invoice + PaymentIntent with correct amount for wallet payments
     // We include default_payment_method so Stripe creates PaymentIntent immediately
@@ -220,26 +265,31 @@ export async function POST(request: NextRequest) {
     // console.log("📋 Creating Stripe subscription...");
     let subscription;
     try {
-      subscription = await stripe.subscriptions.create({
-        customer: customer.id,
-        items: [
-          {
-            price: stripePriceId, // ✅ Use existing Price ID
+      subscription = await stripe.subscriptions.create(
+        {
+          customer: customer.id,
+          items: [
+            {
+              price: stripePriceId, // ✅ Use existing Price ID
+            },
+          ],
+          // ✅ Include default_payment_method so Stripe creates PaymentIntent immediately
+          // Payment will still be collected via PaymentElement (not auto-paid)
+          default_payment_method: finalPaymentMethodId,
+          payment_behavior: "default_incomplete", // ✅ Stripe creates PaymentIntent automatically with correct amount
+          payment_settings: { save_default_payment_method: "on_subscription" },
+          expand: ["latest_invoice.payment_intent"], // ✅ Get PaymentIntent from invoice
+          description: `${membershipPackage.name}`,
+          metadata: {
+            packageId: validatedData.packageId,
+            packageName: membershipPackage.name,
+            userEmail: validatedData.userEmail,
           },
-        ],
-        // ✅ Include default_payment_method so Stripe creates PaymentIntent immediately
-        // Payment will still be collected via PaymentElement (not auto-paid)
-        default_payment_method: finalPaymentMethodId,
-        payment_behavior: "default_incomplete", // ✅ Stripe creates PaymentIntent automatically with correct amount
-        payment_settings: { save_default_payment_method: "on_subscription" },
-        expand: ["latest_invoice.payment_intent"], // ✅ Get PaymentIntent from invoice
-        description: `${membershipPackage.name}`,
-        metadata: {
-          packageId: validatedData.packageId,
-          packageName: membershipPackage.name,
-          userEmail: validatedData.userEmail,
         },
-      });
+        {
+          idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate subscription creation
+        }
+      );
 
       // console.log(`📋 Created subscription: ${subscription.id}`);
       // console.log(`📊 Subscription status: ${subscription.status}`);
@@ -315,36 +365,58 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ✅ NOTE: Upfront PaymentIntent cancellation moved BEFORE subscription creation (above)
+    // This ensures it's cancelled before it can be confirmed, preventing double charging
+
     // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually
     // With payment_behavior: "default_incomplete", Stripe doesn't create PaymentIntent automatically
     // We need to create it for wallet payments (Google Pay/Apple Pay) to show correct amount
-    if (!paymentIntent && latestInvoice.status === "open" && latestInvoice.amount_due > 0) {
+    if (!paymentIntent && latestInvoice.status === "open") {
       try {
-        console.log(
-          `⚠️ Invoice is open but has no PaymentIntent. Creating PaymentIntent for invoice amount: ${latestInvoice.amount_due}`
-        );
-
-        // Create PaymentIntent for the invoice amount
-        const invoiceAmount = latestInvoice.amount_due || 0;
+        // ✅ FIX: Use invoice amount_due, but fallback to subscription price if amount_due is 0
+        // This handles edge cases where invoice might have 0 amount due to prorations or trials
+        const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
         const invoiceCurrency = (latestInvoice.currency as string) || "aud";
 
+        console.log(
+          `⚠️ Invoice is open but has no PaymentIntent. Creating PaymentIntent for amount: ${invoiceAmount} (invoice amount_due: ${
+            latestInvoice.amount_due
+          }, package price: ${Math.round(membershipPackage.price * 100)})`
+        );
+
+        // ✅ DEBUG: Verify amount is correct for wallet display
+        if (invoiceAmount === 0) {
+          console.warn(
+            `⚠️ WARNING: PaymentIntent amount is 0! This will show $0.00 in Google Pay/Apple Pay. Using package price fallback: ${Math.round(
+              membershipPackage.price * 100
+            )}`
+          );
+        }
+
+        // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
+        // Don't confirm it - let PaymentElement handle confirmation
         const newPaymentIntent = await stripe.paymentIntents.create({
           amount: invoiceAmount,
           currency: invoiceCurrency,
           customer: customer.id,
           payment_method: finalPaymentMethodId,
           setup_future_usage: "off_session",
+          confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
           automatic_payment_methods: {
             enabled: true,
             allow_redirects: "never",
           },
+          // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+          description: membershipPackage.name,
           metadata: {
             invoice_id: latestInvoice.id || "",
             subscription_id: subscription.id,
             packageId: validatedData.packageId,
             packageName: membershipPackage.name,
             userEmail: validatedData.userEmail,
+            type: "subscription", // ✅ Set 'type' for webhook compatibility
             packageType: "subscription",
+            isUpfrontPayment: "true", // ✅ Mark as upfront payment so webhook skips it
           },
         });
 
@@ -383,10 +455,16 @@ export async function POST(request: NextRequest) {
           const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntent);
           clientSecret = retrievedPI.client_secret || null;
           console.log(
-            `✅ Retrieved PaymentIntent: ${retrievedPI.id}, status: ${
-              retrievedPI.status
+            `✅ Retrieved PaymentIntent: ${retrievedPI.id}, status: ${retrievedPI.status}, amount: ${
+              retrievedPI.amount
             }, has client_secret: ${!!clientSecret}`
           );
+
+          // ✅ DEBUG: Verify amount matches subscription price
+          const expectedAmount = Math.round(membershipPackage.price * 100);
+          if (retrievedPI.amount !== expectedAmount) {
+            console.warn(`⚠️ PaymentIntent amount mismatch: expected ${expectedAmount}, got ${retrievedPI.amount}`);
+          }
         } catch (retrieveError) {
           console.error("❌ Failed to retrieve PaymentIntent:", retrieveError);
         }
@@ -394,10 +472,16 @@ export async function POST(request: NextRequest) {
         // If it's already expanded, use it directly
         clientSecret = paymentIntent.client_secret || null;
         console.log(
-          `✅ Using expanded PaymentIntent: ${paymentIntent.id}, status: ${
-            paymentIntent.status
+          `✅ Using expanded PaymentIntent: ${paymentIntent.id}, status: ${paymentIntent.status}, amount: ${
+            paymentIntent.amount
           }, has client_secret: ${!!clientSecret}`
         );
+
+        // ✅ DEBUG: Verify amount matches subscription price
+        const expectedAmount = Math.round(membershipPackage.price * 100);
+        if (paymentIntent.amount !== expectedAmount) {
+          console.warn(`⚠️ PaymentIntent amount mismatch: expected ${expectedAmount}, got ${paymentIntent.amount}`);
+        }
       }
     }
 
