@@ -172,3 +172,4 @@ if (mongoose.models[modelName]) {
 export default mongoose.model<IFacebookAdsInsight>(modelName, FacebookAdsInsightSchema);
 
 
+
