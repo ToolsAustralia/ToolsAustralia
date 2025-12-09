@@ -22,6 +22,7 @@ import {
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
+import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import {
   Users,
   DollarSign,
@@ -585,6 +586,9 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
 
           {/* AFFILIATES TAB */}
           {selectedTab === "affiliates" && <AffiliatesManagement />}
+
+          {/* FACEBOOK ADS TAB */}
+          {selectedTab === "facebook-ads" && <FacebookAdsManagement />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (
