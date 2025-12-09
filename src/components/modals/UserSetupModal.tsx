@@ -93,7 +93,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
     try {
       sessionStorage.removeItem(SETUP_STATE_KEY);
-      // console.log("🗑️ Cleared modal state from sessionStorage");
+      console.log("🗑️ Cleared modal state from sessionStorage");
     } catch (error) {
       console.error("Failed to clear modal state:", error);
     }
@@ -103,7 +103,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const handleClose = useCallback(() => {
     // Prevent closing in production
     if (!environmentFlags.userSetupModalClosable()) {
-      // console.log("🚫 User setup modal cannot be closed in production environment");
+      console.log("🚫 User setup modal cannot be closed in production environment");
       return;
     }
 
@@ -113,14 +113,14 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     // Check if upsell should be shown after modal close (for first-time users who skip setup)
     const { pendingUpsellAfterSetup, pendingUpsellData, setPendingUpsellAfterSetup } = useModalPriorityStore.getState();
     if (pendingUpsellAfterSetup && pendingUpsellData) {
-      // console.log("🎯 User setup modal closed, triggering pending upsell");
+      console.log("🎯 User setup modal closed, triggering pending upsell");
       setPendingUpsellAfterSetup(false); // Clear the flag
 
       // Trigger the upsell modal after a short delay
       setTimeout(() => {
         const { requestModal } = useModalPriorityStore.getState();
         requestModal("upsell", false, pendingUpsellData);
-        // console.log("🎯 Triggered pending upsell after modal close");
+        console.log("🎯 Triggered pending upsell after modal close");
       }, 1000); // 1 second delay after modal close
     }
 
@@ -147,7 +147,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
     try {
       sessionStorage.setItem(SETUP_STATE_KEY, JSON.stringify(state));
-      // console.log("💾 Saved modal state to sessionStorage");
+      console.log("💾 Saved modal state to sessionStorage");
     } catch (error) {
       console.error("Failed to save modal state:", error);
     }
@@ -179,7 +179,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         return null;
       }
 
-      // console.log("🔄 Restored modal state from sessionStorage");
+      console.log("🔄 Restored modal state from sessionStorage");
       return state;
     } catch (error) {
       console.error("Failed to restore modal state:", error);
@@ -253,7 +253,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setIsEmailVerified(savedState.isEmailVerified || userData?.isEmailVerified || false);
         setCurrentEmail(savedState.currentEmail || userData?.email || "");
         setShowEmailVerification(savedState.showEmailVerification || false);
-        // console.log("✅ Restored modal state from sessionStorage");
+        console.log("✅ Restored modal state from sessionStorage");
       } else {
         // Fresh start - detect initial step and reset
         let targetStep = initialStep;
@@ -293,7 +293,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setIsEmailVerified(userData?.isEmailVerified || false);
         setCurrentEmail(userData?.email || "");
         setShowEmailVerification(false);
-        // console.log("🆕 Starting fresh modal session");
+        console.log("🆕 Starting fresh modal session");
       }
 
       // Always reset these (error/loading states only)
@@ -330,7 +330,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   // Sync isEmailVerified state when userData updates while modal is open at step 3
   useEffect(() => {
     if (isOpen && currentStep === 3 && userData?.isEmailVerified && !isEmailVerified && !hasAutoCompletedRef.current) {
-      // console.log("🔄 Syncing email verification state from userData");
+      console.log("🔄 Syncing email verification state from userData");
       setIsEmailVerified(true);
     }
   }, [isOpen, currentStep, userData?.isEmailVerified, isEmailVerified]);
@@ -519,14 +519,14 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         const { pendingUpsellAfterSetup, pendingUpsellData, setPendingUpsellAfterSetup } =
           useModalPriorityStore.getState();
         if (pendingUpsellAfterSetup && pendingUpsellData) {
-          // console.log("🎯 User setup completed, triggering pending upsell");
+          console.log("🎯 User setup completed, triggering pending upsell");
           setPendingUpsellAfterSetup(false); // Clear the flag
 
           // Trigger the upsell modal after a short delay
           setTimeout(() => {
             const { requestModal } = useModalPriorityStore.getState();
             requestModal("upsell", false, pendingUpsellData);
-            // console.log("🎯 Triggered pending upsell with stored data");
+            console.log("🎯 Triggered pending upsell with stored data");
           }, 2000); // 2 second delay after setup completion
         }
 
@@ -545,11 +545,11 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           // Set session storage flag to prevent modal from re-appearing after reload
           sessionStorage.setItem("setupJustCompleted", "true");
           clearStateFromStorage(); // Clear the saved modal state
-          // console.log("✅ Setup completion flag set and modal state cleared");
+          console.log("✅ Setup completion flag set and modal state cleared");
 
           // Reload page to sync session with updated email and ensure clean state
           // This triggers JWT callback to fetch fresh user data from database
-          // console.log("🔄 Reloading page to sync session after profile setup");
+          console.log("🔄 Reloading page to sync session after profile setup");
           window.location.reload();
         }, 1500);
       } catch (err) {
@@ -577,7 +577,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       !hasAutoCompletedRef.current &&
       handleCompleteRef.current
     ) {
-      // console.log("✅ Email already verified (e.g., Gmail login), auto-completing step 3...");
+      console.log("✅ Email already verified (e.g., Gmail login), auto-completing step 3...");
       setIsEmailVerified(true);
       hasAutoCompletedRef.current = true;
 
@@ -590,7 +590,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
   // Email verification handlers
   const handleEmailVerificationSuccess = async () => {
-    // console.log("✅ Email verified successfully, auto-completing setup...");
+    console.log("✅ Email verified successfully, auto-completing setup...");
     setIsEmailVerified(true);
     setShowEmailVerification(false);
     setIsLoading(true); // Show loading during auto-completion
@@ -666,7 +666,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
       if (data.success) {
         // Email updated successfully in database
-        // console.log("✅ Email updated successfully to:", data.user.email);
+        console.log("✅ Email updated successfully to:", data.user.email);
 
         // Update local state with the new email (for immediate UI update without refetch)
         setCurrentEmail(data.user.email);
