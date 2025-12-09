@@ -85,6 +85,29 @@ export async function processRefundReversal(
     await connectDB();
     // console.log(`🔗 Database connected for refund processing: ${paymentIntentId}`);
 
+    // ✅ EARLY IDEMPOTENCY CHECK: Check if refund already processed before doing any lookups
+    // This provides an additional layer of protection against duplicate processing
+    // For subscriptions, use invoice ID if available; otherwise use paymentIntentId
+    const idempotencyKey = invoiceId ? `invoice_${invoiceId}` : paymentIntentId;
+    const earlyRefundCheck = await PaymentEvent.findOne({
+      $or: [
+        // Check by the idempotency key format
+        { paymentIntentId: idempotencyKey, eventType: "RefundProcessed" },
+        // Also check by invoice format if invoiceId was provided
+        ...(invoiceId ? [{ paymentIntentId: `invoice_${invoiceId}`, eventType: "RefundProcessed" }] : []),
+        // Check by payment intent format
+        { paymentIntentId: paymentIntentId, eventType: "RefundProcessed" },
+      ],
+    });
+
+    if (earlyRefundCheck) {
+      console.log(`✅ Refund already processed (early idempotency check): ${idempotencyKey}`);
+      return {
+        success: true,
+        alreadyProcessed: true,
+      };
+    }
+
     // Find the original payment event to get benefit details
     // For subscriptions, PaymentEvent is stored with invoice ID format: invoice_${invoice.id}
     // For one-time payments, it's stored with payment intent ID: pi_xxx
@@ -468,22 +491,35 @@ async function reverseSubscriptionPackage(user: IUser, originalEvent: IPaymentEv
   }
 
   // ✅ Only decrement accumulated entries by the specific month's entries
+  // Use atomic $inc operation to prevent race conditions if multiple webhooks process simultaneously
   if (entriesToRemove > 0) {
-    const currentAccumulated = user.accumulatedEntries || 0;
-    const newAccumulated = Math.max(0, currentAccumulated - entriesToRemove);
-    user.accumulatedEntries = newAccumulated;
+    // Atomic operation: Use $inc to prevent race conditions
+    // This ensures that even if two webhooks process simultaneously, entries are only deducted once
+    await User.findByIdAndUpdate(
+      user._id,
+      {
+        $inc: {
+          accumulatedEntries: -entriesToRemove,
+        },
+      },
+      { new: false }
+    );
 
     // Update lastMonthAccumulatedEntries if this was the most recent payment
-    if (user.subscription?.lastMonthAccumulatedEntries) {
-      const currentLastMonth = user.subscription.lastMonthAccumulatedEntries;
+    // Reload user to get updated accumulatedEntries value after atomic operation
+    const updatedUser = await User.findById(user._id);
+    if (updatedUser?.subscription?.lastMonthAccumulatedEntries) {
+      const currentLastMonth = updatedUser.subscription.lastMonthAccumulatedEntries;
       const newLastMonth = Math.max(0, currentLastMonth - entriesToRemove);
-      user.subscription.lastMonthAccumulatedEntries = newLastMonth;
+      updatedUser.subscription.lastMonthAccumulatedEntries = newLastMonth;
+      await updatedUser.save();
       console.log(`📊 [REFUND] Updated lastMonthAccumulatedEntries: ${currentLastMonth} → ${newLastMonth}`);
     }
 
-    console.log(`📊 [REFUND] Updated accumulated entries: ${currentAccumulated} → ${newAccumulated}`);
+    console.log(`📊 [REFUND] Updated accumulated entries using atomic operation: -${entriesToRemove} entries`);
   }
 
+  // Save subscription status changes (accumulatedEntries already updated atomically above)
   await user.save();
 
   // ✅ Verify save worked

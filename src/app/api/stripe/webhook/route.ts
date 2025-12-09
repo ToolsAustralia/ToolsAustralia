@@ -2811,7 +2811,12 @@ export async function POST(request: NextRequest) {
         await handleChargeRefunded(event.data.object);
         break;
       case "charge.refund.updated":
-        await handleChargeRefundUpdated(event.data.object);
+        // Skip charge.refund.updated - charge.refunded is the canonical event for refunds
+        // This prevents duplicate processing when both events fire for the same refund
+        // charge.refunded fires when refund is created, charge.refund.updated fires when status changes
+        // Both can trigger processRefundReversal, causing double deduction of accumulated entries
+        webhookLog("info", `Skipping charge.refund.updated - using charge.refunded as canonical event`);
+        // ✅ CRITICAL: Don't mark as processed - we're skipping this event!
         break;
       case "charge.dispute.created":
         await handleChargeDisputeCreated(event.data.object);
