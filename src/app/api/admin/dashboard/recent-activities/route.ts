@@ -93,7 +93,7 @@ export async function GET() {
 
     recentPayments.forEach((payment) => {
       // Handle populated userId - it could be an ObjectId or populated user object
-      let user: {
+      type UserType = {
         firstName: string;
         lastName: string;
         email: string;
@@ -103,7 +103,9 @@ export async function GET() {
           lastUpgradeDate?: Date;
           lastDowngradeDate?: Date;
         };
-      } | null = null;
+      };
+
+      let user: UserType | null = null;
       const populatedUser = payment.userId as unknown;
       if (
         populatedUser &&
@@ -112,7 +114,7 @@ export async function GET() {
         "lastName" in populatedUser &&
         "email" in populatedUser
       ) {
-        user = populatedUser as typeof user;
+        user = populatedUser as UserType;
       }
 
       const timeAgo = getTimeAgo(payment.timestamp);
@@ -127,7 +129,7 @@ export async function GET() {
         // Check if this is a renewal (user already had this package)
         const isRenewal =
           user?.subscription?.packageId === payment.packageId &&
-          user.subscription.lastUpgradeDate &&
+          user?.subscription?.lastUpgradeDate &&
           new Date(user.subscription.lastUpgradeDate).getTime() < payment.timestamp.getTime() - 24 * 60 * 60 * 1000; // More than 24 hours ago
 
         if (isRenewal) {
@@ -195,7 +197,8 @@ export async function GET() {
 
         // Get package names (simplified - in production you'd fetch from package data)
         const currentPackageName = getPackageName(currentPackage);
-        const previousPackageName = user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
+        const previousPackageName =
+          user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
 
         activities.push({
           id: `upgrade-${user._id}-${user.subscription.lastUpgradeDate.getTime()}`,
@@ -215,7 +218,8 @@ export async function GET() {
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
 
         const currentPackageName = getPackageName(currentPackage);
-        const previousPackageName = user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
+        const previousPackageName =
+          user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
 
         activities.push({
           id: `downgrade-${user._id}-${user.subscription.lastDowngradeDate.getTime()}`,
@@ -300,7 +304,7 @@ export async function GET() {
       ) {
         user = populatedUser as { firstName: string; lastName: string };
       }
-      
+
       const timeAgo = getTimeAgo(order.createdAt);
 
       activities.push({

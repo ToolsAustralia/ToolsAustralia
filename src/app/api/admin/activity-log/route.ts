@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
       .populate("userId", "firstName lastName email subscription");
 
     payments.forEach((payment) => {
-      let user: {
+      type UserType = {
         firstName: string;
         lastName: string;
         email: string;
@@ -111,7 +111,9 @@ export async function GET(request: NextRequest) {
           lastUpgradeDate?: Date;
           lastDowngradeDate?: Date;
         };
-      } | null = null;
+      };
+
+      let user: UserType | null = null;
       const populatedUser = payment.userId as unknown;
       if (
         populatedUser &&
@@ -120,7 +122,7 @@ export async function GET(request: NextRequest) {
         "lastName" in populatedUser &&
         "email" in populatedUser
       ) {
-        user = populatedUser as typeof user;
+        user = populatedUser as UserType;
       }
 
       const timeAgo = getTimeAgo(payment.timestamp);
@@ -133,7 +135,7 @@ export async function GET(request: NextRequest) {
       if (payment.packageType === "subscription") {
         const isRenewal =
           user?.subscription?.packageId === payment.packageId &&
-          user.subscription.lastUpgradeDate &&
+          user?.subscription?.lastUpgradeDate &&
           new Date(user.subscription.lastUpgradeDate).getTime() < payment.timestamp.getTime() - 24 * 60 * 60 * 1000;
 
         if (isRenewal) {
@@ -195,7 +197,8 @@ export async function GET(request: NextRequest) {
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
         const currentPackageName = getPackageName(currentPackage);
-        const previousPackageName = user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
+        const previousPackageName =
+          user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
 
         activities.push({
           id: `upgrade-${user._id}-${user.subscription.lastUpgradeDate.getTime()}`,
@@ -213,7 +216,8 @@ export async function GET(request: NextRequest) {
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
         const currentPackageName = getPackageName(currentPackage);
-        const previousPackageName = user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
+        const previousPackageName =
+          user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
 
         activities.push({
           id: `downgrade-${user._id}-${user.subscription.lastDowngradeDate.getTime()}`,
@@ -283,9 +287,7 @@ export async function GET(request: NextRequest) {
     }
     if (searchTerm) {
       filteredActivities = filteredActivities.filter(
-        (a) =>
-          a.user.toLowerCase().includes(searchTerm) ||
-          a.action.toLowerCase().includes(searchTerm)
+        (a) => a.user.toLowerCase().includes(searchTerm) || a.action.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -357,4 +359,3 @@ function getPackageName(packageId: string): string {
 
   return packageMap[packageId] || packageId;
 }
-
