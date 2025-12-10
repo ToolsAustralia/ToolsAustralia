@@ -4,19 +4,20 @@ import React, { useState, useMemo } from "react";
 import {
   DollarSign,
   TrendingUp,
-  TrendingDown,
-  RefreshCw,
-  Calendar,
   BarChart3,
   AlertTriangle,
   CheckCircle,
-  Clock,
   Eye,
   MousePointerClick,
   Target,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useFacebookAdsInsights } from "@/hooks/queries/useFacebookAdsInsights";
 import type { DateRangeOption, InsightLevel } from "@/types/facebook-ads";
+import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
 
 /**
  * Facebook Ads Management Component
@@ -38,11 +39,12 @@ import type { DateRangeOption, InsightLevel } from "@/types/facebook-ads";
  */
 export default function FacebookAdsManagement() {
   // State management
-  const [dateRangeMode, setDateRangeMode] = useState<DateRangeOption>("today");
+  const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-  const [level, setLevel] = useState<InsightLevel>("account");
-  const [forceRefresh, setForceRefresh] = useState(false);
+  const [level, setLevel] = useState<InsightLevel>("adset");
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // Format dates for input fields (YYYY-MM-DD)
   const today = new Date();
@@ -50,6 +52,16 @@ export default function FacebookAdsManagement() {
     .toISOString()
     .split("T")[0];
   const defaultEndDate = today.toISOString().split("T")[0];
+
+  // Convert DateRange to DateRangeOption
+  const dateRangeOption: DateRangeOption = useMemo(() => {
+    if (dateRange === "all-time") {
+      // For Facebook Ads, "all-time" maps to a large custom range
+      // We'll use a custom range for now, or you can implement all-time logic
+      return "custom";
+    }
+    return dateRange as DateRangeOption;
+  }, [dateRange]);
 
   // Build query parameters
   const queryParams = useMemo(() => {
@@ -60,34 +72,23 @@ export default function FacebookAdsManagement() {
       level: InsightLevel;
       refresh?: boolean;
     } = {
-      dateRange: dateRangeMode,
+      dateRange: dateRangeOption,
       level,
     };
 
-    if (dateRangeMode === "custom") {
+    if (dateRangeOption === "custom") {
       params.startDate = startDate || defaultStartDate;
       params.endDate = endDate || defaultEndDate;
     }
 
-    if (forceRefresh) {
-      params.refresh = true;
-    }
-
     return params;
-  }, [dateRangeMode, startDate, endDate, level, forceRefresh, defaultStartDate, defaultEndDate]);
+  }, [dateRangeOption, startDate, endDate, level, defaultStartDate, defaultEndDate]);
 
   // Fetch insights data
-  const { data, isLoading, error, refetch, isFetching } = useFacebookAdsInsights(queryParams);
-
-  // Handle refresh
-  const handleRefresh = () => {
-    setForceRefresh(true);
-    refetch().finally(() => {
-      setForceRefresh(false);
-    });
-  };
+  const { data, isLoading, error } = useFacebookAdsInsights(queryParams);
 
   // Format currency (AUD)
+  // Note: API returns summary values in dollars, not cents
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-AU", {
       style: "currency",
@@ -112,72 +113,92 @@ export default function FacebookAdsManagement() {
     return `${roas.toFixed(2)}x`;
   };
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-AU", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  // Get trend indicator
-  const getTrendIcon = (value: number, isPositive: boolean = true) => {
-    if (value > 0) {
-      return isPositive ? (
-        <TrendingUp className="w-4 h-4 text-green-500" />
-      ) : (
-        <TrendingDown className="w-4 h-4 text-red-500" />
-      );
+  // Handle date range change from DateRangeToggle
+  const handleDateRangeChange = (range: DateRange) => {
+    setDateRange(range);
+    if (range !== "custom") {
+      setStartDate("");
+      setEndDate("");
+    } else {
+      // Set default dates when switching to custom
+      if (!startDate) setStartDate(defaultStartDate);
+      if (!endDate) setEndDate(defaultEndDate);
     }
-    return null;
   };
 
-  // Summary card component
-  const SummaryCard = ({
-    title,
-    value,
-    subtitle,
-    icon: Icon,
-    trend,
-    trendLabel,
-    color = "indigo",
-  }: {
-    title: string;
-    value: string;
-    subtitle?: string;
-    icon: React.ElementType;
-    trend?: number;
-    trendLabel?: string;
-    color?: "indigo" | "emerald" | "yellow" | "purple" | "blue" | "red";
-  }) => {
-    const colorClasses = {
-      indigo: "bg-indigo-50 text-indigo-600",
-      emerald: "bg-emerald-50 text-emerald-600",
-      yellow: "bg-yellow-50 text-yellow-600",
-      purple: "bg-purple-50 text-purple-600",
-      blue: "bg-blue-50 text-blue-600",
-      red: "bg-red-50 text-red-600",
-    };
+  // Table sorting functions
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // New column, default to ascending
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
 
-    return (
-      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-2">
-          <div className={`w-10 h-10 ${colorClasses[color]} rounded-lg flex items-center justify-center`}>
-            <Icon className="w-5 h-5" />
-          </div>
-          {trend !== undefined && trend !== 0 && (
-            <div className="flex items-center gap-1 text-sm">
-              {getTrendIcon(trend, trend > 0)}
-              <span className={trend > 0 ? "text-green-600" : "text-red-600"}>{Math.abs(trend).toFixed(1)}%</span>
-            </div>
-          )}
-        </div>
-        <h3 className="text-sm font-medium text-gray-600 mb-1">{title}</h3>
-        <p className="text-2xl sm:text-3xl font-bold text-gray-900">{value}</p>
-        {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
-        {trendLabel && <p className="text-xs text-gray-400 mt-1">{trendLabel}</p>}
-      </div>
+  // Sort breakdown data
+  const sortedBreakdown = useMemo(() => {
+    if (!data?.breakdown || !sortColumn) {
+      return data?.breakdown || [];
+    }
+
+    const sorted = [...data.breakdown];
+    sorted.sort((a, b) => {
+      let aValue: number | string;
+      let bValue: number | string;
+
+      switch (sortColumn) {
+        case "name":
+          aValue = level === "campaign" ? a.campaignName || a.campaignId || "" : a.adsetName || a.adsetId || "";
+          bValue = level === "campaign" ? b.campaignName || b.campaignId || "" : b.adsetName || b.adsetId || "";
+          break;
+        case "spend":
+          aValue = a.spend;
+          bValue = b.spend;
+          break;
+        case "revenue":
+          aValue = a.revenue;
+          bValue = b.revenue;
+          break;
+        case "profit":
+          aValue = a.profit;
+          bValue = b.profit;
+          break;
+        case "roas":
+          aValue = a.roas;
+          bValue = b.roas;
+          break;
+        case "conversions":
+          aValue = a.conversions;
+          bValue = b.conversions;
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        return sortDirection === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      }
+
+      const numA = typeof aValue === "number" ? aValue : 0;
+      const numB = typeof bValue === "number" ? bValue : 0;
+      return sortDirection === "asc" ? numA - numB : numB - numA;
+    });
+
+    return sorted;
+  }, [data?.breakdown, sortColumn, sortDirection, level]);
+
+  // Get sort icon for column header
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="w-3 h-3 ml-1 text-gray-400" />;
+    }
+    return sortDirection === "asc" ? (
+      <ArrowUp className="w-3 h-3 ml-1 text-gray-700" />
+    ) : (
+      <ArrowDown className="w-3 h-3 ml-1 text-gray-700" />
     );
   };
 
@@ -212,14 +233,7 @@ export default function FacebookAdsManagement() {
           <AlertTriangle className="w-6 h-6 text-red-500" />
           <h3 className="text-lg font-semibold text-gray-900">Error Loading Facebook Ads Data</h3>
         </div>
-        <p className="text-gray-600 mb-4">{error.message || "An error occurred while fetching data."}</p>
-        <button
-          onClick={handleRefresh}
-          className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Try Again
-        </button>
+        <p className="text-gray-600">{error.message || "An error occurred while fetching data."}</p>
       </div>
     );
   }
@@ -230,157 +244,76 @@ export default function FacebookAdsManagement() {
       <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6 sm:p-8 text-center">
         <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Available</h3>
-        <p className="text-gray-600 mb-4">No Facebook ads data found for the selected date range.</p>
-        <button
-          onClick={handleRefresh}
-          className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200"
-        >
-          Refresh
-        </button>
+        <p className="text-gray-600">No Facebook ads data found for the selected date range.</p>
       </div>
     );
   }
 
-  const { summary, dateRange, syncedAt, cached } = data;
+  const { summary } = data;
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header with Controls */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-1">Facebook Ads Performance</h2>
-            <p className="text-sm text-gray-600">
-              Track your ad spend, revenue, profit, and ROAS from Facebook Ads Manager
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {cached && (
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Clock className="w-3 h-3" />
-                <span>Cached</span>
-              </div>
-            )}
-            <button
-              onClick={handleRefresh}
-              disabled={isFetching}
-              className="px-3 py-2 border-2 border-red-600 text-red-600 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Header with Controls - Simple like Dashboard Overview */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+        <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+          Facebook Ads Performance
+        </h2>
+        <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
           {/* Date Range Toggle */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDateRangeMode("today")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  dateRangeMode === "today"
-                    ? "bg-gradient-to-r from-red-600 to-red-700 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Today
-              </button>
-              <button
-                onClick={() => setDateRangeMode("custom")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  dateRangeMode === "custom"
-                    ? "bg-gradient-to-r from-red-600 to-red-700 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Custom
-              </button>
-            </div>
-          </div>
-
-          {/* Custom Date Range Inputs */}
-          {dateRangeMode === "custom" && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                <input
-                  type="date"
-                  value={startDate || defaultStartDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                <input
-                  type="date"
-                  value={endDate || defaultEndDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-            </>
-          )}
-
-          {/* Granularity Selector */}
-          <div className={dateRangeMode === "custom" ? "sm:col-span-2 lg:col-span-1" : "sm:col-span-2"}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">View Level</label>
-            <select
-              value={level}
-              onChange={(e) => setLevel(e.target.value as InsightLevel)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-            >
-              <option value="account">Account Level</option>
-              <option value="campaign">Campaign Level</option>
-              <option value="adset">Ad Set Level</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Date Range Display */}
-        <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
-          <Calendar className="w-4 h-4" />
-          <span>
-            {dateRangeMode === "today"
-              ? `Today (${formatDate(dateRange.start)})`
-              : `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`}
-          </span>
-          {syncedAt && (
-            <>
-              <span>•</span>
-              <span>Last synced: {new Date(syncedAt).toLocaleTimeString("en-AU")}</span>
-            </>
-          )}
+          <DateRangeToggle selectedRange={dateRange} onRangeChange={handleDateRangeChange} />
         </div>
       </div>
 
+      {/* Custom Date Range Inputs - Only show when custom is selected */}
+      {dateRange === "custom" && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+              <input
+                type="date"
+                value={startDate || defaultStartDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+              <input
+                type="date"
+                value={endDate || defaultEndDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <SummaryCard
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <AdminStatsCard
           title="Ad Spend"
           value={formatCurrency(summary.spend)}
           subtitle="Total advertising cost"
           icon={DollarSign}
           color="red"
         />
-        <SummaryCard
+        <AdminStatsCard
           title="Revenue"
           value={formatCurrency(summary.revenue)}
           subtitle="From Facebook conversions"
           icon={TrendingUp}
           color="emerald"
         />
-        <SummaryCard
+        <AdminStatsCard
           title="Profit"
           value={formatCurrency(summary.profit)}
-          subtitle={`Revenue - Spend`}
+          subtitle="Revenue - Spend"
           icon={BarChart3}
           color={summary.profit >= 0 ? "emerald" : "red"}
         />
-        <SummaryCard
+        <AdminStatsCard
           title="ROAS"
           value={formatROAS(summary.roas)}
           subtitle="Return on Ad Spend"
@@ -391,89 +324,139 @@ export default function FacebookAdsManagement() {
 
       {/* Additional Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Eye className="w-4 h-4 text-gray-500" />
-            <span className="text-xs font-medium text-gray-600">Impressions</span>
-          </div>
-          <p className="text-lg font-bold text-gray-900">{formatNumber(summary.impressions)}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <MousePointerClick className="w-4 h-4 text-gray-500" />
-            <span className="text-xs font-medium text-gray-600">Clicks</span>
-          </div>
-          <p className="text-lg font-bold text-gray-900">{formatNumber(summary.clicks)}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Target className="w-4 h-4 text-gray-500" />
-            <span className="text-xs font-medium text-gray-600">CTR</span>
-          </div>
-          <p className="text-lg font-bold text-gray-900">{formatPercentage(summary.ctr)}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <DollarSign className="w-4 h-4 text-gray-500" />
-            <span className="text-xs font-medium text-gray-600">CPC</span>
-          </div>
-          <p className="text-lg font-bold text-gray-900">{formatCurrency(summary.cpc)}</p>
-        </div>
+        <AdminStatsCard title="Impressions" value={formatNumber(summary.impressions)} icon={Eye} color="blue" />
+        <AdminStatsCard title="Clicks" value={formatNumber(summary.clicks)} icon={MousePointerClick} color="indigo" />
+        <AdminStatsCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
+        <AdminStatsCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
       </div>
 
       {/* Conversions */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Conversions</h3>
-          <CheckCircle className="w-5 h-5 text-green-500" />
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
+        <div className="flex items-center justify-between mb-2 sm:mb-4">
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Conversions</h3>
+          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
         </div>
-        <div className="text-3xl font-bold text-gray-900">{formatNumber(summary.conversions)}</div>
-        <p className="text-sm text-gray-600 mt-1">Total purchases from Facebook ads</p>
+        <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatNumber(summary.conversions)}</div>
+        <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">Total purchases from Facebook ads</p>
       </div>
 
       {/* Breakdown Table (for Campaign/Ad Set levels) */}
       {data.breakdown && data.breakdown.length > 0 && (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            {level === "campaign" ? "Campaign Breakdown" : level === "adset" ? "Ad Set Breakdown" : "Breakdown"}
-          </h3>
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
+          <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
+            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 flex-1 min-w-0 truncate">
+              {level === "campaign" ? "Campaign Breakdown" : "Ad Set Breakdown"}
+            </h3>
+
+            {/* View Level Dropdown - Compact Styling */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+              <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
+                View Level:
+              </label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value as InsightLevel)}
+                className="px-2.5 sm:px-3 py-1.5 sm:py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm bg-white font-semibold text-gray-900 shadow-sm hover:border-gray-400 transition-all duration-200 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpolyline points=%226 9 12 15 18 9%22%3E%3C/polyline%3E%3C/svg%3E')] bg-no-repeat bg-right pr-7 sm:pr-8 min-w-[100px] sm:min-w-[140px]"
+                style={{
+                  backgroundPosition: "right 0.5rem center",
+                  backgroundSize: "0.75em 0.75em",
+                }}
+              >
+                <option value="campaign">Campaign</option>
+                <option value="adset">Ad Set</option>
+              </select>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    {level === "campaign" ? "Campaign" : "Ad Set"}
+                <tr className="border-b-2 border-gray-200 bg-gray-50">
+                  <th
+                    className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("name")}
+                  >
+                    <div className="flex items-center">
+                      {level === "campaign" ? "Campaign" : "Ad Set"}
+                      {getSortIcon("name")}
+                    </div>
                   </th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Spend</th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Revenue</th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Profit</th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">ROAS</th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Conversions</th>
+                  <th
+                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("spend")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Spend
+                      {getSortIcon("spend")}
+                    </div>
+                  </th>
+                  <th
+                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("revenue")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Revenue
+                      {getSortIcon("revenue")}
+                    </div>
+                  </th>
+                  <th
+                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("profit")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Profit
+                      {getSortIcon("profit")}
+                    </div>
+                  </th>
+                  <th
+                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("roas")}
+                  >
+                    <div className="flex items-center justify-end">
+                      ROAS
+                      {getSortIcon("roas")}
+                    </div>
+                  </th>
+                  <th
+                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("conversions")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Conversions
+                      {getSortIcon("conversions")}
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {data.breakdown.map((item, index) => (
-                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-3 px-4 text-sm text-gray-900">
+                {sortedBreakdown.map((item, index) => (
+                  <tr
+                    key={index}
+                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors even:bg-gray-50/30"
+                  >
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium">
                       {level === "campaign"
                         ? item.campaignName || item.campaignId || "Unknown Campaign"
                         : item.adsetName || item.adsetId || "Unknown Ad Set"}
                     </td>
-                    <td className="py-3 px-4 text-sm text-right text-gray-900 font-medium">
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
                       {formatCurrency(item.spend)}
                     </td>
-                    <td className="py-3 px-4 text-sm text-right text-gray-900 font-medium">
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
                       {formatCurrency(item.revenue)}
                     </td>
                     <td
-                      className={`py-3 px-4 text-sm text-right font-medium ${
+                      className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${
                         item.profit >= 0 ? "text-green-600" : "text-red-600"
                       }`}
                     >
                       {formatCurrency(item.profit)}
                     </td>
-                    <td className="py-3 px-4 text-sm text-right text-gray-900 font-medium">{formatROAS(item.roas)}</td>
-                    <td className="py-3 px-4 text-sm text-right text-gray-900">{formatNumber(item.conversions)}</td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                      {formatROAS(item.roas)}
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
+                      {formatNumber(item.conversions)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -484,8 +467,3 @@ export default function FacebookAdsManagement() {
     </div>
   );
 }
-
-
-
-
-

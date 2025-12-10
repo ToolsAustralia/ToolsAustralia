@@ -8,7 +8,7 @@
 /**
  * Date range options for fetching ad insights
  */
-export type DateRangeOption = "today" | "custom";
+export type DateRangeOption = "today" | "yesterday" | "custom";
 
 /**
  * Data granularity levels for ad insights
@@ -171,8 +171,3 @@ export interface DateRangeState {
   startDate?: Date;
   endDate?: Date;
 }
-
-
-
-
-

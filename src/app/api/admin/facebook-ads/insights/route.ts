@@ -4,7 +4,10 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import FacebookAdsInsight from "@/models/FacebookAdsInsight";
-import { fetchFacebookInsights, formatDateForFacebook, getTodayDateRange } from "@/lib/facebook-marketing";
+import { fetchFacebookInsights } from "@/lib/facebook-marketing";
+import { getStartOfTodayInAEST } from "@/utils/common/timezone";
+import { subDays } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import type {
   FacebookAdsInsightsResponse,
   FacebookAdsSummary,
@@ -17,7 +20,7 @@ import type {
  * Uses Zod for type-safe validation
  */
 const insightsQuerySchema = z.object({
-  dateRange: z.enum(["today", "custom"]).default("today"),
+  dateRange: z.enum(["today", "yesterday", "custom"]).default("today"),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   level: z.enum(["account", "campaign", "adset"]).default("account"),
@@ -43,7 +46,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
  * - Real-time and custom date range support
  *
  * Query Parameters:
- * - dateRange: 'today' | 'custom' (default: 'today')
+ * - dateRange: 'today' | 'yesterday' | 'custom' (default: 'today')
  * - startDate: ISO date string (required if dateRange === 'custom')
  * - endDate: ISO date string (required if dateRange === 'custom')
  * - level: 'account' | 'campaign' | 'adset' (default: 'account')
@@ -126,18 +129,65 @@ export async function GET(request: NextRequest) {
     let startDate: Date;
     let endDate: Date;
 
+    const startOfToday = getStartOfTodayInAEST();
+    const AEST_TIMEZONE = "Australia/Sydney";
+
     if (validatedQuery.dateRange === "today") {
-      dateRange = getTodayDateRange();
-      const today = new Date();
-      startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+      // Get today's date in AEST timezone for Facebook API
+      const now = new Date();
+      const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+      const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+      const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
+      const todayDateStr = `${todayYear}-${String(todayMonth).padStart(2, "0")}-${String(todayDay).padStart(2, "0")}`;
+
+      dateRange = {
+        since: todayDateStr,
+        until: todayDateStr,
+      };
+      startDate = startOfToday;
+      // End date is end of today in AEST (23:59:59.999)
+      // Calculate by getting start of tomorrow and subtracting 1ms
+      const tomorrowStart = new Date(startOfToday);
+      tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+      endDate = new Date(tomorrowStart.getTime() - 1);
+    } else if (validatedQuery.dateRange === "yesterday") {
+      // Get yesterday's start (24 hours before today's start)
+      const yesterdayStart = subDays(startOfToday, 1);
+      const yesterdayEnd = new Date(startOfToday.getTime() - 1); // One millisecond before today starts
+      startDate = yesterdayStart;
+      endDate = yesterdayEnd;
+
+      // Format yesterday's date in AEST for Facebook API
+      const yesterdayYear = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "yyyy"), 10);
+      const yesterdayMonth = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "M"), 10);
+      const yesterdayDay = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "d"), 10);
+      const yesterdayDateStr = `${yesterdayYear}-${String(yesterdayMonth).padStart(2, "0")}-${String(
+        yesterdayDay
+      ).padStart(2, "0")}`;
+
+      dateRange = {
+        since: yesterdayDateStr,
+        until: yesterdayDateStr, // Facebook API uses same date for single day
+      };
     } else {
-      // Custom range
+      // Custom range - parse dates and format in AEST
       startDate = new Date(validatedQuery.startDate!);
       endDate = new Date(validatedQuery.endDate!);
+
+      // Format dates in AEST timezone for Facebook API
+      const startYear = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "yyyy"), 10);
+      const startMonth = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "M"), 10);
+      const startDay = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "d"), 10);
+      const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+
+      const endYear = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "yyyy"), 10);
+      const endMonth = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "M"), 10);
+      const endDay = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "d"), 10);
+      const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+
       dateRange = {
-        since: formatDateForFacebook(startDate),
-        until: formatDateForFacebook(endDate),
+        since: startDateStr,
+        until: endDateStr,
       };
     }
 
@@ -270,11 +320,14 @@ export async function GET(request: NextRequest) {
       };
     } else if (insightsData && insightsData.length > 0) {
       // Use fresh data from API
+      // Note: All metrics from processInsightData are in CENTS
       if (validatedQuery.level === "account") {
-        // Account level: aggregate all data
+        // Account level: use the single aggregated result
+        // Facebook API returns account-level data as a single aggregated insight
         metrics = insightsData[0].metrics;
       } else {
-        // Campaign/Ad Set level: aggregate for summary, create breakdown items
+        // Campaign/Ad Set level: aggregate multiple insights for summary, create breakdown items
+        // Aggregate raw values (all in cents)
         const aggregated = insightsData.reduce(
           (acc, item) => ({
             spend: acc.spend + item.metrics.spend,
@@ -301,29 +354,38 @@ export async function GET(request: NextRequest) {
         );
 
         // Calculate aggregated derived metrics
+        // ROAS: revenue / spend (both in cents, so ratio is correct)
         aggregated.roas = aggregated.spend > 0 ? aggregated.revenue / aggregated.spend : 0;
+        // CTR: (clicks / impressions) * 100
         aggregated.ctr = aggregated.impressions > 0 ? (aggregated.clicks / aggregated.impressions) * 100 : 0;
+        // CPC: spend / clicks (both in cents, result is cents per click)
         aggregated.cpc = aggregated.clicks > 0 ? aggregated.spend / aggregated.clicks : 0;
 
         metrics = aggregated;
 
         // Create breakdown items for each campaign/adset
-        breakdownItems = insightsData.map((item) => ({
-          level: validatedQuery.level,
-          campaignId: item.breakdown?.campaignId,
-          campaignName: item.breakdown?.campaignName,
-          adsetId: item.breakdown?.adsetId,
-          adsetName: item.breakdown?.adsetName,
-          spend: item.metrics.spend / 100, // Convert to dollars
-          revenue: item.metrics.revenue / 100, // Convert to dollars
-          profit: item.metrics.profit / 100, // Convert to dollars
-          roas: item.metrics.roas,
-          conversions: item.metrics.conversions,
-          impressions: item.metrics.impressions,
-          clicks: item.metrics.clicks,
-          ctr: item.metrics.ctr,
-          cpc: item.metrics.cpc / 100, // Convert to dollars
-        }));
+        // Convert from cents to dollars for display
+        breakdownItems = insightsData.map((item) => {
+          // Calculate individual item ROAS (revenue/spend, both in cents)
+          const itemRoas = item.metrics.spend > 0 ? item.metrics.revenue / item.metrics.spend : 0;
+
+          return {
+            level: validatedQuery.level,
+            campaignId: item.breakdown?.campaignId,
+            campaignName: item.breakdown?.campaignName,
+            adsetId: item.breakdown?.adsetId,
+            adsetName: item.breakdown?.adsetName,
+            spend: item.metrics.spend / 100, // Convert cents to dollars
+            revenue: item.metrics.revenue / 100, // Convert cents to dollars
+            profit: item.metrics.profit / 100, // Convert cents to dollars
+            roas: itemRoas, // ROAS is a ratio, no conversion needed
+            conversions: item.metrics.conversions,
+            impressions: item.metrics.impressions,
+            clicks: item.metrics.clicks,
+            ctr: item.metrics.ctr, // Already a percentage
+            cpc: item.metrics.cpc / 100, // Convert cents to dollars
+          };
+        });
       }
     } else {
       // No data available
@@ -340,17 +402,18 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Calculate summary (convert from cents to dollars)
+    // Calculate summary (convert from cents to dollars for monetary values)
+    // Note: metrics are stored in cents, summary should be in dollars
     const summary: FacebookAdsSummary = {
-      spend: metrics.spend / 100,
-      revenue: metrics.revenue / 100,
-      profit: metrics.profit / 100,
-      roas: metrics.roas,
-      conversions: metrics.conversions,
-      impressions: metrics.impressions,
-      clicks: metrics.clicks,
-      ctr: metrics.ctr,
-      cpc: metrics.cpc / 100,
+      spend: metrics.spend / 100, // Convert cents to dollars
+      revenue: metrics.revenue / 100, // Convert cents to dollars
+      profit: metrics.profit / 100, // Convert cents to dollars
+      roas: metrics.roas, // ROAS is a ratio (revenue/spend), no conversion needed
+      conversions: metrics.conversions, // Count, no conversion needed
+      impressions: metrics.impressions, // Count, no conversion needed
+      clicks: metrics.clicks, // Count, no conversion needed
+      ctr: metrics.ctr, // Percentage, already calculated correctly
+      cpc: metrics.cpc / 100, // Convert cents to dollars
     };
 
     const response: FacebookAdsInsightsResponse = {
@@ -381,8 +444,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
-
-
-

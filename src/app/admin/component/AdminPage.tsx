@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import AdminSidebar from "./AdminSidebar";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import AdminStatsCard from "./AdminStatsCard";
@@ -41,6 +42,7 @@ import {
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isClosingMobileSidebar, setIsClosingMobileSidebar] = useState(false);
@@ -245,8 +247,18 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // Refresh all page data
-      await Promise.all([refetchStats(), refetchActivities(), refetchRevenue()]);
+      // Refresh data based on current tab
+      if (selectedTab === "overview") {
+        // Refresh overview tab data
+        await Promise.all([refetchStats(), refetchActivities(), refetchRevenue()]);
+      } else if (selectedTab === "facebook-ads") {
+        // Invalidate and refetch Facebook Ads data
+        await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
+        await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
+      } else {
+        // For other tabs, refresh stats as fallback
+        await refetchStats();
+      }
     } catch (error) {
       console.error("Failed to refresh data:", error);
     } finally {
