@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   BarChart3,
@@ -22,7 +23,6 @@ import {
 
 interface AdminSidebarProps {
   selectedTab: string;
-  onTabChange: (tab: string) => void;
   onNavigateToSite: () => void;
   user: {
     name: string;
@@ -137,18 +137,33 @@ const adminTabs = [
 
 export default function AdminSidebar({
   selectedTab,
-  onTabChange,
   onNavigateToSite,
   user,
   isMobile = false,
   onClose,
 }: AdminSidebarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const handleSignOut = () => {
     // Clear localStorage when signing out
     localStorage.removeItem("wasAuthenticated");
     localStorage.removeItem("topBarHidden");
     // Sign out and redirect to home page
     signOut({ callbackUrl: "/" });
+  };
+
+  const handleTabChange = (tabId: string) => {
+    // Close mobile sidebar if open
+    if (isMobile && onClose) {
+      onClose();
+    }
+    // Navigate to the tab route
+    if (tabId === "overview") {
+      router.push("/admin");
+    } else {
+      router.push(`/admin/${tabId}`);
+    }
   };
 
   return (
@@ -199,12 +214,15 @@ export default function AdminSidebar({
         <nav className="p-4 space-y-1">
           {adminTabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive = selectedTab === tab.id;
+            // Check if this tab is active based on current pathname
+            const isActive =
+              (tab.id === "overview" && (pathname === "/admin" || pathname === "/admin/")) ||
+              (tab.id !== "overview" && pathname === `/admin/${tab.id}`);
 
             return (
               <button
                 key={tab.id}
-                onClick={() => onTabChange(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl transition-all duration-200 ${
                   isActive
                     ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-lg"

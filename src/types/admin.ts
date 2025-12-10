@@ -127,6 +127,7 @@ export interface AdminTab {
 export interface AdminDashboardProps {
   user: AdminUser;
   navigateTo: (page: string) => void;
+  selectedTab?: string;
 }
 
 type ReferralHistoryItem = {

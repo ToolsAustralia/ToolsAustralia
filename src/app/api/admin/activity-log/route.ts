@@ -7,7 +7,7 @@ import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 import Order from "@/models/Order";
 
-export interface RecentActivity {
+export interface ActivityLogItem {
   id: string;
   type:
     | "user_signup"
@@ -26,10 +26,16 @@ export interface RecentActivity {
 }
 
 /**
- * GET /api/admin/dashboard/recent-activities
- * Get recent activities for admin dashboard
+ * GET /api/admin/activity-log
+ * Get paginated activity log with filters
+ *
+ * Query Parameters:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 25)
+ * - type: Filter by activity type (optional)
+ * - search: Search term (optional)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
@@ -39,33 +45,37 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("📊 Fetching recent activities...");
+    // Get query parameters
+    const searchParams = request.nextUrl.searchParams;
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "25", 10);
+    const typeFilter = searchParams.get("type");
+    const searchTerm = searchParams.get("search")?.toLowerCase() || "";
 
-    const activities: RecentActivity[] = [];
+    console.log("📊 Fetching activity log...", { page, limit, typeFilter, searchTerm });
+
+    const activities: ActivityLogItem[] = [];
     const now = new Date();
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Get activities from last 90 days for pagination
+    const startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
     // ========================================
-    // RECENT USER SIGNUPS
+    // USER SIGNUPS
     // ========================================
-    const recentSignups = await User.find({
-      createdAt: { $gte: oneWeekAgo },
+    const signups = await User.find({
+      createdAt: { $gte: startDate },
       isActive: true,
     })
       .sort({ createdAt: -1 })
-      .limit(10)
       .select("firstName lastName email createdAt referral affiliateReferral");
 
-    recentSignups.forEach((user) => {
+    signups.forEach((user) => {
       const timeAgo = getTimeAgo(user.createdAt);
       let action = "Signed up for an account";
 
-      // Check for friend referral
       if (user.referral?.code) {
         action = `Signed up via friend referral (code: ${user.referral.code})`;
-      }
-      // Check for affiliate code
-      else if (user.affiliateReferral?.affiliateCode) {
+      } else if (user.affiliateReferral?.affiliateCode) {
         action = `Signed up via affiliate (code: ${user.affiliateReferral.affiliateCode})`;
       }
 
@@ -81,18 +91,16 @@ export async function GET() {
     });
 
     // ========================================
-    // RECENT PAYMENT EVENTS
+    // PAYMENT EVENTS
     // ========================================
-    const recentPayments = await PaymentEvent.find({
+    const payments = await PaymentEvent.find({
       eventType: "BenefitsGranted",
-      timestamp: { $gte: oneWeekAgo },
+      timestamp: { $gte: startDate },
     })
       .sort({ timestamp: -1 })
-      .limit(15)
       .populate("userId", "firstName lastName email subscription");
 
-    recentPayments.forEach((payment) => {
-      // Handle populated userId - it could be an ObjectId or populated user object
+    payments.forEach((payment) => {
       let user: {
         firstName: string;
         lastName: string;
@@ -120,15 +128,13 @@ export async function GET() {
       const packageName = payment.packageName || "Unknown Package";
 
       let action = "";
-      let type: RecentActivity["type"] = "one_time_purchase";
+      let type: ActivityLogItem["type"] = "one_time_purchase";
 
-      // Determine action based on package type and name
       if (payment.packageType === "subscription") {
-        // Check if this is a renewal (user already had this package)
         const isRenewal =
           user?.subscription?.packageId === payment.packageId &&
           user.subscription.lastUpgradeDate &&
-          new Date(user.subscription.lastUpgradeDate).getTime() < payment.timestamp.getTime() - 24 * 60 * 60 * 1000; // More than 24 hours ago
+          new Date(user.subscription.lastUpgradeDate).getTime() < payment.timestamp.getTime() - 24 * 60 * 60 * 1000;
 
         if (isRenewal) {
           action = `Renewed ${packageName} subscription`;
@@ -147,7 +153,6 @@ export async function GET() {
         type = "one_time_purchase";
       }
 
-      // Check for high-value orders
       if (amount >= 300) {
         type = "high_value_order";
         action = `High-value purchase: ${action} - $${amount}`;
@@ -166,34 +171,29 @@ export async function GET() {
     });
 
     // ========================================
-    // SUBSCRIPTION CHANGES (Upgrades, Downgrades, Cancellations)
+    // SUBSCRIPTION CHANGES
     // ========================================
-    // Find users with recent subscription changes
-    const usersWithSubscriptionChanges = await User.find({
+    const usersWithChanges = await User.find({
       $or: [
-        { "subscription.lastUpgradeDate": { $gte: oneWeekAgo } },
-        { "subscription.lastDowngradeDate": { $gte: oneWeekAgo } },
+        { "subscription.lastUpgradeDate": { $gte: startDate } },
+        { "subscription.lastDowngradeDate": { $gte: startDate } },
         {
           "subscription.isActive": false,
-          "subscription.endDate": { $gte: oneWeekAgo },
+          "subscription.endDate": { $gte: startDate },
         },
       ],
       isActive: true,
     })
       .sort({ "subscription.lastUpgradeDate": -1, "subscription.lastDowngradeDate": -1, "subscription.endDate": -1 })
-      .limit(10)
       .select("firstName lastName email subscription");
 
-    usersWithSubscriptionChanges.forEach((user) => {
+    usersWithChanges.forEach((user) => {
       if (!user.subscription) return;
 
-      // Check for upgrades
-      if (user.subscription.lastUpgradeDate && user.subscription.lastUpgradeDate >= oneWeekAgo) {
+      if (user.subscription.lastUpgradeDate && user.subscription.lastUpgradeDate >= startDate) {
         const timeAgo = getTimeAgo(user.subscription.lastUpgradeDate);
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
-
-        // Get package names (simplified - in production you'd fetch from package data)
         const currentPackageName = getPackageName(currentPackage);
         const previousPackageName = user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
 
@@ -208,12 +208,10 @@ export async function GET() {
         });
       }
 
-      // Check for downgrades
-      if (user.subscription.lastDowngradeDate && user.subscription.lastDowngradeDate >= oneWeekAgo) {
+      if (user.subscription.lastDowngradeDate && user.subscription.lastDowngradeDate >= startDate) {
         const timeAgo = getTimeAgo(user.subscription.lastDowngradeDate);
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
-
         const currentPackageName = getPackageName(currentPackage);
         const previousPackageName = user.subscription.previousSubscription?.packageName || getPackageName(previousPackage);
 
@@ -228,11 +226,10 @@ export async function GET() {
         });
       }
 
-      // Check for cancellations
       if (
         !user.subscription.isActive &&
         user.subscription.endDate &&
-        user.subscription.endDate >= oneWeekAgo &&
+        user.subscription.endDate >= startDate &&
         (!user.subscription.lastDowngradeDate ||
           user.subscription.endDate.getTime() !== user.subscription.lastDowngradeDate.getTime())
       ) {
@@ -252,17 +249,16 @@ export async function GET() {
     });
 
     // ========================================
-    // RECENT MAJOR DRAW COMPLETIONS
+    // DRAW COMPLETIONS
     // ========================================
-    const recentCompletedDraws = await MajorDraw.find({
+    const completedDraws = await MajorDraw.find({
       status: "completed",
-      updatedAt: { $gte: oneWeekAgo },
+      updatedAt: { $gte: startDate },
     })
       .sort({ updatedAt: -1 })
-      .limit(5)
       .select("name winner updatedAt");
 
-    recentCompletedDraws.forEach((draw) => {
+    completedDraws.forEach((draw) => {
       const timeAgo = getTimeAgo(draw.updatedAt);
       const winnerName = draw.winner?.userId ? "Winner selected" : "No winner yet";
 
@@ -277,63 +273,50 @@ export async function GET() {
       });
     });
 
-    // ========================================
-    // RECENT HIGH-VALUE ORDERS
-    // ========================================
-    const recentOrders = await Order.find({
-      createdAt: { $gte: oneWeekAgo },
-      totalAmount: { $gte: 200 },
-    })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate("user", "firstName lastName");
-
-    recentOrders.forEach((order) => {
-      // Handle populated user - it could be an ObjectId or populated user object
-      let user: { firstName: string; lastName: string } | null = null;
-      const populatedUser = order.user as unknown;
-      if (
-        populatedUser &&
-        typeof populatedUser === "object" &&
-        "firstName" in populatedUser &&
-        "lastName" in populatedUser
-      ) {
-        user = populatedUser as { firstName: string; lastName: string };
-      }
-      
-      const timeAgo = getTimeAgo(order.createdAt);
-
-      activities.push({
-        id: `order-${order._id}`,
-        type: "high_value_order",
-        user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
-        action: `Purchased $${order.totalAmount} worth of tools`,
-        time: timeAgo,
-        status: "success",
-        amount: order.totalAmount,
-        timestamp: order.createdAt,
-      });
-    });
-
     // Sort all activities by timestamp (most recent first)
     activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    // Return top 20 most recent activities
-    const recentActivities = activities.slice(0, 20);
+    // Apply filters
+    let filteredActivities = activities;
+    if (typeFilter) {
+      filteredActivities = filteredActivities.filter((a) => a.type === typeFilter);
+    }
+    if (searchTerm) {
+      filteredActivities = filteredActivities.filter(
+        (a) =>
+          a.user.toLowerCase().includes(searchTerm) ||
+          a.action.toLowerCase().includes(searchTerm)
+      );
+    }
 
-    console.log(`✅ Found ${recentActivities.length} recent activities`);
+    // Calculate pagination
+    const total = filteredActivities.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedActivities = filteredActivities.slice(startIndex, endIndex);
+
+    console.log(`✅ Activity log: ${paginatedActivities.length} of ${total} activities`);
 
     return NextResponse.json({
       success: true,
-      data: recentActivities,
+      data: {
+        activities: paginatedActivities,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+        },
+      },
     });
   } catch (error) {
-    console.error("❌ Error fetching recent activities:", error);
+    console.error("❌ Error fetching activity log:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to fetch recent activities",
+        error: "Failed to fetch activity log",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
@@ -362,7 +345,6 @@ function getTimeAgo(date: Date): string {
 
 // Helper function to get package name from package ID
 function getPackageName(packageId: string): string {
-  // Map common package IDs to names
   const packageMap: Record<string, string> = {
     "tradie-subscription": "Tradie",
     "foreman-subscription": "Foreman",
@@ -375,3 +357,4 @@ function getPackageName(packageId: string): string {
 
   return packageMap[packageId] || packageId;
 }
+

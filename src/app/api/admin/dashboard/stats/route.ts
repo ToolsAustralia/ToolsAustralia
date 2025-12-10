@@ -6,18 +6,24 @@ import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 import { getStartOfTodayInAEST, getStartOfMonthInAEST } from "@/utils/common/timezone";
+import { subDays } from "date-fns";
 
 /**
  * GET /api/admin/dashboard/stats
  * Get comprehensive dashboard statistics for admin overview
  *
+ * Query Parameters:
+ * - dateRange: "today" | "yesterday" | "all-time" | "custom" (default: "today")
+ * - startDate: ISO date string (required if dateRange is "custom")
+ * - endDate: ISO date string (required if dateRange is "custom")
+ *
  * Returns real-time data for:
  * - User statistics (total, active subscriptions, new signups, profile completion)
- * - Revenue statistics (today, month, breakdown by package type)
+ * - Revenue statistics (filtered by date range, breakdown by package type)
  * - Major draw statistics (total entries, active draws)
  * - Conversion rate (paying customers / total users)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
@@ -27,24 +33,58 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("📊 Fetching admin dashboard stats...");
+    // Get query parameters
+    const searchParams = request.nextUrl.searchParams;
+    const dateRange = (searchParams.get("dateRange") as "today" | "yesterday" | "all-time" | "custom") || "today";
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
 
-    // Calculate date ranges using AEST timezone (Australian business day)
-    // This ensures "today" resets at midnight AEST, not UTC
+    console.log("📊 Fetching admin dashboard stats...", { dateRange });
+
+    // Calculate date range based on selection
+    let startDate: Date;
+    let endDate: Date = new Date(); // End date is always now
+
     const startOfToday = getStartOfTodayInAEST();
     const startOfMonth = getStartOfMonthInAEST();
+
+    switch (dateRange) {
+      case "today":
+        startDate = startOfToday;
+        break;
+      case "yesterday":
+        // Get yesterday's start (24 hours before today's start)
+        const yesterdayStart = subDays(startOfToday, 1);
+        startDate = yesterdayStart;
+        endDate = startOfToday; // End at start of today
+        break;
+      case "all-time":
+        startDate = new Date(0); // Beginning of time
+        break;
+      case "custom":
+        if (!startDateParam || !endDateParam) {
+          return NextResponse.json({ error: "startDate and endDate are required for custom range" }, { status: 400 });
+        }
+        startDate = new Date(startDateParam);
+        endDate = new Date(endDateParam);
+        break;
+      default:
+        startDate = startOfToday;
+    }
 
     // ========================================
     // USER STATISTICS
     // ========================================
-    const [totalUsers, activeSubscriptions, newSignupsToday, usersWithCompletedProfiles] = await Promise.all([
+    // For user stats, we always show all-time totals (not filtered by date range)
+    // But new signups are filtered by date range
+    const [totalUsers, activeSubscriptions, newSignupsInRange, usersWithCompletedProfiles] = await Promise.all([
       User.countDocuments({ isActive: true }),
       User.countDocuments({
         "subscription.isActive": true,
         isActive: true,
       }),
       User.countDocuments({
-        createdAt: { $gte: startOfToday },
+        createdAt: { $gte: startDate, $lte: endDate },
         isActive: true,
       }),
       User.countDocuments({
@@ -59,30 +99,20 @@ export async function GET() {
     // ========================================
     // REVENUE STATISTICS
     // ========================================
-    // Get revenue from PaymentEvent model (all successful payments)
+    // Get revenue from PaymentEvent model filtered by date range
     const revenueEvents = await PaymentEvent.find({
       eventType: "BenefitsGranted", // Only count successful payments
+      timestamp: { $gte: startDate, $lte: endDate },
     });
 
     // Calculate revenue breakdowns
-    let todayRevenue = 0;
-    let monthRevenue = 0;
+    let totalRevenue = 0;
     let subscriptionRevenue = 0;
     let oneTimeRevenue = 0; // Includes: one-time, upsell, mini-draw packages
 
     revenueEvents.forEach((event) => {
-      const eventDate = new Date(event.timestamp);
       const price = event.data?.price || 0;
-
-      // Today's revenue
-      if (eventDate >= startOfToday) {
-        todayRevenue += price;
-      }
-
-      // Monthly revenue
-      if (eventDate >= startOfMonth) {
-        monthRevenue += price;
-      }
+      totalRevenue += price;
 
       // Package type breakdown
       if (event.packageType === "subscription") {
@@ -123,12 +153,11 @@ export async function GET() {
       users: {
         total: totalUsers,
         activeSubscriptions,
-        newToday: newSignupsToday,
+        newInRange: newSignupsInRange,
         profileCompletion: profileCompletionRate,
       },
       revenue: {
-        today: todayRevenue,
-        month: monthRevenue,
+        total: totalRevenue,
         breakdown: {
           subscriptions: subscriptionRevenue,
           oneTimePackages: oneTimeRevenue,
@@ -139,15 +168,20 @@ export async function GET() {
         activeDraws: activeDrawsCount,
       },
       conversionRate,
+      dateRange: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        range: dateRange,
+      },
     };
 
     console.log("✅ Admin dashboard stats calculated:", {
       totalUsers,
       activeSubscriptions,
-      todayRevenue,
-      monthRevenue,
+      totalRevenue,
       totalEntries,
       conversionRate,
+      dateRange,
     });
 
     return NextResponse.json({

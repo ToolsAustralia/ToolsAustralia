@@ -1,14 +1,16 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import AdminPage from "@/app/admin/component/AdminPage";
 import { AdminUser } from "@/types/admin";
 
-export default function AdminDashboard() {
+export default function AdminTabPage() {
   const router = useRouter();
+  const params = useParams();
   const { data: session, status } = useSession();
+  const tab = params?.tab as string;
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -70,5 +72,5 @@ export default function AdminDashboard() {
     }
   };
 
-  return <AdminPage user={adminUser} navigateTo={navigateTo} selectedTab="overview" />;
+  return <AdminPage user={adminUser} navigateTo={navigateTo} selectedTab={tab || "overview"} />;
 }

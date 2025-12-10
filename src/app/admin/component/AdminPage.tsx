@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import AdminSidebar from "./AdminSidebar";
+import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import AdminStatsCard from "./AdminStatsCard";
 import AdminMiniDrawModal from "@/components/modals/AdminMiniDrawModal";
 import AdminProductModal from "@/components/modals/AdminProductModal";
@@ -13,12 +15,7 @@ import UpcomingDraws from "./UpcomingDraws";
 import SubmissionsManagement from "./SubmissionsManagement";
 import PromoManagement from "./PromoManagement";
 import { AdminDashboardProps } from "@/types/admin";
-import {
-  useAdminDashboardStats,
-  useRecentActivities,
-  useRevenueBreakdown,
-  ChartData,
-} from "@/hooks/queries/useAdminQueries";
+import { useAdminDashboardStats, useRecentActivities, useRevenueBreakdown } from "@/hooks/queries/useAdminQueries";
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
@@ -42,8 +39,8 @@ import {
   Menu,
 } from "lucide-react";
 
-export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
-  const [selectedTab, setSelectedTab] = useState("overview");
+export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isClosingMobileSidebar, setIsClosingMobileSidebar] = useState(false);
@@ -52,23 +49,30 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
   const [isAdminMiniDrawModalOpen, setIsAdminMiniDrawModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>("today");
+  // Custom date range state (for future implementation)
+  // const [customStartDate, setCustomStartDate] = useState<string>("");
+  // const [customEndDate, setCustomEndDate] = useState<string>("");
 
-  // Fetch real admin dashboard stats
+  // Fetch real admin dashboard stats with date range filtering
   const {
     data: dashboardStats,
     isLoading: statsLoading,
     error: statsError,
     refetch: refetchStats,
-  } = useAdminDashboardStats();
+  } = useAdminDashboardStats(dateRange);
 
   // Fetch real recent activities
-  const { data: recentActivities = [], isLoading: activitiesLoading, error: activitiesError } = useRecentActivities();
+  const {
+    data: recentActivities = [],
+    isLoading: activitiesLoading,
+    error: activitiesError,
+    refetch: refetchActivities,
+  } = useRecentActivities();
 
-  // Fetch real revenue breakdown
-  const { data: revenueBreakdown, isLoading: revenueLoading, error: revenueError } = useRevenueBreakdown();
-
-  // Use real revenue data or fallback to empty array
-  const revenueData: ChartData[] = revenueBreakdown?.chartData || [];
+  // RevenueOverview now manages its own data fetching
+  // We still need refetchRevenue for the refresh button
+  const { refetch: refetchRevenue } = useRevenueBreakdown();
 
   // Handle mobile sidebar close with animation
   const handleCloseMobileSidebar = () => {
@@ -241,12 +245,10 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
-        refetchStats(),
-        // Note: The other queries will auto-refresh based on their refetchInterval
-      ]);
+      // Refresh all page data
+      await Promise.all([refetchStats(), refetchActivities(), refetchRevenue()]);
     } catch (error) {
-      console.error("Failed to refresh stats:", error);
+      console.error("Failed to refresh data:", error);
     } finally {
       setRefreshing(false);
     }
@@ -352,10 +354,6 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
           >
             <AdminSidebar
               selectedTab={selectedTab}
-              onTabChange={(tab) => {
-                setSelectedTab(tab);
-                handleCloseMobileSidebar();
-              }}
               onNavigateToSite={() => {
                 navigateTo("home");
                 handleCloseMobileSidebar();
@@ -372,7 +370,6 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
       <div className="hidden lg:block w-64">
         <AdminSidebar
           selectedTab={selectedTab}
-          onTabChange={setSelectedTab}
           onNavigateToSite={() => navigateTo("home")}
           user={user}
           isMobile={false}
@@ -432,9 +429,19 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
           {/* OVERVIEW TAB */}
           {selectedTab === "overview" && (
             <div className="space-y-4 sm:space-y-6">
+              {/* Date Range Toggle */}
+              <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+                <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+                  Dashboard Overview
+                </h2>
+                <div className="flex-shrink-0">
+                  <DateRangeToggle selectedRange={dateRange} onRangeChange={setDateRange} />
+                </div>
+              </div>
+
               {/* Real-time Metrics */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {statsLoading || activitiesLoading || revenueLoading ? (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {statsLoading || activitiesLoading ? (
                   // Loading state - show skeleton cards
                   <>
                     {[1, 2, 3, 4].map((i) => (
@@ -448,7 +455,7 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
                       </div>
                     ))}
                   </>
-                ) : statsError || activitiesError || revenueError ? (
+                ) : statsError || activitiesError ? (
                   // Error state
                   <div className="col-span-full bg-red-50 border border-red-200 rounded-xl p-4">
                     <div className="flex items-center space-x-2">
@@ -456,10 +463,7 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
                       <span className="text-red-700 font-medium">Failed to load dashboard data</span>
                     </div>
                     <p className="text-red-600 text-sm mt-1">
-                      {statsError?.message ||
-                        activitiesError?.message ||
-                        revenueError?.message ||
-                        "Unknown error occurred"}
+                      {statsError?.message || activitiesError?.message || "Unknown error occurred"}
                     </p>
                   </div>
                 ) : dashboardStats ? (
@@ -473,18 +477,50 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
                       color="indigo"
                     />
                     <AdminStatsCard
-                      title="Today's Revenue"
-                      value={`$${dashboardStats.revenue.today.toLocaleString()}`}
-                      icon={DollarSign}
-                      subtitle="From all sources"
-                      color="emerald"
+                      title={
+                        dateRange === "today"
+                          ? "New Signups"
+                          : dateRange === "yesterday"
+                          ? "New Signups"
+                          : dateRange === "all-time"
+                          ? "Total Signups"
+                          : "New Signups"
+                      }
+                      value={dashboardStats.users.newInRange.toLocaleString()}
+                      icon={UserCheck}
+                      subtitle={
+                        dateRange === "today"
+                          ? "Signed up today"
+                          : dateRange === "yesterday"
+                          ? "Signed up yesterday"
+                          : dateRange === "all-time"
+                          ? "All-time signups"
+                          : "In selected period"
+                      }
+                      color="blue"
                     />
                     <AdminStatsCard
-                      title="Total Entries"
-                      value={dashboardStats.majorDraw.totalEntries.toLocaleString()}
-                      icon={Trophy}
-                      subtitle="All-time entries"
-                      color="yellow"
+                      title={
+                        dateRange === "today"
+                          ? "Today's Revenue"
+                          : dateRange === "yesterday"
+                          ? "Yesterday's Revenue"
+                          : dateRange === "all-time"
+                          ? "Total Revenue"
+                          : "Revenue"
+                      }
+                      value={`$${dashboardStats.revenue.total.toLocaleString()}`}
+                      icon={DollarSign}
+                      subtitle={
+                        dateRange === "today"
+                          ? "From all sources"
+                          : dateRange === "yesterday"
+                          ? "From all sources"
+                          : dateRange === "all-time"
+                          ? "All-time total"
+                          : "Selected period"
+                      }
+                      color="emerald"
                     />
                     <AdminStatsCard
                       title="Conversion Rate"
@@ -498,7 +534,7 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
               </div>
 
               {/* Revenue Overview */}
-              <RevenueOverview data={revenueData} isLoading={revenueLoading} error={revenueError} />
+              <RevenueOverview />
 
               {/* Quick Actions & Recent Activity */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -536,7 +572,15 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
 
                 {/* Recent Activity */}
                 <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6">
-                  <h3 className="text-base font-bold text-gray-900 mb-3">Recent Activity</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-bold text-gray-900">Recent Activity</h3>
+                    <button
+                      onClick={() => router.push("/admin/activity-log")}
+                      className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+                    >
+                      View All →
+                    </button>
+                  </div>
                   <div className="space-y-2">
                     {recentActivities.slice(0, 5).map((activity) => (
                       <div key={activity.id} className="flex items-start space-x-2">
@@ -607,64 +651,6 @@ export default function AdminPage({ user, navigateTo }: AdminDashboardProps) {
           )}
         </div>
       </div>
-
-      {/* Floating Quick Actions - Mobile Only - Hide when sidebar is open */}
-      {!isMobileSidebarOpen && (
-        <div className="lg:hidden fixed right-3 bottom-4 z-50 flex flex-col gap-2">
-          <div className="group relative">
-            <button
-              onClick={() => setIsAdminMajorDrawModalOpen(true)}
-              className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-            <div className="absolute right-full mr-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-              <div className="bg-gradient-to-r from-black to-gray-800 text-white px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap shadow-lg">
-                Create Major Draw
-              </div>
-            </div>
-          </div>
-          <div className="group relative">
-            <button
-              onClick={() => setSelectedTab("products")}
-              className="bg-gradient-to-r from-amber-500 to-yellow-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
-            >
-              <Package className="w-5 h-5" />
-            </button>
-            <div className="absolute right-full mr-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-              <div className="bg-gradient-to-r from-black to-gray-800 text-white px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap shadow-lg">
-                Add Product
-              </div>
-            </div>
-          </div>
-          <div className="group relative">
-            <button
-              onClick={() => setIsExportModalOpen(true)}
-              className="bg-blue-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
-            >
-              <Download className="w-5 h-5" />
-            </button>
-            <div className="absolute right-full mr-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-              <div className="bg-gradient-to-r from-black to-gray-800 text-white px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap shadow-lg">
-                Export Participants
-              </div>
-            </div>
-          </div>
-          <div className="group relative">
-            <button
-              onClick={() => setSelectedTab("users")}
-              className="bg-green-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
-            >
-              <Users className="w-5 h-5" />
-            </button>
-            <div className="absolute right-full mr-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-              <div className="bg-gradient-to-r from-black to-gray-800 text-white px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap shadow-lg">
-                Manage Users
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Admin Product Modal */}
       <AdminProductModal

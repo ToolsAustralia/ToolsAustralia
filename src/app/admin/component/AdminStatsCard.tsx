@@ -29,56 +29,56 @@ export default function AdminStatsCard({
 }: AdminStatsCardProps) {
   const colorClasses = {
     red: {
-      bg: "bg-gradient-to-br from-red-500 to-red-600",
+      bg: "bg-gradient-to-br from-red-500 via-red-600 to-red-700",
       bgLight: "bg-red-50",
       text: "text-red-600",
       icon: "text-white",
       iconBg: "bg-red-100",
     },
     green: {
-      bg: "bg-gradient-to-br from-green-500 to-green-600",
-      bgLight: "bg-green-50",
-      text: "text-green-600",
+      bg: "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600",
+      bgLight: "bg-emerald-50",
+      text: "text-emerald-600",
       icon: "text-white",
-      iconBg: "bg-green-100",
+      iconBg: "bg-emerald-100",
     },
     blue: {
-      bg: "bg-gradient-to-br from-blue-500 to-blue-600",
+      bg: "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600",
       bgLight: "bg-blue-50",
       text: "text-blue-600",
       icon: "text-white",
       iconBg: "bg-blue-100",
     },
     yellow: {
-      bg: "bg-gradient-to-br from-yellow-500 to-yellow-600",
+      bg: "bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600",
       bgLight: "bg-yellow-50",
       text: "text-yellow-600",
       icon: "text-white",
       iconBg: "bg-yellow-100",
     },
     purple: {
-      bg: "bg-gradient-to-br from-purple-500 to-purple-600",
+      bg: "bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600",
       bgLight: "bg-purple-50",
       text: "text-purple-600",
       icon: "text-white",
       iconBg: "bg-purple-100",
     },
     indigo: {
-      bg: "bg-gradient-to-br from-indigo-500 to-indigo-600",
+      bg: "bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-600",
       bgLight: "bg-indigo-50",
       text: "text-indigo-600",
       icon: "text-white",
       iconBg: "bg-indigo-100",
     },
     pink: {
-      bg: "bg-gradient-to-br from-pink-500 to-pink-600",
+      bg: "bg-gradient-to-br from-pink-500 via-pink-600 to-rose-600",
       bgLight: "bg-pink-50",
       text: "text-pink-600",
       icon: "text-white",
       iconBg: "bg-pink-100",
     },
     emerald: {
-      bg: "bg-gradient-to-br from-emerald-500 to-emerald-600",
+      bg: "bg-gradient-to-br from-emerald-400 via-emerald-500 to-green-500",
       bgLight: "bg-emerald-50",
       text: "text-emerald-600",
       icon: "text-white",
@@ -107,46 +107,64 @@ export default function AdminStatsCard({
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all duration-300 overflow-hidden group ${className}`}
+      className={`relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group ${className}`}
+      style={{
+        background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
+      }}
     >
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
+      {/* Gradient overlay on hover */}
+      <div
+        className={`absolute inset-0 ${selectedColor.bg} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}
+      ></div>
+
+      <div className="relative p-2.5 sm:p-4 lg:p-5">
+        <div className="flex items-start justify-between mb-2 sm:mb-4">
           <div className="flex-1 min-w-0">
-            <p className="text-gray-600 font-medium text-sm mb-1 truncate">{title}</p>
-            {subtitle && <p className="text-xs text-gray-500 mb-2">{subtitle}</p>}
+            <p className="text-slate-600 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+              {title}
+            </p>
+            {subtitle && (
+              <p className="text-[9px] sm:text-xs text-slate-500 font-medium mb-1 sm:mb-2 leading-tight">{subtitle}</p>
+            )}
           </div>
           <div
-            className={`w-10 h-10 ${selectedColor.iconBg} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}
+            className={`w-8 h-8 sm:w-12 sm:h-12 lg:w-14 lg:h-14 ${selectedColor.bg} rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
           >
-            <Icon className={`w-5 h-5 ${selectedColor.text}`} />
+            <Icon className={`w-4 h-4 sm:w-6 sm:h-6 lg:w-7 lg:h-7 ${selectedColor.icon}`} />
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-2xl sm:text-3xl font-bold text-gray-900 leading-none">
+        <div className="space-y-1 sm:space-y-2">
+          <p className="text-xl sm:text-3xl lg:text-4xl font-bold text-slate-900 leading-none tracking-tight">
             {typeof value === "number" ? value.toLocaleString() : value}
           </p>
 
           {trend && (
             <div
-              className={`flex items-center gap-1 text-sm font-medium ${
-                trend.isPositive ? "text-green-600" : "text-red-600"
+              className={`flex items-center gap-1 text-[10px] sm:text-xs lg:text-sm font-semibold ${
+                trend.isPositive ? "text-emerald-600" : "text-red-600"
               }`}
             >
-              {trend.isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+              {trend.isPositive ? (
+                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
+              ) : (
+                <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
+              )}
               <span>
                 {trend.isPositive ? "+" : ""}
                 {trend.value}%
               </span>
-              <span className="text-gray-500 text-xs ml-1">vs last period</span>
+              <span className="text-slate-500 text-[9px] sm:text-xs ml-1 font-normal hidden sm:inline">
+                vs last period
+              </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Subtle gradient accent */}
+      {/* Bottom gradient accent bar */}
       <div
-        className={`h-1 ${selectedColor.bg} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+        className={`h-1.5 ${selectedColor.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
       ></div>
     </div>
   );

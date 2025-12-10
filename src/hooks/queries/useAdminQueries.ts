@@ -30,17 +30,24 @@ export interface RecentActivity {
 
 // Types for revenue breakdown
 export interface ChartData {
-  month: string;
-  oneTime: number; // Combined: one-time, upsell, mini-draw packages
-  memberships: number; // subscription packages
+  date: string; // Date label (e.g., "Jan 15", "2024", "Jan")
+  dateKey: string; // ISO date string for filtering (e.g., "2025-01-15T00:00:00.000Z")
+  oneTime: number; // One-time packages (excluding mini-draw)
+  memberships: number; // Subscription packages
+  miniDraw: number; // Mini-draw packages
   total: number;
 }
 
 export interface RevenueBreakdownResponse {
   chartData: ChartData[];
-  currentMonthTotal: number;
-  previousMonthTotal: number;
+  totals: {
+    total: number;
+    oneTime: number;
+    memberships: number;
+    miniDraw: number;
+  };
   growthRate: number;
+  period: "days" | "months" | "years";
 }
 
 // Types for admin dashboard stats
@@ -48,12 +55,11 @@ export interface AdminDashboardStats {
   users: {
     total: number;
     activeSubscriptions: number;
-    newToday: number;
+    newInRange: number;
     profileCompletion: number;
   };
   revenue: {
-    today: number;
-    month: number;
+    total: number;
     breakdown: {
       subscriptions: number;
       oneTimePackages: number;
@@ -64,6 +70,11 @@ export interface AdminDashboardStats {
     activeDraws: number;
   };
   conversionRate: number;
+  dateRange?: {
+    start: string;
+    end: string;
+    range: string;
+  };
 }
 
 export interface AdminDashboardResponse {
@@ -73,12 +84,25 @@ export interface AdminDashboardResponse {
 
 /**
  * Hook to fetch admin dashboard statistics
+ * @param dateRange - Date range filter: "today" | "yesterday" | "all-time" | "custom"
+ * @param startDate - Start date for custom range (ISO string)
+ * @param endDate - End date for custom range (ISO string)
  */
-export function useAdminDashboardStats() {
+export function useAdminDashboardStats(
+  dateRange: "today" | "yesterday" | "all-time" | "custom" = "today",
+  startDate?: string,
+  endDate?: string
+) {
   return useQuery<AdminDashboardStats>({
-    queryKey: ["admin", "dashboard", "stats"],
+    queryKey: ["admin", "dashboard", "stats", dateRange, startDate, endDate],
     queryFn: async (): Promise<AdminDashboardStats> => {
-      const response = await fetch("/api/admin/dashboard/stats");
+      const params = new URLSearchParams({ dateRange });
+      if (dateRange === "custom" && startDate && endDate) {
+        params.append("startDate", startDate);
+        params.append("endDate", endDate);
+      }
+
+      const response = await fetch(`/api/admin/dashboard/stats?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch admin stats: ${response.statusText}`);
@@ -129,12 +153,25 @@ export function useRecentActivities() {
 
 /**
  * Hook to fetch revenue breakdown for admin dashboard
+ * @param period - Time period: "days" | "months" | "years" (default: "months")
+ * @param startDate - Start date for custom range (ISO string)
+ * @param endDate - End date for custom range (ISO string)
  */
-export function useRevenueBreakdown() {
+export function useRevenueBreakdown(
+  period: "days" | "months" | "years" = "months",
+  startDate?: string,
+  endDate?: string
+) {
   return useQuery<RevenueBreakdownResponse>({
-    queryKey: ["admin", "dashboard", "revenue-breakdown"],
+    queryKey: ["admin", "dashboard", "revenue-breakdown", period, startDate, endDate],
     queryFn: async (): Promise<RevenueBreakdownResponse> => {
-      const response = await fetch("/api/admin/dashboard/revenue-breakdown");
+      const params = new URLSearchParams({ period });
+      if (startDate && endDate) {
+        params.append("startDate", startDate);
+        params.append("endDate", endDate);
+      }
+
+      const response = await fetch(`/api/admin/dashboard/revenue-breakdown?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch revenue breakdown: ${response.statusText}`);
