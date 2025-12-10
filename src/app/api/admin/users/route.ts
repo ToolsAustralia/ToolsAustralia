@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
+import { getPackageById } from "@/data/membershipPackages";
 
 /**
  * GET /api/admin/users
@@ -15,10 +16,11 @@ import MajorDraw from "@/models/MajorDraw";
  * - limit: Items per page (default: 25)
  * - search: Search term (searches email and name)
  * - subscriptionStatus: Filter by subscription status (active, inactive, none)
+ * - membershipPackage: Filter by subscription package ID (matches package name)
  * - role: Filter by user role (user, admin)
  * - dateFrom: Filter users created after this date
  * - dateTo: Filter users created before this date
- * - sortBy: Sort field (createdAt, email, lastLogin, totalSpent)
+ * - sortBy: Sort field (createdAt, email, lastLogin, totalSpent, majorDrawEntries, miniDrawCount)
  * - sortOrder: Sort direction (asc, desc)
  */
 export async function GET(request: NextRequest) {
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "25"), 100); // Max 100 per page
     const search = searchParams.get("search") || "";
     const subscriptionStatus = searchParams.get("subscriptionStatus") || "";
+    const membershipPackage = searchParams.get("membershipPackage") || "";
     const role = searchParams.get("role") || "";
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
@@ -49,6 +52,7 @@ export async function GET(request: NextRequest) {
       limit,
       search,
       subscriptionStatus,
+      membershipPackage,
       role,
       dateFrom,
       dateTo,
@@ -106,26 +110,62 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build sort object
-    const sort: Record<string, 1 | -1> = {};
-    sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+    // Membership package filter (filter by subscription packageId)
+    // The membershipPackage param contains the package name, we need to find matching packageIds
+    if (membershipPackage) {
+      // Find all packages that match the name (case-insensitive)
+      const matchingPackages = (await import("@/data/membershipPackages")).membershipPackages.filter(
+        (pkg) =>
+          pkg.isActive &&
+          pkg.type === "subscription" &&
+          pkg.name.toLowerCase().includes(membershipPackage.toLowerCase())
+      );
+      const matchingPackageIds = matchingPackages.map((pkg) => pkg._id);
 
-    // Calculate skip value for pagination
-    const skip = (page - 1) * limit;
+      if (matchingPackageIds.length > 0) {
+        filter["subscription.packageId"] = { $in: matchingPackageIds };
+      } else {
+        // If no matching packages found, return empty result
+        filter["subscription.packageId"] = { $in: [] };
+      }
+    }
 
-    // Execute query with pagination
-    const [users, totalCount] = await Promise.all([
-      User.find(filter)
+    // For computed fields (totalSpent, majorDrawEntries, miniDrawCount), we need to:
+    // 1. Fetch ALL matching users (not paginated)
+    // 2. Calculate computed fields
+    // 3. Sort by computed field
+    // 4. Then apply pagination
+    const isComputedFieldSort = ["totalSpent", "majorDrawEntries", "miniDrawCount"].includes(sortBy);
+
+    let users: unknown[];
+    let totalCount: number;
+
+    if (isComputedFieldSort) {
+      // Fetch ALL matching users for computed field sorting
+      users = await User.find(filter)
         .select("-password -emailVerificationToken -passwordResetToken -smsOtpCode")
-        .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter),
-    ]);
+        .lean();
+      totalCount = users.length;
+    } else {
+      // For database-sortable fields, use MongoDB sorting and pagination
+      const sort: Record<string, 1 | -1> = {};
+      sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+
+      const skip = (page - 1) * limit;
+
+      [users, totalCount] = await Promise.all([
+        User.find(filter)
+          .select("-password -emailVerificationToken -passwordResetToken -smsOtpCode")
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        User.countDocuments(filter),
+      ]);
+    }
 
     // Get user IDs for additional data fetching
-    const userIds = users.map((user) => user._id);
+    const userIds = (users as Array<{ _id: { toString: () => string } }>).map((user) => user._id.toString());
 
     // Fetch total spent for each user from PaymentEvent
     const paymentEvents = await PaymentEvent.find({
@@ -146,52 +186,168 @@ export async function GET(request: NextRequest) {
     const userEntriesMap = new Map<string, number>();
 
     if (currentMajorDraw) {
-      currentMajorDraw.entries?.forEach((entry: { userId: { toString: () => string }; quantity: number }) => {
-        const userId = entry.userId.toString();
-        const currentEntries = userEntriesMap.get(userId) || 0;
-        userEntriesMap.set(userId, currentEntries + entry.quantity);
-      });
+      currentMajorDraw.entries?.forEach(
+        (entry: { userId: { toString: () => string }; totalEntries?: number; quantity?: number }) => {
+          const userId = entry.userId.toString();
+          const currentEntries = userEntriesMap.get(userId) || 0;
+          // Use totalEntries if available, otherwise fall back to quantity
+          const entryCount = entry.totalEntries || entry.quantity || 0;
+          userEntriesMap.set(userId, currentEntries + entryCount);
+        }
+      );
     }
 
-    // Transform users data with computed fields
-    const usersWithStats = users.map((user) => {
-      const userId = user._id.toString();
-      const totalSpent = userSpentMap.get(userId) || 0;
-      const currentDrawEntries = userEntriesMap.get(userId) || 0;
-      // Show accumulated entries if no current draw entries, otherwise show current draw entries
-      const majorDrawEntries = currentDrawEntries > 0 ? currentDrawEntries : user.accumulatedEntries || 0;
+    // Calculate stats from all users (not just paginated)
+    // Conversions = users who have made at least one purchase (subscription OR one-time package OR mini-draw package)
+    const [totalUsers, activeSubscriptionsCount, verifiedUsersCount, convertedUsersCount] = await Promise.all([
+      User.countDocuments({ isActive: true }),
+      User.countDocuments({ "subscription.isActive": true, isActive: true }),
+      User.countDocuments({ isEmailVerified: true, isActive: true }),
+      User.countDocuments({
+        $or: [
+          { "subscription.isActive": true },
+          { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
+          { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
+        ],
+        isActive: true,
+      }),
+    ]);
 
-      return {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        mobile: user.mobile,
-        state: user.state,
-        role: user.role,
-        isActive: user.isActive,
-        isEmailVerified: user.isEmailVerified,
-        isMobileVerified: user.isMobileVerified,
-        profileSetupCompleted: user.profileSetupCompleted,
-        createdAt: user.createdAt,
-        lastLogin: user.lastLogin,
-        subscription: user.subscription
-          ? {
-              packageId: user.subscription.packageId,
-              isActive: user.subscription.isActive,
-              startDate: user.subscription.startDate,
-              endDate: user.subscription.endDate,
-              status: user.subscription.status,
-            }
-          : null,
-        totalSpent,
-        majorDrawEntries,
-        rewardsPoints: user.rewardsPoints || 0,
-        accumulatedEntries: user.accumulatedEntries || 0,
+    // Transform users data with computed fields and map packageId to packageName
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const usersWithStats = (users as any[]).map(
+      (user: {
+        _id: { toString: () => string };
+        firstName: string;
+        lastName: string;
+        email: string;
+        mobile?: string;
+        state?: string;
+        role: string;
+        isActive: boolean;
+        isEmailVerified: boolean;
+        isMobileVerified?: boolean;
+        profileSetupCompleted?: boolean;
+        createdAt: Date;
+        lastLogin?: Date;
+        subscription?: {
+          packageId: string;
+          isActive: boolean;
+          startDate: Date;
+          endDate?: Date;
+          status?: string;
+        };
+        miniDrawParticipation?: Array<{ isActive?: boolean }>;
+        rewardsPoints?: number;
+        accumulatedEntries?: number;
+      }) => {
+        const userId = user._id.toString();
+        const totalSpent = userSpentMap.get(userId) || 0;
+        const currentDrawEntries = userEntriesMap.get(userId) || 0;
+        // Show current draw entries only (not accumulated)
+        const majorDrawEntries = currentDrawEntries;
+
+        // Count mini draws user is participating in
+        const miniDrawCount = (user.miniDrawParticipation || []).filter(
+          (p: { isActive?: boolean }) => p.isActive !== false
+        ).length;
+
+        // Map packageId to packageName using membershipPackages data
+        let packageName: string | null = null;
+        if (user.subscription?.packageId) {
+          const packageData = getPackageById(user.subscription.packageId.toString());
+          packageName = packageData?.name || null;
+        }
+
+        return {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          mobile: user.mobile,
+          state: user.state,
+          role: user.role,
+          isActive: user.isActive,
+          isEmailVerified: user.isEmailVerified,
+          isMobileVerified: user.isMobileVerified,
+          profileSetupCompleted: user.profileSetupCompleted,
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin,
+          subscription: user.subscription
+            ? {
+                packageId: user.subscription.packageId.toString(),
+                packageName: packageName, // Mapped from packageId
+                isActive: user.subscription.isActive,
+                startDate: user.subscription.startDate,
+                endDate: user.subscription.endDate,
+                status: user.subscription.status,
+              }
+            : null,
+          totalSpent,
+          majorDrawEntries,
+          miniDrawCount,
+          rewardsPoints: user.rewardsPoints || 0,
+          accumulatedEntries: user.accumulatedEntries || 0,
+        };
+      }
+    );
+
+    // Handle sorting for computed fields (must happen before pagination)
+    if (isComputedFieldSort) {
+      if (sortBy === "totalSpent") {
+        usersWithStats.sort((a, b) => {
+          return sortOrder === "asc" ? a.totalSpent - b.totalSpent : b.totalSpent - a.totalSpent;
+        });
+      } else if (sortBy === "majorDrawEntries") {
+        usersWithStats.sort((a, b) => {
+          return sortOrder === "asc"
+            ? a.majorDrawEntries - b.majorDrawEntries
+            : b.majorDrawEntries - a.majorDrawEntries;
+        });
+      } else if (sortBy === "miniDrawCount") {
+        usersWithStats.sort((a, b) => {
+          const aCount = a.miniDrawCount || 0;
+          const bCount = b.miniDrawCount || 0;
+          return sortOrder === "asc" ? aCount - bCount : bCount - aCount;
+        });
+      }
+
+      // Apply pagination AFTER sorting
+      const skip = (page - 1) * limit;
+      const paginatedUsers = usersWithStats.slice(skip, skip + limit);
+
+      // Calculate pagination info
+      const totalPages = Math.ceil(totalCount / limit);
+      const hasNextPage = page < totalPages;
+      const hasPrevPage = page > 1;
+
+      const response = {
+        success: true,
+        data: {
+          users: paginatedUsers,
+          stats: {
+            totalUsers,
+            activeSubscriptions: activeSubscriptionsCount,
+            verifiedUsers: verifiedUsersCount,
+            conversions: convertedUsersCount,
+          },
+          pagination: {
+            currentPage: page,
+            totalPages,
+            totalCount,
+            limit,
+            hasNextPage,
+            hasPrevPage,
+          },
+        },
       };
-    });
 
-    // Calculate pagination info
+      console.log(`✅ Fetched ${paginatedUsers.length} users (page ${page}/${totalPages}) with computed field sorting`);
+
+      return NextResponse.json(response);
+    }
+
+    // For non-computed fields, pagination was already applied
     const totalPages = Math.ceil(totalCount / limit);
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
@@ -200,6 +356,12 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         users: usersWithStats,
+        stats: {
+          totalUsers,
+          activeSubscriptions: activeSubscriptionsCount,
+          verifiedUsers: verifiedUsersCount,
+          conversions: convertedUsersCount,
+        },
         pagination: {
           currentPage: page,
           totalPages,

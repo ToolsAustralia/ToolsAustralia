@@ -255,6 +255,10 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         // Invalidate and refetch Facebook Ads data
         await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
         await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
+      } else if (selectedTab === "users") {
+        // Invalidate and refetch Users data
+        await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });
+        await queryClient.refetchQueries({ queryKey: ["admin", "users", "list"] });
       } else {
         // For other tabs, refresh stats as fallback
         await refetchStats();

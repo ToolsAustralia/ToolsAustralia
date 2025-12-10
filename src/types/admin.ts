@@ -161,6 +161,7 @@ export interface AdminUserListItem {
   lastLogin?: string;
   subscription?: {
     packageId: string;
+    packageName?: string | null;
     isActive: boolean;
     startDate: string;
     endDate?: string;
@@ -168,6 +169,7 @@ export interface AdminUserListItem {
   } | null;
   totalSpent: number;
   majorDrawEntries: number;
+  miniDrawCount?: number;
   rewardsPoints: number;
   accumulatedEntries: number;
 }
@@ -328,10 +330,11 @@ export interface UserFilters {
   limit?: number;
   search?: string;
   subscriptionStatus?: "active" | "inactive" | "none";
+  membershipPackage?: string;
   role?: "user" | "admin";
   dateFrom?: string;
   dateTo?: string;
-  sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent";
+  sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent" | "majorDrawEntries" | "miniDrawCount";
   sortOrder?: "asc" | "desc";
 }
 
@@ -360,6 +363,12 @@ export interface AdminUsersResponse {
   success: boolean;
   data: {
     users: AdminUserListItem[];
+    stats?: {
+      totalUsers: number;
+      activeSubscriptions: number;
+      verifiedUsers: number;
+      conversions: number;
+    };
     pagination: {
       currentPage: number;
       totalPages: number;

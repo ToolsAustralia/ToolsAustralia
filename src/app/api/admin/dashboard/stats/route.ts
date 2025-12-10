@@ -5,7 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
-import { getStartOfTodayInAEST, getStartOfMonthInAEST } from "@/utils/common/timezone";
+import { getStartOfTodayInAEST } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
 
 /**
@@ -46,7 +46,6 @@ export async function GET(request: NextRequest) {
     let endDate: Date = new Date(); // End date is always now
 
     const startOfToday = getStartOfTodayInAEST();
-    const startOfMonth = getStartOfMonthInAEST();
 
     switch (dateRange) {
       case "today":
@@ -135,16 +134,43 @@ export async function GET(request: NextRequest) {
     const totalEntries = allMajorDraws.reduce((sum, draw) => sum + (draw.totalEntries || 0), 0);
 
     // ========================================
-    // CONVERSION RATE
+    // CONVERSION RATE (Date Range Aware)
     // ========================================
-    // Calculate as: (Users with active subscription OR one-time packages) / Total users * 100
-    // Get unique users who have made any purchase (subscription OR one-time)
-    const payingUsers = await User.countDocuments({
-      $or: [{ "subscription.isActive": true }, { oneTimePackages: { $exists: true, $not: { $size: 0 } } }],
-      isActive: true,
-    });
+    // Calculate as: (Users who signed up in range AND have made a purchase) / (Users who signed up in range) * 100
+    // For "all-time": (All paying users) / (All users) * 100
 
-    const conversionRate = totalUsers > 0 ? Math.round((payingUsers / totalUsers) * 100) : 0;
+    let conversionRate = 0;
+
+    if (dateRange === "all-time") {
+      // All-time conversion rate: all paying users / all users
+      const payingUsers = await User.countDocuments({
+        $or: [
+          { "subscription.isActive": true },
+          { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
+          { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
+        ],
+        isActive: true,
+      });
+      conversionRate = totalUsers > 0 ? Math.round((payingUsers / totalUsers) * 100) : 0;
+    } else {
+      // Date-range specific conversion rate
+      // Get users who signed up in the date range
+      const usersInRange = newSignupsInRange; // Already calculated above
+
+      // Get users who signed up in range AND have made at least one purchase (anytime)
+      // This shows the conversion rate of users who signed up in that period
+      const convertedUsersInRange = await User.countDocuments({
+        createdAt: { $gte: startDate, $lte: endDate },
+        $or: [
+          { "subscription.isActive": true },
+          { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
+          { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
+        ],
+        isActive: true,
+      });
+
+      conversionRate = usersInRange > 0 ? Math.round((convertedUsersInRange / usersInRange) * 100) : 0;
+    }
 
     // ========================================
     // RESPONSE

@@ -124,7 +124,9 @@ export default function AdminStatsCard({
               {title}
             </p>
             {subtitle && (
-              <p className="text-[9px] sm:text-xs text-slate-500 font-medium mb-1 sm:mb-2 leading-tight">{subtitle}</p>
+              <p className="hidden sm:block text-[9px] sm:text-xs text-slate-500 font-medium mb-1 sm:mb-2 leading-tight">
+                {subtitle}
+              </p>
             )}
           </div>
           <div

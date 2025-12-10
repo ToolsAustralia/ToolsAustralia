@@ -3,8 +3,6 @@
 import React, { useState, useMemo } from "react";
 import {
   Search,
-  Filter,
-  Download,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -17,23 +15,41 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  ArrowUp,
+  ArrowDown,
+  CreditCard,
+  Shield,
+  Gift,
+  X,
 } from "lucide-react";
+import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
 import { useAdminUsers, useAdminUserActions } from "@/hooks/queries/useAdminQueries";
 import UserDetailModal from "./UserDetailModal";
 import { useDebounce } from "@/hooks/useDebounce";
+import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
+import { membershipPackages } from "@/data/membershipPackages";
+
+// Import package icons
+import apprentice from "../../../public/images/packageIcons/apprentice.png";
+import tradie from "../../../public/images/packageIcons/tradie.png";
+import foreman from "../../../public/images/packageIcons/foreman.png";
+import boss from "../../../public/images/packageIcons/boss.png";
+import power from "../../../public/images/packageIcons/power.png";
+import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 
 /**
- * Main Users Management component with search, filtering, and user table
- * Provides comprehensive user management interface for admins
+ * World-class Users Management component
+ * Provides comprehensive user management interface with stats, filtering, and modern design
  */
 export default function UsersManagement() {
-  // State management
+  // Filter state
   const [filters, setFilters] = useState<UserFilters>({
     page: 1,
     limit: 25,
     search: "",
     subscriptionStatus: undefined,
+    membershipPackage: undefined,
     role: undefined,
     sortBy: "createdAt",
     sortOrder: "desc",
@@ -41,7 +57,6 @@ export default function UsersManagement() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
 
   // Debounced search to avoid excessive API calls
   const debouncedSearch = useDebounce(filters.search || "", 300);
@@ -60,6 +75,42 @@ export default function UsersManagement() {
 
   const userActions = useAdminUserActions();
 
+  // Get stats from API response
+  const stats = useMemo(() => {
+    const defaultStats = {
+      totalUsers: 0,
+      activeSubscriptions: 0,
+      verifiedUsers: 0,
+      conversions: 0,
+      conversionRate: 0,
+    };
+
+    if (!usersData?.stats) {
+      return defaultStats;
+    }
+
+    const totalUsers = usersData.stats.totalUsers || 0;
+    const conversions = (usersData.stats as { conversions?: number }).conversions || 0;
+    const conversionRate = totalUsers > 0 ? Math.round((conversions / totalUsers) * 100 * 10) / 10 : 0; // Round to 1 decimal place
+
+    return {
+      totalUsers,
+      activeSubscriptions: usersData.stats.activeSubscriptions || 0,
+      verifiedUsers: usersData.stats.verifiedUsers || 0,
+      conversions,
+      conversionRate,
+    };
+  }, [usersData]);
+
+  // Get unique membership packages for filter dropdown
+  const membershipPackageOptions = useMemo(() => {
+    const packages = membershipPackages
+      .filter((pkg) => pkg.isActive && pkg.type === "subscription")
+      .map((pkg) => pkg.name)
+      .sort();
+    return packages;
+  }, []);
+
   // Handle filter changes
   const updateFilter = (key: keyof UserFilters, value: string | number) => {
     setFilters((prev) => ({
@@ -68,6 +119,32 @@ export default function UsersManagement() {
       page: 1, // Reset to first page when filters change
     }));
   };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFilters({
+      page: 1,
+      limit: 25,
+      search: "",
+      subscriptionStatus: undefined,
+      membershipPackage: undefined,
+      role: undefined,
+      sortBy: "createdAt",
+      sortOrder: "desc",
+    });
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return !!(
+      filters.search ||
+      filters.subscriptionStatus ||
+      filters.membershipPackage ||
+      filters.role ||
+      filters.sortBy !== "createdAt" ||
+      filters.sortOrder !== "desc"
+    );
+  }, [filters]);
 
   // Handle pagination
   const goToPage = (page: number) => {
@@ -81,6 +158,18 @@ export default function UsersManagement() {
       sortBy,
       sortOrder: prev.sortBy === sortBy && prev.sortOrder === "asc" ? "desc" : "asc",
     }));
+  };
+
+  // Get sort icon
+  const getSortIcon = (column: UserFilters["sortBy"]) => {
+    if (filters.sortBy !== column) {
+      return null;
+    }
+    return filters.sortOrder === "asc" ? (
+      <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+    ) : (
+      <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+    );
   };
 
   // Handle user row click
@@ -114,7 +203,7 @@ export default function UsersManagement() {
     return new Intl.NumberFormat("en-AU", {
       style: "currency",
       currency: "AUD",
-    }).format(amount); // Amount is already in dollars
+    }).format(amount);
   };
 
   // Format date
@@ -126,364 +215,565 @@ export default function UsersManagement() {
     });
   };
 
+  // Get package icon image (matching PartnerDiscountQueue logic)
+  const getPackageIconImage = (packageName?: string | null) => {
+    if (!packageName) return null;
+    const lowerName = packageName.toLowerCase();
+
+    if (lowerName.includes("boss")) return boss;
+    if (lowerName.includes("foreman")) return foreman;
+    if (lowerName.includes("tradie")) return tradie;
+    if (lowerName.includes("apprentice")) return apprentice;
+    if (lowerName.includes("power")) return power;
+
+    return null;
+  };
+
+  // Get package color scheme (matching PartnerDiscountQueue logic)
+  const getPackageColorScheme = (packageName?: string | null) => {
+    if (!packageName) return null;
+    const lowerName = packageName.toLowerCase();
+
+    if (lowerName.includes("apprentice")) {
+      return {
+        gradient: "from-gray-300 via-slate-400 to-gray-500",
+        text: "text-gray-300",
+        border: "border-gray-400/40",
+      };
+    } else if (lowerName.includes("tradie")) {
+      return {
+        gradient: "from-blue-500 via-blue-600 to-blue-700",
+        text: "text-blue-400",
+        border: "border-blue-500/50",
+      };
+    } else if (lowerName.includes("foreman")) {
+      return {
+        gradient: "from-green-500 via-green-600 to-green-700",
+        text: "text-green-300",
+        border: "border-green-500/50",
+      };
+    } else if (lowerName.includes("boss")) {
+      return {
+        gradient: "from-yellow-400 via-amber-500 to-yellow-600",
+        text: "text-yellow-400",
+        border: "border-yellow-400/50",
+      };
+    } else if (lowerName.includes("power")) {
+      return {
+        gradient: "from-orange-600 via-red-500 to-orange-700",
+        text: "text-orange-400",
+        border: "border-orange-500/50",
+      };
+    }
+
+    // Default fallback
+    return {
+      gradient: "from-slate-600 via-gray-700 to-slate-800",
+      text: "text-gray-400",
+      border: "border-gray-500/50",
+    };
+  };
+
+  // Helper function to extract gradient color for border (matching PartnerDiscountQueue)
+  const getGradientColor = (gradient: string): string => {
+    if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
+    if (gradient.includes("blue")) return "#3b82f6";
+    if (gradient.includes("purple")) return "#9333ea";
+    if (gradient.includes("orange")) return "#f97316";
+    if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
+    if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
+    if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
+    if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
+    return "#6b7280";
+  };
+
   // Get subscription status badge
   const getSubscriptionBadge = (user: AdminUserListItem) => {
     if (!user.subscription) {
       return (
-        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">No Subscription</span>
+        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+          No Subscription
+        </span>
       );
     }
 
     if (user.subscription.isActive) {
-      return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>;
+      return (
+        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+          Active
+        </span>
+      );
     }
 
-    return <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactive</span>;
+    return (
+      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+        Inactive
+      </span>
+    );
   };
 
   // Get user status badge
   const getUserStatusBadge = (user: AdminUserListItem) => {
     if (user.isActive) {
-      return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>;
+      return (
+        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
+          Active
+        </span>
+      );
     }
 
-    return <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactive</span>;
+    return (
+      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+        Inactive
+      </span>
+    );
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-600 mt-1">Manage user accounts, subscriptions, and activity</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
-              showFilters
-                ? "border-[#ee0000] bg-red-50 text-[#ee0000]"
-                : "border-gray-300 text-gray-700 hover:border-gray-400"
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all">
-            <Download className="w-4 h-4" />
-            Export
-          </button>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Simplified */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+        <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+          User Management
+        </h2>
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-        {/* Search Bar */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search users by name or email..."
-            value={filters.search || ""}
-            onChange={(e) => updateFilter("search", e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
-          />
-        </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <AdminStatsCard title="Total Users" value={stats.totalUsers} icon={Users} color="blue" loading={isLoading} />
+        <AdminStatsCard
+          title="Active Subscriptions"
+          value={stats.activeSubscriptions}
+          icon={CreditCard}
+          color="emerald"
+          loading={isLoading}
+        />
+        <AdminStatsCard
+          title="Conversions"
+          value={`${stats.conversionRate}%`}
+          icon={CheckCircle}
+          color="green"
+          subtitle="Users who made a purchase"
+          loading={isLoading}
+        />
+        <AdminStatsCard
+          title="Verified Users"
+          value={stats.verifiedUsers}
+          icon={Shield}
+          color="purple"
+          loading={isLoading}
+        />
+      </div>
 
-        {/* Filters */}
-        {showFilters && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Subscription Status</label>
-              <select
-                value={filters.subscriptionStatus || ""}
-                onChange={(e) => updateFilter("subscriptionStatus", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
-              >
-                <option value="">All Subscriptions</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="none">No Subscription</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">User Role</label>
-              <select
-                value={filters.role || ""}
-                onChange={(e) => updateFilter("role", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
-              >
-                <option value="">All Roles</option>
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-              <select
-                value={filters.sortBy || "createdAt"}
-                onChange={(e) => updateFilter("sortBy", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
-              >
-                <option value="createdAt">Date Joined</option>
-                <option value="email">Email</option>
-                <option value="lastLogin">Last Login</option>
-                <option value="totalSpent">Total Spent</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Items Per Page</label>
-              <select
-                value={filters.limit || 25}
-                onChange={(e) => updateFilter("limit", parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
+      {/* Search and Filters - In One Row */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-2.5 sm:p-4 lg:p-6">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:gap-4">
+          {/* Search Bar */}
+          <div className="relative flex-1">
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={filters.search || ""}
+              onChange={(e) => updateFilter("search", e.target.value)}
+              className="w-full pl-7 sm:pl-9 lg:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base"
+            />
           </div>
-        )}
+
+          {/* Filters - In Same Row */}
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 lg:gap-3">
+            {/* Subscription Status Filter */}
+            <select
+              value={filters.subscriptionStatus || ""}
+              onChange={(e) => updateFilter("subscriptionStatus", e.target.value)}
+              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
+            >
+              <option value="">All Subscriptions</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="none">No Subscription</option>
+            </select>
+
+            {/* Membership Package Filter */}
+            <select
+              value={filters.membershipPackage || ""}
+              onChange={(e) => updateFilter("membershipPackage", e.target.value)}
+              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
+            >
+              <option value="">All Packages</option>
+              {membershipPackageOptions.map((pkg) => (
+                <option key={pkg} value={pkg}>
+                  {pkg}
+                </option>
+              ))}
+            </select>
+
+            {/* Role Filter */}
+            <select
+              value={filters.role || ""}
+              onChange={(e) => updateFilter("role", e.target.value)}
+              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[90px] sm:min-w-[100px] lg:min-w-[120px]"
+            >
+              <option value="">All Roles</option>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+
+            {/* Sort By Filter */}
+            <select
+              value={filters.sortBy || "createdAt"}
+              onChange={(e) => updateFilter("sortBy", e.target.value)}
+              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
+            >
+              <option value="createdAt">Date Joined</option>
+              <option value="email">Email</option>
+              <option value="lastLogin">Last Login</option>
+              <option value="totalSpent">Total Spent</option>
+              <option value="miniDrawCount">Mini Draws</option>
+            </select>
+
+            {/* Items Per Page */}
+            <select
+              value={filters.limit || 25}
+              onChange={(e) => updateFilter("limit", parseInt(e.target.value))}
+              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[70px] sm:min-w-[80px] lg:min-w-[100px]"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            {/* Clear Filters Button */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-red-300 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 hover:border-red-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base font-medium transition-colors flex items-center gap-1 sm:gap-1.5 lg:gap-2 whitespace-nowrap"
+                title="Clear all filters"
+              >
+                <X className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Clear Filters</span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Results Summary */}
       {usersData && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
+        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600">
           <p>
             Showing {(usersData.pagination.currentPage - 1) * usersData.pagination.limit + 1} to{" "}
             {Math.min(usersData.pagination.currentPage * usersData.pagination.limit, usersData.pagination.totalCount)}{" "}
             of {usersData.pagination.totalCount} users
           </p>
-          <button onClick={() => refetch()} className="text-[#ee0000] hover:text-[#cc0000] transition-colors">
-            Refresh
-          </button>
         </div>
       )}
 
       {/* Users Table */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
         {isLoading ? (
-          // Loading skeleton
-          <div className="p-6">
-            <div className="space-y-4">
+          // Enhanced Loading skeleton
+          <div className="p-4 sm:p-6">
+            <div className="space-y-3 sm:space-y-4">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-4 animate-pulse">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                <div key={i} className="flex items-center space-x-3 sm:space-x-4 animate-pulse">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-full flex-shrink-0"></div>
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="h-4 bg-gray-200 rounded w-1/3 sm:w-1/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2 sm:w-1/3"></div>
                   </div>
-                  <div className="h-6 bg-gray-200 rounded w-20"></div>
-                  <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  <div className="h-8 bg-gray-200 rounded w-24"></div>
+                  <div className="h-6 bg-gray-200 rounded w-16 sm:w-20 hidden sm:block"></div>
+                  <div className="h-6 bg-gray-200 rounded w-20 sm:w-24 hidden md:block"></div>
+                  <div className="h-6 bg-gray-200 rounded w-16 sm:w-20"></div>
+                  <div className="h-8 bg-gray-200 rounded w-20 sm:w-24"></div>
                 </div>
               ))}
             </div>
           </div>
         ) : error ? (
-          // Error state
-          <div className="p-6 text-center">
-            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Users</h3>
-            <p className="text-gray-600 mb-4">{error instanceof Error ? error.message : "Failed to load users"}</p>
+          // Enhanced Error state
+          <div className="p-6 sm:p-8 text-center">
+            <AlertTriangle className="w-12 h-12 sm:w-16 sm:h-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">Error Loading Users</h3>
+            <p className="text-sm sm:text-base text-gray-600 mb-4">
+              {error instanceof Error ? error.message : "Failed to load users"}
+            </p>
             <button
               onClick={() => refetch()}
-              className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all font-medium"
             >
               Try Again
             </button>
           </div>
         ) : !usersData?.users.length ? (
-          // Empty state
-          <div className="p-6 text-center">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Users Found</h3>
-            <p className="text-gray-600">
+          // Enhanced Empty state
+          <div className="p-6 sm:p-8 text-center">
+            <Users className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No Users Found</h3>
+            <p className="text-sm sm:text-base text-gray-600">
               {filters.search || filters.subscriptionStatus || filters.role
                 ? "Try adjusting your search criteria"
                 : "No users have been registered yet"}
             </p>
           </div>
         ) : (
-          // Users table
+          // Enhanced Users table
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-50 border-b-2 border-gray-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User
+                    <th
+                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("createdAt")}
+                    >
+                      <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
+                        User
+                        {getSortIcon("createdAt")}
+                      </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Subscription
                     </th>
                     <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700"
+                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("totalSpent")}
                     >
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
                         Total Spent
-                        {filters.sortBy === "totalSpent" && (
-                          <span className="text-[#ee0000]">{filters.sortOrder === "asc" ? "↑" : "↓"}</span>
-                        )}
+                        {getSortIcon("totalSpent")}
                       </div>
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Major Draw Entries
                     </th>
                     <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700"
-                      onClick={() => handleSort("lastLogin")}
+                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
+                      onClick={() => handleSort("majorDrawEntries")}
                     >
-                      <div className="flex items-center gap-1">
-                        Last Login
-                        {filters.sortBy === "lastLogin" && (
-                          <span className="text-[#ee0000]">{filters.sortOrder === "asc" ? "↑" : "↓"}</span>
-                        )}
+                      <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
+                        Major Draw Entries
+                        {getSortIcon("majorDrawEntries")}
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("miniDrawCount")}
+                    >
+                      <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
+                        Mini Draws
+                        {getSortIcon("miniDrawCount")}
+                      </div>
+                    </th>
+                    <th
+                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("lastLogin")}
+                    >
+                      <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
+                        Last Login
+                        {getSortIcon("lastLogin")}
+                      </div>
+                    </th>
+                    <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
                       Status
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {usersData.users.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => handleUserClick(user)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-10 h-10 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-full flex items-center justify-center text-white font-bold text-sm">
-                            {user.firstName.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.firstName} {user.lastName}
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {usersData.users.map((user) => {
+                    const packageIcon = getPackageIconImage(user.subscription?.packageName);
+                    const colorScheme = getPackageColorScheme(user.subscription?.packageName);
+                    const hasActiveSubscription = user.subscription?.isActive;
+                    const borderGradientColor = colorScheme ? getGradientColor(colorScheme.gradient) : "#6b7280";
+                    const isPremiumPackage =
+                      user.subscription?.packageName?.toLowerCase().includes("boss") ||
+                      user.subscription?.packageName?.toLowerCase().includes("power");
+
+                    return (
+                      <tr
+                        key={user.id}
+                        className="hover:bg-gray-50 cursor-pointer transition-colors even:bg-gray-50/30"
+                        onClick={() => handleUserClick(user)}
+                      >
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            {/* User Avatar - Logo or Package Icon */}
+                            {hasActiveSubscription && packageIcon ? (
+                              <span
+                                className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${
+                                  isPremiumPackage ? "animate-pulse" : ""
+                                }`}
+                                style={{
+                                  border: `2px solid transparent`,
+                                  backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
+                                  backgroundOrigin: `border-box`,
+                                  backgroundClip: `padding-box, border-box`,
+                                  padding: "2px",
+                                }}
+                              >
+                                <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                                  <Image
+                                    src={packageIcon}
+                                    alt={user.subscription?.packageName || "Package"}
+                                    className="w-5 h-5 sm:w-7 sm:h-7 lg:w-9 lg:h-9 object-contain"
+                                    width={36}
+                                    height={36}
+                                  />
+                                </div>
+                              </span>
+                            ) : (
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100">
+                                <Image
+                                  src={defaultLogo}
+                                  alt="Tools Australia"
+                                  className="w-full h-full object-cover"
+                                  width={48}
+                                  height={48}
+                                />
+                              </div>
+                            )}
+                            <div className="ml-2 sm:ml-3 lg:ml-4 min-w-0 flex-1">
+                              <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 truncate">
+                                {user.firstName} {user.lastName}
+                              </div>
+                              <div className="text-[9px] sm:text-xs lg:text-sm text-gray-500 truncate">
+                                {user.email}
+                              </div>
+                              <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 mt-0.5 sm:mt-1">
+                                {user.isEmailVerified ? (
+                                  <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-green-500 flex-shrink-0" />
+                                ) : (
+                                  <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-yellow-500 flex-shrink-0" />
+                                )}
+                                {user.role === "admin" && (
+                                  <span className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 font-medium">
+                                    Admin
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                            <div className="flex items-center gap-2 mt-1">
-                              {user.isEmailVerified ? (
-                                <CheckCircle className="w-3 h-3 text-green-500" />
-                              ) : (
-                                <AlertTriangle className="w-3 h-3 text-yellow-500" />
-                              )}
-                              <span className="text-xs text-gray-500">{user.role === "admin" && "Admin"}</span>
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
+                          {getSubscriptionBadge(user)}
+                        </td>
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900">
+                          {formatCurrency(user.totalSpent)}
+                        </td>
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden md:table-cell">
+                          <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
+                            <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 text-yellow-500 flex-shrink-0" />
+                            <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900">
+                              {user.majorDrawEntries}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
+                            <Gift className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 text-purple-500 flex-shrink-0" />
+                            <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900">
+                              {user.miniDrawCount || 0}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm text-gray-500">
+                          {user.lastLogin ? (
+                            <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
+                              <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 flex-shrink-0" />
+                              <span className="truncate">{formatDate(user.lastLogin)}</span>
                             </div>
+                          ) : (
+                            <span className="text-gray-400">Never</span>
+                          )}
+                        </td>
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden sm:table-cell">
+                          {getUserStatusBadge(user)}
+                        </td>
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium">
+                          <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUserClick(user);
+                              }}
+                              className="text-red-600 hover:text-red-700 transition-colors p-1 sm:p-1.5 hover:bg-red-50 rounded"
+                              title="View Details"
+                            >
+                              <Eye className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickAction("resend_verification", user.id);
+                              }}
+                              className="text-blue-600 hover:text-blue-700 transition-colors p-1 sm:p-1.5 hover:bg-blue-50 rounded"
+                              title="Resend Verification"
+                            >
+                              <Mail className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickAction("reset_password", user.id);
+                              }}
+                              className="text-yellow-600 hover:text-yellow-700 transition-colors p-1 sm:p-1.5 hover:bg-yellow-50 rounded"
+                              title="Reset Password"
+                            >
+                              <Key className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+                            </button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">{getSubscriptionBadge(user)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(user.totalSpent)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          <Trophy className="w-4 h-4 text-yellow-500" />
-                          <span className="text-sm font-medium text-gray-900">{user.majorDrawEntries}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.lastLogin ? (
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatDate(user.lastLogin)}
-                          </div>
-                        ) : (
-                          "Never"
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">{getUserStatusBadge(user)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleUserClick(user);
-                            }}
-                            className="text-[#ee0000] hover:text-[#cc0000] transition-colors"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickAction("resend_verification", user.id);
-                            }}
-                            className="text-blue-600 hover:text-blue-800 transition-colors"
-                            title="Resend Verification"
-                          >
-                            <Mail className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickAction("reset_password", user.id);
-                            }}
-                            className="text-yellow-600 hover:text-yellow-800 transition-colors"
-                            title="Reset Password"
-                          >
-                            <Key className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* Enhanced Pagination */}
             {usersData.pagination.totalPages > 1 && (
-              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+              <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200">
+                <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     <button
                       onClick={() => goToPage(1)}
                       disabled={!usersData.pagination.hasPrevPage}
-                      className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="First page"
                     >
                       <ChevronsLeft className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => goToPage(usersData.pagination.currentPage - 1)}
                       disabled={!usersData.pagination.hasPrevPage}
-                      className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700">
+                    <span className="text-xs sm:text-sm text-gray-700 font-medium">
                       Page {usersData.pagination.currentPage} of {usersData.pagination.totalPages}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     <button
                       onClick={() => goToPage(usersData.pagination.currentPage + 1)}
                       disabled={!usersData.pagination.hasNextPage}
-                      className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => goToPage(usersData.pagination.totalPages)}
                       disabled={!usersData.pagination.hasNextPage}
-                      className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Last page"
                     >
                       <ChevronsRight className="w-4 h-4" />
                     </button>
