@@ -306,6 +306,13 @@ MajorDrawSchema.pre(/^find/, async function (next) {
   const currentDate = new Date();
 
   try {
+    // Check if mongoose is connected before running database operations
+    // This prevents errors during build time when the database might not be connected
+    if (mongoose.connection.readyState !== 1) {
+      // Connection not ready, skip middleware and continue with query
+      return next();
+    }
+
     // Get the compiled model safely from mongoose registry
     const MajorDrawModel = (mongoose.models.MajorDraw ||
       mongoose.model<IMajorDraw>("MajorDraw")) as mongoose.Model<IMajorDraw>;
