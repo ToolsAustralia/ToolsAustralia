@@ -31,15 +31,27 @@ import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
+import Image from "next/image";
+import { StaticImageData } from "next/image";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
-import { PROFESSIONS } from "@/data/professions";
-import { membershipPackages } from "@/data/membershipPackages";
+import { membershipPackages, getPackageById } from "@/data/membershipPackages";
 import { AdminUserUpdatePayload, UserActionType } from "@/types/admin";
 import { useAdminUpdateUser, useAdminUserActions, useAdminUserDetail } from "@/hooks/queries/useAdminQueries";
-import { UserStatsCardCompact } from "./UserStatsCard";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import ModalContent from "@/components/modals/ui/ModalContent";
+import Input from "@/components/modals/ui/Input";
+import Select from "@/components/modals/ui/Select";
+import Checkbox from "@/components/modals/ui/Checkbox";
+
+// Import package icons
+import apprentice from "../../../public/images/packageIcons/apprentice.png";
+import tradie from "../../../public/images/packageIcons/tradie.png";
+import foreman from "../../../public/images/packageIcons/foreman.png";
+import boss from "../../../public/images/packageIcons/boss.png";
+import power from "../../../public/images/packageIcons/power.png";
+import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 
 // Proper interfaces for user data structures
 interface SubscriptionHistoryItem {
@@ -63,6 +75,8 @@ interface OneTimePackageItem {
   packageId?: string;
   packageName?: string;
   purchaseDate?: string;
+  startDate?: string;
+  endDate?: string;
   price?: number;
   status?: string;
   entriesGranted?: number;
@@ -215,6 +229,102 @@ const formatReferralDate = (value?: string) => {
   } catch {
     return value;
   }
+};
+
+// Helper function to get package icon image (matching UsersManagement.tsx)
+const getPackageIconImage = (packageName?: string | null): StaticImageData | null => {
+  if (!packageName) return null;
+  const lowerName = packageName.toLowerCase();
+
+  if (lowerName.includes("boss")) return boss;
+  if (lowerName.includes("foreman")) return foreman;
+  if (lowerName.includes("tradie")) return tradie;
+  if (lowerName.includes("apprentice")) return apprentice;
+  if (lowerName.includes("power")) return power;
+
+  return null;
+};
+
+// Helper function to get package color scheme (matching UsersManagement.tsx)
+const getPackageColorScheme = (packageName?: string | null) => {
+  if (!packageName) return null;
+  const lowerName = packageName.toLowerCase();
+
+  if (lowerName.includes("apprentice")) {
+    return {
+      gradient: "from-gray-300 via-slate-400 to-gray-500",
+      text: "text-gray-300",
+      border: "border-gray-400/40",
+    };
+  } else if (lowerName.includes("tradie")) {
+    return {
+      gradient: "from-blue-500 via-blue-600 to-blue-700",
+      text: "text-blue-400",
+      border: "border-blue-500/50",
+    };
+  } else if (lowerName.includes("foreman")) {
+    return {
+      gradient: "from-green-500 via-green-600 to-green-700",
+      text: "text-green-300",
+      border: "border-green-500/50",
+    };
+  } else if (lowerName.includes("boss")) {
+    return {
+      gradient: "from-yellow-400 via-amber-500 to-yellow-600",
+      text: "text-yellow-400",
+      border: "border-yellow-400/50",
+    };
+  } else if (lowerName.includes("power")) {
+    return {
+      gradient: "from-orange-600 via-red-500 to-orange-700",
+      text: "text-orange-400",
+      border: "border-orange-500/50",
+    };
+  }
+
+  return null;
+};
+
+// Helper function to extract gradient color for border (matching UsersManagement.tsx)
+const getGradientColor = (gradient: string): string => {
+  if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
+  if (gradient.includes("blue")) return "#3b82f6";
+  if (gradient.includes("purple")) return "#9333ea";
+  if (gradient.includes("orange")) return "#f97316";
+  if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
+  if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
+  if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
+  if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
+  return "#6b7280";
+};
+
+// Helper function to format activity event with detailed description
+const formatActivityEvent = (event: PaymentEventItem, formatCurrency: (amount: number) => string) => {
+  const eventData = event.data as Record<string, unknown> | undefined;
+  const packageName = (eventData?.packageName as string) || (eventData?.offerTitle as string) || "Package";
+  const packageType = event.packageType || "unknown";
+  const price = (eventData?.price as number) || event.price || 0;
+  const entries = (eventData?.entries as number) || 0;
+
+  let description = "";
+  if (packageType === "subscription") {
+    description = `${packageName} Subscription - ${formatCurrency(price)}/month`;
+  } else if (packageType === "one-time") {
+    description = `${packageName} Package - ${formatCurrency(price)}`;
+  } else if (packageType === "mini-draw") {
+    description = `${packageName} Mini Draw Package - ${formatCurrency(price)}`;
+  } else if (packageType === "upsell") {
+    const eventData = event.data as Record<string, unknown> | undefined;
+    description = `${(eventData?.offerTitle as string) || "Upsell"} - ${formatCurrency(price)}`;
+  } else {
+    description = `${event.eventType || "Payment event"}`;
+  }
+
+  if (entries > 0) {
+    description += ` - ${entries} entries granted`;
+  }
+
+  return description;
 };
 
 /**
@@ -483,7 +593,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   ];
 
   const inputClasses =
-    "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ee0000]";
+    "mt-1 w-full rounded-lg border-2 border-gray-300 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#ee0000]";
 
   if (!isOpen) return null;
 
@@ -885,48 +995,112 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     }).format(amount); // Amount is already in dollars
   };
 
+  // Icon color mapping for stats cards (matching AdminStatsCard)
+  const getIconColorConfig = (color: string) => {
+    const colorMap: Record<string, { bg: string; icon: string }> = {
+      red: {
+        bg: "bg-gradient-to-br from-red-500 via-red-600 to-red-700",
+        icon: "text-white",
+      },
+      green: {
+        bg: "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600",
+        icon: "text-white",
+      },
+      blue: {
+        bg: "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600",
+        icon: "text-white",
+      },
+      yellow: {
+        bg: "bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600",
+        icon: "text-white",
+      },
+      purple: {
+        bg: "bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600",
+        icon: "text-white",
+      },
+      emerald: {
+        bg: "bg-gradient-to-br from-emerald-400 via-emerald-500 to-green-500",
+        icon: "text-white",
+      },
+    };
+    return colorMap[color] || colorMap.blue;
+  };
+
+  // Get avatar details (matching UsersManagement.tsx logic)
+  const packageIcon = getPackageIconImage(user?.subscription?.packageName);
+  const colorScheme = getPackageColorScheme(user?.subscription?.packageName);
+  const hasActiveSubscription = user?.subscription?.isActive;
+  const borderGradientColor = colorScheme ? getGradientColor(colorScheme.gradient) : "#6b7280";
+  const isPremiumPackage =
+    user?.subscription?.packageName?.toLowerCase().includes("boss") ||
+    user?.subscription?.packageName?.toLowerCase().includes("power");
+
   return (
     <>
       {/* Main Modal */}
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden animate-fade-in">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-2 sm:p-4">
+        <div
+          className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200/50 max-w-6xl w-full max-h-[90vh] overflow-hidden animate-fade-in"
+          style={{
+            background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
+          }}
+        >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-full flex items-center justify-center text-white font-bold text-lg">
-                {user.firstName.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {user.firstName} {user.lastName}
-                </h2>
-                <p className="text-gray-600">{user.email}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      user.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {user.isActive ? "Active" : "Inactive"}
-                  </span>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      user.role === "admin" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
-                    }`}
-                  >
-                    {user.role === "admin" ? "Admin" : "User"}
-                  </span>
+          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b-2 border-slate-200/50 bg-gradient-to-r from-slate-50 to-white">
+            <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 flex-1">
+              {/* User Avatar - Logo or Package Icon (matching UsersManagement) */}
+              {hasActiveSubscription && packageIcon ? (
+                <span
+                  className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 ${
+                    isPremiumPackage ? "animate-pulse" : ""
+                  }`}
+                  style={{
+                    border: `2px solid transparent`,
+                    backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
+                    backgroundOrigin: `border-box`,
+                    backgroundClip: `padding-box, border-box`,
+                    padding: "3px",
+                  }}
+                >
+                  <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                    <Image
+                      src={packageIcon}
+                      alt={user?.subscription?.packageName || "Package"}
+                      className="w-7 h-7 sm:w-9 sm:h-9 lg:w-11 lg:h-11 object-contain"
+                      width={44}
+                      height={44}
+                    />
+                  </div>
+                </span>
+              ) : (
+                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100">
+                  <Image
+                    src={defaultLogo}
+                    alt="Tools Australia"
+                    className="w-full h-full object-cover"
+                    width={56}
+                    height={56}
+                  />
                 </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 truncate">
+                  {user?.firstName} {user?.lastName}
+                </h2>
+                <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 truncate">{user?.email}</p>
               </div>
             </div>
-            <button onClick={onCloseAction} className="text-gray-400 hover:text-gray-600 transition-colors">
-              <X className="w-6 h-6" />
+            <button
+              onClick={onCloseAction}
+              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 sm:p-2"
+            >
+              <X className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200 bg-white sticky top-0 z-20">
-            <nav className="flex gap-6 px-6 overflow-x-auto">
+          {/* Tabs - Bigger on mobile for easy touching */}
+          <div className="border-b-2 border-slate-200/50 bg-gradient-to-r from-slate-50 to-white sticky top-0 z-20 shadow-sm">
+            <nav className="flex gap-1 sm:gap-2 lg:gap-4 px-2 sm:px-4 lg:px-6 overflow-x-auto">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -934,13 +1108,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    className={`flex items-center gap-1.5 sm:gap-2 py-4 sm:py-3 lg:py-4 px-4 sm:px-3 border-b-2 font-semibold text-xs sm:text-xs lg:text-sm transition-all whitespace-nowrap min-h-[48px] ${
                       isActive
-                        ? "border-[#ee0000] text-[#ee0000]"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50/50"
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-4 h-4 sm:w-4 sm:h-4" />
                     {tab.label}
                   </button>
                 );
@@ -949,61 +1123,99 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          <ModalContent padding="lg" className="max-h-[calc(90vh-200px)]">
             {activeTab === "overview" && (
-              <div className="space-y-6">
-                {/* Quick Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-                  <UserStatsCardCompact
-                    title="Total Spent"
-                    value={formatCurrency(user.statistics.totalSpent)}
-                    icon={DollarSign}
-                    color="green"
-                  />
-                  <UserStatsCardCompact
-                    title="Major Draw Entries"
-                    value={user.statistics.currentDrawEntries}
-                    icon={Trophy}
-                    color="yellow"
-                  />
-                  <UserStatsCardCompact
-                    title="Rewards Points"
-                    value={rewardsFeatureEnabled ? user.rewardsPoints : "Paused"}
-                    icon={Star}
-                    color="purple"
-                  />
-                  <UserStatsCardCompact
-                    title="Engagement Score"
-                    value={`${user.statistics.engagementScore}/100`}
-                    icon={Activity}
-                    color="blue"
-                  />
-                  {user.referral && (
-                    <>
-                      <UserStatsCardCompact
-                        title="Referral Conversions"
-                        value={user.referral.successfulConversions}
-                        icon={Users}
-                        color="emerald"
-                      />
-                      <UserStatsCardCompact
-                        title="Referral Entries"
-                        value={user.referral.totalEntriesAwarded}
-                        icon={Gift}
-                        color="red"
-                      />
-                    </>
-                  )}
+              <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+                {/* Quick Stats - Elevated Design with Darker Icon Backgrounds */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+                  {[
+                    {
+                      title: "Total Spent",
+                      value: formatCurrency(user.statistics.totalSpent),
+                      icon: DollarSign,
+                      color: "green",
+                    },
+                    {
+                      title: "Major Draw Entries",
+                      value: user.statistics.currentDrawEntries,
+                      icon: Trophy,
+                      color: "yellow",
+                    },
+                    {
+                      title: "Rewards Points",
+                      value: rewardsFeatureEnabled ? user.rewardsPoints : "Paused",
+                      icon: Star,
+                      color: "purple",
+                    },
+                    {
+                      title: "Engagement Score",
+                      value: `${user.statistics.engagementScore}/100`,
+                      icon: Activity,
+                      color: "blue",
+                    },
+                    ...(user.referral
+                      ? [
+                          {
+                            title: "Referral Conversions",
+                            value: user.referral.successfulConversions,
+                            icon: Users,
+                            color: "emerald",
+                          },
+                          {
+                            title: "Referral Entries",
+                            value: user.referral.totalEntriesAwarded,
+                            icon: Gift,
+                            color: "red",
+                          },
+                        ]
+                      : []),
+                  ].map((stat, idx) => {
+                    const Icon = stat.icon;
+                    const iconConfig = getIconColorConfig(stat.color);
+                    return (
+                      <div
+                        key={idx}
+                        className="relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group"
+                        style={{
+                          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
+                        }}
+                      >
+                        <div className="p-2 sm:p-3 lg:p-4">
+                          <div className="flex items-start justify-between mb-1 sm:mb-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-slate-600 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                                {stat.title}
+                              </p>
+                            </div>
+                            <div
+                              className={`w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 ${iconConfig.bg} rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
+                            >
+                              <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
+                            </div>
+                          </div>
+                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 leading-none tracking-tight">
+                            {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
+                          </p>
+                        </div>
+                        <div
+                          className={`h-1 ${iconConfig.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
+                        ></div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* Basic Information */}
-                <div className="bg-gray-50 rounded-xl p-6">
+                {/* Basic Information - Minimized on mobile */}
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
                   {isEditing("overview") ? (
-                    <form onSubmit={overviewForm.handleSubmit(handleOverviewSubmit)} className="space-y-6">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
+                    <form
+                      onSubmit={overviewForm.handleSubmit(handleOverviewSubmit)}
+                      className="space-y-2 sm:space-y-4 lg:space-y-6"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
-                          <p className="text-sm text-gray-500">
+                          <h3 className="text-sm sm:text-base font-semibold text-gray-900">Basic Information</h3>
+                          <p className="text-xs text-gray-500 hidden sm:block mt-0.5">
                             Update the user&apos;s profile and verification details. Changes sync immediately across the
                             admin dashboard.
                           </p>
@@ -1012,196 +1224,209 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("overview")}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {updateUser.isPending ? "Saving..." : "Save Changes"}
+                            {updateUser.isPending ? "Saving..." : "Save"}
                           </button>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">First Name</label>
-                          <input
-                            {...overviewForm.register("firstName")}
-                            className={inputClasses}
-                            placeholder="First name"
-                          />
-                          {overviewForm.formState.errors.firstName && (
-                            <p className="mt-1 text-xs text-red-600">
-                              {overviewForm.formState.errors.firstName.message}
-                            </p>
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                        <Controller
+                          name="firstName"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="First Name"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="First name"
+                              error={fieldState.error?.message}
+                            />
                           )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Last Name</label>
-                          <input
-                            {...overviewForm.register("lastName")}
-                            className={inputClasses}
-                            placeholder="Last name"
-                          />
-                          {overviewForm.formState.errors.lastName && (
-                            <p className="mt-1 text-xs text-red-600">
-                              {overviewForm.formState.errors.lastName.message}
-                            </p>
+                        />
+                        <Controller
+                          name="lastName"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Last Name"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="Last name"
+                              error={fieldState.error?.message}
+                            />
                           )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Email</label>
-                          <input
-                            type="email"
-                            {...overviewForm.register("email")}
-                            className={inputClasses}
-                            placeholder="name@example.com"
-                          />
-                          {overviewForm.formState.errors.email && (
-                            <p className="mt-1 text-xs text-red-600">{overviewForm.formState.errors.email.message}</p>
+                        />
+                        <Controller
+                          name="email"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Email"
+                              type="email"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="name@example.com"
+                              error={fieldState.error?.message}
+                            />
                           )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Mobile</label>
-                          <input
-                            {...overviewForm.register("mobile")}
-                            className={inputClasses}
-                            placeholder="0412 345 678"
-                          />
-                          {overviewForm.formState.errors.mobile && (
-                            <p className="mt-1 text-xs text-red-600">{overviewForm.formState.errors.mobile.message}</p>
+                        />
+                        <Controller
+                          name="mobile"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Mobile"
+                              type="tel"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="0412 345 678"
+                              error={fieldState.error?.message}
+                            />
                           )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">State</label>
-                          <select {...overviewForm.register("state")} className={inputClasses}>
-                            <option value="">Select state</option>
-                            {AUSTRALIAN_STATES.map((state) => (
-                              <option key={state.code} value={state.code}>
-                                {state.name} ({state.code})
-                              </option>
-                            ))}
-                          </select>
-                          {overviewForm.formState.errors.state && (
-                            <p className="mt-1 text-xs text-red-600">{overviewForm.formState.errors.state.message}</p>
+                        />
+                        <Controller
+                          name="state"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Select
+                              label="State"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              options={[
+                                { value: "", label: "Select state" },
+                                ...AUSTRALIAN_STATES.map((state) => ({
+                                  value: state.code,
+                                  label: `${state.name} (${state.code})`,
+                                })),
+                              ]}
+                              placeholder="Select state"
+                              error={fieldState.error?.message}
+                            />
                           )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Profession</label>
-                          <input
-                            {...overviewForm.register("profession")}
-                            className={inputClasses}
-                            placeholder="Enter profession"
-                            maxLength={100}
-                          />
-                          {overviewForm.formState.errors.profession && (
-                            <p className="mt-1 text-xs text-red-600">
-                              {overviewForm.formState.errors.profession.message}
-                            </p>
+                        />
+                        <Controller
+                          name="profession"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Profession"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="Enter profession"
+                              maxLength={100}
+                              error={fieldState.error?.message}
+                            />
                           )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Role</label>
-                          <select {...overviewForm.register("role")} className={inputClasses}>
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                        </div>
+                        />
+                        <Controller
+                          name="role"
+                          control={overviewForm.control}
+                          render={({ field }) => (
+                            <Select
+                              label="Role"
+                              value={field.value || "user"}
+                              onChange={field.onChange}
+                              options={[
+                                { value: "user", label: "User" },
+                                { value: "admin", label: "Admin" },
+                              ]}
+                            />
+                          )}
+                        />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <Controller
                           control={overviewForm.control}
                           name="isActive"
                           render={({ field }) => (
-                            <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
+                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                              <Checkbox
                                 checked={field.value}
-                                onChange={(event) => field.onChange(event.target.checked)}
-                                className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                onChange={(e) => field.onChange(e.target.checked)}
+                                label="Account is active"
                               />
-                              <span>Account is active</span>
-                            </label>
+                            </div>
                           )}
                         />
                         <Controller
                           control={overviewForm.control}
                           name="profileSetupCompleted"
                           render={({ field }) => (
-                            <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
+                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                              <Checkbox
                                 checked={field.value}
-                                onChange={(event) => field.onChange(event.target.checked)}
-                                className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                onChange={(e) => field.onChange(e.target.checked)}
+                                label="Profile setup completed"
                               />
-                              <span>Profile setup completed</span>
-                            </label>
+                            </div>
                           )}
                         />
                         <Controller
                           control={overviewForm.control}
                           name="isEmailVerified"
                           render={({ field }) => (
-                            <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
+                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                              <Checkbox
                                 checked={field.value}
-                                onChange={(event) => field.onChange(event.target.checked)}
-                                className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                onChange={(e) => field.onChange(e.target.checked)}
+                                label="Email verified"
                               />
-                              <span>Email verified</span>
-                            </label>
+                            </div>
                           )}
                         />
                         <Controller
                           control={overviewForm.control}
                           name="isMobileVerified"
                           render={({ field }) => (
-                            <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
+                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                              <Checkbox
                                 checked={field.value}
-                                onChange={(event) => field.onChange(event.target.checked)}
-                                className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                onChange={(e) => field.onChange(e.target.checked)}
+                                label="Mobile verified"
                               />
-                              <span>Mobile verified</span>
-                            </label>
+                            </div>
                           )}
                         />
                       </div>
                     </form>
                   ) : (
                     <>
-                      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
-                          <p className="text-sm text-gray-500">Review contact details and verification status.</p>
+                          <h3 className="text-sm sm:text-base font-semibold text-gray-900">Basic Information</h3>
+                          <p className="text-xs text-gray-500 hidden sm:block mt-0.5">
+                            Review contact details and verification status.
+                          </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("overview")}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                         >
                           Edit Details
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3">
-                          <Mail className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">Email</p>
-                            <p className="font-medium break-words">{user.email}</p>
-                            <div className="flex items-center gap-1 mt-1">
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                        <div className="flex items-start gap-2">
+                          <Mail className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Email</p>
+                            <p className="font-medium break-words text-sm mb-1">{user.email}</p>
+                            <div className="flex items-center gap-1">
                               {user.isEmailVerified ? (
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
                               ) : (
-                                <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
                               )}
                               <span className="text-xs text-gray-500">
                                 {user.isEmailVerified ? "Verified" : "Unverified"}
@@ -1210,16 +1435,16 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <Phone className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">Mobile</p>
-                            <p className="font-medium break-words">{user.mobile || "Not provided"}</p>
-                            <div className="flex items-center gap-1 mt-1">
+                        <div className="flex items-start gap-2">
+                          <Phone className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Mobile</p>
+                            <p className="font-medium break-words text-sm mb-1">{user.mobile || "Not provided"}</p>
+                            <div className="flex items-center gap-1">
                               {user.isMobileVerified ? (
-                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
                               ) : (
-                                <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
                               )}
                               <span className="text-xs text-gray-500">
                                 {user.isMobileVerified ? "Verified" : "Unverified"}
@@ -1228,20 +1453,20 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <User className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">Role</p>
-                            <p className="font-medium capitalize">{user.role}</p>
+                        <div className="flex items-start gap-2">
+                          <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Role</p>
+                            <p className="font-medium capitalize text-sm">{user.role}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <Shield className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">Account Status</p>
+                        <div className="flex items-start gap-2">
+                          <Shield className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Account Status</p>
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                                 user.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                               }`}
                             >
@@ -1250,39 +1475,39 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <MapPin className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">State</p>
-                            <p className="font-medium">{user.state || "Not provided"}</p>
+                        <div className="flex items-start gap-2">
+                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">State</p>
+                            <p className="font-medium text-sm">{user.state || "Not provided"}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <User className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">Profession</p>
-                            <p className="font-medium">{user.profession || "Not provided"}</p>
+                        <div className="flex items-start gap-2">
+                          <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Profession</p>
+                            <p className="font-medium text-sm">{user.profession || "Not provided"}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <Calendar className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">Member Since</p>
-                            <p className="font-medium">{formatDate(user.createdAt)}</p>
-                            <p className="text-xs text-gray-500">{user.statistics.accountAge} days ago</p>
+                        <div className="flex items-start gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Member Since</p>
+                            <p className="font-medium text-sm">{formatDate(user.createdAt)}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{user.statistics.accountAge} days ago</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <Clock className="w-5 h-5 text-gray-400" />
-                          <div>
-                            <p className="text-sm text-gray-600">Last Login</p>
-                            <p className="font-medium">
+                        <div className="flex items-start gap-2">
+                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Last Login</p>
+                            <p className="font-medium text-sm">
                               {user.lastLogin ? formatDate(user.lastLogin) : "No login recorded"}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-gray-500 mt-0.5">
                               {user.statistics.daysSinceLastLogin !== undefined &&
                               user.statistics.daysSinceLastLogin !== null
                                 ? `${user.statistics.daysSinceLastLogin} days ago`
@@ -1296,34 +1521,42 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 </div>
 
                 {user.referral && (
-                  <div className="bg-white rounded-xl border border-gray-100 p-6">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="bg-white rounded-xl border border-gray-100 p-2 sm:p-4 lg:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">Referral Program</h3>
-                        <p className="text-sm text-gray-500">
+                        <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                          Referral Program
+                        </h3>
+                        <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                           Track referral conversions and rewards earned from {user.firstName}&apos;s invite code.
                         </p>
                       </div>
                       {user.referral.code && (
-                        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-semibold text-gray-700">
-                          <span className="uppercase tracking-wide text-xs text-gray-500">Code</span>
-                          <span className="text-lg font-bold text-gray-900">{user.referral.code}</span>
+                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-gray-700">
+                          <span className="uppercase tracking-wide text-[9px] sm:text-xs text-gray-500">Code</span>
+                          <span className="text-sm sm:text-lg font-bold text-gray-900">{user.referral.code}</span>
                         </div>
                       )}
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                        <p className="text-xs uppercase text-gray-500 mb-1">Successful Conversions</p>
-                        <p className="text-2xl font-bold text-gray-900">{user.referral.successfulConversions}</p>
+                    <div className="mt-2 sm:mt-4 grid grid-cols-3 gap-1.5 sm:gap-4">
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
+                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Conversions</p>
+                        <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
+                          {user.referral.successfulConversions}
+                        </p>
                       </div>
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                        <p className="text-xs uppercase text-gray-500 mb-1">Total Entries Awarded</p>
-                        <p className="text-2xl font-bold text-gray-900">{user.referral.totalEntriesAwarded}</p>
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
+                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Entries</p>
+                        <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
+                          {user.referral.totalEntriesAwarded}
+                        </p>
                       </div>
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                        <p className="text-xs uppercase text-gray-500 mb-1">Pending Conversions</p>
-                        <p className="text-2xl font-bold text-gray-900">{user.referral.pendingCount}</p>
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
+                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Pending</p>
+                        <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
+                          {user.referral.pendingCount}
+                        </p>
                       </div>
                     </div>
 
@@ -1364,10 +1597,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   </div>
                 )}
 
-                {/* Quick Actions */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* Quick Actions - Minimized on mobile */}
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                  <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">
+                    Quick Actions
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
                     <button
                       onClick={() =>
                         showActionConfirmation(
@@ -1458,57 +1693,79 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             )}
 
             {activeTab === "subscription" && (
-              <div className="space-y-6">
-                <div className="bg-gray-50 rounded-xl p-6">
+              <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
                   {isEditing("subscription") ? (
-                    <form onSubmit={subscriptionForm.handleSubmit(handleSubscriptionSubmit)} className="space-y-6">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
+                    <form
+                      onSubmit={subscriptionForm.handleSubmit(handleSubscriptionSubmit)}
+                      className="space-y-2 sm:space-y-4 lg:space-y-6"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Manage Subscription</h3>
-                          <p className="text-sm text-gray-500">
+                          <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                            Manage Subscription
+                          </h3>
+                          <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                             Assign or update the member&apos;s subscription package and adjust benefit totals.
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("subscription")}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 lg:gap-4">
+                        <Controller
+                          name="packageId"
+                          control={subscriptionForm.control}
+                          render={({ field }) => (
+                            <Select
+                              label="Subscription Package"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              options={[
+                                { value: "", label: "No active subscription" },
+                                ...subscriptionPackageOptions.map((pkg) => ({
+                                  value: pkg._id,
+                                  label: pkg.name,
+                                })),
+                              ]}
+                              placeholder="Select package"
+                              className="text-[10px] sm:text-xs lg:text-sm"
+                            />
+                          )}
+                        />
+                        <Controller
+                          name="status"
+                          control={subscriptionForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Status"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              placeholder="active | cancelled | past_due"
+                              error={fieldState.error?.message}
+                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                            />
+                          )}
+                        />
                         <div>
-                          <label className="text-sm font-medium text-gray-700">Subscription Package</label>
-                          <select {...subscriptionForm.register("packageId")} className={inputClasses}>
-                            <option value="">No active subscription</option>
-                            {subscriptionPackageOptions.map((pkg) => (
-                              <option key={pkg._id} value={pkg._id}>
-                                {pkg.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Status</label>
-                          <input
-                            {...subscriptionForm.register("status")}
-                            className={inputClasses}
-                            placeholder="active | cancelled | past_due"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Start Date</label>
+                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700">
+                            Start Date
+                          </label>
                           <input
                             type="datetime-local"
                             {...subscriptionForm.register("startDate")}
@@ -1516,7 +1773,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           />
                         </div>
                         <div>
-                          <label className="text-sm font-medium text-gray-700">End Date</label>
+                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700">
+                            End Date
+                          </label>
                           <input
                             type="datetime-local"
                             {...subscriptionForm.register("endDate")}
@@ -1527,130 +1786,119 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={subscriptionForm.control}
                           name="isActive"
                           render={({ field }) => (
-                            <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
+                            <div className="rounded-lg border-2 border-gray-200 bg-white px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
+                              <Checkbox
                                 checked={field.value}
-                                onChange={(event) => field.onChange(event.target.checked)}
-                                className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                onChange={(e) => field.onChange(e.target.checked)}
+                                label="Subscription active"
+                                className="text-[10px] sm:text-xs lg:text-sm"
                               />
-                              <span>Subscription active</span>
-                            </label>
+                            </div>
                           )}
                         />
                         <Controller
                           control={subscriptionForm.control}
                           name="autoRenew"
                           render={({ field }) => (
-                            <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                              <input
-                                type="checkbox"
+                            <div className="rounded-lg border-2 border-gray-200 bg-white px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
+                              <Checkbox
                                 checked={field.value}
-                                onChange={(event) => field.onChange(event.target.checked)}
-                                className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                onChange={(e) => field.onChange(e.target.checked)}
+                                label="Auto renew enabled"
+                                className="text-[10px] sm:text-xs lg:text-sm"
                               />
-                              <span>Auto renew enabled</span>
-                            </label>
+                            </div>
                           )}
                         />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Rewards Points</label>
-                          <input
-                            type="number"
-                            {...subscriptionForm.register("rewardsPoints", { valueAsNumber: true })}
-                            className={`${inputClasses} ${
-                              !rewardsFeatureEnabled ? "opacity-60 cursor-not-allowed" : ""
-                            }`}
-                            min={0}
-                            disabled={!rewardsFeatureEnabled}
-                            title={!rewardsFeatureEnabled ? rewardsPauseMessage : undefined}
-                          />
-                          {!rewardsFeatureEnabled && (
-                            <p className="mt-1 text-xs text-gray-500">{rewardsPauseMessage}</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
+                        <Controller
+                          name="rewardsPoints"
+                          control={subscriptionForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Rewards Points"
+                              type="number"
+                              value={field.value || 0}
+                              onChange={field.onChange}
+                              min={0}
+                              disabled={!rewardsFeatureEnabled}
+                              error={
+                                fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
+                              }
+                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                            />
                           )}
-                          {subscriptionForm.formState.errors.rewardsPoints && (
-                            <p className="mt-1 text-xs text-red-600">
-                              {subscriptionForm.formState.errors.rewardsPoints.message}
-                            </p>
+                        />
+                        <Controller
+                          name="accumulatedEntries"
+                          control={subscriptionForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Accumulated Entries"
+                              type="number"
+                              value={field.value || 0}
+                              onChange={field.onChange}
+                              min={0}
+                              disabled={!rewardsFeatureEnabled}
+                              error={
+                                fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
+                              }
+                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                            />
                           )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Accumulated Entries</label>
-                          <input
-                            type="number"
-                            {...subscriptionForm.register("accumulatedEntries", { valueAsNumber: true })}
-                            className={`${inputClasses} ${
-                              !rewardsFeatureEnabled ? "opacity-60 cursor-not-allowed" : ""
-                            }`}
-                            min={0}
-                            disabled={!rewardsFeatureEnabled}
-                            title={!rewardsFeatureEnabled ? rewardsPauseMessage : undefined}
-                          />
-                          {!rewardsFeatureEnabled && (
-                            <p className="mt-1 text-xs text-gray-500">{rewardsPauseMessage}</p>
+                        />
+                        <Controller
+                          name="entryWallet"
+                          control={subscriptionForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Entry Wallet"
+                              type="number"
+                              value={field.value || 0}
+                              onChange={field.onChange}
+                              min={0}
+                              disabled={!rewardsFeatureEnabled}
+                              error={
+                                fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
+                              }
+                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                            />
                           )}
-                          {subscriptionForm.formState.errors.accumulatedEntries && (
-                            <p className="mt-1 text-xs text-red-600">
-                              {subscriptionForm.formState.errors.accumulatedEntries.message}
-                            </p>
-                          )}
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-700">Entry Wallet</label>
-                          <input
-                            type="number"
-                            {...subscriptionForm.register("entryWallet", { valueAsNumber: true })}
-                            className={`${inputClasses} ${
-                              !rewardsFeatureEnabled ? "opacity-60 cursor-not-allowed" : ""
-                            }`}
-                            min={0}
-                            disabled={!rewardsFeatureEnabled}
-                            title={!rewardsFeatureEnabled ? rewardsPauseMessage : undefined}
-                          />
-                          {!rewardsFeatureEnabled && (
-                            <p className="mt-1 text-xs text-gray-500">{rewardsPauseMessage}</p>
-                          )}
-                          {subscriptionForm.formState.errors.entryWallet && (
-                            <p className="mt-1 text-xs text-red-600">
-                              {subscriptionForm.formState.errors.entryWallet.message}
-                            </p>
-                          )}
-                        </div>
+                        />
                       </div>
                     </form>
                   ) : (
                     <>
-                      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Current Subscription</h3>
-                          <p className="text-sm text-gray-500">
+                          <h3 className="text-sm sm:text-base font-semibold text-gray-900">Current Subscription</h3>
+                          <p className="text-xs text-gray-500 hidden sm:block mt-0.5">
                             View the active membership plan, renewal schedule, and accumulated entries.
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("subscription")}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                         >
                           Edit Subscription
                         </button>
                       </div>
 
                       {user.subscription ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
                           <div>
-                            <p className="text-sm text-gray-600">Package</p>
-                            <p className="font-medium">
+                            <p className="text-xs text-gray-600 mb-1">Package</p>
+                            <p className="font-medium text-sm">
                               {user.subscription.packageName || user.subscription.packageId}
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Status</p>
+                            <p className="text-xs text-gray-600 mb-1">Status</p>
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                                 user.subscription.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                               }`}
                             >
@@ -1658,31 +1906,34 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             </span>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Start Date</p>
-                            <p className="font-medium">{formatDate(user.subscription.startDate)}</p>
+                            <p className="text-xs text-gray-600 mb-1">Start Date</p>
+                            <p className="font-medium text-sm">{formatDate(user.subscription.startDate)}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">End Date</p>
-                            <p className="font-medium">
+                            <p className="text-xs text-gray-600 mb-1">End Date</p>
+                            <p className="font-medium text-sm">
                               {user.subscription.endDate ? formatDate(user.subscription.endDate) : "Active"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Auto Renew</p>
-                            <span className="font-medium">{user.subscription.autoRenew ? "Enabled" : "Disabled"}</span>
+                            <p className="text-xs text-gray-600 mb-1">Auto Renew</p>
+                            <span className="font-medium text-sm">
+                              {user.subscription.autoRenew ? "Enabled" : "Disabled"}
+                            </span>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Rewards Points</p>
-                            <p className="font-medium">{rewardsFeatureEnabled ? user.rewardsPoints : "Paused"}</p>
-                            {!rewardsFeatureEnabled && <p className="text-xs text-gray-500">{rewardsPauseMessage}</p>}
+                            <p className="text-xs text-gray-600 mb-1">Rewards Points</p>
+                            <p className="font-medium text-sm">
+                              {rewardsFeatureEnabled ? user.rewardsPoints : "Unavailable"}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Accumulated Entries</p>
-                            <p className="font-medium">{user.accumulatedEntries}</p>
+                            <p className="text-xs text-gray-600 mb-1">Accumulated Entries</p>
+                            <p className="font-medium text-sm">{user.accumulatedEntries}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Entry Wallet</p>
-                            <p className="font-medium">{user.entryWallet}</p>
+                            <p className="text-xs text-gray-600 mb-1">Entry Wallet</p>
+                            <p className="font-medium text-sm">{user.entryWallet}</p>
                           </div>
                         </div>
                       ) : (
@@ -1701,31 +1952,90 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Subscription History */}
                 {user.subscriptionHistory.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Subscription History</h3>
-                    <div className="space-y-3">
-                      {user.subscriptionHistory.slice(0, 10).map((sub: SubscriptionHistoryItem, index: number) => (
-                        <div key={index} className="flex items-center justify-between gap-4 rounded-lg bg-white p-3">
-                          <div>
-                            <p className="font-medium">{sub.packageName || sub.packageId || "Package"}</p>
-                            <p className="text-sm text-gray-600">
-                              {formatDate(sub.timestamp || new Date().toISOString())}
-                            </p>
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
+                      Subscription History
+                    </h3>
+                    <div className="space-y-2 sm:space-y-3">
+                      {user.subscriptionHistory.slice(0, 10).map((sub: SubscriptionHistoryItem, index: number) => {
+                        // Resolve package name from packageId if packageName is not available
+                        const resolvedPackageName =
+                          sub.packageName || (sub.packageId ? getPackageById(sub.packageId)?.name : null);
+                        const packageIcon = getPackageIconImage(resolvedPackageName);
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between gap-2 sm:gap-3 rounded-lg bg-white border border-gray-200 p-2 sm:p-3 hover:shadow-sm transition-shadow"
+                          >
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              {packageIcon ? (
+                                (() => {
+                                  const subColorScheme = getPackageColorScheme(resolvedPackageName);
+                                  const subBorderGradientColor = subColorScheme
+                                    ? getGradientColor(subColorScheme.gradient)
+                                    : "#6b7280";
+                                  const isSubPremium =
+                                    resolvedPackageName?.toLowerCase().includes("boss") ||
+                                    resolvedPackageName?.toLowerCase().includes("power");
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 ${
+                                        isSubPremium ? "animate-pulse" : ""
+                                      }`}
+                                      style={{
+                                        border: `2px solid transparent`,
+                                        backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${subBorderGradientColor}, transparent)`,
+                                        backgroundOrigin: `border-box`,
+                                        backgroundClip: `padding-box, border-box`,
+                                        padding: "2px",
+                                      }}
+                                    >
+                                      <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                                        <Image
+                                          src={packageIcon}
+                                          alt={resolvedPackageName || "Package"}
+                                          className="w-5 h-5 sm:w-7 sm:h-7 object-contain"
+                                          width={28}
+                                          height={28}
+                                        />
+                                      </div>
+                                    </span>
+                                  );
+                                })()
+                              ) : (
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100">
+                                  <Image
+                                    src={defaultLogo}
+                                    alt="Tools Australia"
+                                    className="w-full h-full object-cover"
+                                    width={40}
+                                    height={40}
+                                  />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-xs sm:text-sm text-gray-900">
+                                  {resolvedPackageName || sub.packageId || "Package"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="font-semibold text-xs sm:text-sm text-gray-900">
+                                {formatCurrency(sub.price || 0)}
+                              </p>
+                              <span
+                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
+                                  sub.status === "BenefitsGranted"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                                }`}
+                              >
+                                {sub.status || "Status not provided"}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium">{formatCurrency(sub.price || 0)}</p>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                sub.status === "BenefitsGranted"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}
-                            >
-                              {sub.status || "Status not provided"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1733,30 +2043,69 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             )}
 
             {activeTab === "purchases" && (
-              <div className="space-y-6">
-                {/* Purchase Summary */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <UserStatsCardCompact
-                    title="Total Orders"
-                    value={user.statistics.totalOrders}
-                    icon={Package}
-                    color="blue"
-                  />
-                  <UserStatsCardCompact
-                    title="Total Spent"
-                    value={formatCurrency(user.statistics.totalSpent)}
-                    icon={DollarSign}
-                    color="green"
-                  />
-                  <UserStatsCardCompact
-                    title="Average Order"
-                    value={formatCurrency(user.statistics.averageOrderValue)}
-                    icon={Trophy}
-                    color="purple"
-                  />
+              <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+                {/* Purchase Summary - Elevated Design with Darker Icon Backgrounds - 3 cards in 1 row on mobile */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-3 lg:gap-4">
+                  {(() => {
+                    // Calculate total orders - use orders array length if statistics is 0 or missing
+                    const totalOrders =
+                      user.statistics.totalOrders > 0 ? user.statistics.totalOrders : user.orders?.length || 0;
+
+                    // Calculate average order value
+                    const avgOrderValue =
+                      user.statistics.averageOrderValue > 0
+                        ? user.statistics.averageOrderValue
+                        : user.statistics.totalSpent > 0 && totalOrders > 0
+                        ? user.statistics.totalSpent / totalOrders
+                        : 0;
+
+                    return [
+                      { title: "Total Orders", value: totalOrders, icon: Package, color: "blue" },
+                      {
+                        title: "Total Spent",
+                        value: formatCurrency(user.statistics.totalSpent),
+                        icon: DollarSign,
+                        color: "green",
+                      },
+                      { title: "Average Order", value: formatCurrency(avgOrderValue), icon: Trophy, color: "purple" },
+                    ];
+                  })().map((stat, idx) => {
+                    const Icon = stat.icon;
+                    const iconConfig = getIconColorConfig(stat.color);
+                    return (
+                      <div
+                        key={idx}
+                        className="relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group"
+                        style={{
+                          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
+                        }}
+                      >
+                        <div className="p-2 sm:p-3 lg:p-4">
+                          <div className="flex items-start justify-between mb-1 sm:mb-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-slate-600 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                                {stat.title}
+                              </p>
+                            </div>
+                            <div
+                              className={`w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 ${iconConfig.bg} rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
+                            >
+                              <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
+                            </div>
+                          </div>
+                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 leading-none tracking-tight">
+                            {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
+                          </p>
+                        </div>
+                        <div
+                          className={`h-1 ${iconConfig.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
+                        ></div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <div className="bg-gray-50 rounded-xl p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-6">
                   {isEditing("purchases") ? (
                     <form onSubmit={purchasesForm.handleSubmit(handlePurchasesSubmit)} className="space-y-6">
                       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1829,32 +2178,33 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     </button>
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700">Package ID</label>
-                                      <input
-                                        list="one-time-package-options"
-                                        {...purchasesForm.register(`oneTimePackages.${index}.packageId` as const)}
-                                        className={inputClasses}
-                                        placeholder="apprentice-pack"
-                                      />
-                                      {errors?.packageId && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.packageId.message}</p>
+                                    <Controller
+                                      control={purchasesForm.control}
+                                      name={`oneTimePackages.${index}.packageId` as const}
+                                      render={({ field, fieldState }) => (
+                                        <Input
+                                          label="Package ID"
+                                          value={field.value || ""}
+                                          onChange={field.onChange}
+                                          placeholder="apprentice-pack"
+                                          error={fieldState.error?.message}
+                                        />
                                       )}
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700">Entries Granted</label>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        {...purchasesForm.register(`oneTimePackages.${index}.entriesGranted` as const, {
-                                          valueAsNumber: true,
-                                        })}
-                                        className={inputClasses}
-                                      />
-                                      {errors?.entriesGranted && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.entriesGranted.message}</p>
+                                    />
+                                    <Controller
+                                      control={purchasesForm.control}
+                                      name={`oneTimePackages.${index}.entriesGranted` as const}
+                                      render={({ field, fieldState }) => (
+                                        <Input
+                                          label="Entries Granted"
+                                          type="number"
+                                          value={field.value || 0}
+                                          onChange={field.onChange}
+                                          min={0}
+                                          error={fieldState.error?.message}
+                                        />
                                       )}
-                                    </div>
+                                    />
                                     <div>
                                       <label className="text-sm font-medium text-gray-700">Purchase Date</label>
                                       <input
@@ -1889,15 +2239,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       control={purchasesForm.control}
                                       name={`oneTimePackages.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                                          <input
-                                            type="checkbox"
+                                        <div className="rounded-lg border-2 border-gray-200 bg-white px-4 py-3">
+                                          <Checkbox
                                             checked={field.value}
-                                            onChange={(event) => field.onChange(event.target.checked)}
-                                            className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                            onChange={(e) => field.onChange(e.target.checked)}
+                                            label="Package active"
                                           />
-                                          <span>Package active</span>
-                                        </label>
+                                        </div>
                                       )}
                                     />
                                   </div>
@@ -2118,17 +2466,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     </form>
                   ) : (
                     <>
-                      <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Packages & Entries</h3>
-                          <p className="text-sm text-gray-500">
+                          <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                            Packages & Entries
+                          </h3>
+                          <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                             Review package purchases below or switch to edit mode to grant additional entries.
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("purchases")}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                         >
                           Edit Packages
                         </button>
@@ -2139,24 +2489,33 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Recent Orders */}
                 {!isEditing("purchases") && user.orders.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Orders</h3>
-                    <div className="space-y-3">
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
+                      Recent Orders
+                    </h3>
+                    <div className="space-y-2 sm:space-y-3">
                       {user.orders.slice(0, 5).map((order: OrderItem, index: number) => (
                         <div
                           key={order._id || `order-${index}`}
-                          className="flex items-center justify-between p-3 bg-white rounded-lg"
+                          className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
                         >
-                          <div>
-                            <p className="font-medium">Order #{order.orderNumber || order._id || "--"}</p>
-                            <p className="text-sm text-gray-600">
-                              {formatDate(order.createdAt || new Date().toISOString())}
-                            </p>
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-xs sm:text-sm text-gray-900">
+                                Order #{order.orderNumber || order._id || "--"}
+                              </p>
+                              <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+                                {formatDate(order.createdAt || new Date().toISOString())}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium">{formatCurrency(order.totalAmount || 0)}</p>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-semibold text-xs sm:text-sm text-gray-900">
+                              {formatCurrency(order.totalAmount || order.total || 0)}
+                            </p>
                             <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
                                 order.status === "completed"
                                   ? "bg-green-100 text-green-800"
                                   : order.status === "pending"
@@ -2175,29 +2534,95 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* One-time Packages */}
                 {!isEditing("purchases") && user.oneTimePackages.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">One-time Packages</h3>
-                    <div className="space-y-3">
-                      {user.oneTimePackages.slice(0, 5).map((pkg: OneTimePackageItem, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg">
-                          <div>
-                            <p className="font-medium">{pkg.packageName || pkg.packageId || "Package"}</p>
-                            <p className="text-sm text-gray-600">
-                              {formatDate(pkg.purchaseDate || new Date().toISOString())}
-                            </p>
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
+                      One-time Packages
+                    </h3>
+                    <div className="space-y-2 sm:space-y-3">
+                      {user.oneTimePackages.slice(0, 5).map((pkg: OneTimePackageItem, index: number) => {
+                        const packageIcon = getPackageIconImage(pkg.packageName);
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                          >
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              {packageIcon ? (
+                                (() => {
+                                  const pkgColorScheme = getPackageColorScheme(pkg.packageName);
+                                  const pkgBorderGradientColor = pkgColorScheme
+                                    ? getGradientColor(pkgColorScheme.gradient)
+                                    : "#6b7280";
+                                  const isPkgPremium =
+                                    pkg.packageName?.toLowerCase().includes("boss") ||
+                                    pkg.packageName?.toLowerCase().includes("power");
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 ${
+                                        isPkgPremium ? "animate-pulse" : ""
+                                      }`}
+                                      style={{
+                                        border: `2px solid transparent`,
+                                        backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${pkgBorderGradientColor}, transparent)`,
+                                        backgroundOrigin: `border-box`,
+                                        backgroundClip: `padding-box, border-box`,
+                                        padding: "2px",
+                                      }}
+                                    >
+                                      <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                                        <Image
+                                          src={packageIcon}
+                                          alt={pkg.packageName || "Package"}
+                                          className="w-5 h-5 sm:w-7 sm:h-7 object-contain"
+                                          width={28}
+                                          height={28}
+                                        />
+                                      </div>
+                                    </span>
+                                  );
+                                })()
+                              ) : (
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100">
+                                  <Image
+                                    src={defaultLogo}
+                                    alt="Tools Australia"
+                                    className="w-full h-full object-cover"
+                                    width={40}
+                                    height={40}
+                                  />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-xs sm:text-sm text-gray-900">
+                                  {pkg.packageName || pkg.packageId || "Package"}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <p className="text-[10px] sm:text-xs text-gray-600">
+                                    {formatDate(pkg.purchaseDate || new Date().toISOString())}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                                {pkg.entriesGranted || 0} entries
+                              </p>
+                              {pkg.price && (
+                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 mt-0.5">
+                                  {formatCurrency(pkg.price)}
+                                </p>
+                              )}
+                              <span
+                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium ${
+                                  pkg.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                                }`}
+                              >
+                                {pkg.isActive ? "Active" : "Expired"}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium">{pkg.entriesGranted || 0} entries</p>
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                pkg.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                              }`}
-                            >
-                              {pkg.isActive ? "Active" : "Expired"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -2205,14 +2630,17 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             )}
 
             {activeTab === "activity" && (
-              <div className="space-y-6">
-                <div className="bg-gray-50 rounded-xl p-6">
+              <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
                   {isEditing("activity") ? (
-                    <form onSubmit={activityForm.handleSubmit(handleActivitySubmit)} className="space-y-6">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
+                    <form
+                      onSubmit={activityForm.handleSubmit(handleActivitySubmit)}
+                      className="space-y-3 sm:space-y-4 lg:space-y-6"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Manage Draw Entries</h3>
-                          <p className="text-sm text-gray-500">
+                          <h3 className="text-sm sm:text-base font-semibold text-gray-900">Manage Draw Entries</h3>
+                          <p className="text-xs text-gray-500 hidden sm:block mt-0.5">
                             Update the user&apos;s participation in major and mini draws. Removing an entry will clear
                             the draw record for this user.
                           </p>
@@ -2221,81 +2649,81 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("activity")}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
                         </div>
                       </div>
 
-                      <section className="space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h4 className="text-base font-semibold text-gray-900">Major Draw Participation</h4>
+                      <section className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-xs sm:text-sm font-semibold text-gray-900">Major Draw Participation</h4>
                           <button
                             type="button"
                             onClick={handleAddMajorDraw}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                           >
-                            Add Major Draw Entry
+                            Add Entry
                           </button>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                           {majorDrawFields.length === 0 ? (
-                            <p className="text-sm text-gray-500">
+                            <p className="text-xs text-gray-500">
                               No major draw entries recorded. Use the button above to add one.
                             </p>
                           ) : (
                             majorDrawFields.map((field, index) => {
-                              const errors = activityForm.formState.errors.majorDrawParticipation?.[index];
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-4 space-y-4"
+                                  className="rounded-lg border border-gray-200 bg-white p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <h5 className="text-sm font-semibold text-gray-900">Major Draw {index + 1}</h5>
+                                    <h5 className="text-xs font-semibold text-gray-900">Major Draw {index + 1}</h5>
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMajorDraw(index)}
-                                      className="text-sm font-medium text-[#ee0000] hover:underline"
+                                      className="text-xs font-medium text-[#ee0000] hover:underline"
                                     >
                                       Remove
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700">Draw ID</label>
-                                      <input
-                                        {...activityForm.register(`majorDrawParticipation.${index}.drawId` as const)}
-                                        className={inputClasses}
-                                        placeholder="Major draw ObjectId"
-                                      />
-                                      {errors?.drawId && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.drawId.message}</p>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Controller
+                                      control={activityForm.control}
+                                      name={`majorDrawParticipation.${index}.drawId` as const}
+                                      render={({ field, fieldState }) => (
+                                        <Input
+                                          label="Draw ID"
+                                          value={field.value || ""}
+                                          onChange={field.onChange}
+                                          placeholder="Major draw ObjectId"
+                                          error={fieldState.error?.message}
+                                        />
                                       )}
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700">Total Entries</label>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        {...activityForm.register(
-                                          `majorDrawParticipation.${index}.totalEntries` as const,
-                                          { valueAsNumber: true }
-                                        )}
-                                        className={inputClasses}
-                                      />
-                                      {errors?.totalEntries && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.totalEntries.message}</p>
+                                    />
+                                    <Controller
+                                      control={activityForm.control}
+                                      name={`majorDrawParticipation.${index}.totalEntries` as const}
+                                      render={({ field, fieldState }) => (
+                                        <Input
+                                          label="Total Entries"
+                                          type="number"
+                                          value={field.value || 0}
+                                          onChange={field.onChange}
+                                          min={0}
+                                          error={fieldState.error?.message}
+                                        />
                                       )}
-                                    </div>
+                                    />
                                   </div>
                                 </div>
                               );
@@ -2304,80 +2732,78 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         </div>
                       </section>
 
-                      <section className="space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h4 className="text-base font-semibold text-gray-900">Mini Draw Participation</h4>
+                      <section className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-xs sm:text-sm font-semibold text-gray-900">Mini Draw Participation</h4>
                           <button
                             type="button"
                             onClick={handleAddMiniDraw}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                           >
-                            Add Mini Draw Entry
+                            Add Entry
                           </button>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                           {miniDrawFields.length === 0 ? (
-                            <p className="text-sm text-gray-500">
+                            <p className="text-xs text-gray-500">
                               No mini draw entries recorded. Use the button above to add one.
                             </p>
                           ) : (
                             miniDrawFields.map((field, index) => {
-                              const errors = activityForm.formState.errors.miniDrawParticipation?.[index];
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-4 space-y-4"
+                                  className="rounded-lg border border-gray-200 bg-white p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <h5 className="text-sm font-semibold text-gray-900">Mini Draw {index + 1}</h5>
+                                    <h5 className="text-xs font-semibold text-gray-900">Mini Draw {index + 1}</h5>
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMiniDraw(index)}
-                                      className="text-sm font-medium text-[#ee0000] hover:underline"
+                                      className="text-xs font-medium text-[#ee0000] hover:underline"
                                     >
                                       Remove
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700">Mini Draw ID</label>
-                                      <input
-                                        {...activityForm.register(`miniDrawParticipation.${index}.miniDrawId` as const)}
-                                        className={inputClasses}
-                                        placeholder="Mini draw ObjectId"
-                                      />
-                                      {errors?.miniDrawId && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.miniDrawId.message}</p>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Controller
+                                      control={activityForm.control}
+                                      name={`miniDrawParticipation.${index}.miniDrawId` as const}
+                                      render={({ field, fieldState }) => (
+                                        <Input
+                                          label="Mini Draw ID"
+                                          value={field.value || ""}
+                                          onChange={field.onChange}
+                                          placeholder="Mini draw ObjectId"
+                                          error={fieldState.error?.message}
+                                        />
                                       )}
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium text-gray-700">Total Entries</label>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        {...activityForm.register(
-                                          `miniDrawParticipation.${index}.totalEntries` as const,
-                                          { valueAsNumber: true }
-                                        )}
-                                        className={inputClasses}
-                                      />
-                                      {errors?.totalEntries && (
-                                        <p className="mt-1 text-xs text-red-600">{errors.totalEntries.message}</p>
+                                    />
+                                    <Controller
+                                      control={activityForm.control}
+                                      name={`miniDrawParticipation.${index}.totalEntries` as const}
+                                      render={({ field, fieldState }) => (
+                                        <Input
+                                          label="Total Entries"
+                                          type="number"
+                                          value={field.value || 0}
+                                          onChange={field.onChange}
+                                          min={0}
+                                          error={fieldState.error?.message}
+                                        />
                                       )}
-                                    </div>
+                                    />
                                     <Controller
                                       control={activityForm.control}
                                       name={`miniDrawParticipation.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-                                          <input
-                                            type="checkbox"
+                                        <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                                          <Checkbox
                                             checked={field.value ?? true}
-                                            onChange={(event) => field.onChange(event.target.checked)}
-                                            className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                            onChange={(e) => field.onChange(e.target.checked)}
+                                            label="Entry active"
                                           />
-                                          <span>Entry active</span>
-                                        </label>
+                                        </div>
                                       )}
                                     />
                                   </div>
@@ -2411,24 +2837,25 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Major Draw Participation */}
                 {!isEditing("activity") && user.majorDrawParticipation.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Major Draw Participation</h3>
-                    <div className="space-y-3">
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Major Draw Participation</h3>
+                    <div className="space-y-2">
                       {user.majorDrawParticipation.map((draw: MajorDrawParticipationItem, index: number) => (
                         <div
                           key={draw.drawId || `draw-${index}`}
-                          className="flex items-center justify-between p-3 bg-white rounded-lg"
+                          className="flex items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
                         >
-                          <div>
-                            <p className="font-medium">{draw.title || draw.drawId || "Major draw"}</p>
-                            <p className="text-sm text-gray-600">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm truncate">{draw.title || draw.drawId || "Major draw"}</p>
+                            <p className="text-xs text-gray-600 mt-0.5">
                               {draw.endDate ? formatDate(draw.endDate) : "End date not set"}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium">{draw.totalEntries || 0} entries</p>
+                          <div className="text-right flex-shrink-0 ml-3">
+                            <p className="font-semibold text-sm sm:text-base">{draw.totalEntries || 0}</p>
+                            <p className="text-xs text-gray-500">entries</p>
                             <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                 draw.status === "completed"
                                   ? "bg-green-100 text-green-800"
                                   : draw.status === "active"
@@ -2447,9 +2874,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Mini Draw Participation */}
                 {!isEditing("activity") && user.miniDrawParticipation?.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Mini Draw Participation</h3>
-                    <div className="space-y-3">
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Mini Draw Participation</h3>
+                    <div className="space-y-2">
                       {user.miniDrawParticipation.map((entry, index: number) => {
                         const miniDrawName = (entry as { miniDrawName?: string }).miniDrawName;
                         const miniDrawStatus = (entry as { miniDrawStatus?: string }).miniDrawStatus;
@@ -2462,20 +2889,21 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         return (
                           <div
                             key={entry.miniDrawId?.toString?.() || `mini-${index}`}
-                            className="flex items-center justify-between p-3 bg-white rounded-lg"
+                            className="flex items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
                           >
-                            <div>
-                              <p className="font-medium">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-sm truncate">
                                 {miniDrawName || entry.miniDrawId?.toString?.() || "Mini draw"}
                               </p>
-                              <p className="text-sm text-gray-600">
+                              <p className="text-xs text-gray-600 mt-0.5">
                                 {drawDateValue ? formatDate(drawDateValue) : "Draw date not set"}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className="font-medium">{entry.totalEntries || 0} entries</p>
+                            <div className="text-right flex-shrink-0 ml-3">
+                              <p className="font-semibold text-sm sm:text-base">{entry.totalEntries || 0}</p>
+                              <p className="text-xs text-gray-500">entries</p>
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                   miniDrawStatus === "completed"
                                     ? "bg-green-100 text-green-800"
                                     : entry.isActive
@@ -2495,29 +2923,82 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Recent Payment Events */}
                 {user.paymentEvents.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                    <div className="space-y-3">
-                      {user.paymentEvents.slice(0, 10).map((event: PaymentEventItem, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg">
-                          <div>
-                            <p className="font-medium">{event.eventType || "Payment event"}</p>
-                            <p className="text-sm text-gray-600">
-                              {formatDate(event.timestamp || new Date().toISOString())}
-                            </p>
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
+                      Recent Activity
+                    </h3>
+                    <div className="space-y-2 sm:space-y-3">
+                      {user.paymentEvents.slice(0, 10).map((event: PaymentEventItem, index: number) => {
+                        const eventDescription = formatActivityEvent(event, formatCurrency);
+                        const eventIcon =
+                          event.packageType === "subscription"
+                            ? CreditCard
+                            : event.packageType === "one-time"
+                            ? Package
+                            : event.packageType === "mini-draw"
+                            ? Trophy
+                            : event.packageType === "upsell"
+                            ? Gift
+                            : Activity;
+                        const Icon = eventIcon;
+
+                        return (
+                          <div
+                            key={index}
+                            className="flex items-start justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border-2 border-slate-200/50 hover:shadow-md hover:border-slate-300 transition-all"
+                          >
+                            <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
+                              <div className="flex-shrink-0 mt-0.5">
+                                <div
+                                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center ${
+                                    event.packageType === "subscription"
+                                      ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600"
+                                      : event.packageType === "one-time"
+                                      ? "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600"
+                                      : event.packageType === "mini-draw"
+                                      ? "bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600"
+                                      : event.packageType === "upsell"
+                                      ? "bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600"
+                                      : "bg-gradient-to-br from-gray-500 via-gray-600 to-gray-700"
+                                  } shadow-md`}
+                                >
+                                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                                </div>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-[10px] sm:text-xs lg:text-sm text-gray-900 break-words">
+                                  {eventDescription}
+                                </p>
+                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 mt-0.5">
+                                  {formatDate(event.timestamp || new Date().toISOString())}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              {(() => {
+                                const eventData = event.data as Record<string, unknown> | undefined;
+                                const price = eventData?.price;
+                                return price != null && typeof price === "number" ? (
+                                  <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                                    {formatCurrency(price)}
+                                  </p>
+                                ) : null;
+                              })()}
+                              {event.packageType && (
+                                <span className="inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium bg-gray-100 text-gray-600 capitalize">
+                                  {event.packageType.replace("-", " ")}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-right">
-                            {event.data?.price && <p className="font-medium">{formatCurrency(event.data.price)}</p>}
-                            <span className="text-xs text-gray-500">{event.packageType || "Not specified"}</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
               </div>
             )}
-          </div>
+          </ModalContent>
         </div>
       </div>
 

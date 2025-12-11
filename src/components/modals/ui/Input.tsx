@@ -49,10 +49,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     ref
   ) => {
     return (
-      <div className={`space-y-2 ${wrapperClassName}`}>
+      <div className={`space-y-1.5 sm:space-y-2 ${wrapperClassName}`}>
         {/* Label */}
         {label && (
-          <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+          <label htmlFor={id} className={`block font-medium text-gray-700 ${wrapperClassName ? "" : "text-xs sm:text-sm"}`}>
             {label} {required && <span className="text-red-500">*</span>}
           </label>
         )}
@@ -65,12 +65,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={onIconClick}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
               </button>
             ) : (
-              <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Icon className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-400" />
             ))}
 
           {/* Input Field */}
@@ -87,9 +87,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             max={max}
             step={step}
             maxLength={maxLength}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
-              Icon && !onIconClick ? "pl-10" : ""
-            } ${Icon && onIconClick ? "pr-10" : ""} ${error ? "border-red-500 bg-red-50" : "border-gray-300"} ${
+            className={`w-full px-3 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3 text-sm border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
+              Icon && !onIconClick ? "pl-9 sm:pl-10" : ""
+            } ${Icon && onIconClick ? "pr-9 sm:pr-10" : ""} ${error ? "border-red-500 bg-red-50" : "border-gray-300"} ${
               disabled ? "bg-gray-100 cursor-not-allowed" : "hover:border-red-400 hover:shadow-sm"
             } ${className}`}
           />
@@ -97,8 +97,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
         {/* Error Message */}
         {error && (
-          <p className="text-red-500 text-sm flex items-center gap-1">
-            <AlertCircle className="w-4 h-4" />
+          <p className="text-red-500 text-xs sm:text-sm flex items-center gap-1">
+            <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             {error}
           </p>
         )}

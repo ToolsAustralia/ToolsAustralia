@@ -27,7 +27,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
   // Ensure checked is always a boolean to prevent controlled/uncontrolled switching
   const isChecked = Boolean(checked);
   return (
-    <div className={`flex items-start gap-3 ${className}`}>
+    <div className={`flex items-start gap-2.5 sm:gap-3 ${className}`}>
       {/* Custom Checkbox */}
       <div className="relative flex items-center">
         <input
@@ -40,7 +40,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
           className="sr-only"
         />
         <div
-          className={`w-5 h-5 border-2 rounded transition-all duration-200 flex items-center justify-center cursor-pointer focus-within:ring-2 focus-within:ring-red-500/20 ${
+          className={`w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5 border-2 rounded transition-all duration-200 flex items-center justify-center cursor-pointer focus-within:ring-2 focus-within:ring-red-500/20 ${
             isChecked ? "bg-red-600 border-red-600" : "border-gray-300 hover:border-red-400"
           } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           onClick={() =>
@@ -48,7 +48,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
             onChange({ target: { name: name || "", checked: !isChecked } } as React.ChangeEvent<HTMLInputElement>)
           }
         >
-          {isChecked && <Check className="w-3 h-3 text-white" />}
+          {isChecked && <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />}
         </div>
       </div>
 
@@ -58,14 +58,14 @@ const Checkbox: React.FC<CheckboxProps> = ({
           {label && (
             <label
               htmlFor={id}
-              className={`text-sm font-medium text-gray-700 cursor-pointer ${
+              className={`font-medium text-gray-700 cursor-pointer ${className ? "" : "text-xs sm:text-sm"} ${
                 disabled ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
               {label}
             </label>
           )}
-          {description && <p className="text-xs text-gray-500 mt-1">{description}</p>}
+          {description && <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{description}</p>}
         </div>
       )}
     </div>

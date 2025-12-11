@@ -143,10 +143,10 @@ const Select: React.FC<SelectProps> = ({
   };
 
   return (
-    <div className={`space-y-2 ${className}`} ref={selectRef}>
+    <div className={`space-y-1.5 sm:space-y-2 ${className}`} ref={selectRef}>
       {/* Label */}
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        <label htmlFor={id} className={`block font-medium text-gray-700 ${className ? "" : "text-xs sm:text-sm"}`}>
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
@@ -176,7 +176,7 @@ const Select: React.FC<SelectProps> = ({
           type="button"
           onClick={toggleDropdown}
           disabled={disabled}
-          className={`w-full px-4 py-3 border rounded-lg text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
+          className={`w-full px-3 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3 text-sm border rounded-lg text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
             error ? "border-red-500 bg-red-50" : "border-gray-300"
           } ${
             disabled
@@ -188,7 +188,7 @@ const Select: React.FC<SelectProps> = ({
             {selectedOption ? selectedOption.label : placeholder}
           </span>
           <ChevronDown
-            className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 transition-transform duration-200 ${
+            className={`absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-400 transition-transform duration-200 ${
               isOpen ? "rotate-180" : ""
             }`}
           />
@@ -254,8 +254,8 @@ const Select: React.FC<SelectProps> = ({
 
       {/* Error Message */}
       {error && (
-        <p className="text-red-500 text-sm flex items-center gap-1">
-          <AlertCircle className="w-4 h-4" />
+        <p className="text-red-500 text-xs sm:text-sm flex items-center gap-1">
+          <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           {error}
         </p>
       )}

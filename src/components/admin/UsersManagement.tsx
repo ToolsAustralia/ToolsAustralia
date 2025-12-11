@@ -388,7 +388,7 @@ export default function UsersManagement() {
               onChange={(e) => updateFilter("subscriptionStatus", e.target.value)}
               className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
             >
-              <option value="">All Subscriptions</option>
+              <option value="">Subscriptions</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="none">No Subscription</option>
@@ -400,7 +400,7 @@ export default function UsersManagement() {
               onChange={(e) => updateFilter("membershipPackage", e.target.value)}
               className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
             >
-              <option value="">All Packages</option>
+              <option value="">Packages</option>
               {membershipPackageOptions.map((pkg) => (
                 <option key={pkg} value={pkg}>
                   {pkg}
@@ -414,7 +414,7 @@ export default function UsersManagement() {
               onChange={(e) => updateFilter("role", e.target.value)}
               className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[90px] sm:min-w-[100px] lg:min-w-[120px]"
             >
-              <option value="">All Roles</option>
+              <option value="">Roles</option>
               <option value="user">User</option>
               <option value="admin">Admin</option>
             </select>
