@@ -9,12 +9,71 @@
 
 import { klaviyo } from "@/lib/klaviyo";
 import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpers";
-import { hasUserMadePurchase } from "@/utils/integrations/klaviyo/klaviyo-helpers";
 import type { IUser } from "@/models/User";
 
 /**
+ * Subscribe user to Klaviyo lists ONCE during registration
+ * ⚠️ CRITICAL: This should ONLY be called during user registration, never during profile syncs
+ * This ensures users who manually unsubscribe via Klaviyo links won't be resubscribed
+ *
+ * Subscribes to:
+ * - Email marketing (always)
+ * - SMS marketing (if phone number exists)
+ * - SMS transactional (if phone number exists) - subscribed immediately, no purchase required
+ *
+ * @param user - User model instance
+ * @param profileId - Klaviyo profile ID (from upsertProfile)
+ */
+export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileId: string): Promise<void> {
+  try {
+    const profile = await userToKlaviyoProfile(user);
+
+    // ✅ Subscribe to email marketing (always)
+    if (user.email) {
+      try {
+        const emailResult = await klaviyo.subscribeToEmailList(profileId, user.email);
+        if (emailResult.success) {
+          console.log(`✅ User subscribed to email on registration: ${user.email}`);
+        } else {
+          console.warn(`⚠️ Failed to subscribe user to email on registration: ${emailResult.error}`);
+        }
+      } catch (emailError) {
+        console.error(`❌ Error subscribing user to email on registration: ${emailError}`);
+      }
+    }
+
+    // ✅ Subscribe to SMS marketing AND transactional (if phone number exists)
+    // Both are subscribed immediately - no need to wait for purchase
+    if (profile.phone_number) {
+      try {
+        // Subscribe to both marketing and transactional immediately
+        const consentTypes: ("sms_marketing" | "sms_transactional")[] = [
+          "sms_marketing",
+          "sms_transactional", // ✅ Always include transactional from registration
+        ];
+
+        const smsResult = await klaviyo.subscribeToSMSList(profileId, profile.phone_number, consentTypes);
+        if (smsResult.success) {
+          console.log(`✅ User subscribed to SMS (marketing + transactional) on registration: ${user.email}`);
+        } else {
+          console.warn(`⚠️ Failed to subscribe user to SMS on registration: ${smsResult.error}`);
+        }
+      } catch (smsError) {
+        console.error(`❌ Error subscribing user to SMS on registration: ${smsError}`);
+      }
+    }
+  } catch (error) {
+    console.error(`❌ Error in initial Klaviyo subscription for ${user.email}:`, error);
+  }
+}
+
+/**
  * Sync a single user's profile to Klaviyo
- * Non-blocking operation with error handling
+ * ⚠️ IMPORTANT: This function ONLY updates profile data, NOT subscription status
+ * Subscriptions are handled separately during registration to respect user unsubscribe preferences
+ *
+ * This ensures that if a user manually unsubscribes via Klaviyo's unsubscribe link,
+ * their profile data can still be updated without resubscribing them.
  *
  * @param user - User model instance
  * @param brandInterestFromSignup - Optional brand interest from signup (e.g., "milwaukee", "dewalt", "makita")
@@ -22,76 +81,15 @@ import type { IUser } from "@/models/User";
  */
 export async function syncUserProfileToKlaviyo(user: IUser, brandInterestFromSignup?: string | null): Promise<void> {
   try {
-    // console.log(`📊 Syncing Klaviyo profile for user: ${user.email}`);
-
-    // ✅ VALIDATION: Log user data structure before processing
-    // console.log(`📊 User data validation before sync:`, {
-    //   userId: user._id?.toString(),
-    //   email: user.email,
-    //   hasUpsellPurchases: !!user.upsellPurchases,
-    //   upsellPurchasesLength: user.upsellPurchases?.length || 0,
-    //   hasSubscription: !!user.subscription,
-    //   subscriptionIsActive: user.subscription?.isActive,
-    //   accumulatedEntries: user.accumulatedEntries,
-    //   rewardsPoints: user.rewardsPoints,
-    // });
-
     // ✅ CRITICAL FIX: await the async userToKlaviyoProfile function
     const profile = await userToKlaviyoProfile(user, brandInterestFromSignup);
     const result = await klaviyo.upsertProfile(profile);
 
     if (result.success && result.profile_id) {
-      // console.log(`✅ Klaviyo profile synced successfully for: ${user.email}`);
-
-      // ✅ Subscribe user to email list using profile ID
-      // Email consent must be set via list subscription, not profile attributes
-      // Based on privacy policy - users consent to marketing by registering
-      // Note: Newer Klaviyo API requires profile ID, not email
-      try {
-        const emailResult = await klaviyo.subscribeToEmailList(result.profile_id, user.email);
-
-        if (emailResult.success) {
-          console.log(`✅ User subscribed to email list: ${user.email}`);
-        } else {
-          // Non-critical error - log but don't fail the entire sync
-          console.warn(`⚠️ Failed to subscribe user to email list: ${emailResult.error}`);
-        }
-      } catch (emailError) {
-        // Non-critical error - log but don't fail the entire sync
-        console.error(`❌ Error subscribing user to email list for ${user.email}:`, emailError);
-      }
-
-      // ✅ Subscribe user to SMS marketing list using profile ID
-      // SMS marketing consent must be set via list subscription, not profile attributes
-      // Based on privacy policy - users consent to marketing by registering
-      // Note: Newer Klaviyo API requires profile ID, not phone number
-      if (profile.phone_number) {
-        try {
-          // Determine which SMS consent types to set
-          const userHasMadePurchase = hasUserMadePurchase(user);
-          const consentTypes: ("sms_marketing" | "sms_transactional")[] = ["sms_marketing"]; // Always include marketing
-
-          // ✅ Add transactional consent ONLY if user has made a purchase
-          // Transactional SMS is for order confirmations, shipping updates, etc.
-          // Only users who have purchased should receive transactional messages
-          if (userHasMadePurchase) {
-            consentTypes.push("sms_transactional");
-          }
-
-          // Subscribe with all applicable consent types in a single call
-          const smsResult = await klaviyo.subscribeToSMSList(result.profile_id, profile.phone_number, consentTypes);
-
-          if (smsResult.success) {
-            // console.log(`✅ User subscribed to SMS list with consent: ${user.email}`, { consentTypes });
-          } else {
-            // Non-critical error - log but don't fail the entire sync
-            // console.warn(`⚠️ Failed to subscribe user to SMS list: ${smsResult.error}`);
-          }
-        } catch (smsError) {
-          // Non-critical error - log but don't fail the entire sync
-          console.error(`❌ Error subscribing user to SMS list for ${user.email}:`, smsError);
-        }
-      }
+      // ✅ Profile data synced successfully
+      // ⚠️ NOTE: We do NOT subscribe here to respect user's unsubscribe preferences
+      // Subscriptions are only set during initial registration via subscribeUserToKlaviyoOnRegistration
+      // console.log(`✅ Klaviyo profile synced (data only, no subscription changes): ${user.email}`);
     } else {
       // console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
     }
