@@ -94,6 +94,9 @@ export interface KlaviyoProfile {
   first_name?: string;
   last_name?: string;
   phone_number?: string;
+  // Note: email_consent and sms_consent are NOT valid fields in profile attributes
+  // Both email and SMS consent must be handled via list subscriptions
+  // Use subscribeToSMSList for SMS and subscribe to email lists for email consent
   properties?: Partial<KlaviyoProfileProperties>;
 }
 

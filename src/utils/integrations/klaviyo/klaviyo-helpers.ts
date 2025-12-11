@@ -76,8 +76,11 @@ export function calculateEntryBreakdown(user: IUser): {
 /**
  * Determine if user has made any purchase
  * Checks for subscriptions, one-time packages, mini-draw packages, or upsells
+ *
+ * @param user - User model instance
+ * @returns true if user has made any purchase (subscription, one-time, mini-draw, or upsell)
  */
-function hasUserMadePurchase(user: IUser): boolean {
+export function hasUserMadePurchase(user: IUser): boolean {
   const hasSubscription = user.subscription?.isActive || false;
   const hasOneTimePackages = (user.oneTimePackages?.length || 0) > 0;
   const hasMiniDrawPackages = (user.miniDrawPackages?.length || 0) > 0;
@@ -167,6 +170,10 @@ export async function userToKlaviyoProfile(
     first_name: user.firstName,
     last_name: user.lastName,
     phone_number: phone,
+    // Note: email_consent and sms_consent are NOT valid fields in profile attributes
+    // Email consent should be handled by subscribing users to email lists
+    // SMS consent is handled separately via subscribeToSMSList method
+    // Both will be handled via list subscriptions to ensure proper consent tracking
     properties: {
       // Basic user info
       user_id: user._id.toString(),

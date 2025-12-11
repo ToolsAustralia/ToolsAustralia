@@ -9,6 +9,7 @@
 
 import { klaviyo } from "@/lib/klaviyo";
 import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpers";
+import { hasUserMadePurchase } from "@/utils/integrations/klaviyo/klaviyo-helpers";
 import type { IUser } from "@/models/User";
 
 /**
@@ -39,8 +40,58 @@ export async function syncUserProfileToKlaviyo(user: IUser, brandInterestFromSig
     const profile = await userToKlaviyoProfile(user, brandInterestFromSignup);
     const result = await klaviyo.upsertProfile(profile);
 
-    if (result.success) {
+    if (result.success && result.profile_id) {
       // console.log(`✅ Klaviyo profile synced successfully for: ${user.email}`);
+
+      // ✅ Subscribe user to email list using profile ID
+      // Email consent must be set via list subscription, not profile attributes
+      // Based on privacy policy - users consent to marketing by registering
+      // Note: Newer Klaviyo API requires profile ID, not email
+      try {
+        const emailResult = await klaviyo.subscribeToEmailList(result.profile_id, user.email);
+
+        if (emailResult.success) {
+          console.log(`✅ User subscribed to email list: ${user.email}`);
+        } else {
+          // Non-critical error - log but don't fail the entire sync
+          console.warn(`⚠️ Failed to subscribe user to email list: ${emailResult.error}`);
+        }
+      } catch (emailError) {
+        // Non-critical error - log but don't fail the entire sync
+        console.error(`❌ Error subscribing user to email list for ${user.email}:`, emailError);
+      }
+
+      // ✅ Subscribe user to SMS marketing list using profile ID
+      // SMS marketing consent must be set via list subscription, not profile attributes
+      // Based on privacy policy - users consent to marketing by registering
+      // Note: Newer Klaviyo API requires profile ID, not phone number
+      if (profile.phone_number) {
+        try {
+          // Determine which SMS consent types to set
+          const userHasMadePurchase = hasUserMadePurchase(user);
+          const consentTypes: ("sms_marketing" | "sms_transactional")[] = ["sms_marketing"]; // Always include marketing
+
+          // ✅ Add transactional consent ONLY if user has made a purchase
+          // Transactional SMS is for order confirmations, shipping updates, etc.
+          // Only users who have purchased should receive transactional messages
+          if (userHasMadePurchase) {
+            consentTypes.push("sms_transactional");
+          }
+
+          // Subscribe with all applicable consent types in a single call
+          const smsResult = await klaviyo.subscribeToSMSList(result.profile_id, profile.phone_number, consentTypes);
+
+          if (smsResult.success) {
+            // console.log(`✅ User subscribed to SMS list with consent: ${user.email}`, { consentTypes });
+          } else {
+            // Non-critical error - log but don't fail the entire sync
+            // console.warn(`⚠️ Failed to subscribe user to SMS list: ${smsResult.error}`);
+          }
+        } catch (smsError) {
+          // Non-critical error - log but don't fail the entire sync
+          console.error(`❌ Error subscribing user to SMS list for ${user.email}:`, smsError);
+        }
+      }
     } else {
       // console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
     }
