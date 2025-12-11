@@ -273,16 +273,17 @@ export async function GET(request: NextRequest) {
           profileSetupCompleted: user.profileSetupCompleted,
           createdAt: user.createdAt,
           lastLogin: user.lastLogin,
-          subscription: user.subscription
-            ? {
-                packageId: user.subscription.packageId.toString(),
-                packageName: packageName, // Mapped from packageId
-                isActive: user.subscription.isActive,
-                startDate: user.subscription.startDate,
-                endDate: user.subscription.endDate,
-                status: user.subscription.status,
-              }
-            : null,
+          subscription:
+            user.subscription && user.subscription.packageId
+              ? {
+                  packageId: user.subscription.packageId.toString(),
+                  packageName: packageName, // Mapped from packageId
+                  isActive: user.subscription.isActive,
+                  startDate: user.subscription.startDate,
+                  endDate: user.subscription.endDate,
+                  status: user.subscription.status,
+                }
+              : null,
           totalSpent,
           majorDrawEntries,
           miniDrawCount,
