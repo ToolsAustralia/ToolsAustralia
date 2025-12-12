@@ -17,4 +17,3 @@ export default function PromoLinkTracker() {
   // This component doesn't render anything
   return null;
 }
-
