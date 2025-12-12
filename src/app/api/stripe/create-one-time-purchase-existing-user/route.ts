@@ -20,6 +20,7 @@ const createOneTimePurchaseExistingUserSchema = z.object({
   paymentMethodId: z.string().min(1, "Payment method ID is required").optional(),
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
+  promoLinkCode: z.string().optional(),
 });
 
 /**
@@ -277,6 +278,8 @@ export async function POST(request: NextRequest) {
           : existingUser.affiliateReferral?.affiliateCode
           ? { affiliateCode: existingUser.affiliateReferral.affiliateCode }
           : {}),
+        ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+        ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
       },
     });
 

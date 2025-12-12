@@ -16,6 +16,7 @@ const createSubscriptionExistingUserSchema = z.object({
   paymentIntentId: z.string().optional(), // ✅ NEW: Optional upfront PaymentIntent ID for wallet display
   idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode: z.string().optional(),
+  promoLinkCode: z.string().optional(),
 });
 
 /**
@@ -307,6 +308,8 @@ export async function POST(request: NextRequest) {
             type: "subscription",
             packageType: "subscription",
             isUpfrontPayment: "true",
+            ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+            ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
           },
         });
 

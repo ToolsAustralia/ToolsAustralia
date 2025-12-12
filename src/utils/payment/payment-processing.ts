@@ -36,6 +36,7 @@ type PaymentMetadata = {
   packageType?: string;
   miniDrawId?: string;
   affiliateCode?: string;
+  promoLinkCode?: string;
 };
 interface UserDocument {
   _id: { toString: () => string };
@@ -530,7 +531,13 @@ async function processPaymentBenefitsInternal(
  */
 async function checkAndApplyBonusEntryPromo(
   packageType: "one-time" | "subscription" | "upsell" | "mini-draw",
-  paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string },
+  paymentMetadata?: {
+    created?: number;
+    type?: string;
+    packageType?: string;
+    miniDrawId?: string;
+    promoLinkCode?: string;
+  },
   user?: UserDocument
 ): Promise<number> {
   try {
@@ -607,6 +614,140 @@ async function checkAndApplyBonusEntryPromo(
   }
 }
 
+/**
+ * Check for promo link code and return bonus entries to grant
+ *
+ * This function checks if there's a valid promo link code in the payment metadata
+ * and verifies that it applies to the purchase type. Promo links are one-time use per user.
+ *
+ * @param user - User document making the purchase
+ * @param packageType - Type of package purchased (subscription, one-time, mini-draw, upsell)
+ * @param paymentMetadata - Payment metadata containing promoLinkCode
+ * @returns Number of bonus entries to grant (0 if no valid promo link or type mismatch)
+ */
+async function checkAndApplyPromoLink(
+  user: UserDocument,
+  packageType: "one-time" | "subscription" | "upsell" | "mini-draw",
+  paymentMetadata?: PaymentMetadata
+): Promise<number> {
+  try {
+    // Get promo link code from payment metadata
+    if (!paymentMetadata?.promoLinkCode) {
+      // No promo link code - this is normal, no logging needed
+      return 0;
+    }
+
+    const code = paymentMetadata.promoLinkCode.trim().toUpperCase();
+
+    // Import PromoLink model dynamically to avoid circular dependencies
+    const PromoLink = (await import("@/models/PromoLink")).default;
+
+    // Find active promo link by code
+    const promoLink = await PromoLink.findActiveByCode(code);
+
+    if (!promoLink) {
+      console.log(`ℹ️ [PROMO LINK] Code not found or inactive: ${code}`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType,
+      });
+      return 0;
+    }
+
+    // Check if expired
+    if (promoLink.isExpired()) {
+      console.log(`ℹ️ [PROMO LINK] Code expired: ${code}`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType,
+        expiresAt: promoLink.expiresAt,
+      });
+      return 0;
+    }
+
+    // Check if promo link applies to this package type
+    const isMembershipPurchase = packageType === "subscription";
+    const isOneTimePurchase = packageType === "one-time";
+
+    // Promo links don't apply to mini-draw or upsell packages
+    if (packageType === "mini-draw" || packageType === "upsell") {
+      console.log(`ℹ️ [PROMO LINK] Code does not apply to ${packageType} packages: ${code}`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType,
+        promoLinkCode: code,
+        appliesToMembership: promoLink.appliesToMembership,
+        appliesToOneTime: promoLink.appliesToOneTime,
+      });
+      return 0;
+    }
+
+    // Check package type match
+    if (isMembershipPurchase && !promoLink.appliesToMembership) {
+      console.log(`ℹ️ [PROMO LINK] Code does not apply to membership packages: ${code}`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType,
+        promoLinkCode: code,
+        appliesToMembership: promoLink.appliesToMembership,
+        appliesToOneTime: promoLink.appliesToOneTime,
+      });
+      return 0;
+    }
+
+    if (isOneTimePurchase && !promoLink.appliesToOneTime) {
+      console.log(`ℹ️ [PROMO LINK] Code does not apply to one-time packages: ${code}`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType,
+        promoLinkCode: code,
+        appliesToMembership: promoLink.appliesToMembership,
+        appliesToOneTime: promoLink.appliesToOneTime,
+      });
+      return 0;
+    }
+
+    // Check if user has already used this code (one-time use enforcement)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const userId = (user._id as any).toString();
+    if (promoLink.isUsedByUser(userId)) {
+      console.log(`ℹ️ [PROMO LINK] User already used this code: ${code}`, {
+        userId: userId,
+        userEmail: user.email,
+        packageType,
+        promoLinkCode: code,
+      });
+      return 0;
+    }
+
+    // Log successful promo link match with detailed information
+    console.log(`🎁 [PROMO LINK] Valid promo link matched and applies to purchase:`, {
+      promoLinkId: promoLink._id?.toString(),
+      code: promoLink.code,
+      bonusEntries: promoLink.bonusEntries,
+      packageType,
+      appliesToMembership: promoLink.appliesToMembership,
+      appliesToOneTime: promoLink.appliesToOneTime,
+      userId: user._id?.toString(),
+      userEmail: user.email,
+    });
+
+    // Return the bonus entries amount - will be granted in grantBenefits
+    return promoLink.bonusEntries;
+  } catch (error) {
+    // Log error but don't throw - promo links are non-critical
+    console.error("❌ [PROMO LINK] Error checking promo link:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      userId: user._id?.toString(),
+      userEmail: user.email,
+      packageType,
+      paymentMetadata,
+    });
+    return 0;
+  }
+}
+
 async function grantBenefits(
   user: UserDocument,
   packageData: {
@@ -617,7 +758,7 @@ async function grantBenefits(
     points: number;
     price: number;
   },
-  paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string },
+  paymentMetadata?: PaymentMetadata,
   paymentIntentId?: string,
   requestContext?: {
     // Optional request context for improved Facebook CAPI match quality (backward compatible)
@@ -690,13 +831,19 @@ async function grantBenefits(
 
   // ✅ BONUS ENTRY PROMO: Check for active bonus entry promos and grant bonus entries
   // This happens after regular entries are granted
+  // Bonus entry promos are date-based and can apply simultaneously with promo links
   try {
     const bonusEntries = await checkAndApplyBonusEntryPromo(packageData.packageType, paymentMetadata, user);
 
     if (bonusEntries > 0) {
-      console.log(
-        `🎁 Processing ${bonusEntries} bonus entries for user ${user.email} (${packageData.packageType} purchase)`
-      );
+      console.log(`🎁 [BONUS ENTRY PROMO] Processing bonus entries from date-based promo:`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        bonusEntries,
+        paymentTimestamp: paymentMetadata?.created ? new Date(paymentMetadata.created).toISOString() : "unknown",
+      });
 
       // Add bonus entries to user's accumulated entries
       const updateResult = await User.findByIdAndUpdate(
@@ -738,11 +885,12 @@ async function grantBenefits(
         await addToMajorDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
       }
 
-      console.log(`✅ Successfully granted ${bonusEntries} bonus entries:`, {
+      console.log(`✅ [BONUS ENTRY PROMO] Successfully granted bonus entries:`, {
         userId: user._id?.toString(),
         userEmail: user.email,
         packageType: packageData.packageType,
         packageId: packageData.packageId,
+        bonusEntriesGranted: bonusEntries,
         targetDraw: targetDraw,
         previousAccumulatedEntries: previousAccumulated,
         newAccumulatedEntries: user.accumulatedEntries,
@@ -750,7 +898,7 @@ async function grantBenefits(
       });
     } else {
       // Log when no bonus entries (helpful for debugging why promos aren't applying)
-      console.log(`ℹ️ No bonus entry promo active for ${packageData.packageType} purchase:`, {
+      console.log(`ℹ️ [BONUS ENTRY PROMO] No active promo for ${packageData.packageType} purchase:`, {
         userId: user._id?.toString(),
         userEmail: user.email,
         packageType: packageData.packageType,
@@ -759,7 +907,7 @@ async function grantBenefits(
     }
   } catch (bonusError) {
     // Non-blocking - log but don't fail payment processing
-    console.error("❌ Bonus entry promo processing error (non-blocking):", {
+    console.error("❌ [BONUS ENTRY PROMO] Processing error (non-blocking):", {
       error: bonusError instanceof Error ? bonusError.message : String(bonusError),
       stack: bonusError instanceof Error ? bonusError.stack : undefined,
       userId: user._id?.toString(),
@@ -768,6 +916,130 @@ async function grantBenefits(
       paymentMetadata,
     });
   }
+
+  // ✅ PROMO LINK: Check for promo link codes and grant bonus entries
+  // This happens after regular bonus entry promos
+  // Promo links are checked separately and can apply simultaneously with bonus entry promos
+  try {
+    const promoLinkEntries = await checkAndApplyPromoLink(user, packageData.packageType, paymentMetadata);
+
+    if (promoLinkEntries > 0) {
+      console.log(`🎁 [PROMO LINK] Processing ${promoLinkEntries} bonus entries from promo link:`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        promoLinkCode: paymentMetadata?.promoLinkCode,
+        bonusEntries: promoLinkEntries,
+      });
+
+      // Get the promo link to mark as used
+      const PromoLink = (await import("@/models/PromoLink")).default;
+      const promoLinkCode = paymentMetadata?.promoLinkCode?.trim().toUpperCase();
+      const promoLink = promoLinkCode ? await PromoLink.findActiveByCode(promoLinkCode) : null;
+
+      if (!promoLink) {
+        console.error(`❌ [PROMO LINK] Promo link not found when trying to mark as used:`, {
+          promoLinkCode,
+          userId: user._id?.toString(),
+          userEmail: user.email,
+          packageType: packageData.packageType,
+        });
+      } else {
+        // Mark as used by this user and increment usage count atomically
+        await PromoLink.findByIdAndUpdate(promoLink._id, {
+          $addToSet: { usedBy: user._id }, // Add user ID to usedBy array (idempotent)
+          $inc: { usageCount: 1 }, // Increment usage count
+        });
+        console.log(`✅ [PROMO LINK] Marked promo link as used:`, {
+          promoLinkId: promoLink._id?.toString(),
+          promoLinkCode,
+          userId: user._id?.toString(),
+          userEmail: user.email,
+          newUsageCount: promoLink.usageCount + 1,
+        });
+      }
+
+      // Add promo link entries to user's accumulated entries
+      const updateResult = await User.findByIdAndUpdate(
+        user._id,
+        {
+          $inc: {
+            accumulatedEntries: promoLinkEntries,
+          },
+        },
+        { new: false }
+      );
+
+      if (!updateResult) {
+        console.error(`❌ [PROMO LINK] Failed to update accumulatedEntries for user ${user._id?.toString()}`);
+      }
+
+      // Update local user object
+      const previousAccumulated = user.accumulatedEntries || 0;
+      user.accumulatedEntries = previousAccumulated + promoLinkEntries;
+
+      // Route promo link entries to appropriate draw (same as regular entries)
+      const promoLinkPackageData = {
+        entries: promoLinkEntries,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        packageName: `Promo Link Bonus (${promoLinkEntries} entries)`,
+      };
+
+      // Determine target draw for logging
+      let targetDraw: "mini-draw" | "major-draw";
+      if (packageData.packageType === "mini-draw") {
+        targetDraw = "mini-draw";
+        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+      } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
+        targetDraw = "mini-draw";
+        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+      } else {
+        targetDraw = "major-draw";
+        await addToMajorDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+      }
+
+      console.log(`✅ [PROMO LINK] Successfully granted bonus entries from promo link:`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        promoLinkCode: promoLinkCode,
+        bonusEntriesGranted: promoLinkEntries,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        targetDraw: targetDraw,
+        previousAccumulatedEntries: previousAccumulated,
+        newAccumulatedEntries: user.accumulatedEntries,
+        paymentTimestamp: paymentMetadata?.created ? new Date(paymentMetadata.created).toISOString() : "unknown",
+      });
+    }
+  } catch (promoLinkError) {
+    // Non-blocking - log but don't fail payment processing
+    console.error("❌ [PROMO LINK] Promo link processing error (non-blocking):", {
+      error: promoLinkError instanceof Error ? promoLinkError.message : String(promoLinkError),
+      stack: promoLinkError instanceof Error ? promoLinkError.stack : undefined,
+      userId: user._id?.toString(),
+      userEmail: user.email,
+      packageType: packageData.packageType,
+      paymentMetadata,
+    });
+  }
+
+  // Summary log: Total bonus entries from all sources
+  const totalRegularEntries = packageData.entries;
+  const totalBonusEntries = (user.accumulatedEntries || 0) - (packageData.entries || 0);
+  console.log(`📊 [BENEFITS SUMMARY] Total entries granted:`, {
+    userId: user._id?.toString(),
+    userEmail: user.email,
+    packageType: packageData.packageType,
+    packageId: packageData.packageId,
+    regularEntries: totalRegularEntries,
+    totalBonusEntries: totalBonusEntries,
+    totalAccumulatedEntries: user.accumulatedEntries || 0,
+    hasPromoLink: !!paymentMetadata?.promoLinkCode,
+    promoLinkCode: paymentMetadata?.promoLinkCode || null,
+    paymentTimestamp: paymentMetadata?.created ? new Date(paymentMetadata.created).toISOString() : "unknown",
+  });
 
   // ✅ NEW: Track pixel events for all purchase types
   try {
@@ -1249,7 +1521,7 @@ async function handleMiniDrawPackage(
 async function addToMajorDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
-  paymentMetadata?: { created?: number; type?: string; packageType?: string },
+  paymentMetadata?: PaymentMetadata,
   sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
 ): Promise<void> {
   try {
@@ -1457,7 +1729,7 @@ async function addToMajorDraw(
 async function addToMiniDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
-  paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string },
+  paymentMetadata?: PaymentMetadata,
   sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
 ): Promise<void> {
   try {

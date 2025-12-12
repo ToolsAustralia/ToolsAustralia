@@ -475,6 +475,7 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
       packageType: "upsell",
       ...(miniDrawId && { miniDrawId: miniDrawId }), // Include miniDrawId if present
       affiliateCode: paymentIntent.metadata.affiliateCode,
+      promoLinkCode: paymentIntent.metadata.promoLinkCode,
     },
     requestContext // Pass request context for improved match quality
   );
@@ -548,6 +549,7 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       type: "one-time",
       packageType: "one-time",
       affiliateCode: paymentIntent.metadata.affiliateCode,
+      promoLinkCode: paymentIntent.metadata.promoLinkCode,
     },
     requestContext // Pass request context for improved match quality
   );
@@ -616,6 +618,7 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
       packageType: "mini-draw",
       miniDrawId: miniDrawId, // Pass MiniDraw ID to payment processing
       affiliateCode: paymentIntent.metadata.affiliateCode,
+      promoLinkCode: paymentIntent.metadata.promoLinkCode,
     },
     requestContext // Pass request context for improved match quality
   );
@@ -1964,6 +1967,24 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Note: For subscription renewals, original request context may not be available
     const requestContext = invoice.metadata ? extractRequestContextFromMetadata(invoice.metadata) : undefined;
 
+    // Retrieve payment intent to get promoLinkCode and affiliateCode from metadata
+    let promoLinkCode: string | undefined;
+    let affiliateCode: string | undefined;
+    try {
+      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
+      if (invoiceWithPaymentIntent.payment_intent) {
+        const paymentIntentId =
+          typeof invoiceWithPaymentIntent.payment_intent === "string"
+            ? invoiceWithPaymentIntent.payment_intent
+            : invoiceWithPaymentIntent.payment_intent.id;
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        promoLinkCode = paymentIntent.metadata.promoLinkCode;
+        affiliateCode = paymentIntent.metadata.affiliateCode;
+      }
+    } catch (error) {
+      webhookLog("warn", `Failed to retrieve payment intent for promo link code: ${error}`);
+    }
+
     const result = await processPaymentBenefits(
       invoicePaymentId,
       user._id.toString(),
@@ -1980,6 +2001,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         created: Math.floor(paymentTimestamp * 1000), // Use paid_at timestamp, not invoice creation time
         type: "subscription",
         packageType: "subscription",
+        promoLinkCode,
+        affiliateCode,
       },
       requestContext // Pass request context if available (may be undefined for renewals)
     );

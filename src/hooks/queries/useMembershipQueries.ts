@@ -76,6 +76,7 @@ export interface MembershipPurchaseData {
   paymentMethodId?: string;
   referralCode?: string;
   affiliateCode?: string;
+  promoLinkCode?: string;
   userId: string; // Add userId parameter
 }
 

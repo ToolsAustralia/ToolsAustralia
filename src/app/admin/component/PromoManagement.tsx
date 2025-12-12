@@ -5,12 +5,15 @@ import { useAdminActivePromos } from "@/hooks/queries/usePromoQueries";
 import AdminPromoToggle from "@/components/modals/AdminPromoToggle";
 import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
 import BonusEntryPromoList from "@/components/admin/BonusEntryPromoList";
+import AdminPromoLinkModal from "@/components/modals/AdminPromoLinkModal";
+import PromoLinkList from "@/components/admin/PromoLinkList";
 import PromoBadge from "@/components/ui/PromoBadge";
-import { Zap, Loader2, RefreshCw, Settings, Gift, Plus } from "lucide-react";
+import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2 } from "lucide-react";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
   const [isBonusEntryModalOpen, setIsBonusEntryModalOpen] = useState(false);
+  const [isPromoLinkModalOpen, setIsPromoLinkModalOpen] = useState(false);
 
   const { data: activePromos = [], isLoading: activeLoading, refetch: refetchActive } = useAdminActivePromos();
 
@@ -114,6 +117,31 @@ export default function PromoManagement() {
         <BonusEntryPromoList />
       </div>
 
+      {/* Promo Links Section */}
+      <div className="mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-red-600" />
+              Promo Links
+            </h3>
+            <p className="text-gray-600 mt-1 text-sm">
+              Create shareable promo links with unique codes that grant bonus entries. Users click the link and the code
+              is saved for their next purchase.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsPromoLinkModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            <Plus className="w-4 h-4" />
+            Create Promo Link
+          </button>
+        </div>
+
+        <PromoLinkList />
+      </div>
+
       {/* Toggle Promo Modal */}
       <AdminPromoToggle isOpen={isToggleModalOpen} onClose={() => setIsToggleModalOpen(false)} />
 
@@ -123,6 +151,15 @@ export default function PromoManagement() {
         onClose={() => setIsBonusEntryModalOpen(false)}
         onSuccess={() => {
           setIsBonusEntryModalOpen(false);
+        }}
+      />
+
+      {/* Promo Link Modal */}
+      <AdminPromoLinkModal
+        isOpen={isPromoLinkModalOpen}
+        onClose={() => setIsPromoLinkModalOpen(false)}
+        onSuccess={() => {
+          setIsPromoLinkModalOpen(false);
         }}
       />
     </div>

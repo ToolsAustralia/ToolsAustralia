@@ -21,6 +21,7 @@ export interface SubscriptionData {
   idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;
+  promoLinkCode?: string;
 }
 
 export interface OneTimePurchaseData {
@@ -34,6 +35,7 @@ export interface OneTimePurchaseData {
   paymentIntentId?: string; // Optional PaymentIntent ID if already confirmed upfront
   referralCode?: string;
   affiliateCode?: string;
+  promoLinkCode?: string;
 }
 
 export interface ExistingUserSubscriptionData {
@@ -43,6 +45,7 @@ export interface ExistingUserSubscriptionData {
   idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;
+  promoLinkCode?: string;
 }
 
 export interface ExistingUserOneTimePurchaseData {
@@ -50,6 +53,7 @@ export interface ExistingUserOneTimePurchaseData {
   paymentMethodId?: string;
   referralCode?: string;
   affiliateCode?: string;
+  promoLinkCode?: string;
 }
 
 export interface SubscriptionResult {

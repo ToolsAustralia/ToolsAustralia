@@ -522,3 +522,59 @@ export interface BonusEntryPromoConflict {
   };
   message: string;
 }
+
+// ========================================
+// PROMO LINK TYPES
+// ========================================
+
+export interface PromoLink {
+  id: string;
+  code: string;
+  bonusEntries: number;
+  expiresAt?: Date | null;
+  expiresAtFormatted?: string | null;
+  isActive: boolean;
+  appliesToMembership: boolean; // Whether this promo applies to membership/subscription packages
+  appliesToOneTime: boolean; // Whether this promo applies to one-time packages
+  isExpired?: boolean;
+  description?: string;
+  usageCount: number;
+  usedByCount: number;
+  promoUrl: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: {
+    id: string;
+    email: string;
+    name: string;
+  } | null;
+}
+
+export interface CreatePromoLinkPayload {
+  bonusEntries?: number;
+  expiresAt?: string | null;
+  description?: string;
+  isActive?: boolean;
+  appliesToMembership?: boolean;
+  appliesToOneTime?: boolean;
+}
+
+export interface UpdatePromoLinkPayload {
+  bonusEntries?: number;
+  expiresAt?: string | null;
+  description?: string;
+  isActive?: boolean;
+  appliesToMembership?: boolean;
+  appliesToOneTime?: boolean;
+}
+
+export interface PromoLinkListResponse {
+  success: boolean;
+  data: PromoLink[];
+  count: number;
+}
+
+export interface PromoLinkResponse {
+  success: boolean;
+  data: PromoLink | null;
+}

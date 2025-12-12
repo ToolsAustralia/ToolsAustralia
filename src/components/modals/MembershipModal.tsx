@@ -36,6 +36,7 @@ import { usePaymentIntent } from "@/hooks/usePaymentIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
+import { usePromoLink } from "@/hooks/usePromoLink";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
@@ -99,6 +100,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     clearReferralCode,
   } = useReferralCode();
   const { affiliateCode } = useAffiliateLink();
+  const { promoCode: promoLinkCode } = usePromoLink();
   const [isValidatingReferral, setIsValidatingReferral] = useState(false);
   const [referralInfo, setReferralInfo] = useState<{ referrerName: string } | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
@@ -2081,6 +2083,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageId: packageId,
           userId: userData?._id || "",
           paymentMethodId,
+          referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+          affiliateCode: affiliateCode || undefined,
+          promoLinkCode: promoLinkCode || undefined,
         });
 
         if (miniDrawResult) {
@@ -2218,6 +2223,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               idempotencyKey, // ✅ Pass idempotency key to prevent duplicate creation
               referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
               affiliateCode: affiliateCode || undefined,
+              promoLinkCode: promoLinkCode || undefined,
             });
 
             // ✅ Track subscription creation to prevent duplicates
@@ -2234,6 +2240,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             paymentMethodId,
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
+            promoLinkCode: promoLinkCode || undefined,
           });
         }
 

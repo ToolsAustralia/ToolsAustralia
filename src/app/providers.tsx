@@ -15,6 +15,7 @@ import { useState } from "react";
 import FloatingPromoBanner from "@/components/banners/FloatingPromoBanner";
 import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
+import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
 
 // Export loading components for global use
 export {
@@ -81,6 +82,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     <ToastProvider>
                       <AffiliateTracker />
                       <ReferralTracker />
+                      <PromoLinkTracker />
                       <UpgradeSuccessToast />
                       {children}
                       <FloatingPromoBanner />

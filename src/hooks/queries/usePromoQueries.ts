@@ -1,20 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   BonusEntryPromo,
-  BonusEntryPromoType,
   CreateBonusEntryPromoPayload,
   UpdateBonusEntryPromoPayload,
-  BonusEntryPromoListResponse,
-  BonusEntryPromoResponse,
+  PromoLink,
+  CreatePromoLinkPayload,
+  UpdatePromoLinkPayload,
 } from "@/types/admin";
 
 // Types
-export type PromoType = "membership-packages" | "one-time-packages" | "mini-packages";
-
 export interface ActivePromo {
   id: string;
-  type: PromoType;
-  multiplier: 2 | 3 | 5 | 10;
+  type: "one-time-packages" | "mini-packages" | "membership-packages";
+  multiplier: 2 | 3 | 5 | 10; // 2x, 3x, 5x, 10x supported
   startDate: string;
   endDate: string;
   duration: number;
@@ -35,7 +33,7 @@ export interface ActivePromo {
 // CreatePromoData interface removed - replaced with TogglePromoData
 
 export interface TogglePromoData {
-  type: PromoType;
+  type: "one-time-packages" | "mini-packages" | "membership-packages";
   multiplier: 2 | 3 | 5 | 10 | null; // 2x, 3x, 5x, 10x, or null (OFF)
 }
 
@@ -110,7 +108,7 @@ export const useAdminActivePromos = () => {
   });
 };
 
-export const usePromoMultiplier = (packageType: "membership" | "one-time" | "mini") => {
+export const usePromoMultiplier = (packageType: "one-time" | "mini") => {
   const { data: promos } = useActivePromos();
 
   if (!promos || promos.length === 0) {
@@ -118,18 +116,13 @@ export const usePromoMultiplier = (packageType: "membership" | "one-time" | "min
   }
 
   // Find active promo for the package type (updated for toggle system - no expiration check)
-  const promoType =
-    packageType === "membership"
-      ? "membership-packages"
-      : packageType === "one-time"
-      ? "one-time-packages"
-      : "mini-packages";
+  const promoType = packageType === "one-time" ? "one-time-packages" : "mini-packages";
   const activePromo = promos.find((promo) => promo.type === promoType && promo.isActive);
 
   return activePromo ? activePromo.multiplier : 1;
 };
 
-export const usePromoByType = (type: PromoType) => {
+export const usePromoByType = (type: "one-time-packages" | "mini-packages" | "membership-packages") => {
   const { data: promos, ...rest } = useActivePromos();
 
   // Updated for toggle system - no expiration check
@@ -195,9 +188,8 @@ export const useFormattedTimeRemaining = (timeRemaining: number) => {
 // BONUS ENTRY PROMO HOOKS
 // ========================================
 
-// API functions for bonus entry promos
 const fetchBonusEntryPromos = async (filters?: {
-  type?: BonusEntryPromoType;
+  type?: "membership-packages" | "one-time-packages" | "mini-packages";
   isActive?: boolean;
 }): Promise<BonusEntryPromo[]> => {
   const params = new URLSearchParams();
@@ -210,24 +202,11 @@ const fetchBonusEntryPromos = async (filters?: {
     throw new Error("Failed to fetch bonus entry promos");
   }
 
-  const result: BonusEntryPromoListResponse = await response.json();
+  const result = await response.json();
   return result.data || [];
 };
 
-const fetchActiveBonusEntryPromo = async (type: BonusEntryPromoType): Promise<BonusEntryPromo | null> => {
-  const response = await fetch(`/api/admin/promo/bonus-entry/active?type=${type}`);
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch active bonus entry promo");
-  }
-
-  const result: BonusEntryPromoResponse = await response.json();
-  return result.data || null;
-};
-
-const createBonusEntryPromo = async (
-  data: CreateBonusEntryPromoPayload
-): Promise<{ success: boolean; data?: BonusEntryPromo; message: string }> => {
+const createBonusEntryPromo = async (data: CreateBonusEntryPromoPayload): Promise<BonusEntryPromo> => {
   const response = await fetch("/api/admin/promo/bonus-entry/create", {
     method: "POST",
     headers: {
@@ -242,13 +221,16 @@ const createBonusEntryPromo = async (
     throw new Error(result.error || "Failed to create bonus entry promo");
   }
 
-  return result;
+  return result.data;
 };
 
-const updateBonusEntryPromo = async (
-  id: string,
-  data: UpdateBonusEntryPromoPayload
-): Promise<{ success: boolean; data?: BonusEntryPromo; message: string }> => {
+const updateBonusEntryPromo = async ({
+  id,
+  data,
+}: {
+  id: string;
+  data: UpdateBonusEntryPromoPayload;
+}): Promise<BonusEntryPromo> => {
   const response = await fetch(`/api/admin/promo/bonus-entry/${id}`, {
     method: "PATCH",
     headers: {
@@ -263,38 +245,28 @@ const updateBonusEntryPromo = async (
     throw new Error(result.error || "Failed to update bonus entry promo");
   }
 
-  return result;
+  return result.data;
 };
 
-const deleteBonusEntryPromo = async (id: string): Promise<{ success: boolean; message: string }> => {
+const deleteBonusEntryPromo = async (id: string): Promise<void> => {
   const response = await fetch(`/api/admin/promo/bonus-entry/${id}`, {
     method: "DELETE",
   });
 
-  const result = await response.json();
-
   if (!response.ok) {
+    const result = await response.json();
     throw new Error(result.error || "Failed to delete bonus entry promo");
   }
-
-  return result;
 };
 
-// React Query hooks for bonus entry promos
-export const useBonusEntryPromos = (filters?: { type?: BonusEntryPromoType; isActive?: boolean }) => {
+export const useBonusEntryPromos = (filters?: {
+  type?: "membership-packages" | "one-time-packages" | "mini-packages";
+  isActive?: boolean;
+}) => {
   return useQuery({
     queryKey: ["bonus-entry-promos", filters],
     queryFn: () => fetchBonusEntryPromos(filters),
     staleTime: 30000, // 30 seconds
-  });
-};
-
-export const useActiveBonusEntryPromo = (type: BonusEntryPromoType) => {
-  return useQuery({
-    queryKey: ["bonus-entry-promos", "active", type],
-    queryFn: () => fetchActiveBonusEntryPromo(type),
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 30000, // Refetch every 30 seconds to check if promo is still active
   });
 };
 
@@ -304,7 +276,6 @@ export const useCreateBonusEntryPromo = () => {
   return useMutation({
     mutationFn: createBonusEntryPromo,
     onSuccess: () => {
-      // Invalidate and refetch all bonus entry promo queries
       queryClient.invalidateQueries({ queryKey: ["bonus-entry-promos"] });
     },
   });
@@ -314,9 +285,8 @@ export const useUpdateBonusEntryPromo = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateBonusEntryPromoPayload }) => updateBonusEntryPromo(id, data),
+    mutationFn: updateBonusEntryPromo,
     onSuccess: () => {
-      // Invalidate and refetch all bonus entry promo queries
       queryClient.invalidateQueries({ queryKey: ["bonus-entry-promos"] });
     },
   });
@@ -328,8 +298,114 @@ export const useDeleteBonusEntryPromo = () => {
   return useMutation({
     mutationFn: deleteBonusEntryPromo,
     onSuccess: () => {
-      // Invalidate and refetch all bonus entry promo queries
       queryClient.invalidateQueries({ queryKey: ["bonus-entry-promos"] });
+    },
+  });
+};
+
+// ========================================
+// PROMO LINK HOOKS
+// ========================================
+
+const fetchPromoLinks = async (filters?: { isActive?: boolean; expired?: boolean }): Promise<PromoLink[]> => {
+  const params = new URLSearchParams();
+  if (filters?.isActive !== undefined) params.append("isActive", String(filters.isActive));
+  if (filters?.expired !== undefined) params.append("expired", String(filters.expired));
+
+  const response = await fetch(`/api/admin/promo/link/list?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch promo links");
+  }
+
+  const result = await response.json();
+  return result.data || [];
+};
+
+const createPromoLink = async (data: CreatePromoLinkPayload): Promise<PromoLink> => {
+  const response = await fetch("/api/admin/promo/link/create", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || "Failed to create promo link");
+  }
+
+  return result.data;
+};
+
+const updatePromoLink = async ({ id, data }: { id: string; data: UpdatePromoLinkPayload }): Promise<PromoLink> => {
+  const response = await fetch(`/api/admin/promo/link/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || "Failed to update promo link");
+  }
+
+  return result.data;
+};
+
+const deletePromoLink = async (id: string): Promise<void> => {
+  const response = await fetch(`/api/admin/promo/link/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const result = await response.json();
+    throw new Error(result.error || "Failed to delete promo link");
+  }
+};
+
+export const usePromoLinks = (filters?: { isActive?: boolean; expired?: boolean }) => {
+  return useQuery({
+    queryKey: ["promo-links", filters],
+    queryFn: () => fetchPromoLinks(filters),
+    staleTime: 30000, // 30 seconds
+  });
+};
+
+export const useCreatePromoLink = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createPromoLink,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["promo-links"] });
+    },
+  });
+};
+
+export const useUpdatePromoLink = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updatePromoLink,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["promo-links"] });
+    },
+  });
+};
+
+export const useDeletePromoLink = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deletePromoLink,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["promo-links"] });
     },
   });
 };

@@ -27,6 +27,7 @@ const createSubscriptionSchema = z.object({
   paymentIntentId: z.string().optional(), // ✅ NEW: Optional upfront PaymentIntent ID for wallet display (Google Pay/Apple Pay)
   idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode: z.string().optional(),
+  promoLinkCode: z.string().optional(),
 });
 
 /**
@@ -284,6 +285,8 @@ export async function POST(request: NextRequest) {
             packageId: validatedData.packageId,
             packageName: membershipPackage.name,
             userEmail: validatedData.userEmail,
+            ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+            ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
           },
         },
         {
@@ -417,6 +420,8 @@ export async function POST(request: NextRequest) {
             type: "subscription", // ✅ Set 'type' for webhook compatibility
             packageType: "subscription",
             isUpfrontPayment: "true", // ✅ Mark as upfront payment so webhook skips it
+            ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+            ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
           },
         });
 

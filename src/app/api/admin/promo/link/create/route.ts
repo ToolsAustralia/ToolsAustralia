@@ -1,0 +1,157 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectDB from "@/lib/mongodb";
+import PromoLink from "@/models/PromoLink";
+import { z } from "zod";
+import { generatePromoLinkCode } from "@/utils/promo/generate-promo-link-code";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+
+/**
+ * Validation schema for creating promo link
+ */
+const createPromoLinkSchema = z
+  .object({
+    bonusEntries: z.number().int().min(1, "Bonus entries must be at least 1").optional(),
+    expiresAt: z.string().datetime("Invalid expiration date format").optional().nullable(),
+    description: z.string().max(500, "Description cannot exceed 500 characters").optional(),
+    isActive: z.boolean().optional(),
+    appliesToMembership: z.boolean().optional(),
+    appliesToOneTime: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      // If active, at least one package type must be selected
+      const isActive = data.isActive !== undefined ? data.isActive : true;
+      if (!isActive) return true; // Inactive promos don't need package types
+      return data.appliesToMembership || false || data.appliesToOneTime || false;
+    },
+    {
+      message: "At least one package type (membership or one-time) must be selected for active promo links",
+      path: ["appliesToMembership"], // Error will show on this field
+    }
+  );
+
+/**
+ * POST /api/admin/promo/link/create
+ * Create a new promo link with auto-generated unique code
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // Check admin authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await connectDB();
+
+    // Get user from database to verify admin role
+    const { default: User } = await import("@/models/User");
+    const user = await User.findOne({ email: session.user.email });
+    if (!user || user.role !== "admin") {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    }
+
+    // Parse and validate request body
+    const body = await request.json();
+    const validatedData = createPromoLinkSchema.parse(body);
+
+    // Generate unique promo code
+    const code = await generatePromoLinkCode();
+
+    // Parse expiration date if provided
+    let expiresAt: Date | undefined;
+    if (validatedData.expiresAt) {
+      expiresAt = new Date(validatedData.expiresAt);
+      // Validate expiration is in the future
+      if (expiresAt <= new Date()) {
+        return NextResponse.json({ success: false, error: "Expiration date must be in the future" }, { status: 400 });
+      }
+    }
+
+    // Create promo link
+    const isActive = validatedData.isActive !== undefined ? validatedData.isActive : true;
+    const newPromoLink = new PromoLink({
+      code,
+      bonusEntries: validatedData.bonusEntries || 100,
+      expiresAt,
+      isActive,
+      appliesToMembership: validatedData.appliesToMembership || false,
+      appliesToOneTime: validatedData.appliesToOneTime || false,
+      createdBy: user._id,
+      description: validatedData.description || undefined,
+      usageCount: 0,
+      usedBy: [],
+    });
+
+    await newPromoLink.save();
+
+    // Generate full URL with default promotion slug
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
+    const promoUrl = `${baseUrl}/promotions/${DEFAULT_PRIZE_SLUG}?promo=${code}`;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newPromoLinkId = (newPromoLink._id as any).toString();
+
+    console.log(`✅ Created new promo link`, {
+      id: newPromoLinkId,
+      code: newPromoLink.code,
+      bonusEntries: newPromoLink.bonusEntries,
+      appliesToMembership: newPromoLink.appliesToMembership,
+      appliesToOneTime: newPromoLink.appliesToOneTime,
+      createdBy: user.email,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Successfully created promo link",
+        data: {
+          id: newPromoLinkId,
+          code: newPromoLink.code,
+          bonusEntries: newPromoLink.bonusEntries,
+          expiresAt: newPromoLink.expiresAt,
+          isActive: newPromoLink.isActive,
+          appliesToMembership: newPromoLink.appliesToMembership,
+          appliesToOneTime: newPromoLink.appliesToOneTime,
+          description: newPromoLink.description,
+          usageCount: newPromoLink.usageCount,
+          promoUrl,
+          createdAt: newPromoLink.createdAt,
+          createdBy: {
+            id: user._id.toString(),
+            email: user.email,
+            name: `${user.firstName} ${user.lastName}`,
+          },
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("❌ Error creating promo link:", error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Validation error",
+          details: error.issues.map((err) => ({
+            field: err.path.join("."),
+            message: err.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to create promo link",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}

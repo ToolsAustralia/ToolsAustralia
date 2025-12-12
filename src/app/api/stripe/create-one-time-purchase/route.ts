@@ -26,6 +26,7 @@ const createOneTimePurchaseSchema = z.object({
   paymentIntentId: z.string().optional(), // Optional PaymentIntent ID if already confirmed upfront
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
+  promoLinkCode: z.string().optional(),
 });
 
 /**
@@ -373,6 +374,8 @@ export async function POST(request: NextRequest) {
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(),
         ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
+        ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+        ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
         // Store request context for Facebook CAPI (webhook will extract and use)
         ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
         ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
@@ -448,6 +451,8 @@ export async function POST(request: NextRequest) {
           entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
           price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
+          ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+          ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
           // Store request context for Facebook CAPI (webhook will extract and use)
           ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
           ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
