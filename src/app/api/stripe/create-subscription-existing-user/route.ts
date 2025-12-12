@@ -148,6 +148,8 @@ export async function POST(request: NextRequest) {
           packageId: validatedData.packageId,
           packageName: membershipPackage.name,
           userEmail: existingUser.email,
+          ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+          ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
         },
       },
       {

@@ -637,7 +637,13 @@ async function checkAndApplyPromoLink(
       return 0;
     }
 
-    const code = paymentMetadata.promoLinkCode.trim().toUpperCase();
+    // Normalize the code - handle empty strings and whitespace
+    const rawCode = paymentMetadata.promoLinkCode;
+    if (!rawCode || typeof rawCode !== "string" || !rawCode.trim()) {
+      return 0;
+    }
+
+    const code = rawCode.trim().toUpperCase();
 
     // Import PromoLink model dynamically to avoid circular dependencies
     const PromoLink = (await import("@/models/PromoLink")).default;
@@ -720,20 +726,57 @@ async function checkAndApplyPromoLink(
       return 0;
     }
 
-    // Log successful promo link match with detailed information
-    console.log(`🎁 [PROMO LINK] Valid promo link matched and applies to purchase:`, {
-      promoLinkId: promoLink._id?.toString(),
-      code: promoLink.code,
-      bonusEntries: promoLink.bonusEntries,
-      packageType,
-      appliesToMembership: promoLink.appliesToMembership,
-      appliesToOneTime: promoLink.appliesToOneTime,
-      userId: user._id?.toString(),
-      userEmail: user.email,
-    });
+    // ✅ CRITICAL: Mark as used IMMEDIATELY to prevent race conditions
+    // Use atomic operation to mark as used and increment count in one operation
+    // This prevents two concurrent payments from both getting bonus entries
+    try {
+      const updatedPromoLink = await PromoLink.findOneAndUpdate(
+        { _id: promoLink._id, usedBy: { $ne: userId } }, // Only update if user not already in usedBy
+        {
+          $addToSet: { usedBy: userId }, // Add user ID to usedBy array (idempotent)
+          $inc: { usageCount: 1 }, // Increment usage count
+        },
+        { new: true } // Return updated document
+      );
 
-    // Return the bonus entries amount - will be granted in grantBenefits
-    return promoLink.bonusEntries;
+      if (!updatedPromoLink) {
+        // Another process already marked this user as used (race condition detected)
+        console.log(`ℹ️ [PROMO LINK] Code already used by this user (race condition detected): ${code}`, {
+          userId: userId,
+          userEmail: user.email,
+          packageType,
+          promoLinkCode: code,
+        });
+        return 0;
+      }
+
+      // Log successful promo link match and usage marking
+      console.log(`🎁 [PROMO LINK] Valid promo link matched, marked as used, and applies to purchase:`, {
+        promoLinkId: updatedPromoLink._id?.toString(),
+        code: updatedPromoLink.code,
+        bonusEntries: updatedPromoLink.bonusEntries,
+        packageType,
+        appliesToMembership: updatedPromoLink.appliesToMembership,
+        appliesToOneTime: updatedPromoLink.appliesToOneTime,
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        newUsageCount: updatedPromoLink.usageCount,
+      });
+
+      // Return the bonus entries amount - will be granted in grantBenefits
+      return updatedPromoLink.bonusEntries;
+    } catch (markUsedError) {
+      // If marking as used fails, log but still grant entries (non-critical)
+      console.error(`❌ [PROMO LINK] Failed to mark promo link as used (non-critical):`, {
+        error: markUsedError instanceof Error ? markUsedError.message : String(markUsedError),
+        promoLinkId: promoLink._id?.toString(),
+        code: promoLink.code,
+        userId: userId,
+        userEmail: user.email,
+      });
+      // Still return bonus entries - marking as used is non-critical
+      return promoLink.bonusEntries;
+    }
   } catch (error) {
     // Log error but don't throw - promo links are non-critical
     console.error("❌ [PROMO LINK] Error checking promo link:", {
@@ -933,32 +976,8 @@ async function grantBenefits(
         bonusEntries: promoLinkEntries,
       });
 
-      // Get the promo link to mark as used
-      const PromoLink = (await import("@/models/PromoLink")).default;
-      const promoLinkCode = paymentMetadata?.promoLinkCode?.trim().toUpperCase();
-      const promoLink = promoLinkCode ? await PromoLink.findActiveByCode(promoLinkCode) : null;
-
-      if (!promoLink) {
-        console.error(`❌ [PROMO LINK] Promo link not found when trying to mark as used:`, {
-          promoLinkCode,
-          userId: user._id?.toString(),
-          userEmail: user.email,
-          packageType: packageData.packageType,
-        });
-      } else {
-        // Mark as used by this user and increment usage count atomically
-        await PromoLink.findByIdAndUpdate(promoLink._id, {
-          $addToSet: { usedBy: user._id }, // Add user ID to usedBy array (idempotent)
-          $inc: { usageCount: 1 }, // Increment usage count
-        });
-        console.log(`✅ [PROMO LINK] Marked promo link as used:`, {
-          promoLinkId: promoLink._id?.toString(),
-          promoLinkCode,
-          userId: user._id?.toString(),
-          userEmail: user.email,
-          newUsageCount: promoLink.usageCount + 1,
-        });
-      }
+      // Note: Promo link is already marked as used in checkAndApplyPromoLink to prevent race conditions
+      // No need to mark again here
 
       // Add promo link entries to user's accumulated entries
       const updateResult = await User.findByIdAndUpdate(
@@ -1003,7 +1022,7 @@ async function grantBenefits(
       console.log(`✅ [PROMO LINK] Successfully granted bonus entries from promo link:`, {
         userId: user._id?.toString(),
         userEmail: user.email,
-        promoLinkCode: promoLinkCode,
+        promoLinkCode: paymentMetadata?.promoLinkCode || null,
         bonusEntriesGranted: promoLinkEntries,
         packageType: packageData.packageType,
         packageId: packageData.packageId,

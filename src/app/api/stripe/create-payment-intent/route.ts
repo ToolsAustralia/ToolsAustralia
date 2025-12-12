@@ -80,10 +80,10 @@ export async function POST(request: NextRequest) {
           stripeCustomerId = registeredUser.stripeCustomerId;
           userEmail = registeredUser.email;
           userId = registeredUser._id.toString();
-          console.log(`✅ Found registered user's Stripe customer: ${stripeCustomerId}`);
+          // console.log(`✅ Found registered user's Stripe customer: ${stripeCustomerId}`);
         } else {
           // User registered but no customer yet (shouldn't happen, but handle gracefully)
-          console.log(`⚠️ Registered user found but no Stripe customer: ${registeredUser?._id}`);
+          // console.log(`⚠️ Registered user found but no Stripe customer: ${registeredUser?._id}`);
           stripeCustomerId = undefined;
           userId = registeredUser?._id.toString() || "guest";
           userEmail = validatedData.userEmail;

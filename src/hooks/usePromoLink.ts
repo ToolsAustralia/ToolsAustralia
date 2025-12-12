@@ -34,17 +34,31 @@ export const usePromoLink = () => {
       // Store in sessionStorage
       window.sessionStorage.setItem(PROMO_LINK_STORAGE_KEY, urlCode);
       setPromoCodeState(urlCode);
+      console.log(`[PROMO LINK] Code found in URL, saved to sessionStorage:`, urlCode);
     } else {
       // Check sessionStorage for existing code
       const storedCode = normalizeCode(window.sessionStorage.getItem(PROMO_LINK_STORAGE_KEY));
       if (storedCode) {
         setPromoCodeState(storedCode);
+        console.log(`[PROMO LINK] Code retrieved from sessionStorage:`, storedCode);
       } else {
         // Clear state if no code found
         setPromoCodeState(null);
       }
     }
   }, [pathname, searchParams]); // Re-run on route changes
+
+  // Also check sessionStorage on mount (in case useEffect hasn't run yet)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (promoCode) return; // Already have a code, don't overwrite
+
+    // Check sessionStorage one more time on mount
+    const storedCode = normalizeCode(window.sessionStorage.getItem(PROMO_LINK_STORAGE_KEY));
+    if (storedCode) {
+      setPromoCodeState(storedCode);
+    }
+  }, []); // Run once on mount
 
   const setPromoCode = useCallback((code: string | null) => {
     if (typeof window === "undefined") return;

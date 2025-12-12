@@ -1700,27 +1700,41 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
  */
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   try {
-    webhookLog("info", `🎯 INVOICE PAYMENT SUCCEEDED HANDLER CALLED for ${invoice.id}`);
-    webhookLog("info", `Processing invoice.payment_succeeded for ${invoice.id}`);
+    // ✅ Type guard: Invoice ID is always present in webhook events
+    const invoiceId = invoice.id;
+    if (!invoiceId) {
+      webhookLog("error", `Invoice ID is missing`);
+      return;
+    }
+
+    webhookLog("info", `🎯 INVOICE PAYMENT SUCCEEDED HANDLER CALLED for ${invoiceId}`);
+    webhookLog("info", `Processing invoice.payment_succeeded for ${invoiceId}`);
+
+    // ✅ CRITICAL: Retrieve invoice fresh from Stripe with expansions
+    // Webhook events don't always include all fields expanded, so we need to retrieve it fresh
+    // This ensures we have access to subscription, payment_intent, and charge fields
+    const expandedInvoice = await stripe.invoices.retrieve(invoiceId, {
+      expand: ["subscription", "payment_intent", "charge"],
+    });
 
     // ✅ CRITICAL FIX: ATOMIC PaymentEvent creation to prevent race conditions
     // Create PaymentEvent FIRST using MongoDB unique constraint
     // If creation fails (duplicate key), another webhook is already processing
-    const invoicePaymentId = `invoice_${invoice.id}`;
+    const invoicePaymentId = `invoice_${expandedInvoice.id}`;
     const eventId = `BenefitsGranted-${invoicePaymentId}`;
 
     // ✅ DEBUG: Log invoice details for debugging
     webhookLog("info", `Invoice details:`, {
-      invoiceId: invoice.id,
-      customerId: invoice.customer,
+      invoiceId: expandedInvoice.id,
+      customerId: expandedInvoice.customer,
       subscriptionId: (() => {
-        const subscriptionField = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
+        const subscriptionField = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
           .subscription;
         return typeof subscriptionField === "string"
           ? subscriptionField
           : (subscriptionField as Stripe.Subscription)?.id;
       })(),
-      metadata: invoice.metadata,
+      metadata: expandedInvoice.metadata,
     });
 
     // Ensure database connection
@@ -1728,8 +1742,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     // Find user by customer ID first
     let user;
-    if (invoice.customer) {
-      const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer.id;
+    if (expandedInvoice.customer) {
+      const customerId =
+        typeof expandedInvoice.customer === "string" ? expandedInvoice.customer : expandedInvoice.customer.id;
       user = await User.findOne({ stripeCustomerId: customerId });
     } else {
       webhookLog("error", `No customer ID in invoice`);
@@ -1737,26 +1752,26 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (!user) {
-      webhookLog("warn", `User not found for customer: ${invoice.customer}`);
+      webhookLog("warn", `User not found for customer: ${expandedInvoice.customer}`);
       return;
     }
 
     // ✅ PRORATION DETECTION: Check if this invoice contains proration items
     const hasProrationItems =
-      invoice.lines?.data?.some((line) => {
+      expandedInvoice.lines?.data?.some((line) => {
         const lineItem = line as Stripe.InvoiceLineItem & { proration?: boolean };
         return lineItem.proration === true;
       }) || false;
     const isProrationInvoice =
       hasProrationItems ||
-      invoice.billing_reason === "subscription_update" ||
-      invoice.billing_reason === "subscription_cycle";
+      expandedInvoice.billing_reason === "subscription_update" ||
+      expandedInvoice.billing_reason === "subscription_cycle";
 
     webhookLog("info", `Invoice analysis:`, {
-      billingReason: invoice.billing_reason,
+      billingReason: expandedInvoice.billing_reason,
       hasProrationItems,
       isProrationInvoice,
-      lineItems: invoice.lines?.data?.length || 0,
+      lineItems: expandedInvoice.lines?.data?.length || 0,
     });
 
     // Get subscription ID - check if this is an upgrade scenario
@@ -1796,8 +1811,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
       // Update payment intent description for recurring payments
-      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
-      if (invoice.billing_reason === "subscription_cycle" && invoiceWithPaymentIntent.payment_intent) {
+      const invoiceWithPaymentIntent = expandedInvoice as Stripe.Invoice & {
+        payment_intent?: string | Stripe.PaymentIntent;
+      };
+      if (expandedInvoice.billing_reason === "subscription_cycle" && invoiceWithPaymentIntent.payment_intent) {
         try {
           const paymentIntentId =
             typeof invoiceWithPaymentIntent.payment_intent === "string"
@@ -1867,7 +1884,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     // Get promo multiplier for initial subscriptions and resubscribes
     let promoMultiplier = 1;
-    if (invoice.billing_reason === "subscription_create" || isResubscribe) {
+    if (expandedInvoice.billing_reason === "subscription_create" || isResubscribe) {
       try {
         promoMultiplier = await getActivePromoMultiplier("membership");
       } catch (promoError) {
@@ -1928,7 +1945,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       isResubscribe,
       isUpgrade,
       promoMultiplier:
-        invoice.billing_reason === "subscription_create" || isResubscribe ? promoMultiplier : "N/A (renewal)",
+        expandedInvoice.billing_reason === "subscription_create" || isResubscribe ? promoMultiplier : "N/A (renewal)",
       previousAccumulated: user.subscription?.lastMonthAccumulatedEntries,
     });
 
@@ -1942,16 +1959,16 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "info",
         `🎯 UPGRADE: Granting full ${membershipPackage.name} benefits (${entriesToGrant} entries, ${pointsToGrant} points)`
       );
-    } else if (invoice.billing_reason === "subscription_cycle") {
+    } else if (expandedInvoice.billing_reason === "subscription_cycle") {
       webhookLog("info", `Processing renewal for package ${packageId} - granting full benefits`);
       // Grant full benefits for renewal
-    } else if (invoice.billing_reason === "subscription_create") {
+    } else if (expandedInvoice.billing_reason === "subscription_create") {
       webhookLog("info", `Processing new subscription for package ${packageId} - granting full benefits`);
       // Grant full benefits for new subscription
     } else {
       webhookLog(
         "warn",
-        `Unknown billing reason ${invoice.billing_reason} for package ${packageId} - skipping benefits`
+        `Unknown billing reason ${expandedInvoice.billing_reason} for package ${packageId} - skipping benefits`
       );
       return; // Skip processing for unknown billing reasons
     }
@@ -1961,25 +1978,82 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     webhookLog("info", `🔒 Processing payment with atomic PaymentEvent check: ${eventId}`);
     // ✅ CRITICAL: Use invoice.status_transitions.paid_at for actual payment time
     // This ensures entries route correctly during freeze period
-    const paymentTimestamp = invoice.status_transitions?.paid_at || invoice.created;
+    const paymentTimestamp = expandedInvoice.status_transitions?.paid_at || expandedInvoice.created;
 
     // Extract request context from invoice metadata (if available)
     // Note: For subscription renewals, original request context may not be available
-    const requestContext = invoice.metadata ? extractRequestContextFromMetadata(invoice.metadata) : undefined;
+    const requestContext = expandedInvoice.metadata
+      ? extractRequestContextFromMetadata(expandedInvoice.metadata)
+      : undefined;
 
-    // Retrieve payment intent to get promoLinkCode and affiliateCode from metadata
+    // ✅ CRITICAL: Retrieve promoLinkCode and affiliateCode from metadata
+    // For subscriptions, check subscription metadata FIRST (most reliable)
+    // Then fall back to payment_intent metadata
     let promoLinkCode: string | undefined;
     let affiliateCode: string | undefined;
     try {
-      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
-      if (invoiceWithPaymentIntent.payment_intent) {
+      const invoiceTyped = expandedInvoice as Stripe.Invoice & {
+        payment_intent?: string | Stripe.PaymentIntent;
+        charge?: string | Stripe.Charge;
+        subscription?: string | Stripe.Subscription;
+      };
+
+      // ✅ METHOD 1: Check subscription metadata FIRST (for subscription payments) - MOST RELIABLE
+      // For subscriptions, metadata is set on the subscription object when created
+      // We already have the subscription object from line 1796, so use it directly
+      if (subscription?.metadata?.promoLinkCode) {
+        promoLinkCode = subscription.metadata.promoLinkCode;
+        affiliateCode = subscription.metadata.affiliateCode;
+        if (promoLinkCode) {
+          webhookLog("info", `✅ Retrieved promoLinkCode from subscription metadata: ${promoLinkCode}`);
+        }
+      }
+
+      // Method 2: Check invoice payment_intent field (fallback for subscriptions, primary for one-time)
+      if (!promoLinkCode && invoiceTyped.payment_intent) {
         const paymentIntentId =
-          typeof invoiceWithPaymentIntent.payment_intent === "string"
-            ? invoiceWithPaymentIntent.payment_intent
-            : invoiceWithPaymentIntent.payment_intent.id;
+          typeof invoiceTyped.payment_intent === "string"
+            ? invoiceTyped.payment_intent
+            : invoiceTyped.payment_intent.id;
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
         promoLinkCode = paymentIntent.metadata.promoLinkCode;
         affiliateCode = paymentIntent.metadata.affiliateCode;
+        if (promoLinkCode) {
+          webhookLog("info", `✅ Retrieved promoLinkCode from invoice payment_intent: ${promoLinkCode}`);
+        }
+      }
+
+      // Method 3: Check charge payment intent (for some payment methods)
+      if (!promoLinkCode && invoiceTyped.charge && typeof invoiceTyped.charge === "string") {
+        const charge = await stripe.charges.retrieve(invoiceTyped.charge);
+        if (charge.payment_intent && typeof charge.payment_intent === "string") {
+          const paymentIntent = await stripe.paymentIntents.retrieve(charge.payment_intent);
+          promoLinkCode = paymentIntent.metadata.promoLinkCode;
+          affiliateCode = paymentIntent.metadata.affiliateCode;
+          if (promoLinkCode) {
+            webhookLog("info", `✅ Retrieved promoLinkCode from charge payment_intent: ${promoLinkCode}`);
+          }
+        }
+      }
+
+      // Method 4: Check invoice metadata directly (final fallback)
+      if (!promoLinkCode && expandedInvoice.metadata?.promoLinkCode) {
+        promoLinkCode = expandedInvoice.metadata.promoLinkCode;
+        affiliateCode = expandedInvoice.metadata.affiliateCode;
+        if (promoLinkCode) {
+          webhookLog("info", `✅ Retrieved promoLinkCode from invoice metadata: ${promoLinkCode}`);
+        }
+      }
+
+      // Final check: If still no promoLinkCode, log warning for debugging
+      if (!promoLinkCode) {
+        webhookLog(
+          "warn",
+          `⚠️ No promoLinkCode found. Invoice ID: ${
+            expandedInvoice.id
+          }, Has subscription: ${!!invoiceTyped.subscription}, Has payment_intent: ${!!invoiceTyped.payment_intent}, Has charge: ${!!invoiceTyped.charge}, Subscription metadata: ${!!subscription
+            ?.metadata?.promoLinkCode}`
+        );
       }
     } catch (error) {
       webhookLog("warn", `Failed to retrieve payment intent for promo link code: ${error}`);
@@ -2001,8 +2075,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         created: Math.floor(paymentTimestamp * 1000), // Use paid_at timestamp, not invoice creation time
         type: "subscription",
         packageType: "subscription",
-        promoLinkCode,
-        affiliateCode,
+        promoLinkCode: promoLinkCode || undefined, // Ensure undefined instead of empty string
+        affiliateCode: affiliateCode || undefined,
       },
       requestContext // Pass request context if available (may be undefined for renewals)
     );

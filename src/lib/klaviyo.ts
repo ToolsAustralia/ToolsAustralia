@@ -238,12 +238,12 @@ class KlaviyoClient {
 
       // ✅ DEBUG: Log payload to verify properties are being sent
       // Uncomment this to debug missing properties
-      console.log("📊 Klaviyo Profile Payload:", {
-        email: profile.email,
-        propertiesCount: Object.keys(cleanedProperties).length,
-        propertiesKeys: Object.keys(cleanedProperties),
-        properties: cleanedProperties,
-      });
+      // console.log("📊 Klaviyo Profile Payload:", {
+      //   email: profile.email,
+      //   propertiesCount: Object.keys(cleanedProperties).length,
+      //   propertiesKeys: Object.keys(cleanedProperties),
+      //   properties: cleanedProperties,
+      // });
 
       // First, try to create the profile
       let response = await this.retryRequest(() => this.makeRequest("/profiles/", "POST", payload));

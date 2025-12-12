@@ -153,7 +153,13 @@ export const usePurchaseMembership = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ packageId, paymentMethodId, referralCode, affiliateCode, promoLinkCode }: MembershipPurchaseData) => {
+    mutationFn: async ({
+      packageId,
+      paymentMethodId,
+      referralCode,
+      affiliateCode,
+      promoLinkCode,
+    }: MembershipPurchaseData) => {
       const response = await apiPost<MembershipResponse>("/api/stripe/create-one-time-purchase-existing-user", {
         packageId,
         paymentMethodId,

@@ -2216,6 +2216,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             const userEmail = userData?.email || "unknown";
             const idempotencyKey = `sub_${packageId}_${userEmail}_${Date.now()}`;
 
+            const promoLinkCodeToSend = promoLinkCode || undefined;
             result = await createSubscriptionExistingUser({
               packageId,
               paymentMethodId,
@@ -2223,7 +2224,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               idempotencyKey, // ✅ Pass idempotency key to prevent duplicate creation
               referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
               affiliateCode: affiliateCode || undefined,
-              promoLinkCode: promoLinkCode || undefined,
+              promoLinkCode: promoLinkCodeToSend,
             });
 
             // ✅ Track subscription creation to prevent duplicates
@@ -2564,7 +2565,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             ...(confirmedPaymentIntentId ? { paymentIntentId: confirmedPaymentIntentId } : {}),
             referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
             affiliateCode: affiliateCode || undefined,
+            promoLinkCode: promoLinkCode || undefined,
           };
+
+          console.log(
+            `[MEMBERSHIP MODAL] Creating subscription (new user) with promoLinkCode:`,
+            subscriptionData.promoLinkCode
+          );
 
           // console.log("📦 Subscription data:", subscriptionData);
 
