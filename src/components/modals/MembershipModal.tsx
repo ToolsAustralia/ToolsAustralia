@@ -3167,7 +3167,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       <ModalHeader title="" onClose={handleClose} showLogo={true} />
 
       <ModalContent>
-        <div className="text-center ">
+        {/* Hide header on mobile for step 2 (payment step) */}
+        <div className={`text-center ${currentStep === 2 ? "hidden sm:block" : ""}`}>
           <h1 className="text-base sm:text-lg font-bold text-black mb-1">
             JOIN <span className="text-[#ee0000]">TOOLS AUSTRALIA</span>
           </h1>
@@ -3326,7 +3327,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   {/* Coupon Code - Only show for regular packages, not upsells */}
                   {promoEnhancedPlan?.metadata?.isUpsellOffer !== true && (
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Coupon Code</label>
                       <div className="flex gap-2">
                         <input
                           type="text"

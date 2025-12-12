@@ -96,6 +96,43 @@ const StripeCardForm = React.forwardRef<
       }
     }, [stripe, elements]);
 
+    // Inject custom CSS for wallet payment method layout (icons and text on same row)
+    // Note: Stripe uses shadow DOM, so we inject styles that target the iframe content
+    useEffect(() => {
+      // Add custom styles for Stripe PaymentElement wallet tabs
+      const styleId = "stripe-wallet-layout-fix";
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement("style");
+        style.id = styleId;
+        style.textContent = `
+          /* Fix wallet payment method tabs - ensure icons and text are on same row */
+          /* Target Stripe PaymentElement tabs container */
+          iframe[data-testid="payment-element"] ~ *,
+          [data-testid="payment-element"] {
+            /* These styles will be applied to the container */
+          }
+          /* Use a more aggressive approach - target all potential Stripe containers */
+          div[id*="stripe"],
+          div[class*="StripeElement"] {
+            /* Ensure tab content is flex row */
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      // Note: Stripe uses shadow DOM and iframes, so direct CSS injection has limitations
+      // The appearance.rules configuration above is the primary method for styling
+      // Cross-origin restrictions prevent direct iframe styling, so we rely on Stripe's API
+
+      // Cleanup on unmount
+      return () => {
+        const existingStyle = document.getElementById(styleId);
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+      };
+    }, []);
+
     // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
     // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
     // For subscriptions: PaymentIntent must be created before wallets can show correct amount
@@ -327,18 +364,34 @@ const StripeCardForm = React.forwardRef<
     if (isStripeLoading) {
       return (
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
-          </div>
+          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-red-600" />
+            Payment Details
+          </h4>
           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+            {/* Payment method tabs skeleton */}
+            <div className="flex gap-2 mb-4">
+              <div className="h-10 bg-gray-200 rounded animate-pulse flex-1"></div>
+              {shouldEnableWallets && (
+                <>
+                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
+                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
+                </>
+              )}
+            </div>
             {/* Card Element Skeleton */}
-            <div className="h-12 bg-gray-200 rounded animate-pulse flex items-center px-3">
-              <div className="flex items-center space-x-2 w-full">
-                <div className="w-6 h-4 bg-gray-300 rounded animate-pulse"></div>
-                <div className="flex-1 h-4 bg-gray-300 rounded animate-pulse"></div>
-                <div className="w-8 h-4 bg-gray-300 rounded animate-pulse"></div>
+            <div className="space-y-3">
+              <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+              <div className="flex gap-3">
+                <div className="flex-1 h-12 bg-gray-200 rounded animate-pulse"></div>
+                <div className="w-20 h-12 bg-gray-200 rounded animate-pulse"></div>
               </div>
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
+              <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
+              <span>Loading payment form...</span>
             </div>
           </div>
         </div>
@@ -540,6 +593,40 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     fontFamily: "system-ui, sans-serif",
                     spacingUnit: "4px",
                     borderRadius: "8px",
+                  },
+                  rules: {
+                    // Ensure wallet payment method tabs have icon and text on same row
+                    ".Tab": {
+                      display: "flex",
+                      alignItems: "center",
+                      flexDirection: "row",
+                      gap: "8px",
+                    },
+                    ".Tab--selected": {
+                      display: "flex",
+                      alignItems: "center",
+                      flexDirection: "row",
+                      gap: "8px",
+                    },
+                    // Target tab button content
+                    "button[role='tab']": {
+                      display: "flex",
+                      alignItems: "center",
+                      flexDirection: "row",
+                      gap: "8px",
+                    },
+                    // Ensure icons are inline
+                    ".TabIcon, svg, img": {
+                      display: "inline-flex",
+                      alignItems: "center",
+                      flexShrink: "0",
+                      marginRight: "0",
+                    },
+                    // Ensure payment method labels are inline with icons
+                    ".TabLabel, span": {
+                      display: "inline-flex",
+                      alignItems: "center",
+                    },
                   },
                 },
               }}
@@ -744,6 +831,40 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                         fontFamily: "system-ui, sans-serif",
                         spacingUnit: "4px",
                         borderRadius: "8px",
+                      },
+                      rules: {
+                        // Ensure wallet payment method tabs have icon and text on same row
+                        ".Tab": {
+                          display: "flex",
+                          alignItems: "center",
+                          flexDirection: "row",
+                          gap: "8px",
+                        },
+                        ".Tab--selected": {
+                          display: "flex",
+                          alignItems: "center",
+                          flexDirection: "row",
+                          gap: "8px",
+                        },
+                        // Target tab button content
+                        "button[role='tab']": {
+                          display: "flex",
+                          alignItems: "center",
+                          flexDirection: "row",
+                          gap: "8px",
+                        },
+                        // Ensure icons are inline
+                        ".TabIcon, svg, img": {
+                          display: "inline-flex",
+                          alignItems: "center",
+                          flexShrink: "0",
+                          marginRight: "0",
+                        },
+                        // Ensure payment method labels are inline with icons
+                        ".TabLabel, span": {
+                          display: "inline-flex",
+                          alignItems: "center",
+                        },
                       },
                     },
                   }}
