@@ -21,6 +21,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { generateEventID } from "@/utils/tracking/facebook-helpers";
+import { usePromoLink } from "@/hooks/usePromoLink";
 
 /**
  * SpecialPackagesModalProps Interface
@@ -55,6 +56,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   const { isAuthenticated, userData, hasActiveSubscription } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { paymentMethods } = useSavedPaymentMethods();
+
+  // Get promo link code from URL/sessionStorage (for bonus entries)
+  const { promoCode: promoLinkCode } = usePromoLink();
 
   // Get active one-time promo (same as MembershipSection)
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
@@ -175,6 +179,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         {
           packageId: pkg._id,
           userId: userData?._id || "",
+          promoLinkCode: promoLinkCode || undefined,
         },
         {
           onSuccess: (result) => {
