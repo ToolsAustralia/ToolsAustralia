@@ -38,6 +38,7 @@ export interface IMiniDraw extends Document {
     entriesBySource: {
       "mini-draw-package"?: number;
       "free-entry"?: number; // Reserved for future use
+      "bonus-entry-promo"?: number;
     };
     firstAddedDate: Date; // When user first got entries
     lastUpdatedDate: Date; // When entries were last updated
@@ -168,6 +169,11 @@ const MiniDrawSchema = new Schema<IMiniDraw>(
             type: Number,
             default: 0,
             min: [0, "Free entries cannot be negative"],
+          },
+          "bonus-entry-promo": {
+            type: Number,
+            default: 0,
+            min: [0, "Bonus entry promo entries cannot be negative"],
           },
         },
         firstAddedDate: {

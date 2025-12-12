@@ -14,6 +14,7 @@ interface TextareaProps {
   error?: string;
   disabled?: boolean;
   rows?: number;
+  maxLength?: number;
   className?: string; // Applied to the textarea element itself
   wrapperClassName?: string; // Applied to the wrapper div
 }
@@ -29,6 +30,7 @@ const Textarea: React.FC<TextareaProps> = ({
   error,
   disabled = false,
   rows = 4,
+  maxLength,
   className = "",
   wrapperClassName = "",
 }) => {
@@ -50,6 +52,7 @@ const Textarea: React.FC<TextareaProps> = ({
         placeholder={placeholder}
         disabled={disabled}
         rows={rows}
+        maxLength={maxLength}
         className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 resize-none ${
           error ? "border-red-500 bg-red-50" : "border-gray-300"
         } ${disabled ? "bg-gray-100 cursor-not-allowed" : "hover:border-red-400 hover:shadow-sm"} ${className}`}

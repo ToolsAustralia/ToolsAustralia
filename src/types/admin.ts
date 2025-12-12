@@ -451,3 +451,74 @@ export interface AdminUserUpdatePayload {
     status: "active" | "queued" | "expired" | "cancelled";
   }>;
 }
+
+// ========================================
+// BONUS ENTRY PROMO TYPES
+// ========================================
+
+export type BonusEntryPromoType = "membership-packages" | "one-time-packages" | "mini-packages";
+
+export interface BonusEntryPromo {
+  id: string;
+  type: BonusEntryPromoType;
+  bonusEntries: number;
+  startDate: string; // ISO date string
+  endDate: string; // ISO date string
+  startDateFormatted?: string; // Human-readable AEST date
+  endDateFormatted?: string; // Human-readable AEST date
+  isActive: boolean;
+  isCurrentlyActive?: boolean; // Based on current AEST time
+  isUpcoming?: boolean; // Promo hasn't started yet
+  isExpired?: boolean; // Promo has ended
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  } | null;
+}
+
+export interface CreateBonusEntryPromoPayload {
+  type: BonusEntryPromoType;
+  bonusEntries: number;
+  startDate: string; // ISO date string in AEST
+  endDate: string; // ISO date string in AEST
+  description?: string;
+  forceCreate?: boolean; // If true, deactivates existing promo of same type
+}
+
+export interface UpdateBonusEntryPromoPayload {
+  type?: BonusEntryPromoType;
+  bonusEntries?: number;
+  startDate?: string; // ISO date string in AEST
+  endDate?: string; // ISO date string in AEST
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface BonusEntryPromoListResponse {
+  success: boolean;
+  data: BonusEntryPromo[];
+  count: number;
+}
+
+export interface BonusEntryPromoResponse {
+  success: boolean;
+  data: BonusEntryPromo | null;
+  message?: string;
+}
+
+export interface BonusEntryPromoConflict {
+  existingPromo: {
+    id: string;
+    type: BonusEntryPromoType;
+    bonusEntries: number;
+    startDate: string;
+    endDate: string;
+    description?: string;
+  };
+  message: string;
+}

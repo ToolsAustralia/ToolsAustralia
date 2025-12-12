@@ -516,6 +516,97 @@ async function processPaymentBenefitsInternal(
  * @param paymentMetadata - Optional payment metadata with created timestamp
  * @param paymentIntentId - Payment intent ID for tracking in queue
  */
+/**
+ * Check for active bonus entry promo and return bonus entries to grant
+ *
+ * This function checks if there's an active bonus entry promo for the given package type
+ * at the time of purchase. It uses the payment timestamp to determine if the purchase
+ * was made during the promo period.
+ *
+ * @param packageType - Type of package purchased (subscription, one-time, mini-draw, upsell)
+ * @param paymentMetadata - Payment metadata containing created timestamp
+ * @param user - User document (for logging purposes)
+ * @returns Number of bonus entries to grant (0 if no active promo)
+ */
+async function checkAndApplyBonusEntryPromo(
+  packageType: "one-time" | "subscription" | "upsell" | "mini-draw",
+  paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string },
+  user?: UserDocument
+): Promise<number> {
+  try {
+    // Map package types to promo types
+    const promoType =
+      packageType === "subscription"
+        ? "membership-packages"
+        : packageType === "one-time"
+        ? "one-time-packages"
+        : packageType === "mini-draw"
+        ? "mini-packages"
+        : null; // Upsells don't have bonus entry promos (they follow the package they're attached to)
+
+    if (!promoType) {
+      // Upsells don't have bonus entry promos - this is expected, no logging needed
+      return 0;
+    }
+
+    // Get purchase date from payment metadata
+    // The created timestamp is in Unix milliseconds (from Stripe)
+    if (!paymentMetadata?.created) {
+      console.warn(
+        `⚠️ No payment timestamp available for bonus entry promo check - userId: ${
+          user?._id?.toString() || "unknown"
+        }, packageType: ${packageType}`
+      );
+      return 0;
+    }
+
+    const purchaseDate = new Date(paymentMetadata.created);
+
+    // Import BonusEntryPromo model dynamically to avoid circular dependencies
+    const BonusEntryPromo = (await import("@/models/BonusEntryPromo")).default;
+
+    // Find active promo for this type at the purchase date
+    const activePromo = await BonusEntryPromo.findOne({
+      type: promoType,
+      isActive: true,
+      startDate: { $lte: purchaseDate },
+      endDate: { $gte: purchaseDate },
+    }).sort({ createdAt: -1 }); // Get most recent if multiple match
+
+    if (!activePromo) {
+      // No active promo found - this is normal, no logging needed
+      return 0;
+    }
+
+    // Log successful promo match with details
+    console.log(`🎁 Bonus entry promo matched:`, {
+      promoId: activePromo._id?.toString(),
+      promoType: activePromo.type,
+      bonusEntries: activePromo.bonusEntries,
+      purchaseDate: purchaseDate.toISOString(),
+      promoStartDate: activePromo.startDate.toISOString(),
+      promoEndDate: activePromo.endDate.toISOString(),
+      userId: user?._id?.toString(),
+      userEmail: user?.email,
+      packageType: packageType,
+    });
+
+    // Return bonus entries amount
+    return activePromo.bonusEntries;
+  } catch (error) {
+    // Log error but don't throw - bonus entries are non-critical
+    console.error("❌ Error checking bonus entry promo:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      packageType,
+      userId: user?._id?.toString(),
+      userEmail: user?.email,
+      paymentMetadata,
+    });
+    return 0;
+  }
+}
+
 async function grantBenefits(
   user: UserDocument,
   packageData: {
@@ -595,6 +686,87 @@ async function grantBenefits(
   } else {
     // Add to major draw entries with payment metadata for freeze period handling
     await addToMajorDraw(user, packageData, paymentMetadata);
+  }
+
+  // ✅ BONUS ENTRY PROMO: Check for active bonus entry promos and grant bonus entries
+  // This happens after regular entries are granted
+  try {
+    const bonusEntries = await checkAndApplyBonusEntryPromo(packageData.packageType, paymentMetadata, user);
+
+    if (bonusEntries > 0) {
+      console.log(
+        `🎁 Processing ${bonusEntries} bonus entries for user ${user.email} (${packageData.packageType} purchase)`
+      );
+
+      // Add bonus entries to user's accumulated entries
+      const updateResult = await User.findByIdAndUpdate(
+        user._id,
+        {
+          $inc: {
+            accumulatedEntries: bonusEntries,
+          },
+        },
+        { new: false }
+      );
+
+      if (!updateResult) {
+        console.error(`❌ Failed to update accumulatedEntries for user ${user._id?.toString()}`);
+      }
+
+      // Update local user object
+      const previousAccumulated = user.accumulatedEntries || 0;
+      user.accumulatedEntries = previousAccumulated + bonusEntries;
+
+      // Route bonus entries to appropriate draw (same as regular entries)
+      const bonusPackageData = {
+        entries: bonusEntries,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        packageName: `Bonus Entry Promo (${bonusEntries} entries)`,
+      };
+
+      // Determine target draw for logging
+      let targetDraw: "mini-draw" | "major-draw";
+      if (packageData.packageType === "mini-draw") {
+        targetDraw = "mini-draw";
+        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+      } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
+        targetDraw = "mini-draw";
+        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+      } else {
+        targetDraw = "major-draw";
+        await addToMajorDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+      }
+
+      console.log(`✅ Successfully granted ${bonusEntries} bonus entries:`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        targetDraw: targetDraw,
+        previousAccumulatedEntries: previousAccumulated,
+        newAccumulatedEntries: user.accumulatedEntries,
+        paymentTimestamp: paymentMetadata?.created ? new Date(paymentMetadata.created).toISOString() : "unknown",
+      });
+    } else {
+      // Log when no bonus entries (helpful for debugging why promos aren't applying)
+      console.log(`ℹ️ No bonus entry promo active for ${packageData.packageType} purchase:`, {
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        packageType: packageData.packageType,
+        purchaseDate: paymentMetadata?.created ? new Date(paymentMetadata.created).toISOString() : "unknown",
+      });
+    }
+  } catch (bonusError) {
+    // Non-blocking - log but don't fail payment processing
+    console.error("❌ Bonus entry promo processing error (non-blocking):", {
+      error: bonusError instanceof Error ? bonusError.message : String(bonusError),
+      stack: bonusError instanceof Error ? bonusError.stack : undefined,
+      userId: user._id?.toString(),
+      userEmail: user.email,
+      packageType: packageData.packageType,
+      paymentMetadata,
+    });
   }
 
   // ✅ NEW: Track pixel events for all purchase types
@@ -1077,7 +1249,8 @@ async function handleMiniDrawPackage(
 async function addToMajorDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
-  paymentMetadata?: { created?: number; type?: string; packageType?: string }
+  paymentMetadata?: { created?: number; type?: string; packageType?: string },
+  sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
@@ -1114,22 +1287,27 @@ async function addToMajorDraw(
     // }
 
     // ✅ OPTION 1: Determine source type for major draw entries (single source of truth)
-    let sourceType: "membership" | "one-time-package" | "upsell" | "mini-draw";
-    switch (packageData.packageType) {
-      case "subscription":
-        sourceType = "membership";
-        break;
-      case "one-time":
-        sourceType = "one-time-package";
-        break;
-      case "upsell":
-        sourceType = "upsell";
-        break;
-      case "mini-draw":
-        sourceType = "mini-draw";
-        break;
-      default:
-        sourceType = "membership"; // Default fallback
+    // Use override if provided (for bonus entries), otherwise determine from package type
+    let sourceType: "membership" | "one-time-package" | "upsell" | "mini-draw" | "bonus-entry-promo";
+    if (sourceTypeOverride) {
+      sourceType = sourceTypeOverride as typeof sourceType;
+    } else {
+      switch (packageData.packageType) {
+        case "subscription":
+          sourceType = "membership";
+          break;
+        case "one-time":
+          sourceType = "one-time-package";
+          break;
+        case "upsell":
+          sourceType = "upsell";
+          break;
+        case "mini-draw":
+          sourceType = "mini-draw";
+          break;
+        default:
+          sourceType = "membership"; // Default fallback
+      }
     }
 
     // console.log(`🎯 Processing major draw entries for package (source: ${sourceType})`);
@@ -1148,11 +1326,13 @@ async function addToMajorDraw(
         "one-time-package"?: number;
         upsell?: number;
         "mini-draw"?: number;
+        "bonus-entry-promo"?: number;
       } = {
         membership: 0,
         "one-time-package": 0,
         upsell: 0,
         "mini-draw": 0,
+        "bonus-entry-promo": 0,
       };
       entriesBySource[sourceType] = packageData.entries;
 
@@ -1277,7 +1457,8 @@ async function addToMajorDraw(
 async function addToMiniDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
-  paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string }
+  paymentMetadata?: { created?: number; type?: string; packageType?: string; miniDrawId?: string },
+  sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
@@ -1337,13 +1518,19 @@ async function addToMiniDraw(
       }
 
       // Create new user entry atomically
+      // Use override source type if provided (for bonus entries), otherwise use "mini-draw-package"
+      const sourceType: "mini-draw-package" | "free-entry" | "bonus-entry-promo" =
+        (sourceTypeOverride as "mini-draw-package" | "free-entry" | "bonus-entry-promo") || "mini-draw-package";
       const entriesBySource: {
         "mini-draw-package"?: number;
         "free-entry"?: number;
+        "bonus-entry-promo"?: number;
       } = {
-        "mini-draw-package": packageData.entries,
+        "mini-draw-package": 0,
         "free-entry": 0,
+        "bonus-entry-promo": 0,
       };
+      entriesBySource[sourceType] = packageData.entries;
 
       const newEntry = {
         userId: user._id as mongoose.Types.ObjectId,
@@ -1378,7 +1565,7 @@ async function addToMiniDraw(
           {
             $inc: {
               "entries.$.totalEntries": packageData.entries,
-              "entries.$.entriesBySource.mini-draw-package": packageData.entries,
+              [`entries.$.entriesBySource.${sourceType}`]: packageData.entries,
             },
             $set: {
               "entries.$.lastUpdatedDate": now,

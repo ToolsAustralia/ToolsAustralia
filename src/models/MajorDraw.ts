@@ -55,6 +55,7 @@ export interface IMajorDraw extends Document {
       upsell?: number;
       "mini-draw"?: number;
       referral?: number;
+      "bonus-entry-promo"?: number;
     };
     firstAddedDate: Date; // When user first got entries
     lastUpdatedDate: Date; // When entries were last updated
@@ -240,6 +241,11 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
             type: Number,
             default: 0,
             min: [0, "Referral entries cannot be negative"],
+          },
+          "bonus-entry-promo": {
+            type: Number,
+            default: 0,
+            min: [0, "Bonus entry promo entries cannot be negative"],
           },
         },
         firstAddedDate: {

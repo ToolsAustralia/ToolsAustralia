@@ -3,11 +3,14 @@
 import React, { useState } from "react";
 import { useAdminActivePromos } from "@/hooks/queries/usePromoQueries";
 import AdminPromoToggle from "@/components/modals/AdminPromoToggle";
+import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
+import BonusEntryPromoList from "@/components/admin/BonusEntryPromoList";
 import PromoBadge from "@/components/ui/PromoBadge";
-import { Zap, Loader2, RefreshCw, Settings } from "lucide-react";
+import { Zap, Loader2, RefreshCw, Settings, Gift, Plus } from "lucide-react";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
+  const [isBonusEntryModalOpen, setIsBonusEntryModalOpen] = useState(false);
 
   const { data: activePromos = [], isLoading: activeLoading, refetch: refetchActive } = useAdminActivePromos();
 
@@ -87,8 +90,41 @@ export default function PromoManagement() {
         </div>
       </div>
 
+      {/* Bonus Entry Promos Section */}
+      <div className="mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Gift className="w-5 h-5 text-red-600" />
+              Bonus Entry Promos
+            </h3>
+            <p className="text-gray-600 mt-1 text-sm">
+              Create date-based promos that grant bonus entries when users purchase packages during specific periods
+            </p>
+          </div>
+          <button
+            onClick={() => setIsBonusEntryModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            <Plus className="w-4 h-4" />
+            Create Bonus Entry Promo
+          </button>
+        </div>
+
+        <BonusEntryPromoList />
+      </div>
+
       {/* Toggle Promo Modal */}
       <AdminPromoToggle isOpen={isToggleModalOpen} onClose={() => setIsToggleModalOpen(false)} />
+
+      {/* Bonus Entry Promo Modal */}
+      <AdminBonusEntryPromoModal
+        isOpen={isBonusEntryModalOpen}
+        onClose={() => setIsBonusEntryModalOpen(false)}
+        onSuccess={() => {
+          setIsBonusEntryModalOpen(false);
+        }}
+      />
     </div>
   );
 }
