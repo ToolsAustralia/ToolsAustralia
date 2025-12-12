@@ -3297,7 +3297,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 )}
 
                 {/* Payment Section - Always show package info and payment button */}
-                <div className="space-y-2 sm:space-y-3 border-t border-gray-200 pt-3 sm:pt-4">
+                <div className="space-y-2 sm:space-y-3 border-t-0 sm:border-t border-gray-200 pt-0 sm:pt-4">
                   {/* Payment Method Selector for non-authenticated users */}
                   {/* ✅ VERIFIED: Amount is correctly calculated from activePlan (from PackageSelectionModal) 
                       Flow: PackageSelectionModal -> onPlanSelect -> handlePackageSelect -> onPlanChange -> 

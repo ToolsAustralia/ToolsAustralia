@@ -363,12 +363,12 @@ const StripeCardForm = React.forwardRef<
     // IMPORTANT: Conditional return must come AFTER all hooks are called
     if (isStripeLoading) {
       return (
-        <div className="space-y-4">
-          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+        <div className="space-y-0">
+          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-0">
             <CreditCard className="w-4 h-4 text-red-600" />
             Payment Details
           </h4>
-          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50 mt-0">
             {/* Payment method tabs skeleton */}
             <div className="flex gap-2 mb-4">
               <div className="h-10 bg-gray-200 rounded animate-pulse flex-1"></div>
@@ -399,12 +399,12 @@ const StripeCardForm = React.forwardRef<
     }
 
     return (
-      <div className="space-y-4">
-        <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+      <div className="space-y-0">
+        <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-2">
           <CreditCard className="w-4 h-4 text-red-600" />
           Payment Details
         </h4>
-        <div className="p-3 border border-gray-300 rounded-lg bg-white">
+        <div className="p-3 border border-gray-300 rounded-lg bg-white mt-0">
           <PaymentElement
             key={`payment-element-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
@@ -593,6 +593,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     fontFamily: "system-ui, sans-serif",
                     spacingUnit: "4px",
                     borderRadius: "8px",
+                    // Match coupon code input size on mobile
+                    fontSizeBase: "14px", // text-sm equivalent
                   },
                   rules: {
                     // Ensure wallet payment method tabs have icon and text on same row
@@ -626,6 +628,40 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     ".TabLabel, span": {
                       display: "inline-flex",
                       alignItems: "center",
+                    },
+                    // Match coupon code input field size on mobile
+                    ".Input": {
+                      fontSize: "14px", // text-sm
+                      padding: "10px", // py-2 equivalent
+                      minHeight: "auto",
+                    },
+                    ".Input--empty": {
+                      fontSize: "14px",
+                    },
+                    ".Input--focus": {
+                      fontSize: "14px",
+                    },
+                    ".Input--invalid": {
+                      fontSize: "14px",
+                    },
+                    // Card number, expiration, and CVC inputs
+                    "input[data-elements-stable-field-name='cardNumber']": {
+                      fontSize: "14px",
+                      padding: "8px",
+                    },
+                    "input[data-elements-stable-field-name='cardExpiry']": {
+                      fontSize: "14px",
+                      padding: "8px",
+                    },
+                    "input[data-elements-stable-field-name='cardCvc']": {
+                      fontSize: "14px",
+                      padding: "8px",
+                    },
+                    // Input container
+                    ".InputElement": {
+                      fontSize: "14px",
+                      padding: "8px",
+                      minHeight: "auto",
                     },
                   },
                 },
@@ -831,6 +867,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                         fontFamily: "system-ui, sans-serif",
                         spacingUnit: "4px",
                         borderRadius: "8px",
+                        // Match coupon code input size on mobile
+                        fontSizeBase: "14px", // text-sm equivalent
                       },
                       rules: {
                         // Ensure wallet payment method tabs have icon and text on same row
@@ -864,6 +902,40 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                         ".TabLabel, span": {
                           display: "inline-flex",
                           alignItems: "center",
+                        },
+                        // Match coupon code input field size on mobile
+                        ".Input": {
+                          fontSize: "14px", // text-sm
+                          padding: "10px",
+                          minHeight: "auto",
+                        },
+                        ".Input--empty": {
+                          fontSize: "14px",
+                        },
+                        ".Input--focus": {
+                          fontSize: "14px",
+                        },
+                        ".Input--invalid": {
+                          fontSize: "14px",
+                        },
+                        // Card number, expiration, and CVC inputs
+                        "input[data-elements-stable-field-name='cardNumber']": {
+                          fontSize: "14px",
+                          padding: "8px",
+                        },
+                        "input[data-elements-stable-field-name='cardExpiry']": {
+                          fontSize: "14px",
+                          padding: "8px",
+                        },
+                        "input[data-elements-stable-field-name='cardCvc']": {
+                          fontSize: "14px",
+                          padding: "8px",
+                        },
+                        // Input container
+                        ".InputElement": {
+                          fontSize: "14px",
+                          padding: "8px",
+                          minHeight: "auto",
                         },
                       },
                     },
