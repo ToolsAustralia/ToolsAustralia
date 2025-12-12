@@ -7,6 +7,9 @@ import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 import { getStartOfTodayInAEST } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
+import FacebookAdsInsight from "@/models/FacebookAdsInsight";
+import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 
 /**
  * GET /api/admin/dashboard/stats
@@ -173,6 +176,172 @@ export async function GET(request: NextRequest) {
     }
 
     // ========================================
+    // FACEBOOK ADS STATISTICS
+    // ========================================
+    let facebookAdsSpend = 0;
+    let facebookAdsRoas = 0;
+
+    try {
+      // Get environment variables
+      const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
+      const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
+
+      if (accessToken && adAccountId) {
+        // Map dashboard date range to Facebook Ads date range
+        let fbDateRange: { since: string; until: string };
+        let fbStartDate: Date;
+        let fbEndDate: Date;
+
+        const AEST_TIMEZONE = "Australia/Sydney";
+
+        if (dateRange === "today") {
+          // Get today's date in AEST timezone for Facebook API
+          const now = new Date();
+          const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+          const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+          const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
+          const todayDateStr = `${todayYear}-${String(todayMonth).padStart(2, "0")}-${String(todayDay).padStart(
+            2,
+            "0"
+          )}`;
+
+          fbDateRange = {
+            since: todayDateStr,
+            until: todayDateStr,
+          };
+          fbStartDate = startOfToday;
+          const tomorrowStart = new Date(startOfToday);
+          tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+          fbEndDate = new Date(tomorrowStart.getTime() - 1);
+        } else if (dateRange === "yesterday") {
+          const yesterdayStart = subDays(startOfToday, 1);
+          fbStartDate = yesterdayStart;
+          fbEndDate = new Date(startOfToday.getTime() - 1);
+
+          const yesterdayYear = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "yyyy"), 10);
+          const yesterdayMonth = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "M"), 10);
+          const yesterdayDay = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "d"), 10);
+          const yesterdayDateStr = `${yesterdayYear}-${String(yesterdayMonth).padStart(2, "0")}-${String(
+            yesterdayDay
+          ).padStart(2, "0")}`;
+
+          fbDateRange = {
+            since: yesterdayDateStr,
+            until: yesterdayDateStr,
+          };
+        } else if (dateRange === "all-time") {
+          // For all-time, use a large date range (last 2 years)
+          const allTimeStart = new Date();
+          allTimeStart.setFullYear(allTimeStart.getFullYear() - 2);
+          fbStartDate = allTimeStart;
+          fbEndDate = new Date();
+
+          const startYear = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "yyyy"), 10);
+          const startMonth = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "M"), 10);
+          const startDay = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "d"), 10);
+          const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(
+            2,
+            "0"
+          )}`;
+
+          const endYear = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "yyyy"), 10);
+          const endMonth = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "M"), 10);
+          const endDay = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "d"), 10);
+          const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+
+          fbDateRange = {
+            since: startDateStr,
+            until: endDateStr,
+          };
+        } else {
+          // Custom range
+          fbStartDate = startDate;
+          fbEndDate = endDate;
+
+          const startYear = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "yyyy"), 10);
+          const startMonth = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "M"), 10);
+          const startDay = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "d"), 10);
+          const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(
+            2,
+            "0"
+          )}`;
+
+          const endYear = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "yyyy"), 10);
+          const endMonth = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "M"), 10);
+          const endDay = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "d"), 10);
+          const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+
+          fbDateRange = {
+            since: startDateStr,
+            until: endDateStr,
+          };
+        }
+
+        // Check cache (5 minute TTL)
+        const CACHE_TTL_MS = 5 * 60 * 1000;
+        const cacheKey = {
+          adAccountId,
+          "dateRange.start": fbStartDate,
+          "dateRange.end": fbEndDate,
+          level: "account",
+        };
+
+        const cachedData = await FacebookAdsInsight.findOne(cacheKey).sort({ syncedAt: -1 });
+        let isCached = false;
+
+        if (cachedData) {
+          const cacheAge = Date.now() - new Date(cachedData.syncedAt).getTime();
+          if (cacheAge < CACHE_TTL_MS) {
+            isCached = true;
+          }
+        }
+
+        let metrics: { spend: number; revenue: number; roas: number } | null = null;
+
+        if (isCached && cachedData) {
+          // Use cached data
+          metrics = {
+            spend: cachedData.metrics.spend / 100, // Convert cents to dollars
+            revenue: cachedData.metrics.revenue / 100, // Convert cents to dollars
+            roas: cachedData.calculated.roas,
+          };
+        } else {
+          // Fetch fresh data
+          try {
+            const insightsData = await fetchFacebookInsights(adAccountId, accessToken, fbDateRange, "account");
+
+            if (insightsData && insightsData.length > 0) {
+              const firstInsight = insightsData[0];
+              metrics = {
+                spend: firstInsight.metrics.spend / 100, // Convert cents to dollars
+                revenue: firstInsight.metrics.revenue / 100, // Convert cents to dollars
+                roas: firstInsight.metrics.roas,
+              };
+            }
+          } catch (error) {
+            console.error("⚠️ Error fetching Facebook Ads insights:", error);
+            // If we have cached data (even if expired), use it as fallback
+            if (cachedData) {
+              metrics = {
+                spend: cachedData.metrics.spend / 100,
+                revenue: cachedData.metrics.revenue / 100,
+                roas: cachedData.calculated.roas,
+              };
+            }
+          }
+        }
+
+        if (metrics) {
+          facebookAdsSpend = metrics.spend;
+          facebookAdsRoas = metrics.roas;
+        }
+      }
+    } catch (error) {
+      console.error("⚠️ Error fetching Facebook Ads stats:", error);
+      // Gracefully degrade - return 0 values
+    }
+
+    // ========================================
     // RESPONSE
     // ========================================
     const stats = {
@@ -194,6 +363,10 @@ export async function GET(request: NextRequest) {
         activeDraws: activeDrawsCount,
       },
       conversionRate,
+      facebookAds: {
+        spend: facebookAdsSpend,
+        roas: facebookAdsRoas,
+      },
       dateRange: {
         start: startDate.toISOString(),
         end: endDate.toISOString(),

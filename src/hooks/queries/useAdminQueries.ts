@@ -70,6 +70,10 @@ export interface AdminDashboardStats {
     activeDraws: number;
   };
   conversionRate: number;
+  facebookAds?: {
+    spend: number;
+    roas: number;
+  };
   dateRange?: {
     start: string;
     end: string;

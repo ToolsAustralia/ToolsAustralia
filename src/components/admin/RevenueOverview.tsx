@@ -64,7 +64,7 @@ export default function RevenueOverview() {
             return data.date.startsWith(monthName);
           }
           return false;
-        }
+    }
 
         // Use dateKey for accurate filtering
         const dataDate = new Date(data.dateKey);
@@ -258,30 +258,30 @@ export default function RevenueOverview() {
             <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30">
               <div className="flex items-center gap-1 sm:gap-2">
                 {(["days", "months", "years"] as Period[]).map((period) => (
-                  <button
-                    key={period}
-                    onClick={() => setSelectedPeriod(period)}
+                <button
+                  key={period}
+                  onClick={() => setSelectedPeriod(period)}
                     className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-[11px] text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none font-['Poppins'] ${
                       selectedPeriod === period
                         ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)]"
                         : "text-slate-300 hover:text-white hover:bg-slate-700/50"
-                    }`}
-                  >
+                  }`}
+                >
                     <span className="capitalize">{period}</span>
-                  </button>
-                ))}
-              </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Summary Cards */}
+      {/* Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
           {/* Total Revenue */}
           <div className="bg-gradient-to-br from-emerald-500/20 to-green-600/20 rounded-xl p-3 sm:p-4 border border-emerald-500/30 relative">
             <div className="text-lg sm:text-xl font-bold text-white font-['Poppins']">
               {formatCurrency(totals.total)}
-            </div>
+              </div>
             <div className="flex items-center justify-between mt-1">
               <div className="text-xs text-slate-400 font-['Poppins']">Total Revenue</div>
               <div
@@ -363,7 +363,7 @@ export default function RevenueOverview() {
             >
               <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-          </div>
+            </div>
         )}
 
         {/* Chart Area */}
@@ -375,7 +375,7 @@ export default function RevenueOverview() {
             <span>{formatCurrency(maxValue * 0.5)}</span>
             <span>{formatCurrency(maxValue * 0.25)}</span>
             <span>$0</span>
-          </div>
+            </div>
 
           {/* Y-Axis Line */}
           <div className="absolute left-8 sm:left-10 top-0 bottom-16 w-px bg-slate-600/20"></div>
@@ -463,17 +463,17 @@ export default function RevenueOverview() {
                       onClick={() => setClickedBar(clickedBar === barId ? null : barId)}
                     >
                       {/* One-Time Bar */}
-                      <div
+                    <div
                         className="flex flex-col items-center justify-end h-full cursor-pointer transition-opacity hover:opacity-90"
                         style={{ width: `${barWidthPercent}%`, minWidth: barMinWidth }}
                       >
                         <div
                           className="w-full bg-gradient-to-t from-blue-600 via-blue-500 to-cyan-600 rounded-t relative border border-blue-500/50"
-                          style={{
+                      style={{
                             height: `${maxValue > 0 ? (data.oneTime / maxValue) * 100 : 0}%`,
                             minHeight: data.oneTime > 0 ? "3px" : "0px",
-                          }}
-                        >
+                      }}
+                    >
                           {data.oneTime > 0 && showValue && (
                             <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
                               {formatCurrency(data.oneTime)}
@@ -499,21 +499,21 @@ export default function RevenueOverview() {
                               {formatCurrency(data.memberships)}
                             </div>
                           )}
-                        </div>
                       </div>
+                    </div>
 
                       {/* Mini-Draw Bar */}
-                      <div
+                    <div
                         className="flex flex-col items-center justify-end h-full cursor-pointer transition-opacity hover:opacity-90"
                         style={{ width: `${barWidthPercent}%`, minWidth: barMinWidth }}
                       >
                         <div
                           className="w-full bg-gradient-to-t from-green-500 via-emerald-500 to-green-600 rounded-t relative border border-green-500/50"
-                          style={{
+                      style={{
                             height: `${maxValue > 0 ? (data.miniDraw / maxValue) * 100 : 0}%`,
                             minHeight: data.miniDraw > 0 ? "3px" : "0px",
-                          }}
-                        >
+                      }}
+                    >
                           {data.miniDraw > 0 && showValue && (
                             <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
                               {formatCurrency(data.miniDraw)}
@@ -526,13 +526,13 @@ export default function RevenueOverview() {
                     {/* Period Label - Under the bars (simplified) */}
                     <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 text-xs sm:text-sm font-semibold text-white font-['Poppins'] whitespace-nowrap text-center w-full">
                       {formatDateLabel(data, selectedPeriod)}
-                    </div>
+                  </div>
                   </div>
                 );
               })}
             </div>
           </div>
-        </div>
+                      </div>
 
         {/* Legend */}
         <div className="pt-4 border-t border-slate-600/20">
@@ -543,13 +543,13 @@ export default function RevenueOverview() {
                 <span className="sm:hidden">One-Time</span>
                 <span className="hidden sm:inline">One-Time Packages</span>
               </span>
-            </div>
+                      </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-gradient-to-t from-orange-500 via-amber-500 to-yellow-500"></div>
               <span className="text-[10px] sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">
                 Memberships
               </span>
-            </div>
+                      </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-gradient-to-t from-green-500 via-emerald-500 to-green-600"></div>
               <span className="text-[10px] sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">

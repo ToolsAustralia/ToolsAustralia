@@ -460,7 +460,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 {statsLoading || activitiesLoading ? (
                   // Loading state - show skeleton cards
                   <>
-                    {[1, 2, 3, 4].map((i) => (
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
                       <div
                         key={i}
                         className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-3 sm:p-4 animate-pulse"
@@ -544,6 +544,39 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       icon={Target}
                       subtitle="Paying customers"
                       color="purple"
+                    />
+                    <AdminStatsCard
+                      title={
+                        dateRange === "today"
+                          ? "Ad Spend"
+                          : dateRange === "yesterday"
+                          ? "Ad Spend"
+                          : dateRange === "all-time"
+                          ? "Total Ad Spend"
+                          : "Ad Spend"
+                      }
+                      value={`$${(dashboardStats.facebookAds?.spend || 0).toLocaleString("en-AU", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`}
+                      icon={BarChart3}
+                      subtitle={
+                        dateRange === "today"
+                          ? "Facebook Ads spend"
+                          : dateRange === "yesterday"
+                          ? "Facebook Ads spend"
+                          : dateRange === "all-time"
+                          ? "All-time Facebook Ads"
+                          : "Facebook Ads spend"
+                      }
+                      color="blue"
+                    />
+                    <AdminStatsCard
+                      title="ROAS"
+                      value={`${(dashboardStats.facebookAds?.roas || 0).toFixed(2)}x`}
+                      icon={Target}
+                      subtitle="Return on ad spend"
+                      color="green"
                     />
                   </>
                 ) : null}
