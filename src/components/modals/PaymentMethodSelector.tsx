@@ -129,7 +129,7 @@ const StripeCardForm = React.forwardRef<
             googlePay: "auto" as const,
           }
         : undefined, // Disable wallets until PaymentIntent is ready
-      paymentMethodOrder: shouldEnableWallets ? ["apple_pay", "google_pay", "card"] : ["card"],
+      paymentMethodOrder: shouldEnableWallets ? ["card", "apple_pay", "google_pay"] : ["card"],
       // Only include paymentRequest when amount is valid to prevent $0.00 display
       ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
       fields: {

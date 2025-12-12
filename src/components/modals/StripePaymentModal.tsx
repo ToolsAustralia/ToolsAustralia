@@ -518,7 +518,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
                 wallets: {
                   applePay: "auto",
                 },
-                paymentMethodOrder: ["apple_pay", "card"],
+                paymentMethodOrder: ["card", "apple_pay"],
                 fields: {
                   billingDetails: "never", // Hide country, address, and postal code fields
                 },
