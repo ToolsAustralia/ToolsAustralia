@@ -21,8 +21,6 @@ import {
   Clock,
   Send,
   Key,
-  UserCheck,
-  UserX,
   MessageSquare,
   Gift,
   Trash2,

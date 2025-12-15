@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useToast } from "@/components/ui/Toast";
 import SubscriptionManagementModal from "./SubscriptionManagementModal";
@@ -48,14 +48,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isRequestingReset, setIsRequestingReset] = useState(false);
 
-  const invalidateAccountData = async () => {
+  const invalidateAccountData = useCallback(async () => {
     if (!session?.user?.id) return;
     // Invalidate user account/detail queries so UI reflects latest profile/subscription changes
     await queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
     await queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(session.user.id) });
-  };
+  }, [queryClient, session?.user?.id]);
 
-  const handleSaveMobile = async () => {
+  const handleSaveMobile = useCallback(async () => {
     try {
       setIsSavingMobile(true);
       const res = await fetch("/api/user/update-profile", {
@@ -84,7 +84,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
     } finally {
       setIsSavingMobile(false);
     }
-  };
+  }, [invalidateAccountData, mobile, showToast]);
 
   const handleChangePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
