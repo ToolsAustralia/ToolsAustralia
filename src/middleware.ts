@@ -67,7 +67,17 @@ export default withAuth(
         const { pathname } = req.nextUrl;
 
         // Allow access to public routes
-        const publicRoutes = ["/", "/shop", "/mini-draws", "/partner", "/contact", "/faq", "/winners", "/membership", "/affiliate/login"];
+        const publicRoutes = [
+          "/",
+          "/shop",
+          "/mini-draws",
+          "/partner",
+          "/contact",
+          "/faq",
+          "/winners",
+          "/membership",
+          "/affiliate/login",
+        ];
         const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
         if (isPublicRoute) {
@@ -79,7 +89,10 @@ export default withAuth(
         const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
 
         if (isProtectedRoute) {
-          return !!token;
+          // Treat tokens without a valid subject as unauthenticated.
+          // This ensures that when the JWT callback clears the token
+          // for deleted/inactive users, protected routes become inaccessible.
+          return !!token && !!token.sub;
         }
 
         // For admin routes, require admin role
@@ -87,7 +100,8 @@ export default withAuth(
         const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 
         if (isAdminRoute) {
-          return token?.role === "admin";
+          // Admin routes require both a valid subject and admin role.
+          return !!token?.sub && token?.role === "admin";
         }
 
         return true;

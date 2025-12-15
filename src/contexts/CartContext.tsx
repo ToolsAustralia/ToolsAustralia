@@ -4,6 +4,7 @@ import React, { createContext, useContext, ReactNode, useState, useCallback, use
 import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 
 // Define CartItem type locally to match our needs
 interface CartItem {
@@ -129,6 +130,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const userId = session?.user?.id;
   const { trackRemoveFromCart } = usePixelTracking();
+  const { trackRemoveFromCart: trackKlaviyoRemoveFromCart } = useKlaviyoTracking();
 
   // Enhanced cart state
   const [cartState, setCartState] = useState<OptimisticCartState>({
@@ -517,6 +519,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
             currency: "AUD",
             productId: type === "product" ? itemId : undefined,
             contentName: type === "product" ? itemToRemove.product?.name : itemToRemove.miniDraw?.name,
+          });
+
+          // Track Klaviyo remove from cart event
+          trackKlaviyoRemoveFromCart({
+            value: itemToRemove.price * itemToRemove.quantity,
+            currency: "AUD",
+            productId: type === "product" ? itemId : undefined,
+            productName: type === "product" ? itemToRemove.product?.name : itemToRemove.miniDraw?.name,
+            numItems: itemToRemove.quantity,
           });
         } catch (error) {
           console.error("Error tracking RemoveFromCart:", error);

@@ -6,6 +6,7 @@ import { ProductData } from "@/data";
 import { useCart } from "@/contexts/CartContext";
 import { useSession } from "next-auth/react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { useUserContext } from "@/contexts/UserContext";
 
 interface DatabaseProduct {
@@ -28,6 +29,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   const { addToCart, isLoading } = useCart();
   const { data: session } = useSession();
   const { trackAddToCart } = usePixelTracking();
+  const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { isAuthenticated } = useUserContext();
 
   const handleQuantityChange = (change: number) => {
@@ -51,6 +53,15 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
         value: (product.price as number) * quantity,
         currency: "AUD",
         productId: productId as string,
+      });
+
+      // Track Klaviyo add to cart event
+      trackKlaviyoAddToCart({
+        value: (product.price as number) * quantity,
+        currency: "AUD",
+        productId: productId as string,
+        productName: product.name,
+        numItems: quantity,
       });
 
       await addToCart({

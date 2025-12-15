@@ -1,4 +1,5 @@
 import { NextAuthOptions } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
@@ -179,6 +180,13 @@ export const authOptions: NextAuthOptions = {
             token.firstName = dbUser.firstName;
             token.lastName = dbUser.lastName;
             token.email = dbUser.email;
+          } else {
+            // If the user record has been removed, invalidate the JWT
+            // so downstream middleware treats this as an unauthenticated request.
+            authDebugLog("🔒 JWT invalidated: Google user no longer exists in database");
+            // Cast to JWT to satisfy TypeScript while returning an empty token,
+            // which NextAuth interprets as an invalidated session.
+            return {} as JWT;
           }
         } catch (error) {
           console.error("Error finding user in JWT callback:", error);
@@ -195,12 +203,26 @@ export const authOptions: NextAuthOptions = {
         try {
           await connectDB();
           const dbUser = await User.findById(token.sub);
-          if (dbUser && dbUser.email !== token.email) {
-            authDebugLog(`✅ Email synced from database: ${token.email} → ${dbUser.email}`);
-            token.email = dbUser.email;
-            token.firstName = dbUser.firstName;
-            token.lastName = dbUser.lastName;
+          if (!dbUser || dbUser.isActive === false) {
+            // If the user has been deleted or deactivated, clear the token.
+            // Returning an empty object ensures:
+            // - withAuth middleware sees no valid subject
+            // - useSession() will eventually treat the user as signed out
+            authDebugLog(
+              `🔒 JWT invalidated: user ${token.sub} is ${!dbUser ? "missing" : "inactive"} – clearing session token`
+            );
+            // Return an empty token object, typed as JWT for TypeScript.
+            return {} as JWT;
           }
+
+          // Keep session data in sync with the latest database values.
+          if (dbUser.email !== token.email) {
+            authDebugLog(`✅ Email synced from database: ${token.email} → ${dbUser.email}`);
+          }
+          token.email = dbUser.email;
+          token.firstName = dbUser.firstName;
+          token.lastName = dbUser.lastName;
+          token.role = dbUser.role;
         } catch (error) {
           console.error("Error syncing user data in JWT callback:", error);
         }

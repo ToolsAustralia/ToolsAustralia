@@ -4,6 +4,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/StructuredData";
 import PixelTracker from "@/components/PixelTracker";
+import KlaviyoScriptLoader from "@/components/KlaviyoScriptLoader";
+import KlaviyoPageTracker from "@/components/KlaviyoPageTracker";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
@@ -96,6 +98,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
           nonce={nonce}
         />
+        <KlaviyoScriptLoader
+          companyId={process.env.NEXT_PUBLIC_KLAVIYO_COMPANY_ID}
+          disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
+          nonce={nonce}
+        />
+        <KlaviyoPageTracker />
         <Providers>{children}</Providers>
         <MajorDrawTestControls />
         <Analytics />

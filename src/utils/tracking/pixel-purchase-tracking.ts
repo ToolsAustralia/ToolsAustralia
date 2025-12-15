@@ -11,6 +11,7 @@
 
 import { trackFacebookEvent } from "@/components/FacebookPixel";
 import { trackTikTokEvent } from "@/components/TikTokPixel";
+import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
 import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
 import {
   generateEventID,
@@ -223,6 +224,39 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       } catch (tiktokError) {
         // Silently fail - TikTok tracking is optional and client-side only
         console.warn("⚠️ TikTok Pixel tracking skipped (server-side execution)");
+      }
+    }
+
+    // 4. Track Klaviyo Purchase (client-side only)
+    if (typeof window !== "undefined") {
+      try {
+        trackKlaviyoEvent("Placed Order", {
+          value,
+          currency,
+          order_id: orderId,
+          item_count: num_items || 1,
+          items: packageId
+            ? [
+                {
+                  product_id: packageId,
+                  product_name: packageName,
+                  value,
+                  quantity: num_items || 1,
+                },
+              ]
+            : [],
+          package_type: packageType,
+          package_id: packageId,
+          package_name: packageName,
+          user_id: userId,
+          user_email: userEmail,
+        });
+        // console.log(`📧 Klaviyo: Purchase tracked for ${packageType} - $${value} ${currency}`);
+      } catch (klaviyoError) {
+        // Silently fail - Klaviyo tracking is optional and client-side only
+        if (process.env.NODE_ENV === "development") {
+          console.warn("⚠️ Klaviyo tracking error:", klaviyoError);
+        }
       }
     }
   } catch (error) {

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import type { BrandLogo } from "@/data/brandLogos";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
@@ -87,6 +88,7 @@ export default function ProductCard({
 }: ProductCardProps) {
   const { items, addToCart, isAddingToCart, isUpdatingCart, hasFailedOperations, retryAllFailedOperations } = useCart();
   const { trackAddToCart } = usePixelTracking();
+  const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { userData, isAuthenticated } = useUserContext();
 
   // Helper functions
@@ -339,6 +341,15 @@ export default function ProductCard({
         content_name: productData.name,
         content_category: productData.brand,
         num_items: 1,
+      });
+
+      // Track Klaviyo add to cart event
+      trackKlaviyoAddToCart({
+        value: productData.price,
+        currency: "AUD",
+        productId: productData.id,
+        productName: productData.name,
+        numItems: 1,
       });
 
       // Call legacy callback if provided

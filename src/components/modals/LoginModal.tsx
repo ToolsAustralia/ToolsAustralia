@@ -9,6 +9,7 @@ import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
 import { authenticateWithPopup } from "@/utils/auth/popupAuth";
 import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ui/Toast";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   const { data: session, status } = useSession();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { identify } = useKlaviyoTracking();
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -153,6 +155,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
           queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
           queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
           queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(session.user.id) });
+
+          // Identify user in Klaviyo after successful login
+          if (session.user.email) {
+            identify({
+              email: session.user.email,
+              firstName: session.user.firstName,
+              lastName: session.user.lastName,
+            });
+          }
         }
         // Redirect will happen via useEffect
         router.push("/my-account");
@@ -203,6 +214,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
               queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
               queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
               queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(session.user.id) });
+
+              // Identify user in Klaviyo after successful Google login
+              if (session.user.email) {
+                identify({
+                  email: session.user.email,
+                  firstName: session.user.firstName,
+                  lastName: session.user.lastName,
+                });
+              }
             }
             // Redirect will happen via useEffect
             router.push("/my-account");

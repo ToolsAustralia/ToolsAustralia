@@ -5,6 +5,18 @@ declare global {
     conn: mongoose.Connection | null;
     promise: Promise<mongoose.Connection> | null;
   };
+
+  interface Window {
+    // Klaviyo onsite JavaScript types.
+    // Optional because the script is loaded client-side and may not be present
+    // during SSR or before the loader has finished executing.
+    klaviyo?: {
+      push: (args: unknown[]) => void;
+      identify: (email: string, properties?: Record<string, unknown>) => void;
+      track: (eventName: string, properties?: Record<string, unknown>) => void;
+    };
+    _klOnsite?: unknown[];
+  }
 }
 
 declare module "next-auth" {

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { useUserContext } from "@/contexts/UserContext";
 import { getUserType } from "@/utils/tracking/user-type-helpers";
 import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
@@ -23,6 +24,7 @@ interface ProductViewTrackingProps {
  */
 export default function ProductViewTracking({ product }: ProductViewTrackingProps) {
   const { trackViewContent } = usePixelTracking();
+  const { trackViewContent: trackKlaviyoViewContent } = useKlaviyoTracking();
   const { isAuthenticated } = useUserContext();
   const pathname = usePathname();
 
@@ -45,6 +47,14 @@ export default function ProductViewTracking({ product }: ProductViewTrackingProp
       page_type: pageMetadata.page_type,
       user_type: userType,
       platform: "tools-australia-website",
+    });
+
+    // Track Klaviyo view content event
+    trackKlaviyoViewContent({
+      value: product.price,
+      currency: "AUD",
+      productId: product._id,
+      productName: product.name,
     });
 
     if (process.env.NODE_ENV === "development") {

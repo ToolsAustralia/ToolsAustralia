@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { useUserContext } from "@/contexts/UserContext";
 import { getUserType } from "@/utils/tracking/user-type-helpers";
 import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
@@ -24,6 +25,7 @@ interface MiniDrawViewTrackingProps {
  */
 export default function MiniDrawViewTracking({ miniDraw }: MiniDrawViewTrackingProps) {
   const { trackViewContent } = usePixelTracking();
+  const { trackViewContent: trackKlaviyoViewContent } = useKlaviyoTracking();
   const { isAuthenticated } = useUserContext();
   const pathname = usePathname();
 
@@ -45,6 +47,14 @@ export default function MiniDrawViewTracking({ miniDraw }: MiniDrawViewTrackingP
       page_type: pageMetadata.page_type,
       user_type: userType,
       platform: "tools-australia-website",
+    });
+
+    // Track Klaviyo view content event
+    trackKlaviyoViewContent({
+      value: miniDraw.prize.value,
+      currency: "AUD",
+      productId: miniDraw._id,
+      productName: miniDraw.prize.name,
     });
 
     if (process.env.NODE_ENV === "development") {

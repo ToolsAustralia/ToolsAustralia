@@ -48,7 +48,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      // When the user record backing this session cannot be found,
+      // return a consistent machine-readable error code so the client
+      // can safely treat this as a dangling session and force logout.
+      return NextResponse.json({ error: "User not found", code: "USER_NOT_FOUND" }, { status: 404 });
     }
 
     // Cast user to access properties (ignoring mongoose typing complexity)
