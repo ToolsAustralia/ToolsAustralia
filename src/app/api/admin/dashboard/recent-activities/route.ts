@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
@@ -6,6 +6,8 @@ import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 import Order from "@/models/Order";
+import ReferralEvent from "@/models/ReferralEvent";
+import mongoose from "mongoose";
 
 export interface RecentActivity {
   id: string;
@@ -54,15 +56,38 @@ export async function GET() {
     })
       .sort({ createdAt: -1 })
       .limit(10)
-      .select("firstName lastName email createdAt referral affiliateReferral");
+      .select("firstName lastName email createdAt _id affiliateReferral");
+
+    // Batch query referral events for all signups to check if they were referred by someone else
+    // This is more efficient than querying one by one
+    const userIds = recentSignups.map((user) => new mongoose.Types.ObjectId(user._id));
+    const referralEvents = await ReferralEvent.find({
+      inviteeUserId: { $in: userIds },
+      status: { $in: ["pending", "converted"] },
+    })
+      .select("inviteeUserId referralCode referrerId")
+      .lean();
+
+    // Create a map for quick lookup: userId -> referralCode
+    // Only include events where the referrer is different from the invitee (defense in depth)
+    const referralMap = new Map<string, string>();
+    referralEvents.forEach((event) => {
+      const inviteeId = event.inviteeUserId?.toString();
+      const referrerId = event.referrerId?.toString();
+      // Only add if referrer is different from invitee (user can't refer themselves)
+      if (inviteeId && referrerId && inviteeId !== referrerId && event.referralCode) {
+        referralMap.set(inviteeId, event.referralCode);
+      }
+    });
 
     recentSignups.forEach((user) => {
       const timeAgo = getTimeAgo(user.createdAt);
       let action = "Signed up for an account";
 
-      // Check for friend referral
-      if (user.referral?.code) {
-        action = `Signed up via friend referral (code: ${user.referral.code})`;
+      // Check if user was referred by someone else (not their own referral code)
+      const usedReferralCode = referralMap.get(user._id.toString());
+      if (usedReferralCode) {
+        action = `Signed up via friend referral (code: ${usedReferralCode})`;
       }
       // Check for affiliate code
       else if (user.affiliateReferral?.affiliateCode) {

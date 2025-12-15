@@ -24,3 +24,6 @@ export function useUserDetail(userId: string | null) {
     retry: 2,
   });
 }
+
+
+
