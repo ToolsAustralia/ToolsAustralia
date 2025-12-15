@@ -434,6 +434,108 @@ export function generateEmailVerificationToken(): string {
 }
 
 /**
+ * Send a plain email with provided subject/body (centralized design)
+ */
+export async function sendCustomEmail({
+  to,
+  subject,
+  html,
+  text,
+  fromName = "Tools Australia",
+}: {
+  to: string;
+  subject: string;
+  html?: string;
+  text?: string;
+  fromName?: string;
+}): Promise<EmailResult> {
+  try {
+    const transporter = createEmailTransporter();
+
+    if (!transporter) {
+      console.error("Email transporter not created - SMTP not configured");
+      return {
+        success: false,
+        error: "Email service not configured",
+      };
+    }
+
+    const mailOptions = {
+      from: {
+        name: fromName,
+        address: process.env.SMTP_SERVER_USER!,
+      },
+      to,
+      subject,
+      html,
+      text: text || html?.replace(/<[^>]+>/g, "") || "",
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
+  } catch (error) {
+    console.error("Failed to send custom email:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send email",
+    };
+  }
+}
+
+/**
+ * Send password reset email with link and code
+ */
+export async function sendPasswordResetEmail({
+  to,
+  userName,
+  resetUrl,
+  resetCode,
+}: {
+  to: string;
+  userName?: string;
+  resetUrl: string;
+  resetCode: string;
+}): Promise<EmailResult> {
+  const safeName = userName || "User";
+  const html = `
+    <div style="font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 24px;">
+      <div style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06); overflow: hidden; border: 1px solid #e5e7eb;">
+        <div style="background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%); padding: 28px 24px;">
+          <h1 style="color: #fff; margin: 0; font-size: 22px; font-weight: 700;">Reset your password</h1>
+          <p style="color: #cbd5e1; margin: 6px 0 0; font-size: 14px;">Tools Australia account security</p>
+        </div>
+        <div style="padding: 24px 22px 26px;">
+          <p style="margin: 0 0 12px; color: #0f172a; font-size: 15px;">Hi ${safeName},</p>
+          <p style="margin: 0 0 12px; color: #1f2937; font-size: 14px;">We received a request to reset your password. Use the code below or click the reset button. The code expires in 60 minutes.</p>
+          <div style="margin: 18px 0; text-align: center; padding: 14px; border: 1px dashed #cbd5e1; border-radius: 12px; background: #f8fafc;">
+            <div style="font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #0f172a;">${resetCode}</div>
+          </div>
+          <div style="text-align: center; margin: 18px 0 16px;">
+            <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #ee0000, #ff4444); color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600;">Reset Password</a>
+          </div>
+          <p style="margin: 0 0 10px; color: #475569; font-size: 13px;">If you didn’t request this, you can ignore this email—your password will stay the same.</p>
+        </div>
+        <div style="background: #0f172a; color: #cbd5e1; padding: 18px 22px; font-size: 12px;">
+          <div style="font-weight: 600; color: #fff;">Tools Australia</div>
+          <div style="margin-top: 4px;">© 2025 Tools Australia. All rights reserved.</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendCustomEmail({
+    to,
+    subject: "Reset your password - Tools Australia",
+    html,
+    text: `Hi ${safeName},\n\nYour password reset code is ${resetCode}. It expires in 60 minutes.\nReset link: ${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
+  });
+}
+
+/**
  * Get verification expiry time
  */
 export function getEmailVerificationExpiry(): Date {

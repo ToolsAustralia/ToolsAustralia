@@ -343,12 +343,17 @@ export type UserActionType =
   | "reset_password"
   | "toggle_status"
   | "add_note"
-  | "resend_sms_verification";
+  | "resend_sms_verification"
+  | "send_email"
+  | "admin_set_password";
 
 export interface UserActionRequest {
   action: UserActionType;
   note?: string;
   reason?: string;
+  subject?: string;
+  message?: string;
+  newPassword?: string;
 }
 
 export interface UserActionResponse {

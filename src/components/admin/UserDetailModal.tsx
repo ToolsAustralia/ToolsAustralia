@@ -365,6 +365,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const userActions = useAdminUserActions();
   const updateUser = useAdminUpdateUser();
   const [activeEditTab, setActiveEditTab] = useState<TabType | null>(null);
+  const [showSendEmailModal, setShowSendEmailModal] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
+  const [adminNewPassword, setAdminNewPassword] = useState("");
   const rewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
   const referralHistory = user?.referral?.history ?? [];
@@ -674,6 +679,60 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     const reason = action === "toggle_status" ? actionInput : undefined;
 
     handleAction(action, note, reason);
+  };
+
+  const handleSendEmail = async () => {
+    if (!user) return;
+    if (!emailSubject.trim() || !emailMessage.trim()) {
+      alert("Subject and message are required.");
+      return;
+    }
+    setActionLoading("send_email");
+    try {
+      await userActions.mutateAsync({
+        userId: user.id,
+        actionData: {
+          action: "send_email",
+          subject: emailSubject.trim(),
+          message: emailMessage.trim(),
+        },
+      });
+      alert("Email sent successfully.");
+      setEmailSubject("");
+      setEmailMessage("");
+      setShowSendEmailModal(false);
+    } catch (error) {
+      console.error("Send email failed:", error);
+      alert("Failed to send email. Please try again.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleAdminSetPassword = async () => {
+    if (!user) return;
+    if (adminNewPassword.trim().length < 6) {
+      alert("New password must be at least 6 characters.");
+      return;
+    }
+    setActionLoading("admin_set_password");
+    try {
+      await userActions.mutateAsync({
+        userId: user.id,
+        actionData: {
+          action: "admin_set_password",
+          newPassword: adminNewPassword.trim(),
+        },
+      });
+      alert("Password updated successfully.");
+      setAdminNewPassword("");
+      setShowAdminPasswordModal(false);
+    } catch (error) {
+      console.error("Admin set password failed:", error);
+      alert("Failed to update password. Please try again.");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // Fetch deletion summary
@@ -1604,33 +1663,21 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
                     <button
-                      onClick={() =>
-                        showActionConfirmation(
-                          "resend_verification",
-                          "Resend Verification Email",
-                          "Send a new email verification code to this user."
-                        )
-                      }
-                      disabled={actionLoading === "resend_verification"}
+                      onClick={() => setShowSendEmailModal(true)}
+                      disabled={actionLoading === "send_email"}
                       className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors disabled:opacity-50"
                     >
                       <Send className="w-5 h-5 text-blue-600" />
-                      <span className="text-xs font-medium text-gray-700">Resend Email</span>
+                      <span className="text-xs font-medium text-gray-700">Send Email</span>
                     </button>
 
                     <button
-                      onClick={() =>
-                        showActionConfirmation(
-                          "reset_password",
-                          "Reset Password",
-                          "Send a password reset email to this user."
-                        )
-                      }
-                      disabled={actionLoading === "reset_password"}
+                      onClick={() => setShowAdminPasswordModal(true)}
+                      disabled={actionLoading === "admin_set_password"}
                       className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:bg-yellow-50 transition-colors disabled:opacity-50"
                     >
                       <Key className="w-5 h-5 text-yellow-600" />
-                      <span className="text-xs font-medium text-gray-700">Reset Password</span>
+                      <span className="text-xs font-medium text-gray-700">Set Password</span>
                     </button>
 
                     <button
@@ -3040,6 +3087,99 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-50 transition-all"
               >
                 {actionLoading === showActionModal.action ? "Processing..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Email Modal */}
+      {showSendEmailModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-fade-in">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Send Email</h3>
+            <p className="text-gray-600 mb-6">Compose and send an email directly to the user.</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="Subject"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <textarea
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  rows={5}
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  placeholder="Write your message..."
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowSendEmailModal(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading === "send_email"}
+                onClick={handleSendEmail}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-sm font-semibold text-white shadow-sm hover:from-blue-700 hover:to-blue-600 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {actionLoading === "send_email" ? "Sending..." : "Send Email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Set Password Modal */}
+      {showAdminPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Set New Password</h3>
+            <p className="text-gray-600 mb-6">
+              Set a new password for this user. Minimum length is enforced; no verification email is sent.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+                <input
+                  type="password"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-yellow-500 focus:outline-none"
+                  value={adminNewPassword}
+                  onChange={(e) => setAdminNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAdminPasswordModal(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading === "admin_set_password"}
+                onClick={handleAdminSetPassword}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-400 text-sm font-semibold text-white shadow-sm hover:from-yellow-600 hover:to-yellow-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {actionLoading === "admin_set_password" ? "Saving..." : "Save Password"}
               </button>
             </div>
           </div>

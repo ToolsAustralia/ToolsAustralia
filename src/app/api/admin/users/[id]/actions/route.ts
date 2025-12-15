@@ -8,6 +8,8 @@ import mongoose from "mongoose";
 // import { sendEmail } from "@/lib/email";
 // import { sendSMS } from "@/lib/sms";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import { sendCustomEmail } from "@/lib/email";
 
 /**
  * POST /api/admin/users/[id]/actions
@@ -15,7 +17,9 @@ import crypto from "crypto";
  *
  * Supported actions:
  * - resend_verification: Resend email verification
- * - reset_password: Send password reset email
+ * - reset_password: Send password reset email (legacy)
+ * - admin_set_password: Set a new password directly (no email)
+ * - send_email: Send a direct email to the user
  * - toggle_status: Activate/deactivate account
  * - add_note: Add internal admin note
  * - resend_sms_verification: Resend SMS verification code
@@ -31,8 +35,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const { id: userId } = await params;
-    const body = (await request.json()) as { action: string; note?: string; reason?: string };
-    const { action, note, reason } = body;
+    const body = (await request.json()) as {
+      action: string;
+      note?: string;
+      reason?: string;
+      subject?: string;
+      message?: string;
+      newPassword?: string;
+    };
+    const { action, note, reason, subject, message, newPassword } = body;
 
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -46,6 +57,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       "toggle_status",
       "add_note",
       "resend_sms_verification",
+      "send_email",
+      "admin_set_password",
     ];
 
     if (!validActions.includes(action)) {
@@ -76,6 +89,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       case "reset_password":
         result = await handleResetPassword(user);
+        break;
+
+      case "admin_set_password":
+        if (!newPassword || newPassword.length < 6) {
+          return NextResponse.json(
+            { error: "New password is required and must be at least 6 characters" },
+            { status: 400 }
+          );
+        }
+        result = await handleAdminSetPassword(user, newPassword);
+        break;
+
+      case "send_email":
+        if (!subject || !message) {
+          return NextResponse.json({ error: "Subject and message are required" }, { status: 400 });
+        }
+        result = await handleSendEmail(user, subject, message);
         break;
 
       case "toggle_status":
@@ -220,6 +250,70 @@ async function handleResetPassword(user: any) {
       success: false,
       action: "reset_password",
       error: "Failed to send password reset email",
+    };
+  }
+}
+
+/**
+ * Handle admin-set password (no email verification)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleAdminSetPassword(user: any, newPassword: string) {
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    user.password = hashedPassword;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    return {
+      success: true,
+      action: "admin_set_password",
+      message: "Password updated successfully",
+    };
+  } catch (error) {
+    console.error("Error setting password:", error);
+    return {
+      success: false,
+      action: "admin_set_password",
+      error: "Failed to set password",
+    };
+  }
+}
+
+/**
+ * Handle direct email send to user
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleSendEmail(user: any, subject: string, message: string) {
+  try {
+    const emailResult = await sendCustomEmail({
+      to: user.email,
+      subject,
+      html: `<p>${message.replace(/\n/g, "<br>")}</p>`,
+      text: message,
+    });
+
+    if (!emailResult.success) {
+      return {
+        success: false,
+        action: "send_email",
+        error: emailResult.error || "Failed to send email",
+      };
+    }
+
+    return {
+      success: true,
+      action: "send_email",
+      message: "Email sent successfully",
+      messageId: emailResult.messageId,
+    };
+  } catch (error) {
+    console.error("Error sending email:", error);
+    return {
+      success: false,
+      action: "send_email",
+      error: "Failed to send email",
     };
   }
 }

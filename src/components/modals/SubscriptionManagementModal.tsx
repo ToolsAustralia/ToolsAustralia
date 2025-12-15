@@ -146,6 +146,10 @@ interface SubscriptionManagementModalProps {
   user: User;
   onSubscriptionUpdate?: () => void;
   membershipModal?: ReturnType<typeof useMembershipModal>;
+  /**
+   * When true, renders content without modal chrome so it can be embedded.
+   */
+  renderAsPanel?: boolean;
 }
 
 const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = ({
@@ -154,6 +158,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   user,
   onSubscriptionUpdate,
   membershipModal: parentMembershipModal,
+  renderAsPanel = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -625,7 +630,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     window.location.reload();
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !renderAsPanel) return null;
 
   const parseDate = (value?: string | Date | null) => {
     if (!value) return null;
@@ -644,9 +649,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       : null;
   };
 
-  return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="lg" closeOnBackdrop={false}>
-      <ModalHeader title="Manage Subscription" onClose={onClose} showLogo={false} />
+  const subscriptionContent = (
+    <>
+      {!renderAsPanel && <ModalHeader title="Manage Subscription" onClose={onClose} showLogo={false} />}
 
       <ModalContent padding="lg">
         {membershipPackage && activeSubscription ? (
@@ -1101,6 +1106,16 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           onDecline={handleUpsellDecline}
         />
       </ModalContent>
+    </>
+  );
+
+  if (renderAsPanel) {
+    return <div className="w-full">{subscriptionContent}</div>;
+  }
+
+  return (
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="lg" closeOnBackdrop={false}>
+      {subscriptionContent}
     </ModalContainer>
   );
 };

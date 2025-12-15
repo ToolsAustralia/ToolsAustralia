@@ -18,7 +18,7 @@ import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resol
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import MembershipModal from "@/components/modals/MembershipModal";
-import SubscriptionManagementModal from "@/components/modals/SubscriptionManagementModal";
+import SettingsModal from "@/components/modals/SettingsModal";
 import ReferFriendModal from "@/components/modals/ReferFriendModal";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
@@ -141,7 +141,7 @@ export default function MyAccountPage() {
   const rewardsPauseMessage = rewardsDisabledMessage();
 
   // Local state for subscription management modal
-  const [isSubscriptionManagementModalOpen, setIsSubscriptionManagementModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
 
   // State for accumulation tooltip
@@ -528,7 +528,7 @@ export default function MyAccountPage() {
                 {/* Desktop Only - Manage Membership Buttons */}
                 <div className="hidden lg:flex flex-row gap-3 my-5">
                   <button
-                    onClick={() => setIsSubscriptionManagementModalOpen(true)}
+                    onClick={() => setIsSettingsModalOpen(true)}
                     className="group relative bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-sm border border-white/30 text-white px-6 py-3 rounded-xl font-semibold hover:from-white/30 hover:to-white/20 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
                   >
                     <span className="relative z-10 flex items-center justify-center gap-2">
@@ -546,7 +546,7 @@ export default function MyAccountPage() {
                           d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                         />
                       </svg>
-                      Manage Membership
+                      Settings
                     </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
@@ -795,7 +795,7 @@ export default function MyAccountPage() {
                   {/* First Row: Manage and Refer a Friend */}
                   <div className="flex flex-row gap-3">
                     <button
-                      onClick={() => setIsSubscriptionManagementModalOpen(true)}
+                      onClick={() => setIsSettingsModalOpen(true)}
                       className="group relative bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-sm border border-white/30 text-white px-4 py-2 rounded-lg font-semibold hover:from-white/30 hover:to-white/20 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex-1"
                     >
                       <span className="relative z-10 flex items-center justify-center gap-2">
@@ -813,7 +813,7 @@ export default function MyAccountPage() {
                             d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                           />
                         </svg>
-                        Manage
+                        Settings
                       </span>
                       <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     </button>
@@ -1146,9 +1146,9 @@ export default function MyAccountPage() {
         onPlanChange={membershipModal.selectPlan}
       />
 
-      <SubscriptionManagementModal
-        isOpen={isSubscriptionManagementModalOpen}
-        onClose={() => setIsSubscriptionManagementModalOpen(false)}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
         user={user}
         membershipModal={membershipModal}
       />
