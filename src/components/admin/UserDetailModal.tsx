@@ -1534,6 +1534,32 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                         </div>
 
+                        <div className="flex items-start gap-2 col-span-2">
+                          <CreditCard className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Saved payment methods</p>
+                            {user.savedPaymentMethods && user.savedPaymentMethods.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {user.savedPaymentMethods.map((pm) => (
+                                  <span
+                                    key={pm.paymentMethodId}
+                                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-700"
+                                  >
+                                    <span className="truncate max-w-[140px]">{pm.paymentMethodId}</span>
+                                    {pm.isDefault && (
+                                      <span className="ml-1 inline-flex items-center rounded-full bg-green-100 px-1 text-[10px] font-semibold text-green-700">
+                                        Default
+                                      </span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500">No saved payment methods</p>
+                            )}
+                          </div>
+                        </div>
+
                         <div className="flex items-start gap-2">
                           <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
@@ -1678,35 +1704,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     >
                       <Key className="w-5 h-5 text-yellow-600" />
                       <span className="text-xs font-medium text-gray-700">Set Password</span>
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        showActionConfirmation(
-                          "toggle_status",
-                          user.isActive ? "Deactivate Account" : "Activate Account",
-                          user.isActive
-                            ? "Deactivate this user account. They will not be able to log in."
-                            : "Activate this user account. They will be able to log in again.",
-                          true,
-                          "Reason for this action (optional)"
-                        )
-                      }
-                      disabled={actionLoading === "toggle_status"}
-                      className={`flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 transition-colors disabled:opacity-50 ${
-                        user.isActive
-                          ? "hover:border-red-300 hover:bg-red-50"
-                          : "hover:border-green-300 hover:bg-green-50"
-                      }`}
-                    >
-                      {user.isActive ? (
-                        <UserX className="w-5 h-5 text-red-600" />
-                      ) : (
-                        <UserCheck className="w-5 h-5 text-green-600" />
-                      )}
-                      <span className="text-xs font-medium text-gray-700">
-                        {user.isActive ? "Deactivate" : "Activate"}
-                      </span>
                     </button>
 
                     <button

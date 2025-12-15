@@ -488,6 +488,7 @@ export async function sendCustomEmail({
 
 /**
  * Send password reset email with link and code
+ * Uses the same header/footer and overall styling as the verification email for consistency.
  */
 export async function sendPasswordResetEmail({
   to,
@@ -501,37 +502,234 @@ export async function sendPasswordResetEmail({
   resetCode: string;
 }): Promise<EmailResult> {
   const safeName = userName || "User";
+  const baseUrl = getBaseUrl();
+
   const html = `
-    <div style="font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 24px;">
-      <div style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06); overflow: hidden; border: 1px solid #e5e7eb;">
-        <div style="background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%); padding: 28px 24px;">
-          <h1 style="color: #fff; margin: 0; font-size: 22px; font-weight: 700;">Reset your password</h1>
-          <p style="color: #cbd5e1; margin: 6px 0 0; font-size: 14px;">Tools Australia account security</p>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Password Reset - Tools Australia</title>
+        <style>
+            body {
+                font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                margin: 0;
+                padding: 0;
+                background-color: #f8fafc;
+            }
+            .email-wrapper {
+                width: 100%;
+                background-color: #f8fafc;
+                padding: 20px 0;
+            }
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 16px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+                border: 1px solid #e5e7eb;
+            }
+            .header {
+                background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+                padding: 40px 30px;
+                text-align: center;
+                position: relative;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+            }
+            .logo-container {
+                position: relative;
+                z-index: 1;
+            }
+            .logo {
+                max-width: 200px;
+                height: auto;
+                margin-bottom: 16px;
+            }
+            .header-title {
+                color: white;
+                font-size: 18px;
+                font-weight: 600;
+                margin: 0;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .content {
+                padding: 40px 30px;
+            }
+            .greeting {
+                font-size: 24px;
+                font-weight: 700;
+                color: #1f2937;
+                margin: 0 0 20px 0;
+            }
+            .intro-text {
+                font-size: 16px;
+                color: #4b5563;
+                margin: 0 0 20px 0;
+                line-height: 1.7;
+            }
+            .reset-button-wrapper {
+                text-align: center;
+                margin: 20px 0 18px;
+            }
+            .reset-button {
+                display: inline-block;
+                background: linear-gradient(135deg, #ee0000, #ff4444);
+                color: #fff;
+                text-decoration: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-weight: 600;
+                font-size: 14px;
+                box-shadow: 0 10px 20px rgba(248, 113, 113, 0.3);
+            }
+            .security-notice {
+                background-color: #fffbeb;
+                border-left: 4px solid #f59e0b;
+                border-radius: 8px;
+                padding: 18px 18px 16px;
+                margin: 20px 0 0 0;
+            }
+            .security-notice h3 {
+                color: #92400e;
+                font-size: 16px;
+                font-weight: 700;
+                margin: 0 0 10px 0;
+            }
+            .security-notice ul {
+                margin: 0;
+                padding-left: 20px;
+                color: #92400e;
+            }
+            .security-notice li {
+                margin: 6px 0;
+                font-size: 14px;
+            }
+            .support-text {
+                font-size: 15px;
+                color: #6b7280;
+                margin: 26px 0 18px 0;
+                line-height: 1.6;
+            }
+            .signature {
+                margin: 20px 0 0 0;
+            }
+            .signature-text {
+                font-size: 15px;
+                color: #4b5563;
+                margin: 0;
+            }
+            .team-name {
+                font-weight: 700;
+                color: #dc2626;
+            }
+            .footer {
+                background-color: #f9fafb;
+                padding: 30px;
+                text-align: center;
+                border-top: 1px solid #e5e7eb;
+            }
+            .footer-text {
+                color: #6b7280;
+                font-size: 13px;
+                margin: 0 0 8px 0;
+                line-height: 1.5;
+            }
+            .footer-logo {
+                max-width: 120px;
+                height: auto;
+                margin: 20px 0;
+                opacity: 0.7;
+            }
+            @media (max-width: 600px) {
+                .container {
+                    margin: 10px;
+                    border-radius: 12px;
+                }
+                .header, .content, .footer {
+                    padding: 30px 20px;
+                }
+                .reset-code {
+                    font-size: 26px;
+                    letter-spacing: 5px;
+                }
+                .greeting {
+                    font-size: 20px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-wrapper">
+            <div class="container">
+                <div class="header">
+                    <div class="logo-container">
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
+                        <h1 class="header-title">Password Reset</h1>
+                    </div>
+                </div>
+                
+                <div class="content">
+                    <h2 class="greeting">Hi ${safeName},</h2>
+                    
+                    <p class="intro-text">
+                        We received a request to reset the password for your Tools Australia account.
+                        Click the button below to securely choose a new password. This link expires in 60 minutes.
+                    </p>
+
+                    <div class="reset-button-wrapper">
+                      <a
+                        href="${resetUrl}"
+                        class="reset-button"
+                        style="color:#ffffff !important; text-decoration:none;"
+                      >
+                        Reset Password
+                      </a>
+                    </div>
+
+                    <div class="security-notice">
+                        <h3>Security Information</h3>
+                        <ul>
+                            <li>This reset link expires in 60 minutes.</li>
+                            <li>Never share this link with anyone.</li>
+                            <li>If you didn't request a password reset, you can safely ignore this email.</li>
+                        </ul>
+                    </div>
+
+                    <p class="support-text">
+                        If you have any questions or need help, our support team is here for you. 
+                        You can reach us through your account dashboard or by replying to this email.
+                    </p>
+
+                    <div class="signature">
+                        <p class="signature-text">
+                            Best regards,<br>
+                            <span class="team-name">The Tools Australia Team</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
+                    <p class="footer-text">This is an automated message. Please do not reply to this email.</p>
+                    <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
+                </div>
+            </div>
         </div>
-        <div style="padding: 24px 22px 26px;">
-          <p style="margin: 0 0 12px; color: #0f172a; font-size: 15px;">Hi ${safeName},</p>
-          <p style="margin: 0 0 12px; color: #1f2937; font-size: 14px;">We received a request to reset your password. Use the code below or click the reset button. The code expires in 60 minutes.</p>
-          <div style="margin: 18px 0; text-align: center; padding: 14px; border: 1px dashed #cbd5e1; border-radius: 12px; background: #f8fafc;">
-            <div style="font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #0f172a;">${resetCode}</div>
-          </div>
-          <div style="text-align: center; margin: 18px 0 16px;">
-            <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #ee0000, #ff4444); color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600;">Reset Password</a>
-          </div>
-          <p style="margin: 0 0 10px; color: #475569; font-size: 13px;">If you didn’t request this, you can ignore this email—your password will stay the same.</p>
-        </div>
-        <div style="background: #0f172a; color: #cbd5e1; padding: 18px 22px; font-size: 12px;">
-          <div style="font-weight: 600; color: #fff;">Tools Australia</div>
-          <div style="margin-top: 4px;">© 2025 Tools Australia. All rights reserved.</div>
-        </div>
-      </div>
-    </div>
+    </body>
+    </html>
   `;
 
   return sendCustomEmail({
     to,
     subject: "Reset your password - Tools Australia",
     html,
-    text: `Hi ${safeName},\n\nYour password reset code is ${resetCode}. It expires in 60 minutes.\nReset link: ${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
+    text: `Hi ${safeName},\n\nYou requested a password reset for your Tools Australia account.\nUse the following link to choose a new password (it expires in 60 minutes):\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
   });
 }
 

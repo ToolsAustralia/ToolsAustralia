@@ -44,6 +44,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isRequestingReset, setIsRequestingReset] = useState(false);
 
@@ -86,6 +87,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
   };
 
   const handleChangePassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      showToast({
+        type: "error",
+        title: "Password too short",
+        message: "Your new password must be at least 6 characters long.",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      showToast({
+        type: "error",
+        title: "Passwords do not match",
+        message: "New password and confirmation do not match. Please try again.",
+      });
+      return;
+    }
+
     try {
       setIsUpdatingPassword(true);
       const res = await fetch("/api/user/change-password", {
@@ -104,6 +123,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
       });
       setCurrentPassword("");
       setNewPassword("");
+      setConfirmNewPassword("");
     } catch (error) {
       showToast({
         type: "error",
@@ -130,7 +150,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
       showToast({
         type: "success",
         title: "Reset email sent",
-        message: "Check the inbox for the reset link/code.",
+        message: "Check your inbox for the reset link/code.",
       });
     } catch (error) {
       showToast({
@@ -148,17 +168,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
       <div className="space-y-4">
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="text-base font-semibold text-gray-900">Profile Details</h3>
-          <p className="text-xs text-gray-500">Name and email are read-only here; phone is editable.</p>
+
           <div className="mt-3 space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="text-sm font-medium text-gray-700">Name</label>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 cursor-default">
                 {user.firstName} {user.lastName}
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="text-sm font-medium text-gray-700">Email</label>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 cursor-default">
                 {user.email}
               </div>
             </div>
@@ -206,14 +226,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
         </div>
       </div>
     ),
-    [isSavingMobile, mobile, user.email, user.firstName, user.isEmailVerified, user.lastName, user.mobile]
+    [
+      handleSaveMobile,
+      isSavingMobile,
+      mobile,
+      user.email,
+      user.firstName,
+      user.isEmailVerified,
+      user.lastName,
+      user.mobile,
+    ]
   );
 
   const passwordView = (
     <div className="space-y-4">
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <h3 className="text-base font-semibold text-gray-900">Change Password</h3>
-        <p className="text-xs text-gray-500">Minimum length is enforced; current password required.</p>
+        <p className="text-xs text-gray-500">Minimum of 6 characters</p>
         <div className="mt-3 space-y-3">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Current password</label>
@@ -233,6 +262,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Enter new password"
+              minLength={6}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Confirm new password</label>
+            <input
+              type="password"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              placeholder="Re-enter new password"
+              minLength={6}
             />
           </div>
           <div className="flex gap-2">
@@ -260,7 +301,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <h3 className="text-base font-semibold text-gray-900">Forgot password</h3>
-        <p className="text-xs text-gray-500">Send a reset link/code to the account email.</p>
+
         <button
           type="button"
           onClick={handleRequestReset}

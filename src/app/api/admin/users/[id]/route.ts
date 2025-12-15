@@ -16,6 +16,7 @@ import { adminUserUpdateSchema } from "@/utils/validation/admin-user-update";
 import type { AdminUserUpdatePayload } from "@/types/admin";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import { stripe } from "@/lib/stripe";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -450,6 +451,46 @@ async function buildAdminUserProfile(userId: string) {
     }),
   };
 
+  // Stripe card preview for saved payment methods (brand + last4)
+  let savedPaymentMethodsSummary: Array<{
+    paymentMethodId: string;
+    brand?: string | null;
+    last4?: string | null;
+    isDefault: boolean;
+    createdAt?: string;
+    lastUsed?: string;
+  }> = [];
+
+  if (user.savedPaymentMethods && user.savedPaymentMethods.length > 0 && user.stripeCustomerId) {
+    const summaries: typeof savedPaymentMethodsSummary = [];
+
+    for (const pm of user.savedPaymentMethods) {
+      try {
+        const stripePm = await stripe.paymentMethods.retrieve(pm.paymentMethodId);
+        const card = stripePm.card;
+
+        summaries.push({
+          paymentMethodId: pm.paymentMethodId,
+          brand: card?.brand ?? null,
+          last4: card?.last4 ?? null,
+          isDefault: pm.isDefault,
+          createdAt: pm.createdAt ? pm.createdAt.toISOString() : undefined,
+          lastUsed: pm.lastUsed ? pm.lastUsed.toISOString() : undefined,
+        });
+      } catch (error) {
+        console.error("Error retrieving Stripe payment method for admin preview:", error);
+        summaries.push({
+          paymentMethodId: pm.paymentMethodId,
+          isDefault: pm.isDefault,
+          createdAt: pm.createdAt ? pm.createdAt.toISOString() : undefined,
+          lastUsed: pm.lastUsed ? pm.lastUsed.toISOString() : undefined,
+        });
+      }
+    }
+
+    savedPaymentMethodsSummary = summaries;
+  }
+
   return {
     id: user._id,
     firstName: user.firstName,
@@ -528,6 +569,7 @@ async function buildAdminUserProfile(userId: string) {
     orders,
     paymentEvents: paymentEvents.slice(0, 50),
     referral: referralSummary,
+    savedPaymentMethods: savedPaymentMethodsSummary,
   };
 }
 

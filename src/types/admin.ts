@@ -264,6 +264,14 @@ export interface AdminUserDetail {
   activePartnerDiscount?: Record<string, unknown>;
   queuedPartnerDiscounts: Array<Record<string, unknown>>;
 
+  // Saved payment methods preview
+  savedPaymentMethods?: Array<{
+    paymentMethodId: string;
+    isDefault: boolean;
+    createdAt?: string;
+    lastUsed?: string;
+  }>;
+
   // Purchase History
   upsellPurchases: Array<Record<string, unknown>>;
   upsellHistory: Array<Record<string, unknown>>;

@@ -34,7 +34,26 @@ export async function POST(request: NextRequest) {
     }
 
     if (typeof parsed.data.mobile === "string") {
-      user.mobile = parsed.data.mobile;
+      const newMobile = parsed.data.mobile;
+
+      // Ensure the new mobile number is not already used by another user
+      const existingUserWithMobile = await User.findOne({
+        mobile: newMobile,
+        _id: { $ne: user._id },
+      });
+
+      if (existingUserWithMobile) {
+        return NextResponse.json(
+          {
+            error: "Phone number already in use",
+            field: "mobile",
+            message: "An account with this phone number already exists. Please use a different number.",
+          },
+          { status: 400 }
+        );
+      }
+
+      user.mobile = newMobile;
     }
 
     await user.save();

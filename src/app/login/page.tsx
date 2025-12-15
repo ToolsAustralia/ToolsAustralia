@@ -398,6 +398,16 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Forgot password link */}
+            <div className="flex justify-end">
+              <Link
+                href="/reset-password"
+                className="text-[12px] sm:text-[13px] lg:text-[14px] font-medium text-[#ee0000] hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
             {/* Remember Me */}
             <div className="flex items-center gap-2.5">
               <SquareCheckbox
