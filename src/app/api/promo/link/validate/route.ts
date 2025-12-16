@@ -54,6 +54,8 @@ export async function GET(request: NextRequest) {
         code: promoLink.code,
         bonusEntries: promoLink.bonusEntries,
         expiresAt: promoLink.expiresAt,
+        appliesToMembership: promoLink.appliesToMembership,
+        appliesToOneTime: promoLink.appliesToOneTime,
       },
     });
   } catch (error) {
@@ -69,4 +71,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

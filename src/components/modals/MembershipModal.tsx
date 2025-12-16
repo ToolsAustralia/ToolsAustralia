@@ -106,6 +106,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const [referralError, setReferralError] = useState<string | null>(null);
   const [isPackageSelectionOpen, setIsPackageSelectionOpen] = useState(false);
 
+  // Promo link validation state - tracks bonus entries from promo codes
+  const [promoLinkInfo, setPromoLinkInfo] = useState<{
+    bonusEntries: number;
+    isValid: boolean;
+    isLoading: boolean;
+    appliesToMembership: boolean;
+    appliesToOneTime: boolean;
+    code: string;
+  } | null>(null);
+
   const normalizedCouponCode = couponCode.trim().toUpperCase();
   const showApplyingIndicator = !couponApplied && isValidatingReferral;
   const isApplyDisabled = normalizedCouponCode.length === 0 || isValidatingReferral;
@@ -385,6 +395,56 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   }, [isOpen]);
 
   const [currentStep, setCurrentStep] = useState(1); // Start neutral, will be updated by useEffect based on auth
+
+  // Validate promo link when code is detected
+  // This fetches bonus entries information to display encouraging text to users
+  useEffect(() => {
+    const validatePromoLink = async () => {
+      // Only validate if we have a promo code and modal is open
+      if (!promoLinkCode || !isOpen) {
+        setPromoLinkInfo(null);
+        return;
+      }
+
+      // Only validate for subscription or one-time packages (not placeholder)
+      if (!activePlan || activePlan.id === "placeholder") {
+        setPromoLinkInfo(null);
+        return;
+      }
+
+      try {
+        setPromoLinkInfo({
+          bonusEntries: 0,
+          isValid: false,
+          isLoading: true,
+          appliesToMembership: false,
+          appliesToOneTime: false,
+          code: "",
+        });
+
+        const response = await fetch(`/api/promo/link/validate?code=${encodeURIComponent(promoLinkCode)}`);
+        const data = await response.json();
+
+        if (data.success && data.valid && data.data) {
+          setPromoLinkInfo({
+            bonusEntries: data.data.bonusEntries,
+            isValid: true,
+            isLoading: false,
+            appliesToMembership: data.data.appliesToMembership || false,
+            appliesToOneTime: data.data.appliesToOneTime || false,
+            code: data.data.code || promoLinkCode,
+          });
+        } else {
+          setPromoLinkInfo(null);
+        }
+      } catch (error) {
+        console.error("Error validating promo link:", error);
+        setPromoLinkInfo(null);
+      }
+    };
+
+    validatePromoLink();
+  }, [promoLinkCode, isOpen, activePlan]);
 
   // Resolve billing details once so every Stripe call receives consistent data.
   const resolvedBillingDetails = React.useMemo(() => {
@@ -3191,6 +3251,32 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               ? "Get your name into the draw"
               : "Get Your Name in EVERY Draw Automatically"}
           </p>
+          {/* Dynamic promo text - show based on promo link applicability and current plan type */}
+          {promoLinkInfo?.isValid &&
+            promoLinkInfo.bonusEntries > 0 &&
+            // For subscription packages - check if promo applies to membership
+            activePlan.period !== "one-time" &&
+            promoLinkInfo.appliesToMembership && (
+              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold mt-1 animate-pulse">
+                🎁 Bonus: Get {promoLinkInfo.bonusEntries} Extra Entries
+                {promoLinkInfo.appliesToMembership && promoLinkInfo.appliesToOneTime
+                  ? " When You Purchase!"
+                  : " When You Purchase a Membership!"}
+              </p>
+            )}
+
+          {/* For one-time packages - check if promo applies to one-time */}
+          {promoLinkInfo?.isValid &&
+            promoLinkInfo.bonusEntries > 0 &&
+            activePlan.period === "one-time" &&
+            promoLinkInfo.appliesToOneTime && (
+              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold mt-1 animate-pulse">
+                🎁 Bonus: Get {promoLinkInfo.bonusEntries} Extra Entries
+                {promoLinkInfo.appliesToMembership && promoLinkInfo.appliesToOneTime
+                  ? " When You Purchase a One-Time Package!"
+                  : " With This Purchase!"}
+              </p>
+            )}
         </div>
         <div className="w-full max-w-sm mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl">
           <div className="bg-white rounded-lg sm:rounded-xl shadow-xl p-3 sm:p-6">
@@ -3338,54 +3424,70 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     />
                   )}
 
-                  {/* Coupon Code - Only show for regular packages, not upsells */}
+                  {/* Bonus Applied or Coupon Code - Only show for regular packages, not upsells */}
                   {promoEnhancedPlan?.metadata?.isUpsellOffer !== true && (
                     <div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={couponCode}
-                          onChange={(e) => {
-                            const value = e.target.value.toUpperCase();
-                            setCouponCode(value);
-                            setCouponApplied(false);
-                            setReferralInfo(null);
-                            setReferralError(null);
-                            if (!value.trim()) {
-                              clearReferralCode();
-                            }
-                          }}
-                          className="flex-1 px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base"
-                          placeholder="Enter coupon code"
-                        />
-                        {couponApplied ? (
+                      {/* Show Bonus Applied section when promo link is active */}
+                      {promoLinkInfo?.isValid && promoLinkInfo.bonusEntries > 0 ? (
+                        <div className="flex gap-2">
+                          <div className="flex-1 px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl bg-gray-50 flex items-center text-sm sm:text-base text-gray-700">
+                            {promoLinkInfo.bonusEntries} extra entries applied
+                          </div>
                           <div className="bg-green-500 text-white px-2 sm:px-3 py-2 sm:py-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
                             <Check size={12} />
                             <span className="text-xs font-bold">APPLIED</span>
                           </div>
-                        ) : showApplyingIndicator ? (
-                          <div className="flex items-center gap-2 text-xs text-gray-500 px-2 sm:px-3 py-2 sm:py-3">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>Applying...</span>
+                        </div>
+                      ) : (
+                        /* Regular coupon code input when no promo link is active */
+                        <>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={couponCode}
+                              onChange={(e) => {
+                                const value = e.target.value.toUpperCase();
+                                setCouponCode(value);
+                                setCouponApplied(false);
+                                setReferralInfo(null);
+                                setReferralError(null);
+                                if (!value.trim()) {
+                                  clearReferralCode();
+                                }
+                              }}
+                              className="flex-1 px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base"
+                              placeholder="Enter coupon code"
+                            />
+                            {couponApplied ? (
+                              <div className="bg-green-500 text-white px-2 sm:px-3 py-2 sm:py-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
+                                <Check size={12} />
+                                <span className="text-xs font-bold">APPLIED</span>
+                              </div>
+                            ) : showApplyingIndicator ? (
+                              <div className="flex items-center gap-2 text-xs text-gray-500 px-2 sm:px-3 py-2 sm:py-3">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>Applying...</span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleCouponApply("manual")}
+                                disabled={isApplyDisabled}
+                                className="bg-gray-500 text-white px-2 sm:px-3 py-2 sm:py-3 rounded-lg sm:rounded-xl hover:bg-gray-600 transition-colors text-xs sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                Apply
+                              </button>
+                            )}
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleCouponApply("manual")}
-                            disabled={isApplyDisabled}
-                            className="bg-gray-500 text-white px-2 sm:px-3 py-2 sm:py-3 rounded-lg sm:rounded-xl hover:bg-gray-600 transition-colors text-xs sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            Apply
-                          </button>
-                        )}
-                      </div>
-                      {referralInfo && (
-                        <p className="mt-2 text-xs text-green-600">
-                          Code confirmed! {referralInfo.referrerName} will receive 100 bonus entries when you complete
-                          your purchase and verify your email.
-                        </p>
+                          {referralInfo && (
+                            <p className="mt-2 text-xs text-green-600">
+                              Code confirmed! {referralInfo.referrerName} will receive 100 bonus entries when you
+                              complete your purchase and verify your email.
+                            </p>
+                          )}
+                          {referralError && <p className="mt-2 text-xs text-red-600">{referralError}</p>}
+                        </>
                       )}
-                      {referralError && <p className="mt-2 text-xs text-red-600">{referralError}</p>}
                     </div>
                   )}
 
