@@ -17,7 +17,6 @@ import Image from "next/image";
 import { useToast } from "@/components/ui/Toast";
 
 import { queryKeys } from "@/lib/queryKeys";
-import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 
 // Google Icon Component
 
@@ -180,7 +179,6 @@ export default function LoginPage() {
   const { showToast } = useToast();
 
   const queryClient = useQueryClient();
-  const { identify } = useKlaviyoTracking();
 
   // Redirect if user is already logged in based on their role
 
@@ -308,15 +306,6 @@ export default function LoginPage() {
             queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(updatedSession.user.id) });
 
             queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(updatedSession.user.id) });
-
-            // Identify user in Klaviyo after successful login
-            if (updatedSession.user.email) {
-              identify({
-                email: updatedSession.user.email,
-                firstName: updatedSession.user.firstName,
-                lastName: updatedSession.user.lastName,
-              });
-            }
           }
         }, 500);
 
