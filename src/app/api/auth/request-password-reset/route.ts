@@ -35,7 +35,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
-      return NextResponse.json({ success: true, message: "If the account exists, an email has been sent." });
+      return NextResponse.json(
+        { success: false, error: "No account found with this email address. Please check your email and try again." },
+        { status: 404 }
+      );
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");

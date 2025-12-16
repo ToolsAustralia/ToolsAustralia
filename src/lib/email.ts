@@ -671,8 +671,8 @@ export async function sendPasswordResetEmail({
                     <div class="logo-container">
                         <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
                         <h1 class="header-title">Password Reset</h1>
-                    </div>
-                </div>
+        </div>
+          </div>
                 
                 <div class="content">
                     <h2 class="greeting">Hi ${safeName},</h2>
@@ -690,7 +690,7 @@ export async function sendPasswordResetEmail({
                       >
                         Reset Password
                       </a>
-                    </div>
+          </div>
 
                     <div class="security-notice">
                         <h3>Security Information</h3>
@@ -699,7 +699,7 @@ export async function sendPasswordResetEmail({
                             <li>Never share this link with anyone.</li>
                             <li>If you didn't request a password reset, you can safely ignore this email.</li>
                         </ul>
-                    </div>
+        </div>
 
                     <p class="support-text">
                         If you have any questions or need help, our support team is here for you. 
@@ -711,14 +711,14 @@ export async function sendPasswordResetEmail({
                             Best regards,<br>
                             <span class="team-name">The Tools Australia Team</span>
                         </p>
-                    </div>
-                </div>
+        </div>
+      </div>
                 
                 <div class="footer">
                     <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
                     <p class="footer-text">This is an automated message. Please do not reply to this email.</p>
                     <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
-                </div>
+    </div>
             </div>
         </div>
     </body>

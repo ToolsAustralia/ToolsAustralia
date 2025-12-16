@@ -17,6 +17,7 @@ export default function ResetPasswordPage({ searchParams }: ResetPasswordPagePro
 
   const [email, setEmail] = useState("");
   const [isRequesting, setIsRequesting] = useState(false);
+  const [emailError, setEmailError] = useState("");
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,6 +35,9 @@ export default function ResetPasswordPage({ searchParams }: ResetPasswordPagePro
     e.preventDefault();
     if (!email) return;
 
+    // Clear previous errors
+    setEmailError("");
+
     try {
       setIsRequesting(true);
       const res = await fetch("/api/auth/request-password-reset", {
@@ -44,15 +48,41 @@ export default function ResetPasswordPage({ searchParams }: ResetPasswordPagePro
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Unable to send reset email");
+        // Set inline error for email field if email doesn't exist
+        const isEmailNotFound =
+          res.status === 404 ||
+          data.error?.toLowerCase().includes("no account") ||
+          data.error?.toLowerCase().includes("not found");
+
+        if (isEmailNotFound) {
+          setEmailError(data.error || "No account found with this email address.");
+          // Also show toast for visibility
+          showToast({
+            type: "error",
+            title: "Email not found",
+            message: data.error || "No account found with this email address.",
+          });
+        } else {
+          // Show toast for other errors
+          showToast({
+            type: "error",
+            title: "Request failed",
+            message: data.error || "Could not send reset email. Please try again.",
+          });
+        }
+        return; // Exit early, don't throw
       }
 
+      // Clear email field and error on success
+      setEmail("");
+      setEmailError("");
       showToast({
         type: "success",
         title: "Email sent",
         message: "Check your inbox for a link to reset your password.",
       });
     } catch (error) {
+      // Network errors or other unexpected errors
       showToast({
         type: "error",
         title: "Request failed",
@@ -155,10 +185,17 @@ export default function ResetPasswordPage({ searchParams }: ResetPasswordPagePro
                 type="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  // Clear error when user starts typing
+                  if (emailError) setEmailError("");
+                }}
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
+                  emailError ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-red-500"
+                }`}
                 placeholder="you@example.com"
               />
+              {emailError && <p className="text-sm text-red-600 mt-1">{emailError}</p>}
             </div>
             <button
               type="submit"
