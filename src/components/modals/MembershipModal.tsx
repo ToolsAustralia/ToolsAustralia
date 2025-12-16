@@ -31,6 +31,7 @@ import { type PaymentStatusResponse } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
 import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePaymentIntent } from "@/hooks/usePaymentIntent";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
@@ -302,6 +303,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   }, [activePlan, oneTimePromo, miniPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { trackInitiateCheckout } = usePixelTracking();
+  const { identify: identifyKlaviyoUser } = useKlaviyoTracking();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { savePaymentMethod } = useSavedPaymentMethods();
   const purchaseMembership = usePurchaseMembership();
@@ -2711,6 +2713,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     // Invalidate user caches to update UI immediately
                     if (userId) {
                       invalidateUserCaches(userId);
+                    }
+
+                    // Identify user in Klaviyo after successful auto-login
+                    // This provides redundancy in case KlaviyoUserIdentifier hasn't processed the session update yet
+                    if (oneTimeData?.user?.email) {
+                      identifyKlaviyoUser({
+                        email: oneTimeData.user.email,
+                        firstName: oneTimeData.user.firstName,
+                        lastName: oneTimeData.user.lastName,
+                      });
                     }
 
                     // Show global success screen

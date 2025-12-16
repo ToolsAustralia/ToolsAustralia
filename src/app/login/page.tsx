@@ -451,7 +451,7 @@ export default function LoginPage() {
         {/* Logo Section */}
 
         <div className="mb-4 sm:mb-6 lg:mb-12">
-          <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
             <div className="w-[40px] h-[42px] sm:w-[50px] sm:h-[52px] relative">
               <Image
                 src="/images/Tools Australia Logo/Social Media Profile_Primary.png"
@@ -463,7 +463,7 @@ export default function LoginPage() {
             </div>
 
             <span className="text-xl sm:text-2xl font-semibold text-black tracking-[-0.96px]">Tools Australia</span>
-          </div>
+          </Link>
         </div>
 
         {/* Content Section */}

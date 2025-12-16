@@ -91,12 +91,29 @@ export function trackKlaviyoEvent(eventName: string, properties?: Record<string,
 }
 
 /**
- * Track a page view in Klaviyo.
+ * Track a page view in Klaviyo using the "Viewed Page" event format.
  *
- * This is an explicit page view helper, mainly used by higher-level hooks.
- * It is consent-aware and will no-op if tracking has been disabled.
+ * This helper uses Klaviyo's recommended event format: `klaviyo.track("Viewed Page", {...})`
+ * which creates a visible metric in the Klaviyo Metrics dashboard. This is preferred over
+ * the basic `["page"]` call which doesn't create a trackable metric.
  *
- * @param properties - Optional page properties (title, url, etc.)
+ * Note: This helper is currently unused as page tracking is handled by `KlaviyoPageTracker`
+ * component. It's kept for future flexibility and API consistency.
+ *
+ * @param properties - Page properties following Klaviyo's "Viewed Page" format:
+ *   - PageName: Name of the page (e.g., "Product Detail", "Home")
+ *   - PageURL: Full URL of the page
+ *   - PageType: Type of page (e.g., "product", "home", "checkout")
+ *   - Additional custom properties as needed
+ *
+ * @example
+ * ```typescript
+ * trackKlaviyoPageView({
+ *   PageName: "Product Detail",
+ *   PageURL: "https://example.com/shop/product",
+ *   PageType: "product"
+ * });
+ * ```
  */
 export function trackKlaviyoPageView(properties?: Record<string, unknown>): void {
   if (!hasPixelConsent()) {
@@ -111,11 +128,13 @@ export function trackKlaviyoPageView(properties?: Record<string, unknown>): void
   }
 
   try {
-    // Klaviyo page format: ["page", properties]
-    window.klaviyo.push(["page", properties || {}]);
+    // Use Klaviyo's recommended "Viewed Page" event format
+    // This creates a visible metric in Klaviyo Metrics dashboard
+    // Format: klaviyo.track("Viewed Page", { PageName, PageURL, PageType, ... })
+    trackKlaviyoEvent("Viewed Page", properties || {});
 
     if (process.env.NODE_ENV === "development") {
-      console.log("📧 Klaviyo: Page view tracked", properties);
+      console.log("📧 Klaviyo: Viewed Page event tracked", properties);
     }
   } catch (error) {
     // Silently fail - don't break user experience

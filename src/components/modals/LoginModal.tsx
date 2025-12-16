@@ -330,6 +330,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                 queryClient.invalidateQueries({ queryKey: queryKeys.users.account(newSession.user.id) });
                 queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(newSession.user.id) });
                 queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(newSession.user.id) });
+
+                // Identify user in Klaviyo after successful auto-login
+                // This provides redundancy in case KlaviyoUserIdentifier hasn't processed the session update yet
+                if (newSession.user.email) {
+                  identify({
+                    email: newSession.user.email,
+                    firstName: newSession.user.firstName,
+                    lastName: newSession.user.lastName,
+                  });
+                }
               }
 
               // Show success toast

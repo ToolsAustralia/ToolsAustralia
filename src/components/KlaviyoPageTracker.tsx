@@ -3,12 +3,25 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { hasPixelConsent } from "@/components/PixelTracker";
+import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
+import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
 
 /**
  * Klaviyo Page View Tracker Component
  *
- * Automatically tracks page views on route changes using Klaviyo onsite JavaScript.
- * This component follows the same pattern as FacebookPixel and TikTokPixel page tracking.
+ * Automatically tracks page views on route changes using Klaviyo's "Viewed Page" event.
+ * This ensures page views appear in Klaviyo Metrics dashboard for analytics.
+ *
+ * Uses Klaviyo's recommended event format: `klaviyo.track("Viewed Page", {...})`
+ * instead of the basic `["page"]` call, which doesn't create a visible metric.
+ *
+ * This component follows the same pattern as FacebookPixel and TikTokPixel page tracking
+ * for consistency across the codebase.
+ *
+ * Deduplication:
+ * - Tracks once per route change (enforced by useEffect dependency on pathname)
+ * - This is the ONLY component that tracks general page views
+ * - Product-specific views use "Viewed Product" event (different metric)
  *
  * @example
  * ```tsx
@@ -32,12 +45,28 @@ export default function KlaviyoPageTracker() {
     }
 
     try {
-      // Track page view using Klaviyo's page event
-      // This is the standard way to track page views in Klaviyo
-      window.klaviyo.push(["page"]);
+      // Extract page metadata for better analytics
+      const pageMetadata = extractPageMetadata(
+        pathname,
+        typeof window !== "undefined" ? window.location.href : undefined
+      );
+
+      // Track page view using Klaviyo's recommended "Viewed Page" event format
+      // This creates a visible metric in Klaviyo Metrics dashboard
+      // Format follows Klaviyo's current best practices (2024-2025)
+      trackKlaviyoEvent("Viewed Page", {
+        PageName: pageMetadata.page_name || pathname,
+        PageURL: pageMetadata.page_url || (typeof window !== "undefined" ? window.location.href : ""),
+        PageType: pageMetadata.page_type,
+        // Include pathname for additional context
+        Pathname: pathname,
+      });
 
       if (process.env.NODE_ENV === "development") {
-        console.log("📧 Klaviyo: Page view tracked", pathname);
+        console.log("📧 Klaviyo: Viewed Page event tracked", {
+          pathname,
+          pageMetadata,
+        });
       }
     } catch (error) {
       // Silently fail - don't break user experience

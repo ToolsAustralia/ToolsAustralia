@@ -16,6 +16,7 @@ import FloatingPromoBanner from "@/components/banners/FloatingPromoBanner";
 import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
 import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
+import KlaviyoUserIdentifier from "@/components/tracking/KlaviyoUserIdentifier";
 
 // Export loading components for global use
 export {
@@ -83,6 +84,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                       <AffiliateTracker />
                       <ReferralTracker />
                       <PromoLinkTracker />
+                      <KlaviyoUserIdentifier />
                       <UpgradeSuccessToast />
                       {children}
                       <FloatingPromoBanner />
