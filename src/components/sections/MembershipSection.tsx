@@ -16,20 +16,7 @@ import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
-
-// Import package icons
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
-
-type StaticImageData = {
-  src: string;
-  height: number;
-  width: number;
-  blurDataURL?: string;
-};
+import { getPackageIcon } from "@/utils/images/package-icons";
 
 interface MembershipSectionProps {
   title?: string;
@@ -37,28 +24,6 @@ interface MembershipSectionProps {
   titleColor?: string;
   onPlanSelect?: (plan: LocalMembershipPlan) => void;
 }
-
-// Helper function to get the package icon based on plan ID
-const PACKAGE_ICONS: Record<string, StaticImageData> = {
-  // One-time packages
-  "apprentice-pack": apprentice,
-  "tradie-pack": tradie,
-  "foreman-pack": foreman,
-  "boss-pack": boss,
-  "power-pack": power,
-
-  // Additional packages (accessible to users with subscription OR current draw entries)
-  "additional-apprentice-pack-member": apprentice,
-  "additional-tradie-pack-member": tradie,
-  "additional-foreman-pack-member": foreman,
-  "additional-boss-pack-member": boss,
-  "additional-power-pack-member": power,
-
-  // Subscription packages (using generated IDs from useMemberships hook)
-  tradie: tradie,
-  foreman: foreman,
-  boss: boss,
-};
 
 // Helper function to extract gradient colors for rounded borders
 const getGradientColor = (gradient: string) => {
@@ -153,10 +118,6 @@ const getPackageColorScheme = (planId: string) => {
     hoverShadow: "hover:shadow-gray-500/50",
     borderGlow: "animate-border-glow-blue",
   };
-};
-
-const getPackageIcon = (planId: string): StaticImageData | null => {
-  return PACKAGE_ICONS[planId] || null;
 };
 
 export default function MembershipSection({
@@ -681,6 +642,9 @@ export default function MembershipSection({
                                 <Image
                                   src={getPackageIcon(plan.id)!}
                                   alt={`${plan.name} icon`}
+                                  fill
+                                  sizes="(max-width: 640px) 56px, (max-width: 1024px) 64px, 96px"
+                                  priority={index === 0}
                                   className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
                                 />
                                 {/* Promo Badge removed from mobile view - now shown on toggle instead */}

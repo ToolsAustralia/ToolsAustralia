@@ -4,11 +4,10 @@
  */
 
 import type { StaticImageData } from "next/image";
-import apprentice from "../../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../../public/images/packageIcons/foreman.png";
-import boss from "../../../../public/images/packageIcons/boss.png";
-import power from "../../../../public/images/packageIcons/power.png";
+import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
+
+// Type alias for consistency with existing code
+type PackageIconImageData = PackageIconData;
 
 /**
  * Format currency amount to AUD format
@@ -33,18 +32,12 @@ export function formatDate(dateString: string | Date): string {
 
 /**
  * Get package icon image based on package name
+ * Uses centralized utility for consistency
  */
 export function getPackageIconImage(packageName?: string | null): StaticImageData | null {
   if (!packageName) return null;
-  const lowerName = packageName.toLowerCase();
-
-  if (lowerName.includes("boss")) return boss;
-  if (lowerName.includes("foreman")) return foreman;
-  if (lowerName.includes("tradie")) return tradie;
-  if (lowerName.includes("apprentice")) return apprentice;
-  if (lowerName.includes("power")) return power;
-
-  return null;
+  // Try subscription first, then one-time as fallback
+  return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
 }
 
 /**
@@ -157,7 +150,3 @@ export function getUserStatusBadgeConfig(isActive: boolean): { label: string; cl
     className: "px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200",
   };
 }
-
-
-
-

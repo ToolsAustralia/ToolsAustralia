@@ -17,14 +17,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package } from "lucide-react";
 import Image from "next/image";
-import { StaticImageData } from "next/image";
+import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
 
-// Import package icons (matching MembershipSection)
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
+// Type alias for consistency with existing code
+type StaticImageData = PackageIconData;
 
 // Interface for active period data from API
 interface ActivePeriod {
@@ -302,30 +298,12 @@ export default function PartnerDiscountQueue({
   };
 
   // Helper function to get package icon image (for subscription badge)
+  // Uses centralized utility for consistency
   const getPackageIconImage = (
     packageName: string,
     membershipType?: "subscription" | "one-time"
   ): StaticImageData | null => {
-    const lowerName = packageName.toLowerCase();
-    const isSubscription = membershipType === "subscription";
-
-    // For subscriptions, use simple names
-    if (isSubscription) {
-      if (lowerName.includes("boss")) return boss;
-      if (lowerName.includes("foreman")) return foreman;
-      if (lowerName.includes("tradie")) return tradie;
-    }
-
-    // For one-time packages, check for pack names
-    if (!isSubscription) {
-      if (lowerName.includes("power pack") || lowerName.includes("power")) return power;
-      if (lowerName.includes("boss pack") || lowerName.includes("boss")) return boss;
-      if (lowerName.includes("foreman pack") || lowerName.includes("foreman")) return foreman;
-      if (lowerName.includes("tradie pack") || lowerName.includes("tradie")) return tradie;
-      if (lowerName.includes("apprentice pack") || lowerName.includes("apprentice")) return apprentice;
-    }
-
-    return null;
+    return getPackageIconByName(packageName, membershipType);
   };
 
   // Helper function to get package color scheme (matching MembershipBadge)

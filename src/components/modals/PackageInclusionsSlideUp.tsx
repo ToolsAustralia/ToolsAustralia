@@ -3,52 +3,12 @@
 import React from "react";
 import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-
-// Import package icons
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
-
-type StaticImageData = {
-  src: string;
-  height: number;
-  width: number;
-  blurDataURL?: string;
-};
+import { getPackageIcon } from "@/utils/images/package-icons";
 
 interface PackageInclusionsExpandedProps {
   isExpanded: boolean;
   packages: LocalMembershipPlan[];
 }
-
-// Package icons mapping - matches MembershipSection
-const PACKAGE_ICONS: Record<string, StaticImageData> = {
-  // One-time packages
-  "apprentice-pack": apprentice,
-  "tradie-pack": tradie,
-  "foreman-pack": foreman,
-  "boss-pack": boss,
-  "power-pack": power,
-
-  // Additional packages
-  "additional-apprentice-pack": apprentice,
-  "additional-tradie-pack": tradie,
-  "additional-foreman-pack": foreman,
-  "additional-boss-pack": boss,
-  "additional-power-pack": power,
-  "additional-apprentice-pack-member": apprentice,
-  "additional-tradie-pack-member": tradie,
-  "additional-foreman-pack-member": foreman,
-  "additional-boss-pack-member": boss,
-  "additional-power-pack-member": power,
-
-  // Subscription packages
-  tradie: tradie,
-  foreman: foreman,
-  boss: boss,
-};
 
 /**
  * PackageInclusionsExpanded Component
@@ -98,34 +58,32 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
     };
   };
 
-  // Helper to get package icon - matches MembershipSection logic
-  const getPackageIcon = (planId: string) => {
-    // Try direct lookup first
-    if (PACKAGE_ICONS[planId]) {
-      return PACKAGE_ICONS[planId];
-    }
+  // Helper to get package icon - uses centralized utility with fallback logic
+  const getPackageIconLocal = (planId: string) => {
+    // Try direct lookup first using centralized utility
+    const icon = getPackageIcon(planId);
+    if (icon) return icon;
 
-    // Try with normalized ID (lowercase)
+    // Try with normalized ID (lowercase) - fallback for edge cases
     const normalizedId = planId.toLowerCase();
-    if (PACKAGE_ICONS[normalizedId]) {
-      return PACKAGE_ICONS[normalizedId];
-    }
+    const normalizedIcon = getPackageIcon(normalizedId);
+    if (normalizedIcon) return normalizedIcon;
 
-    // Fallback: try to find by package type
+    // Additional fallback: try to find by package type in centralized mapping
     if (normalizedId.includes("apprentice")) {
-      return PACKAGE_ICONS["additional-apprentice-pack"] || apprentice;
+      return getPackageIcon("additional-apprentice-pack");
     }
     if (normalizedId.includes("tradie")) {
-      return PACKAGE_ICONS["additional-tradie-pack"] || tradie;
+      return getPackageIcon("additional-tradie-pack");
     }
     if (normalizedId.includes("foreman")) {
-      return PACKAGE_ICONS["additional-foreman-pack"] || foreman;
+      return getPackageIcon("additional-foreman-pack");
     }
     if (normalizedId.includes("boss")) {
-      return PACKAGE_ICONS["additional-boss-pack"] || boss;
+      return getPackageIcon("additional-boss-pack");
     }
     if (normalizedId.includes("power")) {
-      return PACKAGE_ICONS["additional-power-pack"] || power;
+      return getPackageIcon("additional-power-pack");
     }
 
     return null;
@@ -138,7 +96,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
       <div className="space-y-6">
         {packages.map((plan) => {
           const colorScheme = getPackageColorScheme(plan.id);
-          const packageIcon = getPackageIcon(plan.id);
+          const packageIcon = getPackageIconLocal(plan.id);
 
           return (
             <div key={plan.id} className="space-y-3">

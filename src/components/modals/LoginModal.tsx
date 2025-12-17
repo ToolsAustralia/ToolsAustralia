@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Clipboard, ClipboardCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
 import { authenticateWithPopup } from "@/utils/auth/popupAuth";
@@ -52,12 +52,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
-  const [verificationCode, setVerificationCode] = useState("");
   const [codeDigits, setCodeDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [isCheckingVerification, setIsCheckingVerification] = useState(false);
+  const [isPasteClicked, setIsPasteClicked] = useState(false);
 
   const checkEmailVerificationStatus = useCallback(async () => {
     setIsCheckingVerification(true);
@@ -105,7 +105,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
       setPassword("");
       setError("");
       setCodeSent(false);
-      setVerificationCode("");
       setCodeDigits(["", "", "", "", "", ""]);
     }
   }, [isOpen, email, checkEmailVerificationStatus]);
@@ -117,6 +116,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
       onClose();
     }
   }, [status, session, router, onClose]);
+
+  // Clear error when a valid 6-digit code is entered
+  useEffect(() => {
+    const currentCode = codeDigits.join("");
+    if (currentCode.length === 6 && error === "Please enter the 6-digit verification code") {
+      setError("");
+    }
+  }, [codeDigits, error]);
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,7 +270,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
         setError("");
         // Reset code digits
         setCodeDigits(["", "", "", "", "", ""]);
-        setVerificationCode("");
       } else {
         setError(data.error || "Failed to send verification code");
       }
@@ -276,12 +282,20 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   };
 
   const handleVerifyCode = async () => {
-    if (verificationCode.length !== 6) {
+    // Calculate code from codeDigits array to ensure we have the latest value
+    // This avoids issues with React state updates being asynchronous
+    const currentCode = codeDigits.join("").toUpperCase();
+
+    // Clear error first before validation check
+    setError("");
+
+    if (currentCode.length !== 6) {
       setError("Please enter the 6-digit verification code");
       return;
     }
 
     setIsVerifyingCode(true);
+    // Error already cleared above, but ensure it stays cleared
     setError("");
 
     try {
@@ -292,7 +306,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
         },
         body: JSON.stringify({
           email,
-          verificationCode: verificationCode.toUpperCase(),
+          verificationCode: currentCode,
         }),
       });
 
@@ -369,7 +383,46 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
     }
   };
 
+  // Fill code digits from text (used by both paste event and paste button)
+  const fillCodeFromText = (text: string) => {
+    const cleanText = text
+      .replace(/[^A-Za-z0-9]/g, "")
+      .toUpperCase()
+      .slice(0, 6);
+    const newDigits: string[] = ["", "", "", "", "", ""];
+
+    for (let i = 0; i < cleanText.length && i < 6; i++) {
+      newDigits[i] = cleanText[i];
+    }
+
+    setCodeDigits(newDigits);
+
+    // Clear error immediately when code is entered
+    // If we have a full 6-character code, clear error right away
+    if (cleanText.length === 6) {
+      setError("");
+    } else {
+      // Clear error when user starts entering code
+      setError("");
+    }
+
+    // Focus on the next empty input or the last input
+    const nextEmptyIndex = newDigits.findIndex((digit) => !digit);
+    const focusIndex = nextEmptyIndex === -1 ? 5 : nextEmptyIndex;
+    const nextInput = document.getElementById(`code-digit-${focusIndex}`);
+    nextInput?.focus();
+
+    // Auto-submit when all 6 digits are entered
+    if (cleanText.length === 6) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        handleVerifyCode();
+      }, 100);
+    }
+  };
+
   const handleDigitChange = (index: number, value: string) => {
+    // Only allow alphanumeric characters
     const cleanValue = value
       .replace(/[^A-Za-z0-9]/g, "")
       .toUpperCase()
@@ -379,11 +432,18 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
     newDigits[index] = cleanValue;
     setCodeDigits(newDigits);
 
+    // Update the full code string
     const fullCode = newDigits.join("");
-    setVerificationCode(fullCode);
-    setError("");
 
-    // Auto-advance to next input
+    // Clear error immediately when user types - especially if we now have 6 digits
+    // This ensures the error disappears as soon as a valid code is entered
+    if (fullCode.length === 6) {
+      setError(""); // Clear error immediately when 6 digits are present
+    } else {
+      setError(""); // Also clear error when user is typing to give immediate feedback
+    }
+
+    // Auto-advance to next input if value entered
     if (cleanValue && index < 5) {
       const nextInput = document.getElementById(`code-digit-${index + 1}`);
       nextInput?.focus();
@@ -391,29 +451,47 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
 
     // Auto-submit when all 6 digits are entered
     if (fullCode.length === 6) {
-      handleVerifyCode();
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        handleVerifyCode();
+      }, 100);
     }
   };
 
-  const handlePaste = async (e: React.ClipboardEvent) => {
+  // Handle paste event to fill all digits at once
+  const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pastedText = e.clipboardData
-      .getData("text")
-      .replace(/[^A-Za-z0-9]/g, "")
-      .toUpperCase()
-      .slice(0, 6);
-    const newDigits = pastedText.split("").concat(Array(6 - pastedText.length).fill(""));
-    setCodeDigits(newDigits);
-    setVerificationCode(pastedText);
-    setError("");
+    const pastedText = e.clipboardData.getData("text");
+    fillCodeFromText(pastedText);
+  };
 
-    if (pastedText.length === 6) {
-      handleVerifyCode();
-    } else {
-      // Focus on the next empty input
-      const nextEmptyIndex = pastedText.length;
-      const nextInput = document.getElementById(`code-digit-${nextEmptyIndex}`);
-      nextInput?.focus();
+  // Handle paste button click
+  const handlePasteButtonClick = async () => {
+    try {
+      // Check if Clipboard API is available
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        // Fallback for browsers that don't support Clipboard API
+        setError("Paste functionality not available. Please paste using Ctrl+V (or Cmd+V on Mac) in the code fields.");
+        return;
+      }
+
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        fillCodeFromText(text);
+        setIsPasteClicked(true);
+        setTimeout(() => setIsPasteClicked(false), 2000);
+      }
+    } catch (error) {
+      console.error("Failed to read clipboard:", error);
+      setError("Could not read from clipboard. Please paste using Ctrl+V (or Cmd+V on Mac) in the code fields.");
+    }
+  };
+
+  // Handle backspace to go to previous input
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !codeDigits[index] && index > 0) {
+      const prevInput = document.getElementById(`code-digit-${index - 1}`);
+      prevInput?.focus();
     }
   };
 
@@ -459,23 +537,50 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                     <>
                       {/* Verification Code Input */}
                       <div className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">Verification Code</label>
-                        <div className="flex gap-2 justify-center">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700">Verification Code</label>
+                          <button
+                            type="button"
+                            onClick={handlePasteButtonClick}
+                            disabled={isVerifyingCode}
+                            className="flex items-center space-x-1 text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            title="Paste code from clipboard"
+                          >
+                            {isPasteClicked ? (
+                              <>
+                                <ClipboardCheck className="w-3.5 h-3.5" />
+                                <span>Pasted!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clipboard className="w-3.5 h-3.5" />
+                                <span>Paste</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-center gap-2">
                           {codeDigits.map((digit, index) => (
                             <input
                               key={index}
                               id={`code-digit-${index}`}
                               type="text"
                               inputMode="text"
-                              maxLength={1}
                               value={digit}
                               onChange={(e) => handleDigitChange(index, e.target.value)}
-                              onPaste={index === 0 ? handlePaste : undefined}
-                              className="w-12 h-12 text-center text-lg font-semibold border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                              autoFocus={index === 0}
+                              onPaste={handlePaste}
+                              onKeyDown={(e) => handleKeyDown(index, e)}
+                              className="w-12 h-14 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono text-2xl font-bold text-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                              maxLength={1}
+                              disabled={isVerifyingCode}
+                              autoComplete="off"
+                              autoFocus={index === 0 && codeDigits.join("").length === 0}
                             />
                           ))}
                         </div>
+                        <p className="text-xs text-gray-500 text-center">
+                          Enter the code exactly as shown in your email
+                        </p>
                       </div>
 
                       <div className="flex flex-col gap-2">
@@ -485,7 +590,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                           fullWidth
                           size="lg"
                           loading={isVerifyingCode}
-                          disabled={verificationCode.length !== 6}
+                          disabled={codeDigits.join("").length !== 6}
                         >
                           Verify Code
                         </Button>

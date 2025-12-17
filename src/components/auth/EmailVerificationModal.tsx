@@ -78,9 +78,9 @@ export default function EmailVerificationModal({
 
       const state = JSON.parse(stored);
 
-      // Check if state is not too old (10 minutes - same as code expiry)
-      const tenMinutes = 10 * 60 * 1000;
-      if (Date.now() - state.timestamp > tenMinutes) {
+      // Check if state is not too old (24 hours - same as code expiry)
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (Date.now() - state.timestamp > twentyFourHours) {
         sessionStorage.removeItem(VERIFICATION_STATE_KEY);
         return null;
       }

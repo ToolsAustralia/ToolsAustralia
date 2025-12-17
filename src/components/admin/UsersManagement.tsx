@@ -29,13 +29,7 @@ import UserDetailModal from "./UserDetailModal";
 import { useDebounce } from "@/hooks/useDebounce";
 import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
 import { membershipPackages } from "@/data/membershipPackages";
-
-// Import package icons
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
+import { getPackageIconByName } from "@/utils/images/package-icons";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 
 /**
@@ -215,18 +209,11 @@ export default function UsersManagement() {
     });
   };
 
-  // Get package icon image (matching PartnerDiscountQueue logic)
+  // Get package icon image (uses centralized utility for consistency)
   const getPackageIconImage = (packageName?: string | null) => {
     if (!packageName) return null;
-    const lowerName = packageName.toLowerCase();
-
-    if (lowerName.includes("boss")) return boss;
-    if (lowerName.includes("foreman")) return foreman;
-    if (lowerName.includes("tradie")) return tradie;
-    if (lowerName.includes("apprentice")) return apprentice;
-    if (lowerName.includes("power")) return power;
-
-    return null;
+    // Try subscription first, then one-time as fallback
+    return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
   };
 
   // Get package color scheme (matching PartnerDiscountQueue logic)

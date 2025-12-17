@@ -232,7 +232,7 @@ const VerificationEmailPreview: React.FC = () => {
                     <div class="security-notice">
                         <h3>Security Information</h3>
                         <ul>
-                            <li>This verification code expires in 10 minutes</li>
+                            <li>This verification code expires in 24 hours</li>
                             <li>Never share this code with anyone</li>
                             <li>If you didn't request this verification, please ignore this email</li>
                             <li>For security reasons, this code can only be used once</li>

@@ -42,13 +42,7 @@ import ModalContent from "@/components/modals/ui/ModalContent";
 import Input from "@/components/modals/ui/Input";
 import Select from "@/components/modals/ui/Select";
 import Checkbox from "@/components/modals/ui/Checkbox";
-
-// Import package icons
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
+import { getPackageIconByName } from "@/utils/images/package-icons";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 
 // Proper interfaces for user data structures
@@ -229,18 +223,11 @@ const formatReferralDate = (value?: string) => {
   }
 };
 
-// Helper function to get package icon image (matching UsersManagement.tsx)
+// Helper function to get package icon image (uses centralized utility for consistency)
 const getPackageIconImage = (packageName?: string | null): StaticImageData | null => {
   if (!packageName) return null;
-  const lowerName = packageName.toLowerCase();
-
-  if (lowerName.includes("boss")) return boss;
-  if (lowerName.includes("foreman")) return foreman;
-  if (lowerName.includes("tradie")) return tradie;
-  if (lowerName.includes("apprentice")) return apprentice;
-  if (lowerName.includes("power")) return power;
-
-  return null;
+  // Try subscription first, then one-time as fallback
+  return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
 };
 
 // Helper function to get package color scheme (matching UsersManagement.tsx)

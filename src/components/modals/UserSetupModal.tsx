@@ -6,6 +6,7 @@ import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { PROFESSIONS } from "@/data/professions";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { useReferralCode } from "@/hooks/useReferralCode";
 import { DropdownOption } from "./ui/Dropdown";
 import Dropdown from "./ui/Dropdown";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input, Select } from "./ui";
@@ -83,6 +84,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
 
   const { refetch, userData } = useUserContext();
+  const { hasReferralCode } = useReferralCode();
 
   // SessionStorage key for persisting modal state
   const SETUP_STATE_KEY = "userSetupModalState";
@@ -731,10 +733,12 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
               <p className="text-gray-600">
                 You can now log in with your email and password, and we&apos;ve recorded your state for better service.
               </p>
-              <p className="text-sm text-green-600">
-                Next up, we&apos;ll walk you through sharing your referral code so you can lock in 100 bonus entries
-                with your mates.
-              </p>
+              {hasReferralCode && (
+                <p className="text-sm text-green-600">
+                  Next up, we&apos;ll walk you through sharing your referral code so you can lock in 100 bonus entries
+                  with your mates.
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -828,9 +832,11 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                         ? "Email verification is required to complete your account setup and ensure account security."
                         : "Verify your email address to enhance account security and receive important updates."}
                     </p>
-                    <p className="text-xs text-green-600 font-['Poppins']">
-                      Complete verification to unlock the 100 bonus entries tied to your referral code.
-                    </p>
+                    {hasReferralCode && (
+                      <p className="text-xs text-green-600 font-['Poppins']">
+                        Complete verification to unlock the 100 bonus entries tied to your referral code.
+                      </p>
+                    )}
 
                     {currentEmail && !isEditingEmail && (
                       <div className="space-y-2">

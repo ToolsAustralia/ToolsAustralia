@@ -6,20 +6,10 @@ import MetallicDivider from "@/components/ui/MetallicDivider";
 import { Check } from "lucide-react";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
+import { apprentice, tradie, foreman, boss, power, type PackageIconData } from "@/utils/images/package-icons";
 
-// Import package icons (matching MembershipSection)
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
-
-type StaticImageData = {
-  src: string;
-  height: number;
-  width: number;
-  blurDataURL?: string;
-};
+// Type alias for consistency
+type StaticImageData = PackageIconData;
 
 // Package data interfaces
 interface PackageBenefit {
@@ -510,6 +500,8 @@ export default function MembershipPackagesChart() {
                           <Image
                             src={pkg.icon}
                             alt={`${pkg.name} icon`}
+                            fill
+                            sizes="(max-width: 640px) 32px, 48px"
                             className="w-full h-full object-contain opacity-90"
                           />
                         </div>

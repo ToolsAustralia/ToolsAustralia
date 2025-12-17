@@ -16,46 +16,7 @@ import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
-
-// Import package icons
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
-
-type StaticImageData = {
-  src: string;
-  height: number;
-  width: number;
-  blurDataURL?: string;
-};
-
-// Helper function to get the package icon based on plan ID
-const PACKAGE_ICONS: Record<string, StaticImageData> = {
-  // One-time packages
-  "apprentice-pack": apprentice,
-  "tradie-pack": tradie,
-  "foreman-pack": foreman,
-  "boss-pack": boss,
-  "power-pack": power,
-
-  // Member exclusive packages (additional packages)
-  "additional-apprentice-pack-member": apprentice,
-  "additional-tradie-pack-member": tradie,
-  "additional-foreman-pack-member": foreman,
-  "additional-boss-pack-member": boss,
-  "additional-power-pack-member": power,
-
-  // Subscription packages (using generated IDs from useMemberships hook)
-  tradie: tradie,
-  foreman: foreman,
-  boss: boss,
-};
-
-const getPackageIcon = (planId: string): StaticImageData | null => {
-  return PACKAGE_ICONS[planId] || null;
-};
+import { getPackageIcon } from "@/utils/images/package-icons";
 
 // Helper function to extract gradient color for rounded borders
 const getGradientColor = (gradient: string) => {
@@ -735,6 +696,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                       <Image
                         src={getPackageIcon(plan.id)!}
                         alt={`${plan.name} icon`}
+                        fill
+                        sizes="(max-width: 640px) 32px, 48px"
                         className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
                       />
                     </div>

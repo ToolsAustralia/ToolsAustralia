@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import crypto from "crypto";
+import { isDevelopment } from "@/lib/environment";
 
 // Email verification rate limiting store (in production, use Redis or database)
 const emailRateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -28,8 +29,18 @@ export interface EmailRateLimitResult {
 
 /**
  * Check rate limiting for email verification requests
+ * Rate limiting is disabled in development environment for easier testing
  */
 export function checkEmailRateLimit(email: string): EmailRateLimitResult {
+  // Skip rate limiting in development
+  if (isDevelopment()) {
+    return {
+      allowed: true,
+      remainingAttempts: 999, // Unlimited in development
+      resetTime: Date.now() + RATE_LIMIT_WINDOW,
+    };
+  }
+
   const now = Date.now();
   const key = `email_verification_${email}`;
 
@@ -331,7 +342,7 @@ function createVerificationEmailTemplate(userName: string, verificationCode: str
                     <div class="security-notice">
                         <h3>Security Information</h3>
                         <ul>
-                            <li>This verification code expires in 10 minutes</li>
+                            <li>This verification code expires in 24 hours</li>
                             <li>Never share this code with anyone</li>
                             <li>If you didn't request this verification, please ignore this email</li>
                             <li>For security reasons, this code can only be used once</li>
@@ -398,7 +409,7 @@ export async function sendEmailVerificationCode(
       html: htmlContent,
       text: `Hello ${
         userName || "User"
-      }! Your Tools Australia verification code is: ${verificationCode}. This code expires in 10 minutes.`,
+      }! Your Tools Australia verification code is: ${verificationCode}. This code expires in 24 hours.`,
     };
 
     // console.log(`Sending email with options:`, {
@@ -735,9 +746,10 @@ export async function sendPasswordResetEmail({
 
 /**
  * Get verification expiry time
+ * Defaults to 24 hours if EMAIL_VERIFICATION_EXPIRY_MINUTES is not set
  */
 export function getEmailVerificationExpiry(): Date {
-  const expiryMinutes = parseInt(process.env.EMAIL_VERIFICATION_EXPIRY_MINUTES || "10");
+  const expiryMinutes = parseInt(process.env.EMAIL_VERIFICATION_EXPIRY_MINUTES || "1440"); // 24 hours = 1440 minutes
   return new Date(Date.now() + expiryMinutes * 60 * 1000);
 }
 
