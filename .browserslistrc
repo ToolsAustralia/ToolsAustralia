@@ -1,0 +1,12 @@
+# Browser support configuration for Tools Australia
+# Used by autoprefixer and other tools to determine browser targets
+
+# Last 2 versions of major evergreen browsers (Chrome, Firefox, Edge, Opera)
+last 2 versions
+
+# Safari and iOS support (covers 95%+ of users)
+iOS >= 14
+Safari >= 14
+
+# Exclude browsers without security updates
+not dead

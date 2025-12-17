@@ -14,6 +14,7 @@
     /* Mobile styles */
     height: 50vh;
     min-height: 430px;
+    -webkit-clip-path: ellipse(135% 97% at 50% 0); /* Safari < 15.4 support */
     clip-path: ellipse(135% 97% at 50% 0);
   }
 
@@ -22,6 +23,7 @@
     .main-banner-image {
       height: 83vh !important;
       min-height: unset !important;
+      -webkit-clip-path: ellipse(126% 97% at 50% 0) !important; /* Safari < 15.4 support */
       clip-path: ellipse(126% 97% at 50% 0) !important;
     }
   }
@@ -50,34 +52,43 @@
   }
 
   .clip-card-left {
+    -webkit-clip-path: polygon(0% 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%); /* Safari < 15.4 support */
     clip-path: polygon(0% 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%);
   }
 
   .clip-card-center {
+    -webkit-clip-path: polygon(40px 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%); /* Safari < 15.4 support */
     clip-path: polygon(40px 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%);
   }
 
   .clip-card-right {
+    -webkit-clip-path: polygon(40px 0%, 100% 0%, 100% 100%, 0% 100%); /* Safari < 15.4 support */
     clip-path: polygon(40px 0%, 100% 0%, 100% 100%, 0% 100%);
   }
 }
 
 /* Custom Viewport Height Utilities */
+/* Progressive enhancement: vh fallback for older browsers (Safari < 15.4, iOS < 15.4) */
+/* Modern browsers will use svh/dvh, older browsers will use vh fallback */
 @layer utilities {
   .h-screen-svh {
-    height: 100svh;
+    height: 100vh; /* Fallback for older browsers */
+    height: 100svh; /* Modern browsers that support it */
   }
 
   .min-h-screen-svh {
-    min-height: 100svh;
+    min-height: 100vh; /* Fallback for older browsers */
+    min-height: 100svh; /* Modern browsers that support it */
   }
 
   .h-screen-dvh {
-    height: 100dvh;
+    height: 100vh; /* Fallback for older browsers */
+    height: 100dvh; /* Modern browsers that support it */
   }
 
   .min-h-screen-dvh {
-    min-height: 100dvh;
+    min-height: 100vh; /* Fallback for older browsers */
+    min-height: 100dvh; /* Modern browsers that support it */
   }
 }
 
