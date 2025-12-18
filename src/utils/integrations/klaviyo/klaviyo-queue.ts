@@ -60,6 +60,17 @@ export async function getFailedEventsStats(): Promise<QueueStats> {
     .select("createdAt")
     .lean();
 
+  // Handle lean() query results - they return plain objects
+  const oldestDate =
+    oldestPending && "createdAt" in oldestPending && oldestPending.createdAt
+      ? new Date(oldestPending.createdAt as Date)
+      : undefined;
+
+  const newestDate =
+    newestPending && "createdAt" in newestPending && newestPending.createdAt
+      ? new Date(newestPending.createdAt as Date)
+      : undefined;
+
   return {
     pending,
     processing,
@@ -67,8 +78,8 @@ export async function getFailedEventsStats(): Promise<QueueStats> {
     failed_permanent,
     total: pending + processing + succeeded + failed_permanent,
     readyToRetry,
-    oldestPending: oldestPending?.createdAt ? new Date(oldestPending.createdAt) : undefined,
-    newestPending: newestPending?.createdAt ? new Date(newestPending.createdAt) : undefined,
+    oldestPending: oldestDate,
+    newestPending: newestDate,
   };
 }
 
@@ -204,7 +215,7 @@ export async function clearOldFailedEvents(
  *
  * @param status - Status to filter by
  * @param limit - Maximum number of events to return (default: 50)
- * @returns Array of failed events
+ * @returns Array of failed events (as plain objects)
  */
 export async function getFailedEventsByStatus(
   status: "pending" | "processing" | "succeeded" | "failed_permanent",
@@ -212,8 +223,9 @@ export async function getFailedEventsByStatus(
 ): Promise<IKlaviyoFailedEvent[]> {
   await connectDB();
 
+  // Return full documents (not lean) to maintain type compatibility
   return await KlaviyoFailedEvent.find({ status })
     .sort({ createdAt: -1 }) // Newest first
     .limit(limit)
-    .lean();
+    .exec();
 }

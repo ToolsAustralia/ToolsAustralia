@@ -20,8 +20,6 @@ import type {
   KlaviyoEventResponse,
   TrackEventOptions,
 } from "@/types/klaviyo";
-import KlaviyoFailedEvent, { IKlaviyoFailedEvent } from "@/models/KlaviyoFailedEvent";
-import connectDB from "@/lib/mongodb";
 
 // ============================================================
 // CONFIGURATION
@@ -62,13 +60,6 @@ class KlaviyoClient {
   private readonly MAX_RETRIES = 5; // Increased from 3 for better resilience
   private readonly BASE_RETRY_DELAY_MS = 2000; // 2 seconds base delay
   private readonly GATEWAY_ERROR_DELAY_MULTIPLIER = 2; // Double delay for gateway errors (502/504)
-
-  // ✅ Queue configuration constants
-  // For failed event queue system
-  private readonly MAX_QUEUE_RETRIES = 10; // Total attempts including initial (10 retries after initial failure)
-  private readonly QUEUE_RETRY_BASE_DELAY_MS = 60000; // 1 minute base delay for queue retries
-  private readonly QUEUE_CLEANUP_DAYS_SUCCEEDED = 30; // Delete succeeded events after 30 days
-  private readonly QUEUE_CLEANUP_DAYS_FAILED = 90; // Delete permanent failures after 90 days
 
   constructor() {
     const config = getKlaviyoConfig();
@@ -1013,7 +1004,7 @@ class KlaviyoClient {
   }
 
   trackEventBackground(event: KlaviyoEvent, options?: TrackEventOptions): void {
-    this.trackEvent(event, options).catch(async (error) => {
+    this.trackEvent(event, options).catch((error) => {
       // Enhanced error logging for production debugging
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const eventName = event.event;
@@ -1026,16 +1017,6 @@ class KlaviyoClient {
         mode: this.mode,
         timestamp: new Date().toISOString(),
       });
-
-      // ✅ FIX: Save failed event to queue for later retry
-      // Only saves retryable errors (502/504/5xx, timeout, network)
-      // Non-retryable errors (400/401/403/404) are not queued
-      if (error instanceof Error) {
-        await this.saveFailedEvent(event, error).catch((queueError) => {
-          // Log queue save failure but don't throw - don't break main flow
-          console.error(`❌ Failed to save event to queue:`, queueError);
-        });
-      }
 
       // In production, you might want to send this to a monitoring service
       if (this.mode === "production") {
@@ -1132,187 +1113,6 @@ class KlaviyoClient {
       isProduction,
       warnings,
     };
-  }
-
-  /**
-   * Check if an error is retryable (should be queued)
-   * Only retryable errors should be saved to the queue
-   *
-   * @param error - Error object or error message
-   * @returns True if error is retryable (502/504/5xx, timeout, network)
-   */
-  private isRetryableError(error: Error | string): boolean {
-    const errorMessage = error instanceof Error ? error.message.toLowerCase() : error.toLowerCase();
-
-    // Retryable errors: server errors, gateway errors, timeouts, network issues
-    return (
-      errorMessage.includes("502") ||
-      errorMessage.includes("504") ||
-      errorMessage.includes("500") ||
-      errorMessage.includes("503") ||
-      errorMessage.includes("timeout") ||
-      errorMessage.includes("network") ||
-      errorMessage.includes("econnreset") ||
-      errorMessage.includes("fetch failed") ||
-      errorMessage.includes("econnrefused")
-    );
-  }
-
-  /**
-   * Calculate next retry time using exponential backoff
-   * Caps maximum delay at 24 hours
-   *
-   * @param retryCount - Current retry attempt number (0 = first retry)
-   * @returns Date object for next retry
-   */
-  private calculateNextRetryTime(retryCount: number): Date {
-    // Exponential backoff: baseDelay * 2^(retryCount)
-    const exponentialDelay = this.QUEUE_RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
-    // Cap at 24 hours (86400000 ms)
-    const delayMs = Math.min(exponentialDelay, 86400000);
-    return new Date(Date.now() + delayMs);
-  }
-
-  /**
-   * Save failed event to queue for later retry
-   * Only saves retryable errors (502/504/5xx, timeout, network)
-   * Non-retryable errors (400/401/403/404) are not queued
-   *
-   * @param event - Klaviyo event that failed
-   * @param error - Error that occurred
-   */
-  async saveFailedEvent(event: KlaviyoEvent, error: Error): Promise<void> {
-    // Only queue retryable errors
-    if (!this.isRetryableError(error)) {
-      console.warn(`⚠️ Not queueing non-retryable error for event "${event.event}": ${error.message}`);
-      return;
-    }
-
-    // Skip if Klaviyo is disabled
-    if (!this.isConfigured()) {
-      return;
-    }
-
-    try {
-      // Ensure database connection
-      await connectDB();
-
-      // Check if event already exists in queue (prevent duplicates)
-      const existingEvent = await KlaviyoFailedEvent.findOne({
-        "event.event": event.event,
-        "event.customer_properties.email": event.customer_properties.email,
-        "event.properties.user_id": event.properties.user_id,
-        status: { $in: ["pending", "processing"] },
-      });
-
-      if (existingEvent) {
-        console.log(
-          `ℹ️ Event "${event.event}" for user ${event.customer_properties.email} already in queue, skipping duplicate`
-        );
-        return;
-      }
-
-      // Create new failed event record
-      const failedEvent = new KlaviyoFailedEvent({
-        event,
-        status: "pending",
-        retryCount: 0,
-        maxRetries: this.MAX_QUEUE_RETRIES,
-        lastError: error.message,
-        firstError: error.message,
-        nextRetryAt: this.calculateNextRetryTime(0), // First retry in 1 minute
-      });
-
-      await failedEvent.save();
-
-      console.log(
-        `💾 Saved failed event "${event.event}" to queue for user ${
-          event.customer_properties.email
-        }. Will retry at ${failedEvent.nextRetryAt.toISOString()}`
-      );
-    } catch (dbError) {
-      // Don't throw - queue save failure shouldn't break the main flow
-      console.error(`❌ Failed to save event to queue:`, dbError);
-    }
-  }
-
-  /**
-   * Retry a failed event from the queue
-   * Updates the event status based on result
-   *
-   * @param failedEvent - Failed event document from database
-   * @returns True if event was successfully sent, false otherwise
-   */
-  async retryFailedEvent(failedEvent: IKlaviyoFailedEvent): Promise<boolean> {
-    try {
-      // Mark as processing
-      failedEvent.status = "processing";
-      failedEvent.lastRetriedAt = new Date();
-      await failedEvent.save();
-
-      // Attempt to send the event (cast to KlaviyoEvent since it's stored as Mixed)
-      const eventData = failedEvent.event as KlaviyoEvent;
-      const result = await this.trackEvent(eventData, {
-        skipIfDisabled: false, // Don't skip - we want to retry even if disabled
-        retryOnFailure: true, // Use retry logic
-        logToConsole: this.mode === "development",
-      });
-
-      if (result.success) {
-        // Success! Mark as succeeded
-        failedEvent.status = "succeeded";
-        failedEvent.succeededAt = new Date();
-        await failedEvent.save();
-
-        console.log(
-          `✅ Successfully retried event "${eventData.event}" for user ${
-            eventData.customer_properties.email
-          } (attempt ${failedEvent.retryCount + 1})`
-        );
-        return true;
-      } else {
-        // Failed - update retry count and schedule next retry
-        failedEvent.retryCount += 1;
-        failedEvent.lastError = result.error || "Unknown error";
-
-        if (failedEvent.retryCount >= failedEvent.maxRetries) {
-          // Max retries exceeded - mark as permanently failed
-          failedEvent.status = "failed_permanent";
-          console.error(
-            `❌ Event "${eventData.event}" for user ${eventData.customer_properties.email} exceeded max retries (${failedEvent.maxRetries}). Marking as permanently failed.`
-          );
-        } else {
-          // Schedule next retry
-          failedEvent.status = "pending";
-          failedEvent.nextRetryAt = this.calculateNextRetryTime(failedEvent.retryCount);
-          console.log(
-            `⚠️ Retry ${failedEvent.retryCount}/${failedEvent.maxRetries} failed for event "${
-              failedEvent.event.event
-            }". Next retry at ${failedEvent.nextRetryAt.toISOString()}`
-          );
-        }
-
-        await failedEvent.save();
-        return false;
-      }
-    } catch (error) {
-      // Error during retry - update error and schedule next retry
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      const eventData = failedEvent.event as KlaviyoEvent;
-      failedEvent.retryCount += 1;
-      failedEvent.lastError = errorMessage;
-      failedEvent.status = "pending";
-
-      if (failedEvent.retryCount >= failedEvent.maxRetries) {
-        failedEvent.status = "failed_permanent";
-        console.error(`❌ Event "${eventData.event}" exceeded max retries. Marking as permanently failed.`);
-      } else {
-        failedEvent.nextRetryAt = this.calculateNextRetryTime(failedEvent.retryCount);
-      }
-
-      await failedEvent.save();
-      return false;
-    }
   }
 }
 
