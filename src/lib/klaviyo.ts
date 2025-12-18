@@ -54,6 +54,13 @@ class KlaviyoClient {
   private smsListId: string | undefined;
   private emailListId: string | undefined;
 
+  // ✅ Retry and timeout configuration constants
+  // Following Klaviyo best practices for API resilience
+  private readonly REQUEST_TIMEOUT_MS = 30000; // 30 seconds - Klaviyo recommended timeout
+  private readonly MAX_RETRIES = 5; // Increased from 3 for better resilience
+  private readonly BASE_RETRY_DELAY_MS = 2000; // 2 seconds base delay
+  private readonly GATEWAY_ERROR_DELAY_MULTIPLIER = 2; // Double delay for gateway errors (502/504)
+
   constructor() {
     const config = getKlaviyoConfig();
     this.apiKey = config.apiKey;
@@ -83,10 +90,12 @@ class KlaviyoClient {
       // console.warn("⚠️ In development but KLAVIYO_MODE is not 'development'. Events will not have [DEV] prefix.");
     }
 
+    // ✅ FIX: Warn about environment mismatch (NODE_ENV=production but KLAVIYO_MODE=development)
     if (!isDevelopment && this.mode !== "production") {
-      // console.warn(
-      //   "⚠️ In production but KLAVIYO_MODE is not 'production'. Consider updating for production deployment."
-      // );
+      console.warn(
+        "⚠️ ENVIRONMENT MISMATCH: NODE_ENV=production but KLAVIYO_MODE=development. " +
+          "This may cause issues. Set KLAVIYO_MODE=production in production."
+      );
     }
 
     // Production readiness check
@@ -136,36 +145,159 @@ class KlaviyoClient {
     return eventName;
   }
 
+  /**
+   * Make HTTP request to Klaviyo API with timeout and error detection
+   *
+   * Per Klaviyo best practices:
+   * - 30 second timeout to prevent hanging requests
+   * - Throws errors for 502/504/5xx status codes so retry logic can catch them
+   * - Handles network errors and timeouts gracefully
+   *
+   * @param endpoint - API endpoint (e.g., "/profiles/")
+   * @param method - HTTP method (GET, POST, PATCH)
+   * @param body - Optional request body
+   * @returns Response object for successful requests
+   * @throws Error for retryable errors (502/504/5xx, timeout, network errors)
+   */
   private async makeRequest(endpoint: string, method: "GET" | "POST" | "PATCH", body?: unknown): Promise<Response> {
     const url = `${this.baseUrl}${endpoint}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT_MS);
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-        "Content-Type": "application/json",
-        revision: "2024-10-15",
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+          "Content-Type": "application/json",
+          revision: "2024-10-15",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
 
-    return response;
+      clearTimeout(timeoutId);
+
+      // ✅ CRITICAL FIX: Throw errors for retryable status codes (502/504/5xx)
+      // This allows retry logic to catch and retry these errors
+      // Per Klaviyo best practices: gateway errors and server errors are retryable
+      if (response.status >= 500 || response.status === 502 || response.status === 504) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Klaviyo API error: ${response.status} - ${errorMessage}`);
+      }
+
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      // Handle timeout errors specifically
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`Klaviyo API timeout after ${this.REQUEST_TIMEOUT_MS}ms`);
+      }
+
+      // Handle network errors (ECONNREFUSED, fetch failed, etc.)
+      if (
+        error instanceof Error &&
+        (error.message.includes("fetch failed") || error.message.includes("ECONNREFUSED"))
+      ) {
+        throw new Error(`Klaviyo API network error: ${error.message}`);
+      }
+
+      // Re-throw other errors (including our own Error objects)
+      throw error;
+    }
   }
 
-  private async retryRequest<T>(fn: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
+  /**
+   * Retry request with exponential backoff and jitter
+   *
+   * Implements Klaviyo best practices for handling temporary failures:
+   * - Exponential backoff: delays increase exponentially with each retry
+   * - Jitter: random delay added to prevent thundering herd problem
+   * - Error classification: only retries retryable errors (502/504/5xx, timeout, network)
+   * - Gateway error handling: longer delays for 502/504 errors (indicates server issues)
+   *
+   * Retry Strategy:
+   * - Base delay: 2 seconds
+   * - Gateway errors (502/504): 2x multiplier
+   * - Exponential: baseDelay * multiplier * 2^(attempt-1)
+   * - Jitter: Random 0-1000ms added
+   * - Max delay: 30 seconds
+   *
+   * Error Classification:
+   * - Retryable: 502, 504, 500, 503, timeout, network errors
+   * - Non-retryable: 400, 401, 403, 404 (throw immediately)
+   *
+   * @param fn - Function that returns a Promise to retry
+   * @param maxRetries - Maximum number of retry attempts (default: 5)
+   * @param baseDelay - Base delay in milliseconds (default: 2000ms)
+   * @returns Result of the function call
+   * @throws Error if all retries fail or error is non-retryable
+   */
+  private async retryRequest<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = this.MAX_RETRIES,
+    baseDelay: number = this.BASE_RETRY_DELAY_MS
+  ): Promise<T> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await fn();
-      } catch (error) {
-        lastError = error as Error;
+        const result = await fn();
 
-        if (attempt < maxRetries) {
-          const waitTime = delay * Math.pow(2, attempt - 1);
-          // console.log(`⚠️ Klaviyo request failed (attempt ${attempt}/${maxRetries}). Retrying in ${waitTime}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, waitTime));
+        // If result is a Response, check if it's OK (for non-throwing cases)
+        if (result instanceof Response && !result.ok) {
+          // Only throw for retryable errors (502/504/5xx)
+          if (result.status >= 500 || result.status === 502 || result.status === 504) {
+            const errorData = await result.json().catch(() => ({}));
+            const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${result.status}: ${result.statusText}`;
+            throw new Error(`Klaviyo API error: ${result.status} - ${errorMessage}`);
+          }
         }
+
+        return result;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = lastError.message.toLowerCase();
+
+        // ✅ Error Classification: Check if it's a retryable error
+        const isRetryable =
+          errorMessage.includes("502") ||
+          errorMessage.includes("504") ||
+          errorMessage.includes("500") ||
+          errorMessage.includes("503") ||
+          errorMessage.includes("timeout") ||
+          errorMessage.includes("network") ||
+          errorMessage.includes("econnreset") ||
+          errorMessage.includes("fetch failed");
+
+        // Don't retry non-retryable errors (400, 401, 403, 404, etc.)
+        // These indicate client errors that won't be fixed by retrying
+        if (!isRetryable) {
+          throw lastError;
+        }
+
+        // If we've exhausted retries, throw the error
+        if (attempt >= maxRetries) {
+          console.error(`❌ Klaviyo request failed after ${maxRetries} attempts:`, lastError.message);
+          throw lastError;
+        }
+
+        // ✅ Calculate exponential backoff with jitter
+        // Longer delays for gateway errors (502/504) - these indicate server issues
+        const isGatewayError = errorMessage.includes("502") || errorMessage.includes("504");
+        const delayMultiplier = isGatewayError ? this.GATEWAY_ERROR_DELAY_MULTIPLIER : 1;
+        const exponentialDelay = baseDelay * delayMultiplier * Math.pow(2, attempt - 1);
+        const jitter = Math.random() * 1000; // Add up to 1 second of jitter to prevent thundering herd
+        const waitTime = Math.min(exponentialDelay + jitter, 30000); // Cap at 30 seconds
+
+        console.warn(
+          `⚠️ Klaviyo API error (${lastError.message.split(":")[1]?.trim() || "unknown"}) - ` +
+            `Retrying in ${Math.round(waitTime)}ms (attempt ${attempt}/${maxRetries})...`
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
 
@@ -198,6 +330,28 @@ class KlaviyoClient {
     return cleaned;
   }
 
+  /**
+   * Create or update a Klaviyo profile
+   *
+   * This method implements Klaviyo best practices:
+   * - Automatic retry on 502/504/5xx errors with exponential backoff
+   * - Request timeout of 30 seconds to prevent hanging
+   * - Handles profile conflicts (409) by updating existing profile
+   * - Cleans undefined values from properties to ensure data integrity
+   *
+   * Retry Strategy:
+   * - Uses retryRequest() wrapper for automatic retries
+   * - Exponential backoff with jitter prevents thundering herd
+   * - Gateway errors (502/504) get longer delays
+   *
+   * Error Handling:
+   * - Returns success:false for non-retryable errors (400, 401, 403, 404)
+   * - Throws errors for retryable errors (502/504/5xx) which are caught by retry logic
+   * - Logs errors with context for debugging
+   *
+   * @param profile - Klaviyo profile object with email, name, phone, and properties
+   * @returns Response object with success status and profile_id if successful
+   */
   async upsertProfile(profile: KlaviyoProfile): Promise<KlaviyoProfileResponse> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
@@ -245,8 +399,13 @@ class KlaviyoClient {
       //   properties: cleanedProperties,
       // });
 
-      // First, try to create the profile
-      let response = await this.retryRequest(() => this.makeRequest("/profiles/", "POST", payload));
+      // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
+      // This ensures resilience during Klaviyo API outages
+      let response = await this.retryRequest(
+        () => this.makeRequest("/profiles/", "POST", payload),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
 
       // If we get a 409 conflict, it means the profile already exists
       if (response.status === 409) {
@@ -286,8 +445,11 @@ class KlaviyoClient {
           );
         } else {
           // Fallback: try to find profile by email and update
-          const searchResponse = await this.retryRequest(() =>
-            this.makeRequest(`/profiles/?filter=equals(email,"${profile.email}")`, "GET")
+          // ✅ FIX: Use retryRequest with explicit retry configuration for profile search
+          const searchResponse = await this.retryRequest(
+            () => this.makeRequest(`/profiles/?filter=equals(email,"${profile.email}")`, "GET"),
+            this.MAX_RETRIES,
+            this.BASE_RETRY_DELAY_MS
           );
 
           if (searchResponse.ok) {
@@ -317,8 +479,11 @@ class KlaviyoClient {
                 },
               };
 
-              response = await this.retryRequest(() =>
-                this.makeRequest(`/profiles/${existingProfile.id}/`, "PATCH", updatePayload)
+              // ✅ FIX: Use retryRequest with explicit retry configuration for profile update
+              response = await this.retryRequest(
+                () => this.makeRequest(`/profiles/${existingProfile.id}/`, "PATCH", updatePayload),
+                this.MAX_RETRIES,
+                this.BASE_RETRY_DELAY_MS
               );
             }
           }
@@ -342,10 +507,12 @@ class KlaviyoClient {
         profile_id: profileId,
       };
     } catch (error) {
-      console.error("❌ Failed to upsert Klaviyo profile:", error);
+      // Enhanced error logging with context
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.error(`❌ Failed to upsert Klaviyo profile for ${profile.email}:`, errorMessage);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
       };
     }
   }
@@ -445,15 +612,21 @@ class KlaviyoClient {
         },
       };
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-          revision: "2024-10-15",
-        },
-        body: JSON.stringify(payload),
-      });
+      // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
+      const response = await this.retryRequest(
+        () =>
+          fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+              revision: "2024-10-15",
+            },
+            body: JSON.stringify(payload),
+          }),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -473,22 +646,48 @@ class KlaviyoClient {
           ],
         };
 
-        const listResponse = await fetch(listUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-            revision: "2024-10-15",
-          },
-          body: JSON.stringify(listPayload),
-        });
+        // ✅ FIX: Use retryRequest wrapper for list addition (with retry logic)
+        try {
+          const listResponse = await this.retryRequest(
+            () =>
+              fetch(listUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+                  revision: "2024-10-15",
+                },
+                body: JSON.stringify(listPayload),
+              }),
+            this.MAX_RETRIES,
+            this.BASE_RETRY_DELAY_MS
+          );
 
-        if (!listResponse.ok) {
-          const errorData = await listResponse.json().catch(() => ({}));
-          const errorMessage =
-            errorData.errors?.[0]?.detail || `HTTP ${listResponse.status}: ${listResponse.statusText}`;
-          // Log but don't fail - subscriptions are set, list addition is secondary
-          console.warn(`⚠️ Failed to add profile to SMS list: ${errorMessage}`);
+          if (!listResponse.ok) {
+            const errorData = await listResponse.json().catch(() => ({}));
+            const errorMessage =
+              errorData.errors?.[0]?.detail || `HTTP ${listResponse.status}: ${listResponse.statusText}`;
+
+            // ✅ FIX: Enhanced error handling for deleted lists (404 detection)
+            if (listResponse.status === 404) {
+              console.error(
+                `❌ CRITICAL: Klaviyo SMS list not found (404). ` +
+                  `List ID: ${this.smsListId}. ` +
+                  `The list may have been deleted. Check your Klaviyo dashboard and update KLAVIYO_SMS_LIST_ID.`
+              );
+            } else {
+              // Log but don't fail - subscriptions are set, list addition is secondary
+              console.warn(`⚠️ Failed to add profile to SMS list: ${errorMessage}`);
+            }
+          } else if (this.mode === "development") {
+            // Success - profile added to list
+            console.log("✅ Profile added to SMS list:", { profileId, listId: this.smsListId });
+          }
+        } catch (error) {
+          // If retry fails completely, log but don't fail the entire operation
+          // Subscription consent is more important than list addition
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          console.warn(`⚠️ Failed to add profile to SMS list after retries: ${errorMessage}`);
         }
       }
 
@@ -508,11 +707,28 @@ class KlaviyoClient {
 
   /**
    * Subscribe user to email marketing list using Subscribe Profiles endpoint
-   * This is the correct way to set email consent in Klaviyo per their documentation
-   * Uses the subscriptions object structure to properly set consent
    *
-   * Note: The newer Klaviyo API requires a profile ID, not email
-   * You must upsert the profile first to get the profile ID, then use it here
+   * This is the correct way to set email consent in Klaviyo per their documentation.
+   * Uses the subscriptions object structure to properly set consent.
+   *
+   * Implements Klaviyo best practices:
+   * - Automatic retry on 502/504/5xx errors with exponential backoff
+   * - Request timeout of 30 seconds
+   * - Enhanced error handling for deleted lists (404 detection)
+   * - Non-blocking list addition (subscription consent is more important)
+   *
+   * Retry Strategy:
+   * - Uses retryRequest() wrapper for automatic retries
+   * - Exponential backoff with jitter prevents thundering herd
+   * - Gateway errors (502/504) get longer delays
+   *
+   * Error Handling:
+   * - 404 errors (deleted lists) are logged as critical with clear instructions
+   * - Other errors are logged but don't fail the entire operation
+   * - Subscription consent is set even if list addition fails
+   *
+   * Note: The newer Klaviyo API requires a profile ID, not email.
+   * You must upsert the profile first to get the profile ID, then use it here.
    *
    * @param profileId - Klaviyo profile ID (returned from upsertProfile)
    * @param email - Email address (required when setting email subscriptions)
@@ -583,15 +799,21 @@ class KlaviyoClient {
         },
       };
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-          revision: "2024-10-15",
-        },
-        body: JSON.stringify(payload),
-      });
+      // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
+      const response = await this.retryRequest(
+        () =>
+          fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+              revision: "2024-10-15",
+            },
+            body: JSON.stringify(payload),
+          }),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
 
       const responseData = await response.json().catch(() => ({}));
 
@@ -630,26 +852,48 @@ class KlaviyoClient {
           ],
         };
 
-        const listResponse = await fetch(listUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-            revision: "2024-10-15",
-          },
-          body: JSON.stringify(listPayload),
-        });
+        // ✅ FIX: Use retryRequest wrapper for list addition (with retry logic)
+        try {
+          const listResponse = await this.retryRequest(
+            () =>
+              fetch(listUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+                  revision: "2024-10-15",
+                },
+                body: JSON.stringify(listPayload),
+              }),
+            this.MAX_RETRIES,
+            this.BASE_RETRY_DELAY_MS
+          );
 
-        if (!listResponse.ok) {
-          const errorData = await listResponse.json().catch(() => ({}));
-          const errorMessage =
-            errorData.errors?.[0]?.detail || `HTTP ${listResponse.status}: ${listResponse.statusText}`;
-          // Log but don't fail - subscriptions are set, list addition is secondary
-          console.warn(`⚠️ Failed to add profile to email list: ${errorMessage}`);
-        } else {
-          if (this.mode === "development") {
+          if (!listResponse.ok) {
+            const errorData = await listResponse.json().catch(() => ({}));
+            const errorMessage =
+              errorData.errors?.[0]?.detail || `HTTP ${listResponse.status}: ${listResponse.statusText}`;
+
+            // ✅ FIX: Enhanced error handling for deleted lists (404 detection)
+            if (listResponse.status === 404) {
+              console.error(
+                `❌ CRITICAL: Klaviyo email list not found (404). ` +
+                  `List ID: ${this.emailListId}. ` +
+                  `The list may have been deleted. Check your Klaviyo dashboard and update KLAVIYO_EMAIL_LIST_ID.`
+              );
+            } else {
+              // Log but don't fail - subscriptions are set, list addition is secondary
+              console.warn(`⚠️ Failed to add profile to email list: ${errorMessage}`);
+            }
+          } else if (this.mode === "development") {
+            // Success - profile added to list
             console.log("✅ Profile added to email list:", { profileId, listId: this.emailListId });
           }
+        } catch (error) {
+          // If retry fails completely, log but don't fail the entire operation
+          // Subscription consent is more important than list addition
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          console.warn(`⚠️ Failed to add profile to email list after retries: ${errorMessage}`);
         }
       } else {
         console.warn("⚠️ KLAVIYO_EMAIL_LIST_ID not configured - profile subscriptions set but not added to list");

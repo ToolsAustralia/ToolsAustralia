@@ -4,12 +4,12 @@ import { useEffect, useRef } from "react";
 
 /**
  * Custom hook for scroll-triggered animations using IntersectionObserver
- * 
+ *
  * Features:
  * - Progressive enhancement: Falls back gracefully if IntersectionObserver is not available
  * - Automatically adds 'visible' class when element enters viewport
  * - Clean cleanup on unmount
- * 
+ *
  * Browser compatibility:
  * - Modern browsers: Uses IntersectionObserver API
  * - Older browsers: Falls back to immediate visibility (graceful degradation)
@@ -29,12 +29,12 @@ export function useScrollAnimation() {
       if (element) {
         element.classList.add("visible");
       }
-      
+
       // Log warning in development mode only
       if (process.env.NODE_ENV === "development") {
         console.warn(
           "IntersectionObserver is not supported in this browser. " +
-          "Animation will be applied immediately as fallback."
+            "Animation will be applied immediately as fallback."
         );
       }
       return;

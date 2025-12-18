@@ -129,7 +129,76 @@ export async function syncMultipleUserProfilesToKlaviyo(users: IUser[]): Promise
 }
 
 /**
+ * Create Klaviyo profile and subscribe user during registration with retry logic
+ *
+ * This function properly handles the race condition by ensuring profile is created before subscription.
+ * It includes retry logic following Klaviyo best practices to handle temporary API failures.
+ *
+ * Flow:
+ * 1. Create/update profile in Klaviyo (with automatic retry on 502/504/5xx errors)
+ * 2. Wait for profile creation to complete successfully
+ * 3. Subscribe user to lists (only if profile creation succeeded)
+ *
+ * This replaces the setTimeout pattern which had race conditions where subscription could
+ * fail if profile sync hadn't completed yet.
+ *
+ * Error Handling:
+ * - Logs errors but doesn't throw (non-blocking - registration shouldn't fail due to Klaviyo)
+ * - Uses retry logic internally for resilience during Klaviyo API outages
+ *
+ * When to use:
+ * - During user registration (ONCE per user)
+ * - When you need both profile creation AND subscription in sequence
+ *
+ * When NOT to use:
+ * - For profile updates only (use syncUserProfileToKlaviyo instead)
+ * - For re-subscribing users (respects unsubscribe preferences)
+ *
+ * @param user - User model instance
+ * @param brandInterestFromSignup - Optional brand interest from signup (e.g., "milwaukee", "dewalt", "makita")
+ *                                   Only used if user hasn't made any purchases yet
+ */
+export async function createKlaviyoProfileAndSubscribe(
+  user: IUser,
+  brandInterestFromSignup?: string | null
+): Promise<void> {
+  // Skip if Klaviyo is disabled
+  if (process.env.KLAVIYO_ENABLED === "false") {
+    return;
+  }
+
+  try {
+    // Step 1: Create/update profile in Klaviyo (with retry logic built into upsertProfile)
+    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup);
+    const klaviyoResult = await klaviyo.upsertProfile(profile);
+
+    if (!klaviyoResult.success || !klaviyoResult.profile_id) {
+      throw new Error(`Failed to create Klaviyo profile: ${klaviyoResult.error || "Unknown error"}`);
+    }
+
+    // Step 2: Subscribe user to lists (only if profile was created successfully)
+    // This ensures we have a valid profile ID before subscribing
+    await subscribeUserToKlaviyoOnRegistration(user, klaviyoResult.profile_id);
+
+    console.log(`✅ Successfully created Klaviyo profile and subscribed user: ${user.email}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`❌ Failed to create Klaviyo profile and subscribe user ${user.email}:`, errorMessage);
+    // Don't throw - we don't want to block registration
+  }
+}
+
+/**
  * Ensure user profile is synced after any user data change
+ *
+ * ⚠️ IMPORTANT: This function ONLY updates profile data, NOT subscription status.
+ * Subscriptions are handled separately during registration to respect user unsubscribe preferences.
+ *
+ * This ensures that if a user manually unsubscribes via Klaviyo's unsubscribe link,
+ * their profile data can still be updated without resubscribing them.
+ *
+ * For initial registration with subscription, use createKlaviyoProfileAndSubscribe() instead.
+ *
  * This is a convenience function that can be called after user updates
  *
  * @param user - User model instance

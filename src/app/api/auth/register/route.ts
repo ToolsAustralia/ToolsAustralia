@@ -6,9 +6,8 @@ import { klaviyo } from "@/lib/klaviyo";
 import { createUserRegisteredEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import {
   ensureUserProfileSynced,
-  subscribeUserToKlaviyoOnRegistration,
+  createKlaviyoProfileAndSubscribe,
 } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
-import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpers";
 // TikTok Pixel tracking disabled for now - client-side only
 // import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
@@ -561,24 +560,17 @@ export async function POST(request: NextRequest) {
 
     // ✅ Step 1: Sync profile data to Klaviyo (non-blocking)
     // Pass brand interest so it can be set in Klaviyo profile (will be removed when user makes any purchase)
+    // This ensures profile data is synced immediately for other operations
     ensureUserProfileSynced(newUser, brandInterest);
 
-    // ✅ Step 2: Subscribe user ONCE during registration (only time we set subscriptions)
+    // ✅ FIX: Step 2: Create profile and subscribe user ONCE during registration
+    // This replaces the setTimeout pattern which had race conditions
+    // The function properly handles profile creation before subscription with retry logic
     // This ensures users who manually unsubscribe won't be resubscribed on future syncs
-    // Small delay to ensure profile is created first
-    setTimeout(async () => {
-      try {
-        // Get profile ID from Klaviyo (profile should be created by ensureUserProfileSynced)
-        const profile = await userToKlaviyoProfile(newUser, brandInterest);
-        const klaviyoResult = await klaviyo.upsertProfile(profile);
-
-        if (klaviyoResult.success && klaviyoResult.profile_id) {
-          await subscribeUserToKlaviyoOnRegistration(newUser, klaviyoResult.profile_id);
-        }
-      } catch (error) {
-        console.error("❌ Error subscribing user to Klaviyo on registration:", error);
-      }
-    }, 1000); // Small delay to ensure profile is created first
+    createKlaviyoProfileAndSubscribe(newUser, brandInterest).catch((error) => {
+      // Log error but don't block registration - Klaviyo failures shouldn't prevent user registration
+      console.error(`❌ Background Klaviyo profile creation/subscription failed for ${newUser.email}:`, error);
+    });
 
     // ✅ NEW: Track pixel registration event (non-blocking)
     // Generate unique event ID for deduplication (needed for response)
