@@ -554,6 +554,112 @@ export function createMajorDrawEndedEvent(
 }
 
 // ============================================================
+// REVENUE EVENTS (Standard Klaviyo Events for Revenue Metrics)
+// ============================================================
+
+/**
+ * Create "Placed Order" event - Standard Klaviyo event for revenue tracking
+ *
+ * This is REQUIRED for Klaviyo's revenue metrics to work correctly.
+ * This event works alongside custom events (Subscription Started, One-Time Package Purchased, etc.)
+ *
+ * - Custom events: For business logic and workflows
+ * - Placed Order: For revenue metrics and analytics
+ *
+ * @param user - User model instance
+ * @param orderData - Order data including value, currency, order ID, and package details
+ * @returns Formatted Klaviyo event
+ */
+export function createPlacedOrderEvent(
+  user: IUser,
+  orderData: {
+    orderId: string; // Unique order identifier (generated via klaviyo-order-helpers)
+    value: number; // Purchase amount in dollars
+    currency: string; // Currency code (e.g., "AUD")
+    packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+    packageId: string;
+    packageName: string;
+    entriesGranted?: number;
+    pointsEarned?: number;
+    paymentIntentId?: string;
+  }
+): KlaviyoEvent {
+  return {
+    event: "Placed Order",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      // REQUIRED fields
+      user_id: user._id.toString(),
+
+      // REQUIRED fields for Klaviyo revenue metrics
+      value: orderData.value,
+      currency: orderData.currency,
+      order_id: orderData.orderId,
+      items: [
+        {
+          product_id: orderData.packageId,
+          product_name: orderData.packageName,
+          value: orderData.value,
+          quantity: 1,
+        },
+      ],
+
+      // Custom properties for segmentation and analytics
+      package_type: orderData.packageType,
+      package_id: orderData.packageId,
+      package_name: orderData.packageName,
+      entries_granted: orderData.entriesGranted,
+      points_earned: orderData.pointsEarned,
+      payment_intent_id: orderData.paymentIntentId,
+      purchase_date: formatDateForKlaviyo(),
+      timestamp: formatTimestampForKlaviyo(),
+    },
+  };
+}
+
+/**
+ * Create "Refunded Order" event - Standard Klaviyo event for refund tracking
+ *
+ * This ensures revenue metrics correctly subtract refunds from total revenue.
+ * The order_id MUST match the original "Placed Order" event's order_id.
+ *
+ * @param user - User model instance
+ * @param refundData - Refund data including original order ID, refund amount, and reason
+ * @returns Formatted Klaviyo event
+ */
+export function createRefundedOrderEvent(
+  user: IUser,
+  refundData: {
+    originalOrderId: string; // MUST match the original "Placed Order" order_id
+    refundAmount: number; // Refund amount in dollars
+    currency: string; // Currency code (e.g., "AUD")
+    refundReason?: string; // Reason for refund (e.g., "customer_request", "chargeback")
+    packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+  }
+): KlaviyoEvent {
+  return {
+    event: "Refunded Order",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      // REQUIRED fields
+      user_id: user._id.toString(),
+
+      // REQUIRED fields for Klaviyo revenue metrics
+      value: -refundData.refundAmount, // Negative value to subtract from revenue
+      currency: refundData.currency,
+      order_id: refundData.originalOrderId, // MUST match original order_id
+      refund_amount: refundData.refundAmount,
+      refund_reason: refundData.refundReason || "customer_request",
+
+      // Custom properties
+      package_type: refundData.packageType,
+      refund_date: formatDateForKlaviyo(),
+      timestamp: formatTimestampForKlaviyo(),
+    },
+  };
+}
+
+// ============================================================
 // INVOICE EVENTS
 // ============================================================
 

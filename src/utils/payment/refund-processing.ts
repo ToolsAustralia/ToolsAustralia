@@ -16,6 +16,8 @@ import { removeMajorDrawEntries } from "../draws/remove-draw-entries";
 import { removeMiniDrawEntries } from "../draws/remove-draw-entries";
 import { reverseAffiliateCommissions } from "../affiliate/reverse-commission";
 import { getPackageById } from "@/data/membershipPackages";
+import { trackRefundedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
+import { extractOrderIdFromPaymentIntent, type PackageType } from "@/utils/integrations/klaviyo/klaviyo-order-helpers";
 
 /**
  * Result of refund processing
@@ -324,6 +326,42 @@ export async function processRefundReversal(
     } catch (commissionError) {
       // Non-blocking - log but don't fail refund processing
       console.error("❌ Affiliate commission reversal error (non-blocking):", commissionError);
+    }
+
+    // ✅ Track "Refunded Order" event in Klaviyo (non-blocking)
+    // This ensures revenue metrics correctly subtract refunds from total revenue
+    try {
+      // Reconstruct original order ID from payment event data
+      // For subscriptions, paymentIntentId might be in invoice format (invoice_xxx)
+      // Extract actual payment intent ID if needed
+      const actualPaymentIntentId = originalPaymentEvent.paymentIntentId.startsWith("invoice_")
+        ? paymentIntentId // Use the paymentIntentId parameter (actual pi_xxx)
+        : originalPaymentEvent.paymentIntentId;
+
+      // Get purchase timestamp from original payment event
+      const purchaseTimestamp = originalPaymentEvent.timestamp
+        ? new Date(originalPaymentEvent.timestamp).getTime()
+        : undefined;
+
+      // Generate original order ID using same logic as purchase
+      const originalOrderId = extractOrderIdFromPaymentIntent(
+        actualPaymentIntentId,
+        packageType as PackageType,
+        originalPaymentEvent.packageId || "unknown",
+        purchaseTimestamp
+      );
+
+      // Track refund event
+      await trackRefundedOrder(user, {
+        originalOrderId,
+        refundAmount: refundAmount / 100, // Convert cents to dollars
+        currency: "AUD",
+        refundReason: "customer_request",
+        packageType: packageType as PackageType,
+      });
+    } catch (refundTrackingError) {
+      // Non-blocking - log but don't fail refund processing
+      console.error("❌ Klaviyo refund event tracking error (non-blocking):", refundTrackingError);
     }
 
     // console.log(`✅ Refund reversal completed successfully for payment: ${paymentIntentId}`);

@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import CheckoutPageClient from "./components/CheckoutPageClient";
-import CustomerTestimonials from "@/components/sections/CustomerTestimonials";
 import ProductSection from "@/components/features/ProductSection";
 import MembershipSection from "@/components/sections/MembershipSection";
 // Using real API endpoints for products and mini draws

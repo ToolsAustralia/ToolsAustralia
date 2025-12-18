@@ -16,6 +16,7 @@ import {
   createMajorDrawEntryAddedEvent,
   createInvoiceGeneratedEvent,
 } from "@/utils/integrations/klaviyo/klaviyo-events";
+import { trackPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
 import {
   addToPartnerDiscountQueue,
   handleSubscriptionQueueUpdate,
@@ -1217,6 +1218,24 @@ function trackKlaviyoEvent(
         );
         break;
     }
+
+    // ✅ Track "Placed Order" event for Klaviyo revenue metrics (standard event)
+    // This works alongside custom events above - both fire together for dual tracking
+    // Custom events: For business logic and workflows
+    // Placed Order: For revenue metrics and analytics
+    trackPlacedOrder(user as never, {
+      packageType: packageData.packageType,
+      packageId: commonData.packageId,
+      packageName: commonData.packageName,
+      value: packageData.price,
+      currency: "AUD",
+      paymentIntentId,
+      entriesGranted: packageData.entries,
+      pointsEarned: packageData.points,
+    }).catch((error) => {
+      // Log error but don't fail payment processing
+      console.error(`❌ Failed to track "Placed Order" event:`, error);
+    });
 
     // ✅ Invoice generation - skip if flagged (will be sent after upsell decision)
     if (!skipInvoice) {

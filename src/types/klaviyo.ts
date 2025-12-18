@@ -102,7 +102,7 @@ export interface KlaviyoProfile {
 
 export interface KlaviyoEventProperties {
   user_id: string;
-  [key: string]: string | number | boolean | undefined | null;
+  [key: string]: string | number | boolean | undefined | null | unknown[] | Record<string, unknown>;
 }
 
 export interface KlaviyoEvent {
