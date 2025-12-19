@@ -52,7 +52,7 @@ export interface OriginalPurchaseContext {
   paymentIntentId: string;
   packageId: string;
   packageName: string;
-  packageType: "subscription" | "one-time" | "mini-draw";
+  packageType: "membership" | "one-time" | "mini-draw";
   price: number;
   entries: number;
   miniDrawId?: string; // For mini-draw package purchases, link to the specific mini-draw

@@ -150,7 +150,7 @@ export async function GET() {
       let type: RecentActivity["type"] = "one_time_purchase";
 
       // Determine action based on package type and name
-      if (payment.packageType === "subscription") {
+      if (payment.packageType === "membership") {
         // Check if this is a renewal (user already had this package)
         const isRenewal =
           user?.subscription?.packageId === payment.packageId &&

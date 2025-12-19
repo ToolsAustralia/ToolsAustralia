@@ -25,7 +25,7 @@ const createPaymentIntentSchema = z.object({
   packageId: z.string().optional(),
   packageName: z.string().optional(),
   userEmail: z.string().email().optional(), // ✅ NEW: Accept userEmail to find registered user's customer
-  packageType: z.enum(["one-time", "subscription"]).optional(), // ✅ NEW: Specify package type for proper metadata
+  packageType: z.enum(["one-time", "membership"]).optional(), // ✅ NEW: Specify package type for proper metadata
 });
 
 export async function POST(request: NextRequest) {
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       // ✅ STRIPE BEST PRACTICE: For subscription upfront PaymentIntents, use manual capture
       // This allows us to cancel the PaymentIntent before it's captured, preventing double charge
       // The PaymentIntent will be in "requires_capture" status after confirmation, giving us time to cancel it
-      ...(validatedData.packageType === "subscription" && { capture_method: "manual" }), // ✅ Manual capture for subscriptions
+      ...(validatedData.packageType === "membership" && { capture_method: "manual" }), // ✅ Manual capture for memberships
       // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
       ...(validatedData.packageName && { description: validatedData.packageName }),
       metadata: {
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
         userEmail: userEmail || validatedData.userEmail || "guest",
         type: validatedData.packageType || "one-time", // ✅ Use provided packageType or default to one-time
         packageType: validatedData.packageType || "one-time", // ✅ Also set 'packageType' for consistency
-        ...(validatedData.packageType === "subscription" && { isUpfrontPayment: "true" }), // ✅ Mark subscription PaymentIntent so webhook skips it
+        ...(validatedData.packageType === "membership" && { isUpfrontPayment: "true" }), // ✅ Mark membership PaymentIntent so webhook skips it
         ...(validatedData.packageId && { packageId: validatedData.packageId }),
         ...(validatedData.packageName && { packageName: validatedData.packageName }),
       },

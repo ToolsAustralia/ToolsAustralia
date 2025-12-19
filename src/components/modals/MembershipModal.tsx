@@ -161,8 +161,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // paymentIntentId is already declared above (line 128) - using same state for payment processing
   const [processingPackageName, setProcessingPackageName] = useState<string>("");
   const [processingPackageType, setProcessingPackageType] = useState<
-    "one-time" | "subscription" | "upsell" | "mini-draw"
-  >("subscription");
+    "one-time" | "membership" | "upsell" | "mini-draw"
+  >("membership");
 
   // Original purchase context for combined invoice (invoice finalization)
   const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
@@ -367,7 +367,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
     setShowPaymentProcessing(false);
     setProcessingPackageName("");
-    setProcessingPackageType(undefined as unknown as "one-time" | "subscription" | "upsell" | "mini-draw");
+    setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
     onClose();
   }, [onClose, paymentIntentId]);
 
@@ -379,7 +379,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
       setProcessingPackageName("");
-      setProcessingPackageType(undefined as unknown as "one-time" | "subscription" | "upsell" | "mini-draw");
+      setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
       // ✅ STRIPE BEST PRACTICE: Reset subscription tracking when modal opens for new purchase
       subscriptionCreatedRef.current = null;
       // Success state is now handled by global LoadingContext
@@ -390,7 +390,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
       setProcessingPackageName("");
-      setProcessingPackageType(undefined as unknown as "one-time" | "subscription" | "upsell" | "mini-draw");
+      setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
     }
   }, [isOpen]);
 
@@ -675,7 +675,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageId: packageId || undefined,
           packageName: packageName,
           userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
-          packageType: "subscription",
+          packageType: "membership",
         },
         {
           onSuccess: (result) => {
@@ -728,7 +728,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               packageId: packageId || undefined,
               packageName: packageName,
               userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
-              packageType: "subscription", // ✅ Mark as subscription for proper metadata
+              packageType: "membership", // ✅ Mark as subscription for proper metadata
             },
             {
               onSuccess: (result) => {
@@ -784,7 +784,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               packageId: packageId || undefined,
               packageName: packageName,
               userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
-              packageType: isSubscription ? "subscription" : "one-time",
+              packageType: isSubscription ? "membership" : "one-time",
             },
             {
               onSuccess: (result) => {
@@ -1031,7 +1031,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               packageId: packageId || undefined,
               packageName: packageName,
               userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
-              packageType: "subscription", // ✅ Mark as subscription for proper metadata
+              packageType: "membership", // ✅ Mark as subscription for proper metadata
             });
 
             if (paymentResult.success && paymentResult.client_secret) {
@@ -1347,7 +1347,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageId: packageId || undefined,
           packageName: packageName,
           userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
-          packageType: "subscription", // ✅ Mark as subscription for proper metadata
+          packageType: "membership", // ✅ Mark as subscription for proper metadata
         });
 
         if (result.success && result.client_secret) {
@@ -1400,7 +1400,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             packageId: packageId || undefined,
             packageName: packageName,
             userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
-            packageType: "subscription",
+            packageType: "membership",
           });
 
           if (result.success && result.client_secret) {
@@ -1466,8 +1466,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
 
         // Determine packageType from status or fallback to activePlan context
-        const packageType =
-          status.data?.packageType || (activePlan.period === "one-time" ? "one-time" : "subscription");
+        const packageType = status.data?.packageType || (activePlan.period === "one-time" ? "one-time" : "membership");
 
         // Get package details
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
@@ -1484,7 +1483,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           value,
           currency,
           order_id: finalPaymentIntentId,
-          content_type: packageType === "subscription" ? "subscription" : "membership_package",
+          content_type: packageType === "membership" ? "subscription" : "membership_package",
           content_ids: packageId ? [packageId] : [],
           num_items: 1,
           content_name: packageName,
@@ -1608,7 +1607,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           : getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
 
         const triggerType = activePlan.period === "one-time" ? "one-time-purchase" : "membership-purchase";
-        const packageType = activePlan.period === "mo" ? "subscription" : "one-time";
+        const packageType = activePlan.period === "mo" ? "membership" : "one-time";
 
         // console.log("🎯 Triggering upsell from PaymentProcessingScreen:", {
         //   packageName: processingPackageName || activePlan.name,
@@ -1739,7 +1738,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 paymentIntentId,
                 packageId: packageId || "",
                 packageName: activePlan.name,
-                packageType: activePlan.period === "mo" ? "subscription" : "one-time",
+                packageType: activePlan.period === "mo" ? "membership" : "one-time",
                 price: activePlan.price,
                 entries: entriesCount,
               };
@@ -1767,7 +1766,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 activePlan.name,
                 activePlan.price,
                 getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-                activePlan.period === "mo" ? "subscription" : "one-time",
+                activePlan.period === "mo" ? "membership" : "one-time",
                 finalContextToPass
               );
 
@@ -1894,7 +1893,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           paymentIntentId,
           packageId: packageId || "",
           packageName: activePlan.name,
-          packageType: "subscription",
+          packageType: "membership",
           price: activePlan.price,
           entries: entriesCount,
         };
@@ -1932,7 +1931,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           activePlan.name,
           activePlan.price,
           getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-          activePlan.period === "mo" ? "subscription" : "one-time",
+          activePlan.period === "mo" ? "membership" : "one-time",
           finalContextToPass
         );
       }, 2000); // 2 second delay
@@ -2555,7 +2554,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 activePlan.name,
                 activePlan.price,
                 getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-                activePlan.period === "mo" ? "subscription" : "one-time",
+                activePlan.period === "mo" ? "membership" : "one-time",
                 finalFallbackContext || originalPurchaseContext
               );
             }, 2000); // 2 second delay
@@ -2579,7 +2578,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             activePlan.name,
             activePlan.price,
             getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-            activePlan.period === "mo" ? "subscription" : "one-time",
+            activePlan.period === "mo" ? "membership" : "one-time",
             originalPurchaseContext
           );
 
@@ -2896,7 +2895,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                           paymentIntentId: oneTimePaymentIntentId2,
                           packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
                           packageName: activePlan.name,
-                          packageType: activePlan.period === "mo" ? "subscription" : "one-time",
+                          packageType: activePlan.period === "mo" ? "membership" : "one-time",
                           price: activePlan.price,
                           entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
                         }
@@ -2912,7 +2911,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                         activePlan.name,
                         activePlan.price,
                         getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-                        activePlan.period === "mo" ? "subscription" : "one-time",
+                        activePlan.period === "mo" ? "membership" : "one-time",
                         oneTimeOriginalContext2 || originalPurchaseContext
                       );
 
@@ -2974,7 +2973,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   paymentIntentId: finalPaymentIntentId,
                   packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
                   packageName: activePlan.name,
-                  packageType: activePlan.period === "mo" ? "subscription" : "one-time",
+                  packageType: activePlan.period === "mo" ? "membership" : "one-time",
                   price: activePlan.price,
                   entries: activePlan.metadata?.entriesCount || oneTimeData?.totalEntries || 0,
                 }
@@ -2986,7 +2985,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               activePlan.name,
               activePlan.price,
               getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
-              activePlan.period === "mo" ? "subscription" : "one-time",
+              activePlan.period === "mo" ? "membership" : "one-time",
               finalOriginalContext || originalPurchaseContext
             );
 
@@ -3078,7 +3077,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     recentPurchase: string,
     purchaseAmount: number,
     packageId?: string,
-    packageType?: "subscription" | "one-time",
+    packageType?: "membership" | "one-time",
     originalPurchaseContextParam?: OriginalPurchaseContext | null
   ) => {
     try {

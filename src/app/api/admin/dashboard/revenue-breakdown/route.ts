@@ -125,8 +125,8 @@ export async function GET(request: NextRequest) {
 
       const periodData = dataMap.get(key)!;
 
-        // Categorize revenue by package type
-        if (event.packageType === "subscription") {
+      // Categorize revenue by package type
+      if (event.packageType === "membership") {
         periodData.memberships += price;
       } else if (event.packageType === "mini-draw") {
         periodData.miniDraw += price;
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
         }
         currentMonth.setMonth(currentMonth.getMonth() + 1);
       }
-        } else {
+    } else {
       // Years
       const currentYear = startOfYear(startDate);
       const endYear = startOfYear(endDate);
@@ -190,7 +190,7 @@ export async function GET(request: NextRequest) {
           });
         }
         currentYear.setFullYear(currentYear.getFullYear() + 1);
-        }
+      }
     }
 
     // Convert map to array and sort by date

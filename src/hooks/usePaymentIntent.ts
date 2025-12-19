@@ -14,7 +14,7 @@ interface CreatePaymentIntentParams {
   packageId?: string;
   packageName?: string;
   userEmail?: string; // ✅ NEW: User email for finding registered user's customer
-  packageType?: "one-time" | "subscription"; // ✅ NEW: Package type for proper metadata
+  packageType?: "one-time" | "membership"; // ✅ NEW: Package type for proper metadata
 }
 
 /**

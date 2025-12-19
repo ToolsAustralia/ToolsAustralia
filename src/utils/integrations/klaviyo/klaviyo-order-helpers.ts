@@ -12,7 +12,7 @@
  * @module utils/integrations/klaviyo/klaviyo-order-helpers
  */
 
-export type PackageType = "subscription" | "one-time" | "mini-draw" | "upsell";
+export type PackageType = "membership" | "one-time" | "mini-draw" | "upsell";
 
 /**
  * Generate a unique order ID for Klaviyo events
@@ -23,14 +23,14 @@ export type PackageType = "subscription" | "one-time" | "mini-draw" | "upsell";
  * - Consistency for refund linking
  *
  * Format:
- * - Subscriptions: `sub_{paymentIntentId}_{timestamp}`
+ * - Memberships: `sub_{paymentIntentId}_{timestamp}`
  * - One-time: `onetime_{packageId}_{timestamp}`
  * - Mini-draw: `minidraw_{packageId}_{timestamp}`
  * - Upsell: `upsell_{packageId}_{timestamp}`
  *
  * @param packageType - Type of package being purchased
- * @param packageId - Package identifier (required for non-subscription types)
- * @param paymentIntentId - Stripe payment intent ID (required for subscriptions)
+ * @param packageId - Package identifier (required for non-membership types)
+ * @param paymentIntentId - Stripe payment intent ID (required for memberships)
  * @param timestamp - Optional timestamp (defaults to current time)
  * @returns Unique order ID string
  */
@@ -43,8 +43,8 @@ export function generateOrderId(
   const ts = timestamp || Date.now();
 
   switch (packageType) {
-    case "subscription":
-      // Subscriptions use payment intent ID as primary identifier
+    case "membership":
+      // Memberships use payment intent ID as primary identifier
       return `sub_${paymentIntentId}_${ts}`;
 
     case "one-time":
@@ -65,12 +65,12 @@ export function generateOrderId(
 /**
  * Extract order ID from payment intent ID
  *
- * For subscriptions, we may need to reconstruct the order ID
+ * For memberships, we may need to reconstruct the order ID
  * from the payment intent. This helper ensures consistency.
  *
  * @param paymentIntentId - Stripe payment intent ID
  * @param packageType - Type of package
- * @param packageId - Package identifier (for non-subscription types)
+ * @param packageId - Package identifier (for non-membership types)
  * @param purchaseTimestamp - Original purchase timestamp (if available)
  * @returns Order ID string
  */
@@ -80,8 +80,8 @@ export function extractOrderIdFromPaymentIntent(
   packageId?: string,
   purchaseTimestamp?: number
 ): string {
-  // For subscriptions, use payment intent directly
-  if (packageType === "subscription") {
+  // For memberships, use payment intent directly
+  if (packageType === "membership") {
     return generateOrderId(packageType, "", paymentIntentId, purchaseTimestamp);
   }
 
@@ -151,7 +151,7 @@ export function parseOrderId(orderId: string): {
 
   // Map prefix to package type
   const packageTypeMap: Record<string, PackageType | "unknown"> = {
-    sub: "subscription",
+    sub: "membership",
     onetime: "one-time",
     minidraw: "mini-draw",
     upsell: "upsell",

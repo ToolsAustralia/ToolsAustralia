@@ -576,7 +576,7 @@ export function createPlacedOrderEvent(
     orderId: string; // Unique order identifier (generated via klaviyo-order-helpers)
     value: number; // Purchase amount in dollars
     currency: string; // Currency code (e.g., "AUD")
-    packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell";
     packageId: string;
     packageName: string;
     entriesGranted?: number;
@@ -634,7 +634,7 @@ export function createRefundedOrderEvent(
     refundAmount: number; // Refund amount in dollars
     currency: string; // Currency code (e.g., "AUD")
     refundReason?: string; // Reason for refund (e.g., "customer_request", "chargeback")
-    packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell";
   }
 ): KlaviyoEvent {
   return {
@@ -665,14 +665,19 @@ export function createRefundedOrderEvent(
 
 /**
  * Create invoice generated event - ONLY for successful payments
- * This event should ONLY be triggered by webhook handlers after successful payment processing
+ *
+ * This event builder is used by the invoice service layer (klaviyo-invoice-service.ts)
+ * to create "Invoice Generated" events for Klaviyo email flows.
+ *
+ * Should NOT be called directly from payment processing code.
+ * Use trackInvoice() or trackCombinedInvoice() from klaviyo-invoice-service.ts instead.
  */
 export function createInvoiceGeneratedEvent(
   user: IUser,
   invoiceData: {
     invoiceId: string;
     invoiceNumber: string;
-    packageType: "subscription" | "one-time" | "upsell" | "mini-draw";
+    packageType: "membership" | "one-time" | "upsell" | "mini-draw";
     packageId: string;
     packageName: string;
     packageTier?: string;

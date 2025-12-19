@@ -14,9 +14,9 @@ import {
   createMiniDrawPurchasedEvent,
   createUpsellAcceptedEvent,
   createMajorDrawEntryAddedEvent,
-  createInvoiceGeneratedEvent,
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { trackPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
+import { trackInvoice, shouldDelayInvoice } from "@/utils/integrations/klaviyo/klaviyo-invoice-service";
 import {
   addToPartnerDiscountQueue,
   handleSubscriptionQueueUpdate,
@@ -24,7 +24,6 @@ import {
 import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
-import { getUpsellPackagesForPurchase } from "@/data/upsellPackages";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 
 // Global processing lock to prevent concurrent processing of same payment
@@ -70,7 +69,7 @@ interface UserDocument {
     _id?: mongoose.Types.ObjectId;
     packageId: string;
     packageName: string;
-    packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell";
     discountDays: number;
     discountHours: number;
     purchaseDate: Date;
@@ -110,7 +109,7 @@ export async function processPaymentBenefits(
   paymentIntentId: string,
   userId: string,
   packageData: {
-    packageType: "one-time" | "subscription" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -186,7 +185,7 @@ async function processPaymentBenefitsInternal(
   paymentIntentId: string,
   userId: string,
   packageData: {
-    packageType: "one-time" | "subscription" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -375,27 +374,11 @@ async function processPaymentBenefitsInternal(
 
       // console.log(`✅ Benefits granted and recorded for payment ${paymentIntentId} via ${processedBy}`);
 
-      // ✅ Check if this purchase has eligible upsells OR is an upsell itself
-      // If it does, skip invoice generation (will be finalized after upsell decision)
-      let shouldSkipInvoice = false;
-      if (packageData.packageType === "upsell") {
-        // Always skip invoice for upsells - handled by finalization API
-        shouldSkipInvoice = true;
-        // console.log(`📊 Upsell purchase detected - invoice will be sent via finalization API`);
-      } else if (
-        packageData.packageId &&
-        (packageData.packageType === "subscription" ||
-          packageData.packageType === "one-time" ||
-          packageData.packageType === "mini-draw")
-      ) {
-        // Map mini-draw to "one-time" for upsell lookups (as mini-draw is treated as one-time for upsells)
-        const lookupPackageType = packageData.packageType === "mini-draw" ? "one-time" : packageData.packageType;
-        const eligibleUpsells = getUpsellPackagesForPurchase(packageData.packageId, lookupPackageType);
-        shouldSkipInvoice = eligibleUpsells.length > 0;
-        if (shouldSkipInvoice) {
-          // console.log(`📊 Package has ${eligibleUpsells.length} eligible upsells - invoice will be delayed`);
-        }
-      }
+      // ✅ Check if invoice should be delayed (for upsells)
+      // If upsells exist, invoice will be finalized after upsell decision
+      const shouldSkipInvoice = packageData.packageId
+        ? shouldDelayInvoice(packageData.packageType, packageData.packageId)
+        : false;
 
       // Track purchase event in Klaviyo (non-blocking)
       trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, shouldSkipInvoice);
@@ -525,13 +508,13 @@ async function processPaymentBenefitsInternal(
  * at the time of purchase. It uses the payment timestamp to determine if the purchase
  * was made during the promo period.
  *
- * @param packageType - Type of package purchased (subscription, one-time, mini-draw, upsell)
+ * @param packageType - Type of package purchased (membership, one-time, mini-draw, upsell)
  * @param paymentMetadata - Payment metadata containing created timestamp
  * @param user - User document (for logging purposes)
  * @returns Number of bonus entries to grant (0 if no active promo)
  */
 async function checkAndApplyBonusEntryPromo(
-  packageType: "one-time" | "subscription" | "upsell" | "mini-draw",
+  packageType: "one-time" | "membership" | "upsell" | "mini-draw",
   paymentMetadata?: {
     created?: number;
     type?: string;
@@ -544,7 +527,7 @@ async function checkAndApplyBonusEntryPromo(
   try {
     // Map package types to promo types
     const promoType =
-      packageType === "subscription"
+      packageType === "membership"
         ? "membership-packages"
         : packageType === "one-time"
         ? "one-time-packages"
@@ -622,13 +605,13 @@ async function checkAndApplyBonusEntryPromo(
  * and verifies that it applies to the purchase type. Promo links are one-time use per user.
  *
  * @param user - User document making the purchase
- * @param packageType - Type of package purchased (subscription, one-time, mini-draw, upsell)
+ * @param packageType - Type of package purchased (membership, one-time, mini-draw, upsell)
  * @param paymentMetadata - Payment metadata containing promoLinkCode
  * @returns Number of bonus entries to grant (0 if no valid promo link or type mismatch)
  */
 async function checkAndApplyPromoLink(
   user: UserDocument,
-  packageType: "one-time" | "subscription" | "upsell" | "mini-draw",
+  packageType: "one-time" | "membership" | "upsell" | "mini-draw",
   paymentMetadata?: PaymentMetadata
 ): Promise<number> {
   try {
@@ -673,7 +656,7 @@ async function checkAndApplyPromoLink(
     }
 
     // Check if promo link applies to this package type
-    const isMembershipPurchase = packageType === "subscription";
+    const isMembershipPurchase = packageType === "membership";
     const isOneTimePurchase = packageType === "one-time";
 
     // Promo links don't apply to mini-draw or upsell packages
@@ -795,7 +778,7 @@ async function checkAndApplyPromoLink(
 async function grantBenefits(
   user: UserDocument,
   packageData: {
-    packageType: "one-time" | "subscription" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -844,7 +827,7 @@ async function grantBenefits(
   // Handle package-specific tracking
   if (packageData.packageType === "one-time") {
     await handleOneTimePackage(user, packageData, paymentIntentId);
-  } else if (packageData.packageType === "subscription") {
+  } else if (packageData.packageType === "membership") {
     await handleSubscriptionPackage(user, packageData);
   } else if (packageData.packageType === "upsell") {
     await handleUpsellPackage(user, packageData, paymentIntentId);
@@ -1076,7 +1059,7 @@ async function grantBenefits(
       pointsEarned: packageData.points,
       paymentIntentId: paymentIntentId,
       content_type:
-        packageData.packageType === "subscription"
+        packageData.packageType === "membership"
           ? "subscription"
           : packageData.packageType === "one-time"
           ? "membership_package"
@@ -1119,7 +1102,7 @@ async function grantBenefits(
           purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
           paymentIntentId: paymentIntentId,
         });
-      } else if (packageData.packageType === "subscription") {
+      } else if (packageData.packageType === "membership") {
         // Get subscription ID from user
         const subscriptionId = user.stripeSubscriptionId || "";
         await processMembershipFirstCommission({
@@ -1148,7 +1131,7 @@ async function grantBenefits(
 function trackKlaviyoEvent(
   user: UserDocument,
   packageData: {
-    packageType: "one-time" | "subscription" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -1173,7 +1156,7 @@ function trackKlaviyoEvent(
 
     // Track event based on package type
     switch (packageData.packageType) {
-      case "subscription":
+      case "membership":
         klaviyo.trackEventBackground(
           createSubscriptionStartedEvent(user as never, {
             ...commonData,
@@ -1237,46 +1220,24 @@ function trackKlaviyoEvent(
       console.error(`❌ Failed to track "Placed Order" event:`, error);
     });
 
-    // ✅ Invoice generation - skip if flagged (will be sent after upsell decision)
+    // ✅ Track invoice (handled by invoice service)
+    // Skip if flagged - will be finalized after upsell decision via /api/invoice/finalize
     if (!skipInvoice) {
-      const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-
-      klaviyo.trackEventBackground(
-        createInvoiceGeneratedEvent(user as never, {
-          invoiceId: `inv_${paymentIntentId}`,
-          invoiceNumber,
+      trackInvoice(
+        user as never,
+        {
           packageType: packageData.packageType,
           packageId: commonData.packageId,
           packageName: commonData.packageName,
-          packageTier:
-            packageData.packageType === "subscription"
-              ? packageData.packageId?.toLowerCase().includes("boss")
-                ? "Boss"
-                : packageData.packageId?.toLowerCase().includes("foreman")
-                ? "Foreman"
-                : packageData.packageId?.toLowerCase().includes("tradie")
-                ? "Tradie"
-                : undefined
-              : undefined,
-          totalAmount: packageData.price,
-          paymentIntentId,
-          billingReason: packageData.packageType === "subscription" ? "subscription_create" : undefined,
-          entries_gained: commonData.entriesGranted,
-          items: [
-            {
-              description: commonData.packageName,
-              quantity: 1,
-              unit_price: packageData.price,
-              total_price: packageData.price,
-            },
-          ],
-        })
-      );
-      // console.log(`📊 Invoice sent for ${packageData.packageType} package`);
-    } else {
-      // console.log(
-      //   `📊 Invoice skipped for ${packageData.packageType} package - will be finalized after upsell decision`
-      // );
+          price: packageData.price,
+          entries: packageData.entries,
+          points: packageData.points,
+        },
+        paymentIntentId
+      ).catch((error) => {
+        // Log error but don't fail payment processing
+        console.error(`❌ Failed to track invoice event:`, error);
+      });
     }
 
     // console.log(`📊 Klaviyo event tracked for ${packageData.packageType} package`);
@@ -1422,7 +1383,7 @@ async function handleSubscriptionPackage(
     });
 
     // Dispatch purchase event for optimistic updates
-    dispatchPackagePurchase(packageData.packageId, "subscription");
+    dispatchPackagePurchase(packageData.packageId, "membership");
   }
 }
 

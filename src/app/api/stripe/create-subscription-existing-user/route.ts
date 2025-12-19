@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
             packageName: membershipPackage.name,
             userEmail: existingUser.email,
             type: "subscription",
-            packageType: "subscription",
+            packageType: "membership",
             isUpfrontPayment: "true",
             ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
             ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),

@@ -292,7 +292,7 @@ const formatActivityEvent = (event: PaymentEventItem, formatCurrency: (amount: n
   const entries = (eventData?.entries as number) || 0;
 
   let description = "";
-  if (packageType === "subscription") {
+  if (packageType === "membership") {
     description = `${packageName} Subscription - ${formatCurrency(price)}/month`;
   } else if (packageType === "one-time") {
     description = `${packageName} Package - ${formatCurrency(price)}`;
@@ -2960,7 +2960,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       {user.paymentEvents.slice(0, 10).map((event: PaymentEventItem, index: number) => {
                         const eventDescription = formatActivityEvent(event, formatCurrency);
                         const eventIcon =
-                          event.packageType === "subscription"
+                          event.packageType === "membership"
                             ? CreditCard
                             : event.packageType === "one-time"
                             ? Package
@@ -2980,7 +2980,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <div className="flex-shrink-0 mt-0.5">
                                 <div
                                   className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center ${
-                                    event.packageType === "subscription"
+                                    event.packageType === "membership"
                                       ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600"
                                       : event.packageType === "one-time"
                                       ? "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600"

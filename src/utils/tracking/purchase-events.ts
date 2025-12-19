@@ -18,19 +18,19 @@ import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
  * can listen to for immediate UI updates before server confirmation.
  *
  * @param packageData - Package information from the purchase
- * @param packageType - Type of package (subscription, one-time, mini-draw, upsell)
+ * @param packageType - Type of package (membership, one-time, mini-draw, upsell)
  */
 export const dispatchPurchaseCompleted = (packageData: {
   packageId: string;
   packageName: string;
-  packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell";
 }) => {
   try {
     // Get package details from static data
     let partnerDiscountDays = 0;
     let partnerDiscountHours = 0;
 
-    if (packageData.packageType === "subscription" || packageData.packageType === "one-time") {
+    if (packageData.packageType === "membership" || packageData.packageType === "one-time") {
       const packageInfo = getPackageById(packageData.packageId);
       if (packageInfo) {
         partnerDiscountDays = packageInfo.partnerDiscountDays || 0;
@@ -114,12 +114,12 @@ export const listenForPurchaseCompleted = (callback: (event: CustomEvent) => voi
  */
 export const dispatchPackagePurchase = (
   packageId: string,
-  packageType: "subscription" | "one-time" | "mini-draw" | "upsell"
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell"
 ) => {
   let packageName = "";
 
   try {
-    if (packageType === "subscription" || packageType === "one-time") {
+    if (packageType === "membership" || packageType === "one-time") {
       const packageInfo = getPackageById(packageId);
       packageName = packageInfo?.name || packageId;
     } else if (packageType === "mini-draw") {

@@ -26,7 +26,7 @@ export interface PartnerDiscountQueueItem {
   _id?: mongoose.Types.ObjectId;
   packageId: string;
   packageName: string;
-  packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell";
   discountDays: number;
   discountHours: number;
   purchaseDate: Date;
@@ -56,7 +56,7 @@ export async function addToPartnerDiscountQueue(
   packageData: {
     packageId: string;
     packageName: string;
-    packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell";
     discountDays: number;
     discountHours?: number;
     stripePaymentIntentId?: string;
@@ -91,17 +91,17 @@ export async function addToPartnerDiscountQueue(
   // Check if user has active subscription
   const hasActiveSubscription = user.subscription?.isActive;
 
-  // Check if there's already an active partner discount period (non-subscription)
+  // Check if there's already an active partner discount period (non-membership)
   const activeQueueItem = user.partnerDiscountQueue.find(
-    (item) => item.status === "active" && item.packageType !== "subscription"
+    (item) => item.status === "active" && item.packageType !== "membership"
   );
 
   // Determine queue position and status
-  if (packageData.packageType === "subscription") {
-    // Subscriptions always activate immediately and take priority
-    // Pause any active non-subscription items
+  if (packageData.packageType === "membership") {
+    // Memberships always activate immediately and take priority
+    // Pause any active non-membership items
     user.partnerDiscountQueue.forEach((item) => {
-      if (item.status === "active" && item.packageType !== "subscription") {
+      if (item.status === "active" && item.packageType !== "membership") {
         item.status = "queued";
         item.startDate = undefined;
         item.endDate = undefined;
@@ -245,9 +245,12 @@ export function calculateActivePartnerDiscountPeriod(user: IUser): {
       const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
       const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
 
+      // Map "membership" to "subscription" for backward compatibility with source type
+      const sourceType = activeItem.packageType === "membership" ? "subscription" : activeItem.packageType;
+
       return {
         isActive: true,
-        source: activeItem.packageType,
+        source: sourceType as "subscription" | "one-time" | "mini-draw" | "upsell" | null,
         packageName: activeItem.packageName,
         endsAt,
         daysRemaining,
@@ -321,7 +324,7 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
 
   // Step 3: Check if we need to activate next item in queue
   const hasActiveNonSubscription = user.partnerDiscountQueue.some(
-    (item) => item.status === "active" && item.packageType !== "subscription"
+    (item) => item.status === "active" && item.packageType !== "membership"
   );
 
   const hasActiveSubscription = user.subscription?.isActive;
@@ -442,9 +445,9 @@ export async function handleSubscriptionQueueUpdate(
   if (action === "start" && subscriptionData) {
     // console.log(`🎯 Activating subscription in partner discount queue: ${subscriptionData.packageName}`);
 
-    // Pause any active non-subscription items
+    // Pause any active non-membership items
     user.partnerDiscountQueue.forEach((item) => {
-      if (item.status === "active" && item.packageType !== "subscription") {
+      if (item.status === "active" && item.packageType !== "membership") {
         // console.log(`⏸️ Pausing active item: ${item.packageName}`);
         item.status = "queued";
         item.startDate = undefined;
@@ -454,7 +457,7 @@ export async function handleSubscriptionQueueUpdate(
 
     // Add or update subscription in queue
     const existingSubscription = user.partnerDiscountQueue.find(
-      (item) => item.packageType === "subscription" && item.packageId === subscriptionData.packageId
+      (item) => item.packageType === "membership" && item.packageId === subscriptionData.packageId
     );
 
     if (existingSubscription) {
@@ -466,7 +469,7 @@ export async function handleSubscriptionQueueUpdate(
       const subscriptionItem: PartnerDiscountQueueItem = {
         packageId: subscriptionData.packageId,
         packageName: subscriptionData.packageName,
-        packageType: "subscription",
+        packageType: "membership",
         discountDays: 30, // Monthly subscription
         discountHours: 30 * 24,
         purchaseDate: new Date(),
@@ -487,7 +490,7 @@ export async function handleSubscriptionQueueUpdate(
 
     // Mark subscription items as expired
     user.partnerDiscountQueue.forEach((item) => {
-      if (item.packageType === "subscription" && item.status === "active") {
+      if (item.packageType === "membership" && item.status === "active") {
         // console.log(`⏰ Marking subscription as expired: ${item.packageName}`);
         item.status = "expired";
       }

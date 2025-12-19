@@ -70,7 +70,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     maxShowsPerUser: 2,
     cooldownHours: 24,
     triggersOnPackageIds: ["tradie-subscription"], // Tradie subscription
-    triggersOnPackageTypes: ["subscription"],
+    triggersOnPackageTypes: ["membership"],
     showAfterPurchase: true,
     showAfterDelay: 2,
   },
@@ -101,7 +101,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     maxShowsPerUser: 2,
     cooldownHours: 24,
     triggersOnPackageIds: ["foreman-subscription"], // Foreman subscription
-    triggersOnPackageTypes: ["subscription"],
+    triggersOnPackageTypes: ["membership"],
     showAfterPurchase: true,
     showAfterDelay: 2,
   },
@@ -132,7 +132,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     maxShowsPerUser: 2,
     cooldownHours: 24,
     triggersOnPackageIds: ["boss-subscription"], // Boss subscription
-    triggersOnPackageTypes: ["subscription"],
+    triggersOnPackageTypes: ["membership"],
     showAfterPurchase: true,
     showAfterDelay: 2,
   },
@@ -684,7 +684,7 @@ export const getUpsellPackagesByCategory = (category: StaticUpsellPackage["categ
  */
 export const getUpsellPackagesForPurchase = (
   packageId: string,
-  packageType: "subscription" | "one-time"
+  packageType: "membership" | "one-time"
 ): StaticUpsellPackage[] => {
   return upsellPackages.filter((pkg) => {
     if (!pkg.isActive) return false;
@@ -744,7 +744,7 @@ export const filterUpsellPackagesByUserSegment = (
  */
 export const getBestUpsellOffer = (
   packageId: string,
-  packageType: "subscription" | "one-time",
+  packageType: "membership" | "one-time",
   userSegment: string = "returning-user"
 ): StaticUpsellPackage | null => {
   const relevantPackages = getUpsellPackagesForPurchase(packageId, packageType);
@@ -764,7 +764,7 @@ export const getBestUpsellOffer = (
  */
 export const getBestUpsellOfferForUser = (
   packageId: string,
-  packageType: "subscription" | "one-time",
+  packageType: "membership" | "one-time",
   userSegment: string = "returning-user",
   isMember: boolean = false,
   hasAccessToAdditionalPackages: boolean = false // ✅ NEW parameter

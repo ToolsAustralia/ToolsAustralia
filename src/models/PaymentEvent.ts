@@ -12,7 +12,7 @@ export interface IPaymentEvent extends Document {
     | "RefundProcessed"
     | "BenefitsReversed";
   userId: mongoose.Types.ObjectId;
-  packageType: "one-time" | "subscription" | "upsell" | "mini-draw";
+  packageType: "one-time" | "membership" | "upsell" | "mini-draw";
   packageId?: string;
   packageName?: string;
   data: {
@@ -60,7 +60,7 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
     packageType: {
       type: String,
       required: true,
-      enum: ["one-time", "subscription", "upsell", "mini-draw"],
+      enum: ["one-time", "membership", "upsell", "mini-draw"],
     },
     packageId: {
       type: String,

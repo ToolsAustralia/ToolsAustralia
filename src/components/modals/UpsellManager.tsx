@@ -183,12 +183,12 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
       // Track analytics
       trackUpsellEvent("shown", offer);
 
-      // Start 1-minute timeout for invoice finalization
+      // Start 30-second timeout for invoice finalization
       if (originalPurchaseContext && !invoiceFinalized) {
         const timeoutId = setTimeout(() => {
           // console.log("⏰ Invoice finalization timeout - sending original purchase only");
           finalizeInvoice();
-        }, 60000); // 1 minute = 60000ms
+        }, 30000); // 30 seconds = 30000ms
 
         setFinalizationTimeoutId(timeoutId);
       }

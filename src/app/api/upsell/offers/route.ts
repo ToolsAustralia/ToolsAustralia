@@ -13,7 +13,7 @@ const getOffersSchema = z.object({
   userType: z.enum(["new-user", "returning-user", "high-value"]).optional(),
   userId: z.string().optional(),
   packageId: z.string().optional(),
-  packageType: z.enum(["subscription", "one-time"]).optional(),
+  packageType: z.enum(["membership", "one-time"]).optional(),
 });
 
 /**
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const userType = searchParams.get("userType") as string | null;
     const userId = searchParams.get("userId");
     const packageId = searchParams.get("packageId");
-    const packageType = searchParams.get("packageType") as "subscription" | "one-time" | null;
+    const packageType = searchParams.get("packageType") as "membership" | "one-time" | null;
 
     // Validate query parameters
     const validatedData = getOffersSchema.parse({

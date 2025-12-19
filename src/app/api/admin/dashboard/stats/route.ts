@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
       totalRevenue += price;
 
       // Package type breakdown
-      if (event.packageType === "subscription") {
+      if (event.packageType === "membership") {
         subscriptionRevenue += price;
       } else {
         // All non-subscription payments: one-time, upsell, mini-draw

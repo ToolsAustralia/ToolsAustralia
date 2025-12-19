@@ -184,7 +184,7 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
     : 0;
 
   const subscriptionHistory = paymentEvents
-    .filter((event) => event.packageType === "subscription")
+    .filter((event) => event.packageType === "membership")
     .map((event) => {
       const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
       return {
@@ -914,8 +914,3 @@ export async function searchUsers(params: { q: string; page: number; limit: numb
     },
   };
 }
-
-
-
-
-

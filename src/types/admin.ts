@@ -250,7 +250,7 @@ export interface AdminUserDetail {
     _id?: string;
     packageId: string;
     packageName: string;
-    packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell";
     discountDays: number;
     discountHours: number;
     purchaseDate: string;

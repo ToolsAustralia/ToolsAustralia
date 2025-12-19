@@ -481,7 +481,7 @@ export default function MiniDrawPackages({
     recentPurchase: string,
     purchaseAmount: number,
     packageId?: string,
-    packageType?: "subscription" | "one-time" | "mini-draw"
+    packageType?: "membership" | "one-time" | "mini-draw"
   ) => {
     try {
       if (packageId && packageType) {

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { klaviyo } from "@/lib/klaviyo";
-import { createInvoiceGeneratedEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
+import { trackCombinedInvoice } from "@/utils/integrations/klaviyo/klaviyo-invoice-service";
 
 /**
  * Validation schema for invoice finalization request
@@ -14,7 +13,7 @@ const invoiceFinalizeSchema = z.object({
     paymentIntentId: z.string(),
     packageId: z.string(),
     packageName: z.string(),
-    packageType: z.enum(["subscription", "one-time", "mini-draw"]),
+    packageType: z.enum(["membership", "one-time", "mini-draw"]),
     price: z.number(),
     entries: z.number(),
   }),
@@ -50,75 +49,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Build items array
-    const items: Array<{
-      description: string;
-      quantity: number;
-      unit_price: number;
-      total_price: number;
-    }> = [
-      {
-        description: validatedData.originalPurchase.packageName,
-        quantity: 1,
-        unit_price: validatedData.originalPurchase.price,
-        total_price: validatedData.originalPurchase.price,
+    // Track combined invoice using invoice service
+    await trackCombinedInvoice(user, {
+      originalPurchase: {
+        paymentIntentId: validatedData.originalPurchase.paymentIntentId,
+        packageId: validatedData.originalPurchase.packageId,
+        packageName: validatedData.originalPurchase.packageName,
+        packageType: validatedData.originalPurchase.packageType,
+        price: validatedData.originalPurchase.price,
+        entries: validatedData.originalPurchase.entries,
       },
-    ];
-
-    // Add upsell if present
-    if (validatedData.upsellPurchase) {
-      items.push({
-        description: validatedData.upsellPurchase.offerName,
-        quantity: 1,
-        unit_price: validatedData.upsellPurchase.price,
-        total_price: validatedData.upsellPurchase.price,
-      });
-    }
-
-    // Calculate totals
-    const totalAmount = items.reduce((sum, item) => sum + item.total_price, 0);
-    const totalEntries = validatedData.originalPurchase.entries + (validatedData.upsellPurchase?.entries || 0);
-
-    // Generate invoice number
-    const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-
-    // Determine package tier for subscriptions
-    let packageTier: string | undefined;
-    if (validatedData.originalPurchase.packageType === "subscription") {
-      const packageId = validatedData.originalPurchase.packageId.toLowerCase();
-      if (packageId.includes("boss")) packageTier = "Boss";
-      else if (packageId.includes("foreman")) packageTier = "Foreman";
-      else if (packageId.includes("tradie")) packageTier = "Tradie";
-    }
-
-    // Send combined invoice to Klaviyo
-    const invoiceEvent = createInvoiceGeneratedEvent(user as never, {
-      invoiceId: `inv_${validatedData.originalPurchase.paymentIntentId}`,
-      invoiceNumber,
-      packageType: validatedData.originalPurchase.packageType,
-      packageId: validatedData.originalPurchase.packageId,
-      packageName: validatedData.originalPurchase.packageName,
-      packageTier,
-      totalAmount,
-      paymentIntentId: validatedData.originalPurchase.paymentIntentId,
-      billingReason: validatedData.originalPurchase.packageType === "subscription" ? "subscription_create" : undefined,
-      entries_gained: totalEntries,
-      items,
+      upsellPurchase: validatedData.upsellPurchase
+        ? {
+            paymentIntentId: validatedData.upsellPurchase.paymentIntentId,
+            offerId: validatedData.upsellPurchase.offerId,
+            offerName: validatedData.upsellPurchase.offerName,
+            price: validatedData.upsellPurchase.price,
+            entries: validatedData.upsellPurchase.entries,
+          }
+        : undefined,
     });
 
-    await klaviyo.trackEventBackground(invoiceEvent);
-
-    // console.log(`✅ Combined invoice sent to Klaviyo`);
-    // console.log(
-    //   `📊 Invoice #${invoiceNumber}: ${items.length} items, $${totalAmount.toFixed(2)}, ${totalEntries} entries`
-    // );
+    // Calculate totals for response
+    const totalAmount = validatedData.originalPurchase.price + (validatedData.upsellPurchase?.price || 0);
+    const totalEntries = validatedData.originalPurchase.entries + (validatedData.upsellPurchase?.entries || 0);
+    const itemCount = validatedData.upsellPurchase ? 2 : 1;
 
     return NextResponse.json({
       success: true,
-      invoiceNumber,
+      invoiceNumber: `INV-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
       totalAmount,
       totalEntries,
-      itemCount: items.length,
+      itemCount,
     });
   } catch (error) {
     console.error("Invoice finalization error:", error);

@@ -8,7 +8,7 @@ import { rewardsEnabled } from "@/config/featureFlags";
 interface PaymentProcessingScreenProps {
   paymentIntentId: string;
   packageName: string;
-  packageType: "one-time" | "subscription" | "upsell" | "mini-draw";
+  packageType: "one-time" | "membership" | "upsell" | "mini-draw";
   isVisible?: boolean;
   onSuccess?: (status: PaymentStatusResponse) => void;
   onError?: (error: string) => void;
@@ -54,7 +54,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     ];
 
     switch (packageType) {
-      case "subscription":
+      case "membership":
         return [...baseSteps, "Activating your subscription...", "Setting up recurring benefits..."];
       case "one-time":
         return [...baseSteps, "Adding entries to your account...", "Updating your rewards..."];
@@ -230,10 +230,10 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
               <Check className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-in fade-in duration-500 delay-500" />
             </div>
             <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
-              {packageType === "subscription" ? `${packageName} Upgraded!` : `${packageName} Activated!`}
+              {packageType === "membership" ? `${packageName} Upgraded!` : `${packageName} Activated!`}
             </h2>
             <p className="text-xs sm:text-sm text-gray-600">
-              {packageType === "subscription"
+              {packageType === "membership"
                 ? "Your subscription has been upgraded successfully!"
                 : "Your benefits have been successfully granted"}
             </p>

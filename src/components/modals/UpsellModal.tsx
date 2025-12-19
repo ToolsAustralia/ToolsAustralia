@@ -77,6 +77,10 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
   /**
    * Finalize invoice and send to Klaviyo
+   *
+   * CRITICAL: This function MUST finalize the invoice when the upsell modal is shown.
+   * Uses userContext.userId if available, otherwise falls back to userData._id from useUserContext().
+   * This ensures invoices are ALWAYS sent, even if userContext is incomplete.
    */
   const finalizeInvoice = useCallback(
     async (upsellData?: {
@@ -86,29 +90,45 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       price: number;
       entries: number;
     }) => {
-      if (invoiceFinalized || !originalPurchaseContext || !userContext?.userId) {
-        // console.log("📧 Invoice finalization skipped:", {
-        //   invoiceFinalized,
-        //   hasContext: !!originalPurchaseContext,
-        //   hasUserId: !!userContext?.userId,
-        //   contextDetails: originalPurchaseContext
-        //     ? {
-        //         paymentIntentId: originalPurchaseContext.paymentIntentId,
-        //         packageName: originalPurchaseContext.packageName,
-        //       }
-        //     : null,
-        // });
+      // Prevent duplicate finalization
+      if (invoiceFinalized) {
+        return;
+      }
+
+      // CRITICAL: originalPurchaseContext is REQUIRED - without it we can't finalize
+      if (!originalPurchaseContext) {
+        console.error("❌ Invoice finalization skipped: missing originalPurchaseContext", {
+          hasContext: !!originalPurchaseContext,
+          hasUserContextUserId: !!userContext?.userId,
+          hasUserDataId: !!userData?._id,
+        });
+        return;
+      }
+
+      // CRITICAL FIX: Use userContext.userId if available, otherwise fall back to userData._id
+      // This ensures we ALWAYS have a userId when finalizing invoices
+      const finalUserId = userContext?.userId || userData?._id;
+      if (!finalUserId) {
+        console.error("❌ Invoice finalization skipped: missing userId", {
+          hasUserContextUserId: !!userContext?.userId,
+          hasUserDataId: !!userData?._id,
+        });
         return;
       }
 
       try {
-        // console.log("📧 Finalizing invoice...", { withUpsell: !!upsellData });
+        console.log("📧 Finalizing invoice...", {
+          withUpsell: !!upsellData,
+          userId: finalUserId,
+          paymentIntentId: originalPurchaseContext.paymentIntentId,
+          packageName: originalPurchaseContext.packageName,
+        });
 
         const response = await fetch("/api/invoice/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: userContext.userId,
+            userId: finalUserId,
             originalPurchase: originalPurchaseContext,
             upsellPurchase: upsellData,
           }),
@@ -116,7 +136,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
         if (response.ok) {
           const result = await response.json();
-          // console.log("✅ Invoice finalized:", result);
+          console.log("✅ Invoice finalized:", result);
           setInvoiceFinalized(true);
 
           // Clear timeout if it exists
@@ -125,13 +145,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
             finalizationTimeoutIdRef.current = null;
           }
         } else {
-          console.error("❌ Invoice finalization failed:", await response.text());
+          const errorText = await response.text();
+          console.error("❌ Invoice finalization failed:", response.status, errorText);
         }
       } catch (error) {
         console.error("❌ Invoice finalization error:", error);
       }
     },
-    [invoiceFinalized, originalPurchaseContext, userContext?.userId]
+    [invoiceFinalized, originalPurchaseContext, userContext?.userId, userData?._id]
   );
 
   // Custom close handler that resets payment processing state
@@ -148,8 +169,13 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     // ✅ CRITICAL: Finalize invoice if not already finalized
     // This ensures Klaviyo email is sent even if user closes modal without clicking decline
     if (!invoiceFinalized && originalPurchaseContext) {
-      // console.log("📧 Modal closing - finalizing invoice with original purchase only");
+      console.log("📧 Modal closing - finalizing invoice with original purchase only");
       finalizeInvoice();
+    } else if (!invoiceFinalized) {
+      console.warn("⚠️ Modal closing but invoice not finalized - missing context:", {
+        invoiceFinalized,
+        hasContext: !!originalPurchaseContext,
+      });
     }
 
     // Clear pending upsell (this also clears sessionStorage via the updated function)
@@ -186,30 +212,36 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
 
-      // Debug logging to check context
-      // console.log("🔍 UpsellModal opened:", {
-      //   hasContext: !!originalPurchaseContext,
-      //   contextDetails: originalPurchaseContext
-      //     ? {
-      //         paymentIntentId: originalPurchaseContext.paymentIntentId,
-      //         packageName: originalPurchaseContext.packageName,
-      //         packageType: originalPurchaseContext.packageType,
-      //       }
-      //     : null,
-      //   invoiceFinalized,
-      // });
+      // CRITICAL: Log context to help debug invoice finalization issues
+      console.log("🔍 UpsellModal opened:", {
+        hasContext: !!originalPurchaseContext,
+        contextDetails: originalPurchaseContext
+          ? {
+              paymentIntentId: originalPurchaseContext.paymentIntentId,
+              packageName: originalPurchaseContext.packageName,
+              packageType: originalPurchaseContext.packageType,
+            }
+          : null,
+        invoiceFinalized,
+        hasUserContextUserId: !!userContext?.userId,
+        hasUserDataId: !!userData?._id,
+      });
 
-      // Start 1-minute timeout for invoice finalization if we have purchase context
+      // CRITICAL: Start 30-second timeout for invoice finalization if we have purchase context
+      // This ensures invoices are ALWAYS sent, even if user doesn't interact with the modal
       if (originalPurchaseContext && !invoiceFinalized) {
         const timeoutId = setTimeout(() => {
-          // console.log("⏰ Invoice finalization timeout - sending original purchase only");
+          console.log("⏰ Invoice finalization timeout (30s) - sending original purchase only");
           finalizeInvoice();
-        }, 60000); // 1 minute = 60000ms
+        }, 30000); // 30 seconds = 30000ms
 
         finalizationTimeoutIdRef.current = timeoutId;
-        // console.log("⏰ Started 60-second timeout for invoice finalization");
+        console.log("⏰ Started 30-second timeout for invoice finalization");
       } else {
-        // console.log("⚠️ Invoice timeout NOT started - missing context or already finalized");
+        console.warn("⚠️ Invoice timeout NOT started:", {
+          hasContext: !!originalPurchaseContext,
+          invoiceFinalized,
+        });
       }
 
       return () => {
@@ -431,15 +463,32 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     // Show success modal with entry information
     showSuccess("Upsell Successful!", `${offer.title} activated`, benefits, 3000);
 
-    // ✅ Finalize invoice with both original purchase and upsell
-    if (paymentIntentId && originalPurchaseContext) {
+    // ✅ CRITICAL: Always finalize invoice with both original purchase and upsell
+    // Use paymentIntentId from status.data if available, otherwise fall back to state
+    const finalUpsellPaymentIntentId = status.data?.paymentIntentId || paymentIntentId;
+    if (originalPurchaseContext && finalUpsellPaymentIntentId) {
+      console.log("📧 Finalizing invoice with upsell purchase:", {
+        upsellPaymentIntentId: finalUpsellPaymentIntentId,
+        offerId: offer.id,
+        offerName: offer.title,
+      });
       finalizeInvoice({
-        paymentIntentId,
+        paymentIntentId: finalUpsellPaymentIntentId,
         offerId: offer.id,
         offerName: offer.title,
         price: offer.discountedPrice,
         entries: offer.entriesCount,
       });
+    } else {
+      console.warn("⚠️ Cannot finalize invoice with upsell - missing data:", {
+        hasOriginalContext: !!originalPurchaseContext,
+        hasPaymentIntentId: !!finalUpsellPaymentIntentId,
+      });
+      // Still finalize with original purchase only if we have context
+      if (originalPurchaseContext) {
+        console.log("📧 Finalizing invoice with original purchase only (upsell data missing)");
+        finalizeInvoice();
+      }
     }
 
     // Auto-close modal after showing success

@@ -418,7 +418,7 @@ export async function POST(request: NextRequest) {
             packageName: membershipPackage.name,
             userEmail: validatedData.userEmail,
             type: "subscription", // ✅ Set 'type' for webhook compatibility
-            packageType: "subscription",
+            packageType: "membership",
             isUpfrontPayment: "true", // ✅ Mark as upfront payment so webhook skips it
             ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
             ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),

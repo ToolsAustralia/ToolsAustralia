@@ -4,7 +4,7 @@ import { getUpsellPackagesForPurchase, getBestUpsellOfferForUser } from "@/data/
 
 const triggerUpsellSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
-  packageType: z.enum(["subscription", "one-time"]),
+  packageType: z.enum(["membership", "one-time"]),
   userId: z.string().optional(),
   userType: z
     .enum(["new-user", "returning-user", "high-value", "mini-draw-buyer", "special-package-buyer"])
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const packageId = searchParams.get("packageId");
-    const packageType = searchParams.get("packageType") as "subscription" | "one-time" | null;
+    const packageType = searchParams.get("packageType") as "membership" | "one-time" | null;
 
     if (!packageId || !packageType) {
       return NextResponse.json(

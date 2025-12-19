@@ -35,7 +35,7 @@ interface ActivePeriod {
 // Interface for queued item data from API
 interface QueuedItem {
   packageName: string;
-  packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell";
   daysOfAccess: number;
   hoursOfAccess: number;
   purchaseDate: Date;
@@ -68,7 +68,7 @@ export const usePartnerDiscountQueueOptimistic = () => {
   return {
     addOptimisticQueueItem: (packageData: {
       packageName: string;
-      packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+      packageType: "membership" | "one-time" | "mini-draw" | "upsell";
       discountDays: number;
       discountHours: number;
     }) => {
@@ -161,7 +161,7 @@ export default function PartnerDiscountQueue({
   const addOptimisticQueueItem = useCallback(
     (packageData: {
       packageName: string;
-      packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+      packageType: "membership" | "one-time" | "mini-draw" | "upsell";
       discountDays: number;
       discountHours: number;
     }) => {

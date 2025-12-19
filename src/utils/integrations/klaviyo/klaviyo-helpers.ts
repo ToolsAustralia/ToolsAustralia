@@ -525,7 +525,7 @@ export function getCustomerProperties(user: IUser) {
 export function formatInvoiceDataForKlaviyo(invoiceData: {
   invoiceId: string;
   invoiceNumber: string;
-  packageType: "subscription" | "one-time" | "upsell" | "mini-draw";
+  packageType: "membership" | "one-time" | "upsell" | "mini-draw";
   packageId: string;
   packageName: string;
   packageTier?: string;

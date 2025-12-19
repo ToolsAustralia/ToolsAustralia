@@ -232,13 +232,13 @@ export function ToolsAustraliaMembershipExample({
 }: {
   packageName: "Tradie" | "Foreman" | "Boss";
   packagePrice: number;
-  packageType: "subscription" | "one-time";
+  packageType: "membership" | "one-time";
 }) {
   const { trackSubscribe, trackPurchase } = usePixelTracking();
 
   const handleMembershipPurchase = () => {
-    if (packageType === "subscription") {
-      // Track subscription membership
+    if (packageType === "membership") {
+      // Track membership purchase
       trackSubscribe({
         value: packagePrice,
         currency: "AUD",
@@ -265,8 +265,8 @@ export function ToolsAustraliaMembershipExample({
       onClick={handleMembershipPurchase}
       className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
     >
-      {packageType === "subscription" ? "Subscribe to" : "Purchase"} {packageName} - ${packagePrice}
-      {packageType === "subscription" ? "/month" : ""}
+      {packageType === "membership" ? "Subscribe to" : "Purchase"} {packageName} - ${packagePrice}
+      {packageType === "membership" ? "/month" : ""}
     </button>
   );
 }

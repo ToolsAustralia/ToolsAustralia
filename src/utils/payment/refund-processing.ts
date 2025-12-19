@@ -153,7 +153,7 @@ export async function processRefundReversal(
         attemptedLookups.push(`user subscription events fallback`);
         const subscriptionEvents = await PaymentEvent.find({
           userId: user._id,
-          packageType: "subscription",
+          packageType: "membership",
           eventType: "BenefitsGranted",
         })
           .sort({ timestamp: -1 })
@@ -279,11 +279,13 @@ export async function processRefundReversal(
     // });
 
     // Process reversal based on package type
+    const isMembership = packageType === "membership";
+    
     switch (packageType) {
       case "one-time":
         await reverseOneTimePackage(user, originalPaymentEvent);
         break;
-      case "subscription":
+      case "membership":
         await reverseSubscriptionPackage(user, originalPaymentEvent);
         break;
       case "upsell":
@@ -303,9 +305,9 @@ export async function processRefundReversal(
         };
     }
 
-    // Reverse user benefits (entries and points) - common for all types EXCEPT subscriptions
-    // Subscriptions handle their own reversal in reverseSubscriptionPackage() with correct entriesToRemove calculation
-    if (packageType !== "subscription") {
+    // Reverse user benefits (entries and points) - common for all types EXCEPT memberships
+    // Memberships handle their own reversal in reverseSubscriptionPackage() with correct entriesToRemove calculation
+    if (!isMembership) {
       await User.findByIdAndUpdate(
         user._id,
         {

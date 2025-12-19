@@ -25,7 +25,7 @@ export interface PixelPurchaseParams {
   value: number;
   currency: string;
   orderId: string;
-  packageType: "subscription" | "one-time" | "mini-draw" | "upsell";
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell";
   packageId?: string;
   packageName?: string;
   userId?: string;
@@ -619,7 +619,7 @@ export async function trackPixelPaymentFailed(params: {
   orderId?: string;
   packageId?: string;
   packageName?: string;
-  packageType?: "subscription" | "one-time" | "mini-draw" | "upsell";
+  packageType?: "membership" | "one-time" | "mini-draw" | "upsell";
   userId?: string;
   userEmail?: string;
   userPhone?: string;

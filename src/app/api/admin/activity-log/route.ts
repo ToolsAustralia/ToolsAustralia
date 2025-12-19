@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
       let action = "";
       let type: ActivityLogItem["type"] = "one_time_purchase";
 
-      if (payment.packageType === "subscription") {
+      if (payment.packageType === "membership") {
         const isRenewal =
           user?.subscription?.packageId === payment.packageId &&
           user?.subscription?.lastUpgradeDate &&

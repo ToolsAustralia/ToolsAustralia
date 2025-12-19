@@ -456,7 +456,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
     intentType || (paymentIntentClientSecret ? "payment" : setupIntentClientSecret ? "setup" : undefined);
   // ✅ FIX: Derive package type from intentType and amount for proper Elements remounting
   // PaymentIntent with amount = one-time, SetupIntent = subscription
-  const packageType = paymentIntentClientSecret && amount && amount > 0 ? "one-time" : "subscription";
+  const packageType = paymentIntentClientSecret && amount && amount > 0 ? "one-time" : "membership";
   const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);

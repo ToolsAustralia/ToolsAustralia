@@ -336,10 +336,10 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     // ✅ IMPORTANT: Only skip if it's actually a subscription - never skip one-time purchases
     const isSubscriptionPayment =
       paymentIntent.metadata.type === "subscription" ||
-      paymentIntent.metadata.packageType === "subscription" ||
+      paymentIntent.metadata.packageType === "membership" ||
       paymentIntent.metadata.subscription_id ||
       (paymentIntent.metadata.isUpfrontPayment === "true" &&
-        (paymentIntent.metadata.type === "subscription" || paymentIntent.metadata.packageType === "subscription")) || // ✅ Only skip upfront payments for subscriptions
+        (paymentIntent.metadata.type === "subscription" || paymentIntent.metadata.packageType === "membership")) || // ✅ Only skip upfront payments for memberships
       !!(paymentIntent as { invoice?: string | Stripe.Invoice }).invoice; // ✅ NEW: Also check if payment has an invoice (subscription payments always have invoices)
 
     if (isSubscriptionPayment) {
@@ -730,7 +730,7 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
         orderId: order?.orderId,
         packageId,
         packageName,
-        packageType: paymentType as "subscription" | "one-time" | "mini-draw" | "upsell" | undefined,
+        packageType: paymentType as "membership" | "one-time" | "mini-draw" | "upsell" | undefined,
         userId: user._id.toString(),
         userEmail: user.email,
         userPhone: user.mobile,
@@ -1672,7 +1672,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         paymentIntentId,
         packageId,
         packageName: "Subscription",
-        packageType: "subscription",
+        packageType: "membership",
         userId: user._id.toString(),
         userEmail: user.email,
         userPhone: user.mobile,
@@ -2063,7 +2063,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       invoicePaymentId,
       user._id.toString(),
       {
-        packageType: "subscription",
+        packageType: "membership",
         packageId: packageId,
         packageName: membershipPackage.name,
         entries: entriesToGrant,
@@ -2074,7 +2074,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       {
         created: Math.floor(paymentTimestamp * 1000), // Use paid_at timestamp, not invoice creation time
         type: "subscription",
-        packageType: "subscription",
+        packageType: "membership",
         promoLinkCode: promoLinkCode || undefined, // Ensure undefined instead of empty string
         affiliateCode: affiliateCode || undefined,
       },
@@ -2098,7 +2098,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
               const majorDrawResult = await getTargetMajorDraw({
                 created: Math.floor(paymentTimestamp * 1000),
                 type: "subscription",
-                packageType: "subscription",
+                packageType: "membership",
               });
 
               if (majorDrawResult) {
@@ -2194,7 +2194,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           const majorDrawResult = await getTargetMajorDraw({
             created: Math.floor(paymentTimestamp * 1000),
             type: "subscription",
-            packageType: "subscription",
+            packageType: "membership",
           });
 
           let actualMajorDrawEntries = 0;
@@ -2334,7 +2334,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
             createInvoiceGeneratedEvent(user, {
               invoiceId: `inv_${invoice.id}`,
               invoiceNumber,
-              packageType: "subscription",
+              packageType: "membership",
               packageId: membershipPackage._id.toString(),
               packageName: membershipPackage.name,
               packageTier: membershipPackage.name,

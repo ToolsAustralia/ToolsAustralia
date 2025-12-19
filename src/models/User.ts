@@ -221,7 +221,7 @@ export interface IUser extends Document {
     _id?: mongoose.Types.ObjectId; // Auto-generated ID for queue item
     packageId: string; // Package ID that granted this benefit
     packageName: string; // Package name for display
-    packageType: "subscription" | "one-time" | "mini-draw" | "upsell"; // Source type
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell"; // Source type
     discountDays: number; // Total days of partner discount access
     discountHours: number; // For more granular tracking (mini-draw packages use hours)
     purchaseDate: Date; // When the package was purchased

@@ -385,7 +385,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     recentPurchase: string,
     purchaseAmount: number,
     packageId?: string,
-    packageType?: "subscription" | "one-time",
+    packageType?: "membership" | "one-time",
     originalPurchaseContextParam?: OriginalPurchaseContext | null
   ) => {
     try {
