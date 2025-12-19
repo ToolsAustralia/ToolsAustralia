@@ -171,7 +171,7 @@ export async function addToPartnerDiscountQueue(
  */
 export function calculateActivePartnerDiscountPeriod(user: IUser): {
   isActive: boolean;
-  source: "subscription" | "one-time" | "mini-draw" | "upsell" | null;
+  source: "membership" | "one-time" | "mini-draw" | "upsell" | null;
   packageName: string | null;
   endsAt: Date | null;
   daysRemaining: number;
@@ -194,7 +194,7 @@ export function calculateActivePartnerDiscountPeriod(user: IUser): {
 
       return {
         isActive: true,
-        source: "subscription",
+        source: "membership",
         packageName: subscriptionPackage?.name || "Active Subscription",
         endsAt,
         daysRemaining,
@@ -223,7 +223,7 @@ export function calculateActivePartnerDiscountPeriod(user: IUser): {
 
       return {
         isActive: true,
-        source: "subscription",
+        source: "membership",
         packageName: subscriptionPackage?.name || "Active Subscription",
         endsAt: nextBillingCycle,
         daysRemaining,
@@ -245,12 +245,10 @@ export function calculateActivePartnerDiscountPeriod(user: IUser): {
       const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
       const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
 
-      // Map "membership" to "subscription" for backward compatibility with source type
-      const sourceType = activeItem.packageType === "membership" ? "subscription" : activeItem.packageType;
-
+      // Use packageType directly - no mapping needed for single source of truth
       return {
         isActive: true,
-        source: sourceType as "subscription" | "one-time" | "mini-draw" | "upsell" | null,
+        source: activeItem.packageType as "membership" | "one-time" | "mini-draw" | "upsell" | null,
         packageName: activeItem.packageName,
         endsAt,
         daysRemaining,

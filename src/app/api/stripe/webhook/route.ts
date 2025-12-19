@@ -334,6 +334,9 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     // This prevents duplicate processing when both payment_intent.succeeded and invoice.payment_succeeded fire
     // Also skip upfront PaymentIntents marked for subscriptions (they're just for wallet display)
     // ✅ IMPORTANT: Only skip if it's actually a subscription - never skip one-time purchases
+    // ✅ BACKWARD COMPATIBILITY: Check both metadata.type === "subscription" and metadata.packageType === "membership"
+    // This ensures compatibility during migration from "subscription" to "membership" packageType
+    // Old Stripe metadata may have type: "subscription", new metadata uses packageType: "membership"
     const isSubscriptionPayment =
       paymentIntent.metadata.type === "subscription" ||
       paymentIntent.metadata.packageType === "membership" ||

@@ -206,7 +206,7 @@ export function hasActivePartnerDiscountAccess(user: IUser | null | undefined): 
  *
  * Returns detailed information about the user's current partner discount access:
  * - Whether they have access
- * - Source of access (subscription, one-time, mini-draw, upsell)
+ * - Source of access (membership, one-time, mini-draw, upsell)
  * - When access expires
  * - Days/hours remaining
  *
@@ -215,7 +215,7 @@ export function hasActivePartnerDiscountAccess(user: IUser | null | undefined): 
  */
 export function getPartnerDiscountAccessInfo(user: IUser): {
   hasAccess: boolean;
-  source: "subscription" | "one-time" | "mini-draw" | "upsell" | null;
+  source: "membership" | "one-time" | "mini-draw" | "upsell" | null;
   packageName: string | null;
   expiresAt: Date | null;
   daysRemaining: number;
@@ -226,12 +226,12 @@ export function getPartnerDiscountAccessInfo(user: IUser): {
 
   return {
     hasAccess: activePeriod.isActive,
-    source: activePeriod.source,
+    source: activePeriod.source as "membership" | "one-time" | "mini-draw" | "upsell" | null,
     packageName: activePeriod.packageName,
     expiresAt: activePeriod.endsAt,
     daysRemaining: activePeriod.daysRemaining,
     hoursRemaining: activePeriod.hoursRemaining,
-    isRecurring: activePeriod.source === "subscription", // Subscriptions are recurring
+    isRecurring: activePeriod.source === "membership", // Memberships are recurring
   };
 }
 

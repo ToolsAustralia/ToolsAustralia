@@ -78,7 +78,7 @@ export async function GET() {
     const totalAllQueuedDays = allQueuedItems.reduce((sum, item) => sum + item.discountDays, 0);
 
     // Check if user has active subscription with partner discount benefits
-    const isActiveSubscription = user.subscription?.isActive && activePeriod.source === "subscription";
+    const isActiveSubscription = user.subscription?.isActive && activePeriod.source === "membership";
     let subscriptionBenefits = null;
 
     if (isActiveSubscription && user.subscription?.packageId) {

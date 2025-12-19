@@ -879,7 +879,7 @@ const UserSchema = new Schema<IUser>(
           },
           packageType: {
             type: String,
-            enum: ["subscription", "one-time", "mini-draw", "upsell"],
+            enum: ["membership", "one-time", "mini-draw", "upsell"],
             required: true,
           },
           discountDays: {
