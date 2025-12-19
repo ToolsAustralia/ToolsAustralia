@@ -338,6 +338,7 @@ export interface UserFilters {
   limit?: number;
   search?: string;
   subscriptionStatus?: "active" | "inactive" | "none";
+  autoRenew?: "true" | "false"; // Filter by auto-renewal status
   membershipPackage?: string;
   role?: "user" | "admin";
   dateFrom?: string;

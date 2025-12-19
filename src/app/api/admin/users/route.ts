@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "25"), 100); // Max 100 per page
     const search = searchParams.get("search") || "";
     const subscriptionStatus = searchParams.get("subscriptionStatus") || "";
+    const autoRenew = searchParams.get("autoRenew") || "";
     const membershipPackage = searchParams.get("membershipPackage") || "";
     const role = searchParams.get("role") || "";
     const dateFrom = searchParams.get("dateFrom");
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
       limit,
       search,
       subscriptionStatus,
+      autoRenew,
       membershipPackage,
       role,
       dateFrom,
@@ -107,6 +109,20 @@ export async function GET(request: NextRequest) {
             { "subscription.isActive": { $ne: true } },
           ];
           break;
+      }
+    }
+
+    // AutoRenew filter (only applies to users with active subscriptions)
+    if (autoRenew !== undefined && autoRenew !== "") {
+      // Ensure we only filter users with active subscriptions
+      filter["subscription.isActive"] = true;
+
+      if (autoRenew === "true") {
+        // Only subscriptions that will auto-renew
+        filter["subscription.autoRenew"] = { $ne: false };
+      } else if (autoRenew === "false") {
+        // Only subscriptions that are cancelled (won't renew)
+        filter["subscription.autoRenew"] = false;
       }
     }
 

@@ -440,6 +440,7 @@ export async function getUsers(filters: UserFilters) {
   const limit = Math.min(filters.limit || 25, 100); // Max 100 per page
   const search = filters.search || "";
   const subscriptionStatus = filters.subscriptionStatus || "";
+  const autoRenew = filters.autoRenew || "";
   const membershipPackage = filters.membershipPackage || "";
   const role = filters.role || "";
   const dateFrom = filters.dateFrom;
@@ -491,6 +492,20 @@ export async function getUsers(filters: UserFilters) {
           { "subscription.isActive": { $ne: true } },
         ];
         break;
+    }
+  }
+
+  // AutoRenew filter (only applies to users with active subscriptions)
+  if (autoRenew !== undefined && autoRenew !== "") {
+    // Ensure we only filter users with active subscriptions
+    filter["subscription.isActive"] = true;
+
+    if (autoRenew === "true") {
+      // Only subscriptions that will auto-renew
+      filter["subscription.autoRenew"] = { $ne: false };
+    } else if (autoRenew === "false") {
+      // Only subscriptions that are cancelled (won't renew)
+      filter["subscription.autoRenew"] = false;
     }
   }
 

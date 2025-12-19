@@ -81,6 +81,14 @@ export interface AdminDashboardStats {
   };
 }
 
+// Types for projected income
+export interface ProjectedIncomeData {
+  projectedIncome: number;
+  activeSubscriptions: number;
+  nextMonthStart: string;
+  nextMonthEnd: string;
+}
+
 export interface AdminDashboardResponse {
   success: boolean;
   data: AdminDashboardStats;
@@ -192,6 +200,35 @@ export function useRevenueBreakdown(
     staleTime: 5 * 60 * 1000, // 5 minutes - revenue data can be slightly stale
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchInterval: 10 * 60 * 1000, // Auto-refresh every 10 minutes
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch projected income for next month
+ * Based on active subscriptions with auto-renewal enabled
+ */
+export function useProjectedIncome() {
+  return useQuery<ProjectedIncomeData>({
+    queryKey: ["admin", "projected-income"],
+    queryFn: async (): Promise<ProjectedIncomeData> => {
+      const response = await fetch("/api/admin/dashboard/projected-income");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch projected income");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch projected income");
+      }
+
+      return result.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
     retry: 2,
   });
 }

@@ -16,7 +16,12 @@ import UpcomingDraws from "./UpcomingDraws";
 import SubmissionsManagement from "./SubmissionsManagement";
 import PromoManagement from "./PromoManagement";
 import { AdminDashboardProps } from "@/types/admin";
-import { useAdminDashboardStats, useRecentActivities, useRevenueBreakdown } from "@/hooks/queries/useAdminQueries";
+import {
+  useAdminDashboardStats,
+  useRecentActivities,
+  useRevenueBreakdown,
+  useProjectedIncome,
+} from "@/hooks/queries/useAdminQueries";
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
@@ -38,6 +43,7 @@ import {
   BarChart3,
   Shield,
   Menu,
+  TrendingUp,
 } from "lucide-react";
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
@@ -75,6 +81,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   // RevenueOverview now manages its own data fetching
   // We still need refetchRevenue for the refresh button
   const { refetch: refetchRevenue } = useRevenueBreakdown();
+
+  // Fetch projected income for next month
+  const { data: projectedIncome, isLoading: projectedIncomeLoading } = useProjectedIncome();
 
   // Handle mobile sidebar close with animation
   const handleCloseMobileSidebar = () => {
@@ -539,11 +548,22 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       color="emerald"
                     />
                     <AdminStatsCard
+                      title="Projected Income"
+                      value={`$${(projectedIncome?.projectedIncome || 0).toLocaleString("en-AU", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`}
+                      icon={TrendingUp}
+                      subtitle="Next month's expected revenue"
+                      color="purple"
+                      loading={projectedIncomeLoading}
+                    />
+                    <AdminStatsCard
                       title="Conversion Rate"
                       value={`${dashboardStats.conversionRate}%`}
                       icon={Target}
                       subtitle="Paying customers"
-                      color="purple"
+                      color="indigo"
                     />
                     <AdminStatsCard
                       title={

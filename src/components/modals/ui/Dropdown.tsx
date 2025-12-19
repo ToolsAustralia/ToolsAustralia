@@ -2,12 +2,14 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Input from "./Input";
 
 export interface DropdownOption {
   value: string;
   label: string;
   disabled?: boolean;
+  icon?: LucideIcon; // Optional icon component
 }
 
 interface DropdownProps {
@@ -27,6 +29,10 @@ interface DropdownProps {
   customInputPlaceholder?: string;
   customInputError?: string;
   onOpenChange?: (isOpen: boolean) => void;
+  // Active state for filter indicators
+  active?: boolean;
+  // Compact mode for mobile/smaller spaces
+  compact?: boolean;
 }
 
 const Dropdown: React.FC<DropdownProps> = ({
@@ -45,6 +51,8 @@ const Dropdown: React.FC<DropdownProps> = ({
   customInputPlaceholder = "Enter your profession",
   customInputError,
   onOpenChange,
+  active = false,
+  compact = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -117,9 +125,20 @@ const Dropdown: React.FC<DropdownProps> = ({
         onKeyDown={handleKeyDown}
         disabled={disabled}
         className={`
-          w-full px-4 py-3 border rounded-lg text-left transition-all duration-200
+          w-full border rounded-lg text-left transition-all duration-200
           focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
-          ${error ? "border-red-300 bg-red-50" : "border-gray-300 bg-white hover:border-gray-400"}
+          ${
+            compact
+              ? "px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm lg:px-4 lg:py-2.5 lg:text-base"
+              : "px-3 py-2 text-sm sm:px-4 sm:py-2.5 sm:text-base"
+          }
+          ${
+            error
+              ? "border-red-300 bg-red-50"
+              : active
+              ? "border-red-500 bg-red-50/50 shadow-md"
+              : "border-gray-300 bg-white hover:border-gray-400"
+          }
           ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "cursor-pointer"}
           ${isOpen ? "ring-2 ring-red-500 border-transparent" : ""}
         `}
@@ -128,12 +147,25 @@ const Dropdown: React.FC<DropdownProps> = ({
         aria-controls="dropdown-options"
         role="combobox"
       >
-        <div className="flex items-center justify-between">
-          <span className={`${selectedOption ? "text-gray-900" : "text-gray-500"}`}>
-            {selectedOption ? selectedOption.label : placeholder}
+        <div className="flex items-center justify-between gap-1 sm:gap-2">
+          <span
+            className={`truncate flex-1 flex items-center gap-1 sm:gap-1.5 ${
+              selectedOption ? "text-gray-900" : "text-gray-500"
+            }`}
+          >
+            {selectedOption?.icon && (
+              <selectedOption.icon
+                className={`flex-shrink-0 ${
+                  compact ? "w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4" : "w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4"
+                }`}
+              />
+            )}
+            <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
           </span>
           <ChevronDown
-            className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+            className={`flex-shrink-0 ${
+              compact ? "w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4" : "w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4"
+            } text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
           />
         </div>
       </button>
@@ -147,30 +179,36 @@ const Dropdown: React.FC<DropdownProps> = ({
           {options.length === 0 ? (
             <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
           ) : (
-            options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => handleOptionClick(option.value)}
-                disabled={option.disabled}
-                className={`
-                  w-full px-4 py-3 text-left text-sm transition-colors duration-150
-                  flex items-center justify-between
-                  ${
-                    option.disabled
-                      ? "text-gray-400 cursor-not-allowed bg-gray-50"
-                      : "text-gray-900 hover:bg-red-50 cursor-pointer"
-                  }
-                  ${option.value === value ? "bg-red-50 text-red-700" : ""}
-                  first:rounded-t-lg last:rounded-b-lg
-                `}
-                role="option"
-                aria-selected={option.value === value}
-              >
-                <span>{option.label}</span>
-                {option.value === value && <Check className="w-4 h-4 text-red-600" />}
-              </button>
-            ))
+            options.map((option) => {
+              const IconComponent = option.icon;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleOptionClick(option.value)}
+                  disabled={option.disabled}
+                  className={`
+                    w-full px-4 py-3 text-left text-sm transition-colors duration-150
+                    flex items-center justify-between gap-2
+                    ${
+                      option.disabled
+                        ? "text-gray-400 cursor-not-allowed bg-gray-50"
+                        : "text-gray-900 hover:bg-red-50 cursor-pointer"
+                    }
+                    ${option.value === value ? "bg-red-50 text-red-700" : ""}
+                    first:rounded-t-lg last:rounded-b-lg
+                  `}
+                  role="option"
+                  aria-selected={option.value === value}
+                >
+                  <span className="flex items-center gap-2 flex-1 min-w-0">
+                    {IconComponent && <IconComponent className="w-4 h-4 flex-shrink-0" />}
+                    <span className="truncate">{option.label}</span>
+                  </span>
+                  {option.value === value && <Check className="w-4 h-4 text-red-600 flex-shrink-0" />}
+                </button>
+              );
+            })
           )}
         </div>
       )}

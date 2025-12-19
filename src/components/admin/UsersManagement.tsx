@@ -21,6 +21,18 @@ import {
   Shield,
   Gift,
   X,
+  ClipboardList,
+  XCircle,
+  Ban,
+  RefreshCw,
+  PauseCircle,
+  Package,
+  User,
+  Calendar,
+  DollarSign,
+  Filter,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
@@ -31,6 +43,7 @@ import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
 import { membershipPackages } from "@/data/membershipPackages";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import Dropdown from "@/components/modals/ui/Dropdown";
 
 /**
  * World-class Users Management component
@@ -43,6 +56,7 @@ export default function UsersManagement() {
     limit: 25,
     search: "",
     subscriptionStatus: undefined,
+    autoRenew: undefined,
     membershipPackage: undefined,
     role: undefined,
     sortBy: "createdAt",
@@ -51,6 +65,7 @@ export default function UsersManagement() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false); // Mobile filter collapse state
 
   // Debounced search to avoid excessive API calls
   const debouncedSearch = useDebounce(filters.search || "", 300);
@@ -121,6 +136,7 @@ export default function UsersManagement() {
       limit: 25,
       search: "",
       subscriptionStatus: undefined,
+      autoRenew: undefined,
       membershipPackage: undefined,
       role: undefined,
       sortBy: "createdAt",
@@ -133,6 +149,7 @@ export default function UsersManagement() {
     return !!(
       filters.search ||
       filters.subscriptionStatus ||
+      filters.autoRenew ||
       filters.membershipPackage ||
       filters.role ||
       filters.sortBy !== "createdAt" ||
@@ -352,94 +369,144 @@ export default function UsersManagement() {
         />
       </div>
 
-      {/* Search and Filters - In One Row */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-2.5 sm:p-4 lg:p-6">
+      {/* Search and Filters - Elevated Design */}
+      <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:gap-4">
-          {/* Search Bar */}
-          <div className="relative flex-1">
-            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+          {/* Search Bar - Enhanced */}
+          <div className="relative flex-1 group flex items-center gap-2">
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5" />
             <input
               type="text"
               placeholder="Search users..."
               value={filters.search || ""}
               onChange={(e) => updateFilter("search", e.target.value)}
-              className="w-full pl-7 sm:pl-9 lg:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base"
+              className="w-full pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400"
             />
+            {/* Mobile Filter Toggle Button */}
+            <button
+              onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+              className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 rounded-lg bg-white hover:border-red-500 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
+              aria-label="Toggle filters"
+            >
+              <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600"}`} />
+              {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
+              {isFiltersOpen ? (
+                <ChevronUp className="w-4 h-4 text-gray-600" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-gray-600" />
+              )}
+            </button>
           </div>
 
-          {/* Filters - In Same Row */}
-          <div className="flex flex-wrap gap-1.5 sm:gap-2 lg:gap-3">
+          {/* Filters - Elevated Design with Dropdown Components */}
+          {/* Hidden on mobile by default, shown when isFiltersOpen is true */}
+          <div
+            className={`flex flex-wrap gap-1.5 sm:gap-2 lg:gap-2.5 transition-all duration-300 ${
+              isFiltersOpen ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0 overflow-hidden"
+            } sm:max-h-none sm:opacity-100 sm:overflow-visible`}
+          >
             {/* Subscription Status Filter */}
-            <select
-              value={filters.subscriptionStatus || ""}
-              onChange={(e) => updateFilter("subscriptionStatus", e.target.value)}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
-            >
-              <option value="">Subscriptions</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="none">No Subscription</option>
-            </select>
+            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Subscriptions", icon: ClipboardList },
+                  { value: "active", label: "Active", icon: CheckCircle },
+                  { value: "inactive", label: "Inactive", icon: XCircle },
+                  { value: "none", label: "No Subscription", icon: Ban },
+                ]}
+                value={filters.subscriptionStatus || ""}
+                onChange={(value) => updateFilter("subscriptionStatus", value)}
+                placeholder="Subscriptions"
+                active={!!filters.subscriptionStatus}
+              />
+            </div>
+
+            {/* AutoRenew Filter */}
+            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Auto-Renew", icon: RefreshCw },
+                  { value: "true", label: "Will Renew", icon: CheckCircle },
+                  { value: "false", label: "Cancelled", icon: PauseCircle },
+                ]}
+                value={filters.autoRenew || ""}
+                onChange={(value) => updateFilter("autoRenew", value)}
+                placeholder="Auto-Renew"
+                active={!!filters.autoRenew}
+              />
+            </div>
 
             {/* Membership Package Filter */}
-            <select
-              value={filters.membershipPackage || ""}
-              onChange={(e) => updateFilter("membershipPackage", e.target.value)}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
-            >
-              <option value="">Packages</option>
-              {membershipPackageOptions.map((pkg) => (
-                <option key={pkg} value={pkg}>
-                  {pkg}
-                </option>
-              ))}
-            </select>
+            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Packages", icon: Package },
+                  ...membershipPackageOptions.map((pkg) => ({ value: pkg, label: pkg })),
+                ]}
+                value={filters.membershipPackage || ""}
+                onChange={(value) => updateFilter("membershipPackage", value)}
+                placeholder="Packages"
+                active={!!filters.membershipPackage}
+              />
+            </div>
 
             {/* Role Filter */}
-            <select
-              value={filters.role || ""}
-              onChange={(e) => updateFilter("role", e.target.value)}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[90px] sm:min-w-[100px] lg:min-w-[120px]"
-            >
-              <option value="">Roles</option>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
+            <div className="min-w-[90px] sm:min-w-[110px] lg:min-w-[130px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Roles", icon: User },
+                  { value: "user", label: "User", icon: User },
+                  { value: "admin", label: "Admin", icon: Shield },
+                ]}
+                value={filters.role || ""}
+                onChange={(value) => updateFilter("role", value)}
+                placeholder="Roles"
+                active={!!filters.role}
+              />
+            </div>
 
             {/* Sort By Filter */}
-            <select
-              value={filters.sortBy || "createdAt"}
-              onChange={(e) => updateFilter("sortBy", e.target.value)}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[100px] sm:min-w-[120px] lg:min-w-[140px]"
-            >
-              <option value="createdAt">Date Joined</option>
-              <option value="email">Email</option>
-              <option value="lastLogin">Last Login</option>
-              <option value="totalSpent">Total Spent</option>
-              <option value="miniDrawCount">Mini Draws</option>
-            </select>
+            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
+              <Dropdown
+                options={[
+                  { value: "createdAt", label: "Date Joined", icon: Calendar },
+                  { value: "email", label: "Email", icon: Mail },
+                  { value: "lastLogin", label: "Last Login", icon: Clock },
+                  { value: "totalSpent", label: "Total Spent", icon: DollarSign },
+                  { value: "miniDrawCount", label: "Mini Draws", icon: Gift },
+                ]}
+                value={filters.sortBy || "createdAt"}
+                onChange={(value) => updateFilter("sortBy", value)}
+                placeholder="Sort By"
+                active={filters.sortBy !== "createdAt"}
+              />
+            </div>
 
             {/* Items Per Page */}
-            <select
-              value={filters.limit || 25}
-              onChange={(e) => updateFilter("limit", parseInt(e.target.value))}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base bg-white min-w-[70px] sm:min-w-[80px] lg:min-w-[100px]"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+            <div className="min-w-[70px] sm:min-w-[80px] lg:min-w-[90px]">
+              <Dropdown
+                options={[
+                  { value: "10", label: "10" },
+                  { value: "25", label: "25" },
+                  { value: "50", label: "50" },
+                  { value: "100", label: "100" },
+                ]}
+                value={String(filters.limit || 25)}
+                onChange={(value) => updateFilter("limit", parseInt(value))}
+                placeholder="Limit"
+                active={filters.limit !== 25}
+              />
+            </div>
 
-            {/* Clear Filters Button */}
+            {/* Clear Filters Button - Enhanced */}
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 lg:py-2.5 border-2 border-red-300 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 hover:border-red-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm lg:text-base font-medium transition-colors flex items-center gap-1 sm:gap-1.5 lg:gap-2 whitespace-nowrap"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-red-500/30 bg-gradient-to-r from-red-50 to-red-100/50 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 hover:border-red-500/50 focus:ring-2 focus:ring-red-500/50 focus:border-red-500 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1 sm:gap-1.5 whitespace-nowrap shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
                 title="Clear all filters"
               >
                 <X className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Clear Filters</span>
+                <span className="hidden sm:inline">Clear</span>
               </button>
             )}
           </div>
