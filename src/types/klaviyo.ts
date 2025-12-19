@@ -100,6 +100,18 @@ export interface KlaviyoProfile {
   properties?: Partial<KlaviyoProfileProperties>;
 }
 
+/**
+ * Klaviyo event properties
+ *
+ * Supports Klaviyo's special field names including:
+ * - $value: Top-level numeric property for revenue calculation (REQUIRED for revenue metrics)
+ * - Currency: ISO currency code (e.g., "AUD")
+ * - Order ID: Unique order identifier with space (for deduplication)
+ * - Any other custom properties
+ *
+ * The index signature allows flexible property names including special characters
+ * and spaces, which are required for Klaviyo's revenue schema.
+ */
 export interface KlaviyoEventProperties {
   user_id: string;
   [key: string]: string | number | boolean | undefined | null | unknown[] | Record<string, unknown>;

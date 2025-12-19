@@ -280,7 +280,7 @@ export async function processRefundReversal(
 
     // Process reversal based on package type
     const isMembership = packageType === "membership";
-    
+
     switch (packageType) {
       case "one-time":
         await reverseOneTimePackage(user, originalPaymentEvent);

@@ -22,6 +22,7 @@ import {
   formatDateForKlaviyo,
   formatTimestampForKlaviyo,
 } from "./klaviyo-helpers";
+import { buildRevenueProperties, buildRevenueItem, buildSubscriptionProperties } from "./klaviyo-revenue-schema";
 
 // ============================================================
 // ONBOARDING EVENTS
@@ -566,6 +567,9 @@ export function createMajorDrawEndedEvent(
  * - Custom events: For business logic and workflows
  * - Placed Order: For revenue metrics and analytics
  *
+ * CRITICAL: Revenue is calculated ONLY from top-level `$value` property.
+ * Any other property name (value, amount, price) is ignored for revenue.
+ *
  * @param user - User model instance
  * @param orderData - Order data including value, currency, order ID, and package details
  * @returns Formatted Klaviyo event
@@ -584,6 +588,15 @@ export function createPlacedOrderEvent(
     paymentIntentId?: string;
   }
 ): KlaviyoEvent {
+  // Build core revenue properties using schema helper ($value, Currency, Order ID)
+  const revenueProperties = buildRevenueProperties(orderData.orderId, orderData.value, orderData.currency);
+
+  // Build product item for items array (enables product-level analytics)
+  const revenueItem = buildRevenueItem(orderData.packageId, orderData.packageName, orderData.value, 1);
+
+  // Build subscription-specific properties for membership purchases
+  const subscriptionProperties = orderData.packageType === "membership" ? buildSubscriptionProperties("monthly") : {};
+
   return {
     event: "Placed Order",
     customer_properties: getCustomerProperties(user),
@@ -592,17 +605,15 @@ export function createPlacedOrderEvent(
       user_id: user._id.toString(),
 
       // REQUIRED fields for Klaviyo revenue metrics
-      value: orderData.value,
-      currency: orderData.currency,
-      order_id: orderData.orderId,
-      items: [
-        {
-          product_id: orderData.packageId,
-          product_name: orderData.packageName,
-          value: orderData.value,
-          quantity: 1,
-        },
-      ],
+      // Using schema helper ensures correct field names: $value, Currency, "Order ID"
+      ...revenueProperties,
+
+      // Items array for product-level analytics (does not affect total revenue)
+      items: [revenueItem],
+
+      // Subscription-specific properties for membership purchases
+      // Enables subscription segmentation and recurring revenue analysis
+      ...subscriptionProperties,
 
       // Custom properties for segmentation and analytics
       package_type: orderData.packageType,
@@ -621,7 +632,10 @@ export function createPlacedOrderEvent(
  * Create "Refunded Order" event - Standard Klaviyo event for refund tracking
  *
  * This ensures revenue metrics correctly subtract refunds from total revenue.
- * The order_id MUST match the original "Placed Order" event's order_id.
+ * The "Order ID" MUST match the original "Placed Order" event's "Order ID".
+ *
+ * CRITICAL: Revenue is calculated ONLY from top-level `$value` property.
+ * Negative $value subtracts from total revenue.
  *
  * @param user - User model instance
  * @param refundData - Refund data including original order ID, refund amount, and reason
@@ -630,13 +644,21 @@ export function createPlacedOrderEvent(
 export function createRefundedOrderEvent(
   user: IUser,
   refundData: {
-    originalOrderId: string; // MUST match the original "Placed Order" order_id
+    originalOrderId: string; // MUST match the original "Placed Order" "Order ID"
     refundAmount: number; // Refund amount in dollars
     currency: string; // Currency code (e.g., "AUD")
     refundReason?: string; // Reason for refund (e.g., "customer_request", "chargeback")
     packageType: "membership" | "one-time" | "mini-draw" | "upsell";
   }
 ): KlaviyoEvent {
+  // Build core revenue properties using schema helper
+  // Negative $value subtracts from total revenue in Klaviyo
+  const revenueProperties = buildRevenueProperties(
+    refundData.originalOrderId,
+    -refundData.refundAmount, // Negative value to subtract from revenue
+    refundData.currency
+  );
+
   return {
     event: "Refunded Order",
     customer_properties: getCustomerProperties(user),
@@ -645,9 +667,10 @@ export function createRefundedOrderEvent(
       user_id: user._id.toString(),
 
       // REQUIRED fields for Klaviyo revenue metrics
-      value: -refundData.refundAmount, // Negative value to subtract from revenue
-      currency: refundData.currency,
-      order_id: refundData.originalOrderId, // MUST match original order_id
+      // Using schema helper ensures correct field names: $value, Currency, "Order ID"
+      ...revenueProperties,
+
+      // Refund-specific properties
       refund_amount: refundData.refundAmount,
       refund_reason: refundData.refundReason || "customer_request",
 

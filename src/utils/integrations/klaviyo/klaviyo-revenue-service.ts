@@ -28,6 +28,12 @@ import { generateOrderId, type PackageType } from "./klaviyo-order-helpers";
  * This is the standard Klaviyo event required for revenue metrics to work correctly.
  * Fires alongside custom events (Subscription Started, One-Time Package Purchased, etc.)
  *
+ * CRITICAL: Revenue is calculated ONLY from top-level `$value` property.
+ * The event uses Klaviyo's strict schema requirements:
+ * - $value: Top-level numeric property (REQUIRED for revenue)
+ * - Currency: ISO currency code (e.g., "AUD")
+ * - Order ID: Unique identifier for deduplication
+ *
  * @param user - User model instance
  * @param orderData - Order data including purchase details
  * @returns Promise that resolves when event is queued (non-blocking)
@@ -86,7 +92,14 @@ export async function trackPlacedOrder(
  * Track "Refunded Order" event in Klaviyo
  *
  * This ensures revenue metrics correctly subtract refunds from total revenue.
- * The originalOrderId MUST match the original "Placed Order" event's order_id.
+ * The originalOrderId MUST match the original "Placed Order" event's "Order ID".
+ *
+ * CRITICAL: Revenue is calculated ONLY from top-level `$value` property.
+ * Negative $value subtracts from total revenue in Klaviyo.
+ * The event uses Klaviyo's strict schema requirements:
+ * - $value: Negative refund amount (REQUIRED for revenue deduction)
+ * - Currency: ISO currency code (e.g., "AUD")
+ * - Order ID: Must match original "Placed Order" event's "Order ID"
  *
  * @param user - User model instance
  * @param refundData - Refund data including original order ID and refund amount
