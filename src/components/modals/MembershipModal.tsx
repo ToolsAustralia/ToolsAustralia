@@ -172,6 +172,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const [existingAccountConflictField, setExistingAccountConflictField] = useState<"email" | "mobile">("email");
   const [existingAccountEmail, setExistingAccountEmail] = useState<string | undefined>(undefined);
 
+  // Track if package selection modal has been auto-opened from promotion page
+  // This prevents the modal from auto-opening multiple times during the same session
+  const packageSelectionAutoOpenedRef = useRef<boolean>(false);
+
   // Payment confirmation state - now handled directly in handleSubmit
   // Removed showPaymentConfirmation and paymentData states
 
@@ -510,6 +514,42 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       setCurrentStep(1);
     }
   }, [isAuthenticated, userData, isOpen]);
+
+  // Auto-open package selection modal in step 2 when coming from promotion pages
+  // This gives users more package options when they click "Enter Now" from promotion pages
+  useEffect(() => {
+    // Check if we're on a promotion page by checking the pathname
+    // Uses the same regex pattern as handleRegistration (line 941)
+    const isPromotionPage = pathname?.match(/^\/promotions\/([^/?#]+)/);
+
+    // Only auto-open if all conditions are met:
+    // 1. Modal is open
+    // 2. We're in step 2 (payment step)
+    // 3. We're on a promotion page
+    // 4. Package selection modal hasn't been auto-opened yet (prevents duplicate opens)
+    // 5. Package selection modal is not already open
+    if (
+      isOpen &&
+      currentStep === 2 &&
+      isPromotionPage &&
+      !packageSelectionAutoOpenedRef.current &&
+      !isPackageSelectionOpen
+    ) {
+      // Small delay to ensure membership modal is fully rendered before opening package selection
+      const timer = setTimeout(() => {
+        setIsPackageSelectionOpen(true);
+        packageSelectionAutoOpenedRef.current = true;
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+
+    // Reset ref when modal closes so it can auto-open again next time
+    // This ensures the feature works correctly if user closes and reopens the modal
+    if (!isOpen) {
+      packageSelectionAutoOpenedRef.current = false;
+    }
+  }, [isOpen, currentStep, pathname, isPackageSelectionOpen]);
 
   // Handle escape key to close modal
   useEffect(() => {
@@ -3490,6 +3530,39 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     </div>
                   )}
 
+                  {/* Purchase Button - Moved above Selected Package for better UX */}
+                  {!activePlan || activePlan.id === "placeholder" ? (
+                    // Payment Button Skeleton
+                    <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={!isFormValid() || isSubmitting}
+                      variant="metallic"
+                      fullWidth
+                      size="lg"
+                      loading={isSubmitting || createPaymentIntent.isPending || createSetupIntent.isPending}
+                      className="font-bold text-sm sm:text-base"
+                    >
+                      {isSubmitting ? (
+                        "Processing..."
+                      ) : createPaymentIntent.isPending || createSetupIntent.isPending ? (
+                        "Setting up payment..."
+                      ) : isAuthenticated ? (
+                        <>
+                          <span className="sm:hidden">PURCHASE & ENTER</span>
+                          <span className="hidden sm:inline">PURCHASE & ENTER THE DRAW</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="sm:hidden">PURCHASE</span>
+                          <span className="hidden sm:inline">PURCHASE</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
+
                   {/* Selected Package */}
                   <div className="bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl p-2 sm:p-3">
                     {!promoEnhancedPlan || promoEnhancedPlan.id === "placeholder" ? (
@@ -3645,38 +3718,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                       </>
                     )}
                   </div>
-
-                  {!activePlan || activePlan.id === "placeholder" ? (
-                    // Payment Button Skeleton
-                    <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
-                  ) : (
-                    <Button
-                      type="button"
-                      onClick={handleSubmit}
-                      disabled={!isFormValid() || isSubmitting}
-                      variant="metallic"
-                      fullWidth
-                      size="lg"
-                      loading={isSubmitting || createPaymentIntent.isPending || createSetupIntent.isPending}
-                      className="font-bold text-sm sm:text-base"
-                    >
-                      {isSubmitting ? (
-                        "Processing..."
-                      ) : createPaymentIntent.isPending || createSetupIntent.isPending ? (
-                        "Setting up payment..."
-                      ) : isAuthenticated ? (
-                        <>
-                          <span className="sm:hidden">PURCHASE & ENTER</span>
-                          <span className="hidden sm:inline">PURCHASE & ENTER THE DRAW</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="sm:hidden">PURCHASE</span>
-                          <span className="hidden sm:inline">PURCHASE</span>
-                        </>
-                      )}
-                    </Button>
-                  )}
                 </div>
               </div>
             )}
