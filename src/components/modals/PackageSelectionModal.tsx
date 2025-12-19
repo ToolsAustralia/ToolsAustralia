@@ -29,13 +29,21 @@ const getGradientColor = (gradient: string) => {
   return "#6b7280";
 };
 
+// Helper function to convert hex color to rgba for box-shadow
+const hexToRgba = (hex: string, alpha: number) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 // Helper function to get package color scheme
 const getPackageColorScheme = (planId: string) => {
   if (planId.includes("apprentice")) {
     return {
       // Metallic silver/gray to match MembershipSection
       gradient: "from-gray-300 via-slate-400 to-gray-500",
-      glow: "drop-shadow-[0_0_10px_rgba(148,163,184,0.4)]",
+      glow: "drop-shadow-[0_0_12px_rgba(148,163,184,0.52)]",
       text: "text-gray-300",
       border: "border-gray-400/40",
       shadow: "shadow-gray-400/20",
@@ -44,7 +52,7 @@ const getPackageColorScheme = (planId: string) => {
   } else if (planId.includes("tradie")) {
     return {
       gradient: "from-blue-600 via-blue-500 to-cyan-600",
-      glow: "drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]",
+      glow: "drop-shadow-[0_0_12px_rgba(59,130,246,0.65)]",
       text: "text-blue-400",
       border: "border-blue-500/50",
       shadow: "shadow-blue-500/30",
@@ -54,7 +62,7 @@ const getPackageColorScheme = (planId: string) => {
     return {
       // Foreman: Fluro green scheme
       gradient: "from-emerald-400 via-emerald-500 to-green-500",
-      glow: "drop-shadow-[0_0_12px_rgba(16,185,129,0.6)]",
+      glow: "drop-shadow-[0_0_15px_rgba(16,185,129,0.78)]",
       text: "text-emerald-400",
       border: "border-emerald-500/50",
       shadow: "shadow-emerald-500/30",
@@ -63,7 +71,7 @@ const getPackageColorScheme = (planId: string) => {
   } else if (planId.includes("boss")) {
     return {
       gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-      glow: "drop-shadow-[0_0_10px_rgba(251,191,36,0.5)]",
+      glow: "drop-shadow-[0_0_12px_rgba(251,191,36,0.65)]",
       text: "text-yellow-400",
       border: "border-yellow-400/50",
       shadow: "shadow-yellow-400/30",
@@ -72,7 +80,7 @@ const getPackageColorScheme = (planId: string) => {
   } else if (planId.includes("power")) {
     return {
       gradient: "from-orange-600 via-red-500 to-orange-700",
-      glow: "drop-shadow-[0_0_10px_rgba(251,146,60,0.5)]",
+      glow: "drop-shadow-[0_0_12px_rgba(251,146,60,0.65)]",
       text: "text-orange-400",
       border: "border-orange-500/50",
       shadow: "shadow-orange-500/30",
@@ -83,7 +91,7 @@ const getPackageColorScheme = (planId: string) => {
   // Default fallback
   return {
     gradient: "from-slate-600 via-gray-700 to-slate-800",
-    glow: "drop-shadow-[0_0_10px_rgba(100,116,139,0.5)]",
+    glow: "drop-shadow-[0_0_12px_rgba(100,116,139,0.65)]",
     text: "text-gray-400",
     border: "border-gray-500/50",
     shadow: "shadow-gray-500/30",
@@ -627,15 +635,33 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 className={`relative rounded-2xl p-2.5 sm:p-4 shadow-[0_0_15px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-[1.02] ${
                   isCurrentPlan(plan) ? "cursor-not-allowed opacity-75" : "cursor-pointer"
                 } ${
-                  isSelectedPlan(plan) ? "ring-2 ring-yellow-400 shadow-2xl" : "hover:shadow-[0_0_25px_rgba(0,0,0,0.6)]"
+                  isSelectedPlan(plan)
+                    ? "ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-2xl"
+                    : "hover:shadow-[0_0_25px_rgba(0,0,0,0.6)]"
                 }`}
                 style={{
-                  border: `2px solid transparent`,
-                  backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${getGradientColor(
-                    colorScheme.gradient
-                  )}, transparent)`,
+                  border: isSelectedPlan(plan)
+                    ? `3px solid ${getGradientColor(colorScheme.gradient)}`
+                    : `2px solid transparent`,
+                  backgroundImage: isSelectedPlan(plan)
+                    ? `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${hexToRgba(
+                        getGradientColor(colorScheme.gradient),
+                        0.8
+                      )}, ${hexToRgba(getGradientColor(colorScheme.gradient), 0.5)})`
+                    : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${getGradientColor(
+                        colorScheme.gradient
+                      )}, transparent)`,
                   backgroundOrigin: `border-box`,
                   backgroundClip: `padding-box, border-box`,
+                  boxShadow: isSelectedPlan(plan)
+                    ? `0 0 20px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.6)}, 0 0 40px ${hexToRgba(
+                        getGradientColor(colorScheme.gradient),
+                        0.4
+                      )}, 0 0 60px rgba(251, 191, 36, 0.3), 0 0 0 4px rgba(251, 191, 36, 0.2)`
+                    : `0 0 15px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.4)}, 0 0 30px ${hexToRgba(
+                        getGradientColor(colorScheme.gradient),
+                        0.2
+                      )}`,
                 }}
                 onClick={() => !isCurrentPlan(plan) && handlePlanSelect(plan)}
               >
@@ -711,10 +737,18 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                   </div>
                   {plan.subtitle && <p className="text-xs sm:text-sm text-white/80 mb-1.5 sm:mb-2">{plan.subtitle}</p>}
 
-                  {/* Entries and Price - Horizontal Layout */}
+                  {/* Price and Entries - Reordered Layout */}
                   <div className="flex items-center justify-between mb-2 sm:mb-3">
-                    {/* Entries - Main Focus (Left) */}
+                    {/* Price - Left Side (moved from right) */}
                     <div className="flex-1 text-left">
+                      <div className={`text-lg sm:text-xl font-bold text-slate-200`}>${plan.price}</div>
+                      <div className="text-[10px] sm:text-xs text-slate-400">
+                        {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
+                      </div>
+                    </div>
+
+                    {/* Free Entries - Center (moved from left) */}
+                    <div className="flex-1 text-center">
                       {(() => {
                         // Extract entries from features
                         const entriesFeature = plan.features.find(
@@ -734,7 +768,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                           return (
                             <div className={`${colorScheme.text}`}>
                               {isPromoActive ? (
-                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                <div className="flex items-center justify-center gap-1.5 sm:gap-2">
                                   <span className="text-sm sm:text-base font-bold line-through opacity-40 text-slate-400">
                                     {originalEntries}
                                   </span>
@@ -760,13 +794,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                       })()}
                     </div>
 
-                    {/* Price - Secondary (Right) */}
-                    <div className="flex-1 text-right">
-                      <div className={`text-lg sm:text-xl font-bold text-slate-200`}>${plan.price}</div>
-                      <div className="text-[10px] sm:text-xs text-slate-400">
-                        {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
-                      </div>
-                    </div>
+                    {/* Empty space for balance - Right */}
+                    <div className="flex-1"></div>
                   </div>
 
                   {/* Other features as preview (excluding entries) */}

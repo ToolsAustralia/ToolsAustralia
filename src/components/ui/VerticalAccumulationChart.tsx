@@ -90,18 +90,44 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
 
   return (
     <div className="w-full">
+      {/* Chart Title - Outside Chart Container */}
+      <div className="text-center mb-4 sm:mb-6">
+        <h3 className="text-base sm:text-lg lg:text-xl font-bold text-black font-['Poppins']">
+          Entry Accumulation Over Time
+        </h3>
+        <p className="text-xs sm:text-sm text-gray-400 font-['Poppins'] mt-1">
+          See how entries accumulate month by month
+        </p>
+      </div>
+
       {/* Chart Container - Matching modal background */}
       <div
-        className="relative rounded-xl p-3 sm:p-4 border border-slate-700/30 shadow-[0_0_15px_rgba(0,0,0,0.4)]"
+        className="relative rounded-xl p-3 sm:p-4 pt-8 sm:pt-10 border border-slate-700/30 shadow-[0_0_15px_rgba(0,0,0,0.4)]"
         style={{
           background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
         }}
       >
-        {/* space */}
-        <div className="text-center mb-6 sm:mb-8"></div>
+        {/* Month Titles - Inside Chart Container */}
+        <div className="absolute top-2 sm:top-3 left-8 sm:left-10 right-0 flex items-center justify-center gap-4 sm:gap-8 z-20">
+          <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
+            <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
+              1st Month
+            </div>
+          </div>
+          <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
+            <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
+              2nd Month
+            </div>
+          </div>
+          <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
+            <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
+              3rd Month
+            </div>
+          </div>
+        </div>
 
         {/* Chart Area */}
-        <div className="relative h-[200px] sm:h-[250px] lg:h-[300px]">
+        <div className="relative h-[200px] sm:h-[250px] lg:h-[300px] mt-2 sm:mt-3">
           {/* Y-Axis Labels */}
           <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[8px] sm:text-[10px] text-gray-500 font-['Poppins'] pr-2 z-10">
             <span>{maxValue.toLocaleString()}</span>
@@ -118,9 +144,6 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
           <div className="absolute left-8 sm:left-10 right-0 bottom-0 flex items-end justify-center gap-4 sm:gap-8 h-full">
             {/* 1st Month Column */}
             <div className="flex-1 flex flex-col items-center max-w-[80px] sm:max-w-[100px] h-full relative">
-              <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] mb-2 absolute -top-8 sm:-top-9 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                1st Month
-              </div>
               <div className="flex items-end justify-center gap-1 sm:gap-1.5 w-full h-full">
                 {packageData.map((pkg) => {
                   const barHeight = (pkg.month1 / maxValue) * 100;
@@ -149,9 +172,6 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
 
             {/* 2nd Month Column */}
             <div className="flex-1 flex flex-col items-center max-w-[80px] sm:max-w-[100px] h-full relative">
-              <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] mb-2 absolute -top-8 sm:-top-9 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                2nd Month
-              </div>
               <div className="flex items-end justify-center gap-1 sm:gap-1.5 w-full h-full">
                 {packageData.map((pkg) => {
                   const barHeight = (pkg.month2 / maxValue) * 100;
@@ -180,9 +200,6 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
 
             {/* 3rd Month Column */}
             <div className="flex-1 flex flex-col items-center max-w-[80px] sm:max-w-[100px] h-full relative">
-              <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] mb-2 absolute -top-8 sm:-top-9 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                3rd Month
-              </div>
               <div className="flex items-end justify-center gap-1 sm:gap-1.5 w-full h-full">
                 {packageData.map((pkg) => {
                   const barHeight = (pkg.month3 / maxValue) * 100;
