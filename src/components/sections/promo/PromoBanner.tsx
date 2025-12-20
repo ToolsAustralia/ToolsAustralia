@@ -279,7 +279,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
                       }}
                     >
-                      FIRST 500 PEOPLE
+                      LIMITED OFFER
                     </span>
                   </div>
                 </div>
