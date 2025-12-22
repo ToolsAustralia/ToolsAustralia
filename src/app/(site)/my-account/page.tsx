@@ -23,7 +23,7 @@ import ReferFriendModal from "@/components/modals/ReferFriendModal";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
-import { Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft } from "lucide-react";
+import { Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Hourglass } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
@@ -147,6 +147,9 @@ export default function MyAccountPage() {
   // State for accumulation tooltip
   const [showAccumulationTooltip, setShowAccumulationTooltip] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  // State for pending entries tooltip
+  const [showPendingTooltip, setShowPendingTooltip] = useState(false);
+  const [pendingTooltipPosition, setPendingTooltipPosition] = useState<{ top: number; left: number } | null>(null);
 
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -428,11 +431,21 @@ export default function MyAccountPage() {
 
   const hasMembershipWithMiniDraws = checkMembershipIncludesMiniDraws();
 
+  // Calculate draw status and timing information (needed early for displayMembershipEntries)
+  const isCompleted = currentMajorDraw?.status === "completed";
+  const isFrozen = currentMajorDraw?.status === "frozen";
+  const isActive = currentMajorDraw?.status === "active";
+  const isQueued = currentMajorDraw?.status === "queued";
+  const isGapState = isCompleted || isQueued;
+
   // Use lastMonthAccumulatedEntries for accuracy (shows user's actual accumulated entries)
   // Fallback to majorDrawStats if lastMonthAccumulatedEntries is not available
   const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-  const displayMembershipEntries =
-    userSubscription?.lastMonthAccumulatedEntries ?? majorDrawStats?.membershipEntries ?? 0;
+  // During gap state (queued draw), don't show membership entries from previous draw
+  // Only show pending entries that will be added to the next draw
+  const displayMembershipEntries = isGapState
+    ? 0
+    : userSubscription?.lastMonthAccumulatedEntries ?? majorDrawStats?.membershipEntries ?? 0;
   const displayOneTimeEntries = majorDrawStats?.oneTimeEntries || 0;
   const displayTotalEntries = majorDrawStats?.currentDrawEntries || 0;
 
@@ -464,14 +477,35 @@ export default function MyAccountPage() {
 
   const projectionData = getProjectionData();
 
-  // Calculate draw status and timing information
-  const isCompleted = currentMajorDraw?.status === "completed";
-  const isFrozen = currentMajorDraw?.status === "frozen";
-  const isActive = currentMajorDraw?.status === "active";
-  const isQueued = currentMajorDraw?.status === "queued";
-
   // Check if current user is the winner
   const isWinner = currentMajorDraw?.winner?.userId?.toString() === session?.user?.id;
+
+  // Calculate pending entries for gap state (entries that will be added to next draw)
+  const getPendingEntries = () => {
+    if (!isGapState || !hasActiveMembership || !membershipPackage || !userSubscription) {
+      return null;
+    }
+
+    // Only show for subscription packages
+    if (membershipPackage.type !== "subscription" || !("entriesPerMonth" in membershipPackage)) {
+      return null;
+    }
+
+    const baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
+    const lastAccumulated = userSubscription.lastMonthAccumulatedEntries ?? baseEntries;
+
+    // Calculate expected entries for next renewal
+    // This is what will be added when the next draw becomes active
+    const expectedEntries = lastAccumulated + baseEntries;
+
+    return {
+      expectedEntries,
+      baseEntries,
+      lastAccumulated,
+    };
+  };
+
+  const pendingEntriesData = getPendingEntries();
 
   // Debug logging for entry calculation
   // console.log("📊 My Account - Entry Display Logic:", {
@@ -650,9 +684,15 @@ export default function MyAccountPage() {
                             ) : (
                               <button
                                 onClick={() => window.open("https://www.facebook.com/toolsaust", "_blank")}
-                                className="text-blue-400 font-bold text-xs sm:text-sm hover:text-blue-300 transition-colors cursor-pointer"
+                                className="flex items-center gap-1.5 text-white font-bold text-xs sm:text-sm hover:text-white/80 transition-colors cursor-pointer"
                               >
-                                Live Now
+                                <div className="relative">
+                                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                  <div className="absolute inset-0 w-2 h-2 bg-green-500 rounded-full animate-ping opacity-75"></div>
+                                </div>
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                                </svg>
                               </button>
                             )}
                           </div>
@@ -683,6 +723,35 @@ export default function MyAccountPage() {
                           nextMonth={projectionData.nextMonth}
                           month3={projectionData.month3}
                         />
+                      )}
+                      {/* Pending Entries Tooltip - Positioned relative to stats grid */}
+                      {showPendingTooltip && pendingTooltipPosition && pendingEntriesData && (
+                        <div
+                          className="absolute px-3 py-2 sm:px-4 sm:py-3 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white text-[11px] sm:text-sm rounded-xl shadow-2xl border border-slate-500/50 pointer-events-none w-[180px] sm:w-auto sm:min-w-[220px] backdrop-blur-sm"
+                          style={{
+                            zIndex: 10000,
+                            left: `${pendingTooltipPosition.left}px`,
+                            top: `${pendingTooltipPosition.top}px`,
+                            transform: "translateY(-50%)",
+                          }}
+                        >
+                          <div className="font-bold mb-2 sm:mb-3 text-[12px] sm:text-base bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                            Pending Entries
+                          </div>
+                          <div className="space-y-2 sm:space-y-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-gray-300 text-[10px] sm:text-xs font-medium">Expected</span>
+                              <span className="text-white font-bold text-[11px] sm:text-sm tabular-nums">
+                                {pendingEntriesData.expectedEntries.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-2 sm:mt-2.5 pt-2 sm:pt-2.5 border-t border-slate-700/50">
+                            <div className="text-gray-300 text-[10px] sm:text-xs">
+                              Will be automatically added to the draw once your subscription is renewed
+                            </div>
+                          </div>
+                        </div>
                       )}
 
                       {/* Membership Entries */}
@@ -718,8 +787,32 @@ export default function MyAccountPage() {
                               Membership
                             </span>
                           </div>
-                          <div className="text-xl font-bold text-white mb-1 drop-shadow-lg">
-                            {displayMembershipEntries}
+                          <div className="flex items-center justify-center gap-1.5 mb-1">
+                            <div className="text-xl font-bold text-white drop-shadow-lg">
+                              {displayMembershipEntries}
+                            </div>
+                            {/* Pending icon indicator during gap state */}
+                            {pendingEntriesData && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const statsGrid = e.currentTarget.closest(".grid.grid-cols-2") as HTMLElement;
+                                  if (statsGrid) {
+                                    const gridRect = statsGrid.getBoundingClientRect();
+                                    setPendingTooltipPosition({
+                                      top: rect.top - gridRect.top + rect.height / 2,
+                                      left: rect.right - gridRect.left + 8,
+                                    });
+                                    setShowPendingTooltip(true);
+                                  }
+                                }}
+                                className="flex items-center justify-center w-4 h-4 text-blue-300 hover:text-blue-200 transition-colors cursor-help relative z-20"
+                                aria-label="Pending entries info"
+                              >
+                                <Hourglass className="w-4 h-4 animate-hourglass-flip" />
+                              </button>
+                            )}
                           </div>
                           {membershipPackage && (
                             <div className="flex flex-col gap-1 items-center">
@@ -1163,6 +1256,10 @@ export default function MyAccountPage() {
       {/* Click outside to close accumulation tooltip */}
       {showAccumulationTooltip && (
         <div className="fixed inset-0 z-[9998]" onClick={() => setShowAccumulationTooltip(false)} />
+      )}
+      {/* Click outside to close pending tooltip */}
+      {showPendingTooltip && (
+        <div className="fixed inset-0 z-[9998]" onClick={() => setShowPendingTooltip(false)} />
       )}
     </div>
   );

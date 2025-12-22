@@ -29,6 +29,31 @@ interface MajorDrawSectionProps {
   className?: string;
 }
 
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+const getOrdinalSuffix = (day: number): string => {
+  if (day > 3 && day < 21) return "th";
+  switch (day % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+};
+
+// Helper function to format time without AM/PM suffix (e.g., "5:30pm")
+const formatTimeWithoutPeriod = (date: Date): string => {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const hour12 = hours % 12 || 12;
+  const period = hours >= 12 ? "pm" : "am";
+  const minutesStr = minutes.toString().padStart(2, "0");
+  return `${hour12}:${minutesStr}${period}`;
+};
+
 export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
   const searchParams = useSearchParams();
   const [timeLeft, setTimeLeft] = useState({
@@ -44,6 +69,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const [desktopThumbsSwiper, setDesktopThumbsSwiper] = useState<SwiperType | null>(null);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [selectedPrizeSlug, setSelectedPrizeSlug] = useState<string | null>(null);
+  const [nextDrawName, setNextDrawName] = useState<string | null>(null);
   const { userData: user } = useUserContext();
   const { membershipModal, openEntryFlow, getHeavyDutyPack, oneTimePackages } = useMajorDrawEntryCta();
   // The shared CTA hook keeps modal behaviour consistent with Promo pages.
@@ -60,6 +86,28 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       setSelectedPrizeSlug(activeSlug ?? defaultSlug);
     }
   }, [activeSlug, defaultSlug, selectedPrizeSlug]);
+
+  // Fetch next draw name when current draw is frozen or completed (gap state)
+  useEffect(() => {
+    if (currentMajorDraw?.status === "frozen" || currentMajorDraw?.status === "completed") {
+      const fetchNextDrawName = async () => {
+        try {
+          const response = await fetch("/api/major-draw/next");
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.nextDraw?.name) {
+              setNextDrawName(data.nextDraw.name);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching next draw name:", error);
+        }
+      };
+      fetchNextDrawName();
+    } else {
+      setNextDrawName(null);
+    }
+  }, [currentMajorDraw?.status]);
 
   // Debug: Track data changes
   // console.log("🔍 MajorDrawSection: currentMajorDraw data:", currentMajorDraw);
@@ -405,15 +453,26 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     </div>
   );
 
-  // Check if draw is completed
+  // Check if draw is completed or queued (gap state)
   const isCompleted = majorDraw?.status === "completed";
+  const isQueued = majorDraw?.status === "queued";
+  const isGapState = isCompleted || isQueued;
   const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
   const msUntilDraw = drawDateObj ? drawDateObj.getTime() - Date.now() : null;
   const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;
   const shouldShowCountdown =
     !isCompleted && msUntilDraw !== null && msUntilDraw > 0 && daysUntilDraw !== null && daysUntilDraw <= 3;
+  
+  // Format draw date with time in one line: "Tuesday, 27th January 5:30pm"
   const drawDateLabel = drawDateObj
-    ? drawDateObj.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
+    ? (() => {
+        const weekday = drawDateObj.toLocaleDateString("en-AU", { weekday: "long" });
+        const day = drawDateObj.getDate();
+        const month = drawDateObj.toLocaleDateString("en-AU", { month: "long" });
+        const time = formatTimeWithoutPeriod(drawDateObj);
+        const ordinal = getOrdinalSuffix(day);
+        return `${weekday}, ${day}${ordinal} ${month} ${time}`;
+      })()
     : "Draw date TBA";
 
   return (
@@ -594,7 +653,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               <div
                 className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 ${
                   currentMajorDraw?.status === "frozen"
-                    ? "bg-gradient-to-br from-gray-600 to-gray-700"
+                    ? "bg-gradient-to-br from-gray-900 via-gray-800 to-black"
                     : "bg-gradient-to-br from-red-600 to-red-700"
                 }`}
               >
@@ -602,9 +661,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 {currentMajorDraw?.status === "frozen" && (
                   <div className="mb-3 text-center">
                     <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
-                      <div className="text-white font-semibold text-xs sm:text-sm">⏰ Entry Period Closed</div>
+                      <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
+                        Entry Period Closed
+                      </div>
                       <div className="text-white/80 text-[10px] sm:text-xs mt-1">
-                        No new entries accepted for this draw
+                        {nextDrawName
+                          ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
+                          : "No new entries accepted for this draw. Entries will go to the next draw."}
                       </div>
                     </div>
                   </div>
@@ -643,12 +706,22 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     href="https://www.facebook.com/toolsaust"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] font-medium transition-colors"
+                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] font-medium transition-colors underline"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                     </svg>
-                    Follow for live draw updates
+                    {isGapState ? (
+                      <>
+                        <div className="relative">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                        </div>
+                        Watch ongoing draw
+                      </>
+                    ) : (
+                      "Follow for live draw updates"
+                    )}
                   </a>
                 </div>
               </div>
@@ -661,12 +734,22 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     href="https://www.facebook.com/toolsaust"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors"
+                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors underline"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                     </svg>
-                    Follow for live draw updates
+                    {isGapState ? (
+                      <>
+                        <div className="relative">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                        </div>
+                        Watch ongoing draw
+                      </>
+                    ) : (
+                      "Follow for live draw updates"
+                    )}
                   </a>
                 </div>
               </div>
@@ -674,19 +757,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
             {/* Mobile: Draw Ended Section */}
             {isCompleted && (
-              <div className="bg-gradient-to-br from-gray-600 to-gray-700 rounded-3xl p-6 shadow-2xl border-2 border-white/20">
-                <div className="text-center space-y-4">
-                  <div className="flex items-center justify-center">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
-                      <div className="text-[24px] font-bold text-white">Draw Ended</div>
-                      <div className="text-[12px] text-white/80 font-medium">Live Stream Available</div>
-                    </div>
-                  </div>
+              <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border-2 border-white/20">
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20 space-y-4">
+                  <div className="text-[24px] font-bold text-white uppercase tracking-wide">Draw Ended</div>
                   <a
                     href="https://www.facebook.com/toolsaust"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-[14px] transition-all duration-200 shadow-lg hover:shadow-xl"
+                    className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-[14px] transition-all duration-200 shadow-lg hover:shadow-xl w-full"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -948,10 +1026,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     <div className="mb-3 text-center">
                       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
                         <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
-                          ⏰ Entry Period Closed
+                          Entry Period Closed
                         </div>
                         <div className="text-white/80 text-[10px] sm:text-xs mt-1">
-                          No new entries accepted for this draw
+                          {nextDrawName
+                            ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
+                            : "No new entries accepted for this draw. Entries will go to the next draw."}
                         </div>
                       </div>
                     </div>
@@ -981,12 +1061,22 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       href="https://www.facebook.com/toolsaust"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-white/90 hover:text-white text-sm font-medium transition-colors"
+                      className="inline-flex items-center gap-2 text-white/90 hover:text-white text-sm font-medium transition-colors underline"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                       </svg>
-                      Follow for live draw updates
+                      {isGapState ? (
+                        <>
+                          <div className="relative">
+                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                            <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                          </div>
+                          Watch ongoing draw
+                        </>
+                      ) : (
+                        "Follow for live draw updates"
+                      )}
                     </a>
                   </div>
                 </div>
@@ -999,29 +1089,34 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       href="https://www.facebook.com/toolsaust"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-white/90 hover:text-white text-sm font-medium transition-colors"
+                      className="inline-flex items-center gap-2 text-white/90 hover:text-white text-sm font-medium transition-colors underline"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                       </svg>
-                      Follow for live draw updates
+                      {isGapState ? (
+                        <>
+                          <div className="relative">
+                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                            <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                          </div>
+                          Watch ongoing draw
+                        </>
+                      ) : (
+                        "Follow for live draw updates"
+                      )}
                     </a>
                   </div>
                 </div>
               ) : (
-                <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10">
-                  <div className="text-center space-y-4">
-                    <div className="flex items-center justify-center">
-                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/20">
-                        <div className="text-3xl font-bold text-white uppercase tracking-wide">Draw Ended</div>
-                        <div className="text-sm text-white/80 font-medium mt-1">Live Stream Available</div>
-                      </div>
-                    </div>
+                <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/20 space-y-4">
+                    <div className="text-3xl font-bold text-white uppercase tracking-wide">Draw Ended</div>
                     <a
                       href="https://www.facebook.com/toolsaust"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl"
+                      className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl w-full"
                     >
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />

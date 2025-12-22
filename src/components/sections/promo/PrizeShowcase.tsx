@@ -118,6 +118,31 @@ const getFormattedLabel = (label: string) => {
   };
 };
 
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+const getOrdinalSuffix = (day: number): string => {
+  if (day > 3 && day < 21) return "th";
+  switch (day % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+};
+
+// Helper function to format time without AM/PM suffix (e.g., "5:30pm")
+const formatTimeWithoutPeriod = (date: Date): string => {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const hour12 = hours % 12 || 12;
+  const period = hours >= 12 ? "pm" : "am";
+  const minutesStr = minutes.toString().padStart(2, "0");
+  return `${hour12}:${minutesStr}${period}`;
+};
+
 export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const prizeRef = useScrollAnimation();
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
@@ -130,6 +155,11 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   const router = useRouter();
   const searchParams = useSearchParams();
+  
+  // Check if draw is completed or queued (gap state)
+  const isCompleted = currentMajorDraw?.status === "completed";
+  const isQueued = currentMajorDraw?.status === "queued";
+  const isGapState = isCompleted || isQueued;
 
   // Set mounted state after component mounts to prevent hydration mismatch
   useEffect(() => {
@@ -140,7 +170,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   useEffect(() => {
     if (currentMajorDraw?.drawDate) {
       const drawDateObj = new Date(currentMajorDraw.drawDate);
-      const formatted = drawDateObj.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+      const weekday = drawDateObj.toLocaleDateString("en-AU", { weekday: "long" });
+      const day = drawDateObj.getDate();
+      const month = drawDateObj.toLocaleDateString("en-AU", { month: "long" });
+      const time = formatTimeWithoutPeriod(drawDateObj);
+      const ordinal = getOrdinalSuffix(day);
+      const formatted = `${weekday}, ${day}${ordinal} ${month} ${time}`;
       setDrawDateLabel(formatted);
     } else {
       setDrawDateLabel("Draw date TBA");
@@ -420,12 +455,22 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     href="https://www.facebook.com/toolsaust"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors"
+                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors underline"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                     </svg>
-                    Follow for live draw updates
+                    {isGapState ? (
+                      <>
+                        <div className="relative">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                        </div>
+                        Watch ongoing draw
+                      </>
+                    ) : (
+                      "Follow for live draw updates"
+                    )}
                   </a>
                 </div>
               </div>
@@ -438,12 +483,22 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     href="https://www.facebook.com/toolsaust"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors"
+                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors underline"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                     </svg>
-                    Follow for live draw updates
+                    {isGapState ? (
+                      <>
+                        <div className="relative">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                        </div>
+                        Watch ongoing draw
+                      </>
+                    ) : (
+                      "Follow for live draw updates"
+                    )}
                   </a>
                 </div>
               </div>

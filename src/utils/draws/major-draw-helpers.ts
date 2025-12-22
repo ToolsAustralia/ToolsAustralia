@@ -122,29 +122,31 @@ export async function getCurrentMajorDrawForDisplay(
     activationDate: { $lte: now }, // Only show if activation time has passed
   }).sort({ activationDate: -1 });
 
-  // Step 2: If no active/frozen draw found, try to find the latest completed draw
-  // This handles the gap period between completed and next active draw
+  // Step 2: If no active/frozen draw found, check for queued draw first (gap state priority)
+  // During gap state, prioritize showing the next queued draw instead of completed draw
+  if (!draw && includeQueuedDuringGap) {
+    // console.log("🔍 No active/frozen draw found, checking for queued draw...");
+    const queuedDraw = await MajorDraw.findOne({
+      status: "queued",
+      activationDate: { $gt: now }, // Future activation
+    }).sort({ activationDate: 1 }); // Next queued draw
+
+    if (queuedDraw) {
+      // console.log(`✅ Found queued draw for display during gap: ${queuedDraw.name}`);
+      return queuedDraw;
+    }
+  }
+
+  // Step 3: If no queued draw found, try to find the latest completed draw
+  // This handles the gap period when no queued draw exists yet
   if (!draw) {
-    // console.log("🔍 No active/frozen draw found, checking for latest completed draw...");
+    // console.log("🔍 No queued draw found, checking for latest completed draw...");
     draw = await MajorDraw.findOne({
       status: "completed",
     }).sort({ drawDate: -1 }); // Most recent completed draw
 
     if (draw) {
       // console.log(`✅ Found completed draw for display: ${draw.name}`);
-    }
-  }
-
-  // Step 3: If still no draw and we should show queued during gap
-  if (!draw && includeQueuedDuringGap) {
-    // console.log("🔍 No completed draw found, checking for queued draw...");
-    draw = await MajorDraw.findOne({
-      status: "queued",
-      activationDate: { $gt: now }, // Future activation
-    }).sort({ activationDate: 1 }); // Next queued draw
-
-    if (draw) {
-      // console.log(`✅ Found queued draw for display: ${draw.name}`);
     }
   }
 

@@ -1127,6 +1127,24 @@
   animation: pulse-button 2s ease-in-out infinite;
 }
 
+/* Hourglass flip animation - rotates 180 degrees in one direction with pause */
+@keyframes hourglass-flip {
+  0% {
+    transform: rotate(0deg);
+  }
+  12.5% {
+    transform: rotate(180deg);
+  }
+  12.51%,
+  100% {
+    transform: rotate(180deg);
+  }
+}
+
+.animate-hourglass-flip {
+  animation: hourglass-flip 4s ease-in-out infinite;
+}
+
 /* NProgress Styles - Customized for Tools Australia brand */
 #nprogress {
   pointer-events: none;

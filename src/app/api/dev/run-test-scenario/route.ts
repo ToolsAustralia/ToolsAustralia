@@ -9,7 +9,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import MajorDraw from "@/models/MajorDraw";
+import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
+import { getNextQueuedDraw } from "@/utils/draws/major-draw-helpers";
 
 export async function POST(request: NextRequest) {
   // Only allow in development
@@ -29,110 +30,157 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
 
-    // Get draws
-    const octoberDraw = await MajorDraw.findOne({ name: /October/ });
-    const novemberDraw = await MajorDraw.findOne({ name: /November/ });
+    // Find current draw (active, frozen, or latest completed)
+    let currentDraw = await MajorDraw.findOne({
+      status: { $in: ["active", "frozen"] },
+    }).sort({ activationDate: -1 });
 
-    if (!octoberDraw || !novemberDraw) {
-      return NextResponse.json({ error: "Test draws not found. Please seed the database first." }, { status: 404 });
+    // If no active/frozen, get the latest completed draw
+    if (!currentDraw) {
+      currentDraw = await MajorDraw.findOne({
+        status: "completed",
+      }).sort({ drawDate: -1 });
     }
 
-    let octoberDrawEnd: Date;
-    let octoberFreeze: Date;
-    let octoberStatus: "active" | "frozen" | "completed";
-    let octoberIsActive: boolean;
-    let octoberConfigLocked: boolean;
-    let octoberLockedAt: Date | undefined;
+    // Find next draw (queued or any draw after current)
+    let nextDraw: IMajorDraw | null = await getNextQueuedDraw();
 
-    let novemberActivation: Date;
-    let novemberStatus: "queued" | "active";
-    let novemberIsActive: boolean;
+    // If no queued draw, try to find any draw that comes after the current one
+    if (!nextDraw && currentDraw) {
+      nextDraw = await MajorDraw.findOne({
+        _id: { $ne: currentDraw._id },
+        drawDate: { $gt: currentDraw.drawDate },
+      }).sort({ drawDate: 1 });
+    }
+
+    // If still no next draw, use any available draw as fallback
+    if (!nextDraw) {
+      nextDraw = await MajorDraw.findOne({
+        _id: currentDraw ? { $ne: currentDraw._id } : {},
+      }).sort({ drawDate: 1 });
+    }
+
+    // Validation: Ensure we have two different draws
+    if (!currentDraw || !nextDraw) {
+      return NextResponse.json(
+        {
+          error: "Need at least 2 draws in database. Please create 2 major draws first.",
+          hint: "The system will use the current draw and the next consecutive draw automatically.",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Type assertion: After null check, nextDraw is guaranteed to be IMajorDraw
+    const nextDrawTyped = nextDraw as IMajorDraw;
+
+    // Ensure current and next are different draws
+    // Cast _id to handle TypeScript's unknown type from Document interface
+    const currentDrawId = String(currentDraw._id);
+    const nextDrawId = String((nextDrawTyped._id as unknown as { toString(): string }));
+    if (currentDrawId === nextDrawId) {
+      return NextResponse.json(
+        {
+          error: "Need 2 different draws. Please create another major draw.",
+        },
+        { status: 404 }
+      );
+    }
+
+    let currentDrawEnd: Date;
+    let currentFreeze: Date;
+    let currentStatus: "active" | "frozen" | "completed";
+    let currentIsActive: boolean;
+    let currentConfigLocked: boolean;
+    let currentLockedAt: Date | undefined;
+
+    let nextActivation: Date;
+    let nextStatus: "queued" | "active";
+    let nextIsActive: boolean;
 
     // Configure based on scenario
     switch (scenario) {
       case 1:
         // TEST 1: Draw ending in 60 minutes (Active)
-        octoberDrawEnd = new Date(now.getTime() + 60 * 60 * 1000); // +60 mins
-        octoberFreeze = new Date(now.getTime() + 30 * 60 * 1000); // +30 mins
-        octoberStatus = "active";
-        octoberIsActive = true;
-        octoberConfigLocked = false;
-        octoberLockedAt = undefined;
+        currentDrawEnd = new Date(now.getTime() + 60 * 60 * 1000); // +60 mins
+        currentFreeze = new Date(now.getTime() + 30 * 60 * 1000); // +30 mins
+        currentStatus = "active";
+        currentIsActive = true;
+        currentConfigLocked = false;
+        currentLockedAt = undefined;
 
-        novemberActivation = new Date(octoberDrawEnd.getTime() + 4 * 60 * 60 * 1000); // +4 hours
-        novemberStatus = "queued";
-        novemberIsActive = false;
+        nextActivation = new Date(currentDrawEnd.getTime() + 4 * 60 * 60 * 1000); // +4 hours
+        nextStatus = "queued";
+        nextIsActive = false;
         break;
 
       case 2:
         // TEST 2: Draw ending in 30 minutes (Frozen)
-        octoberDrawEnd = new Date(now.getTime() + 30 * 60 * 1000); // +30 mins
-        octoberFreeze = new Date(now.getTime() - 1 * 60 * 1000); // -1 min (already frozen)
-        octoberStatus = "frozen";
-        octoberIsActive = false;
-        octoberConfigLocked = true;
-        octoberLockedAt = octoberFreeze;
+        currentDrawEnd = new Date(now.getTime() + 30 * 60 * 1000); // +30 mins
+        currentFreeze = new Date(now.getTime() - 1 * 60 * 1000); // -1 min (already frozen)
+        currentStatus = "frozen";
+        currentIsActive = false;
+        currentConfigLocked = true;
+        currentLockedAt = currentFreeze;
 
-        novemberActivation = new Date(octoberDrawEnd.getTime() + 4 * 60 * 60 * 1000); // +4 hours
-        novemberStatus = "queued";
-        novemberIsActive = false;
+        nextActivation = new Date(currentDrawEnd.getTime() + 4 * 60 * 60 * 1000); // +4 hours
+        nextStatus = "queued";
+        nextIsActive = false;
         break;
 
       case 3:
         // TEST 3: Draw just ended (Gap Period)
-        octoberDrawEnd = new Date(now.getTime()); // Ended NOW
-        octoberFreeze = new Date(now.getTime() - 30 * 60 * 1000); // -30 mins
-        octoberStatus = "completed";
-        octoberIsActive = false;
-        octoberConfigLocked = true;
-        octoberLockedAt = octoberFreeze;
+        currentDrawEnd = new Date(now.getTime()); // Ended NOW
+        currentFreeze = new Date(now.getTime() - 30 * 60 * 1000); // -30 mins
+        currentStatus = "completed";
+        currentIsActive = false;
+        currentConfigLocked = true;
+        currentLockedAt = currentFreeze;
 
-        novemberActivation = new Date(now.getTime() + 4 * 60 * 60 * 1000); // +4 hours from now
-        novemberStatus = "queued";
-        novemberIsActive = false;
+        nextActivation = new Date(now.getTime() + 4 * 60 * 60 * 1000); // +4 hours from now
+        nextStatus = "queued";
+        nextIsActive = false;
         break;
 
       case 4:
         // TEST 4: Next draw active (Post-Gap)
-        octoberDrawEnd = new Date(now.getTime() - 5 * 60 * 60 * 1000); // -5 hours (ended 5 hours ago)
-        octoberFreeze = new Date(octoberDrawEnd.getTime() - 30 * 60 * 1000); // -30 mins before end
-        octoberStatus = "completed";
-        octoberIsActive = false;
-        octoberConfigLocked = true;
-        octoberLockedAt = octoberFreeze;
+        currentDrawEnd = new Date(now.getTime() - 5 * 60 * 60 * 1000); // -5 hours (ended 5 hours ago)
+        currentFreeze = new Date(currentDrawEnd.getTime() - 30 * 60 * 1000); // -30 mins before end
+        currentStatus = "completed";
+        currentIsActive = false;
+        currentConfigLocked = true;
+        currentLockedAt = currentFreeze;
 
-        novemberActivation = new Date(octoberDrawEnd.getTime() + 4 * 60 * 60 * 1000); // +4 hours from October end (1 hour ago)
-        novemberStatus = "active";
-        novemberIsActive = true;
+        nextActivation = new Date(currentDrawEnd.getTime() + 4 * 60 * 60 * 1000); // +4 hours from current end (1 hour ago)
+        nextStatus = "active";
+        nextIsActive = true;
         break;
 
       default:
         return NextResponse.json({ error: "Invalid scenario" }, { status: 400 });
     }
 
-    // Update October Draw
-    octoberDraw.status = octoberStatus;
-    octoberDraw.isActive = octoberIsActive;
-    octoberDraw.drawDate = octoberDrawEnd;
-    octoberDraw.freezeEntriesAt = octoberFreeze;
-    octoberDraw.configurationLocked = octoberConfigLocked;
-    octoberDraw.lockedAt = octoberLockedAt;
-    await octoberDraw.save();
+    // Update Current Draw
+    currentDraw.status = currentStatus;
+    currentDraw.isActive = currentIsActive;
+    currentDraw.drawDate = currentDrawEnd;
+    currentDraw.freezeEntriesAt = currentFreeze;
+    currentDraw.configurationLocked = currentConfigLocked;
+    currentDraw.lockedAt = currentLockedAt;
+    await currentDraw.save();
 
-    // Update November Draw
-    const novemberDrawEnd = new Date(novemberActivation.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
-    const novemberFreeze = new Date(novemberDrawEnd.getTime() - 30 * 60 * 1000); // -30 minutes
+    // Update Next Draw
+    const nextDrawEnd = new Date(nextActivation.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
+    const nextFreeze = new Date(nextDrawEnd.getTime() - 30 * 60 * 1000); // -30 minutes
 
-    novemberDraw.status = novemberStatus;
-    novemberDraw.isActive = novemberIsActive;
-    novemberDraw.activationDate = novemberActivation;
-    novemberDraw.drawDate = novemberDrawEnd;
-    novemberDraw.startDate = novemberActivation;
-    novemberDraw.endDate = novemberDrawEnd;
-    novemberDraw.freezeEntriesAt = novemberFreeze;
-    novemberDraw.configurationLocked = false;
-    novemberDraw.lockedAt = undefined;
-    await novemberDraw.save();
+    nextDrawTyped.status = nextStatus;
+    nextDrawTyped.isActive = nextIsActive;
+    nextDrawTyped.activationDate = nextActivation;
+    nextDrawTyped.drawDate = nextDrawEnd;
+    nextDrawTyped.freezeEntriesAt = nextFreeze;
+    nextDrawTyped.configurationLocked = false;
+    nextDrawTyped.lockedAt = undefined;
+    await nextDrawTyped.save();
 
     // Build response message
     const scenarioDescriptions = [
@@ -148,17 +196,19 @@ export async function POST(request: NextRequest) {
       message: `Test scenario ${scenario} loaded successfully`,
       scenario: scenarioDescriptions[scenario],
       draws: {
-        october: {
-          status: octoberStatus,
-          isActive: octoberIsActive,
-          drawDate: octoberDrawEnd,
-          freezeEntriesAt: octoberFreeze,
+        current: {
+          name: currentDraw.name,
+          status: currentStatus,
+          isActive: currentIsActive,
+          drawDate: currentDrawEnd,
+          freezeEntriesAt: currentFreeze,
         },
-        november: {
-          status: novemberStatus,
-          isActive: novemberIsActive,
-          activationDate: novemberActivation,
-          drawDate: novemberDrawEnd,
+        next: {
+          name: nextDrawTyped.name,
+          status: nextStatus,
+          isActive: nextIsActive,
+          activationDate: nextActivation,
+          drawDate: nextDrawEnd,
         },
       },
     });
