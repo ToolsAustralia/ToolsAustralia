@@ -28,12 +28,8 @@ export default function MajorDrawTestControls() {
   const [scenarioHistory, setScenarioHistory] = useState<Array<{ scenario: number; drawPair: DrawPair }>>([]);
   const [currentDrawPair, setCurrentDrawPair] = useState<DrawPair | null>(null);
 
-  // Only show in development
-  if (process.env.NODE_ENV !== "development") {
-    return null;
-  }
-
   // Load current scenario and draw pair from localStorage on mount
+  // NOTE: Hooks must be called before any conditional returns
   useEffect(() => {
     const savedScenario = localStorage.getItem("dev-current-scenario");
     const savedDrawPair = localStorage.getItem("dev-current-draw-pair");
@@ -146,6 +142,11 @@ export default function MajorDrawTestControls() {
     // Reset to Test 1 with stored draws if available, otherwise auto-detect
     runTestScenario(1, currentDrawPair !== null);
   };
+
+  // Only show in development (check after all hooks are called)
+  if (process.env.NODE_ENV !== "development") {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999]">
