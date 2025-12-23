@@ -8,7 +8,6 @@ import { recordReferralPurchase } from "@/lib/referral";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import Stripe from "stripe";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import Promo from "@/models/Promo";
@@ -373,6 +372,16 @@ export async function POST(request: NextRequest) {
         packageType: packageTypeValue, // ✅ Also set 'packageType' for consistency
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(),
+        // ✅ ADD: Include user data for account creation in webhook (for new users)
+        ...(!registeredUser && {
+          firstName: validatedData.firstName,
+          lastName: validatedData.lastName,
+          mobile: validatedData.mobile || "",
+          isNewUser: "true", // Flag to indicate this is a new user
+          ...(validatedData.password && { password: validatedData.password }), // Only if provided
+        }),
+        // ✅ ADD: Store payment method ID for webhook to save after payment succeeds
+        paymentMethodId: finalPaymentMethodId,
         ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
@@ -450,6 +459,16 @@ export async function POST(request: NextRequest) {
           packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
           entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
           price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
+          // ✅ ADD: Include user data for account creation in webhook (for new users)
+          ...(!registeredUser && {
+            firstName: validatedData.firstName,
+            lastName: validatedData.lastName,
+            mobile: validatedData.mobile || "",
+            isNewUser: "true", // Flag to indicate this is a new user
+            ...(validatedData.password && { password: validatedData.password }), // Only if provided
+          }),
+          // ✅ ADD: Store payment method ID for webhook to save after payment succeeds
+          paymentMethodId: finalPaymentMethodId,
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
           ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
           ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
@@ -474,24 +493,20 @@ export async function POST(request: NextRequest) {
     let user;
 
     if (existingUser) {
-      // User already exists (registered in step 1), update their Stripe customer ID and payment method
+      // User already exists (registered in step 1)
+      // ✅ FIX: Only update Stripe customer ID, DON'T save payment method yet
+      // Payment method will be saved by webhook after payment succeeds
       console.log(`🔄 Updating existing user with Stripe customer ID: ${customer.id}`);
 
-      // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
-      const savedPaymentMethodData = {
-        paymentMethodId: finalPaymentMethodId,
-        isDefault: true, // Set as default since it's the first payment method
-        createdAt: new Date(),
-      };
-
-      // Update existing user with Stripe customer ID and payment method
+      // Update existing user with Stripe customer ID ONLY
+      // Payment method will be saved by webhook after successful payment
       user = await User.findByIdAndUpdate(
         registeredUser!._id,
         {
           $set: {
             stripeCustomerId: customer.id,
           },
-          $push: { savedPaymentMethods: savedPaymentMethodData },
+          // ✅ REMOVED: Don't save payment method here - webhook will handle it
         },
         { new: true }
       );
@@ -500,50 +515,23 @@ export async function POST(request: NextRequest) {
         throw new Error("Failed to update existing user");
       }
 
-      console.log(`✅ Updated existing user: ${user._id}`);
+      console.log(`✅ Updated existing user: ${user._id} (payment method will be saved after payment succeeds)`);
     } else {
-      // Create new user account (will be fully activated when webhook confirms payment)
-      // Hash password only if provided (for backward compatibility with existing users)
-      const hashedPassword = validatedData.password ? await bcrypt.hash(validatedData.password, 12) : undefined;
-
-      // Clean mobile number before saving (remove spaces)
-      const cleanedMobile = validatedData.mobile?.replace(/\s+/g, "") || "";
-      console.log(`📱 Mobile number: "${validatedData.mobile}" -> cleaned: "${cleanedMobile}"`);
-
-      // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
-      const savedPaymentMethodData = {
-        paymentMethodId: finalPaymentMethodId,
-        isDefault: true, // Set as default since it's the first payment method
-        createdAt: new Date(),
-      };
-
-      user = new User({
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        email: validatedData.userEmail,
-        password: hashedPassword, // Will be undefined for passwordless users
-        mobile: cleanedMobile,
-        role: "user",
-        stripeCustomerId: customer.id,
-        subscription: {
-          packageId: "",
-          startDate: new Date(),
-          isActive: false,
-          autoRenew: true,
-          status: "incomplete",
-          pendingChange: undefined, // Initialize pendingChange field for subscription management
-        }, // Initialize subscription structure (no active subscription for one-time purchases)
-        oneTimePackages: [], // ⏳ Will be added via webhook ONLY to prevent duplication
-        accumulatedEntries: 0, // ⏳ Will be added via webhook only
-        entryWallet: 0,
-        rewardsPoints: 0, // ⏳ Will be added via webhook only
-        isEmailVerified: false, // TODO: Implement email verification
-        isActive: true,
-        savedPaymentMethods: [savedPaymentMethodData], // Save the payment method directly
-      });
-
-      await user.save();
-      console.log(`✅ Created user account: ${user._id}`);
+      // ✅ FIX: Don't create new user account here
+      // Store user data in PaymentIntent metadata instead
+      // Webhook will create the account after payment succeeds
+      console.log(`⏳ Deferring account creation - will be created by webhook after payment succeeds`);
+      
+      // Store user data in metadata for webhook to create account
+      // The webhook will create the account using this metadata
+      // This prevents orphaned accounts if user cancels payment
+      
+      // Set user to null - webhook will create it
+      user = null;
+      
+      // ✅ CRITICAL: Ensure PaymentIntent metadata has all user data needed for account creation
+      // This is already done above when creating/updating PaymentIntent
+      console.log(`📋 User data stored in PaymentIntent metadata for webhook processing`);
     }
 
     // ✅ Attach affiliate referral if provided and not already set
@@ -734,6 +722,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ✅ FIX: Only record referral for existing users
+    // New users will have referral recorded by webhook
     if (validatedData.referralCode && user?._id) {
       try {
         await recordReferralPurchase({
@@ -749,35 +739,57 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "One-time package purchase successful",
-      data: {
-        entriesAdded: membershipPackage.totalEntries || 0,
-        totalEntries: user.accumulatedEntries || 0,
-        packageName: membershipPackage.name,
-        source: "one-time-package",
-        paymentVerified: true,
-        paymentIntentId: paymentIntent.id,
-        customerId: customer.id,
-        userId: user._id,
-        clientSecret: paymentIntent.client_secret,
-        status: paymentIntent.status,
-        // Include user data for auto-login
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          subscription: user.subscription,
-          entryWallet: user.entryWallet,
-          accumulatedEntries: user.accumulatedEntries,
-          rewardsPoints: user.rewardsPoints,
+    // ✅ FIX: Return response based on whether user exists
+    // For new users, don't return user data - webhook will create account and handle login
+    if (user) {
+      // Existing user - return user data for auto-login
+      return NextResponse.json({
+        success: true,
+        message: "One-time package purchase successful",
+        data: {
+          entriesAdded: membershipPackage.totalEntries || 0,
+          totalEntries: user.accumulatedEntries || 0,
+          packageName: membershipPackage.name,
+          source: "one-time-package",
+          paymentVerified: true,
+          paymentIntentId: paymentIntent.id,
+          customerId: customer.id,
+          userId: user._id,
+          clientSecret: paymentIntent.client_secret,
+          status: paymentIntent.status,
+          user: {
+            id: user._id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            subscription: user.subscription,
+            entryWallet: user.entryWallet,
+            accumulatedEntries: user.accumulatedEntries,
+            rewardsPoints: user.rewardsPoints,
+          },
+          autoLogin: true, // Flag to indicate auto-login should be triggered
         },
-        autoLogin: true, // Flag to indicate auto-login should be triggered
-      },
-    });
+      });
+    } else {
+      // New user - account will be created by webhook
+      // Return success but indicate account creation is pending
+      return NextResponse.json({
+        success: true,
+        message: "Payment successful. Account will be created shortly.",
+        data: {
+          entriesAdded: membershipPackage.totalEntries || 0,
+          packageName: membershipPackage.name,
+          source: "one-time-package",
+          paymentVerified: true,
+          paymentIntentId: paymentIntent.id,
+          customerId: customer.id,
+          status: paymentIntent.status,
+          accountCreationPending: true, // Flag to indicate account creation is pending
+          // Don't return user data - webhook will create account
+        },
+      });
+    }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });

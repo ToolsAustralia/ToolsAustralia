@@ -14,6 +14,9 @@ import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import { calculateSubscriptionEntries } from "@/utils/payment/subscription-entries-calculator";
 import Promo from "@/models/Promo";
+import { createUserFromPaymentMetadata, shouldCreateAccountFromMetadata } from "@/utils/payment/account-manager";
+import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
+import { handlePaymentCancellation } from "@/utils/payment/payment-cleanup";
 // ✅ WEBHOOK-FIRST: Remove database dependency for event tracking
 import { klaviyo } from "@/lib/klaviyo";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
@@ -295,16 +298,75 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       }
     }
 
+    // ✅ FIX: If user doesn't exist, check if we need to create account from metadata
+    // This handles new users who didn't register first
     if (!user) {
-      webhookLog("error", `❌ User not found for payment intent: ${paymentIntent.id}`, {
-        customerId: paymentIntent.customer,
-        userEmail: paymentIntent.metadata.userEmail,
-        metadata: paymentIntent.metadata,
-        hasCharge: !!paymentIntent.latest_charge,
-        hasPaymentMethod: !!paymentIntent.payment_method,
-      });
-      webhookLog("warn", `⚠️ PaymentIntent ${paymentIntent.id} will be retried when metadata is updated`);
-      return; // Return undefined to indicate processing failed, webhook will retry
+      if (shouldCreateAccountFromMetadata(paymentIntent)) {
+        webhookLog("info", `🆕 Creating new user account from PaymentIntent metadata: ${paymentIntent.metadata.userEmail}`);
+        
+        try {
+          user = await createUserFromPaymentMetadata(paymentIntent);
+          
+          if (user) {
+            webhookLog("info", `✅ Created new user account from webhook: ${user._id.toString()}`);
+          } else {
+            webhookLog("error", `❌ Failed to create user account from metadata`);
+            return; // Return undefined to indicate processing failed
+          }
+        } catch (createError) {
+          webhookLog("error", `❌ Failed to create user account from metadata: ${createError}`);
+          return; // Return undefined to indicate processing failed
+        }
+      } else {
+        webhookLog("error", `❌ User not found for payment intent: ${paymentIntent.id}`, {
+          customerId: paymentIntent.customer,
+          userEmail: paymentIntent.metadata.userEmail,
+          metadata: paymentIntent.metadata,
+          hasCharge: !!paymentIntent.latest_charge,
+          hasPaymentMethod: !!paymentIntent.payment_method,
+        });
+        webhookLog("warn", `⚠️ PaymentIntent ${paymentIntent.id} will be retried when metadata is updated`);
+        return; // Return undefined to indicate processing failed, webhook will retry
+      }
+    }
+    
+    // ✅ FIX: For existing users, ensure payment method is saved if not already saved
+    // For new users, payment method is already saved during account creation
+    if (user && paymentIntent.payment_method) {
+      const paymentMethodId = typeof paymentIntent.payment_method === "string"
+        ? paymentIntent.payment_method
+        : paymentIntent.payment_method.id;
+      
+      if (paymentMethodId) {
+        // Check if payment method is already saved
+        const hasPaymentMethod = user.savedPaymentMethods?.some(
+          (pm) => pm.paymentMethodId === paymentMethodId
+        );
+        
+        if (!hasPaymentMethod) {
+          // Save payment method now that payment succeeded
+          webhookLog("info", `💳 Saving payment method to user account: ${paymentMethodId}`);
+          
+          const saveResult = await savePaymentMethodToUser(
+            user,
+            paymentMethodId,
+            {
+              setAsDefault: user.savedPaymentMethods?.length === 0, // Set as default if no other payment methods
+            }
+          );
+          
+          if (saveResult.success) {
+            webhookLog("info", `✅ Saved payment method to user account: ${paymentMethodId}`);
+            // Refresh user object to get updated payment methods
+            user = saveResult.user;
+          } else {
+            webhookLog("warn", `⚠️ Failed to save payment method: ${saveResult.error}`);
+            // Non-critical error - continue processing
+          }
+        } else {
+          webhookLog("info", `ℹ️ Payment method already saved to user account: ${paymentMethodId}`);
+        }
+      }
     }
 
     // ✅ NEW: Use event-based idempotency check
@@ -2695,8 +2757,10 @@ async function handleChargeDisputeClosed(dispute: Stripe.Dispute) {
 async function handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
   try {
     webhookLog("info", `Payment intent canceled: ${paymentIntent.id}`);
-    // No action needed - payment never completed, so no benefits to reverse
-    // This is just for logging/cleanup purposes
+    
+    // ✅ FIX: Clean up orphaned accounts/payment methods for cancelled payments
+    // This prevents accounts from being created with payment methods when users cancel payment
+    await handlePaymentCancellation(paymentIntent);
   } catch (error) {
     webhookLog("error", `Error handling payment intent canceled: ${error}`);
   }
@@ -2943,7 +3007,15 @@ export async function POST(request: NextRequest) {
         await handleChargeDisputeClosed(event.data.object);
         break;
       case "payment_intent.canceled":
-        await handlePaymentIntentCanceled(event.data.object);
+        webhookLog("info", `📥 Received payment_intent.canceled event for: ${event.data.object.id}`);
+        const canceledPaymentIntent = event.data.object as Stripe.PaymentIntent;
+        
+        // ✅ FIX: Clean up orphaned accounts/payment methods for cancelled payments
+        try {
+          await handlePaymentCancellation(canceledPaymentIntent);
+        } catch (error) {
+          webhookLog("error", `Error handling payment cancellation: ${error}`);
+        }
         break;
       default:
         webhookLog("warn", `Unhandled event type: ${event.type}`);
