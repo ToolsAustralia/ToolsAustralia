@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const scenario = parseInt(searchParams.get("scenario") || "1");
+    
+    // Optional: restore specific draws by ID
+    const restoreCurrentDrawId = searchParams.get("currentDrawId");
+    const restoreNextDrawId = searchParams.get("nextDrawId");
 
     if (scenario < 1 || scenario > 4) {
       return NextResponse.json({ error: "Invalid scenario. Must be 1-4." }, { status: 400 });
@@ -30,34 +34,50 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
 
-    // Find current draw (active, frozen, or latest completed)
-    let currentDraw = await MajorDraw.findOne({
-      status: { $in: ["active", "frozen"] },
-    }).sort({ activationDate: -1 });
+    let currentDraw: IMajorDraw | null = null;
+    let nextDraw: IMajorDraw | null = null;
 
-    // If no active/frozen, get the latest completed draw
-    if (!currentDraw) {
+    // If draw IDs provided, restore those specific draws
+    if (restoreCurrentDrawId && restoreNextDrawId) {
+      currentDraw = await MajorDraw.findById(restoreCurrentDrawId);
+      nextDraw = await MajorDraw.findById(restoreNextDrawId);
+      
+      if (!currentDraw || !nextDraw) {
+        return NextResponse.json(
+          { error: "Could not find draws with provided IDs. Falling back to auto-detection." },
+          { status: 404 }
+        );
+      }
+    } else {
+      // Original logic: Find current draw (active, frozen, or latest completed)
       currentDraw = await MajorDraw.findOne({
-        status: "completed",
-      }).sort({ drawDate: -1 });
-    }
+        status: { $in: ["active", "frozen"] },
+      }).sort({ activationDate: -1 });
 
-    // Find next draw (queued or any draw after current)
-    let nextDraw: IMajorDraw | null = await getNextQueuedDraw();
+      // If no active/frozen, get the latest completed draw
+      if (!currentDraw) {
+        currentDraw = await MajorDraw.findOne({
+          status: "completed",
+        }).sort({ drawDate: -1 });
+      }
 
-    // If no queued draw, try to find any draw that comes after the current one
-    if (!nextDraw && currentDraw) {
-      nextDraw = await MajorDraw.findOne({
-        _id: { $ne: currentDraw._id },
-        drawDate: { $gt: currentDraw.drawDate },
-      }).sort({ drawDate: 1 });
-    }
+      // Find next draw (queued or any draw after current)
+      nextDraw = await getNextQueuedDraw();
 
-    // If still no next draw, use any available draw as fallback
-    if (!nextDraw) {
-      nextDraw = await MajorDraw.findOne({
-        _id: currentDraw ? { $ne: currentDraw._id } : {},
-      }).sort({ drawDate: 1 });
+      // If no queued draw, try to find any draw that comes after the current one
+      if (!nextDraw && currentDraw) {
+        nextDraw = await MajorDraw.findOne({
+          _id: { $ne: currentDraw._id },
+          drawDate: { $gt: currentDraw.drawDate },
+        }).sort({ drawDate: 1 });
+      }
+
+      // If still no next draw, use any available draw as fallback
+      if (!nextDraw) {
+        nextDraw = await MajorDraw.findOne({
+          _id: currentDraw ? { $ne: currentDraw._id } : {},
+        }).sort({ drawDate: 1 });
+      }
     }
 
     // Validation: Ensure we have two different draws
@@ -197,6 +217,7 @@ export async function POST(request: NextRequest) {
       scenario: scenarioDescriptions[scenario],
       draws: {
         current: {
+          id: currentDrawId,
           name: currentDraw.name,
           status: currentStatus,
           isActive: currentIsActive,
@@ -204,6 +225,7 @@ export async function POST(request: NextRequest) {
           freezeEntriesAt: currentFreeze,
         },
         next: {
+          id: nextDrawId,
           name: nextDrawTyped.name,
           status: nextStatus,
           isActive: nextIsActive,

@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Calendar, Package, Trophy, AlertTriangle, Sparkles, Plus, Trash2, X } from "lucide-react";
-import * as LucideIcons from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Calendar, Package, Trophy, AlertTriangle } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -14,7 +12,6 @@ import {
   DateTimePicker,
   FormSection,
   ImageUpload,
-  IconPickerModal,
 } from "./ui";
 import { convertUTCToAEST, createAESTDateAsUTC, calculateActivationDate } from "@/utils/common/timezone";
 
@@ -38,11 +35,6 @@ interface MajorDrawFormData {
     brand: string;
     terms: string[];
     specifications: Record<string, string | number | string[]>;
-    components: Array<{
-      title: string;
-      description: string;
-      icon?: string;
-    }>;
   };
 }
 
@@ -61,13 +53,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
       brand: "",
       terms: [""],
       specifications: {},
-      components: [
-        {
-          title: "",
-          description: "",
-          icon: "",
-        },
-      ],
     },
   });
 
@@ -79,32 +64,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
   const [scheduledDraws, setScheduledDraws] = useState<
     Array<{ id: string; name: string; drawDate: string; status: string }>
   >([]);
-  // Track which highlight card is editing its icon so we can reopen the picker with context.
-  const [iconPickerState, setIconPickerState] = useState<{ open: boolean; componentIndex: number | null }>({
-    open: false,
-    componentIndex: null,
-  });
-
-  // Allow highlight cards to render an icon by name while gracefully falling back to Sparkles.
-  const resolveIconComponent = (iconName?: string): LucideIcon => {
-    const iconsMap = LucideIcons as unknown as Record<string, LucideIcon>;
-    if (!iconName) {
-      return iconsMap.Sparkles ?? Sparkles;
-    }
-    const formatIconKey = (value: string) =>
-      value
-        .split(/[\s-_]+/)
-        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-        .join("");
-
-    const candidates = [iconName, iconName.charAt(0).toUpperCase() + iconName.slice(1), formatIconKey(iconName)];
-    for (const key of candidates) {
-      if (iconsMap[key]) {
-        return iconsMap[key];
-      }
-    }
-    return iconsMap.Sparkles ?? Sparkles;
-  };
 
   // Check if freeze and draw times are exactly 30 minutes apart
   const getTimeDifferenceWarning = () => {
@@ -324,106 +283,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
     }));
   };
 
-  const handleComponentChange = (index: number, field: "title" | "description" | "icon", value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize,
-        components: prev.prize.components.map((component, i) =>
-          i === index ? { ...component, [field]: value } : component
-        ),
-      },
-    }));
-
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({ ...prev, "prize.components": "" }));
-    }
-  };
-
-  const addComponent = () => {
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize,
-        components: [
-          ...prev.prize.components,
-          {
-            title: "",
-            description: "",
-            icon: "",
-          },
-        ],
-      },
-    }));
-
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({ ...prev, "prize.components": "" }));
-    }
-  };
-
-  const removeComponent = (index: number) => {
-    setFormData((prev) => {
-      const nextComponents = prev.prize.components.filter((_, i) => i !== index);
-      return {
-        ...prev,
-        prize: {
-          ...prev.prize,
-          components:
-            nextComponents.length > 0
-              ? nextComponents
-              : [
-                  {
-                    title: "",
-                    description: "",
-                    icon: "",
-                  },
-                ],
-        },
-      };
-    });
-
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({ ...prev, "prize.components": "" }));
-    }
-  };
-
-  const openIconPicker = (index: number) => {
-    setIconPickerState({ open: true, componentIndex: index });
-  };
-
-  const handleIconSelect = (iconName: string) => {
-    // If we lost the index somehow, close the modal and do nothing.
-    if (iconPickerState.componentIndex === null) {
-      setIconPickerState({ open: false, componentIndex: null });
-      return;
-    }
-
-    // Update the specific highlight entry with the selected icon.
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize,
-        components: prev.prize.components.map((component, i) =>
-          i === iconPickerState.componentIndex ? { ...component, icon: iconName } : component
-        ),
-      },
-    }));
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({ ...prev, "prize.components": "" }));
-    }
-    setIconPickerState({ open: false, componentIndex: null });
-  };
-
-  const clearIcon = (index: number) => {
-    // Reset the icon to an empty string so the highlight falls back to the default sparkle.
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize,
-        components: prev.prize.components.map((component, i) => (i === index ? { ...component, icon: "" } : component)),
-      },
-    }));
-  };
 
   // Validate form
   const validateForm = (): boolean => {
@@ -436,12 +295,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
     if (!formData.prize.description.trim()) newErrors["prize.description"] = "Prize description is required";
     if (formData.prize.value <= 0) newErrors["prize.value"] = "Prize value must be greater than 0";
     if (formData.prize.images.length === 0) newErrors["prize.images"] = "At least one prize image is required";
-    const validComponents = formData.prize.components.filter(
-      (component) => component.title.trim() && component.description.trim()
-    );
-    if (validComponents.length === 0) {
-      newErrors["prize.components"] = "Add at least one prize highlight";
-    }
 
     // Validate date relationships using AEST times
     if (formData.activationDate && formData.drawDate) {
@@ -492,7 +345,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
           images: [...formData.prize.images],
           terms: [...formData.prize.terms],
           specifications: { ...formData.prize.specifications },
-          components: formData.prize.components.map((component) => ({ ...component })),
         },
       };
 
@@ -570,13 +422,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
         delete (submitData.prize as { brand?: string }).brand;
       }
 
-      submitData.prize.components = submitData.prize.components
-        .filter((component) => component.title.trim() && component.description.trim())
-        .map((component) => ({
-          title: component.title.trim(),
-          description: component.description.trim(),
-          ...(component.icon && component.icon.trim() ? { icon: component.icon.trim() } : {}),
-        }));
 
       const response = await fetch("/api/admin/major-draw/create", {
         method: "POST",
@@ -632,13 +477,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
         brand: "",
         terms: [""],
         specifications: {},
-        components: [
-          {
-            title: "",
-            description: "",
-            icon: "",
-          },
-        ],
       },
     });
     setErrors({});
@@ -761,84 +599,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
             />
           </div>
 
-          <FormSection title="Prize Highlights" icon={Sparkles}>
-            <div className="space-y-3">
-              {formData.prize.components.map((component, index) => (
-                <div key={index} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Input
-                      value={component.title}
-                      onChange={(e) => handleComponentChange(index, "title", e.target.value)}
-                      label="Highlight Title"
-                      placeholder="e.g., 13 Milwaukee Power Tools"
-                      className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3 flex-1"
-                    />
-                    {formData.prize.components.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeComponent(index)}
-                        className="text-red-600 hover:text-red-800 text-xs font-semibold mt-6 flex items-center gap-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Remove
-                      </button>
-                    )}
-                  </div>
-
-                  <Textarea
-                    value={component.description}
-                    onChange={(e) => handleComponentChange(index, "description", e.target.value)}
-                    label="Highlight Description"
-                    placeholder="Briefly describe this part of the prize..."
-                    rows={2}
-                    className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-                  />
-
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide block">
-                      Icon (optional)
-                    </span>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <Button type="button" variant="outline" onClick={() => openIconPicker(index)} className="text-xs">
-                        Choose Icon
-                      </Button>
-                      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
-                        <span className="flex items-center justify-center w-7 h-7 rounded-md bg-gray-100">
-                          {(() => {
-                            const PreviewIcon = resolveIconComponent(component.icon);
-                            return <PreviewIcon className="w-4 h-4 text-red-600" />;
-                          })()}
-                        </span>
-                        <span>{component.icon || "None selected"}</span>
-                      </div>
-                      {component.icon && (
-                        <button
-                          type="button"
-                          onClick={() => clearIcon(index)}
-                          className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
-                        >
-                          <X className="w-3 h-3" />
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={addComponent}
-                className="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                Add Highlight
-              </button>
-
-              {errors["prize.components"] && <p className="text-red-600 text-sm">{errors["prize.components"]}</p>}
-            </div>
-          </FormSection>
-
           <FormSection title="Draw Date Configuration" icon={Calendar}>
             <div className="space-y-4">
               <DateTimePicker
@@ -945,13 +705,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
           </div>
         </form>
       </ModalContent>
-
-      <IconPickerModal
-        isOpen={iconPickerState.open}
-        onClose={() => setIconPickerState({ open: false, componentIndex: null })}
-        onSelect={handleIconSelect}
-        title="Select Highlight Icon"
-      />
     </ModalContainer>
   );
 };

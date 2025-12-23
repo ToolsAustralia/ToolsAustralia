@@ -126,7 +126,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     upsell: {
       _id: "mini-pack-4-upgrade",
       name: "Mini Pack 4 Upgrade",
-      price: 9.99,
+      price: 12.5,
       entries: 50,
       partnerDiscountHours: 24,
       partnerDiscountDays: 1,

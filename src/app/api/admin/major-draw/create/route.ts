@@ -16,15 +16,6 @@ const prizeSchema = z
     brand: z.string().optional(),
     terms: z.array(z.string()).optional(),
     specifications: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])).optional(),
-    components: z
-      .array(
-        z.object({
-          title: z.string().min(1, "Component title is required"),
-          description: z.string().min(1, "Component description is required"),
-          icon: z.string().optional(),
-        })
-      )
-      .optional(),
   })
   .optional();
 
@@ -156,12 +147,6 @@ export async function POST(request: NextRequest) {
               ...(validatedData.prize.brand ? { brand: validatedData.prize.brand.trim() } : {}),
               terms: validatedData.prize.terms,
               specifications: validatedData.prize.specifications || {},
-              components:
-                validatedData.prize.components?.map((component) => ({
-                  title: component.title.trim(),
-                  description: component.description.trim(),
-                  ...(component.icon ? { icon: component.icon.trim() } : {}),
-                })) || [],
             },
           }
         : {}),

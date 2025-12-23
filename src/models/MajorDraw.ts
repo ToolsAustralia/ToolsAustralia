@@ -14,11 +14,6 @@ export interface IMajorDraw extends Document {
     images?: string[];
     brand?: string;
     specifications?: Record<string, string | number | string[]>;
-    components?: Array<{
-      title: string;
-      description: string;
-      icon?: string;
-    }>;
     terms?: string[];
   };
   isActive: boolean; // Backward compatibility - should use status instead
@@ -105,27 +100,6 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
       specifications: {
         type: Schema.Types.Mixed, // Flexible object for any specifications
         default: {},
-      },
-      components: {
-        type: [
-          {
-            title: {
-              type: String,
-              required: true,
-              trim: true,
-            },
-            description: {
-              type: String,
-              required: true,
-              trim: true,
-            },
-            icon: {
-              type: String,
-              trim: true,
-            },
-          },
-        ],
-        default: [],
       },
       terms: [
         {

@@ -438,14 +438,15 @@ export default function MyAccountPage() {
   const isQueued = currentMajorDraw?.status === "queued";
   const isGapState = isCompleted || isQueued;
 
-  // Use lastMonthAccumulatedEntries for accuracy (shows user's actual accumulated entries)
-  // Fallback to majorDrawStats if lastMonthAccumulatedEntries is not available
+  // Use actual membership entries from the current draw (not accumulated from previous months)
+  // This shows what's actually in the current draw, not historical accumulation
   const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-  // During gap state (queued draw), don't show membership entries from previous draw
-  // Only show pending entries that will be added to the next draw
-  const displayMembershipEntries = isGapState
+  // During completed state: don't show membership entries (they're from the previous draw)
+  // During queued/active/frozen state: show actual membership entries in the current draw
+  // Always use majorDrawStats.membershipEntries (actual draw entries) instead of lastMonthAccumulatedEntries
+  const displayMembershipEntries = isCompleted
     ? 0
-    : userSubscription?.lastMonthAccumulatedEntries ?? majorDrawStats?.membershipEntries ?? 0;
+    : majorDrawStats?.membershipEntries ?? 0;
   const displayOneTimeEntries = majorDrawStats?.oneTimeEntries || 0;
   const displayTotalEntries = majorDrawStats?.currentDrawEntries || 0;
 
@@ -480,29 +481,65 @@ export default function MyAccountPage() {
   // Check if current user is the winner
   const isWinner = currentMajorDraw?.winner?.userId?.toString() === session?.user?.id;
 
-  // Calculate pending entries for gap state (entries that will be added to next draw)
+  // Calculate pending entries - Show in ALL states if user has active membership but 0 membership entries
+  // Simplified: Check if user has active membership but 0 membership entries in the draw
   const getPendingEntries = () => {
-    if (!isGapState || !hasActiveMembership || !membershipPackage || !userSubscription) {
+    // Wait for majorDrawStats to load
+    // majorDrawStats will be an object (not null) even if user has no entries (returns zeros)
+    if (majorDrawStatsLoading || !majorDrawStats) {
       return null;
     }
 
-    // Only show for subscription packages
-    if (membershipPackage.type !== "subscription" || !("entriesPerMonth" in membershipPackage)) {
-      return null;
+    // Check if user has active membership
+    if (!hasActiveMembership) {
+      return null; // No active membership, no pending entries to show
     }
 
-    const baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
-    const lastAccumulated = userSubscription.lastMonthAccumulatedEntries ?? baseEntries;
+    // Get membership entries from the current draw
+    const membershipEntriesInDraw = majorDrawStats?.membershipEntries ?? 0;
+    
+    // Get displayed membership entries (what's actually shown to user)
+    // Always use actual draw entries, not accumulated from previous months
+    // Only hide entries when draw is completed (previous draw), not when queued (upcoming draw)
+    const displayedMembershipEntries = isCompleted
+      ? 0
+      : majorDrawStats?.membershipEntries ?? 0;
 
-    // Calculate expected entries for next renewal
-    // This is what will be added when the next draw becomes active
-    const expectedEntries = lastAccumulated + baseEntries;
+    // Show pending ONLY if:
+    // 1. User has active membership
+    // 2. Membership entries in current draw are 0 (entries will be added on renewal)
+    // 3. AND displayed membership entries are also 0 (user doesn't see any entries currently)
+    // This prevents showing pending when user already has accumulated entries displayed
+    if (membershipEntriesInDraw === 0 && displayedMembershipEntries === 0) {
+      // Try to calculate expected entries from package (for tooltip display)
+      // If package info is available, use it; otherwise use subscription data
+      let expectedEntries = 0;
+      let baseEntries = 0;
+      let lastAccumulated = 0;
 
-    return {
-      expectedEntries,
-      baseEntries,
-      lastAccumulated,
-    };
+      if (membershipPackage && membershipPackage.type === "subscription" && "entriesPerMonth" in membershipPackage) {
+        baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
+        lastAccumulated = userSubscription?.lastMonthAccumulatedEntries ?? baseEntries;
+        expectedEntries = lastAccumulated + baseEntries;
+      } else if (userSubscription?.lastMonthAccumulatedEntries) {
+        // Fallback: Use lastMonthAccumulatedEntries if package data not available
+        lastAccumulated = userSubscription.lastMonthAccumulatedEntries;
+        expectedEntries = lastAccumulated; // Best guess without package info
+      } else {
+        // Can't calculate expected entries, but still show pending icon
+        expectedEntries = 0;
+      }
+
+      return {
+        expectedEntries,
+        baseEntries,
+        lastAccumulated,
+        needsRenewal: false, // Active membership, just waiting for renewal cycle
+      };
+    }
+
+    // If membership entries > 0, they're already in the draw, no pending
+    return null;
   };
 
   const pendingEntriesData = getPendingEntries();
@@ -791,7 +828,7 @@ export default function MyAccountPage() {
                             <div className="text-xl font-bold text-white drop-shadow-lg">
                               {displayMembershipEntries}
                             </div>
-                            {/* Pending icon indicator during gap state */}
+                            {/* Pending icon indicator during frozen/gap state */}
                             {pendingEntriesData && (
                               <button
                                 onClick={(e) => {

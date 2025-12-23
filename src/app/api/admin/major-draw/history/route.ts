@@ -113,7 +113,6 @@ export async function GET(request: NextRequest) {
             images: draw.prize?.images,
             brand: draw.prize?.brand,
             specifications: draw.prize?.specifications,
-            components: draw.prize?.components,
             terms: draw.prize?.terms,
           }
         : null,

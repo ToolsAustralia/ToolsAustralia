@@ -24,15 +24,6 @@ const majorDrawUpdateSchema = z.object({
       images: z.array(z.string()).min(1).optional(),
       terms: z.array(z.string()).optional(),
       specifications: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])).optional(),
-      components: z
-        .array(
-          z.object({
-            title: z.string().min(1, "Component title is required"),
-            description: z.string().min(1, "Component description is required"),
-            icon: z.string().optional(),
-          })
-        )
-        .optional(),
     })
     .optional(),
 });
@@ -135,13 +126,6 @@ export async function PUT(request: NextRequest) {
       if (prizeUpdates.terms !== undefined) updateData["prize.terms"] = prizeUpdates.terms;
       if (prizeUpdates.images !== undefined) updateData["prize.images"] = prizeUpdates.images;
       if (prizeUpdates.specifications !== undefined) updateData["prize.specifications"] = prizeUpdates.specifications;
-      if (prizeUpdates.components !== undefined) {
-        updateData["prize.components"] = prizeUpdates.components.map((component) => ({
-          title: component.title.trim(),
-          description: component.description.trim(),
-          ...(component.icon ? { icon: component.icon.trim() } : {}),
-        }));
-      }
     }
 
     // Update the major draw
