@@ -286,7 +286,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
                     {/* Text content - centered */}
                     <span
-                      className="relative z-10 text-white font-black tracking-wider uppercase text-[13px] sm:text-[13px] lg:text-[16px] whitespace-nowrap"
+                      className="relative z-10 text-white font-black tracking-wider uppercase text-[10px] sm:text-[13px] whitespace-nowrap"
                       style={{
                         textShadow: `
                         0 0 6px rgba(255, 255, 255, 0.8),
@@ -297,7 +297,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
                       }}
                     >
-                      LIMITED OFFER
+                      CHRISTMAS EVE OFFER
                     </span>
                   </div>
                 </div>
