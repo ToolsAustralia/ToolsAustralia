@@ -301,9 +301,12 @@ export const useMajorDrawCountdown = () => {
   const getTimeRemaining = () => {
     if (!currentDraw) return { days: 0, hours: 0, minutes: 0, seconds: 0, total: 0 };
 
+    // Prefer freezeEntriesAt (entries close) and fall back to drawDate
+    const targetDate = currentDraw.freezeEntriesAt || currentDraw.drawDate;
+    if (!targetDate) return { days: 0, hours: 0, minutes: 0, seconds: 0, total: 0 };
+
     const now = Date.now();
-    // Use drawDate for countdown
-    const endTime = new Date(currentDraw.drawDate || "").getTime();
+    const endTime = new Date(targetDate).getTime();
     const total = Math.max(0, endTime - now);
 
     const days = Math.floor(total / (1000 * 60 * 60 * 24));
@@ -315,8 +318,10 @@ export const useMajorDrawCountdown = () => {
   };
 
   const isActive = currentDraw?.isActive || false;
-  const isEnded = currentDraw ? new Date(currentDraw.drawDate || "").getTime() <= Date.now() : false;
+  const targetDate = currentDraw?.freezeEntriesAt || currentDraw?.drawDate;
+  const isEnded = targetDate ? new Date(targetDate).getTime() <= Date.now() : false;
   const isDrawn = currentDraw?.isDrawn || false;
+  const targetDateMs = targetDate ? new Date(targetDate).getTime() : null;
 
   return {
     currentDraw,
@@ -325,6 +330,7 @@ export const useMajorDrawCountdown = () => {
     isEnded,
     isDrawn,
     canEnter: isActive && !isEnded && !isDrawn,
+    targetDateMs,
   };
 };
 

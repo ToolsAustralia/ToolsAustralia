@@ -7,7 +7,7 @@
   "display": "standalone",
   "lang": "en-AU",
   "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "theme_color": "#ffffff",
   "categories": ["shopping", "business", "productivity"],
   "icons": [
     {

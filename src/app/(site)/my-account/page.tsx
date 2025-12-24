@@ -436,7 +436,6 @@ export default function MyAccountPage() {
   const isFrozen = currentMajorDraw?.status === "frozen";
   const isActive = currentMajorDraw?.status === "active";
   const isQueued = currentMajorDraw?.status === "queued";
-  const isGapState = isCompleted || isQueued;
 
   // Use actual membership entries from the current draw (not accumulated from previous months)
   // This shows what's actually in the current draw, not historical accumulation

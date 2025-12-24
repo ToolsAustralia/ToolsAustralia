@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
-import { getNextMidnightAEST } from "@/utils/common/timezone";
 import { useSidebar } from "@/contexts/SidebarContext";
+import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
+import { getNextMidnightAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 
 /**
@@ -24,6 +25,7 @@ interface PromoBannerProps {
 export default function PromoBanner({ initialMembershipPromo, initialOneTimePromo }: PromoBannerProps) {
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
+  const { targetDateMs } = useMajorDrawCountdown();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
 
   const [timeLeft, setTimeLeft] = useState({
@@ -45,34 +47,50 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const membershipPromo = initialMembershipPromo || membershipPromoClient;
   const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
 
-  // 24-hour looping countdown timer (resets at midnight AEST - Australian business day)
+  // Countdown strategy:
+  // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
+  // - Otherwise keep the 24h business-day loop to next midnight AEST.
   useEffect(() => {
-    const updateTimer = () => {
-      const now = new Date();
-      // Get next midnight in AEST timezone (Australian business day boundary)
-      const nextMidnight = getNextMidnightAEST();
+    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
 
-      const difference = nextMidnight.getTime() - now.getTime();
+    const updateCountdown = () => {
+      const now = Date.now();
+      const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
 
-      // Calculate time remaining until next midnight AEST
-      const totalSeconds = Math.max(0, Math.floor(difference / 1000));
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
+      if (!targetDateMs || freezeMs > fortyEightHoursMs) {
+        // Business-day loop to next midnight AEST
+        const nextMidnight = getNextMidnightAEST();
+        const diffMs = Math.max(0, nextMidnight.getTime() - now);
+        const totalSeconds = Math.floor(diffMs / 1000);
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
 
-      setTimeLeft({
-        days: 0, // Always 0 for 24-hour countdown
-        hours,
-        minutes,
-        seconds,
-      });
+        setTimeLeft((prev) =>
+          prev.hours === h && prev.minutes === m && prev.seconds === s
+            ? prev
+            : { days: 0, hours: h, minutes: m, seconds: s }
+        );
+        return;
+      }
+
+      // Within 48h: precise freeze countdown (aggregate hours for clarity)
+      const totalSeconds = Math.floor(freezeMs / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+
+      setTimeLeft((prev) =>
+        prev.hours === h && prev.minutes === m && prev.seconds === s
+          ? prev
+          : { days: 0, hours: h, minutes: m, seconds: s }
+      );
     };
 
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [targetDateMs]);
 
   // Listen for tab changes from MembershipSection
   useEffect(() => {

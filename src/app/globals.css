@@ -210,22 +210,48 @@
   }
 }
 
+/* Base theme tokens */
 :root {
   --background: #ffffff;
   --foreground: #171717;
   /* Fire animation - grainy/noisy background image for glitter effect */
   --glitter: url("https://assets.codepen.io/13471/silver-glitter-background.png");
+  /* Force light mode so Android email/SMS browsers don't invert colors */
+  color-scheme: light;
+}
+
+/* Always stay in light mode even if device prefers dark */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #ffffff;
+    --foreground: #171717;
+    color-scheme: light;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #171717 !important;
+  }
 }
 
 @layer base {
   html {
     font-family: var(--font-inter), system-ui, sans-serif;
+    /* Lock the document in light mode for consistent branding */
+    color-scheme: light;
   }
 
   body {
     background: var(--background);
     color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Ensure body stays light even when browsers try to auto-darken */
+    background-color: #ffffff !important;
+    color: #171717 !important;
   }
 
   /* Comprehensive focus outline removal for all form elements */

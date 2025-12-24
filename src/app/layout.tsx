@@ -75,6 +75,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en-AU" className={`${inter.variable} ${poppins.variable}`}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        {/* Force light mode for Android email/SMS browsers */}
+        <meta name="color-scheme" content="light" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: dark)" />
         {googleVerify ? <meta name="google-site-verification" content={googleVerify} /> : null}
         {bingVerify ? <meta name="msvalidate.01" content={bingVerify} /> : null}
         {/** Facebook domain verification meta tag so Meta can confirm ownership for ads */}

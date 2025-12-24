@@ -160,6 +160,11 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const isCompleted = currentMajorDraw?.status === "completed";
   const isQueued = currentMajorDraw?.status === "queued";
   const isGapState = isCompleted || isQueued;
+  const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
+  const msUntilDraw = isMounted && drawDateObj ? drawDateObj.getTime() - Date.now() : null;
+  const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;
+  const shouldShowCountdown =
+    !isCompleted && msUntilDraw !== null && msUntilDraw > 0 && daysUntilDraw !== null && daysUntilDraw <= 3;
 
   // Set mounted state after component mounts to prevent hydration mismatch
   useEffect(() => {
@@ -182,17 +187,18 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     }
   }, [currentMajorDraw]);
 
-  // Countdown timer logic - matches FloatingCountdownBanner and MajorDrawSection
+  // Countdown timer logic - align with MajorDrawSection (countdown to drawDate)
   useEffect(() => {
-    if (!currentMajorDraw?.drawDate) {
+    const drawDate = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate).getTime() : null;
+
+    if (!drawDate || Number.isNaN(drawDate)) {
       setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
       return;
     }
 
     const updateTimer = () => {
-      const now = new Date().getTime();
-      const endTime = new Date(currentMajorDraw.drawDate!).getTime();
-      const difference = endTime - now;
+      const now = Date.now();
+      const difference = drawDate - now;
 
       if (difference > 0) {
         setTimeLeft({
@@ -209,7 +215,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, [currentMajorDraw]);
+  }, [currentMajorDraw?.freezeEntriesAt, currentMajorDraw?.drawDate]);
 
   const handleEnterNow = () => openEntryFlow({ openLocalModal: false });
 
@@ -230,10 +236,6 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   // Get brand colors for active prize to match View Specs button and prize header
   const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-sidchrome");
   const highlights = activePrize.highlights ?? [];
-  const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
-  const msUntilDraw = isMounted && drawDateObj ? drawDateObj.getTime() - Date.now() : null;
-  const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;
-  const shouldShowCountdown = msUntilDraw !== null && msUntilDraw > 0 && daysUntilDraw !== null && daysUntilDraw <= 3;
 
   return (
     <section ref={prizeRef} className=" pb-8 sm:pb-12 relative">
@@ -430,7 +432,27 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             )}
 
             {shouldShowCountdown ? (
-              <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20">
+              <div
+                className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 ${
+                  currentMajorDraw?.status === "frozen"
+                    ? "bg-gradient-to-br from-gray-900 via-gray-800 to-black"
+                    : "bg-gradient-to-br from-red-600 to-red-700"
+                }`}
+              >
+                {/* Frozen notice for consistency with MajorDrawSection */}
+                {currentMajorDraw?.status === "frozen" && (
+                  <div className="mb-3 text-center">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
+                      <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
+                        Entry Period Closed
+                      </div>
+                      <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                        No new entries accepted for this draw. Entries will go to the next draw.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                   {[
                     { label: "Days", value: timeLeft.days },
