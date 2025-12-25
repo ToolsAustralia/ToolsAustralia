@@ -5,6 +5,7 @@ import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { convertUTCToAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 
@@ -15,22 +16,61 @@ interface PromoHeroProps {
 
 export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroProps) {
   // Use initial data if available, but allow refetching for real-time updates
-  const { isLoading } = useCurrentMajorDraw();
+  const { isLoading, data: currentDraw } = useCurrentMajorDraw();
   const { data: activePromo } = usePromoByType("membership-packages");
   const heroRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
 
   // Use initial data if available, otherwise fall back to fetched data
   const promo = initialPromo || activePromo;
+  const majorDraw = initialMajorDraw || currentDraw;
 
   const handleEnterNow = () => {
     // Shared handler ensures the membership modal opens via the global event.
     openEntryFlow({ openLocalModal: false });
   };
 
-  // Conditionally render hero image based on active promo multiplier
+  // Helper function to check if draw date is today or tomorrow (in AEST)
+  const getDrawDateStatus = (): "today" | "tomorrow" | null => {
+    if (!majorDraw?.drawDate) return null;
+
+    const drawDateUTC = new Date(majorDraw.drawDate);
+    const drawDateAEST = convertUTCToAEST(drawDateUTC);
+    const nowAEST = convertUTCToAEST(new Date());
+
+    // Compare calendar days (YYYY-MM-DD)
+    const drawDateStr = `${drawDateAEST.getFullYear()}-${String(drawDateAEST.getMonth() + 1).padStart(2, "0")}-${String(drawDateAEST.getDate()).padStart(2, "0")}`;
+    const todayStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
+
+    // Calculate tomorrow's date string
+    const tomorrowAEST = new Date(nowAEST);
+    tomorrowAEST.setDate(tomorrowAEST.getDate() + 1);
+    const tomorrowStr = `${tomorrowAEST.getFullYear()}-${String(tomorrowAEST.getMonth() + 1).padStart(2, "0")}-${String(tomorrowAEST.getDate()).padStart(2, "0")}`;
+
+    if (drawDateStr === todayStr) {
+      return "today";
+    } else if (drawDateStr === tomorrowStr) {
+      return "tomorrow";
+    }
+
+    return null;
+  };
+
+  // Conditionally render hero image based on draw date proximity or active promo multiplier
+  // Priority: Draw date (today/tomorrow) > multiplier-based images
   // 10x → x10 entries.webp, 5x → x5 entries.png, 3x → x3 entries.png, no promo → $20.png
   const getHeroImageSrc = () => {
+    const drawStatus = getDrawDateStatus();
+
+    // If draw is today or tomorrow, use date-based images
+    if (drawStatus === "tomorrow") {
+      return "/images/background/promo/DRAWN TOMORROW.png";
+    }
+    if (drawStatus === "today") {
+      return "/images/background/promo/DRAWN TONIGHT.png";
+    }
+
+    // Otherwise, fall back to multiplier-based logic
     if (!promo) {
       return "/images/background/promo/$20.png";
     }

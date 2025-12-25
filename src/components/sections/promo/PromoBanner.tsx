@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
-import { getNextMidnightAEST } from "@/utils/common/timezone";
+import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 
 /**
@@ -25,7 +25,7 @@ interface PromoBannerProps {
 export default function PromoBanner({ initialMembershipPromo, initialOneTimePromo }: PromoBannerProps) {
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
-  const { targetDateMs } = useMajorDrawCountdown();
+  const { targetDateMs, currentDraw } = useMajorDrawCountdown();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
 
   const [timeLeft, setTimeLeft] = useState({
@@ -147,6 +147,38 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
   // Get multiplier for dynamic text (default to 10x if no promo)
   const multiplier = activePromo?.multiplier || 10;
+
+  // Helper function to determine if draw is today or tomorrow (in AEST)
+  const getDrawDateStatus = (): "today" | "tomorrow" | null => {
+    if (!currentDraw?.drawDate) return null;
+
+    const drawDateUTC = new Date(currentDraw.drawDate);
+    const drawDateAEST = convertUTCToAEST(drawDateUTC);
+    const nowAEST = convertUTCToAEST(new Date());
+
+    // Compare calendar days (YYYY-MM-DD)
+    const drawDateStr = `${drawDateAEST.getFullYear()}-${String(drawDateAEST.getMonth() + 1).padStart(2, "0")}-${String(drawDateAEST.getDate()).padStart(2, "0")}`;
+    const todayStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
+
+    // Calculate tomorrow's date string
+    const tomorrowAEST = new Date(nowAEST);
+    tomorrowAEST.setDate(tomorrowAEST.getDate() + 1);
+    const tomorrowStr = `${tomorrowAEST.getFullYear()}-${String(tomorrowAEST.getMonth() + 1).padStart(2, "0")}-${String(tomorrowAEST.getDate()).padStart(2, "0")}`;
+
+    if (drawDateStr === todayStr) {
+      return "today";
+    } else if (drawDateStr === tomorrowStr) {
+      return "tomorrow";
+    }
+
+    return null;
+  };
+
+  // Get formatted draw time for display
+  const getDrawTimeText = (): string | null => {
+    if (!currentDraw?.drawDate) return null;
+    return formatDateInAEST(new Date(currentDraw.drawDate), "h:mm a");
+  };
 
   // Measure banner height to prevent layout shift when it becomes fixed
   useEffect(() => {
@@ -319,30 +351,58 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               </div>
             </div>
 
-            {/* Right Side - Enhanced Countdown (24-hour looping timer) */}
-            {/* Fixed sizes to prevent layout shift - use CSS classes instead of animated width */}
-            <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-              {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
-              {/* Fixed width classes to prevent size changes on load */}
-              <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
-                <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
-                  {timeLeft.hours.toString().padStart(2, "0")}
+            {/* Right Side - Draw Date Text or Countdown */}
+            {(() => {
+              const drawStatus = getDrawDateStatus();
+              const drawTime = getDrawTimeText();
+
+              // If draw is today or tomorrow, show text instead of countdown
+              if (drawStatus && drawTime) {
+                return (
+                  <div className="flex items-center justify-center">
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md">
+                        {/* Mobile: Stack vertically in 2 rows */}
+                        <div className="flex flex-col sm:flex-row sm:gap-1 lg:gap-2 items-center">
+                          <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
+                            {drawStatus === "tomorrow" ? "DRAW TOMORROW" : "DRAW TONIGHT"}
+                          </div>
+                          <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
+                            {drawTime}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Otherwise, show the countdown timer
+              return (
+                <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
+                  {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
+                  {/* Fixed width classes to prevent size changes on load */}
+                  <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                    <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                      {timeLeft.hours.toString().padStart(2, "0")}
+                    </div>
+                    <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                    <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                      {timeLeft.minutes.toString().padStart(2, "0")}
+                    </div>
+                    <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                    <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                      {timeLeft.seconds.toString().padStart(2, "0")}
+                    </div>
+                    <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                  </div>
                 </div>
-                <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
-              </div>
-              <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
-                <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
-                  {timeLeft.minutes.toString().padStart(2, "0")}
-                </div>
-                <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
-              </div>
-              <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
-                <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
-                  {timeLeft.seconds.toString().padStart(2, "0")}
-                </div>
-                <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </motion.div>
       </motion.div>
