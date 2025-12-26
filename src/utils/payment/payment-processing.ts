@@ -260,6 +260,13 @@ async function processPaymentBenefitsInternal(
         //   userId: user._id.toString(),
         // });
 
+        const paymentEventData = {
+          entries: packageData.entries,
+          points: packageData.points,
+          price: packageData.price,
+          ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
+        };
+
         await PaymentEvent.create({
           _id: eventId,
           paymentIntentId,
@@ -268,16 +275,23 @@ async function processPaymentBenefitsInternal(
           packageType: packageData.packageType,
           packageId: packageData.packageId ? String(packageData.packageId) : undefined,
           packageName: packageData.packageName,
-          data: {
-            entries: packageData.entries,
-            points: packageData.points,
-            price: packageData.price,
-            ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
-          },
+          data: paymentEventData,
           processedBy,
           timestamp: new Date(),
         });
         paymentEventCreated = true;
+
+        // ✅ DEBUG: Log PaymentEvent creation with billingReason for membership payments
+        if (packageData.packageType === "membership") {
+          console.log("💾 PaymentEvent created with billingReason:", {
+            eventId,
+            paymentIntentId,
+            billingReason: billingReason || "NOT STORED",
+            hasBillingReason: !!billingReason,
+            dataKeys: Object.keys(paymentEventData),
+            fullData: paymentEventData,
+          });
+        }
         // console.log(
         //   `✅ [WEBHOOK ${webhookTimestamp}] [${
         //     Date.now() - webhookTimestamp

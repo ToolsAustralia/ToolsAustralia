@@ -2124,6 +2124,16 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       webhookLog("warn", `Failed to retrieve payment intent for promo link code: ${error}`);
     }
 
+    // ✅ DEBUG: Log billing_reason before passing to processPaymentBenefits
+    webhookLog("info", `📊 Passing billing_reason to processPaymentBenefits:`, {
+      invoiceId: expandedInvoice.id,
+      billing_reason: expandedInvoice.billing_reason,
+      billing_reason_type: typeof expandedInvoice.billing_reason,
+      willPass: expandedInvoice.billing_reason || undefined,
+      packageId: packageId,
+      packageName: membershipPackage.name,
+    });
+
     const result = await processPaymentBenefits(
       invoicePaymentId,
       user._id.toString(),

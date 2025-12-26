@@ -108,16 +108,30 @@ export async function GET() {
     // ========================================
     // RECENT PAYMENT EVENTS
     // ========================================
+    // ✅ CRITICAL FIX: Use .lean() to get plain objects - this properly handles Schema.Types.Mixed fields
+    // Mixed type fields are not reliably accessible on Mongoose documents, especially with .populate()
+    // .lean() returns plain JavaScript objects where Mixed types are directly accessible
     const recentPayments = await PaymentEvent.find({
       eventType: "BenefitsGranted",
       timestamp: { $gte: oneWeekAgo },
     })
       .sort({ timestamp: -1 })
       .limit(15)
-      .populate("userId", "firstName lastName email subscription");
+      .lean(); // ✅ Use .lean() to get plain objects - Mixed types are now properly accessible
+
+    // ✅ Populate users separately in batch for better performance
+    const paymentUserIds = [...new Set(recentPayments.map((p) => (p.userId as mongoose.Types.ObjectId).toString()))];
+    const paymentUsers = await User.find({ _id: { $in: paymentUserIds } })
+      .select("firstName lastName email subscription")
+      .lean();
+
+    const userMap = new Map(paymentUsers.map((u) => [u._id.toString(), u]));
 
     recentPayments.forEach((payment) => {
-      // Handle populated userId - it could be an ObjectId or populated user object
+      // ✅ Get user from map (plain object from .lean())
+      const userDoc = userMap.get((payment.userId as mongoose.Types.ObjectId).toString());
+
+      // Handle user data
       type UserType = {
         firstName: string;
         lastName: string;
@@ -131,19 +145,16 @@ export async function GET() {
       };
 
       let user: UserType | null = null;
-      const populatedUser = payment.userId as unknown;
-      if (
-        populatedUser &&
-        typeof populatedUser === "object" &&
-        "firstName" in populatedUser &&
-        "lastName" in populatedUser &&
-        "email" in populatedUser
-      ) {
-        user = populatedUser as UserType;
+      if (userDoc) {
+        user = userDoc as UserType;
       }
 
       const timeAgo = getTimeAgo(payment.timestamp);
-      const amount = payment.data?.price || 0;
+
+      // ✅ With .lean(), payment.data is already a plain object - Mixed types are directly accessible
+      const paymentData = payment.data as Record<string, unknown> | undefined;
+
+      const amount = (paymentData?.price as number | undefined) || 0;
       const packageName = payment.packageName || "Unknown Package";
 
       let action = "";
@@ -151,11 +162,26 @@ export async function GET() {
 
       // Determine action based on package type and name
       if (payment.packageType === "membership") {
-        // Check if this is a renewal (user already had this package)
-        const isRenewal =
-          user?.subscription?.packageId === payment.packageId &&
-          user?.subscription?.lastUpgradeDate &&
-          new Date(user.subscription.lastUpgradeDate).getTime() < payment.timestamp.getTime() - 24 * 60 * 60 * 1000; // More than 24 hours ago
+        // ✅ BEST PRACTICE: Use billing_reason from PaymentEvent data for reliable renewal detection
+        // With .lean(), the data field is a plain object and billingReason is directly accessible
+        const billingReason = paymentData?.billingReason as string | undefined;
+
+        // Check if it's a renewal based on billing_reason
+        let isRenewal = billingReason === "subscription_cycle";
+
+        // ✅ FALLBACK: For old PaymentEvent records that don't have billingReason stored
+        // Try to infer from user subscription data (less reliable but helps with historical records)
+        if (!billingReason && user?.subscription) {
+          // If user already has this package and lastUpgradeDate is more than 24 hours ago, likely a renewal
+          const hasExistingSubscription =
+            user.subscription.packageId === payment.packageId &&
+            user.subscription.lastUpgradeDate &&
+            new Date(user.subscription.lastUpgradeDate).getTime() < payment.timestamp.getTime() - 24 * 60 * 60 * 1000;
+
+          if (hasExistingSubscription) {
+            isRenewal = true;
+          }
+        }
 
         if (isRenewal) {
           action = `Renewed ${packageName} subscription`;
