@@ -329,7 +329,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
                       }}
                     >
-                      CHRISTMAS OFFER
+                      BOXING DAY OFFER
                     </span>
                   </div>
                 </div>
