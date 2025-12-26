@@ -2144,7 +2144,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         affiliateCode: affiliateCode || undefined,
       },
       requestContext, // Pass request context if available (may be undefined for renewals)
-      expandedInvoice.billing_reason // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
+      expandedInvoice.billing_reason || undefined // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
     );
 
     if (result.success) {
