@@ -124,7 +124,8 @@ export async function processPaymentBenefits(
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
-  }
+  },
+  billingReason?: string // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -169,7 +170,8 @@ export async function processPaymentBenefits(
     packageData,
     processedBy,
     paymentMetadata,
-    requestContext
+    requestContext,
+    billingReason
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -199,7 +201,8 @@ async function processPaymentBenefitsInternal(
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
-  }
+  },
+  billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -269,6 +272,7 @@ async function processPaymentBenefitsInternal(
             entries: packageData.entries,
             points: packageData.points,
             price: packageData.price,
+            ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
           },
           processedBy,
           timestamp: new Date(),

@@ -2143,7 +2143,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         promoLinkCode: promoLinkCode || undefined, // Ensure undefined instead of empty string
         affiliateCode: affiliateCode || undefined,
       },
-      requestContext // Pass request context if available (may be undefined for renewals)
+      requestContext, // Pass request context if available (may be undefined for renewals)
+      expandedInvoice.billing_reason // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
     );
 
     if (result.success) {

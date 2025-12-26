@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Edit, Save, AlertCircle, Calendar, DollarSign, Package, Sparkles, Plus, Trash2, X } from "lucide-react";
-import * as LucideIcons from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Edit, Save, AlertCircle, Calendar, DollarSign, Package } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -14,7 +12,6 @@ import {
   Textarea,
   DateTimePicker,
   ImageUpload,
-  IconPickerModal,
 } from "./ui";
 
 // Types
@@ -30,11 +27,6 @@ interface MajorDrawData {
     brand?: string;
     specifications?: Record<string, string | number | string[]>;
     terms?: string[];
-    components?: Array<{
-      title: string;
-      description: string;
-      icon?: string;
-    }>;
   };
   drawDate: string;
   activationDate: string;
@@ -62,32 +54,6 @@ export default function MajorDrawEditModal({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initializedDrawId, setInitializedDrawId] = useState<string | null>(null);
-  // Remember which highlight card is currently choosing an icon.
-  const [iconPickerState, setIconPickerState] = useState<{ open: boolean; componentIndex: number | null }>({
-    open: false,
-    componentIndex: null,
-  });
-
-  // Translate an icon name into a Lucide component so the preview stays in sync.
-  const resolveIconComponent = (iconName?: string): LucideIcon => {
-    const iconsMap = LucideIcons as unknown as Record<string, LucideIcon>;
-    if (!iconName) {
-      return iconsMap.Sparkles ?? Sparkles;
-    }
-    const formatIconKey = (value: string) =>
-      value
-        .split(/[\s-_]+/)
-        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-        .join("");
-
-    const candidates = [iconName, iconName.charAt(0).toUpperCase() + iconName.slice(1), formatIconKey(iconName)];
-    for (const key of candidates) {
-      if (iconsMap[key]) {
-        return iconsMap[key];
-      }
-    }
-    return iconsMap.Sparkles ?? Sparkles;
-  };
 
   // Initialize form data when majorDraw changes
   useEffect(() => {
@@ -110,20 +76,6 @@ export default function MajorDrawEditModal({
         brand: majorDraw.prize.brand || "",
         specifications: { ...(majorDraw.prize.specifications || {}) },
         terms: [...(majorDraw.prize.terms || [])],
-        components:
-          majorDraw.prize.components && majorDraw.prize.components.length > 0
-            ? majorDraw.prize.components.map((component) => ({
-                title: component.title,
-                description: component.description,
-                icon: component.icon || "",
-              }))
-            : [
-                {
-                  title: "",
-                  description: "",
-                  icon: "",
-                },
-              ],
       },
       status: majorDraw.status,
       drawDate: majorDraw.drawDate,
@@ -185,119 +137,6 @@ export default function MajorDrawEditModal({
     }
   };
 
-  const handleComponentChange = (index: number, field: "title" | "description" | "icon", value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize!,
-        components: prev.prize?.components?.map((component, i) =>
-          i === index ? { ...component, [field]: value } : component
-        ),
-      },
-    }));
-
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({
-        ...prev,
-        "prize.components": "",
-      }));
-    }
-  };
-
-  const addComponent = () => {
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize!,
-        components: [
-          ...(prev.prize?.components || []),
-          {
-            title: "",
-            description: "",
-            icon: "",
-          },
-        ],
-      },
-    }));
-
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({
-        ...prev,
-        "prize.components": "",
-      }));
-    }
-  };
-
-  const removeComponent = (index: number) => {
-    setFormData((prev) => {
-      const nextComponents = (prev.prize?.components || []).filter((_, i) => i !== index);
-      return {
-        ...prev,
-        prize: {
-          ...prev.prize!,
-          components:
-            nextComponents.length > 0
-              ? nextComponents
-              : [
-                  {
-                    title: "",
-                    description: "",
-                    icon: "",
-                  },
-                ],
-        },
-      };
-    });
-
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({
-        ...prev,
-        "prize.components": "",
-      }));
-    }
-  };
-
-  const openIconPicker = (index: number) => {
-    setIconPickerState({ open: true, componentIndex: index });
-  };
-
-  const handleIconSelect = (iconName: string) => {
-    // Bail out if we somehow lost the index reference.
-    if (iconPickerState.componentIndex === null) {
-      return;
-    }
-    // Persist the selected icon on the target highlight card.
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize!,
-        components: prev.prize?.components?.map((component, i) =>
-          i === iconPickerState.componentIndex ? { ...component, icon: iconName } : component
-        ),
-      },
-    }));
-
-    if (errors["prize.components"]) {
-      setErrors((prev) => ({
-        ...prev,
-        "prize.components": "",
-      }));
-    }
-    setIconPickerState({ open: false, componentIndex: null });
-  };
-
-  const clearIcon = (index: number) => {
-    // Clearing the icon keeps the UI simple and avoids stale names.
-    setFormData((prev) => ({
-      ...prev,
-      prize: {
-        ...prev.prize!,
-        components: prev.prize?.components?.map((component, i) =>
-          i === index ? { ...component, icon: "" } : component
-        ),
-      },
-    }));
-  };
 
   // Handle image changes - allow multiple
   const handleImagesChange = (images: (string | File)[]) => {
@@ -338,11 +177,6 @@ export default function MajorDrawEditModal({
     }
     if (!formData.prize?.images || formData.prize.images.length === 0) {
       newErrors["prize.images"] = "At least one prize image is required";
-    }
-    const validComponents =
-      formData.prize?.components?.filter((component) => component.title.trim() && component.description.trim()) || [];
-    if (validComponents.length === 0) {
-      newErrors["prize.components"] = "Add at least one prize highlight";
     }
 
     // Date validation
@@ -385,7 +219,6 @@ export default function MajorDrawEditModal({
               images: [...(formData.prize.images || [])],
               specifications: { ...(formData.prize.specifications || {}) },
               terms: formData.prize.terms ? [...formData.prize.terms] : [],
-              components: formData.prize.components?.map((component) => ({ ...component })),
             }
           : undefined,
       };
@@ -438,14 +271,6 @@ export default function MajorDrawEditModal({
           delete updatedFormData.prize.brand;
         }
 
-        // Clean up optional data so we don't send empty strings to the backend.
-        updatedFormData.prize.components = (updatedFormData.prize.components || [])
-          .filter((component) => component.title.trim() && component.description.trim())
-          .map((component) => ({
-            title: component.title.trim(),
-            description: component.description.trim(),
-            ...(component.icon && component.icon.trim() ? { icon: component.icon.trim() } : {}),
-          }));
       }
 
       await onSaveAction(updatedFormData);
@@ -613,96 +438,6 @@ export default function MajorDrawEditModal({
                   error={errors["prize.images"]}
                 />
               </div>
-
-              <div className="mt-4 bg-white/70 border border-blue-200 rounded-lg p-4">
-                <h4 className="text-md font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-600" />
-                  Prize Highlights
-                </h4>
-
-                <div className="space-y-3">
-                  {(formData.prize?.components || []).map((component, index) => (
-                    <div key={index} className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-2">
-                      <div className="flex items-start gap-3">
-                        <Input
-                          label="Highlight Title"
-                          value={component.title}
-                          onChange={(e) => handleComponentChange(index, "title", e.target.value)}
-                          disabled={majorDraw.configurationLocked}
-                          className="flex-1"
-                        />
-                        {(formData.prize?.components?.length || 0) > 1 && !majorDraw.configurationLocked && (
-                          <button
-                            type="button"
-                            onClick={() => removeComponent(index)}
-                            className="text-red-600 hover:text-red-800 text-xs font-semibold mt-6 flex items-center gap-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Remove
-                          </button>
-                        )}
-                      </div>
-
-                      <Textarea
-                        label="Highlight Description"
-                        value={component.description}
-                        onChange={(e) => handleComponentChange(index, "description", e.target.value)}
-                        rows={2}
-                        disabled={majorDraw.configurationLocked}
-                      />
-
-                      <div className="space-y-2">
-                        <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide block">
-                          Icon (optional)
-                        </span>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => openIconPicker(index)}
-                            className="text-xs"
-                            disabled={majorDraw.configurationLocked}
-                          >
-                            Choose Icon
-                          </Button>
-                          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
-                            <span className="flex items-center justify-center w-7 h-7 rounded-md bg-gray-100">
-                              {(() => {
-                                const PreviewIcon = resolveIconComponent(component.icon);
-                                return <PreviewIcon className="w-4 h-4 text-red-600" />;
-                              })()}
-                            </span>
-                            <span>{component.icon || "None selected"}</span>
-                          </div>
-                          {component.icon && !majorDraw.configurationLocked && (
-                            <button
-                              type="button"
-                              onClick={() => clearIcon(index)}
-                              className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
-                            >
-                              <X className="w-3 h-3" />
-                              Clear
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {!majorDraw.configurationLocked && (
-                    <button
-                      type="button"
-                      onClick={addComponent}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Highlight
-                    </button>
-                  )}
-
-                  {errors["prize.components"] && <p className="text-red-600 text-sm">{errors["prize.components"]}</p>}
-                </div>
-              </div>
             </div>
 
             {/* Dates */}
@@ -775,13 +510,6 @@ export default function MajorDrawEditModal({
           </form>
         </ModalContent>
       </ModalContainer>
-
-      <IconPickerModal
-        isOpen={iconPickerState.open}
-        onClose={() => setIconPickerState({ open: false, componentIndex: null })}
-        onSelect={handleIconSelect}
-        title="Select Highlight Icon"
-      />
     </>
   );
 }

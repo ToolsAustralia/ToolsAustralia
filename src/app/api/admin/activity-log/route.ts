@@ -158,10 +158,10 @@ export async function GET(request: NextRequest) {
       let type: ActivityLogItem["type"] = "one_time_purchase";
 
       if (payment.packageType === "membership") {
-        const isRenewal =
-          user?.subscription?.packageId === payment.packageId &&
-          user?.subscription?.lastUpgradeDate &&
-          new Date(user.subscription.lastUpgradeDate).getTime() < payment.timestamp.getTime() - 24 * 60 * 60 * 1000;
+        // ✅ IMPROVED: Use billing_reason from PaymentEvent data for reliable renewal detection
+        // This is more accurate than checking lastUpgradeDate, which may not be set for all renewals
+        const billingReason = payment.data?.billingReason as string | undefined;
+        const isRenewal = billingReason === "subscription_cycle";
 
         if (isRenewal) {
           action = `Renewed ${packageName} subscription`;
