@@ -7,7 +7,32 @@ import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
 import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST } from "@/utils/common/timezone";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
+
+// Helper function to get current timezone abbreviation (AEST or AEDT)
+const getTimezoneAbbr = (): string => {
+  try {
+    const now = new Date();
+    const AEST_TIMEZONE = "Australia/Sydney";
+    const formatter = new Intl.DateTimeFormat("en-AU", {
+      timeZone: AEST_TIMEZONE,
+      timeZoneName: "short",
+    });
+    const parts = formatter.formatToParts(now);
+    const tzPart = parts.find((part) => part.type === "timeZoneName");
+    return tzPart?.value || "AEDT"; // Default to AEDT if not found
+  } catch {
+    // Fallback: check offset to determine AEST (UTC+10) vs AEDT (UTC+11)
+    const now = new Date();
+    const AEST_TIMEZONE = "Australia/Sydney";
+    const zonedDate = toZonedTime(now, AEST_TIMEZONE);
+    const utcTime = now.getTime();
+    const zonedTime = zonedDate.getTime();
+    const offsetHours = (utcTime - zonedTime) / (1000 * 60 * 60);
+    return offsetHours === -10 ? "AEST" : "AEDT";
+  }
+};
 
 /**
  * PromoBanner Component
@@ -38,6 +63,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const [isScrolled, setIsScrolled] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
   const [bannerHeight, setBannerHeight] = useState<number | null>(null);
+  const [timezoneAbbr, setTimezoneAbbr] = useState<string>("AEDT");
 
   // Get promos for each type (use initial data if available, fallback to client-side fetch)
   const { data: membershipPromoClient } = usePromoByType("membership-packages");
@@ -46,6 +72,16 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Use initial data if available, otherwise use client-fetched data
   const membershipPromo = initialMembershipPromo || membershipPromoClient;
   const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
+
+  // Get timezone abbreviation on mount and update periodically
+  useEffect(() => {
+    setTimezoneAbbr(getTimezoneAbbr());
+    // Update timezone every hour in case DST changes
+    const interval = setInterval(() => {
+      setTimezoneAbbr(getTimezoneAbbr());
+    }, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Countdown strategy:
   // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
@@ -318,7 +354,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
                     {/* Text content - centered */}
                     <span
-                      className="relative z-10 text-white font-black tracking-wider uppercase text-[12px] sm:text-[14px] whitespace-nowrap"
+                      className="relative z-10 text-white font-black tracking-wider uppercase text-[14px] sm:text-[17px] whitespace-nowrap"
                       style={{
                         textShadow: `
                         0 0 6px rgba(255, 255, 255, 0.8),
@@ -329,7 +365,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
                       }}
                     >
-                      BOXING DAY OFFER
+                      DRAW TONIGHT
                     </span>
                   </div>
                 </div>
@@ -362,13 +398,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div className="flex items-center justify-center">
                     <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3">
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md">
-                        {/* Mobile: Stack vertically in 2 rows */}
-                        <div className="flex flex-col sm:flex-row sm:gap-1 lg:gap-2 items-center">
+                        {/* Always stack vertically in 2 rows */}
+                        <div className="flex flex-col items-center gap-0.5 sm:gap-1">
                           <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
                             {drawStatus === "tomorrow" ? "DRAW TOMORROW" : "DRAW TONIGHT"}
                           </div>
                           <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
-                            {drawTime}
+                            {drawTime} {timezoneAbbr}
                           </div>
                         </div>
                       </div>
@@ -379,26 +415,32 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
               // Otherwise, show the countdown timer
               return (
-                <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                  {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
-                  {/* Fixed width classes to prevent size changes on load */}
-                  <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
-                    <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
-                      {timeLeft.hours.toString().padStart(2, "0")}
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
+                    {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
+                    {/* Fixed width classes to prevent size changes on load */}
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        {timeLeft.hours.toString().padStart(2, "0")}
+                      </div>
+                      <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
                     </div>
-                    <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        {timeLeft.minutes.toString().padStart(2, "0")}
+                      </div>
+                      <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        {timeLeft.seconds.toString().padStart(2, "0")}
+                      </div>
+                      <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                    </div>
                   </div>
-                  <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
-                    <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
-                      {timeLeft.minutes.toString().padStart(2, "0")}
-                    </div>
-                    <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
-                    <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
-                      {timeLeft.seconds.toString().padStart(2, "0")}
-                    </div>
-                    <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                  {/* Timezone label */}
+                  <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-xs">
+                    {timezoneAbbr}
                   </div>
                 </div>
               );
