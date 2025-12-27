@@ -98,7 +98,14 @@ export async function GET(request: NextRequest) {
     });
 
     // Build export data from populated entries
+    // Filter out users with SA or ACT states
     const exportData = majorDraw.entries
+      .filter((entry) => {
+        const user = entry.userId as unknown as PopulatedUser;
+        const stateAbbr = (user?.state || "").toUpperCase().trim();
+        // Exclude SA and ACT states
+        return stateAbbr !== "SA" && stateAbbr !== "ACT";
+      })
       .map((entry, index) => {
         const user = entry.userId as unknown as PopulatedUser; // Populated user object
         const stateAbbr = (user?.state || "").toUpperCase().trim(); // Ensure uppercase and trimmed
