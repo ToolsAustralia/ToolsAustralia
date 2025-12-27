@@ -23,6 +23,8 @@ interface UserSetupModalProps {
 const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComplete, initialStep = 1 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isSavingStateProfession, setIsSavingStateProfession] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [inlineErrors, setInlineErrors] = useState<{
@@ -80,10 +82,13 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   // Ref to store handleComplete function for use in useEffect
   const handleCompleteRef = useRef<((bypassEmailCheck?: boolean) => Promise<void>) | null>(null);
 
+  // Ref to track if we've already determined and set the initial step
+  const stepDeterminedRef = useRef(false);
+
   // Password validation
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
 
-  const { refetch, userData } = useUserContext();
+  const { refetch, userData, loading: userDataLoading } = useUserContext();
   const { hasReferralCode } = useReferralCode();
 
   // SessionStorage key for persisting modal state
@@ -239,13 +244,28 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
   // Reset form when modal opens (with sessionStorage restore support)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !userDataLoading) {
+      // Wait for userData to load before determining step
       // Try to restore state from sessionStorage first
       const savedState = restoreStateFromStorage();
 
       if (savedState) {
         // Restore saved state (user is continuing after tab switch)
-        setCurrentStep(savedState.currentStep);
+        // Check if user has state and profession - if so, override saved step
+        let restoredStep = savedState.currentStep;
+        if (userData) {
+          const hasState = !!(userData.state && typeof userData.state === 'string' && userData.state.trim().length > 0);
+          const hasProfession = !!(userData.profession && typeof userData.profession === 'string' && userData.profession.trim().length > 0);
+          
+          // If user has both state and profession, they should be on step 3
+          if (hasState && hasProfession) {
+            restoredStep = 3;
+          } else if (hasState || hasProfession) {
+            restoredStep = 2;
+          }
+        }
+        
+        setCurrentStep(restoredStep);
         setPassword(savedState.password || "");
         setConfirmPassword(savedState.confirmPassword || "");
         setSelectedState(savedState.selectedState || "");
@@ -255,37 +275,56 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setIsEmailVerified(savedState.isEmailVerified || userData?.isEmailVerified || false);
         setCurrentEmail(savedState.currentEmail || userData?.email || "");
         setShowEmailVerification(savedState.showEmailVerification || false);
-        console.log("✅ Restored modal state from sessionStorage");
       } else {
         // Fresh start - detect initial step and reset
         let targetStep = initialStep;
 
         if (userData) {
-          // Check if user has password and state
-          // Note: password is not included in UserData for security, so we check profileSetupCompleted
-          // If profileSetupCompleted is false, user needs to set password and state
-          // If profileSetupCompleted is true but email not verified, user needs email verification
+          // Check what data the user already has
+          // Note: password is not included in UserData for security
           const hasCompletedSetup = !!userData.profileSetupCompleted;
-          const hasState = !!userData.state;
+          
+          // Direct access to check values
+          const stateValue = userData.state;
+          const professionValue = userData.profession;
+          // Check if values exist and are non-empty strings
+          const hasState = !!(stateValue && typeof stateValue === 'string' && stateValue.trim().length > 0);
+          const hasProfession = !!(professionValue && typeof professionValue === 'string' && professionValue.trim().length > 0);
           const isEmailVerified = !!userData.isEmailVerified;
 
-          // If user has completed setup (password + state) but email is not verified, start at step 3
-          if (hasCompletedSetup && hasState && !isEmailVerified) {
-            targetStep = 3;
-          }
           // If user has completed setup and verified email, don't show modal at all
-          else if (hasCompletedSetup && hasState && isEmailVerified) {
+          if (hasCompletedSetup && hasState && isEmailVerified) {
             // User setup is already complete, close modal
             onClose();
             return;
           }
-          // If user hasn't completed setup, start at step 1
-          else if (!hasCompletedSetup) {
+
+          // Determine which step to start at based on what data exists:
+          // - If user has both state and profession, they've completed steps 1 and 2, skip to step 3
+          // - If user has state or profession (but not both), they're in step 2 (they have password from step 1)
+          // - If user has neither, they need to start from step 1 (password)
+          // Note: If user has state/profession, they must have completed step 1 (password) to get there
+          if (hasState && hasProfession) {
+            // User has both state and profession, skip to step 3 (email verification)
+            targetStep = 3;
+          } else if (hasState || hasProfession) {
+            // User has one of state/profession but not both, go to step 2 to complete it
+            // They must have password since they got to step 2
+            targetStep = 2;
+          } else {
+            // User has neither state nor profession
+            // Check if they have password by checking if setup API allows password-only operations
+            // Since we can't check password from UserData, we'll check via API
+            // For now, default to step 1 - if they have password, the save will fail and we can handle it
             targetStep = 1;
           }
         }
 
-        setCurrentStep(targetStep);
+        // Only set step if we haven't already determined it, or if we need to update it
+        if (!stepDeterminedRef.current || targetStep !== currentStep) {
+          setCurrentStep(targetStep);
+          stepDeterminedRef.current = true;
+        }
         setPassword("");
         setConfirmPassword("");
         setSelectedState("");
@@ -295,7 +334,6 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         setIsEmailVerified(userData?.isEmailVerified || false);
         setCurrentEmail(userData?.email || "");
         setShowEmailVerification(false);
-        console.log("🆕 Starting fresh modal session");
       }
 
       // Always reset these (error/loading states only)
@@ -308,7 +346,12 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       setNewEmail("");
       setIsUpdatingEmail(false);
     }
-  }, [isOpen, initialStep, onClose, restoreStateFromStorage, userData]); // Removed userData dependency to prevent reset on refetch
+
+    // Reset stepDeterminedRef when modal closes
+    if (!isOpen) {
+      stepDeterminedRef.current = false;
+    }
+  }, [isOpen, initialStep, onClose, restoreStateFromStorage, userData, userDataLoading]); // Wait for userData to load
   // Note: userData is intentionally excluded from affecting reset logic
   // This allows the modal to maintain its state during email update process
 
@@ -382,7 +425,72 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     }
   };
 
-  const handleNext = () => {
+  const savePassword = async (): Promise<boolean> => {
+    try {
+      setIsSavingPassword(true);
+      setError(null);
+
+      const response = await fetch("/api/user/setup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          password,
+          savePasswordOnly: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save password");
+      }
+
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save password. Please try again.");
+      return false;
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  const saveStateAndProfession = async (): Promise<boolean> => {
+    try {
+      setIsSavingStateProfession(true);
+      setError(null);
+
+      const professionValue = selectedProfession === "Other" ? customProfession.trim() : selectedProfession;
+
+      const response = await fetch("/api/user/setup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          state: selectedState,
+          profession: professionValue,
+          saveStateProfessionOnly: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save state and profession");
+      }
+
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save state and profession. Please try again.");
+      return false;
+    } finally {
+      setIsSavingStateProfession(false);
+    }
+  };
+
+  const handleNext = async () => {
     if (currentStep === 1) {
       // Clear previous inline errors
       setInlineErrors({});
@@ -407,6 +515,12 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         // Focus on confirm password field
         setTimeout(() => confirmPasswordRef.current?.focus(), 100);
         return;
+      }
+
+      // Save password before proceeding to step 2
+      const saved = await savePassword();
+      if (!saved) {
+        return; // Don't proceed if save failed
       }
     }
 
@@ -443,6 +557,12 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           return;
         }
       }
+
+      // Save state and profession before proceeding to step 3
+      const saved = await saveStateAndProfession();
+      if (!saved) {
+        return; // Don't proceed if save failed
+      }
     }
 
     setCurrentStep(currentStep + 1);
@@ -472,9 +592,16 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       setError(null);
 
       try {
+        // Check if password, state, and profession are already saved
+        // If we're on step 3, it means we successfully saved password in step 1 (otherwise we wouldn't be here)
+        // So we just need to check if state/profession exist (either from userData if saved in step 2, or from form state)
+        const hasState = userData?.state || selectedState;
+        const hasProfession = userData?.profession || selectedProfession || (selectedProfession === "Other" ? customProfession : "");
+
         // If user started at step 3 (email verification only), they already have password and state
-        if (initialStep === 3 || (userData?.profileSetupCompleted && userData?.state)) {
-          // Just mark setup as complete without sending password/state
+        // Or if we've already saved password and state/profession incrementally (we're on step 3 with state/profession), just mark as complete
+        if (initialStep === 3 || (userData?.profileSetupCompleted && userData?.state) || (currentStep === 3 && hasState && hasProfession)) {
+          // Just mark setup as complete without sending password/state/profession
           const response = await fetch("/api/user/setup", {
             method: "POST",
             headers: {
@@ -492,7 +619,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
             throw new Error(data.error || "Failed to complete setup");
           }
         } else {
-          // Normal flow - user is completing full setup
+          // Fallback: Normal flow - user is completing full setup (shouldn't happen with incremental saving)
           const response = await fetch("/api/user/setup", {
             method: "POST",
             headers: {
@@ -939,9 +1066,11 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                 </Button>
               )}
               <Button
-                onClick={currentStep === 3 ? () => void handleComplete() : handleNext}
+                onClick={currentStep === 3 ? () => void handleComplete() : () => void handleNext()}
                 disabled={
                   isLoading ||
+                  isSavingPassword ||
+                  isSavingStateProfession ||
                   (currentStep === 2 &&
                     (!selectedState ||
                       !selectedProfession ||
@@ -952,7 +1081,15 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                 size="md"
                 className="flex-1"
               >
-                {isLoading ? "Saving..." : currentStep === 3 ? "Complete Setup" : "Next"}
+                {isLoading
+                  ? "Saving..."
+                  : isSavingPassword
+                    ? "Saving password..."
+                    : isSavingStateProfession
+                      ? "Saving..."
+                      : currentStep === 3
+                        ? "Complete Setup"
+                        : "Next"}
               </Button>
             </div>
           </div>

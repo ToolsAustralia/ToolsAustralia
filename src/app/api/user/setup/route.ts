@@ -13,6 +13,19 @@ const setupSchema = z.object({
   profession: z.string().min(1, "Profession is required").max(100, "Profession cannot exceed 100 characters"),
 });
 
+// Validation schema for password-only save
+const passwordOnlySchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  savePasswordOnly: z.literal(true),
+});
+
+// Validation schema for state/profession-only save
+const stateProfessionOnlySchema = z.object({
+  state: z.string().min(1, "State is required"),
+  profession: z.string().min(1, "Profession is required").max(100, "Profession cannot exceed 100 characters"),
+  saveStateProfessionOnly: z.literal(true),
+});
+
 // Validation schema for email verification only
 const emailVerificationSchema = z.object({
   completeSetupOnly: z.boolean().optional(),
@@ -49,8 +62,58 @@ export async function POST(request: NextRequest) {
       await user.save();
 
       console.log(`✅ User email verification completed for: ${user.email}`);
+    } else if (body.savePasswordOnly) {
+      // Password-only save (Step 1)
+      const validationResult = passwordOnlySchema.safeParse(body);
+
+      if (!validationResult.success) {
+        return NextResponse.json({ error: "Invalid input", details: validationResult.error.issues }, { status: 400 });
+      }
+
+      const { password } = validationResult.data;
+
+      // Hash password
+      const saltRounds = 12;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Update only password - don't set profileSetupCompleted
+      user.password = hashedPassword;
+      await user.save();
+
+      console.log(`✅ User password saved for: ${user.email}`);
+    } else if (body.saveStateProfessionOnly) {
+      // State/profession-only save (Step 2)
+      const validationResult = stateProfessionOnlySchema.safeParse(body);
+
+      if (!validationResult.success) {
+        return NextResponse.json({ error: "Invalid input", details: validationResult.error.issues }, { status: 400 });
+      }
+
+      const { state, profession } = validationResult.data;
+
+      // Validate state code
+      const validStates = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
+      if (!validStates.includes(state.toUpperCase())) {
+        return NextResponse.json({ error: "Invalid state code" }, { status: 400 });
+      }
+
+      // Validate profession (trim and ensure it's not empty)
+      const trimmedProfession = profession.trim();
+      if (!trimmedProfession || trimmedProfession.length === 0) {
+        return NextResponse.json({ error: "Profession is required" }, { status: 400 });
+      }
+      if (trimmedProfession.length > 100) {
+        return NextResponse.json({ error: "Profession cannot exceed 100 characters" }, { status: 400 });
+      }
+
+      // Update only state and profession - don't set profileSetupCompleted
+      user.state = state.toUpperCase();
+      user.profession = trimmedProfession;
+      await user.save();
+
+      console.log(`✅ User state and profession saved for: ${user.email}`);
     } else {
-      // Full setup flow - validate password and state
+      // Full setup flow - validate password and state (fallback for backwards compatibility)
       const validationResult = setupSchema.safeParse(body);
 
       if (!validationResult.success) {
@@ -72,11 +135,6 @@ export async function POST(request: NextRequest) {
       }
       if (trimmedProfession.length > 100) {
         return NextResponse.json({ error: "Profession cannot exceed 100 characters" }, { status: 400 });
-      }
-
-      // Check if user already has a password and state set
-      if (user.password && user.state) {
-        return NextResponse.json({ error: "User setup already completed" }, { status: 400 });
       }
 
       // Hash password

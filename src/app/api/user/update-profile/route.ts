@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
+import { AUSTRALIAN_STATES } from "@/data/australianStates";
 
 const updateProfileSchema = z.object({
   mobile: z
@@ -12,6 +13,18 @@ const updateProfileSchema = z.object({
     .max(30, "Phone number is too long")
     .trim()
     .optional(),
+  state: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || AUSTRALIAN_STATES.some((state) => state.code === value.toUpperCase()),
+      "State must be a valid Australian state code"
+    ),
+  profession: z
+    .string()
+    .max(100, "Profession cannot exceed 100 characters")
+    .optional()
+    .transform((val) => (val?.trim() || undefined)),
 });
 
 export async function POST(request: NextRequest) {
@@ -56,12 +69,25 @@ export async function POST(request: NextRequest) {
       user.mobile = newMobile;
     }
 
+    if (parsed.data.state !== undefined) {
+      user.state = parsed.data.state ? parsed.data.state.toUpperCase() : undefined;
+    }
+
+    if (parsed.data.profession !== undefined) {
+      user.profession = parsed.data.profession;
+    }
+
     await user.save();
 
     return NextResponse.json({
       success: true,
       message: "Profile updated successfully",
-      user: { id: user._id.toString(), mobile: user.mobile },
+      user: {
+        id: user._id.toString(),
+        mobile: user.mobile,
+        state: user.state,
+        profession: user.profession,
+      },
     });
   } catch (error) {
     console.error("Update profile error:", error);
