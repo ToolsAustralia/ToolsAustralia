@@ -30,6 +30,7 @@ const basicInfoSchema = z
         "State must be a valid Australian state code"
       )
       .optional(),
+    profession: z.string().max(100, "Profession cannot exceed 100 characters").optional().or(z.literal("")),
     role: z.enum(["user", "admin"]).optional(),
     isActive: z.boolean().optional(),
     isEmailVerified: z.boolean().optional(),
