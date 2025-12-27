@@ -60,6 +60,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     seconds: 0,
   });
 
+  const [freezeTimeLeft, setFreezeTimeLeft] = useState({
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+
   const [isScrolled, setIsScrolled] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
   const [bannerHeight, setBannerHeight] = useState<number | null>(null);
@@ -127,6 +133,32 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
   }, [targetDateMs]);
+
+  // Separate countdown for freeze time when draw is tonight
+  useEffect(() => {
+    if (!currentDraw?.freezeEntriesAt) return;
+
+    const updateFreezeCountdown = () => {
+      const now = Date.now();
+      const freezeDate = new Date(currentDraw.freezeEntriesAt!).getTime();
+      const freezeMs = Math.max(0, freezeDate - now);
+
+      const totalSeconds = Math.floor(freezeMs / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+
+      setFreezeTimeLeft((prev) =>
+        prev.hours === h && prev.minutes === m && prev.seconds === s
+          ? prev
+          : { hours: h, minutes: m, seconds: s }
+      );
+    };
+
+    updateFreezeCountdown();
+    const timer = setInterval(updateFreezeCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [currentDraw?.freezeEntriesAt]);
 
   // Listen for tab changes from MembershipSection
   useEffect(() => {
@@ -208,6 +240,18 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     }
 
     return null;
+  };
+
+  // Determine badge text based on draw status
+  const getBadgeText = (): string => {
+    const drawStatus = getDrawDateStatus();
+    if (drawStatus === "today") {
+      return "DRAWN TONIGHT";
+    } else if (drawStatus === "tomorrow") {
+      return "DRAWN TOMORROW";
+    }
+    // Default fallback
+    return "LIMITED OFFER";
   };
 
   // Get formatted draw time for display
@@ -365,7 +409,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
                       }}
                     >
-                      DRAW TONIGHT
+                      {getBadgeText()}
                     </span>
                   </div>
                 </div>
@@ -392,8 +436,37 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               const drawStatus = getDrawDateStatus();
               const drawTime = getDrawTimeText();
 
-              // If draw is today or tomorrow, show text instead of countdown
-              if (drawStatus && drawTime) {
+              // If draw is tonight, show countdown to freeze time
+              if (drawStatus === "today" && currentDraw?.freezeEntriesAt) {
+                return (
+                  <div className="flex flex-col items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
+                      {/* Countdown to freeze time */}
+                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                          {freezeTimeLeft.hours.toString().padStart(2, "0")}
+                        </div>
+                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                          {freezeTimeLeft.minutes.toString().padStart(2, "0")}
+                        </div>
+                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                          {freezeTimeLeft.seconds.toString().padStart(2, "0")}
+                        </div>
+                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // If draw is tomorrow, show text with time
+              if (drawStatus === "tomorrow" && drawTime) {
                 return (
                   <div className="flex items-center justify-center">
                     <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3">
@@ -401,7 +474,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         {/* Always stack vertically in 2 rows */}
                         <div className="flex flex-col items-center gap-0.5 sm:gap-1">
                           <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
-                            {drawStatus === "tomorrow" ? "DRAW TOMORROW" : "DRAW TONIGHT"}
+                            DRAWN TOMORROW
                           </div>
                           <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
                             {drawTime} {timezoneAbbr}
@@ -438,10 +511,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
                     </div>
                   </div>
-                  {/* Timezone label */}
-                  <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-xs">
-                    {timezoneAbbr}
-                  </div>
+                 
                 </div>
               );
             })()}
