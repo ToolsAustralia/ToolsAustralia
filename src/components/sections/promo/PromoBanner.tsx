@@ -251,7 +251,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       return "DRAWN TOMORROW";
     }
     // Default fallback
-    return "LIMITED OFFER";
+    return "First 500 People";
   };
 
   // Get formatted draw time for display
@@ -398,7 +398,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
                     {/* Text content - centered */}
                     <span
-                      className="relative z-10 text-white font-black tracking-wider uppercase text-[14px] sm:text-[17px] whitespace-nowrap"
+                      className="relative z-10 text-white font-black tracking-wider uppercase text-[12px] sm:text-[16px] whitespace-nowrap"
                       style={{
                         textShadow: `
                         0 0 6px rgba(255, 255, 255, 0.8),
