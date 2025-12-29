@@ -130,7 +130,7 @@ const MiniDrawSchema = new Schema<IMiniDraw>(
       },
       entryNumber: {
         type: Number,
-        min: [1, "Entry number must be at least 1"],
+        min: [0, "Entry number must be at least 0"],
       },
       selectedDate: Date,
       notified: {

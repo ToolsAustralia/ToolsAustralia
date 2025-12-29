@@ -129,11 +129,11 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                 {/* Prize Image with Winner - Responsive */}
                 <div className="lg:col-span-1">
                   <div className="relative">
-                    {draw.prize.images && draw.prize.images.length > 0 ? (
+                    {draw.prize?.images && draw.prize.images.length > 0 ? (
                       <div className="relative w-full h-48 sm:h-64 lg:h-80 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg sm:shadow-xl group-hover:shadow-xl sm:group-hover:shadow-2xl transition-shadow duration-500">
                         <Image
                           src={draw.prize.images[0]}
-                          alt={draw.prize.name}
+                          alt={draw.prize?.name || "Prize"}
                           fill
                           className="object-cover group-hover:scale-105 transition-transform duration-700"
                           sizes="(max-width: 1024px) 100vw, 33vw"
@@ -142,14 +142,16 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                       </div>
                     ) : (
                       <div className="w-full h-48 sm:h-64 lg:h-80 bg-gradient-to-br from-red-100 via-red-200 to-red-300 rounded-xl sm:rounded-2xl flex items-center justify-center text-4xl sm:text-6xl shadow-lg sm:shadow-xl">
-                        {getCategoryIcon(draw.prize.category)}
+                        {getCategoryIcon(draw.prize?.category || "other")}
                       </div>
                     )}
 
                     {/* Prize Value Badge */}
-                    <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gradient-to-r from-red-500 to-red-600 text-white px-2 py-1 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl shadow-lg">
-                      <span className="text-sm sm:text-lg font-bold">{formatCurrency(draw.prize.value)}</span>
-                    </div>
+                    {draw.prize?.value && draw.prize.value > 0 && (
+                      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gradient-to-r from-red-500 to-red-600 text-white px-2 py-1 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl shadow-lg">
+                        <span className="text-sm sm:text-lg font-bold">{formatCurrency(draw.prize.value)}</span>
+                      </div>
+                    )}
 
                     {/* Winner Information - Bottom of Image (All Screen Sizes) */}
                     {draw.winner && (
@@ -222,7 +224,9 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                           <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
                           <span className="text-xs sm:text-sm font-medium text-gray-600">Category</span>
                         </div>
-                        <p className="text-sm sm:text-lg font-bold text-gray-900 capitalize">{draw.prize.category}</p>
+                        <p className="text-sm sm:text-lg font-bold text-gray-900 capitalize">
+                          {draw.prize?.category || "N/A"}
+                        </p>
                       </div>
                     </div>
                   </div>

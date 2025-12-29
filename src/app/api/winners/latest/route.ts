@@ -1,0 +1,132 @@
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import Winner from "@/models/Winner";
+import { Types } from "mongoose";
+
+export async function GET() {
+  try {
+    await connectDB();
+
+    // Get latest major draw winner from Winner model
+    const latestMajorDrawWinner = await Winner.findOne({ drawType: "major" })
+      .sort({ selectedDate: -1 })
+      .populate("userId", "firstName lastName state")
+      .populate({
+        path: "drawId",
+        model: "MajorDraw",
+        select: "name prize drawDate",
+      })
+      .lean()
+      .exec();
+
+    if (latestMajorDrawWinner && !Array.isArray(latestMajorDrawWinner)) {
+      const winner = latestMajorDrawWinner as unknown as {
+        _id: Types.ObjectId;
+        drawId: Types.ObjectId | {
+          name?: string;
+          prize?: { name?: string; description?: string; value?: number; images?: string[] };
+          drawDate?: Date;
+        };
+        userId: { firstName?: string; lastName?: string; state?: string } | Types.ObjectId;
+        prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
+        imageUrl?: string;
+        selectedDate: Date;
+        entryNumber?: number;
+      };
+      const winnerUser = (typeof winner.userId === 'object' && 'firstName' in winner.userId) 
+        ? winner.userId 
+        : null;
+      const majorDraw = (typeof winner.drawId === 'object' && 'name' in winner.drawId)
+        ? winner.drawId
+        : null;
+      
+      return NextResponse.json({
+        success: true,
+        winner: {
+          id: winner._id.toString(),
+          drawId: winner.drawId.toString(),
+          drawName: majorDraw?.name || "Major Draw",
+          drawType: "major" as const,
+          prize: {
+            name: winner.prizeSnapshot?.name || majorDraw?.prize?.name || "Major Prize",
+            description: winner.prizeSnapshot?.description || majorDraw?.prize?.description || "",
+            value: winner.prizeSnapshot?.value || majorDraw?.prize?.value || 0,
+            images: winner.prizeSnapshot?.images || majorDraw?.prize?.images || [],
+          },
+          winnerName: winnerUser
+            ? `${winnerUser.firstName} ${winnerUser.lastName}`
+            : "Unknown",
+          winnerFirstName: winnerUser?.firstName || "",
+          winnerLastName: winnerUser?.lastName || "",
+          winnerState: winnerUser?.state || "",
+          imageUrl: winner.imageUrl,
+          selectedDate: winner.selectedDate,
+          drawDate: majorDraw?.drawDate || winner.selectedDate,
+          entryNumber: winner.entryNumber,
+        },
+      });
+    }
+
+    // Fallback to latest mini draw winner
+    const latestMiniDrawWinner = await Winner.findOne({ drawType: "mini" })
+      .sort({ selectedDate: -1 })
+      .populate("userId", "firstName lastName state")
+      .lean()
+      .exec();
+
+    if (latestMiniDrawWinner && !Array.isArray(latestMiniDrawWinner)) {
+      const miniWinner = latestMiniDrawWinner as unknown as {
+        _id: Types.ObjectId;
+        drawId: Types.ObjectId;
+        userId: { firstName?: string; lastName?: string; state?: string } | Types.ObjectId;
+        prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
+        imageUrl?: string;
+        selectedDate: Date;
+        entryNumber?: number;
+      };
+      const winnerUser = (typeof miniWinner.userId === 'object' && 'firstName' in miniWinner.userId) 
+        ? miniWinner.userId 
+        : null;
+      
+      return NextResponse.json({
+        success: true,
+        winner: {
+          id: miniWinner._id.toString(),
+          drawId: miniWinner.drawId.toString(),
+          drawName: miniWinner.prizeSnapshot?.name || "Mini Draw",
+          drawType: "mini" as const,
+          prize: {
+            name: miniWinner.prizeSnapshot?.name || "",
+            description: miniWinner.prizeSnapshot?.description || "",
+            value: miniWinner.prizeSnapshot?.value || 0,
+            images: miniWinner.prizeSnapshot?.images || [],
+          },
+          winnerName: winnerUser
+            ? `${winnerUser.firstName} ${winnerUser.lastName}`
+            : "Unknown",
+          winnerFirstName: winnerUser?.firstName || "",
+          winnerLastName: winnerUser?.lastName || "",
+          winnerState: winnerUser?.state || "",
+          imageUrl: miniWinner.imageUrl,
+          selectedDate: miniWinner.selectedDate,
+          entryNumber: miniWinner.entryNumber,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      success: false,
+      message: "No winners found",
+    });
+  } catch (error) {
+    console.error("Error fetching latest winner:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch latest winner",
+      },
+      { status: 500 }
+    );
+  }
+}
+

@@ -63,7 +63,6 @@ interface DrawResult {
     };
     entryNumber: number;
     selectedDate: Date;
-    notified: boolean;
     selectedBy?: string;
     selectedByDetails?: {
       firstName: string;
@@ -71,6 +70,7 @@ interface DrawResult {
       email: string;
     };
     selectionMethod?: "manual" | "government-app";
+    imageUrl?: string;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -242,17 +242,25 @@ export default function DrawResults() {
     }
 
     try {
+      const requestBody: {
+        majorDrawId: string;
+        winnerUserId: string;
+        imageUrl?: string;
+      } = {
+        majorDrawId: winnerData.drawId,
+        winnerUserId: winnerData.winnerUserId,
+      };
+      
+      if (winnerData.imageUrl) {
+        requestBody.imageUrl = winnerData.imageUrl;
+      }
+
       const response = await fetch("/api/admin/major-draw/select-winner", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          majorDrawId: winnerData.drawId,
-          winnerUserId: winnerData.winnerUserId,
-          entryNumber: winnerData.entryNumber,
-          selectionMethod: winnerData.selectionMethod,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -516,7 +524,7 @@ export default function DrawResults() {
                         </div>
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <DollarSign className="w-4 h-4" />
-                          <span>{formatCurrency(draw.prize.value)}</span>
+                          <span>{draw.prize?.value ? formatCurrency(draw.prize.value) : "N/A"}</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Users className="w-4 h-4" />
@@ -616,8 +624,7 @@ export default function DrawResults() {
               selectedDraw.winner
                 ? {
                     userId: selectedDraw.winner.userId,
-                    entryNumber: selectedDraw.winner.entryNumber,
-                    selectionMethod: selectedDraw.winner.selectionMethod || "government-app",
+                    imageUrl: selectedDraw.winner.imageUrl,
                   }
                 : undefined
             }

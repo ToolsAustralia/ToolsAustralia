@@ -335,17 +335,12 @@ export function getMajorDrawDisplayStatus(draw: IMajorDraw): {
       };
 
     case "completed":
-      if (draw.winner) {
-        return {
-          status: "Completed",
-          color: "gray",
-          message: "Winner announced",
-        };
-      }
+      // Winner info is now in Winner model, not in draw object
+      // Display status doesn't depend on winner existence
       return {
         status: "Completed",
         color: "gray",
-        message: "Winner to be announced",
+        message: "Draw completed",
       };
 
     case "cancelled":

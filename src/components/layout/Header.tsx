@@ -541,6 +541,14 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <BarChart3 className="w-4 h-4" />
                     Draw Results
                   </Link>
+                  <Link
+                    href="/winners"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                    onClick={() => setIsResultsMenuOpen(false)}
+                  >
+                    <Trophy className="w-4 h-4" />
+                    Winners 
+                  </Link>
                 </div>
               )}
             </div>
@@ -1197,6 +1205,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       >
                         <BarChart3 className="w-4 h-4" />
                         Draw Results
+                      </Link>
+                      <Link
+                        href="/winners"
+                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-all duration-200 rounded-xl text-sm font-medium ${
+                          isActiveLink("/winners")
+                            ? "text-white bg-[#ee0000]"
+                            : "text-gray-600 hover:text-red-600 hover:bg-gray-50"
+                        }`}
+                        onClick={handleCloseMobileMenu}
+                      >
+                        <Trophy className="w-4 h-4" />
+                        Winners Hall of Fame
                       </Link>
                     </div>
                   )}

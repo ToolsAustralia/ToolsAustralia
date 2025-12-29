@@ -75,6 +75,7 @@ export default withAuth(
           "/contact",
           "/faq",
           "/winners",
+          "/draw-results",
           "/membership",
           "/affiliate/login",
         ];

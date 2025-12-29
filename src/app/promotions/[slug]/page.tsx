@@ -28,6 +28,10 @@ const PromoFAQs = dynamic(() => import("@/components/sections/promo/PromoFAQs"),
 const UnlockDiscounts = dynamic(() => import("@/components/sections/promo/UnlockDiscounts"), {
   ssr: true, // Keep SSR for SEO
 });
+
+const LatestWinnerHero = dynamic(() => import("@/components/sections/LatestWinnerHero"), {
+  ssr: true, // Keep SSR for SEO
+});
 import { getPrizeBySlug, listPrizes } from "@/config/prizes";
 import { getActivePromos } from "@/utils/database/queries/promo-queries";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
@@ -155,6 +159,10 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
 
           <Suspense fallback={<div className="min-h-[600px]" />}>
             <PrizeShowcase slug={prize.slug} />
+          </Suspense>
+
+          <Suspense fallback={<div className="min-h-[400px]" />}>
+            <LatestWinnerHero />
           </Suspense>
 
           <Suspense fallback={<div className="min-h-[300px]" />}>

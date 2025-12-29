@@ -14,6 +14,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import MajorDrawSection from "@/components/sections/MajorDrawSection";
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
+import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -1010,6 +1011,9 @@ export default function MyAccountPage() {
 
           {/* Major Draw Section */}
           <MajorDrawSection className="mb-12" />
+
+          {/* Latest Winner Hero Section */}
+          <LatestWinnerHero className="mb-12" />
 
           {/* Mini Draw Section */}
           <div className="">

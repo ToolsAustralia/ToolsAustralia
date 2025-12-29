@@ -74,6 +74,8 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
     const cleanupReport = {
       majorDrawEntriesRemoved: 0,
       miniDrawEntriesRemoved: 0,
+      majorDrawWinnersRemoved: 0,
+      miniDrawWinnersRemoved: 0,
       affiliateCommissionsDeleted: 0,
       paymentEventsDeleted: 0,
       ordersDeleted: 0,
@@ -105,15 +107,16 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
         { session }
       );
 
-      // Clear winner if user is the winner
-      if (majorDraw.winner?.userId?.toString() === userId) {
-        await MajorDraw.updateOne(
-          { _id: majorDraw._id },
-          {
-            $unset: { "winner.userId": "" },
-          },
-          { session }
-        );
+      // Delete winner document if user is the winner (from Winner model)
+      const winnerDoc = await Winner.findOne({
+        drawId: majorDraw._id,
+        drawType: "major",
+        userId: userObjectId,
+      }).session(session);
+
+      if (winnerDoc) {
+        await Winner.deleteOne({ _id: winnerDoc._id }).session(session);
+        cleanupReport.majorDrawWinnersRemoved += 1;
       }
 
       // Update totalEntries
@@ -150,15 +153,16 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
         { session }
       );
 
-      // Clear winner if user is the winner
-      if (miniDraw.winner?.userId?.toString() === userId) {
-        await MiniDraw.updateOne(
-          { _id: miniDraw._id },
-          {
-            $unset: { "winner.userId": "" },
-          },
-          { session }
-        );
+      // Delete winner document if user is the winner (from Winner model)
+      const miniWinnerDoc = await Winner.findOne({
+        drawId: miniDraw._id,
+        drawType: "mini",
+        userId: userObjectId,
+      }).session(session);
+
+      if (miniWinnerDoc) {
+        await Winner.deleteOne({ _id: miniWinnerDoc._id }).session(session);
+        cleanupReport.miniDrawWinnersRemoved += 1;
       }
 
       // Update totalEntries

@@ -6,7 +6,7 @@ export interface IWinner extends Document {
   drawId: mongoose.Types.ObjectId;
   drawType: WinnerDrawType;
   userId: mongoose.Types.ObjectId;
-  entryNumber: number;
+  entryNumber?: number;
   selectedDate: Date;
   selectionMethod?: "manual" | "government-app";
   notified: boolean;
@@ -45,8 +45,8 @@ const WinnerSchema = new Schema<IWinner>(
     },
     entryNumber: {
       type: Number,
-      required: true,
-      min: [1, "Entry number must be at least 1"],
+      required: false,
+      default: 0,
     },
     selectedDate: {
       type: Date,
@@ -88,4 +88,9 @@ const WinnerSchema = new Schema<IWinner>(
 WinnerSchema.index({ drawId: 1, cycle: -1 });
 WinnerSchema.index({ drawType: 1, createdAt: -1 });
 
-export default mongoose.models.Winner || mongoose.model<IWinner>("Winner", WinnerSchema);
+// Clear cached model if it exists to ensure schema changes are applied
+if (mongoose.models.Winner) {
+  delete mongoose.models.Winner;
+}
+
+export default mongoose.model<IWinner>("Winner", WinnerSchema);

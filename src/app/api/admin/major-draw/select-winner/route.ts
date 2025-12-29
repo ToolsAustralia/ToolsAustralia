@@ -13,15 +13,15 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import User from "@/models/User";
-import mongoose from "mongoose";
+import Winner from "@/models/Winner";
+import mongoose, { Types } from "mongoose";
 import { z } from "zod";
 
 // Validation schema
 const selectWinnerSchema = z.object({
   majorDrawId: z.string(),
   winnerUserId: z.string(),
-  entryNumber: z.number().int().positive(),
-  selectionMethod: z.enum(["manual", "government-app"]).default("government-app"),
+  imageUrl: z.string().url().optional().nullable(),
 });
 
 /**
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
     }
 
-    // Parse and validate request body
+    // Parse JSON request (image is uploaded to /api/upload/cloudinary first, then URL is sent here)
     const body = await request.json();
     const validatedData = selectWinnerSchema.parse(body);
 
@@ -63,24 +63,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if winner already selected
-    if (majorDraw.winner && 
-        majorDraw.winner.userId && 
-        majorDraw.winner.entryNumber &&
-        majorDraw.winner.userId.toString() !== 'null' &&
-        majorDraw.winner.userId.toString() !== 'undefined') {
-      return NextResponse.json(
-        {
-          error: "Winner already selected for this draw",
-          existingWinner: {
-            userId: majorDraw.winner.userId,
-            entryNumber: majorDraw.winner.entryNumber,
-            selectedDate: majorDraw.winner.selectedDate,
-          },
-        },
-        { status: 400 }
-      );
-    }
+    // Allow updating winner if one already exists (e.g., to add/update image)
+    // We'll merge the new data with existing winner data
 
     // Verify winner user exists
     const winnerUser = await User.findById(validatedData.winnerUserId);
@@ -103,60 +87,146 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify entry number is within valid range
-    if (validatedData.entryNumber > majorDraw.totalEntries || validatedData.entryNumber < 1) {
+    // Check if winner already exists in Winner collection
+    const existingWinner = await Winner.findOne({
+      drawId: majorDraw._id,
+      drawType: "major",
+    });
+
+    if (existingWinner) {
+      // Update existing winner document
+      existingWinner.userId = new Types.ObjectId(validatedData.winnerUserId);
+      existingWinner.selectedBy = new Types.ObjectId(session.user.id);
+      if (validatedData.imageUrl) {
+        existingWinner.imageUrl = validatedData.imageUrl;
+      }
+      // Update prize snapshot if prize changed
+      if (majorDraw.prize) {
+        existingWinner.prizeSnapshot = {
+          name: majorDraw.prize.name || "",
+          description: majorDraw.prize.description || "",
+          value: majorDraw.prize.value || 0,
+          images: majorDraw.prize.images || [],
+        };
+      }
+      await existingWinner.save();
+
+      // Update major draw status
+      if (majorDraw.status !== "completed") {
+        majorDraw.status = "completed";
+        majorDraw.isActive = false;
+        await majorDraw.save();
+      }
+
+      // Get updated winner user details
+      const updatedWinnerUser = await User.findById(validatedData.winnerUserId).select("firstName lastName email");
+
       return NextResponse.json(
         {
-          error: `Entry number must be between 1 and ${majorDraw.totalEntries}`,
-          providedEntryNumber: validatedData.entryNumber,
+          success: true,
+          message: "Winner updated successfully",
+          winner: {
+            userId: updatedWinnerUser?._id,
+            name: updatedWinnerUser ? `${updatedWinnerUser.firstName} ${updatedWinnerUser.lastName}` : "Unknown",
+            email: updatedWinnerUser?.email,
+            selectedDate: existingWinner.selectedDate,
+            selectedBy: session.user.email,
+            imageUrl: existingWinner.imageUrl,
+          },
+          majorDraw: {
+            id: majorDraw._id,
+            name: majorDraw.name,
+            totalEntries: majorDraw.totalEntries,
+            status: majorDraw.status,
+          },
         },
-        { status: 400 }
+        { status: 200 }
       );
     }
 
-    // Record winner
-    majorDraw.winner = {
-      userId: new mongoose.Types.ObjectId(validatedData.winnerUserId),
-      entryNumber: validatedData.entryNumber,
-      selectedDate: new Date(),
-      notified: false,
-      selectedBy: new mongoose.Types.ObjectId(session.user.id),
-      selectionMethod: validatedData.selectionMethod,
-    };
+    // Image URL is already uploaded to Cloudinary by the client, just use it
+    const imageUrlToSave = validatedData.imageUrl;
 
-    // Update draw status to completed if not already
-    if (majorDraw.status !== "completed") {
+    // Use transaction for atomic operations (like mini draws)
+    const trx = await mongoose.startSession();
+    trx.startTransaction();
+
+    try {
+      // Create Winner document (like mini draws) - NO nested object
+      const selectedDate = new Date();
+      const winnerData: {
+        drawId: Types.ObjectId;
+        drawType: "major";
+        userId: Types.ObjectId;
+        entryNumber?: number;
+        selectedDate: Date;
+        selectedBy: Types.ObjectId;
+        selectionMethod?: string;
+        prizeSnapshot: {
+          name: string;
+          description: string;
+          value: number;
+          images: string[];
+        };
+        imageUrl?: string;
+        cycle: number;
+      } = {
+        drawId: majorDraw._id,
+        drawType: "major",
+        userId: new Types.ObjectId(validatedData.winnerUserId),
+        selectedDate,
+        selectedBy: new Types.ObjectId(session.user.id),
+        selectionMethod: undefined, // Not used for major draws
+        prizeSnapshot: {
+          name: majorDraw.prize?.name || "",
+          description: majorDraw.prize?.description || "",
+          value: majorDraw.prize?.value || 0,
+          images: majorDraw.prize?.images || [],
+        },
+        imageUrl: imageUrlToSave || undefined, // Convert null to undefined
+        cycle: 1, // Major draws are single-cycle
+      };
+      
+      // Only include entryNumber if needed (defaults to 0 in schema)
+      // Omitting it to avoid validation issues with cached models
+      
+      const [winnerDoc] = await Winner.create([winnerData], { session: trx });
+
+      // Update major draw status - DO NOT set majorDraw.winner
       majorDraw.status = "completed";
       majorDraw.isActive = false;
+      await majorDraw.save({ session: trx });
+
+      await trx.commitTransaction();
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Winner selected successfully",
+          winner: {
+            userId: winnerUser._id,
+            name: `${winnerUser.firstName} ${winnerUser.lastName}`,
+            email: winnerUser.email,
+            selectedDate: winnerDoc.selectedDate,
+            selectedBy: session.user.email,
+            imageUrl: winnerDoc.imageUrl, // Direct field access
+          },
+          majorDraw: {
+            id: majorDraw._id,
+            name: majorDraw.name,
+            totalEntries: majorDraw.totalEntries,
+            status: majorDraw.status,
+          },
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      await trx.abortTransaction();
+      throw error;
+    } finally {
+      trx.endSession();
     }
 
-    await majorDraw.save();
-
-    // TODO: Send winner notification (SMS/Email)
-    // This would be implemented later with your notification system
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Winner selected successfully",
-        winner: {
-          userId: winnerUser._id,
-          name: `${winnerUser.firstName} ${winnerUser.lastName}`,
-          email: winnerUser.email,
-          entryNumber: validatedData.entryNumber,
-          selectionMethod: validatedData.selectionMethod,
-          selectedDate: majorDraw.winner.selectedDate,
-          selectedBy: session.user.email,
-        },
-        majorDraw: {
-          id: majorDraw._id,
-          name: majorDraw.name,
-          totalEntries: majorDraw.totalEntries,
-          status: majorDraw.status,
-        },
-      },
-      { status: 200 }
-    );
   } catch (error) {
     console.error("Error selecting winner:", error);
 
@@ -213,8 +283,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Major draw not found" }, { status: 404 });
     }
 
-    // If no winner, return null
-    if (!majorDraw.winner) {
+    // Query Winner model instead of majorDraw.winner
+    const winner = await Winner.findOne({
+      drawId: majorDraw._id,
+      drawType: "major",
+    }).populate("userId", "firstName lastName email mobile state");
+
+    if (!winner) {
       return NextResponse.json(
         {
           hasWinner: false,
@@ -230,25 +305,27 @@ export async function GET(request: NextRequest) {
     }
 
     // Get winner user details
-    const winnerUser = await User.findById(majorDraw.winner.userId).select("firstName lastName email mobile state");
+    const winnerUser = (typeof winner.userId === 'object' && 'firstName' in winner.userId) 
+      ? winner.userId as { firstName?: string; lastName?: string; email?: string; mobile?: string; state?: string }
+      : null;
 
     return NextResponse.json(
       {
         hasWinner: true,
         winner: {
-          userId: majorDraw.winner.userId,
+          userId: winner.userId,
           user: winnerUser
             ? {
-                name: `${winnerUser.firstName} ${winnerUser.lastName}`,
+                name: `${winnerUser.firstName || ''} ${winnerUser.lastName || ''}`.trim(),
                 email: winnerUser.email,
                 mobile: winnerUser.mobile,
                 state: winnerUser.state,
               }
             : null,
-          entryNumber: majorDraw.winner.entryNumber,
-          selectedDate: majorDraw.winner.selectedDate,
-          notified: majorDraw.winner.notified,
-          selectionMethod: majorDraw.winner.selectionMethod,
+          entryNumber: winner.entryNumber,
+          selectedDate: winner.selectedDate,
+          selectionMethod: winner.selectionMethod,
+          imageUrl: winner.imageUrl,
         },
         majorDraw: {
           id: majorDraw._id,

@@ -88,10 +88,7 @@ const nextConfig: NextConfig = {
 
   // SEO-friendly redirects
   async redirects() {
-    return [
-      // Example: temporarily hidden winners page should 301 to home
-      { source: "/winners", destination: "/", permanent: true },
-    ];
+    return [];
   },
 
   // Optional: enforce no trailing slash (Next defaults are fine, keep explicit for clarity)

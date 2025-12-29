@@ -530,13 +530,9 @@ export default function MiniDrawManagement() {
             const formData = new FormData();
             formData.append("miniDrawId", winnerData.drawId);
             formData.append("winnerUserId", winnerData.winnerUserId);
-            formData.append("entryNumber", winnerData.entryNumber.toString());
-            formData.append("selectionMethod", winnerData.selectionMethod);
             formData.append("selectedBy", session.user.id);
 
-            if (winnerData.imageFile) {
-              formData.append("winnerImage", winnerData.imageFile);
-            } else if (winnerData.imageUrl) {
+            if (winnerData.imageUrl) {
               formData.append("imageUrl", winnerData.imageUrl);
             }
 
@@ -578,8 +574,6 @@ export default function MiniDrawManagement() {
           selectedDraw?.latestWinner
             ? {
                 userId: selectedDraw.latestWinner.userId,
-                entryNumber: selectedDraw.latestWinner.entryNumber,
-                selectionMethod: "manual",
                 imageUrl: selectedDraw.latestWinner.imageUrl,
               }
             : undefined

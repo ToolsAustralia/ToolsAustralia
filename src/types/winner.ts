@@ -11,7 +11,7 @@ export interface WinnerSummary {
     value: number;
     images: string[];
   };
-  entryNumber: number;
+  entryNumber?: number;
   selectedDate: string;
   imageUrl?: string;
   selectedBy?: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { formatDateInAEST, formatCountdown } from "@/utils/common/timezone";
@@ -33,6 +33,46 @@ export default function MajorDrawManagement() {
   const [isExporting, setIsExporting] = useState(false);
   const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
   const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
+  const [currentWinner, setCurrentWinner] = useState<{
+    userId: string;
+    entryNumber: number;
+    selectedDate: Date;
+    selectionMethod?: string;
+    imageUrl?: string;
+  } | null>(null);
+  const [isLoadingWinner, setIsLoadingWinner] = useState(false);
+
+  // Fetch current winner from Winner model
+  useEffect(() => {
+    if (!currentMajorDraw?._id) return;
+    
+    const fetchWinner = async () => {
+      setIsLoadingWinner(true);
+      try {
+        const response = await fetch(`/api/admin/major-draw/select-winner?majorDrawId=${currentMajorDraw._id}`);
+        const data = await response.json();
+        
+        if (data.hasWinner && data.winner) {
+          setCurrentWinner({
+            userId: data.winner.userId.toString(),
+            entryNumber: data.winner.entryNumber || 0,
+            selectedDate: new Date(data.winner.selectedDate),
+            selectionMethod: data.winner.selectionMethod,
+            imageUrl: data.winner.imageUrl,
+          });
+        } else {
+          setCurrentWinner(null);
+        }
+      } catch (error) {
+        console.error("Error fetching winner:", error);
+        setCurrentWinner(null);
+      } finally {
+        setIsLoadingWinner(false);
+      }
+    };
+
+    fetchWinner();
+  }, [currentMajorDraw?._id, refetch]);
 
   if (isLoading) {
     return (
@@ -59,7 +99,7 @@ export default function MajorDrawManagement() {
   // Check if draw is frozen or completed
   const isFrozen = majorDraw.status === "frozen" || majorDraw.status === "completed";
   const canExport = majorDraw.status !== "cancelled";
-  const canSelectWinner = (majorDraw.status === "frozen" || majorDraw.status === "completed") && !majorDraw.winner;
+  const canSelectWinner = (majorDraw.status === "frozen" || majorDraw.status === "completed") && !currentWinner;
 
   // Calculate time until draw
   const timeUntilDraw = majorDraw.drawDate
@@ -173,17 +213,33 @@ export default function MajorDrawManagement() {
 
     setIsSubmitting(true);
     try {
+      const requestBody: {
+        majorDrawId: string;
+        winnerUserId: string;
+        imageUrl?: string;
+      } = {
+        majorDrawId: winnerData.drawId,
+        winnerUserId: winnerData.winnerUserId,
+      };
+      
+      // Explicitly include imageUrl if it exists (check for truthy string)
+      if (winnerData.imageUrl && typeof winnerData.imageUrl === 'string' && winnerData.imageUrl.trim() !== '') {
+        requestBody.imageUrl = winnerData.imageUrl.trim();
+      } else {
+        console.warn("⚠️ [MajorDrawManagement] No imageUrl in winnerData:", {
+          hasImageUrl: !!winnerData.imageUrl,
+          imageUrlType: typeof winnerData.imageUrl,
+          imageUrlValue: winnerData.imageUrl,
+          winnerDataKeys: Object.keys(winnerData),
+        });
+      }
+
       const response = await fetch("/api/admin/major-draw/select-winner", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          majorDrawId: winnerData.drawId,
-          winnerUserId: winnerData.winnerUserId,
-          entryNumber: winnerData.entryNumber,
-          selectionMethod: winnerData.selectionMethod,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -200,8 +256,20 @@ export default function MajorDrawManagement() {
       });
 
       setIsWinnerModalOpen(false);
-
-      // Refetch data to update UI
+      // Refetch winner from Winner model
+      const winnerResponse = await fetch(`/api/admin/major-draw/select-winner?majorDrawId=${majorDraw._id}`);
+      const winnerResponseData = await winnerResponse.json();
+      if (winnerResponseData.hasWinner && winnerResponseData.winner) {
+        setCurrentWinner({
+          userId: winnerResponseData.winner.userId.toString(),
+          entryNumber: winnerResponseData.winner.entryNumber || 0,
+          selectedDate: new Date(winnerResponseData.winner.selectedDate),
+          selectionMethod: winnerResponseData.winner.selectionMethod,
+          imageUrl: winnerResponseData.winner.imageUrl,
+        });
+      } else {
+        setCurrentWinner(null);
+      }
       refetch();
     } catch (error) {
       console.error("Winner selection error:", error);
@@ -410,7 +478,7 @@ export default function MajorDrawManagement() {
         )}
 
         {/* Winner Display */}
-        {majorDraw.winner && (
+        {currentWinner && (
           <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl shadow-lg border-2 border-yellow-400 p-4">
             <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
               <Trophy className="w-5 h-5 text-yellow-600" />
@@ -419,23 +487,23 @@ export default function MajorDrawManagement() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-600">Winner User ID</p>
-                <p className="font-semibold text-gray-900">{majorDraw.winner.userId}</p>
+                <p className="font-semibold text-gray-900">{currentWinner.userId}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Entry Number</p>
-                <p className="font-semibold text-gray-900">{majorDraw.winner.entryNumber || "N/A"}</p>
+                <p className="font-semibold text-gray-900">{currentWinner.entryNumber || "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Selection Method</p>
                 <p className="font-semibold text-gray-900 capitalize">
-                  {majorDraw.winner.selectionMethod || "government-app"}
+                  {currentWinner.selectionMethod || "N/A"}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Selected At</p>
                 <p className="font-semibold text-gray-900">
-                  {majorDraw.winner.selectedDate
-                    ? formatDateInAEST(new Date(majorDraw.winner.selectedDate), "MMM dd, yyyy h:mm a")
+                  {currentWinner.selectedDate
+                    ? formatDateInAEST(currentWinner.selectedDate, "MMM dd, yyyy h:mm a")
                     : "N/A"}
                 </p>
               </div>
@@ -477,16 +545,12 @@ export default function MajorDrawManagement() {
           drawName={majorDraw.name || ""}
           drawType="major"
           totalEntries={majorDraw.totalEntries}
+          enableImageField={true}
           currentWinner={
-            majorDraw.winner &&
-            majorDraw.winner.userId &&
-            majorDraw.winner.entryNumber &&
-            majorDraw.winner.userId.toString() !== "null" &&
-            majorDraw.winner.userId.toString() !== "undefined"
+            currentWinner
               ? {
-                  userId: majorDraw.winner.userId.toString(),
-                  entryNumber: majorDraw.winner.entryNumber,
-                  selectionMethod: majorDraw.winner.selectionMethod || "manual",
+                  userId: currentWinner.userId,
+                  imageUrl: currentWinner.imageUrl,
                 }
               : undefined
           }

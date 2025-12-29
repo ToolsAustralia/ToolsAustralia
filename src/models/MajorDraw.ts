@@ -34,7 +34,6 @@ export interface IMajorDraw extends Document {
     userId: mongoose.Types.ObjectId;
     entryNumber: number;
     selectedDate: Date;
-    notified: boolean;
     // NEW: Winner selection tracking
     selectedBy?: mongoose.Types.ObjectId; // Admin who recorded the winner
     selectionMethod?: "manual" | "government-app";
@@ -161,13 +160,11 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
       },
       entryNumber: {
         type: Number,
-        min: [1, "Entry number must be at least 1"],
+        required: false,
+        min: [0, "Entry number must be at least 0"],
+        default: 0,
       },
       selectedDate: Date,
-      notified: {
-        type: Boolean,
-        default: false,
-      },
       // NEW: Winner selection tracking
       selectedBy: {
         type: Schema.Types.ObjectId,
@@ -176,6 +173,9 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
       selectionMethod: {
         type: String,
         enum: ["manual", "government-app"],
+      },
+      imageUrl: {
+        type: String,
       },
     },
     entries: [

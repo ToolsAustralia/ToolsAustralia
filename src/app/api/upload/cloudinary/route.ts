@@ -12,17 +12,30 @@ cloudinary.config({
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("☁️ [Cloudinary Upload] Request received");
+    
     // Verify admin authentication
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || session.user.role !== "admin") {
+      console.error("❌ [Cloudinary Upload] Unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    console.log("☁️ [Cloudinary Upload] Admin authenticated:", session.user.email);
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const folder = formData.get("folder") as string || "major-draws";
 
+    console.log("☁️ [Cloudinary Upload] FormData parsed:", {
+      hasFile: !!file,
+      fileName: file?.name,
+      fileSize: file?.size,
+      fileType: file?.type,
+      folder: folder,
+    });
+
     if (!file) {
+      console.error("❌ [Cloudinary Upload] No file provided");
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
@@ -42,6 +55,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // Upload to Cloudinary
+    console.log("☁️ [Cloudinary Upload] Starting Cloudinary upload to folder:", folder);
     const result = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
@@ -57,18 +71,26 @@ export async function POST(request: NextRequest) {
         },
         (error, result) => {
           if (error) {
+            console.error("❌ [Cloudinary Upload] Cloudinary error:", error);
             reject(error);
           } else {
+            console.log("✅ [Cloudinary Upload] Upload successful:", {
+              url: result?.secure_url,
+              public_id: result?.public_id,
+            });
             resolve(result);
           }
         }
       ).end(buffer);
     });
 
+    const uploadResult = result as { secure_url: string; public_id: string };
+    console.log("✅ [Cloudinary Upload] Returning success response");
+    
     return NextResponse.json({
       success: true,
-      url: (result as { secure_url: string; public_id: string }).secure_url,
-      public_id: (result as { secure_url: string; public_id: string }).public_id,
+      url: uploadResult.secure_url,
+      public_id: uploadResult.public_id,
     });
 
   } catch (error) {

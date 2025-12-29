@@ -167,7 +167,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     ? {
         _id: (latestWinnerDoc._id as mongoose.Types.ObjectId).toString(),
         userId: (latestWinnerDoc.userId as mongoose.Types.ObjectId).toString(),
-        entryNumber: latestWinnerDoc.entryNumber,
+        entryNumber: latestWinnerDoc.entryNumber ?? 0,
         selectedDate: latestWinnerDoc.selectedDate.toISOString(),
         selectionMethod: latestWinnerDoc.selectionMethod,
         imageUrl: latestWinnerDoc.imageUrl,

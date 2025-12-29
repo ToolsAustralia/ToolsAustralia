@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Trophy, User, Hash, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { Trophy, User, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
 import UserSearchModal from "./UserSearchModal";
-import { ModalContainer, ModalHeader, ModalContent, Input, Button, Select } from "./ui";
+import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import ImageUpload from "./ui/ImageUpload";
 
 // Types
@@ -35,9 +35,6 @@ export interface WinnerSelectionData {
   drawId: string;
   drawType: WinnerSelectionDrawType;
   winnerUserId: string;
-  entryNumber: number;
-  selectionMethod: "manual" | "government-app";
-  imageFile?: File;
   imageUrl?: string;
 }
 
@@ -51,8 +48,6 @@ interface WinnerSelectionModalProps {
   totalEntries: number;
   currentWinner?: {
     userId: string;
-    entryNumber: number;
-    selectionMethod: string;
     imageUrl?: string;
   };
   enableImageField?: boolean;
@@ -70,8 +65,6 @@ export default function WinnerSelectionModal({
   enableImageField = false,
 }: WinnerSelectionModalProps) {
   const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
-  const [entryNumber, setEntryNumber] = useState("");
-  const [selectionMethod, setSelectionMethod] = useState<"manual" | "government-app">("manual");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
@@ -79,8 +72,6 @@ export default function WinnerSelectionModal({
   useEffect(() => {
     if (!isOpen) {
       setSelectedUser(null);
-      setEntryNumber("");
-      setSelectionMethod("manual");
       setWinnerImages([]);
       setError(null);
     } else if (enableImageField && currentWinner?.imageUrl) {
@@ -96,35 +87,12 @@ export default function WinnerSelectionModal({
     setError(null);
   };
 
-  // Validate entry number
-  const validateEntryNumber = (value: string): boolean => {
-    const num = parseInt(value, 10);
-    return !isNaN(num) && num >= 1 && num <= totalEntries;
-  };
-
-  // Handle entry number change
-  const handleEntryNumberChange = (value: string) => {
-    setEntryNumber(value);
-    setError(null);
-  };
-
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!selectedUser) {
       setError("Please select a winner");
-      return;
-    }
-
-    if (!entryNumber.trim()) {
-      setError("Please enter an entry number");
-      return;
-    }
-
-    const entryNum = parseInt(entryNumber, 10);
-    if (!validateEntryNumber(entryNumber)) {
-      setError(`Entry number must be between 1 and ${totalEntries}`);
       return;
     }
 
@@ -136,19 +104,61 @@ export default function WinnerSelectionModal({
         drawId,
         drawType,
         winnerUserId: selectedUser._id,
-        entryNumber: entryNum,
-        selectionMethod,
       };
 
-      if (enableImageField) {
+      // Handle image upload for both draw types
+      if (drawType === "major" || enableImageField) {
         const fileImage = winnerImages.find((img): img is File => img instanceof File);
         const existingUrl = winnerImages.find((img): img is string => typeof img === "string");
 
         if (fileImage) {
-          winnerData.imageFile = fileImage;
+          // Upload image in modal (like major draw does)
+          try {
+            const uploadFormData = new FormData();
+            uploadFormData.append("file", fileImage);
+            uploadFormData.append("folder", "major-draw-winners");
+
+            const response = await fetch("/api/upload/cloudinary", {
+              method: "POST",
+              body: uploadFormData,
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || "Failed to upload winner image");
+            }
+
+            const data = await response.json();
+            
+            // Extract URL from response (should have 'url' property)
+            if (!data.url) {
+              console.error("Failed to get image URL from upload response:", data);
+              throw new Error("Failed to get image URL from upload response");
+            }
+            
+            winnerData.imageUrl = data.url;
+          } catch (uploadError) {
+            console.error("Failed to upload image:", uploadError);
+            setError(uploadError instanceof Error ? uploadError.message : "Failed to upload winner image");
+            return; // Stop submission on upload error
+          }
         } else if (existingUrl) {
           winnerData.imageUrl = existingUrl;
         }
+      }
+
+      // Verify imageUrl is set before calling callback
+      console.log("🔍 [Modal] Before callback - winnerData:", {
+        drawId: winnerData.drawId,
+        drawType: winnerData.drawType,
+        winnerUserId: winnerData.winnerUserId,
+        imageUrl: winnerData.imageUrl,
+        hasImageUrl: !!winnerData.imageUrl,
+        imageUrlType: typeof winnerData.imageUrl,
+      });
+
+      if ((drawType === "major" || enableImageField) && !winnerData.imageUrl) {
+        console.warn("⚠️ [Modal] imageUrl not set but should be for drawType:", drawType, "enableImageField:", enableImageField);
       }
 
       await onWinnerSelected(winnerData);
@@ -264,26 +274,8 @@ export default function WinnerSelectionModal({
               )}
             </div>
 
-            {/* Entry Number */}
-            <Input
-              type="number"
-              id="entryNumber"
-              value={entryNumber}
-              onChange={(e) => handleEntryNumberChange(e.target.value)}
-              label="Entry Number"
-              placeholder={`Enter entry number (1-${totalEntries})`}
-              icon={Hash}
-              min={1}
-              max={totalEntries}
-              required
-              error={
-                entryNumber && !validateEntryNumber(entryNumber)
-                  ? `Must be between 1 and ${totalEntries.toLocaleString()}`
-                  : undefined
-              }
-            />
-
-            {enableImageField && (
+            {/* Image Upload - Always enabled for major draws, optional for mini draws */}
+            {(drawType === "major" || enableImageField) && (
               <div className="space-y-2">
                 <ImageUpload
                   label="Winner Photo"
@@ -297,26 +289,13 @@ export default function WinnerSelectionModal({
                 />
                 <p className="flex items-center gap-2 text-xs text-gray-500">
                   <ImageIcon className="w-4 h-4 text-gray-400" />
-                  Upload or drop an image of the winner. We’ll store it once you submit.
+                  Upload or drop an image of the winner. We&apos;ll store it once you submit.
                 </p>
               </div>
             )}
 
-            {/* Selection Method */}
-            <Select
-              id="selectionMethod"
-              value={selectionMethod}
-              onChange={(e) => setSelectionMethod(e.target.value as "manual" | "government-app")}
-              label="Selection Method"
-              required
-              options={[
-                { value: "government-app", label: "Government App" },
-                { value: "manual", label: "Manual Selection" },
-              ]}
-            />
-
             {/* Current Winner Warning */}
-            {currentWinner && currentWinner.userId && currentWinner.entryNumber && (
+            {currentWinner && currentWinner.userId && (
               <div className="p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="w-5 h-5 text-yellow-600" />
@@ -332,7 +311,7 @@ export default function WinnerSelectionModal({
             <div className="pt-4">
               <Button
                 type="submit"
-                disabled={!selectedUser || !entryNumber.trim() || isSubmitting}
+                disabled={!selectedUser || isSubmitting}
                 loading={isSubmitting}
                 icon={Trophy}
                 fullWidth

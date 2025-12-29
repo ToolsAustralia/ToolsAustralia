@@ -112,7 +112,6 @@ export async function GET() {
           configurationLocked: majorDraw.configurationLocked,
           totalEntries: majorDraw.totalEntries,
           totalParticipants: totalParticipants,
-          winner: majorDraw.winner,
           createdAt: majorDraw.createdAt,
           updatedAt: majorDraw.updatedAt,
         },

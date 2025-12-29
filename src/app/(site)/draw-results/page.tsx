@@ -61,7 +61,7 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
           value: prizeSnapshot.value ?? 0,
           images: prizeSnapshot.images ?? [],
         },
-        entryNumber: winner.entryNumber,
+        entryNumber: winner.entryNumber ?? 0,
         selectedDate: winner.selectedDate.toISOString(),
         imageUrl: winner.imageUrl,
         selectedBy: winner.selectedBy ? (winner.selectedBy as Types.ObjectId).toString() : undefined,
@@ -156,14 +156,16 @@ export default async function DrawResultsPage() {
               </div>
             </div>
           </section>
-        </div>
-      </div>
 
-      {/* Membership Section */}
+           {/* Membership Section */}
       <MembershipSection
         title="JOIN FUTURE MINI DRAWS WITH PREMIUM MEMBERSHIP"
         padding="py-4 sm:py-8 lg:py-12 lg:pb-16 mb-8 sm:mb-16 "
       />
+        </div>
+      </div>
+
+     
     </div>
   );
 }

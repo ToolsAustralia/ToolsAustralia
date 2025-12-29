@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
+import Winner from "@/models/Winner";
 import ReferralEvent from "@/models/ReferralEvent";
 import mongoose from "mongoose";
 
@@ -337,20 +338,38 @@ export async function GET(request: NextRequest) {
       updatedAt: { $gte: startDate },
     })
       .sort({ updatedAt: -1 })
-      .select("name winner updatedAt");
+      .select("name updatedAt _id")
+      .lean();
+
+    // Get draw IDs
+    const drawIds = completedDraws.map((draw) => draw._id);
+
+    // Check for winners in Winner model
+    const winners = await Winner.find({
+      drawId: { $in: drawIds },
+      drawType: "major",
+    })
+      .select("drawId")
+      .lean();
+
+    // Create a set of draw IDs that have winners
+    const drawsWithWinners = new Set(winners.map((w: { drawId: { toString(): string } }) => w.drawId.toString()));
 
     completedDraws.forEach((draw) => {
-      const timeAgo = getTimeAgo(draw.updatedAt);
-      const winnerName = draw.winner?.userId ? "Winner selected" : "No winner yet";
+      const drawTyped = draw as unknown as { _id: { toString(): string }; name: string; updatedAt: Date };
+      const drawId = drawTyped._id.toString();
+      const timeAgo = getTimeAgo(drawTyped.updatedAt);
+      const hasWinner = drawsWithWinners.has(drawId);
+      const winnerName = hasWinner ? "Winner selected" : "No winner yet";
 
       activities.push({
-        id: `draw-${draw._id}`,
+        id: `draw-${drawId}`,
         type: "draw_complete",
         user: "System",
-        action: `${draw.name} completed - ${winnerName}`,
+        action: `${drawTyped.name} completed - ${winnerName}`,
         time: timeAgo,
         status: "info",
-        timestamp: draw.updatedAt,
+        timestamp: drawTyped.updatedAt,
       });
     });
 

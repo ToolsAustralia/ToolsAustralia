@@ -11,6 +11,7 @@ import HomeProducts from "./components/HomeProducts";
 import HomeMiniDraws from "./components/HomeMiniDraws";
 import LandingPageTrigger from "./components/LandingPageTrigger";
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
+import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
 
 export const metadata: Metadata = {
   title: "Tools Australia | Professional Tools, Mini Draws & Partner Deals",
@@ -56,7 +57,11 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <MembershipSection padding="pt-8 pb-4" />
           <MajorDrawSection />
+          {/* Latest Winner Hero Section */}
+        <LatestWinnerHero className="mb-8" />
         </div>
+
+        
 
         {/* Mini Draws Section - Client-side fetch */}
         <Suspense

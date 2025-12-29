@@ -13,8 +13,8 @@ import { z } from "zod";
 const selectWinnerSchema = z.object({
   miniDrawId: z.string().min(1, "Mini draw ID is required"),
   winnerUserId: z.string().min(1, "Winner user ID is required"),
-  entryNumber: z.number().min(1, "Entry number must be at least 1"),
-  selectionMethod: z.enum(["manual", "government-app"]),
+  entryNumber: z.number().optional().default(0),
+  selectionMethod: z.string().optional(),
   selectedBy: z.string().min(1, "Admin user ID is required"),
   imageUrl: z.string().url("Winner image must be a valid URL").optional(),
 });
@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
     if (
       typeof miniDrawIdValue !== "string" ||
       typeof winnerUserIdValue !== "string" ||
-      typeof selectionMethodValue !== "string" ||
       typeof selectedByValue !== "string"
     ) {
       return NextResponse.json(
@@ -59,14 +58,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const parsedEntryNumber =
-      typeof entryNumberValue === "string" ? parseInt(entryNumberValue, 10) : Number(entryNumberValue);
+    // Entry number is optional, default to 0 if not provided
+    const parsedEntryNumber = entryNumberValue
+      ? typeof entryNumberValue === "string"
+        ? parseInt(entryNumberValue, 10)
+        : Number(entryNumberValue)
+      : 0;
 
-    if (!Number.isFinite(parsedEntryNumber) || parsedEntryNumber <= 0) {
+    // Allow 0 or positive numbers, but not negative
+    if (!Number.isFinite(parsedEntryNumber) || parsedEntryNumber < 0) {
       return NextResponse.json(
         {
           success: false,
-          error: "Entry number must be a positive integer",
+          error: "Entry number must be 0 or a positive integer",
         },
         { status: 400 }
       );
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest) {
       miniDrawId: miniDrawIdValue,
       winnerUserId: winnerUserIdValue,
       entryNumber: parsedEntryNumber,
-      selectionMethod: selectionMethodValue,
+      selectionMethod: typeof selectionMethodValue === "string" ? selectionMethodValue : undefined,
       selectedBy: selectedByValue,
       imageUrl:
         typeof existingImageUrlValue === "string" && existingImageUrlValue.trim().length > 0
@@ -125,8 +129,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Winner user not found" }, { status: 404 });
       }
 
-      // Validate entry number is within valid range
-      if (validatedData.entryNumber > miniDraw.totalEntries) {
+      // Validate entry number is within valid range (only if entryNumber is provided and > 0)
+      if (validatedData.entryNumber && validatedData.entryNumber > 0 && validatedData.entryNumber > miniDraw.totalEntries) {
         await trx.abortTransaction();
         trx.endSession();
         return NextResponse.json(
@@ -156,26 +160,28 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Validate entry number is within user's entry range
-      let entryRangeStart = 1;
-      for (const entry of miniDraw.entries) {
-        if (entry.userId.toString() === validatedData.winnerUserId) {
-          const entryRangeEnd = entryRangeStart + entry.totalEntries - 1;
-          if (validatedData.entryNumber < entryRangeStart || validatedData.entryNumber > entryRangeEnd) {
-            await trx.abortTransaction();
-            trx.endSession();
-            return NextResponse.json(
-              {
-                success: false,
-                error: "Invalid entry number for this user",
-                details: `User's entry range is ${entryRangeStart}-${entryRangeEnd}`,
-              },
-              { status: 400 }
-            );
+      // Validate entry number is within user's entry range (only if entryNumber is provided and > 0)
+      if (validatedData.entryNumber && validatedData.entryNumber > 0) {
+        let entryRangeStart = 1;
+        for (const entry of miniDraw.entries) {
+          if (entry.userId.toString() === validatedData.winnerUserId) {
+            const entryRangeEnd = entryRangeStart + entry.totalEntries - 1;
+            if (validatedData.entryNumber < entryRangeStart || validatedData.entryNumber > entryRangeEnd) {
+              await trx.abortTransaction();
+              trx.endSession();
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: "Invalid entry number for this user",
+                  details: `User's entry range is ${entryRangeStart}-${entryRangeEnd}`,
+                },
+                { status: 400 }
+              );
+            }
+            break;
           }
-          break;
+          entryRangeStart += entry.totalEntries;
         }
-        entryRangeStart += entry.totalEntries;
       }
 
       const participantUserIds = miniDraw.entries.map((entry: { userId: Types.ObjectId }) => entry.userId);
@@ -213,8 +219,7 @@ export async function POST(request: NextRequest) {
             userId: new Types.ObjectId(validatedData.winnerUserId),
             entryNumber: validatedData.entryNumber,
             selectedDate,
-            selectionMethod: validatedData.selectionMethod,
-            notified: false,
+            selectionMethod: validatedData.selectionMethod || undefined,
             selectedBy: new Types.ObjectId(validatedData.selectedBy),
             prizeSnapshot: {
               name: miniDraw.prize.name,
@@ -281,7 +286,7 @@ export async function POST(request: NextRequest) {
             latestWinnerId: miniDraw.latestWinnerId?.toString(),
           },
           winner: {
-            _id: winnerDoc._id.toString(),
+            _id: (winnerDoc._id as Types.ObjectId).toString(),
             userId: winnerDoc.userId.toString(),
             entryNumber: winnerDoc.entryNumber,
             selectedDate: winnerDoc.selectedDate,

@@ -29,6 +29,7 @@ const PAGE_TYPE_MAP: Record<string, string> = {
   "/terms": "terms",
   "/privacy": "privacy",
   "/winners": "winners",
+  "/draw-results": "draw-results",
 };
 
 /**
