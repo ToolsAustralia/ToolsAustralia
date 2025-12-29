@@ -164,7 +164,7 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                         </div>
                         <p className="text-sm sm:text-lg font-bold text-gray-900">{formatDate(draw.drawDate)}</p>
                       </div>
-                      {draw.winner && (
+                        {draw.winner && (
                         <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
                           <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
                             <Award className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />

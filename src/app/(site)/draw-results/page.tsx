@@ -4,6 +4,7 @@ import { Trophy, Bell, Users, Zap } from "lucide-react";
 import WinnerAnnouncement from "./components/WinnerAnnouncement";
 import CountdownHero from "./components/CountdownHero";
 import CompletedDrawsSection from "./components/CompletedDrawsSection";
+import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import Winner from "@/models/Winner";
@@ -79,9 +80,6 @@ export default async function DrawResultsPage() {
 
   return (
     <div className="min-h-screen-svh bg-white pt-[50px] sm:pt-[60px]">
-      {/* Countdown Hero Section */}
-      <CountdownHero />
-
       <div className="bg-gray-50 ">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-12 ">
           {/* Completed Major Draws Section */}
@@ -165,7 +163,8 @@ export default async function DrawResultsPage() {
         </div>
       </div>
 
-     
+      {/* Floating Countdown Banner */}
+      <FloatingCountdownBanner />
     </div>
   );
 }
