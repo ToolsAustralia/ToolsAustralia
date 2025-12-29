@@ -235,7 +235,7 @@ export default function WinnersPage() {
                   {/* Winner Information */}
                   <div className="p-6">
                     {/* Prize Name */}
-                    <h3 className="text-xl font-bold text-gray-900 font-['Poppins'] mb-3 line-clamp-2">
+                    <h3 className="text-sm sm:text-base lg:text-lg font-bold text-gray-900 font-['Poppins'] mb-2 sm:mb-3 line-clamp-2">
                       {winner.prize.name}
                     </h3>
 

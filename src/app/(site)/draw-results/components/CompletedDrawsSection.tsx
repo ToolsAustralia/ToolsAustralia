@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { Trophy, Calendar, Users, Gift, Award } from "lucide-react";
+import { Calendar, Award } from "lucide-react";
 import Image from "next/image";
 // import MajorDrawStats from "@/components/sections/MajorDrawStats"; // Commented out for now
 import { useCompletedMajorDraws } from "@/hooks/queries/useMajorDrawQueries";
+import { formatWinnerNameFromString } from "@/utils/winner-name-formatter";
 
 // Winner interface - not currently used but kept for future reference
 // interface Winner {
@@ -33,36 +34,6 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
       month: "long",
       day: "numeric",
     });
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(value);
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "vehicle":
-        return "🚗";
-      case "electronics":
-        return "📱";
-      case "travel":
-        return "✈️";
-      case "cash":
-        return "💰";
-      case "experience":
-        return "🎯";
-      case "home":
-        return "🏠";
-      case "fashion":
-        return "👕";
-      case "sports":
-        return "⚽";
-      default:
-        return "🎁";
-    }
   };
 
   if (isLoading) {
@@ -95,7 +66,7 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
     return (
       <section className={`bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 sm:p-8 ${className}`}>
         <div className="text-center py-12">
-          <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No Completed Draws Yet</h3>
           <p className="text-gray-600">Check back soon for completed major draw results!</p>
         </div>
@@ -142,14 +113,7 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                       </div>
                     ) : (
                       <div className="w-full h-48 sm:h-64 lg:h-80 bg-gradient-to-br from-red-100 via-red-200 to-red-300 rounded-xl sm:rounded-2xl flex items-center justify-center text-4xl sm:text-6xl shadow-lg sm:shadow-xl">
-                        {getCategoryIcon(draw.prize?.category || "other")}
-                      </div>
-                    )}
-
-                    {/* Prize Value Badge */}
-                    {draw.prize?.value && draw.prize.value > 0 && (
-                      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gradient-to-r from-red-500 to-red-600 text-white px-2 py-1 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl shadow-lg">
-                        <span className="text-sm sm:text-lg font-bold">{formatCurrency(draw.prize.value)}</span>
+                        🎁
                       </div>
                     )}
 
@@ -161,9 +125,8 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                             <Award className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
                             <span className="text-xs sm:text-sm font-semibold text-red-400">Winner</span>
                           </div>
-                          <p className="text-base sm:text-lg font-bold mb-1">{draw.winner.name}</p>
-                          <div className="flex items-center justify-between text-xs sm:text-sm">
-                            <span>Entry #{draw.winner.entryNumber}</span>
+                          <p className="text-base sm:text-lg font-bold mb-1">{formatWinnerNameFromString(draw.winner.name)}</p>
+                          <div className="flex items-center justify-end text-xs sm:text-sm">
                             <span>{formatDate(draw.winner.selectedDate)}</span>
                           </div>
                         </div>
@@ -201,33 +164,17 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                         </div>
                         <p className="text-sm sm:text-lg font-bold text-gray-900">{formatDate(draw.drawDate)}</p>
                       </div>
-                      <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-                        <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
-                          <Users className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
-                          <span className="text-xs sm:text-sm font-medium text-gray-600">Participants</span>
+                      {draw.winner && (
+                        <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
+                          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+                            <Award className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
+                            <span className="text-xs sm:text-sm font-medium text-gray-600">Winner</span>
+                          </div>
+                          <p className="text-sm sm:text-lg font-bold text-gray-900">
+                            {formatWinnerNameFromString(draw.winner.name)}
+                          </p>
                         </div>
-                        <p className="text-sm sm:text-lg font-bold text-gray-900">
-                          {draw.participantCount.toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-                        <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
-                          <Gift className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
-                          <span className="text-xs sm:text-sm font-medium text-gray-600">Total Entries</span>
-                        </div>
-                        <p className="text-sm sm:text-lg font-bold text-gray-900">
-                          {draw.totalEntries.toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-                        <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
-                          <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
-                          <span className="text-xs sm:text-sm font-medium text-gray-600">Category</span>
-                        </div>
-                        <p className="text-sm sm:text-lg font-bold text-gray-900 capitalize">
-                          {draw.prize?.category || "N/A"}
-                        </p>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
