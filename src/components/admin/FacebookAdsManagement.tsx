@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   DollarSign,
   TrendingUp,
@@ -40,33 +41,86 @@ import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
  * - Cached data indicators
  */
 export default function FacebookAdsManagement() {
-  // State management
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // State management - synced with URL params
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+  const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [level, setLevel] = useState<InsightLevel>("adset");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Sync date filter state with URL params on mount and when URL changes
+  useEffect(() => {
+    const urlDateRange = (searchParams.get("dateRange") as DateRange) || "today";
+    let urlStartDate = searchParams.get("startDate") || "";
+    let urlEndDate = searchParams.get("endDate") || "";
+
+    // If "all-time" is selected but no dates in URL, calculate and set them
+    if (urlDateRange === "all-time" && (!urlStartDate || !urlEndDate)) {
+      const today = new Date();
+      const twoYearsAgo = new Date();
+      twoYearsAgo.setFullYear(today.getFullYear() - 2);
+      const calculatedStart = twoYearsAgo.toISOString().split("T")[0];
+      const calculatedEnd = today.toISOString().split("T")[0];
+      
+      // Update URL with calculated dates (only if they're different)
+      if (calculatedStart !== urlStartDate || calculatedEnd !== urlEndDate) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("startDate", calculatedStart);
+        params.set("endDate", calculatedEnd);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        // Return early - let the next effect run handle the state update
+        return;
+      }
+      
+      urlStartDate = calculatedStart;
+      urlEndDate = calculatedEnd;
+    }
+
+    // Update state from URL params (only if changed to avoid unnecessary re-renders)
+    setDateRange((prev) => (prev !== urlDateRange ? urlDateRange : prev));
+    setStartDate((prev) => (prev !== urlStartDate ? urlStartDate : prev));
+    setEndDate((prev) => (prev !== urlEndDate ? urlEndDate : prev));
+
+    // Auto-collapse on mobile for "all-time" or "custom"
+    if (isMobile && (urlDateRange === "all-time" || urlDateRange === "custom")) {
+      setIsDateFilterCollapsed(true);
+    }
+  }, [searchParams, pathname, router, isMobile]);
 
   // Fetch major draws for date range selection
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
 
   // Convert DateRange to DateRangeOption
+  // Note: "all-time" is converted to "custom" with 2 years range for API compatibility
   const dateRangeOption: DateRangeOption = useMemo(() => {
     if (dateRange === "all-time") {
-      // Match overview tab behavior: use 2 years for all-time
-      const today = new Date();
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(today.getFullYear() - 2);
-
-      // Set dates for custom range
-      setStartDate(twoYearsAgo.toISOString().split("T")[0]);
-      setEndDate(today.toISOString().split("T")[0]);
+      // If we have dates already (from URL), use them
+      if (startDate && endDate) {
+        return "custom";
+      }
+      // Otherwise, calculate 2 years range (but don't set state here - let updateDateFilter handle it)
       return "custom";
     }
     return dateRange as DateRangeOption;
-  }, [dateRange]);
+  }, [dateRange, startDate, endDate]);
 
   // Build query parameters
   const queryParams = useMemo(() => {
@@ -118,14 +172,91 @@ export default function FacebookAdsManagement() {
     return `${roas.toFixed(2)}x`;
   };
 
-  // Handle date range change from DateRangeToggle
-  const handleDateRangeChange = (range: DateRange) => {
-    setDateRange(range);
-    if (range !== "custom") {
+  // Update URL params when date filter changes
+  const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
+    let finalRange = range;
+    let finalStart = start;
+    let finalEnd = end;
+
+    // Handle "all-time" by converting to "custom" with 2 years range
+    if (range === "all-time") {
+      finalRange = "all-time"; // Keep as "all-time" in URL for UI
+      const today = new Date();
+      const twoYearsAgo = new Date();
+      twoYearsAgo.setFullYear(today.getFullYear() - 2);
+      finalStart = twoYearsAgo.toISOString().split("T")[0];
+      finalEnd = today.toISOString().split("T")[0];
+    }
+
+    // Update state immediately for responsive UI
+    setDateRange(finalRange);
+    if (finalStart && finalEnd) {
+      setStartDate(finalStart);
+      setEndDate(finalEnd);
+    } else {
       setStartDate("");
       setEndDate("");
     }
+
+    // Auto-collapse on mobile for "all-time" or "custom"
+    if (isMobile && (finalRange === "all-time" || finalRange === "custom")) {
+      setIsDateFilterCollapsed(true);
+    }
+
+    // Update URL params
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("dateRange", finalRange);
+    if (finalStart && finalEnd) {
+      params.set("startDate", finalStart);
+      params.set("endDate", finalEnd);
+    } else {
+      params.delete("startDate");
+      params.delete("endDate");
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
+
+  // Handle date range change from DateRangeToggle
+  const handleDateRangeChange = (range: DateRange) => {
+    if (range === "custom") {
+      setIsCustomDateModalOpen(true);
+    } else {
+      updateDateFilter(range);
+    }
+  };
+
+  // Determine if filter should be collapsible (only on mobile, and only for custom range or all-time)
+  const shouldCollapse = useMemo(() => {
+    return isMobile && (dateRange === "custom" || dateRange === "all-time");
+  }, [isMobile, dateRange]);
+
+  // Get display date for collapsed view
+  const displayDate = useMemo(() => {
+    if (dateRange === "custom" && startDate && endDate) {
+      try {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const format = (date: Date) => {
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+        };
+        if (startDate === endDate) {
+          return format(start);
+        }
+        const formatShort = (date: Date) => {
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          return `${months[date.getMonth()]} ${date.getDate()}`;
+        };
+        return `${formatShort(start)} - ${format(end)}`;
+      } catch {
+        return "";
+      }
+    }
+    if (dateRange === "all-time") {
+      return "All Time";
+    }
+    return null;
+  }, [dateRange, startDate, endDate]);
 
   // Table sorting functions
   const handleSort = (column: string) => {
@@ -265,6 +396,9 @@ export default function FacebookAdsManagement() {
             selectedRange={dateRange}
             onRangeChange={handleDateRangeChange}
             onCustomClick={() => setIsCustomDateModalOpen(true)}
+            collapsed={isDateFilterCollapsed && shouldCollapse}
+            displayDate={displayDate || undefined}
+            onExpand={() => setIsDateFilterCollapsed(false)}
           />
         </div>
       </div>
@@ -449,9 +583,7 @@ export default function FacebookAdsManagement() {
         isOpen={isCustomDateModalOpen}
         onClose={() => setIsCustomDateModalOpen(false)}
         onApply={(startDateStr, endDateStr) => {
-          setStartDate(startDateStr);
-          setEndDate(endDateStr);
-          setDateRange("custom");
+          updateDateFilter("custom", startDateStr, endDateStr);
         }}
         currentStartDate={startDate}
         currentEndDate={endDate}

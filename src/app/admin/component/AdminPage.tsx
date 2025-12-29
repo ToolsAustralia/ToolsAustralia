@@ -71,6 +71,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
+  // State for date filter - synced with URL params
+  const [dateRange, setDateRange] = useState<DateRange>("today");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+
   // Detect mobile viewport
   useEffect(() => {
     const checkMobile = () => {
@@ -81,13 +86,31 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Read date filter from URL params
-  const dateRange = (searchParams.get("dateRange") as DateRange) || "today";
-  const customStartDate = searchParams.get("startDate") || "";
-  const customEndDate = searchParams.get("endDate") || "";
+  // Sync date filter state with URL params on mount and when URL changes
+  useEffect(() => {
+    const urlDateRange = (searchParams.get("dateRange") as DateRange) || "today";
+    const urlStartDate = searchParams.get("startDate") || "";
+    const urlEndDate = searchParams.get("endDate") || "";
+
+    // Update state from URL params
+    setDateRange(urlDateRange);
+    setCustomStartDate(urlStartDate);
+    setCustomEndDate(urlEndDate);
+  }, [searchParams]); // Only depend on searchParams to sync from URL to state
 
   // Update URL params when date filter changes
   const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
+    // Update state immediately for responsive UI
+    setDateRange(range);
+    if (range === "custom" && start && end) {
+      setCustomStartDate(start);
+      setCustomEndDate(end);
+    } else {
+      setCustomStartDate("");
+      setCustomEndDate("");
+    }
+
+    // Update URL params
     const params = new URLSearchParams(searchParams.toString());
     params.set("dateRange", range);
     if (range === "custom" && start && end) {
@@ -97,7 +120,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
       params.delete("startDate");
       params.delete("endDate");
     }
-    router.replace(`${pathname}?${params.toString()}`);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   // Format abbreviated date for collapsed view
