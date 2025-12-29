@@ -65,13 +65,26 @@ export async function GET(request: NextRequest) {
     // Build filter query
     const filter: Record<string, unknown> = {};
 
-    // Search filter (email or name)
+    // Search filter (email, first name, last name, or full name)
     if (search) {
-      filter.$or = [
-        { email: { $regex: search, $options: "i" } },
-        { firstName: { $regex: search, $options: "i" } },
-        { lastName: { $regex: search, $options: "i" } },
-      ];
+      const normalizedSearch = search.trim();
+      if (normalizedSearch) {
+        filter.$or = [
+          { email: { $regex: normalizedSearch, $options: "i" } },
+          { firstName: { $regex: normalizedSearch, $options: "i" } },
+          { lastName: { $regex: normalizedSearch, $options: "i" } },
+          // Full name search (firstName + lastName) - handles "frank polak"
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $concat: ["$firstName", " ", "$lastName"] },
+                regex: normalizedSearch,
+                options: "i",
+              },
+            },
+          },
+        ];
+      }
     }
 
     // Role filter

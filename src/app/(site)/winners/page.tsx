@@ -82,7 +82,7 @@ export default function WinnersPage() {
   return (
     <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-50 pt-[60px] sm:pt-[70px]">
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-6 sm:py-12 lg:py-20 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-10 sm:py-12 lg:py-20 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 pointer-events-none"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(238,0,0,0.15),transparent_50%)] pointer-events-none"></div>
 

@@ -7,6 +7,7 @@ export type DateRange = "today" | "yesterday" | "all-time" | "custom";
 interface DateRangeToggleProps {
   selectedRange: DateRange;
   onRangeChange: (range: DateRange) => void;
+  onCustomClick?: () => void;
   className?: string;
 }
 
@@ -15,7 +16,12 @@ interface DateRangeToggleProps {
  * Inspired by MembershipPackagesChart toggle design
  * Provides Today, Yesterday, All Time, and Custom date range options
  */
-export default function DateRangeToggle({ selectedRange, onRangeChange, className = "" }: DateRangeToggleProps) {
+export default function DateRangeToggle({
+  selectedRange,
+  onRangeChange,
+  onCustomClick,
+  className = "",
+}: DateRangeToggleProps) {
   const ranges: { value: DateRange; label: string; shortLabel: string }[] = [
     { value: "today", label: "Today", shortLabel: "Today" },
     { value: "yesterday", label: "Yesterday", shortLabel: "Yesterday" },
@@ -31,7 +37,13 @@ export default function DateRangeToggle({ selectedRange, onRangeChange, classNam
         {ranges.map((range) => (
           <button
             key={range.value}
-            onClick={() => onRangeChange(range.value)}
+            onClick={() => {
+              if (range.value === "custom" && onCustomClick) {
+                onCustomClick();
+              } else {
+                onRangeChange(range.value);
+              }
+            }}
             className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-[11px] text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none ${
               selectedRange === range.value
                 ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)]"

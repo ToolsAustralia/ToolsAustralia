@@ -61,8 +61,15 @@ export interface AdminDashboardStats {
   revenue: {
     total: number;
     breakdown: {
-      subscriptions: number;
-      oneTimePackages: number;
+      subscriptions: number; // Backward compatibility: membershipPurchase + membershipRenewal
+      oneTimePackages: number; // Backward compatibility: oneTimePurchase + additionalOneTimePurchase + miniDraw + upsell
+      // Detailed breakdown
+      membershipPurchase: number;
+      membershipRenewal: number;
+      oneTimePurchase: number;
+      additionalOneTimePurchase: number;
+      miniDraw: number;
+      upsell: number;
     };
   };
   majorDraw: {
@@ -92,6 +99,15 @@ export interface ProjectedIncomeData {
 export interface AdminDashboardResponse {
   success: boolean;
   data: AdminDashboardStats;
+}
+
+// Types for major draws for date range selection
+export interface MajorDrawForDateRange {
+  _id: string;
+  name: string;
+  activationDate: string;
+  drawDate: string;
+  status: string;
 }
 
 /**
@@ -200,6 +216,39 @@ export function useRevenueBreakdown(
     staleTime: 5 * 60 * 1000, // 5 minutes - revenue data can be slightly stale
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchInterval: 10 * 60 * 1000, // Auto-refresh every 10 minutes
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch major draws for date range selection
+ * Returns draws with activationDate and drawDate for use in custom date range modal
+ */
+export function useMajorDrawsForDateRange() {
+  return useQuery<MajorDrawForDateRange[]>({
+    queryKey: ["admin", "major-draws", "date-range"],
+    queryFn: async (): Promise<MajorDrawForDateRange[]> => {
+      const response = await fetch(
+        "/api/admin/major-draw/history?limit=100&sortBy=drawDate&sortOrder=desc"
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch major draws: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch major draws");
+      }
+
+      // Filter draws that have both activationDate and drawDate
+      return (result.data?.draws || []).filter(
+        (draw: MajorDrawForDateRange) => draw.activationDate && draw.drawDate
+      );
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
     retry: 2,
   });
 }

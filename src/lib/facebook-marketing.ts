@@ -53,6 +53,9 @@ export async function fetchFacebookInsights(
   const baseUrl = `https://graph.facebook.com/${apiVersion}/${adAccountId}/insights`;
 
   // Build query parameters
+  // Use single attribution window (28d_click) to ensure accurate revenue reporting
+  // Multiple windows can cause duplicate counting or inconsistent data
+  // 28d_click is the standard attribution window that captures all conversions
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
@@ -62,7 +65,7 @@ export async function fetchFacebookInsights(
       until: dateRange.until,
     }),
     level: level,
-    action_attribution_windows: JSON.stringify(["1d_click", "7d_click", "28d_click"]),
+    action_attribution_windows: JSON.stringify(["28d_click"]), // Single window for accurate revenue
   });
 
   const url = `${baseUrl}?${params.toString()}`;
@@ -149,21 +152,30 @@ function processInsightData(insight: FacebookInsightData): ProcessedInsightMetri
   const clicks = parseInt(insight.clicks || "0", 10);
 
   // Extract revenue from action_values (purchase events)
+  // Handle both "purchase" and "purchase.{window}" formats to catch all purchase events
   let revenue = 0;
   let conversions = 0;
 
   if (insight.action_values) {
-    const purchaseActions = insight.action_values.filter((action) => action.action_type === "purchase");
+    // Filter for purchase events - handle both "purchase" and "purchase.{attribution_window}" formats
+    const purchaseActions = insight.action_values.filter(
+      (action) => action.action_type === "purchase" || action.action_type?.startsWith("purchase.")
+    );
     if (purchaseActions.length > 0) {
       // Facebook returns revenue in dollars, convert to cents for consistent storage
+      // Sum all purchase action values (in case there are multiple attribution windows)
       revenue = purchaseActions.reduce((sum, action) => sum + parseFloat(action.value || "0"), 0) * 100;
     }
   }
 
   // Extract conversion count from actions
+  // Handle both "purchase" and "purchase.{window}" formats
   if (insight.actions) {
-    const purchaseActions = insight.actions.filter((action) => action.action_type === "purchase");
+    const purchaseActions = insight.actions.filter(
+      (action) => action.action_type === "purchase" || action.action_type?.startsWith("purchase.")
+    );
     if (purchaseActions.length > 0) {
+      // Sum all purchase action counts
       conversions = purchaseActions.reduce((sum, action) => sum + parseInt(action.value || "0", 10), 0);
     }
   }

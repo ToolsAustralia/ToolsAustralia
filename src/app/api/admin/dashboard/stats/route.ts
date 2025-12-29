@@ -10,6 +10,7 @@ import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import FacebookAdsInsight from "@/models/FacebookAdsInsight";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
+import mongoose from "mongoose";
 
 /**
  * GET /api/admin/dashboard/stats
@@ -105,25 +106,93 @@ export async function GET(request: NextRequest) {
     const revenueEvents = await PaymentEvent.find({
       eventType: "BenefitsGranted", // Only count successful payments
       timestamp: { $gte: startDate, $lte: endDate },
+    })
+      .select("userId packageType data timestamp")
+      .lean();
+
+    // Initialize detailed revenue breakdown
+    let totalRevenue = 0;
+    let membershipPurchase = 0;
+    let membershipRenewal = 0;
+    let oneTimePurchase = 0;
+    let additionalOneTimePurchase = 0;
+    let miniDraw = 0;
+    let upsell = 0;
+
+    // Get all one-time purchase events in the date range
+    const oneTimeEvents = revenueEvents.filter((e) => e.packageType === "one-time");
+
+    // For each one-time event, we need to check if there's a previous purchase
+    // We'll batch this by getting all previous purchases for all users at once
+    const userIds = [...new Set(oneTimeEvents.map((e) => e.userId.toString()))];
+    const userIdObjectIds = userIds.map((id) => new mongoose.Types.ObjectId(id));
+
+    // Get all previous one-time purchases for these users (before the date range)
+    // This gives us users who definitely have previous purchases
+    const usersWithPreviousPurchases = new Set<string>();
+    if (userIds.length > 0) {
+      const previousPurchases = await PaymentEvent.find({
+        userId: { $in: userIdObjectIds },
+        packageType: "one-time",
+        eventType: "BenefitsGranted",
+        timestamp: { $lt: startDate }, // Before the date range
+      })
+        .select("userId")
+        .lean();
+
+      previousPurchases.forEach((purchase) => {
+        usersWithPreviousPurchases.add(purchase.userId.toString());
+      });
+    }
+
+    // Track first purchase per user within the date range
+    const firstPurchaseInRange = new Map<string, Date>();
+
+    // Categorize revenue by package type and context
+    // Sort events by timestamp to process them chronologically
+    const sortedEvents = [...revenueEvents].sort((a, b) => {
+      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
     });
 
-    // Calculate revenue breakdowns
-    let totalRevenue = 0;
-    let subscriptionRevenue = 0;
-    let oneTimeRevenue = 0; // Includes: one-time, upsell, mini-draw packages
-
-    revenueEvents.forEach((event) => {
+    for (const event of sortedEvents) {
       const price = event.data?.price || 0;
       totalRevenue += price;
 
-      // Package type breakdown
       if (event.packageType === "membership") {
-        subscriptionRevenue += price;
-      } else {
-        // All non-subscription payments: one-time, upsell, mini-draw
-        oneTimeRevenue += price;
+        const billingReason = event.data?.billingReason as string | undefined;
+        if (billingReason === "subscription_cycle") {
+          membershipRenewal += price;
+        } else {
+          // subscription_create or undefined (treat as new purchase)
+          membershipPurchase += price;
+        }
+      } else if (event.packageType === "mini-draw") {
+        miniDraw += price;
+      } else if (event.packageType === "upsell") {
+        upsell += price;
+      } else if (event.packageType === "one-time") {
+        const userId = event.userId.toString();
+        const eventTimestamp = new Date(event.timestamp);
+
+        // Check if user has previous purchases before the date range
+        if (usersWithPreviousPurchases.has(userId)) {
+          // User has purchases before the range, so all purchases in range are additional
+          additionalOneTimePurchase += price;
+        } else {
+          // User has no purchases before the range
+          // Check if this is their first purchase in the current range
+          const firstInRange = firstPurchaseInRange.get(userId);
+          if (!firstInRange) {
+            // This is their first purchase (both in range and ever)
+            firstPurchaseInRange.set(userId, eventTimestamp);
+            oneTimePurchase += price;
+          } else {
+            // User already made a first purchase in this range, this is additional
+            additionalOneTimePurchase += price;
+          }
+        }
       }
-    });
+    }
 
     // ========================================
     // MAJOR DRAW STATISTICS
@@ -354,8 +423,15 @@ export async function GET(request: NextRequest) {
       revenue: {
         total: totalRevenue,
         breakdown: {
-          subscriptions: subscriptionRevenue,
-          oneTimePackages: oneTimeRevenue,
+          subscriptions: membershipPurchase + membershipRenewal, // Backward compatibility
+          oneTimePackages: oneTimePurchase + additionalOneTimePurchase + miniDraw + upsell, // Backward compatibility
+          // Detailed breakdown
+          membershipPurchase,
+          membershipRenewal,
+          oneTimePurchase,
+          additionalOneTimePurchase,
+          miniDraw,
+          upsell,
         },
       },
       majorDraw: {

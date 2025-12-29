@@ -18,6 +18,8 @@ import { useFacebookAdsInsights } from "@/hooks/queries/useFacebookAdsInsights";
 import type { DateRangeOption, InsightLevel } from "@/types/facebook-ads";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
+import CustomDateRangeModal from "./CustomDateRangeModal";
+import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 
 /**
  * Facebook Ads Management Component
@@ -42,22 +44,25 @@ export default function FacebookAdsManagement() {
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+  const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
   const [level, setLevel] = useState<InsightLevel>("adset");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  // Format dates for input fields (YYYY-MM-DD)
-  const today = new Date();
-  const defaultStartDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7)
-    .toISOString()
-    .split("T")[0];
-  const defaultEndDate = today.toISOString().split("T")[0];
+  // Fetch major draws for date range selection
+  const { data: majorDraws = [] } = useMajorDrawsForDateRange();
 
   // Convert DateRange to DateRangeOption
   const dateRangeOption: DateRangeOption = useMemo(() => {
     if (dateRange === "all-time") {
-      // For Facebook Ads, "all-time" maps to a large custom range
-      // We'll use a custom range for now, or you can implement all-time logic
+      // Match overview tab behavior: use 2 years for all-time
+      const today = new Date();
+      const twoYearsAgo = new Date();
+      twoYearsAgo.setFullYear(today.getFullYear() - 2);
+
+      // Set dates for custom range
+      setStartDate(twoYearsAgo.toISOString().split("T")[0]);
+      setEndDate(today.toISOString().split("T")[0]);
       return "custom";
     }
     return dateRange as DateRangeOption;
@@ -76,13 +81,13 @@ export default function FacebookAdsManagement() {
       level,
     };
 
-    if (dateRangeOption === "custom") {
-      params.startDate = startDate || defaultStartDate;
-      params.endDate = endDate || defaultEndDate;
+    if (dateRangeOption === "custom" && startDate && endDate) {
+      params.startDate = startDate;
+      params.endDate = endDate;
     }
 
     return params;
-  }, [dateRangeOption, startDate, endDate, level, defaultStartDate, defaultEndDate]);
+  }, [dateRangeOption, startDate, endDate, level]);
 
   // Fetch insights data
   const { data, isLoading, error } = useFacebookAdsInsights(queryParams);
@@ -119,10 +124,6 @@ export default function FacebookAdsManagement() {
     if (range !== "custom") {
       setStartDate("");
       setEndDate("");
-    } else {
-      // Set default dates when switching to custom
-      if (!startDate) setStartDate(defaultStartDate);
-      if (!endDate) setEndDate(defaultEndDate);
     }
   };
 
@@ -260,35 +261,13 @@ export default function FacebookAdsManagement() {
         </h2>
         <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
           {/* Date Range Toggle */}
-          <DateRangeToggle selectedRange={dateRange} onRangeChange={handleDateRangeChange} />
+          <DateRangeToggle
+            selectedRange={dateRange}
+            onRangeChange={handleDateRangeChange}
+            onCustomClick={() => setIsCustomDateModalOpen(true)}
+          />
         </div>
       </div>
-
-      {/* Custom Date Range Inputs - Only show when custom is selected */}
-      {dateRange === "custom" && (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <input
-                type="date"
-                value={startDate || defaultStartDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <input
-                type="date"
-                value={endDate || defaultEndDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -464,6 +443,20 @@ export default function FacebookAdsManagement() {
           </div>
         </div>
       )}
+
+      {/* Custom Date Range Modal */}
+      <CustomDateRangeModal
+        isOpen={isCustomDateModalOpen}
+        onClose={() => setIsCustomDateModalOpen(false)}
+        onApply={(startDateStr, endDateStr) => {
+          setStartDate(startDateStr);
+          setEndDate(endDateStr);
+          setDateRange("custom");
+        }}
+        currentStartDate={startDate}
+        currentEndDate={endDate}
+        majorDraws={majorDraws}
+      />
     </div>
   );
 }

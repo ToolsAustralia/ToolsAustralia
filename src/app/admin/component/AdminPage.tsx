@@ -21,11 +21,13 @@ import {
   useRecentActivities,
   useRevenueBreakdown,
   useProjectedIncome,
+  useMajorDrawsForDateRange,
 } from "@/hooks/queries/useAdminQueries";
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
+import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import {
   Users,
   DollarSign,
@@ -44,6 +46,10 @@ import {
   Shield,
   Menu,
   TrendingUp,
+  ShoppingCart,
+  ShoppingBag,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
@@ -58,9 +64,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>("today");
-  // Custom date range state (for future implementation)
-  // const [customStartDate, setCustomStartDate] = useState<string>("");
-  // const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+  const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(false);
+
+  // Fetch major draws for date range selection
+  const { data: majorDraws = [] } = useMajorDrawsForDateRange();
 
   // Fetch real admin dashboard stats with date range filtering
   const {
@@ -68,7 +78,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     isLoading: statsLoading,
     error: statsError,
     refetch: refetchStats,
-  } = useAdminDashboardStats(dateRange);
+  } = useAdminDashboardStats(dateRange, customStartDate || undefined, customEndDate || undefined);
 
   // Fetch real recent activities
   const {
@@ -460,7 +470,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   Dashboard Overview
                 </h2>
                 <div className="flex-shrink-0">
-                  <DateRangeToggle selectedRange={dateRange} onRangeChange={setDateRange} />
+                  <DateRangeToggle
+                    selectedRange={dateRange}
+                    onRangeChange={setDateRange}
+                    onCustomClick={() => setIsCustomDateModalOpen(true)}
+                  />
                 </div>
               </div>
 
@@ -524,29 +538,43 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       }
                       color="blue"
                     />
-                    <AdminStatsCard
-                      title={
-                        dateRange === "today"
-                          ? "Today's Revenue"
-                          : dateRange === "yesterday"
-                          ? "Yesterday's Revenue"
-                          : dateRange === "all-time"
-                          ? "Total Revenue"
-                          : "Revenue"
-                      }
-                      value={`$${dashboardStats.revenue.total.toLocaleString()}`}
-                      icon={DollarSign}
-                      subtitle={
-                        dateRange === "today"
-                          ? "From all sources"
-                          : dateRange === "yesterday"
-                          ? "From all sources"
-                          : dateRange === "all-time"
-                          ? "All-time total"
-                          : "Selected period"
-                      }
-                      color="emerald"
-                    />
+                    {/* Total Revenue - Prominent Display (Clickable) */}
+                    <div
+                      onClick={() => setIsRevenueBreakdownExpanded(!isRevenueBreakdownExpanded)}
+                      className="cursor-pointer group relative"
+                    >
+                      <AdminStatsCard
+                        title={
+                          dateRange === "today"
+                            ? "Today's Revenue"
+                            : dateRange === "yesterday"
+                            ? "Yesterday's Revenue"
+                            : dateRange === "all-time"
+                            ? "Total Revenue"
+                            : "Revenue"
+                        }
+                        value={`$${dashboardStats.revenue.total.toLocaleString()}`}
+                        icon={DollarSign}
+                        subtitle={
+                          dateRange === "today"
+                            ? "From all sources"
+                            : dateRange === "yesterday"
+                            ? "From all sources"
+                            : dateRange === "all-time"
+                            ? "All-time total"
+                            : "Selected period"
+                        }
+                        color="emerald"
+                      />
+                      {/* Click indicator */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isRevenueBreakdownExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-emerald-600" />
+                        )}
+                      </div>
+                    </div>
                     <AdminStatsCard
                       title="Projected Income"
                       value={`$${(projectedIncome?.projectedIncome || 0).toLocaleString("en-AU", {
@@ -601,6 +629,93 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   </>
                 ) : null}
               </div>
+
+              {/* Detailed Revenue Breakdown - Expandable */}
+              {dashboardStats && isRevenueBreakdownExpanded && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6 transition-all duration-300 ease-in-out">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900">Revenue Breakdown</h3>
+                    <button
+                      onClick={() => setIsRevenueBreakdownExpanded(false)}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      aria-label="Close breakdown"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                    <AdminStatsCard
+                      title={
+                        <span className="block leading-tight">
+                          <span className="block">Membership</span>
+                          <span className="block">New</span>
+                        </span>
+                      }
+                      value={`$${dashboardStats.revenue.breakdown.membershipPurchase.toLocaleString()}`}
+                      icon={Package}
+                      subtitle="New subscriptions"
+                      color="orange"
+                    />
+                    <AdminStatsCard
+                      title={
+                        <span className="block leading-tight">
+                          <span className="block">Membership</span>
+                          <span className="block">Renewal</span>
+                        </span>
+                      }
+                      value={`$${dashboardStats.revenue.breakdown.membershipRenewal.toLocaleString()}`}
+                      icon={RefreshCw}
+                      subtitle="Recurring payments"
+                      color="yellow"
+                    />
+                    <AdminStatsCard
+                      title={
+                        <span className="block leading-tight">
+                          <span className="block">One-Time</span>
+                          <span className="block">First</span>
+                        </span>
+                      }
+                      value={`$${dashboardStats.revenue.breakdown.oneTimePurchase.toLocaleString()}`}
+                      icon={ShoppingCart}
+                      subtitle="First-time"
+                      color="blue"
+                    />
+                    <AdminStatsCard
+                      title={
+                        <span className="block leading-tight">
+                          <span className="block">One-Time</span>
+                          <span className="block">Additional</span>
+                        </span>
+                      }
+                      value={`$${dashboardStats.revenue.breakdown.additionalOneTimePurchase.toLocaleString()}`}
+                      icon={ShoppingBag}
+                      subtitle="Repeat"
+                      color="indigo"
+                    />
+                    <AdminStatsCard
+                      title={
+                        <span className="block leading-tight">
+                          <span className="block">Mini</span>
+                          <span className="block">Draws</span>
+                        </span>
+                      }
+                      value={`$${dashboardStats.revenue.breakdown.miniDraw.toLocaleString()}`}
+                      icon={Trophy}
+                      subtitle="Mini draw entries"
+                      color="purple"
+                    />
+                    <AdminStatsCard
+                      title="Upsells"
+                      value={`$${dashboardStats.revenue.breakdown.upsell.toLocaleString()}`}
+                      icon={TrendingUp}
+                      subtitle="Upsell packages"
+                      color="pink"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Revenue Overview */}
               <RevenueOverview />
@@ -747,6 +862,20 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           // Refresh stats and show success toast
           refetchStats();
         }}
+      />
+
+      {/* Custom Date Range Modal */}
+      <CustomDateRangeModal
+        isOpen={isCustomDateModalOpen}
+        onClose={() => setIsCustomDateModalOpen(false)}
+        onApply={(startDate, endDate) => {
+          setCustomStartDate(startDate);
+          setCustomEndDate(endDate);
+          setDateRange("custom");
+        }}
+        currentStartDate={customStartDate}
+        currentEndDate={customEndDate}
+        majorDraws={majorDraws}
       />
 
       {/* Export Modal */}

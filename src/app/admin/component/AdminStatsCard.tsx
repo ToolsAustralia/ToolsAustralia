@@ -4,14 +4,14 @@ import React from "react";
 import { LucideIcon, TrendingUp, TrendingDown } from "lucide-react";
 
 interface AdminStatsCardProps {
-  title: string;
+  title: string | React.ReactNode;
   value: string | number;
   icon: LucideIcon;
   trend?: {
     value: number;
     isPositive: boolean;
   };
-  color?: "red" | "green" | "blue" | "yellow" | "purple" | "indigo" | "pink" | "emerald";
+  color?: "red" | "green" | "blue" | "yellow" | "purple" | "indigo" | "pink" | "emerald" | "orange";
   className?: string;
   subtitle?: string;
   loading?: boolean;
@@ -84,6 +84,13 @@ export default function AdminStatsCard({
       icon: "text-white",
       iconBg: "bg-emerald-100",
     },
+    orange: {
+      bg: "bg-gradient-to-br from-orange-500 via-orange-600 to-red-600",
+      bgLight: "bg-orange-50",
+      text: "text-orange-600",
+      icon: "text-white",
+      iconBg: "bg-orange-100",
+    },
   };
 
   const selectedColor = colorClasses[color];
@@ -120,9 +127,15 @@ export default function AdminStatsCard({
       <div className="relative p-2.5 sm:p-4 lg:p-5">
         <div className="flex items-start justify-between mb-2 sm:mb-4">
           <div className="flex-1 min-w-0">
-            <p className="text-slate-600 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
-              {title}
-            </p>
+            {typeof title === "string" ? (
+              <p className="text-slate-600 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                {title}
+              </p>
+            ) : (
+              <div className="text-slate-600 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 uppercase tracking-wide">
+                {title}
+              </div>
+            )}
             {subtitle && (
               <p className="hidden sm:block text-[9px] sm:text-xs text-slate-500 font-medium mb-1 sm:mb-2 leading-tight">
                 {subtitle}
