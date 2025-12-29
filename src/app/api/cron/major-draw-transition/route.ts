@@ -26,13 +26,14 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 // import User from "@/models/User"; // No longer needed with Option 1
-import { getDrawsNeedingTransition, shouldCreateNextDraw } from "@/utils/draws/major-draw-helpers";
+import { shouldCreateNextDraw } from "@/utils/draws/major-draw-helpers";
 import {
   calculateFreezeTime,
   calculateActivationDate,
   calculateNextDrawDate,
   formatDateInAEST,
 } from "@/utils/common/timezone";
+import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
 
 /**
  * Cron job handler (Backup for middleware transitions)
@@ -44,60 +45,177 @@ export async function GET() {
   const startTime = Date.now();
   const logs: string[] = [];
 
+  // ✅ Add console.log for Vercel logs visibility
+  console.log("🕐 Major Draw Transition Cron Job Started");
+  console.log(`   Time: ${new Date().toISOString()}`);
+
   try {
     // Vercel cron jobs are automatically protected by Vercel's infrastructure
     // No additional authentication needed as they can only be called internally
     logs.push("✅ Cron job authenticated via Vercel infrastructure");
     logs.push(`🕐 Started at: ${new Date().toISOString()}`);
     logs.push("ℹ️ Running as backup - primary transitions handled by middleware");
+    console.log("✅ Cron job authenticated via Vercel infrastructure");
 
     await connectDB();
     logs.push("✅ Database connected");
+    console.log("✅ Database connected");
+
+    const now = new Date();
 
     // ========================================
-    // STEP 1: Backup transition checks (middleware handles primary transitions)
+    // STEP 1: Complete draws that reached draw date (MATCHES MIDDLEWARE ORDER)
     // ========================================
-    // These transitions are now handled automatically by middleware on every query,
-    // but we keep this as a safety net for edge cases
-    const { drawsToFreeze, drawsToComplete, drawsToActivate } = await getDrawsNeedingTransition();
-
-    for (const draw of drawsToFreeze) {
-      draw.status = "frozen";
-      draw.configurationLocked = true;
-      draw.lockedAt = new Date();
-      await draw.save();
-      logs.push(`🔒 Frozen draw: ${draw.name} (ID: ${draw._id})`);
-    }
-
-    logs.push(`✅ Processed ${drawsToFreeze.length} draws to freeze`);
-
-    // ========================================
-    // STEP 2: Complete draws that reached draw date
-    // ========================================
-    for (const draw of drawsToComplete) {
-      draw.status = "completed";
-      draw.isActive = false; // Backward compatibility
-      draw.configurationLocked = true;
-      if (!draw.lockedAt) {
-        draw.lockedAt = new Date();
+    // CRITICAL: This must happen FIRST to free up "active" status before activating new draws
+    // This prevents draw skipping (e.g., Draw 1 completes → Draw 2 activates, not Draw 3)
+    // Uses updateMany for idempotency - safe to run multiple times, won't double-update
+    // Matches middleware: Completes active/frozen draws when drawDate <= now
+    const completedResult = await MajorDraw.updateMany(
+      {
+        status: { $in: ["active", "frozen"] },
+        drawDate: { $lte: now }, // Draw date has passed
+      },
+      {
+        $set: {
+          status: "completed",
+          isActive: false, // Backward compatibility
+          configurationLocked: true,
+          lockedAt: now,
+        },
       }
-      await draw.save();
-      logs.push(`✅ Completed draw: ${draw.name} (ID: ${draw._id})`);
-    }
+    );
 
-    logs.push(`✅ Processed ${drawsToComplete.length} draws to complete`);
+    logs.push(`✅ Completed ${completedResult.modifiedCount} draw(s)`);
+    console.log(`✅ Completed ${completedResult.modifiedCount} draw(s) (idempotent - safe if already completed)`);
 
     // ========================================
-    // STEP 3: Activate queued draws
+    // STEP 2: Activate queued draws (MATCHES MIDDLEWARE ORDER)
     // ========================================
-    for (const draw of drawsToActivate) {
-      draw.status = "active";
-      draw.isActive = true; // Backward compatibility
-      await draw.save();
-      logs.push(`🎯 Activated draw: ${draw.name} (ID: ${draw._id})`);
-    }
+    // Happens after completing draws to avoid status conflicts
+    // Uses updateMany for idempotency - safe to run multiple times
+    // Matches middleware: Activates queued draws when activationDate <= now
+    const activatedResult = await MajorDraw.updateMany(
+      {
+        status: "queued",
+        activationDate: { $lte: now }, // Activation time has arrived
+      },
+      {
+        $set: {
+          status: "active",
+          isActive: true, // Backward compatibility
+        },
+      }
+    );
 
-    logs.push(`✅ Processed ${drawsToActivate.length} draws to activate`);
+    logs.push(`✅ Activated ${activatedResult.modifiedCount} draw(s)`);
+    console.log(`✅ Activated ${activatedResult.modifiedCount} draw(s) (idempotent - safe if already activated)`);
+
+    // ========================================
+    // STEP 3: Freeze active draws (MATCHES MIDDLEWARE ORDER)
+    // ========================================
+    // Happens last since it only affects active draws
+    // Uses updateMany for idempotency - safe to run multiple times
+    // Matches middleware: Freezes active draws when freezeEntriesAt <= now AND drawDate > now
+    const frozenResult = await MajorDraw.updateMany(
+      {
+        status: "active",
+        freezeEntriesAt: { $lte: now }, // Freeze time has arrived
+        drawDate: { $gt: now }, // Draw hasn't happened yet
+      },
+      {
+        $set: {
+          status: "frozen",
+          configurationLocked: true,
+          lockedAt: now,
+        },
+      }
+    );
+
+    logs.push(`✅ Frozen ${frozenResult.modifiedCount} draw(s)`);
+    console.log(`✅ Frozen ${frozenResult.modifiedCount} draw(s) (idempotent - safe if already frozen)`);
+
+    // ========================================
+    // STEP 3.5: IMMEDIATE Klaviyo reset for newly activated draws (PRIORITY)
+    // ========================================
+    // CRITICAL: This runs immediately after activation to ensure profiles are updated ASAP
+    // for email marketing campaigns. Detects draws activated in last 24 hours to catch
+    // both cron-activated and middleware-activated draws.
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Find active draws that were activated recently (could be by middleware or cron)
+    // Only process draws that haven't been processed yet (safeguard against double processing)
+    const recentlyActivatedDraws = await MajorDraw.find({
+      status: "active",
+      activationDate: {
+        $gte: oneDayAgo,
+        $lte: now,
+      },
+    })
+      .sort({ activationDate: -1 })
+      .lean();
+
+    const klaviyoResetsCount = recentlyActivatedDraws.length;
+
+    if (recentlyActivatedDraws.length > 0) {
+      logs.push(
+        `🔄 IMMEDIATELY resetting Klaviyo draw-specific properties for ${recentlyActivatedDraws.length} recently activated draw(s)...`
+      );
+      console.log(
+        `🔄 IMMEDIATELY resetting Klaviyo properties for ${recentlyActivatedDraws.length} draw(s) - PRIORITY for email campaigns`
+      );
+
+      // Process each activated draw (usually just one, but handle multiple)
+      // Process in parallel for faster execution
+      const klaviyoResetPromises = recentlyActivatedDraws.map(async (activatedDraw) => {
+        try {
+          logs.push(
+            `   Processing draw: ${activatedDraw.name} (activated: ${new Date(activatedDraw.activationDate).toISOString()})`
+          );
+          console.log(`   Processing draw: ${activatedDraw.name} (ID: ${activatedDraw._id})`);
+
+          // Fetch full document for type safety (lean() returns plain objects)
+          const fullDraw = await MajorDraw.findById(activatedDraw._id);
+          if (!fullDraw) {
+            throw new Error(`Draw ${activatedDraw._id} not found`);
+          }
+          const resetResult = await resetDrawPropertiesForAllUsers(fullDraw);
+
+          logs.push(`✅ Klaviyo reset completed for ${activatedDraw.name}:`);
+          logs.push(`   Processed: ${resetResult.processed} users`);
+          logs.push(`   Synced: ${resetResult.synced} users`);
+          logs.push(`   Errors: ${resetResult.errors} users`);
+          logs.push(`   Duration: ${resetResult.duration}ms`);
+
+          console.log(`✅ Klaviyo reset completed for ${activatedDraw.name}:`);
+          console.log(`   Processed: ${resetResult.processed} users`);
+          console.log(`   Synced: ${resetResult.synced} users`);
+          console.log(`   Errors: ${resetResult.errors} users`);
+          console.log(`   Duration: ${resetResult.duration}ms`);
+
+          if (resetResult.errors > 0) {
+            logs.push(`⚠️ ${resetResult.errors} users had errors during reset`);
+            resetResult.errorDetails.slice(0, 5).forEach((error) => {
+              logs.push(`   Error: ${error.email} - ${error.error}`);
+            });
+            console.warn(`⚠️ ${resetResult.errors} users had errors during reset`);
+          }
+
+          return { success: true, draw: activatedDraw, result: resetResult };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          logs.push(`❌ Klaviyo reset failed for ${activatedDraw.name}: ${errorMessage}`);
+          console.error(`❌ Klaviyo reset failed for ${activatedDraw.name}:`, error);
+          return { success: false, draw: activatedDraw, error: errorMessage };
+        }
+      });
+
+      // Wait for all Klaviyo resets to complete (parallel execution for speed)
+      await Promise.allSettled(klaviyoResetPromises);
+      console.log(`✅ All Klaviyo resets completed (parallel execution)`);
+    } else {
+      logs.push("ℹ️ No recently activated draws found - skipping Klaviyo reset");
+      console.log("ℹ️ No recently activated draws found - skipping Klaviyo reset");
+    }
 
     // ========================================
     // STEP 4: Create next queued draw if needed
@@ -183,14 +301,16 @@ export async function GET() {
     // ========================================
     const duration = Date.now() - startTime;
     logs.push(`🎉 Cron job completed successfully in ${duration}ms`);
+    console.log(`🎉 Cron job completed successfully in ${duration}ms`);
 
     return NextResponse.json(
       {
         success: true,
         summary: {
-          frozen: drawsToFreeze.length,
-          completed: drawsToComplete.length,
-          activated: drawsToActivate.length,
+          completed: completedResult.modifiedCount,
+          activated: activatedResult.modifiedCount,
+          frozen: frozenResult.modifiedCount,
+          klaviyoResets: klaviyoResetsCount,
           nextDrawCreated: shouldCreate,
           usersCleanedUp: 0, // Using single source of truth - no user cleanup needed
           duration: `${duration}ms`,
@@ -204,7 +324,8 @@ export async function GET() {
     logs.push(`❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`);
     logs.push(`⏱️ Failed after ${duration}ms`);
 
-    console.error("Cron job error:", error);
+    console.error("❌ Cron job error:", error);
+    console.error(`⏱️ Failed after ${duration}ms`);
 
     return NextResponse.json(
       {

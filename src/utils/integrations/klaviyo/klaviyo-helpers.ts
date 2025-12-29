@@ -12,6 +12,7 @@ import type { KlaviyoProfile } from "@/types/klaviyo";
 import { getStateByCode } from "@/data/australianStates";
 import { getPackageById } from "@/data/membershipPackages";
 import { extractBrandFromSlug } from "./brand-extraction";
+import { calculateDrawSpecificPropertiesForUser } from "./klaviyo-draw-calculator";
 
 /**
  * Calculate entry breakdown by source
@@ -139,6 +140,34 @@ export async function userToKlaviyoProfile(
   const upsellMetrics = calculateUpsellMetrics(user);
   const entryBreakdown = calculateEntryBreakdown(user);
 
+  // Calculate draw-specific properties (non-blocking - use defaults if fails)
+  let drawSpecificProperties: {
+    current_draw_id?: string;
+    current_draw_name?: string;
+    current_draw_start_date?: string;
+    current_draw_subscription_active: boolean;
+    current_draw_one_time_packages: number;
+  } = {
+    current_draw_subscription_active: false,
+    current_draw_one_time_packages: 0,
+  };
+
+  try {
+    const drawProps = await calculateDrawSpecificPropertiesForUser(user);
+    if (drawProps) {
+      drawSpecificProperties = drawProps;
+    } else {
+      // If drawProps is null, log a warning for debugging
+      // This happens when no active draw is found
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`⚠️ No draw-specific properties calculated for ${user.email} - no active draw found`);
+      }
+    }
+  } catch (error) {
+    // Log error but don't fail profile sync - use safe defaults
+    console.error(`Error calculating draw-specific properties for user ${user._id}:`, error);
+  }
+
   // Determine brand interest
   // If user has made purchases, explicitly set to null to remove tag from Klaviyo
   // If no purchases, use brand from signup or default to "milwaukee"
@@ -254,6 +283,15 @@ export async function userToKlaviyoProfile(
       one_time_entries: entryBreakdown.oneTimeEntries,
       upsell_entries: entryBreakdown.upsellEntries,
       mini_draw_entries: entryBreakdown.miniDrawEntries,
+
+      // Draw-specific properties (reset when new draw activates)
+      // Always include boolean/number properties (never undefined) - these will always be sent to Klaviyo
+      // String properties can be undefined (will be filtered by cleanProperties if no draw found)
+      current_draw_id: drawSpecificProperties.current_draw_id,
+      current_draw_name: drawSpecificProperties.current_draw_name,
+      current_draw_start_date: drawSpecificProperties.current_draw_start_date,
+      current_draw_subscription_active: drawSpecificProperties.current_draw_subscription_active ?? false,
+      current_draw_one_time_packages: drawSpecificProperties.current_draw_one_time_packages ?? 0,
     },
   };
 

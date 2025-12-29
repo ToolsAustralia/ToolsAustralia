@@ -1286,6 +1286,20 @@ function trackKlaviyoEvent(
       });
     }
 
+    // ✅ Update draw-specific properties in real-time (non-blocking)
+    // This ensures Klaviyo segments update immediately after purchase
+    // The sync will automatically recalculate draw-specific properties based on purchase date
+    if (packageData.packageType === "membership" || packageData.packageType === "one-time") {
+      import("@/utils/integrations/klaviyo/klaviyo-profile-sync")
+        .then(({ syncUserProfileToKlaviyoBackground }) => {
+          syncUserProfileToKlaviyoBackground(user as never);
+        })
+        .catch((error) => {
+          // Log error but don't fail payment processing
+          console.error(`❌ Failed to update draw-specific properties:`, error);
+        });
+    }
+
     // console.log(`📊 Klaviyo event tracked for ${packageData.packageType} package`);
   } catch (_error) {
     console.error("Klaviyo event tracking failed:", _error);

@@ -26,7 +26,8 @@ import type {
 // ============================================================
 
 const getKlaviyoConfig = () => {
-  const apiKey = process.env.KLAVIYO_PRIVATE_API_KEY;
+  // Trim API key to handle any whitespace issues
+  const apiKey = process.env.KLAVIYO_PRIVATE_API_KEY?.trim();
   // Auto-detect mode based on NODE_ENV if KLAVIYO_MODE is not explicitly set
   const nodeEnv = process.env.NODE_ENV || "development";
   const explicitMode = process.env.KLAVIYO_MODE;
@@ -110,16 +111,26 @@ class KlaviyoClient {
   }
 
   private isConfigured(): boolean {
-    if (!this.enabled) {
+    // Re-read enabled status from environment (handles cases where dotenv loads after singleton creation)
+    const enabled = process.env.KLAVIYO_ENABLED !== "false";
+    if (!enabled) {
       if (this.mode === "development") {
         // console.log("⚠️ Klaviyo is disabled (KLAVIYO_ENABLED=false)");
       }
       return false;
     }
 
-    if (!this.apiKey) {
+    // Re-read API key from environment at runtime (handles cases where dotenv loads after singleton creation)
+    // This ensures the API key is available even if the singleton was created before dotenv loaded
+    const apiKey = process.env.KLAVIYO_PRIVATE_API_KEY?.trim();
+    if (!apiKey) {
       // console.warn("⚠️ Klaviyo API key is missing. Set KLAVIYO_PRIVATE_API_KEY in .env");
       return false;
+    }
+
+    // Update cached API key if it was missing but is now available
+    if (!this.apiKey && apiKey) {
+      this.apiKey = apiKey;
     }
 
     return true;
@@ -390,14 +401,25 @@ class KlaviyoClient {
         },
       };
 
-      // ✅ DEBUG: Log payload to verify properties are being sent
-      // Uncomment this to debug missing properties
-      // console.log("📊 Klaviyo Profile Payload:", {
-      //   email: profile.email,
-      //   propertiesCount: Object.keys(cleanedProperties).length,
-      //   propertiesKeys: Object.keys(cleanedProperties),
-      //   properties: cleanedProperties,
-      // });
+      // ✅ DEBUG: Log payload to verify properties are being sent (only in development)
+      if (this.mode === "development" && process.env.KLAVIYO_DEBUG_PROFILE === "true") {
+        console.log("📊 Klaviyo Profile Payload:", {
+          email: profile.email,
+          propertiesCount: Object.keys(cleanedProperties).length,
+          hasDrawProperties: {
+            current_draw_id: !!cleanedProperties.current_draw_id,
+            current_draw_start_date: !!cleanedProperties.current_draw_start_date,
+            current_draw_subscription_active: cleanedProperties.current_draw_subscription_active !== undefined,
+            current_draw_one_time_packages: cleanedProperties.current_draw_one_time_packages !== undefined,
+          },
+          drawProperties: {
+            current_draw_id: cleanedProperties.current_draw_id,
+            current_draw_start_date: cleanedProperties.current_draw_start_date,
+            current_draw_subscription_active: cleanedProperties.current_draw_subscription_active,
+            current_draw_one_time_packages: cleanedProperties.current_draw_one_time_packages,
+          },
+        });
+      }
 
       // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
       // This ensures resilience during Klaviyo API outages

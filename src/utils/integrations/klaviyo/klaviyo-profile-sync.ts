@@ -9,6 +9,7 @@
 
 import { klaviyo } from "@/lib/klaviyo";
 import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpers";
+import { calculateDrawSpecificPropertiesForUser } from "@/utils/integrations/klaviyo/klaviyo-draw-calculator";
 import type { IUser } from "@/models/User";
 
 /**
@@ -90,8 +91,17 @@ export async function syncUserProfileToKlaviyo(user: IUser, brandInterestFromSig
       // ⚠️ NOTE: We do NOT subscribe here to respect user's unsubscribe preferences
       // Subscriptions are only set during initial registration via subscribeUserToKlaviyoOnRegistration
       // console.log(`✅ Klaviyo profile synced (data only, no subscription changes): ${user.email}`);
+      
+      // Verify draw-specific properties were included
+      if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_PROFILE === "true") {
+        const drawProps = await calculateDrawSpecificPropertiesForUser(user);
+        console.log(`✅ Profile synced for ${user.email}:`, {
+          profileId: result.profile_id,
+          drawProperties: drawProps,
+        });
+      }
     } else {
-      // console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
+      console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
     }
   } catch (error) {
     console.error(`❌ Error syncing Klaviyo profile for ${user.email}:`, error);

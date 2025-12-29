@@ -87,6 +87,13 @@ export interface KlaviyoProfileProperties {
   one_time_entries?: number; // Total entries from one-time packages
   upsell_entries?: number; // Total entries from upsell purchases
   mini_draw_entries?: number; // Total entries from mini-draw packages
+
+  // Draw-specific properties (reset when new draw activates)
+  current_draw_id?: string; // ID of current active major draw
+  current_draw_name?: string; // Name of current active major draw (human-readable)
+  current_draw_start_date?: string; // activationDate of current draw (ISO string)
+  current_draw_subscription_active: boolean; // Subscribed DURING current draw period
+  current_draw_one_time_packages: number; // One-time packages purchased DURING current draw
 }
 
 export interface KlaviyoProfile {

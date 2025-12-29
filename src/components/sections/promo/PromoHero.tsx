@@ -64,10 +64,10 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
 
     // If draw is today or tomorrow, use date-based images
     if (drawStatus === "tomorrow") {
-      return "/images/background/promo/DRAWN TOMORROW.png";
+      return "/images/background/promo/drawn tomorrow.webp";
     }
     if (drawStatus === "today") {
-      return "/images/background/promo/DRAWN TONIGHT.png";
+      return "/images/background/promo/drawn tonight.webp";
     }
 
     // Otherwise, fall back to multiplier-based logic

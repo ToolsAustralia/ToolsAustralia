@@ -2378,8 +2378,22 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         }
       }
 
-      // Update Klaviyo profile
-      ensureUserProfileSynced(user);
+      // ✅ CRITICAL: Fetch fresh user data from database before syncing to Klaviyo
+      // This ensures we have the latest subscription startDate and other updated fields
+      // processPaymentBenefits modifies the user internally, so we need to refresh it
+      // Wait a bit to ensure MongoDB has committed all changes (especially subscription startDate)
+      await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms buffer for database consistency
+      
+      const freshUserForKlaviyo = await User.findById(user._id);
+      if (freshUserForKlaviyo) {
+        // Update Klaviyo profile with fresh user data (includes updated subscription startDate)
+        ensureUserProfileSynced(freshUserForKlaviyo);
+        webhookLog("info", `✅ Klaviyo profile synced with fresh user data for: ${freshUserForKlaviyo.email}`);
+      } else {
+        // Fallback to original user if fresh fetch fails
+        ensureUserProfileSynced(user);
+        webhookLog("warn", `⚠️ Could not fetch fresh user data, synced with original user object`);
+      }
 
       // ✅ CRITICAL: Process recurring membership commission (non-blocking)
       // Only process for subscription_cycle (recurring payments), not initial subscription_create
