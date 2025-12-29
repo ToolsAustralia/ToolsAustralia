@@ -135,7 +135,7 @@ export default async function MiniDrawsPage() {
       </div>
 
       {/* Membership Section */}
-      <div className="bg-gradient-to-b from-black via-slate-900 to-black">
+      <div className="bg-gradient-to-b from-black via-slate-900 to-black max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="pt-8 pb-32" titleColor="text-white" />
       </div>
     </div>

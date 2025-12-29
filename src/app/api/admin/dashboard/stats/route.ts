@@ -5,7 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
-import { getStartOfTodayInAEST } from "@/utils/common/timezone";
+import { getStartOfTodayInAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import FacebookAdsInsight from "@/models/FacebookAdsInsight";
@@ -68,8 +68,29 @@ export async function GET(request: NextRequest) {
         if (!startDateParam || !endDateParam) {
           return NextResponse.json({ error: "startDate and endDate are required for custom range" }, { status: 400 });
         }
-        startDate = new Date(startDateParam);
-        endDate = new Date(endDateParam);
+        // Parse dates and normalize to AEST start/end of day
+        const startDateParsed = new Date(startDateParam);
+        const endDateParsed = new Date(endDateParam);
+        
+        // Get date components in AEST
+        const AEST_TIMEZONE = "Australia/Sydney";
+        const startYear = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "yyyy"), 10);
+        const startMonth = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "M"), 10);
+        const startDay = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "d"), 10);
+        
+        const endYear = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "yyyy"), 10);
+        const endMonth = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "M"), 10);
+        const endDay = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "d"), 10);
+        
+        // Set startDate to start of day (00:00:00) in AEST
+        startDate = createAESTDateAsUTC(startYear, startMonth, startDay, 0, 0);
+        
+        // Set endDate to end of day (23:59:59.999) in AEST
+        // Calculate by getting start of next day and subtracting 1ms
+        const nextDayStart = createAESTDateAsUTC(endYear, endMonth, endDay, 0, 0);
+        const nextDay = new Date(nextDayStart);
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+        endDate = new Date(nextDay.getTime() - 1);
         break;
       default:
         startDate = startOfToday;

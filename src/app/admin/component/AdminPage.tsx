@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import AdminSidebar from "./AdminSidebar";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import AdminStatsCard from "./AdminStatsCard";
@@ -54,6 +55,8 @@ import {
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -63,11 +66,75 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isAdminMiniDrawModalOpen, setIsAdminMiniDrawModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange>("today");
-  const [customStartDate, setCustomStartDate] = useState<string>("");
-  const [customEndDate, setCustomEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
   const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(false);
+  const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Read date filter from URL params
+  const dateRange = (searchParams.get("dateRange") as DateRange) || "today";
+  const customStartDate = searchParams.get("startDate") || "";
+  const customEndDate = searchParams.get("endDate") || "";
+
+  // Update URL params when date filter changes
+  const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("dateRange", range);
+    if (range === "custom" && start && end) {
+      params.set("startDate", start);
+      params.set("endDate", end);
+    } else {
+      params.delete("startDate");
+      params.delete("endDate");
+    }
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
+  // Format abbreviated date for collapsed view
+  const formatAbbreviatedDate = (startDate: string, endDate: string): string => {
+    if (!startDate || !endDate) return "";
+    
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // Check if same date
+      if (format(start, "yyyy-MM-dd") === format(end, "yyyy-MM-dd")) {
+        return format(start, "MMM d, yyyy"); // "Dec 27, 2025"
+      }
+      
+      // Different dates - show abbreviated range
+      return `${format(start, "MMM d")} - ${format(end, "MMM d, yyyy")}`; // "Nov 27 - Dec 27, 2025"
+    } catch {
+      return "";
+    }
+  };
+
+  // Determine if filter should be collapsible (only on mobile, and only for custom range or all-time)
+  const shouldCollapse = useMemo(() => {
+    return isMobile && (dateRange === "custom" || dateRange === "all-time");
+  }, [isMobile, dateRange]);
+
+  // Get display date for collapsed view
+  const displayDate = useMemo(() => {
+    if (dateRange === "custom" && customStartDate && customEndDate) {
+      return formatAbbreviatedDate(customStartDate, customEndDate);
+    }
+    if (dateRange === "all-time") {
+      return "All Time";
+    }
+    return null;
+  }, [dateRange, customStartDate, customEndDate]);
 
   // Fetch major draws for date range selection
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
@@ -78,7 +145,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     isLoading: statsLoading,
     error: statsError,
     refetch: refetchStats,
-  } = useAdminDashboardStats(dateRange, customStartDate || undefined, customEndDate || undefined);
+  } = useAdminDashboardStats(dateRange, customStartDate ? customStartDate : undefined, customEndDate ? customEndDate : undefined);
 
   // Fetch real recent activities
   const {
@@ -472,8 +539,21 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 <div className="flex-shrink-0">
                   <DateRangeToggle
                     selectedRange={dateRange}
-                    onRangeChange={setDateRange}
+                    onRangeChange={(range) => {
+                      if (range === "custom") {
+                        setIsCustomDateModalOpen(true);
+                      } else {
+                        updateDateFilter(range);
+                        // Only collapse if the new filter is collapsible (all-time)
+                        if (range === "all-time") {
+                          setIsDateFilterCollapsed(true);
+                        }
+                      }
+                    }}
                     onCustomClick={() => setIsCustomDateModalOpen(true)}
+                    collapsed={isDateFilterCollapsed && shouldCollapse}
+                    displayDate={displayDate || undefined}
+                    onExpand={() => setIsDateFilterCollapsed(false)}
                   />
                 </div>
               </div>
@@ -869,9 +949,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         isOpen={isCustomDateModalOpen}
         onClose={() => setIsCustomDateModalOpen(false)}
         onApply={(startDate, endDate) => {
-          setCustomStartDate(startDate);
-          setCustomEndDate(endDate);
-          setDateRange("custom");
+          updateDateFilter("custom", startDate, endDate);
+          setIsDateFilterCollapsed(true);
         }}
         currentStartDate={customStartDate}
         currentEndDate={customEndDate}

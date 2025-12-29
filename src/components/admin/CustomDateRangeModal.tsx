@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import DateRangeCalendar from "./DateRangeCalendar";
+import Dropdown, { type DropdownOption } from "@/components/modals/ui/Dropdown";
 import { format, subDays, startOfDay } from "date-fns";
 
 export interface MajorDrawForDateRange {
@@ -36,6 +37,7 @@ export default function CustomDateRangeModal({
 }: CustomDateRangeModalProps) {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [selectedMajorDraw, setSelectedMajorDraw] = useState<string>("");
 
   // Initialize dates from props
   useEffect(() => {
@@ -58,12 +60,22 @@ export default function CustomDateRangeModal({
     setEndDate(today);
   };
 
-  const handleMajorDrawSelect = (draw: MajorDrawForDateRange) => {
-    if (draw.activationDate && draw.drawDate) {
+  const handleMajorDrawSelect = (drawId: string) => {
+    const draw = majorDraws.find((d) => d._id === drawId);
+    if (draw && draw.activationDate && draw.drawDate) {
       setStartDate(startOfDay(new Date(draw.activationDate)));
       setEndDate(startOfDay(new Date(draw.drawDate)));
+      setSelectedMajorDraw(drawId);
+    } else {
+      setSelectedMajorDraw("");
     }
   };
+
+  // Convert major draws to dropdown options
+  const majorDrawOptions: DropdownOption[] = majorDraws.map((draw) => ({
+    value: draw._id,
+    label: draw.name,
+  }));
 
   const handleApply = () => {
     if (startDate && endDate) {
@@ -77,15 +89,16 @@ export default function CustomDateRangeModal({
   const handleClear = () => {
     setStartDate(null);
     setEndDate(null);
+    setSelectedMajorDraw("");
   };
 
   const isValidRange = startDate && endDate && startDate <= endDate;
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl" closeOnBackdrop={true}>
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Select Date Range</h2>
+      <div className="p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
+          <h2 className="text-lg sm:text-2xl font-bold text-gray-900">Select Date Range</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -97,50 +110,68 @@ export default function CustomDateRangeModal({
           </button>
         </div>
 
-        {/* Quick Select Buttons */}
-        <div className="mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Quick Select</h3>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => handleQuickSelect(7)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Last 7 days
-            </button>
-            <button
-              onClick={() => handleQuickSelect(30)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Last 30 days
-            </button>
+        {/* Quick Select and Major Draws - Compact Row */}
+        <div className="mb-4 sm:mb-6">
+          <div className="flex flex-row gap-2 sm:gap-4 items-end">
+            {/* Quick Select Buttons */}
+            <div className="flex-shrink-0">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Quick Select</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    handleQuickSelect(7);
+                    setSelectedMajorDraw("");
+                  }}
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                >
+                  <span className="sm:hidden">7D</span>
+                  <span className="hidden sm:inline">Last 7 days</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleQuickSelect(30);
+                    setSelectedMajorDraw("");
+                  }}
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                >
+                  <span className="sm:hidden">30D</span>
+                  <span className="hidden sm:inline">Last 30 days</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Major Draw Selection - Dropdown */}
+            {majorDraws.length > 0 && (
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Major Draws</h3>
+                <Dropdown
+                  options={majorDrawOptions}
+                  value={selectedMajorDraw}
+                  onChange={(value) => {
+                    handleMajorDrawSelect(value);
+                  }}
+                  placeholder="Select a major draw"
+                  compact={true}
+                  className="w-full"
+                />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Major Draw Selection */}
-        {majorDraws.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Major Draws</h3>
-            <div className="flex flex-wrap gap-2">
-              {majorDraws.map((draw) => (
-                <button
-                  key={draw._id}
-                  onClick={() => handleMajorDrawSelect(draw)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  {draw.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Calendar */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <DateRangeCalendar
             startDate={startDate}
             endDate={endDate}
-            onStartDateChange={setStartDate}
-            onEndDateChange={setEndDate}
+            onStartDateChange={(date) => {
+              setStartDate(date);
+              setSelectedMajorDraw("");
+            }}
+            onEndDateChange={(date) => {
+              setEndDate(date);
+              setSelectedMajorDraw("");
+            }}
             maxDate={new Date()}
             className="w-full"
           />
@@ -148,32 +179,34 @@ export default function CustomDateRangeModal({
 
         {/* Selected Dates Display */}
         {startDate && endDate && (
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="text-sm text-gray-600 mb-1">Selected Range:</div>
-            <div className="text-base font-semibold text-gray-900">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+            <div className="text-xs sm:text-sm text-gray-600 mb-1">Selected Range:</div>
+            <div className="text-sm sm:text-base font-semibold text-gray-900">
               {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")}
             </div>
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3">
-          <button
-            onClick={handleClear}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Clear
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+          <div className="flex flex-row gap-2 sm:gap-3">
+            <button
+              onClick={handleClear}
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
           <button
             onClick={handleApply}
             disabled={!isValidRange}
-            className="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-600 to-red-700 rounded-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="w-full sm:w-auto px-4 sm:px-6 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-red-600 to-red-700 rounded-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             Apply
           </button>

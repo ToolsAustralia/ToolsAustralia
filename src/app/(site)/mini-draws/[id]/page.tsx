@@ -324,10 +324,11 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
             </div>
           </section>
         )}
+         {/* Membership Section */}
+      <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="py-8 sm:py-12 lg:pb-16 mb-16 " />
       </div>
 
-      {/* Membership Section */}
-      <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="py-8 sm:py-12 lg:pb-16 mb-16 " />
+     
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ChevronRight } from "lucide-react";
 
 export type DateRange = "today" | "yesterday" | "all-time" | "custom";
 
@@ -9,6 +10,9 @@ interface DateRangeToggleProps {
   onRangeChange: (range: DateRange) => void;
   onCustomClick?: () => void;
   className?: string;
+  collapsed?: boolean;
+  displayDate?: string;
+  onExpand?: () => void;
 }
 
 /**
@@ -21,6 +25,9 @@ export default function DateRangeToggle({
   onRangeChange,
   onCustomClick,
   className = "",
+  collapsed = false,
+  displayDate,
+  onExpand,
 }: DateRangeToggleProps) {
   const ranges: { value: DateRange; label: string; shortLabel: string }[] = [
     { value: "today", label: "Today", shortLabel: "Today" },
@@ -29,6 +36,29 @@ export default function DateRangeToggle({
     { value: "custom", label: "Custom Range", shortLabel: "Custom" },
   ];
 
+  // Collapsed view - show only active filter with abbreviated date
+  if (collapsed && displayDate) {
+    return (
+      <div
+        className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 ${className}`}
+      >
+        <button
+          onClick={() => {
+            if (onExpand) {
+              onExpand();
+            }
+          }}
+          className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-[11px] text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)] flex items-center gap-1 sm:gap-1.5 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-700"
+        >
+          <span className="sm:hidden">{displayDate.length > 12 ? displayDate.substring(0, 10) + "..." : displayDate}</span>
+          <span className="hidden sm:inline">{displayDate}</span>
+          <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  // Expanded view - show all filter buttons
   return (
     <div
       className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 ${className}`}

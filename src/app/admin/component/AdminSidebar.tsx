@@ -158,11 +158,16 @@ export default function AdminSidebar({
     if (isMobile && onClose) {
       onClose();
     }
-    // Navigate to the tab route
+    // Preserve URL query parameters when navigating between tabs
+    const currentSearchParams = new URLSearchParams(window.location.search);
+    const queryString = currentSearchParams.toString();
+    const queryParam = queryString ? `?${queryString}` : "";
+    
+    // Navigate to the tab route while preserving query params
     if (tabId === "overview") {
-      router.push("/admin");
+      router.push(`/admin${queryParam}`);
     } else {
-      router.push(`/admin/${tabId}`);
+      router.push(`/admin/${tabId}${queryParam}`);
     }
   };
 

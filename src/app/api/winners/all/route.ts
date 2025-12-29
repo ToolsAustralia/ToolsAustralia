@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
+// Import ensures MajorDraw model is registered before populate
 import MajorDraw from "@/models/MajorDraw";
+import { Types } from "mongoose";
+
+// Suppress unused import warning - import is needed for model registration
+void MajorDraw;
+
+// Helper to safely extract ObjectId string from populated or unpopulated fields
+const toIdString = (id: Types.ObjectId | string | { _id?: Types.ObjectId | string } | undefined): string => {
+  if (!id) return "";
+  if (id instanceof Types.ObjectId) return id.toString();
+  if (typeof id === "string") return id;
+  if (typeof id === "object" && "_id" in id && id._id) {
+    return id._id instanceof Types.ObjectId ? id._id.toString() : String(id._id);
+  }
+  return String(id);
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,48 +48,54 @@ export async function GET(request: NextRequest) {
 
     // Fetch major draw winners if needed
     if (!drawType || drawType === "major") {
+      // Importing MajorDraw ensures the model is registered before populate
       const majorDrawWinners = await Winner.find({ drawType: "major" })
         .sort({ selectedDate: -1 })
         .populate("userId", "firstName lastName state")
         .populate({
           path: "drawId",
-          model: "MajorDraw",
+          model: "MajorDraw", // Using string is consistent with codebase pattern
           select: "name prize",
         })
         .lean();
 
-      majorDrawWinners.forEach((winner: {
-        _id: { toString(): string };
-        drawId: { toString(): string } | { name?: string; prize?: { name?: string; description?: string; value?: number; images?: string[] } };
-        userId: { firstName?: string; lastName?: string; state?: string } | { toString(): string };
-        prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
-        imageUrl?: string;
-        selectedDate: Date;
-        entryNumber?: number;
-      }) => {
-        const winnerUser = (typeof winner.userId === 'object' && 'firstName' in winner.userId) 
-          ? winner.userId 
+      majorDrawWinners.forEach((winner) => {
+        // Type assertion for lean() result with populated fields
+        const w = winner as unknown as {
+          _id: Types.ObjectId | string;
+          drawId: Types.ObjectId | string | { _id?: Types.ObjectId | string; name?: string; prize?: { name?: string; description?: string; value?: number; images?: string[] } };
+          userId: Types.ObjectId | string | { firstName?: string; lastName?: string; state?: string };
+          prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
+          imageUrl?: string;
+          selectedDate: Date;
+          entryNumber?: number;
+        };
+        const winnerUser = (typeof w.userId === 'object' && !(w.userId instanceof Types.ObjectId) && 'firstName' in w.userId) 
+          ? w.userId 
           : null;
-        const majorDraw = (typeof winner.drawId === 'object' && 'name' in winner.drawId) 
-          ? winner.drawId 
+        
+        // Check if drawId was populated (object with name property)
+        const majorDraw = (typeof w.drawId === 'object' && !(w.drawId instanceof Types.ObjectId) && 'name' in w.drawId) 
+          ? w.drawId 
           : null;
+        
         winners.push({
-          id: winner._id.toString(),
-          drawId: winner.drawId.toString(),
-          drawName: majorDraw?.name || "Major Draw",
+          id: toIdString(w._id),
+          drawId: toIdString(w.drawId),
+          drawName: majorDraw?.name || w.prizeSnapshot?.name || "Major Draw",
           drawType: "major",
           prize: {
-            name: winner.prizeSnapshot?.name || majorDraw?.prize?.name || "Major Prize",
-            description: winner.prizeSnapshot?.description || majorDraw?.prize?.description || "",
-            value: winner.prizeSnapshot?.value || majorDraw?.prize?.value || 0,
-            images: winner.prizeSnapshot?.images || majorDraw?.prize?.images || [],
+            name: w.prizeSnapshot?.name || majorDraw?.prize?.name || "Major Prize",
+            description: w.prizeSnapshot?.description || majorDraw?.prize?.description || "",
+            value: w.prizeSnapshot?.value || majorDraw?.prize?.value || 0,
+            images: w.prizeSnapshot?.images || majorDraw?.prize?.images || [],
           },
           winnerFirstName: winnerUser?.firstName || "",
           winnerLastName: winnerUser?.lastName || "",
           winnerState: winnerUser?.state || "",
-          imageUrl: winner.imageUrl,
-          selectedDate: winner.selectedDate,
-          entryNumber: winner.entryNumber,
+          imageUrl: w.imageUrl,
+          selectedDate: w.selectedDate,
+          entryNumber: w.entryNumber,
         });
       });
     }
@@ -85,35 +107,37 @@ export async function GET(request: NextRequest) {
         .populate("userId", "firstName lastName state")
         .lean();
 
-      miniDrawWinners.forEach((winner: {
-        _id: { toString(): string };
-        drawId: { toString(): string };
-        userId: { firstName?: string; lastName?: string; state?: string } | { toString(): string };
-        prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
-        imageUrl?: string;
-        selectedDate: Date;
-        entryNumber?: number;
-      }) => {
-        const winnerUser = (typeof winner.userId === 'object' && 'firstName' in winner.userId) 
-          ? winner.userId 
+      miniDrawWinners.forEach((winner) => {
+        // Type assertion for lean() result with populated fields
+        const w = winner as unknown as {
+          _id: Types.ObjectId | string;
+          drawId: Types.ObjectId | string;
+          userId: Types.ObjectId | string | { firstName?: string; lastName?: string; state?: string };
+          prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
+          imageUrl?: string;
+          selectedDate: Date;
+          entryNumber?: number;
+        };
+        const winnerUser = (typeof w.userId === 'object' && !(w.userId instanceof Types.ObjectId) && 'firstName' in w.userId) 
+          ? w.userId 
           : null;
         winners.push({
-          id: winner._id.toString(),
-          drawId: winner.drawId.toString(),
-          drawName: winner.prizeSnapshot?.name || "Mini Draw",
+          id: toIdString(w._id),
+          drawId: toIdString(w.drawId),
+          drawName: w.prizeSnapshot?.name || "Mini Draw",
           drawType: "mini",
           prize: {
-            name: winner.prizeSnapshot?.name || "",
-            description: winner.prizeSnapshot?.description || "",
-            value: winner.prizeSnapshot?.value || 0,
-            images: winner.prizeSnapshot?.images || [],
+            name: w.prizeSnapshot?.name || "",
+            description: w.prizeSnapshot?.description || "",
+            value: w.prizeSnapshot?.value || 0,
+            images: w.prizeSnapshot?.images || [],
           },
           winnerFirstName: winnerUser?.firstName || "",
           winnerLastName: winnerUser?.lastName || "",
           winnerState: winnerUser?.state || "",
-          imageUrl: winner.imageUrl,
-          selectedDate: winner.selectedDate,
-          entryNumber: winner.entryNumber,
+          imageUrl: w.imageUrl,
+          selectedDate: w.selectedDate,
+          entryNumber: w.entryNumber,
         });
       });
     }

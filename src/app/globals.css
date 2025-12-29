@@ -954,6 +954,24 @@
   }
 }
 
+/* Horizontal shimmer animation for winner name */
+@keyframes shimmer-horizontal {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer-horizontal {
+  animation: shimmer-horizontal 3s ease-in-out infinite;
+}
+
+.animate-shimmer-horizontal-fast {
+  animation: shimmer-horizontal 2s ease-in-out infinite;
+}
+
 /* Animated glow effect for package icons */
 @keyframes glow-pulse {
   0%,
