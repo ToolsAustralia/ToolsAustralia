@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmailVerificationCode, generateEmailVerificationCode } from "@/lib/email";
+import { emailService, generateEmailVerificationCode } from "@/lib/email";
 
 /**
  * POST /api/test/email-verification
@@ -20,8 +20,12 @@ export async function POST(request: NextRequest) {
     const verificationCode = generateEmailVerificationCode();
     console.log(`📧 Generated test code: ${verificationCode}`);
 
-    // Send the email
-    const result = await sendEmailVerificationCode(email, verificationCode, userName || "Test User");
+    // Send the email using new SendGrid service
+    const result = await emailService.sendVerificationEmail(email, {
+      userName: userName || "Test User",
+      verificationCode,
+      expiryHours: 24,
+    });
 
     if (result.success) {
       console.log(`✅ Test email sent successfully to ${email}`);

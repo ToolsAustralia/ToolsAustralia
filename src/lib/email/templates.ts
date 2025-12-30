@@ -1,133 +1,21 @@
-import nodemailer from "nodemailer";
-import crypto from "crypto";
-import { isDevelopment } from "@/lib/environment";
-
-// Re-export new SendGrid email service for backward compatibility
-// Using explicit path to avoid circular dependency
-export { emailService, emailVerificationRateLimiter, passwordResetRateLimiter } from "./email/index";
-
-// Email verification rate limiting store (in production, use Redis or database)
-const emailRateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
-// Form submission rate limiting store
-const formSubmissionRateLimitStore = new Map<string, { lastSubmissionTime: number }>();
-
-// Rate limiting configuration
-const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
-const MAX_ATTEMPTS_PER_HOUR = parseInt(process.env.EMAIL_VERIFICATION_RATE_LIMIT_PER_HOUR || "5");
-
-// Form submission rate limiting: 1 email every 5 minutes
-const FORM_SUBMISSION_RATE_LIMIT_WINDOW = 5 * 60 * 1000; // 5 minutes
-
-export interface EmailResult {
-  success: boolean;
-  messageId?: string;
-  error?: string;
-}
-
-export interface EmailRateLimitResult {
-  allowed: boolean;
-  remainingAttempts: number;
-  resetTime: number;
-}
-
 /**
- * Check rate limiting for email verification requests
- * Rate limiting is disabled in development environment for easier testing
+ * Email Templates
+ * Local HTML templates for email sending
+ * These templates can be migrated to SendGrid Dynamic Templates later if desired
  */
-export function checkEmailRateLimit(email: string): EmailRateLimitResult {
-  // Skip rate limiting in development
-  if (isDevelopment()) {
-    return {
-      allowed: true,
-      remainingAttempts: 999, // Unlimited in development
-      resetTime: Date.now() + RATE_LIMIT_WINDOW,
-    };
-  }
-
-  const now = Date.now();
-  const key = `email_verification_${email}`;
-
-  const current = emailRateLimitStore.get(key);
-
-  if (!current || now > current.resetTime) {
-    // Reset or initialize
-    const resetTime = now + RATE_LIMIT_WINDOW;
-    emailRateLimitStore.set(key, { count: 1, resetTime });
-    return {
-      allowed: true,
-      remainingAttempts: MAX_ATTEMPTS_PER_HOUR - 1,
-      resetTime,
-    };
-  }
-
-  if (current.count >= MAX_ATTEMPTS_PER_HOUR) {
-    return {
-      allowed: false,
-      remainingAttempts: 0,
-      resetTime: current.resetTime,
-    };
-  }
-
-  // Increment count
-  current.count++;
-  emailRateLimitStore.set(key, current);
-
-  return {
-    allowed: true,
-    remainingAttempts: MAX_ATTEMPTS_PER_HOUR - current.count,
-    resetTime: current.resetTime,
-  };
-}
-
-/**
- * Generate a 6-character alphanumeric verification code
- */
-export function generateEmailVerificationCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let result = "";
-
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-
-  return result;
-}
-
-/**
- * Create email transporter
- */
-function createEmailTransporter() {
-  // Check if SMTP is configured
-  if (!process.env.SMTP_SERVER_HOST || !process.env.SMTP_SERVER_USER || !process.env.SMTP_SERVER_PASSWORD) {
-    // console.warn("⚠️ SMTP not configured - Email verification disabled");
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_SERVER_HOST,
-    port: parseInt(process.env.SMTP_SERVER_PORT || "587"),
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_SERVER_USER,
-      pass: process.env.SMTP_SERVER_PASSWORD,
-    },
-  });
-}
 
 /**
  * Get the base URL for the application
  */
 function getBaseUrl(): string {
-  // Use NEXT_PUBLIC_APP_URL if available, otherwise fallback to NEXTAUTH_URL
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
-  return appUrl.replace(/\/$/, ""); // Remove trailing slash
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  return appUrl.replace(/\/$/, ''); // Remove trailing slash
 }
 
 /**
  * Create HTML email template for verification code
  */
-function createVerificationEmailTemplate(userName: string, verificationCode: string): string {
+export function createVerificationEmailTemplate(userName: string, verificationCode: string): string {
   const baseUrl = getBaseUrl();
   return `
     <!DOCTYPE html>
@@ -378,148 +266,13 @@ function createVerificationEmailTemplate(userName: string, verificationCode: str
 }
 
 /**
- * Send email verification code
+ * Create HTML email template for password reset
  */
-export async function sendEmailVerificationCode(
-  email: string,
-  verificationCode: string,
-  userName?: string
-): Promise<EmailResult> {
-  try {
-    // console.log(`Email verification attempt for: ${email}`);
-    // console.log(
-    //   `SMTP Config - Host: ${process.env.SMTP_SERVER_HOST}, User: ${process.env.SMTP_SERVER_USER}, Port: ${process.env.SMTP_SERVER_PORT}`
-    // );
-
-    const transporter = createEmailTransporter();
-
-    if (!transporter) {
-      console.error("Email transporter not created - SMTP not configured");
-      return {
-        success: false,
-        error: "Email service not configured",
-      };
-    }
-
-    const htmlContent = createVerificationEmailTemplate(userName || "User", verificationCode);
-
-    const mailOptions = {
-      from: {
-        name: "Tools Australia",
-        address: process.env.SMTP_SERVER_USER!,
-      },
-      to: email,
-      subject: "Verify Your Email - Tools Australia",
-      html: htmlContent,
-      text: `Hello ${
-        userName || "User"
-      }! Your Tools Australia verification code is: ${verificationCode}. This code expires in 24 hours.`,
-    };
-
-    // console.log(`Sending email with options:`, {
-    //   from: mailOptions.from,
-    //   to: mailOptions.to,
-    //   subject: mailOptions.subject,
-    // });
-
-    const info = await transporter.sendMail(mailOptions);
-
-    // console.log(`Email verification sent to ${email}: ${info.messageId}`);
-    // console.log(`Email response:`, info);
-
-    return {
-      success: true,
-      messageId: info.messageId,
-    };
-  } catch (error) {
-    console.error("Failed to send email verification:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to send email",
-    };
-  }
-}
-
-/**
- * Generate email verification token (for future use with links)
- */
-export function generateEmailVerificationToken(): string {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-/**
- * Send a plain email with provided subject/body (centralized design)
- */
-export async function sendCustomEmail({
-  to,
-  subject,
-  html,
-  text,
-  fromName = "Tools Australia",
-}: {
-  to: string;
-  subject: string;
-  html?: string;
-  text?: string;
-  fromName?: string;
-}): Promise<EmailResult> {
-  try {
-    const transporter = createEmailTransporter();
-
-    if (!transporter) {
-      console.error("Email transporter not created - SMTP not configured");
-      return {
-        success: false,
-        error: "Email service not configured",
-      };
-    }
-
-    const mailOptions = {
-      from: {
-        name: fromName,
-        address: process.env.SMTP_SERVER_USER!,
-      },
-      to,
-      subject,
-      html,
-      text: text || html?.replace(/<[^>]+>/g, "") || "",
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-
-    return {
-      success: true,
-      messageId: info.messageId,
-    };
-  } catch (error) {
-    console.error("Failed to send custom email:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to send email",
-    };
-  }
-}
-
-/**
- * Send password reset email with link and code
- * Uses the same header/footer and overall styling as the verification email for consistency.
- */
-export async function sendPasswordResetEmail({
-  to,
-  userName,
-  resetUrl,
-  resetCode,
-}: {
-  to: string;
-  userName?: string;
-  resetUrl: string;
-  resetCode: string;
-}): Promise<EmailResult> {
-  const safeName = userName || "User";
+export function createPasswordResetEmailTemplate(userName: string, resetUrl: string): string {
   const baseUrl = getBaseUrl();
-
-  const html = `
+  const safeName = userName || 'User';
+  
+  return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -686,8 +439,8 @@ export async function sendPasswordResetEmail({
                     <div class="logo-container">
                         <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
                         <h1 class="header-title">Password Reset</h1>
-        </div>
-          </div>
+                    </div>
+                </div>
                 
                 <div class="content">
                     <h2 class="greeting">Hi ${safeName},</h2>
@@ -705,7 +458,7 @@ export async function sendPasswordResetEmail({
                       >
                         Reset Password
                       </a>
-          </div>
+                    </div>
 
                     <div class="security-notice">
                         <h3>Security Information</h3>
@@ -714,7 +467,7 @@ export async function sendPasswordResetEmail({
                             <li>Never share this link with anyone.</li>
                             <li>If you didn't request a password reset, you can safely ignore this email.</li>
                         </ul>
-        </div>
+                    </div>
 
                     <p class="support-text">
                         If you have any questions or need help, our support team is here for you. 
@@ -726,80 +479,25 @@ export async function sendPasswordResetEmail({
                             Best regards,<br>
                             <span class="team-name">The Tools Australia Team</span>
                         </p>
-        </div>
-      </div>
+                    </div>
+                </div>
                 
                 <div class="footer">
                     <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
                     <p class="footer-text">This is an automated message. Please do not reply to this email.</p>
                     <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
-    </div>
+                </div>
             </div>
         </div>
     </body>
     </html>
   `;
-
-  return sendCustomEmail({
-    to,
-    subject: "Reset your password - Tools Australia",
-    html,
-    text: `Hi ${safeName},\n\nYou requested a password reset for your Tools Australia account.\nUse the following link to choose a new password (it expires in 60 minutes):\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
-  });
-}
-
-/**
- * Get verification expiry time
- * Defaults to 24 hours if EMAIL_VERIFICATION_EXPIRY_MINUTES is not set
- */
-export function getEmailVerificationExpiry(): Date {
-  const expiryMinutes = parseInt(process.env.EMAIL_VERIFICATION_EXPIRY_MINUTES || "1440"); // 24 hours = 1440 minutes
-  return new Date(Date.now() + expiryMinutes * 60 * 1000);
-}
-
-/**
- * Check rate limiting for form submissions (contact form and partner applications)
- * Returns true if submission is allowed, false if rate limited
- * Rate limit: 1 submission per 5 minutes per identifier (email + IP)
- */
-export function checkFormSubmissionRateLimit(identifier: string): { allowed: boolean; retryAfter?: number } {
-  const now = Date.now();
-  const key = `form_submission_${identifier}`;
-
-  const current = formSubmissionRateLimitStore.get(key);
-
-  if (!current) {
-    // First submission - allow it and record the time
-    formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
-    // console.log(`✅ Rate limit check passed for ${identifier} - first submission`);
-    return { allowed: true };
-  }
-
-  const timeSinceLastSubmission = now - current.lastSubmissionTime;
-  const minutesSinceLastSubmission = Math.floor(timeSinceLastSubmission / (60 * 1000));
-
-  if (timeSinceLastSubmission < FORM_SUBMISSION_RATE_LIMIT_WINDOW) {
-    // Rate limited - calculate retry after time in seconds
-    const retryAfter = Math.ceil((FORM_SUBMISSION_RATE_LIMIT_WINDOW - timeSinceLastSubmission) / 1000);
-    const retryAfterMinutes = Math.ceil(retryAfter / 60);
-    // console.warn(
-    //   `🚫 Rate limit BLOCKED for ${identifier} - Last submission was ${minutesSinceLastSubmission} minute(s) ago. Retry after ${retryAfterMinutes} minute(s) (${retryAfter} seconds)`
-    // );
-    return { allowed: false, retryAfter };
-  }
-
-  // Enough time has passed - update last submission time and allow
-  formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
-  // console.log(
-  //   `✅ Rate limit check passed for ${identifier} - ${minutesSinceLastSubmission} minute(s) since last submission`
-  // );
-  return { allowed: true };
 }
 
 /**
  * Create HTML email template for contact form submission
  */
-function createContactSubmissionEmailTemplate(data: {
+export function createContactSubmissionEmailTemplate(data: {
   firstName: string;
   lastName: string;
   email: string;
@@ -808,10 +506,10 @@ function createContactSubmissionEmailTemplate(data: {
   message: string;
   submittedAt: Date;
 }): string {
-  const submittedDate = new Date(data.submittedAt).toLocaleString("en-AU", {
-    dateStyle: "full",
-    timeStyle: "long",
-    timeZone: "Australia/Sydney",
+  const submittedDate = new Date(data.submittedAt).toLocaleString('en-AU', {
+    dateStyle: 'full',
+    timeStyle: 'long',
+    timeZone: 'Australia/Sydney',
   });
 
   return `
@@ -961,15 +659,11 @@ function createContactSubmissionEmailTemplate(data: {
                     </div>
                     <div class="info-item">
                         <div class="info-label">Email Address</div>
-                        <div class="info-value"><a href="mailto:${
-                          data.email
-                        }" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
+                        <div class="info-value"><a href="mailto:${data.email}" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Phone Number</div>
-                        <div class="info-value"><a href="tel:${
-                          data.phone
-                        }" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
+                        <div class="info-value"><a href="tel:${data.phone}" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Subject</div>
@@ -979,7 +673,7 @@ function createContactSubmissionEmailTemplate(data: {
                 
                 <div class="message-section">
                     <div class="message-label">Message</div>
-                    <div class="message-content">${data.message.replace(/\n/g, "<br>")}</div>
+                    <div class="message-content">${data.message.replace(/\n/g, '<br>')}</div>
                 </div>
                 
                 <div class="timestamp">
@@ -1000,7 +694,7 @@ function createContactSubmissionEmailTemplate(data: {
 /**
  * Create HTML email template for partner application
  */
-function createPartnerApplicationEmailTemplate(data: {
+export function createPartnerApplicationEmailTemplate(data: {
   firstName: string;
   lastName: string;
   businessName: string;
@@ -1011,10 +705,10 @@ function createPartnerApplicationEmailTemplate(data: {
   goals?: string;
   submittedAt: Date;
 }): string {
-  const submittedDate = new Date(data.submittedAt).toLocaleString("en-AU", {
-    dateStyle: "full",
-    timeStyle: "long",
-    timeZone: "Australia/Sydney",
+  const submittedDate = new Date(data.submittedAt).toLocaleString('en-AU', {
+    dateStyle: 'full',
+    timeStyle: 'long',
+    timeZone: 'Australia/Sydney',
   });
 
   return `
@@ -1164,52 +858,36 @@ function createPartnerApplicationEmailTemplate(data: {
                     </div>
                     <div class="info-item">
                         <div class="info-label">Email Address</div>
-                        <div class="info-value"><a href="mailto:${
-                          data.email
-                        }" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
+                        <div class="info-value"><a href="mailto:${data.email}" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Phone Number</div>
-                        <div class="info-value"><a href="tel:${
-                          data.phone
-                        }" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
+                        <div class="info-value"><a href="tel:${data.phone}" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Business Name</div>
                         <div class="info-value">${data.businessName}</div>
                     </div>
-                    ${
-                      data.abn
-                        ? `
+                    ${data.abn ? `
                     <div class="info-item">
                         <div class="info-label">ABN</div>
                         <div class="info-value">${data.abn}</div>
                     </div>
-                    `
-                        : ""
-                    }
-                    ${
-                      data.acn
-                        ? `
+                    ` : ''}
+                    ${data.acn ? `
                     <div class="info-item">
                         <div class="info-label">ACN</div>
                         <div class="info-value">${data.acn}</div>
                     </div>
-                    `
-                        : ""
-                    }
+                    ` : ''}
                 </div>
                 
-                ${
-                  data.goals
-                    ? `
+                ${data.goals ? `
                 <div class="goals-section">
                     <div class="goals-label">Partnership Goals</div>
-                    <div class="goals-content">${data.goals.replace(/\n/g, "<br>")}</div>
+                    <div class="goals-content">${data.goals.replace(/\n/g, '<br>')}</div>
                 </div>
-                `
-                    : ""
-                }
+                ` : ''}
                 
                 <div class="timestamp">
                     <strong>Submitted:</strong> ${submittedDate}
@@ -1226,128 +904,3 @@ function createPartnerApplicationEmailTemplate(data: {
   `;
 }
 
-/**
- * Send contact form submission notification email
- * Note: Rate limiting is now checked BEFORE calling this function in the API endpoint
- */
-export async function sendContactSubmissionEmail(data: {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  subject: string;
-  message: string;
-  submittedAt: Date;
-}): Promise<EmailResult> {
-  try {
-    const transporter = createEmailTransporter();
-
-    if (!transporter) {
-      console.error("Email transporter not created - SMTP not configured");
-      return {
-        success: false,
-        error: "Email service not configured",
-      };
-    }
-
-    const htmlContent = createContactSubmissionEmailTemplate(data);
-    const recipientEmail = process.env.CONTACT_EMAIL || "hello@toolsaustralia.com.au";
-
-    const mailOptions = {
-      from: {
-        name: "Tools Australia Contact Form",
-        address: process.env.SMTP_SERVER_USER!,
-      },
-      to: recipientEmail,
-      replyTo: data.email,
-      subject: `New Contact Form Submission: ${data.subject}`,
-      html: htmlContent,
-      text: `New Contact Form Submission\n\nName: ${data.firstName} ${data.lastName}\nEmail: ${data.email}\nPhone: ${
-        data.phone
-      }\nSubject: ${data.subject}\n\nMessage:\n${data.message}\n\nSubmitted at: ${new Date(
-        data.submittedAt
-      ).toLocaleString("en-AU")}`,
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-
-    // console.log(`Contact form submission email sent to ${recipientEmail}: ${info.messageId}`);
-
-    return {
-      success: true,
-      messageId: info.messageId,
-    };
-  } catch (error) {
-    console.error("Failed to send contact submission email:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to send email",
-    };
-  }
-}
-
-/**
- * Send partner application notification email
- * Note: Rate limiting is now checked BEFORE calling this function in the API endpoint
- */
-export async function sendPartnerApplicationEmail(data: {
-  firstName: string;
-  lastName: string;
-  businessName: string;
-  email: string;
-  phone: string;
-  abn?: string;
-  acn?: string;
-  goals?: string;
-  submittedAt: Date;
-}): Promise<EmailResult> {
-  try {
-    const transporter = createEmailTransporter();
-
-    if (!transporter) {
-      console.error("Email transporter not created - SMTP not configured");
-      return {
-        success: false,
-        error: "Email service not configured",
-      };
-    }
-
-    const htmlContent = createPartnerApplicationEmailTemplate(data);
-    const recipientEmail = process.env.CONTACT_EMAIL || "hello@toolsaustralia.com.au";
-
-    const mailOptions = {
-      from: {
-        name: "Tools Australia Partner Applications",
-        address: process.env.SMTP_SERVER_USER!,
-      },
-      to: recipientEmail,
-      replyTo: data.email,
-      subject: `New Partner Application: ${data.businessName}`,
-      html: htmlContent,
-      text: `New Partner Application\n\nName: ${data.firstName} ${data.lastName}\nBusiness: ${
-        data.businessName
-      }\nEmail: ${data.email}\nPhone: ${data.phone}${data.abn ? `\nABN: ${data.abn}` : ""}${
-        data.acn ? `\nACN: ${data.acn}` : ""
-      }${data.goals ? `\n\nGoals:\n${data.goals}` : ""}\n\nSubmitted at: ${new Date(data.submittedAt).toLocaleString(
-        "en-AU"
-      )}`,
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-
-    // console.log(`Partner application email sent to ${recipientEmail}: ${info.messageId}`);
-
-    return {
-      success: true,
-      messageId: info.messageId,
-    };
-  } catch (error) {
-    console.error("Failed to send partner application email:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to send email",
-    };
-  }
-}

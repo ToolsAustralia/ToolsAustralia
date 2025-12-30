@@ -4,7 +4,7 @@ import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { sendContactSubmissionEmail, checkFormSubmissionRateLimit } from "@/lib/email";
+import { emailService, checkFormSubmissionRateLimit } from "@/lib/email";
 
 /**
  * Contact Submission API Endpoints
@@ -150,18 +150,21 @@ export async function POST(request: NextRequest) {
     await contactSubmission.save();
 
     // Send email notification (non-blocking - don't fail if email fails)
-    sendContactSubmissionEmail({
-      firstName: validatedData.firstName,
-      lastName: validatedData.lastName,
-      email: validatedData.email,
-      phone: validatedData.phone,
-      subject: validatedData.subject,
-      message: validatedData.message,
-      submittedAt: contactSubmission.submittedAt,
-    }).catch((error) => {
-      console.error("Failed to send contact submission email notification:", error);
-      // Don't throw - email failure shouldn't prevent form submission
-    });
+    const recipientEmail = process.env.CONTACT_EMAIL || 'hello@toolsaustralia.com.au';
+    emailService
+      .sendContactSubmissionEmail(recipientEmail, {
+        firstName: validatedData.firstName,
+        lastName: validatedData.lastName,
+        email: validatedData.email,
+        phone: validatedData.phone,
+        subject: validatedData.subject,
+        message: validatedData.message,
+        submittedAt: contactSubmission.submittedAt.toISOString(),
+      })
+      .catch((error) => {
+        console.error('Failed to send contact submission email notification:', error);
+        // Don't throw - email failure shouldn't prevent form submission
+      });
 
     return NextResponse.json(
       {

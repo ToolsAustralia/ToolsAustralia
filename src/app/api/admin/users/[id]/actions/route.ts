@@ -9,7 +9,7 @@ import mongoose from "mongoose";
 // import { sendSMS } from "@/lib/sms";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import { sendCustomEmail } from "@/lib/email";
+import { emailService } from "@/lib/email";
 
 /**
  * POST /api/admin/users/[id]/actions
@@ -287,10 +287,10 @@ async function handleAdminSetPassword(user: any, newPassword: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleSendEmail(user: any, subject: string, message: string) {
   try {
-    const emailResult = await sendCustomEmail({
+    const emailResult = await emailService.sendCustomEmail({
       to: user.email,
       subject,
-      html: `<p>${message.replace(/\n/g, "<br>")}</p>`,
+      html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
       text: message,
     });
 

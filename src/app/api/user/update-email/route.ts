@@ -5,9 +5,9 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import {
-  sendEmailVerificationCode,
+  emailService,
+  emailVerificationRateLimiter,
   generateEmailVerificationCode,
-  checkEmailRateLimit,
   getEmailVerificationExpiry,
 } from "@/lib/email";
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check rate limiting for the new email
-    const rateLimitResult = checkEmailRateLimit(validatedData.newEmail);
+    const rateLimitResult = emailVerificationRateLimiter.checkLimit(validatedData.newEmail);
     if (!rateLimitResult.allowed) {
       const resetTimeMinutes = Math.ceil((rateLimitResult.resetTime - Date.now()) / 60000);
       return NextResponse.json(
@@ -112,10 +112,18 @@ export async function POST(request: NextRequest) {
 
     // Send verification code to new email
     try {
-      await sendEmailVerificationCode(validatedData.newEmail, verificationCode, user.firstName);
-      console.log(`✅ Verification code sent to new email: ${validatedData.newEmail}`);
+      const emailResult = await emailService.sendVerificationEmail(validatedData.newEmail, {
+        userName: user.firstName || 'User',
+        verificationCode,
+        expiryHours: 24,
+      });
+      if (emailResult.success) {
+        console.log(`✅ Verification code sent to new email: ${validatedData.newEmail}`);
+      } else {
+        console.error('❌ Failed to send verification email:', emailResult.error);
+      }
     } catch (emailError) {
-      console.error("❌ Failed to send verification email:", emailError);
+      console.error('❌ Failed to send verification email:', emailError);
       // Don't fail the request if email sending fails - user can request resend
     }
 
