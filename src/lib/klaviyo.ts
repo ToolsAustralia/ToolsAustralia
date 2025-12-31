@@ -189,10 +189,10 @@ class KlaviyoClient {
 
       clearTimeout(timeoutId);
 
-      // ✅ CRITICAL FIX: Throw errors for retryable status codes (502/504/5xx)
+      // ✅ CRITICAL FIX: Throw errors for retryable status codes (429/502/504/5xx)
       // This allows retry logic to catch and retry these errors
-      // Per Klaviyo best practices: gateway errors and server errors are retryable
-      if (response.status >= 500 || response.status === 502 || response.status === 504) {
+      // Per Klaviyo best practices: rate limit errors (429), gateway errors and server errors are retryable
+      if (response.status === 429 || response.status >= 500 || response.status === 502 || response.status === 504) {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
         throw new Error(`Klaviyo API error: ${response.status} - ${errorMessage}`);
@@ -259,8 +259,8 @@ class KlaviyoClient {
 
         // If result is a Response, check if it's OK (for non-throwing cases)
         if (result instanceof Response && !result.ok) {
-          // Only throw for retryable errors (502/504/5xx)
-          if (result.status >= 500 || result.status === 502 || result.status === 504) {
+          // Only throw for retryable errors (429/502/504/5xx)
+          if (result.status === 429 || result.status >= 500 || result.status === 502 || result.status === 504) {
             const errorData = await result.json().catch(() => ({}));
             const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${result.status}: ${result.statusText}`;
             throw new Error(`Klaviyo API error: ${result.status} - ${errorMessage}`);
@@ -273,11 +273,15 @@ class KlaviyoClient {
         const errorMessage = lastError.message.toLowerCase();
 
         // ✅ Error Classification: Check if it's a retryable error
+        // Include 429 (rate limit) errors - these should be retried with backoff
         const isRetryable =
           errorMessage.includes("502") ||
           errorMessage.includes("504") ||
           errorMessage.includes("500") ||
           errorMessage.includes("503") ||
+          errorMessage.includes("429") ||
+          errorMessage.includes("throttled") ||
+          errorMessage.includes("rate limit") ||
           errorMessage.includes("timeout") ||
           errorMessage.includes("network") ||
           errorMessage.includes("econnreset") ||
@@ -297,11 +301,33 @@ class KlaviyoClient {
 
         // ✅ Calculate exponential backoff with jitter
         // Longer delays for gateway errors (502/504) - these indicate server issues
+        // For 429 rate limit errors, try to extract the "Expected available in X seconds" from the error
         const isGatewayError = errorMessage.includes("502") || errorMessage.includes("504");
-        const delayMultiplier = isGatewayError ? this.GATEWAY_ERROR_DELAY_MULTIPLIER : 1;
-        const exponentialDelay = baseDelay * delayMultiplier * Math.pow(2, attempt - 1);
-        const jitter = Math.random() * 1000; // Add up to 1 second of jitter to prevent thundering herd
-        const waitTime = Math.min(exponentialDelay + jitter, 30000); // Cap at 30 seconds
+        const isRateLimitError = errorMessage.includes("429") || errorMessage.includes("throttled");
+        
+        let waitTime: number;
+        
+        if (isRateLimitError) {
+          // Try to extract the wait time from Klaviyo's error message
+          // Format: "Expected available in X second(s)"
+          const waitTimeMatch = errorMessage.match(/Expected available in (\d+) second/i);
+          if (waitTimeMatch) {
+            const klaviyoWaitSeconds = parseInt(waitTimeMatch[1], 10);
+            // Add 1 second buffer and convert to milliseconds
+            waitTime = (klaviyoWaitSeconds + 1) * 1000;
+          } else {
+            // Fallback to exponential backoff for rate limits
+            const delayMultiplier = 2; // Use longer delays for rate limits
+            const exponentialDelay = baseDelay * delayMultiplier * Math.pow(2, attempt - 1);
+            const jitter = Math.random() * 1000;
+            waitTime = Math.min(exponentialDelay + jitter, 30000);
+          }
+        } else {
+          const delayMultiplier = isGatewayError ? this.GATEWAY_ERROR_DELAY_MULTIPLIER : 1;
+          const exponentialDelay = baseDelay * delayMultiplier * Math.pow(2, attempt - 1);
+          const jitter = Math.random() * 1000; // Add up to 1 second of jitter to prevent thundering herd
+          waitTime = Math.min(exponentialDelay + jitter, 30000); // Cap at 30 seconds
+        }
 
         console.warn(
           `⚠️ Klaviyo API error (${lastError.message.split(":")[1]?.trim() || "unknown"}) - ` +

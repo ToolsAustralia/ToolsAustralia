@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
+import MajorDraw from "@/models/MajorDraw";
 import { Types } from "mongoose";
 
 export async function GET() {
