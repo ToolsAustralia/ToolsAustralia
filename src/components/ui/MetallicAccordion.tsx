@@ -107,6 +107,7 @@ export default function MetallicAccordion({
             <button
               onClick={() => toggleItem(item.id)}
               onKeyDown={(e) => handleKeyDown(e, item.id)}
+              suppressHydrationWarning
               className="w-full px-4 sm:px-6 py-4 sm:py-5 text-left flex items-center justify-between hover:bg-white/5 transition-colors duration-300 relative z-20 focus:outline-none"
               aria-expanded={isExpanded}
               aria-controls={`accordion-content-${item.id}`}

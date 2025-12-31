@@ -12,7 +12,7 @@ import type { KlaviyoProfile } from "@/types/klaviyo";
 import { getStateByCode } from "@/data/australianStates";
 import { getPackageById } from "@/data/membershipPackages";
 import { extractBrandFromSlug } from "./brand-extraction";
-import { calculateDrawSpecificPropertiesForUser } from "./klaviyo-draw-calculator";
+import { calculateDrawSpecificPropertiesForUser, type DrawSpecificProperties } from "./klaviyo-draw-calculator";
 
 /**
  * Calculate entry breakdown by source
@@ -141,15 +141,14 @@ export async function userToKlaviyoProfile(
   const entryBreakdown = calculateEntryBreakdown(user);
 
   // Calculate draw-specific properties (non-blocking - use defaults if fails)
-  let drawSpecificProperties: {
-    current_draw_id?: string;
-    current_draw_name?: string;
-    current_draw_start_date?: string;
+  let drawSpecificProperties: Partial<DrawSpecificProperties> & {
     current_draw_subscription_active: boolean;
     current_draw_one_time_packages: number;
+    current_draw_entries: number;
   } = {
     current_draw_subscription_active: false,
     current_draw_one_time_packages: 0,
+    current_draw_entries: 0,
   };
 
   try {
@@ -292,6 +291,7 @@ export async function userToKlaviyoProfile(
       current_draw_start_date: drawSpecificProperties.current_draw_start_date,
       current_draw_subscription_active: drawSpecificProperties.current_draw_subscription_active ?? false,
       current_draw_one_time_packages: drawSpecificProperties.current_draw_one_time_packages ?? 0,
+      current_draw_entries: drawSpecificProperties.current_draw_entries ?? 0,
     },
   };
 

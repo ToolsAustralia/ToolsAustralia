@@ -94,6 +94,7 @@ export interface KlaviyoProfileProperties {
   current_draw_start_date?: string; // activationDate of current draw (ISO string)
   current_draw_subscription_active: boolean; // Subscribed DURING current draw period
   current_draw_one_time_packages: number; // One-time packages purchased DURING current draw
+  current_draw_entries: number; // Total entries allocated to current draw
 }
 
 export interface KlaviyoProfile {

@@ -422,6 +422,7 @@ export default function MembershipSection({
                       );
                     }
                   }}
+                  suppressHydrationWarning
                   className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                     activeTab === "one-time"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
@@ -446,6 +447,7 @@ export default function MembershipSection({
                       );
                     }
                   }}
+                  suppressHydrationWarning
                   className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                     activeTab === "membership"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
@@ -1008,6 +1010,7 @@ export default function MembershipSection({
                                       className={`${buttonClass} ${colorScheme.borderGlow}`}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={hasActiveSubscription && hierarchy.isCurrent}
+                                      suppressHydrationWarning
                                     >
                                       {buttonText}
                                     </button>
@@ -1354,6 +1357,7 @@ export default function MembershipSection({
                                 className={`${buttonClass} ${colorScheme.borderGlow}`}
                                 onClick={() => handlePlanSelect(plan)}
                                 disabled={hasActiveSubscription && hierarchy.isCurrent}
+                                suppressHydrationWarning
                               >
                                 {buttonText}
                               </button>

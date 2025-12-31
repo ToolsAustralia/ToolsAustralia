@@ -163,6 +163,7 @@ async function migrateKlaviyoDrawProperties() {
             console.log(`   current_draw_start_date: ${drawProps?.current_draw_start_date || "undefined"}`);
             console.log(`   current_draw_subscription_active: ${drawProps?.current_draw_subscription_active}`);
             console.log(`   current_draw_one_time_packages: ${drawProps?.current_draw_one_time_packages}`);
+            console.log(`   current_draw_entries: ${drawProps?.current_draw_entries ?? 0}`);
             
             // Show what will be sent to Klaviyo (after cleanProperties filtering)
             console.log(`\n📤 Properties that will be sent to Klaviyo:`);
@@ -171,6 +172,7 @@ async function migrateKlaviyoDrawProperties() {
             console.log(`   current_draw_start_date: ${drawProps?.current_draw_start_date ? `"${drawProps.current_draw_start_date}"` : "undefined (will be filtered)"}`);
             console.log(`   current_draw_subscription_active: ${drawProps?.current_draw_subscription_active ?? false} (always sent)`);
             console.log(`   current_draw_one_time_packages: ${drawProps?.current_draw_one_time_packages ?? 0} (always sent)`);
+            console.log(`   current_draw_entries: ${drawProps?.current_draw_entries ?? 0} (always sent)`);
           }
           
           // Log for the specific test user
@@ -182,6 +184,7 @@ async function migrateKlaviyoDrawProperties() {
             console.log(`     current_draw_start_date: ${drawProps?.current_draw_start_date || "undefined"}`);
             console.log(`     current_draw_subscription_active: ${drawProps?.current_draw_subscription_active}`);
             console.log(`     current_draw_one_time_packages: ${drawProps?.current_draw_one_time_packages}`);
+            console.log(`     current_draw_entries: ${drawProps?.current_draw_entries ?? 0}`);
             if (user.subscription) {
               console.log(`   User Subscription Details:`);
               console.log(`     startDate: ${user.subscription.startDate}`);
@@ -192,7 +195,7 @@ async function migrateKlaviyoDrawProperties() {
                 const isAfterCutoff = subStart >= drawInfo.cutoffDate;
                 console.log(`     Cutoff Date: ${drawInfo.cutoffDate.toISOString()}`);
                 console.log(`     Subscription started after cutoff: ${isAfterCutoff ? "✅ YES" : "❌ NO"}`);
-                console.log(`     Expected current_draw_subscription_active: ${isAfterCutoff ? "true" : "false"}`);
+                console.log(`     Expected current_draw_subscription_active: ${user.subscription.isActive ? "true (active subscription)" : "false"}`);
               }
             }
           }

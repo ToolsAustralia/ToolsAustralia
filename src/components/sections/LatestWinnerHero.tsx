@@ -230,11 +230,13 @@ export default function LatestWinnerHero({ className = "" }: LatestWinnerHeroPro
 
                   {/* Bottom Section - CTA */}
                   <div className="pt-1.5 sm:pt-4">
-                    <a
-                      href="https://www.facebook.com/toolsaust"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
+                    <button
+                      type="button"
+                      data-facebook-link
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open("https://www.facebook.com/toolsaust", "_blank", "noopener,noreferrer");
+                      }}
                       className="group/btn relative inline-flex items-center justify-center gap-1.5 sm:gap-3 w-full bg-gradient-to-r from-[#1877F2] via-[#0D5FDB] to-[#0A4FBF] hover:from-[#0D5FDB] hover:via-[#0A4FBF] hover:to-[#1877F2] text-white px-3 py-2.5 sm:px-6 sm:py-4 rounded-lg sm:rounded-xl font-bold shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] text-center overflow-hidden text-xs sm:text-base"
                     >
                       {/* Animated background */}
@@ -244,7 +246,7 @@ export default function LatestWinnerHero({ className = "" }: LatestWinnerHeroPro
                       <Facebook className="w-3.5 h-3.5 sm:w-5 sm:h-5 relative z-10" />
                       <span className="relative z-10">Watch Live Draw on Facebook</span>
                       <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 relative z-10 group-hover/btn:translate-x-1 transition-transform" />
-                    </a>
+                    </button>
                   </div>
                 </div>
               </div>

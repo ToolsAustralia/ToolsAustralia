@@ -399,7 +399,8 @@ async function processPaymentBenefitsInternal(
         : false;
 
       // Track purchase event in Klaviyo (non-blocking)
-      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, shouldSkipInvoice);
+      // ✅ FIX: Pass billingReason to skip "Subscription Started" for renewals (webhook handles renewal events)
+      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, shouldSkipInvoice, billingReason);
 
       // ✅ CRITICAL: Update Klaviyo profile with latest user data after benefits are granted
       try {
@@ -1185,12 +1186,14 @@ function trackKlaviyoEvent(
     price: number;
   },
   paymentIntentId: string,
-  skipInvoice: boolean = false
+  skipInvoice: boolean = false,
+  billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
     // console.log(`📊 Package data:`, packageData);
     // console.log(`📊 Skip invoice: ${skipInvoice}`);
+    // console.log(`📊 Billing reason: ${billingReason || "not provided"}`);
 
     const commonData = {
       packageId: packageData.packageId || "unknown",
@@ -1203,16 +1206,11 @@ function trackKlaviyoEvent(
     // Track event based on package type
     switch (packageData.packageType) {
       case "membership":
-        klaviyo.trackEventBackground(
-          createSubscriptionStartedEvent(user as never, {
-            ...commonData,
-            tier: packageData.packageId?.toLowerCase().includes("boss")
-              ? "Boss"
-              : packageData.packageId?.toLowerCase().includes("legend")
-              ? "Legend"
-              : "Mate",
-          })
-        );
+        // ✅ FIX: Don't track "Subscription Started" here - webhook handler is single source of truth
+        // The webhook handler (handleInvoicePaymentSucceeded) tracks both "Subscription Started" 
+        // and "Subscription Renewed" events based on invoice.billing_reason
+        // This prevents duplicate events when both processPaymentBenefits and webhook fire
+        // console.log(`⏭️ Skipping "Subscription Started" event in trackKlaviyoEvent - webhook will handle it`);
         break;
 
       case "one-time":

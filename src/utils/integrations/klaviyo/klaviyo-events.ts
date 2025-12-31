@@ -285,7 +285,7 @@ export function createSubscriptionDowngradedEvent(
 
 /**
  * ✅ NEW: Subscription Renewed Event
- * Tracks when a user renews their subscription (failed payment recovery or reactivation)
+ * Tracks when a user renews their subscription (failed payment recovery, reactivation, or regular renewal)
  */
 export function createSubscriptionRenewedEvent(
   user: IUser,
@@ -294,10 +294,11 @@ export function createSubscriptionRenewedEvent(
     packageName: string;
     tier: string;
     price: number;
-    renewalType: "payment_retry" | "reactivation" | "new_subscription";
-    previousStatus: string; // 'past_due', 'canceled', 'expired'
+    renewalType: "payment_retry" | "reactivation" | "new_subscription" | "subscription_cycle";
+    previousStatus?: string; // 'past_due', 'canceled', 'expired', 'active' (optional for regular renewals)
     paymentIntentId?: string;
     prorationAmount?: number;
+    entriesGranted?: number; // Entries granted during renewal
   }
 ): KlaviyoEvent {
   return {
@@ -312,9 +313,10 @@ export function createSubscriptionRenewedEvent(
         price: renewalData.price,
       }),
       renewal_type: renewalData.renewalType,
-      previous_status: renewalData.previousStatus,
+      previous_status: renewalData.previousStatus || "active", // Default to "active" for regular renewals
       payment_intent_id: renewalData.paymentIntentId || "",
       proration_amount: renewalData.prorationAmount ? renewalData.prorationAmount.toFixed(2) : "0.00",
+      entries_granted: renewalData.entriesGranted ?? 0, // Add entriesGranted to match Subscription Started event
       renewal_date: formatDateForKlaviyo(),
       auto_renew: user.subscription?.autoRenew || true,
       timestamp: formatTimestampForKlaviyo(),

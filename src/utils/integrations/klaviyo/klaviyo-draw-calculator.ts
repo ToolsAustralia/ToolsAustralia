@@ -11,6 +11,7 @@ import type { IUser } from "@/models/User";
 import type { IMajorDraw } from "@/models/MajorDraw";
 import { getTargetMajorDraw } from "@/utils/draws/major-draw-helpers";
 import MajorDraw from "@/models/MajorDraw";
+import PaymentEvent from "@/models/PaymentEvent";
 
 /**
  * Result of draw-specific property calculation
@@ -21,6 +22,7 @@ export interface DrawSpecificProperties {
   current_draw_start_date: string;
   current_draw_subscription_active: boolean;
   current_draw_one_time_packages: number;
+  current_draw_entries: number;
 }
 
 /**
@@ -102,11 +104,11 @@ export async function getTargetDrawForCalculation(): Promise<{
  * @param cutoffDate - Cutoff date for filtering purchases (previous draw's freezeEntriesAt)
  * @returns Draw-specific property values
  */
-export function calculateDrawSpecificProperties(
+export async function calculateDrawSpecificProperties(
   user: IUser,
   targetDraw: IMajorDraw,
   cutoffDate: Date
-): DrawSpecificProperties {
+): Promise<DrawSpecificProperties> {
   // Safe defaults
   const defaults: DrawSpecificProperties = {
     current_draw_id: String(targetDraw._id),
@@ -114,38 +116,90 @@ export function calculateDrawSpecificProperties(
     current_draw_start_date: targetDraw.activationDate.toISOString(),
     current_draw_subscription_active: false,
     current_draw_one_time_packages: 0,
+    current_draw_entries: 0,
   };
 
   try {
-    // Check if subscription started after cutoff date
-    if (user.subscription?.isActive && user.subscription?.startDate) {
+    // ✅ FIX: Check if subscription is active AND (started OR renewed) during current draw period
+    // Property means "Subscribed DURING current draw period" - so subscription must have
+    // started OR been renewed AFTER the cutoff date
+    // 
+    // Logic:
+    // 1. If subscription started after cutoff: It's a new subscription during current draw → TRUE
+    // 2. If subscription started before cutoff but is still active: Check PaymentEvent to see
+    //    if there was a renewal (subscription_cycle) after cutoff → TRUE if renewed, FALSE otherwise
+    // 3. If subscription is not active: → FALSE
+    if (user.subscription?.isActive && user.subscription.startDate) {
       const subscriptionStartDate = new Date(user.subscription.startDate);
       
-      // ✅ ENHANCED DEBUG: Log comparison details for troubleshooting
-      const isAfterCutoff = subscriptionStartDate >= cutoffDate;
-      
-      if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_DRAW_CALC === "true") {
-        console.log(`🔍 [DEBUG] Subscription check for user ${user.email}:`);
-        console.log(`   Subscription startDate: ${subscriptionStartDate.toISOString()}`);
-        console.log(`   Cutoff date: ${cutoffDate.toISOString()}`);
-        console.log(`   Is after cutoff: ${isAfterCutoff ? "✅ YES" : "❌ NO"}`);
-        console.log(`   Time difference: ${subscriptionStartDate.getTime() - cutoffDate.getTime()}ms`);
-        console.log(`   Subscription isActive: ${user.subscription.isActive}`);
-        console.log(`   Current draw: ${targetDraw.name} (activated: ${targetDraw.activationDate.toISOString()})`);
-      }
-      
-      if (isAfterCutoff) {
+      // Case 1: Subscription started after cutoff (new subscription during current draw)
+      if (subscriptionStartDate >= cutoffDate) {
         defaults.current_draw_subscription_active = true;
+        
+        if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_DRAW_CALC === "true") {
+          console.log(`🔍 [DEBUG] Subscription active for current draw - user ${user.email}:`);
+          console.log(`   Subscription isActive: true`);
+          console.log(`   Subscription startDate: ${subscriptionStartDate.toISOString()}`);
+          console.log(`   Cutoff date: ${cutoffDate.toISOString()}`);
+          console.log(`   Current draw: ${targetDraw.name} (activated: ${targetDraw.activationDate.toISOString()})`);
+          console.log(`   ✅ Marked as active (started after cutoff - new subscription)`);
+        }
       } else {
-        // ✅ ADDITIONAL DEBUG: Log why subscription is not active for current draw
-        if (process.env.NODE_ENV === "development") {
-          console.warn(`⚠️ Subscription for ${user.email} not counted for current draw:`);
-          console.warn(`   Start date (${subscriptionStartDate.toISOString()}) is BEFORE cutoff (${cutoffDate.toISOString()})`);
-          console.warn(`   This means the subscription started in a previous draw period.`);
+        // Case 2: Subscription started before cutoff but is still active
+        // Check if there was a renewal (subscription_cycle) OR upgrade (subscription_update) after cutoff date
+        // Upgrades reset startDate to new Date(), but if upgrade happened before cutoff, we need to check PaymentEvent
+        try {
+          const renewalOrUpgradeEvent = await PaymentEvent.findOne({
+            userId: user._id,
+            packageType: "membership",
+            eventType: "BenefitsGranted",
+            timestamp: { $gte: cutoffDate },
+            $or: [
+              { "data.billingReason": "subscription_cycle" }, // Renewal payments
+              { "data.billingReason": "subscription_update" }, // Upgrade payments
+            ],
+          })
+            .sort({ timestamp: -1 }) // Get most recent renewal/upgrade
+            .lean();
+
+          if (renewalOrUpgradeEvent) {
+            // Subscription was renewed or upgraded after cutoff - mark as active for current draw
+            const eventType = renewalOrUpgradeEvent.data?.billingReason === "subscription_update" ? "upgraded" : "renewed";
+            defaults.current_draw_subscription_active = true;
+            
+            if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_DRAW_CALC === "true") {
+              console.log(`🔍 [DEBUG] Subscription active for current draw (${eventType}) - user ${user.email}:`);
+              console.log(`   Subscription isActive: true`);
+              console.log(`   Subscription startDate: ${subscriptionStartDate.toISOString()}`);
+              console.log(`   Cutoff date: ${cutoffDate.toISOString()}`);
+              console.log(`   ${eventType === "upgraded" ? "Upgrade" : "Renewal"} event found: ${renewalOrUpgradeEvent.timestamp.toISOString()}`);
+              console.log(`   Current draw: ${targetDraw.name} (activated: ${targetDraw.activationDate.toISOString()})`);
+              console.log(`   ✅ Marked as active (${eventType} during current draw period)`);
+            }
+          } else {
+            // Subscription started before cutoff and no renewal/upgrade found after cutoff
+            // It's from a previous draw, not renewed/upgraded during current draw → FALSE
+            defaults.current_draw_subscription_active = false;
+            
+            if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_DRAW_CALC === "true") {
+              console.log(`🔍 [DEBUG] Subscription NOT active for current draw - user ${user.email}:`);
+              console.log(`   Subscription isActive: true`);
+              console.log(`   Subscription startDate: ${subscriptionStartDate.toISOString()}`);
+              console.log(`   Cutoff date: ${cutoffDate.toISOString()}`);
+              console.log(`   No renewal or upgrade found after cutoff date`);
+              console.log(`   ❌ NOT marked as active (started before cutoff, not renewed/upgraded during current draw)`);
+            }
+          }
+        } catch (renewalCheckError) {
+          // If PaymentEvent query fails, fall back to false (conservative approach)
+          console.error(`Error checking renewal/upgrade for user ${user._id}:`, renewalCheckError);
+          defaults.current_draw_subscription_active = false;
         }
       }
     } else {
-      // ✅ DEBUG: Log why subscription check was skipped
+      // Case 3: Subscription is not active or has no startDate
+      defaults.current_draw_subscription_active = false;
+      
       if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_DRAW_CALC === "true") {
         console.log(`🔍 [DEBUG] Subscription check skipped for user ${user.email}:`);
         console.log(`   Has subscription: ${!!user.subscription}`);
@@ -154,6 +208,7 @@ export function calculateDrawSpecificProperties(
         if (user.subscription?.startDate) {
           console.log(`   startDate value: ${new Date(user.subscription.startDate).toISOString()}`);
         }
+        console.log(`   ❌ NOT marked as active (subscription not active or missing startDate)`);
       }
     }
 
@@ -164,6 +219,33 @@ export function calculateDrawSpecificProperties(
         return purchaseDate >= cutoffDate;
       });
       defaults.current_draw_one_time_packages = packagesInCurrentDraw.length;
+    }
+
+    // ✅ Calculate current_draw_entries: Get user's total entries in the target draw
+    try {
+      const userEntry = targetDraw.entries.find(
+        (entry: { userId: { toString(): string } }) => entry.userId.toString() === user._id.toString()
+      );
+      
+      if (userEntry) {
+        defaults.current_draw_entries = userEntry.totalEntries || 0;
+        
+        if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_DRAW_CALC === "true") {
+          console.log(`🔍 [DEBUG] Current draw entries for user ${user.email}:`);
+          console.log(`   Total entries in draw "${targetDraw.name}": ${defaults.current_draw_entries}`);
+        }
+      } else {
+        // No entry found in draw - user hasn't been allocated entries to this draw yet
+        defaults.current_draw_entries = 0;
+        
+        if (process.env.NODE_ENV === "development" && process.env.KLAVIYO_DEBUG_DRAW_CALC === "true") {
+          console.log(`🔍 [DEBUG] No entry found in draw "${targetDraw.name}" for user ${user.email}`);
+        }
+      }
+    } catch (entryError) {
+      // Log error but don't fail - use default of 0
+      console.error(`Error calculating current_draw_entries for user ${user._id}:`, entryError);
+      defaults.current_draw_entries = 0;
     }
 
     return defaults;
@@ -191,6 +273,6 @@ export async function calculateDrawSpecificPropertiesForUser(
     return null;
   }
 
-  return calculateDrawSpecificProperties(user, drawInfo.targetDraw, drawInfo.cutoffDate);
+    return await calculateDrawSpecificProperties(user, drawInfo.targetDraw, drawInfo.cutoffDate);
 }
 

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
 import { getNextQueuedDraw } from "@/utils/draws/major-draw-helpers";
+import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
 
 export async function POST(request: NextRequest) {
   // Only allow in development
@@ -202,6 +203,32 @@ export async function POST(request: NextRequest) {
     nextDrawTyped.lockedAt = undefined;
     await nextDrawTyped.save();
 
+    // Auto-trigger Klaviyo reset for scenarios with active draws (1, 2, 4)
+    // This helps with testing by automatically updating Klaviyo profiles
+    let klaviyoResetResult: Awaited<ReturnType<typeof resetDrawPropertiesForAllUsers>> | null = null;
+    let klaviyoResetError: string | null = null;
+    const shouldTriggerReset =
+      (scenario === 1 && currentIsActive) || // Test Case 1: Active draw
+      (scenario === 2 && currentStatus === "frozen") || // Test Case 2: Frozen draw
+      (scenario === 4 && nextIsActive); // Test Case 4: Next draw active
+
+    if (shouldTriggerReset) {
+      try {
+        console.log(`🔄 [TEST] Auto-triggering Klaviyo reset for scenario ${scenario}...`);
+        const targetDraw = scenario === 4 ? nextDrawTyped : currentDraw;
+        klaviyoResetResult = await resetDrawPropertiesForAllUsers(targetDraw);
+        console.log(`✅ [TEST] Klaviyo reset completed:`, {
+          processed: klaviyoResetResult.processed,
+          synced: klaviyoResetResult.synced,
+          errors: klaviyoResetResult.errors,
+          duration: `${klaviyoResetResult.duration}ms`,
+        });
+      } catch (resetError) {
+        console.error(`❌ [TEST] Klaviyo reset failed for scenario ${scenario}:`, resetError);
+        klaviyoResetError = resetError instanceof Error ? resetError.message : "Unknown error";
+      }
+    }
+
     // Build response message
     const scenarioDescriptions = [
       "",
@@ -211,7 +238,37 @@ export async function POST(request: NextRequest) {
       "Next draw active (post-gap)",
     ];
 
-    return NextResponse.json({
+    const response: {
+      success: boolean;
+      message: string;
+      scenario: string;
+      draws: {
+        current: {
+          id: string;
+          name: string;
+          status: string;
+          isActive: boolean;
+          drawDate: Date;
+          freezeEntriesAt: Date;
+        };
+        next: {
+          id: string;
+          name: string;
+          status: string;
+          isActive: boolean;
+          activationDate: Date;
+          drawDate: Date;
+        };
+      };
+      klaviyoReset?: {
+        processed?: number;
+        synced?: number;
+        errors?: number;
+        duration?: string;
+        error?: string;
+        note?: string;
+      };
+    } = {
       success: true,
       message: `Test scenario ${scenario} loaded successfully`,
       scenario: scenarioDescriptions[scenario],
@@ -233,7 +290,31 @@ export async function POST(request: NextRequest) {
           drawDate: nextDrawEnd,
         },
       },
-    });
+    };
+
+    // Include Klaviyo reset results in response
+    if (shouldTriggerReset) {
+      if (klaviyoResetError) {
+        response.klaviyoReset = {
+          error: klaviyoResetError,
+          note: "Reset failed - check server logs for details",
+        };
+      } else if (klaviyoResetResult) {
+        response.klaviyoReset = {
+          processed: klaviyoResetResult.processed,
+          synced: klaviyoResetResult.synced,
+          errors: klaviyoResetResult.errors,
+          duration: `${klaviyoResetResult.duration}ms`,
+          note: "Check your Klaviyo dashboard to verify profile updates",
+        };
+      }
+    } else {
+      response.klaviyoReset = {
+        note: "Reset skipped - no active draw in this scenario",
+      };
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error running test scenario:", error);
     return NextResponse.json(

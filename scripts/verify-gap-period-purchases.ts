@@ -168,7 +168,7 @@ async function verifyGapPeriodPurchases() {
 
     // Calculate and display properties for each sample user
     for (const user of sampleUsers) {
-      const props = calculateDrawSpecificProperties(user, targetDraw, cutoffDate);
+      const props = await calculateDrawSpecificProperties(user, targetDraw, cutoffDate);
 
       console.log(`📧 User: ${user.email} (${user.firstName} ${user.lastName})`);
       

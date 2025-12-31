@@ -22,6 +22,7 @@ import { klaviyo } from "@/lib/klaviyo";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
 import {
   createSubscriptionStartedEvent,
+  createSubscriptionRenewedEvent,
   createSubscriptionCancelledEvent,
   createSubscriptionRenewalFailedEvent,
   createSubscriptionPaymentFailedEvent,
@@ -626,6 +627,19 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       entriesAdded: finalEntriesCount,
       pointsAdded: Math.floor(price / 100),
     });
+
+    // ✅ CRITICAL: Sync Klaviyo profile immediately after one-time package purchase
+    // This ensures current_draw_one_time_packages is updated in real-time
+    try {
+      // Fetch fresh user data to ensure we have the latest oneTimePackages array
+      const freshUser = await User.findById(user._id);
+      if (freshUser) {
+        ensureUserProfileSynced(freshUser);
+        webhookLog("info", `✅ Klaviyo profile synced after one-time package purchase for: ${freshUser.email}`);
+      }
+    } catch (klaviyoError) {
+      webhookLog("error", `Klaviyo profile sync error after one-time package: ${klaviyoError}`);
+    }
   } else {
     webhookLog("error", `❌ Failed to process one-time package ${packageId}: ${result.error}`);
   }
@@ -2342,7 +2356,24 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         }
       }
 
-      // Track in Klaviyo
+      // ✅ Track in Klaviyo - Use appropriate event based on billing reason
+      if (invoice.billing_reason === "subscription_cycle") {
+        // Track "Subscription Renewed" event for renewals
+        klaviyo.trackEventBackground(
+          createSubscriptionRenewedEvent(user as never, {
+            packageId,
+            packageName: membershipPackage.name,
+            tier: membershipPackage.name,
+            price: membershipPackage.price,
+            renewalType: "subscription_cycle",
+            previousStatus: "active", // Regular renewal from active subscription
+            paymentIntentId: invoicePaymentId,
+            entriesGranted: entriesToGrant,
+          })
+        );
+        webhookLog("info", `✅ Subscription Renewed event tracked to Klaviyo for: ${user.email}`);
+      } else {
+        // Track "Subscription Started" event for initial subscriptions
       klaviyo.trackEventBackground(
         createSubscriptionStartedEvent(user as never, {
           packageId,
@@ -2353,6 +2384,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           paymentIntentId: invoicePaymentId,
         })
       );
+        webhookLog("info", `✅ Subscription Started event tracked to Klaviyo for: ${user.email}`);
+      }
 
       // Track subscription renewal to Facebook Pixel (if this is a renewal)
       if (invoice.billing_reason === "subscription_cycle") {

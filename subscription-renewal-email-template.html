@@ -1,0 +1,445 @@
+<html>  
+  <head>    
+    <meta charset="utf-8"/>
+    <meta content="width=device-width" name="viewport"/>
+    <style>
+      /* === GLOBAL RESETS === */
+      body,
+      table,
+      td,
+      p {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background-color: #f2f3f5;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      /* === LAYOUT WRAPPER === */
+      .wrapper {
+        width: 100%;
+        background-color: #f2f3f5;
+        padding: 40px 10px;
+      }
+
+      .card {
+        max-width: 640px;
+        width: 100%;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e5e7eb;
+      }
+
+      /* === HEADER === */
+      .header {
+        background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+        color: #fff;
+        text-align: center;
+        padding: 40px 20px 30px;
+        position: relative;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+      }
+
+      .header-logo {
+        max-width: 160px;
+        height: auto;
+        margin: 0 auto 8px;
+      }
+
+      .header h1 {
+        font-size: 26px;
+        font-weight: bold;
+        margin-bottom: 4px;
+        color: #fff;
+      }
+
+      .header p {
+        font-size: 14px;
+        margin: 0;
+        opacity: 0.9;
+        color: #fff;
+      }
+
+      /* === CONTENT AREA === */
+      .content {
+        padding: 24px;
+      }
+
+      .section {
+        margin-bottom: 24px;
+      }
+
+      .section strong {
+        display: inline-block;
+        min-width: 140px;
+        color: #111;
+      }
+
+      .divider {
+        border-top: 1px solid #e6e6e6;
+        margin: 16px 0;
+      }
+
+      .info-box {
+        background-color: #fafbfc;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      /* === PAYMENT CONFIRMATION TEXT === */
+      .payment-confirmation-text {
+        color: #1e40af;
+        font-size: 14px;
+        text-align: center;
+        font-weight: 500;
+        margin-bottom: 20px;
+        padding: 0;
+      }
+
+      /* === PACKAGE NAME BADGE === */
+      .package-badge {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        color: #ffffff;
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        margin: 16px 0;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.3);
+      }
+
+      .package-badge-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.8;
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
+
+      .package-badge-name {
+        font-size: 24px;
+        font-weight: 800;
+        margin: 8px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+
+      /* === ENTRIES DISPLAY === */
+      .entries-box {
+        background: linear-gradient(135deg, #fff4f4 0%, #fff0f0 100%);
+        border: 2px solid #dc2626;
+        border-radius: 12px;
+        color: #dc2626;
+        font-size: 20px;
+        text-align: center;
+        font-weight: 700;
+        padding: 20px 16px;
+        margin: 16px 0;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .entries-label {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 8px;
+        opacity: 0.9;
+      }
+
+      .entries-value {
+        font-size: 32px;
+        font-weight: 900;
+        margin: 8px 0;
+      }
+
+      /* === DRAW NAME === */
+      .draw-name-box {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 14px;
+        text-align: center;
+        margin: 16px 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      }
+
+      .draw-name-label {
+        font-size: 11px;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      .draw-name-value {
+        font-size: 20px;
+        font-weight: 800;
+        color: #1e293b;
+        letter-spacing: 0.3px;
+      }
+
+      /* === DETAILS GRID === */
+      .details-grid {
+        display: table;
+        width: 100%;
+        max-width: 100%;
+        margin: 16px 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+      }
+
+      .detail-row {
+        display: table-row;
+      }
+
+      .detail-label {
+        display: table-cell;
+        padding: 10px 12px;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-right: none;
+        font-size: 12px;
+        font-weight: 600;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        width: 40%;
+        vertical-align: middle;
+        word-wrap: break-word;
+      }
+
+      .detail-value {
+        display: table-cell;
+        padding: 10px 12px;
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1e293b;
+        vertical-align: middle;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+
+      .detail-row:first-child .detail-label,
+      .detail-row:first-child .detail-value {
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+      }
+
+      .detail-row:last-child .detail-label,
+      .detail-row:last-child .detail-value {
+        border-bottom-left-radius: 8px;
+        border-bottom-right-radius: 8px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      /* === CTA BUTTON === */
+      .cta-button {
+        display: inline-block;
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 16px;
+        padding: 16px 32px;
+        border-radius: 8px;
+        text-align: center;
+        margin: 24px 0;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .cta-button:hover {
+        background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+        box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4);
+        transform: translateY(-2px);
+      }
+
+      .cta-container {
+        text-align: center;
+        margin: 24px 0;
+      }
+
+      /* === FOOTER === */
+      .footer {
+        text-align: center;
+        font-size: 12px;
+        color: #6b7280;
+        background-color: #f9fafb;
+        padding: 24px 20px;
+        border-top: 2px solid #e5e7eb;
+      }
+
+      .footer a {
+        color: #6b7280;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+
+      .footer a:hover {
+        color: #374151;
+      }
+
+      /* === MOBILE === */
+      @media only screen and (max-width: 600px) {
+        .content {
+          padding: 16px;
+        }
+        .header h1 {
+          font-size: 22px;
+        }
+        .section strong {
+          display: block;
+          margin-bottom: 3px;
+        }
+        .card {
+          border-radius: 0;
+        }
+        .entries-value {
+          font-size: 24px;
+        }
+        .cta-button {
+          padding: 14px 24px;
+          font-size: 14px;
+        }
+        .package-badge-name {
+          font-size: 20px;
+        }
+        .detail-label,
+        .detail-value {
+          display: block;
+          width: 100%;
+          border: 1px solid #e2e8f0;
+          border-radius: 0;
+        }
+        .detail-label {
+          border-bottom: none;
+          border-radius: 8px 8px 0 0;
+        }
+        .detail-value {
+          border-radius: 0 0 8px 8px;
+          margin-bottom: 8px;
+        }
+        .detail-row:first-child .detail-label {
+          border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
+        }
+        .detail-row:last-child .detail-value {
+          border-bottom-left-radius: 8px;
+          border-bottom-right-radius: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>    
+    <div class="wrapper">      
+      <div class="card">
+        <!-- HEADER -->
+        <div class="header">          
+          <img alt="Tools Australia Logo" class="header-logo" src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png"/>
+          <h1>
+            Membership Renewed
+          </h1>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="content">
+          <!-- Payment Confirmation Text -->
+          <div class="payment-confirmation-text">
+            💳 Payment received and confirmed
+          </div>
+
+          <!-- Package Name Badge -->
+          {% if event.package_name %}
+          <div class="package-badge">
+            <div class="package-badge-label">Active Membership</div>
+            <div class="package-badge-name">{{ event.package_name }}</div>
+          </div>
+          {% endif %}
+
+          <!-- Details Grid -->
+          <div class="details-grid">
+            {% if event.renewal_date or event.price %}
+            <div class="detail-row">
+              <div class="detail-label">
+                {% if event.renewal_date and event.price %}Renewal Date / Amount Paid{% elif event.renewal_date %}Renewal Date{% else %}Amount Paid{% endif %}
+              </div>
+              <div class="detail-value">
+                {% if event.renewal_date and event.price %}
+                  {{ event.renewal_date }} / A${{ event.price }}
+                {% elif event.renewal_date %}
+                  {{ event.renewal_date }}
+                {% else %}
+                  A${{ event.price }}
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+            
+            {% if event.payment_intent_id %}
+            <div class="detail-row">
+              <div class="detail-label">Payment ID</div>
+              <div class="detail-value" style="font-size: 11px; font-family: monospace; word-break: break-all; overflow-wrap: break-word;">{{ event.payment_intent_id }}</div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Major Draw Name -->
+          {% if person.current_draw_name %}
+          <div class="draw-name-box">
+            <div class="draw-name-label">Current Major Draw</div>
+            <div class="draw-name-value">{{ person.current_draw_name }}</div>
+          </div>
+          {% endif %}
+
+          <!-- Entries Granted -->
+          {% if event.entries_granted %}
+          <div class="entries-box">
+            <div class="entries-label">🎟️ New Entries Added This Renewal</div>
+            <div class="entries-value">{{ event.entries_granted }}</div>
+          </div>
+          {% endif %}
+
+          <!-- CTA Button -->
+          <div class="cta-container">
+            <a href="https://toolsaustralia.com.au/my-account" class="cta-button">
+              View My Account
+            </a>
+          </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">          
+          <p>
+            Thank you for being a valued member!
+          </p>
+          <p>
+            For inquiries, contact
+            <strong>support@toolsaustralia.com.au</strong>
+          </p>
+          <br/>
+          <a href="{% unsubscribe %}">Unsubscribe</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+

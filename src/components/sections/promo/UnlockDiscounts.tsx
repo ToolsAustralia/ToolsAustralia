@@ -291,6 +291,7 @@ export default function UnlockDiscounts({
                 // Shared CTA hook ensures the correct modal flow is triggered every time.
                 openEntryFlow({ openLocalModal: false });
               }}
+              suppressHydrationWarning
               className="relative bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl shadow-[0_8px_32px_rgba(239,68,68,0.4)] hover:shadow-[0_12px_40px_rgba(239,68,68,0.6)] transition-all duration-300 hover:scale-105 border-2 border-red-400/30 group"
             >
               {/* Metallic shine effect */}

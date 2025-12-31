@@ -38,6 +38,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const [invoiceFinalized, setInvoiceFinalized] = useState(false);
   const finalizationTimeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
+  // ✅ FIX: Track if finalization is in progress to prevent race conditions
+  const isFinalizingRef = React.useRef<boolean>(false);
   // const [timeLeft, setTimeLeft] = useState({ // TODO: Implement countdown timer
   //   hours: 0,
   //   minutes: 0,
@@ -90,8 +92,9 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       price: number;
       entries: number;
     }) => {
-      // Prevent duplicate finalization
-      if (invoiceFinalized) {
+      // ✅ FIX: Prevent duplicate finalization - check both state and ref
+      if (invoiceFinalized || isFinalizingRef.current) {
+        console.log("📧 Invoice finalization skipped: already finalized or in progress");
         return;
       }
 
@@ -116,6 +119,16 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         return;
       }
 
+      // ✅ FIX: Set finalizing flag and clear timeout IMMEDIATELY (not waiting for API response)
+      isFinalizingRef.current = true;
+      
+      // Clear timeout immediately to prevent race condition
+      if (finalizationTimeoutIdRef.current) {
+        clearTimeout(finalizationTimeoutIdRef.current);
+        finalizationTimeoutIdRef.current = null;
+        console.log("⏰ Cleared invoice finalization timeout (finalization started)");
+      }
+
       try {
         console.log("📧 Finalizing invoice...", {
           withUpsell: !!upsellData,
@@ -138,18 +151,17 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           const result = await response.json();
           console.log("✅ Invoice finalized:", result);
           setInvoiceFinalized(true);
-
-          // Clear timeout if it exists
-          if (finalizationTimeoutIdRef.current) {
-            clearTimeout(finalizationTimeoutIdRef.current);
-            finalizationTimeoutIdRef.current = null;
-          }
+          // Keep isFinalizingRef.current = true to prevent any further attempts
         } else {
           const errorText = await response.text();
           console.error("❌ Invoice finalization failed:", response.status, errorText);
+          // Reset flag on error so user can retry if needed
+          isFinalizingRef.current = false;
         }
       } catch (error) {
         console.error("❌ Invoice finalization error:", error);
+        // Reset flag on error so user can retry if needed
+        isFinalizingRef.current = false;
       }
     },
     [invoiceFinalized, originalPurchaseContext, userContext?.userId, userData?._id]
@@ -166,12 +178,12 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       finalizationTimeoutIdRef.current = null;
     }
 
-    // ✅ CRITICAL: Finalize invoice if not already finalized
+    // ✅ CRITICAL: Finalize invoice if not already finalized or in progress
     // This ensures Klaviyo email is sent even if user closes modal without clicking decline
-    if (!invoiceFinalized && originalPurchaseContext) {
+    if (!invoiceFinalized && !isFinalizingRef.current && originalPurchaseContext) {
       console.log("📧 Modal closing - finalizing invoice with original purchase only");
       finalizeInvoice();
-    } else if (!invoiceFinalized) {
+    } else if (!invoiceFinalized && !isFinalizingRef.current) {
       console.warn("⚠️ Modal closing but invoice not finalized - missing context:", {
         invoiceFinalized,
         hasContext: !!originalPurchaseContext,
@@ -229,10 +241,15 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
       // CRITICAL: Start 30-second timeout for invoice finalization if we have purchase context
       // This ensures invoices are ALWAYS sent, even if user doesn't interact with the modal
-      if (originalPurchaseContext && !invoiceFinalized) {
+      if (originalPurchaseContext && !invoiceFinalized && !isFinalizingRef.current) {
         const timeoutId = setTimeout(() => {
-          console.log("⏰ Invoice finalization timeout (30s) - sending original purchase only");
-          finalizeInvoice();
+          // ✅ FIX: Check if finalization is in progress before calling
+          if (!isFinalizingRef.current && !invoiceFinalized) {
+            console.log("⏰ Invoice finalization timeout (30s) - sending original purchase only");
+            finalizeInvoice();
+          } else {
+            console.log("⏰ Invoice finalization timeout skipped: already finalized or in progress");
+          }
         }, 30000); // 30 seconds = 30000ms
 
         finalizationTimeoutIdRef.current = timeoutId;
@@ -241,6 +258,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         console.warn("⚠️ Invoice timeout NOT started:", {
           hasContext: !!originalPurchaseContext,
           invoiceFinalized,
+          isFinalizing: isFinalizingRef.current,
         });
       }
 

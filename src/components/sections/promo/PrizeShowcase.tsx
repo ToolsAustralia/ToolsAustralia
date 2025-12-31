@@ -389,6 +389,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               <div className="absolute top-4 right-4 z-20">
                 <button
                   onClick={() => setIsSpecsModalOpen(true)}
+                  suppressHydrationWarning
                   className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
                 >
                   <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`}></div>
@@ -528,6 +529,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
             <button
               onClick={handleEnterNow}
+              suppressHydrationWarning
               className="relative w-full overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group lg:hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-700 to-red-800"></div>
@@ -591,6 +593,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
             <button
               onClick={handleEnterNow}
+              suppressHydrationWarning
               className="relative w-full overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group hidden lg:block"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-700 to-red-800"></div>

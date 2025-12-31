@@ -1,0 +1,417 @@
+<html>  
+  <head>    
+    <meta charset="utf-8"/>
+    <meta content="width=device-width" name="viewport"/>
+    <style>
+      /* === GLOBAL RESETS === */
+      body,
+      table,
+      td,
+      p {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background-color: #f2f3f5;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      /* === LAYOUT WRAPPER === */
+      .wrapper {
+        width: 100%;
+        background-color: #f2f3f5;
+        padding: 40px 10px;
+      }
+
+      .card {
+        max-width: 640px;
+        width: 100%;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e5e7eb;
+      }
+
+      /* === HEADER === */
+      .header {
+        background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+        color: #fff;
+        text-align: center;
+        padding: 40px 20px 30px;
+        position: relative;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+      }
+
+      .header-logo {
+        max-width: 160px;
+        height: auto;
+        margin: 0 auto 8px;
+      }
+
+      .header h1 {
+        font-size: 26px;
+        font-weight: bold;
+        margin-bottom: 4px;
+        color: #fff;
+      }
+
+      .header p {
+        font-size: 14px;
+        margin: 0;
+        opacity: 0.9;
+        color: #fff;
+      }
+
+      .invoice-number {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        margin-top: 8px;
+        opacity: 0.95;
+      }
+
+      /* === CONTENT AREA === */
+      .content {
+        padding: 30px;
+      }
+
+      .section {
+        margin-bottom: 24px;
+      }
+
+      .section strong {
+        display: inline-block;
+        min-width: 140px;
+        color: #111;
+        font-weight: 700;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .divider {
+        border-top: 1px solid #e6e6e6;
+        margin: 24px 0;
+      }
+
+      .info-box {
+        background-color: #fafbfc;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      /* === INVOICE SUMMARY === */
+      .invoice-summary {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 16px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e5e7eb;
+      }
+
+      .invoice-summary th {
+        padding: 16px 14px;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 2px solid #e5e7eb;
+        font-size: 13px;
+        color: #1f2937;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        text-align: left;
+      }
+
+      .invoice-summary td {
+        padding: 16px 14px;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 14px;
+        color: #4b5563;
+        background-color: #ffffff;
+      }
+
+      .invoice-summary tbody tr:hover {
+        background-color: #fafbfc;
+      }
+
+      .invoice-summary tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .invoice-summary tfoot td {
+        font-weight: 800;
+        color: #111827;
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        border-top: 3px solid #e5e7eb;
+        font-size: 16px;
+        padding: 18px 14px;
+      }
+
+      .item-description {
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .item-price {
+        font-weight: 700;
+        color: #1e293b;
+        font-size: 15px;
+      }
+
+      .total-price {
+        font-size: 18px;
+        color: #dc2626;
+      }
+
+      /* === ENTRIES DISPLAY === */
+      .entries-box {
+        background: linear-gradient(135deg, #fff4f4 0%, #fff0f0 100%);
+        border: 2px solid #dc2626;
+        border-radius: 12px;
+        color: #dc2626;
+        font-size: 20px;
+        text-align: center;
+        font-weight: 700;
+        padding: 24px 20px;
+        margin: 32px 0;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .entries-label {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 8px;
+        opacity: 0.9;
+      }
+
+      .entries-value {
+        font-size: 32px;
+        font-weight: 900;
+        margin: 8px 0;
+      }
+
+      /* === CTA BUTTON === */
+      .cta-button {
+        display: inline-block;
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 16px;
+        padding: 16px 32px;
+        border-radius: 8px;
+        text-align: center;
+        margin: 24px 0;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .cta-button:hover {
+        background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+        box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4);
+        transform: translateY(-2px);
+      }
+
+      .cta-container {
+        text-align: center;
+        margin: 32px 0;
+      }
+
+      /* === FOOTER === */
+      .footer {
+        text-align: center;
+        font-size: 12px;
+        color: #6b7280;
+        background-color: #f9fafb;
+        padding: 24px 20px;
+        border-top: 2px solid #e5e7eb;
+      }
+
+      .footer a {
+        color: #6b7280;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+
+      .footer a:hover {
+        color: #374151;
+      }
+
+      /* === MOBILE === */
+      @media only screen and (max-width: 600px) {
+        .content {
+          padding: 20px;
+        }
+        .header h1 {
+          font-size: 22px;
+        }
+        .section strong {
+          display: block;
+          margin-bottom: 8px;
+          min-width: auto;
+        }
+        .card {
+          border-radius: 0;
+        }
+        .invoice-summary {
+          font-size: 12px;
+        }
+        .invoice-summary th,
+        .invoice-summary td {
+          padding: 12px 8px;
+        }
+        .entries-value {
+          font-size: 24px;
+        }
+        .cta-button {
+          padding: 14px 24px;
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>    
+    <div class="wrapper">      
+      <div class="card">
+        <!-- HEADER -->
+        <div class="header">          
+          <img alt="Tools Australia Logo" class="header-logo" src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png"/>
+          <h1>
+            Invoice
+          </h1>
+          <p class="invoice-number">
+            Invoice #: {{ event.invoice_number }}
+          </p>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="content">
+          <!-- Invoice Date -->
+          <div class="section">
+            <strong>Invoice Date:</strong> {{ event.invoice_date }}
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Bill To -->
+          <div class="section">
+            <strong>Bill To:</strong>
+            <div class="info-box" style="margin-top: 12px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #cbd5e1;">
+              <div style="font-weight: 700; color: #1e293b; margin-bottom: 6px; font-size: 15px;">
+                {{ person.first_name }} {{ person.last_name }}
+              </div>
+              <div style="color: #475569; margin-bottom: 4px;">
+                {{ person.email }}
+              </div>
+              {% if person.phone_number %}
+              <div style="color: #475569;">
+                {{ person.phone_number }}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Order Summary -->
+          <div class="section">
+            <strong>Order Summary:</strong>
+            <table class="invoice-summary">
+              <thead>
+                <tr>
+                  <th align="left" width="65%">
+                    Item
+                  </th>
+                  <th align="right" width="35%">
+                    Price
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in event.items %}
+                <tr>
+                  <td width="65%" class="item-description">
+                    {{ item.description }}
+                    {% if item.quantity and item.quantity > 1 %}
+                    <span style="color: #64748b; font-size: 12px; font-weight: 400;">(Qty: {{ item.quantity }})</span>
+                    {% endif %}
+                  </td>
+                  <td align="right" width="35%" class="item-price">
+                    A${{ item.unit_price }}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td align="right" width="65%">
+                    <strong style="font-size: 16px;">Total Amount</strong>
+                  </td>
+                  <td align="right" width="35%" class="total-price">
+                    <strong>A${{ event.total_amount }}</strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Entries Gained -->
+          {% if event.entries_gained %}
+          <div class="entries-box">
+            <div class="entries-label">🎟️ Free Entries Earned</div>
+            <div class="entries-value">{{ event.entries_gained }}</div>
+            <div style="font-size: 13px; font-weight: 500; margin-top: 8px; opacity: 0.9;">
+              Entries have been added to your account
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="divider"></div>
+
+          <!-- Thank You Message -->
+          <div class="info-box" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #22c55e; border-radius: 10px; text-align: center; padding: 20px;">
+            <div style="font-size: 16px; font-weight: 700; color: #15803d; margin-bottom: 8px;">
+              Thank You for Your Purchase!
+            </div>
+            <div style="font-size: 13px; color: #166534; line-height: 1.6;">
+              Your order has been processed successfully. If you have any questions about this invoice, please contact our support team.
+            </div>
+          </div>
+
+          <!-- CTA Button -->
+          <div class="cta-container">
+            <a href="https://toolsaustralia.com.au/my-account" class="cta-button">
+              View My Account
+            </a>
+          </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">          
+          <p>
+            Thank you for your purchase!
+          </p>
+          <p>
+            For inquiries, contact
+            <strong>support@toolsaustralia.com.au</strong>
+          </p>
+          <br/>
+          <a href="{% unsubscribe %}">Unsubscribe</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+
