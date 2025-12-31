@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import AdminSidebar from "./AdminSidebar";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
-import AdminStatsCard from "./AdminStatsCard";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import AdminMiniDrawModal from "@/components/modals/AdminMiniDrawModal";
 import AdminProductModal from "@/components/modals/AdminProductModal";
 import AdminMajorDrawModal from "@/components/modals/AdminMajorDrawModal";
@@ -29,6 +29,7 @@ import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
+import { DailyMetricsView } from "@/components/admin/metrics/DailyMetricsView";
 import {
   Users,
   DollarSign,
@@ -611,14 +612,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 ) : dashboardStats ? (
                   // Real data
                   <>
-                    <AdminStatsCard
+                    <MetricCard
                       title="Total Users"
                       value={dashboardStats.users.total.toLocaleString()}
                       icon={Users}
                       subtitle="Active users"
                       color="indigo"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title={
                         dateRange === "today"
                           ? "New Signups"
@@ -646,7 +647,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       onClick={() => setIsRevenueBreakdownExpanded(!isRevenueBreakdownExpanded)}
                       className="cursor-pointer group relative"
                     >
-                      <AdminStatsCard
+                      <MetricCard
                         title={
                           dateRange === "today"
                             ? "Today's Revenue"
@@ -678,7 +679,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                         )}
                       </div>
                     </div>
-                    <AdminStatsCard
+                    <MetricCard
                       title="Projected Income"
                       value={`$${(projectedIncome?.projectedIncome || 0).toLocaleString("en-AU", {
                         minimumFractionDigits: 2,
@@ -689,14 +690,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       color="purple"
                       loading={projectedIncomeLoading}
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title="Conversion Rate"
                       value={`${dashboardStats.conversionRate}%`}
                       icon={Target}
                       subtitle="Paying customers"
                       color="indigo"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title={
                         dateRange === "today"
                           ? "Ad Spend"
@@ -722,7 +723,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       }
                       color="blue"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title="ROAS"
                       value={`${(dashboardStats.facebookAds?.roas || 0).toFixed(2)}x`}
                       icon={Target}
@@ -749,7 +750,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                     </button>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-                    <AdminStatsCard
+                    <MetricCard
                       title={
                         <span className="block leading-tight">
                           <span className="block">Membership</span>
@@ -761,7 +762,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       subtitle="New subscriptions"
                       color="orange"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title={
                         <span className="block leading-tight">
                           <span className="block">Membership</span>
@@ -773,7 +774,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       subtitle="Recurring payments"
                       color="yellow"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title={
                         <span className="block leading-tight">
                           <span className="block">One-Time</span>
@@ -785,7 +786,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       subtitle="First-time"
                       color="blue"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title={
                         <span className="block leading-tight">
                           <span className="block">One-Time</span>
@@ -797,7 +798,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       subtitle="Repeat"
                       color="indigo"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title={
                         <span className="block leading-tight">
                           <span className="block">Mini</span>
@@ -809,7 +810,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       subtitle="Mini draw entries"
                       color="purple"
                     />
-                    <AdminStatsCard
+                    <MetricCard
                       title="Upsells"
                       value={`$${dashboardStats.revenue.breakdown.upsell.toLocaleString()}`}
                       icon={TrendingUp}
@@ -920,6 +921,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* FACEBOOK ADS TAB */}
           {selectedTab === "facebook-ads" && <FacebookAdsManagement />}
+
+          {/* DAILY METRICS TAB */}
+          {selectedTab === "daily-metrics" && <DailyMetricsView />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (

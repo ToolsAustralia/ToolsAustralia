@@ -11,6 +11,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import FacebookAdsInsight from "@/models/FacebookAdsInsight";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import mongoose from "mongoose";
+import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
 
 /**
  * GET /api/admin/dashboard/stats
@@ -432,6 +433,18 @@ export async function GET(request: NextRequest) {
     }
 
     // ========================================
+    // ENHANCED METRICS (using service layer)
+    // ========================================
+    let enhancedMetrics = null;
+    try {
+      const dashboardMetricsService = new DashboardMetricsService();
+      enhancedMetrics = await dashboardMetricsService.getEnhancedMetrics(startDate, endDate);
+    } catch (error) {
+      console.error("⚠️ Error fetching enhanced metrics:", error);
+      // Gracefully degrade - enhanced metrics are optional
+    }
+
+    // ========================================
     // RESPONSE
     // ========================================
     const stats = {
@@ -469,6 +482,8 @@ export async function GET(request: NextRequest) {
         end: endDate.toISOString(),
         range: dateRange,
       },
+      // Enhanced metrics (optional - only included if successfully calculated)
+      ...(enhancedMetrics && { enhanced: enhancedMetrics }),
     };
 
     console.log("✅ Admin dashboard stats calculated:", {

@@ -416,6 +416,24 @@ export async function GET(request: NextRequest) {
       cpc: metrics.cpc / 100, // Convert cents to dollars
     };
 
+    // Enhanced logging for data verification
+    const dataSource = isCached ? "CACHE" : "MARKETING_API";
+    const cacheAge = isCached 
+      ? Math.round((Date.now() - new Date(cachedData!.syncedAt).getTime()) / 1000 / 60) 
+      : 0;
+    
+    console.log(`📊 [Facebook Ads API] Data Source: ${dataSource}${isCached ? ` (${cacheAge} minutes old)` : ""}`);
+    console.log(`📊 [Facebook Ads API] Summary Metrics:`, {
+      spend: `$${summary.spend.toFixed(2)}`,
+      revenue: `$${summary.revenue.toFixed(2)}`,
+      profit: `$${summary.profit.toFixed(2)}`,
+      roas: `${summary.roas.toFixed(2)}x`,
+      conversions: summary.conversions,
+      impressions: summary.impressions.toLocaleString(),
+      clicks: summary.clicks.toLocaleString(),
+      dateRange: `${dateRange.since} to ${dateRange.until}`,
+    });
+
     const response: FacebookAdsInsightsResponse = {
       success: true,
       data: {

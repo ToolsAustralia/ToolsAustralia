@@ -11,7 +11,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import type { UserFilters, AdminUserListItem } from "@/types/admin";
 import { useUsers } from "../hooks/useUsers";
 import { useUserActions } from "../hooks/useUserActions";
-import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { Users, CreditCard, CheckCircle, Shield } from "lucide-react";
 import UserFiltersComponent from "./UserFilters";
 import UserList from "./UserList";
@@ -167,15 +167,15 @@ export default function UsersManagement() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <AdminStatsCard title="Total Users" value={stats.totalUsers} icon={Users} color="blue" loading={isLoading} />
-        <AdminStatsCard
+        <MetricCard title="Total Users" value={stats.totalUsers} icon={Users} color="blue" loading={isLoading} />
+        <MetricCard
           title="Active Subscriptions"
           value={stats.activeSubscriptions}
           icon={CreditCard}
           color="emerald"
           loading={isLoading}
         />
-        <AdminStatsCard
+        <MetricCard
           title="Conversions"
           value={`${stats.conversionRate}%`}
           icon={CheckCircle}
@@ -183,7 +183,7 @@ export default function UsersManagement() {
           subtitle="Users who made a purchase"
           loading={isLoading}
         />
-        <AdminStatsCard
+        <MetricCard
           title="Verified Users"
           value={stats.verifiedUsers}
           icon={Shield}

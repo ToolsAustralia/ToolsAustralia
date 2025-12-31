@@ -33,9 +33,9 @@ interface MiniDrawFilterState {
 
 // Sort options for mini draws - Updated to match API (entry-based system)
 const sortOptions = [
+  { value: "totalEntries-desc", label: "Most Sold" },
   { value: "name-asc", label: "Name (A-Z)" },
   { value: "name-desc", label: "Name (Z-A)" },
-  { value: "totalEntries-desc", label: "Entry Size (High to Low)" },
   { value: "totalEntries-asc", label: "Entry Size (Low to High)" },
   { value: "minimumEntries-asc", label: "Minimum Entries (Low to High)" },
   { value: "minimumEntries-desc", label: "Minimum Entries (High to Low)" },
@@ -59,7 +59,7 @@ export default function MiniDrawsContent({
   const [filters, setFilters] = useState<MiniDrawFilterState>({
     brands: [],
   });
-  const [sortBy, setSortBy] = useState("name-asc");
+  const [sortBy, setSortBy] = useState("totalEntries-desc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);

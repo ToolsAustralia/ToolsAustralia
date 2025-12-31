@@ -86,6 +86,27 @@ export interface AdminDashboardStats {
     end: string;
     range: string;
   };
+  enhanced?: {
+    averageOrderValue: number;
+    customerAcquisitionCost: number;
+    revenuePerUser: number;
+    conversionRate: number;
+    miniDrawPerformance: {
+      totalRevenue: number;
+      totalSales: number;
+      averageRevenuePerDraw: number;
+    };
+    conversionFunnel: {
+      visitors: number;
+      signups: number;
+      payingCustomers: number;
+      conversionRates: {
+        visitorToSignup: number;
+        signupToPaying: number;
+        overall: number;
+      };
+    };
+  };
 }
 
 // Types for projected income

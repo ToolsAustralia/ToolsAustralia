@@ -39,7 +39,7 @@ import { AdminUserListItem, UserFilters } from "@/types/admin";
 import { useAdminUsers, useAdminUserActions } from "@/hooks/queries/useAdminQueries";
 import UserDetailModal from "./UserDetailModal";
 import { useDebounce } from "@/hooks/useDebounce";
-import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { membershipPackages } from "@/data/membershipPackages";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
@@ -344,15 +344,15 @@ export default function UsersManagement() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <AdminStatsCard title="Total Users" value={stats.totalUsers} icon={Users} color="blue" loading={isLoading} />
-        <AdminStatsCard
+        <MetricCard title="Total Users" value={stats.totalUsers} icon={Users} color="blue" loading={isLoading} />
+        <MetricCard
           title="Active Subscriptions"
           value={stats.activeSubscriptions}
           icon={CreditCard}
           color="emerald"
           loading={isLoading}
         />
-        <AdminStatsCard
+        <MetricCard
           title="Conversions"
           value={`${stats.conversionRate}%`}
           icon={CheckCircle}
@@ -360,7 +360,7 @@ export default function UsersManagement() {
           subtitle="Users who made a purchase"
           loading={isLoading}
         />
-        <AdminStatsCard
+        <MetricCard
           title="Verified Users"
           value={stats.verifiedUsers}
           icon={Shield}

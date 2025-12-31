@@ -18,9 +18,11 @@ import {
 import { useFacebookAdsInsights } from "@/hooks/queries/useFacebookAdsInsights";
 import type { DateRangeOption, InsightLevel } from "@/types/facebook-ads";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
-import AdminStatsCard from "@/app/admin/component/AdminStatsCard";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
+import { DailyBreakdownChart } from "./DailyBreakdownChart";
+import { useDailyMetrics } from "@/hooks/useDailyMetrics";
 
 /**
  * Facebook Ads Management Component
@@ -383,6 +385,21 @@ export default function FacebookAdsManagement() {
 
   const { summary } = data;
 
+  // Component for daily breakdown section
+  function DailyBreakdownSection({ startDate, endDate }: { startDate: Date; endDate: Date }) {
+    const { data: dailyMetrics, isLoading: dailyLoading } = useDailyMetrics({
+      startDate,
+      endDate,
+      enabled: dateRangeOption === "custom" && !!startDate && !!endDate,
+    });
+
+    if (!dailyMetrics || dailyMetrics.length === 0) {
+      return null;
+    }
+
+    return <DailyBreakdownChart metrics={dailyMetrics} loading={dailyLoading} />;
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header with Controls - Simple like Dashboard Overview */}
@@ -405,28 +422,28 @@ export default function FacebookAdsManagement() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <AdminStatsCard
+        <MetricCard
           title="Ad Spend"
           value={formatCurrency(summary.spend)}
           subtitle="Total advertising cost"
           icon={DollarSign}
           color="red"
         />
-        <AdminStatsCard
+        <MetricCard
           title="Revenue"
           value={formatCurrency(summary.revenue)}
           subtitle="From Facebook conversions"
           icon={TrendingUp}
           color="emerald"
         />
-        <AdminStatsCard
+        <MetricCard
           title="Profit"
           value={formatCurrency(summary.profit)}
           subtitle="Revenue - Spend"
           icon={BarChart3}
           color={summary.profit >= 0 ? "emerald" : "red"}
         />
-        <AdminStatsCard
+        <MetricCard
           title="ROAS"
           value={formatROAS(summary.roas)}
           subtitle="Return on Ad Spend"
@@ -437,10 +454,10 @@ export default function FacebookAdsManagement() {
 
       {/* Additional Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <AdminStatsCard title="Impressions" value={formatNumber(summary.impressions)} icon={Eye} color="blue" />
-        <AdminStatsCard title="Clicks" value={formatNumber(summary.clicks)} icon={MousePointerClick} color="indigo" />
-        <AdminStatsCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
-        <AdminStatsCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
+        <MetricCard title="Impressions" value={formatNumber(summary.impressions)} icon={Eye} color="blue" />
+        <MetricCard title="Clicks" value={formatNumber(summary.clicks)} icon={MousePointerClick} color="indigo" />
+        <MetricCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
+        <MetricCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
       </div>
 
       {/* Conversions */}
@@ -452,6 +469,11 @@ export default function FacebookAdsManagement() {
         <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatNumber(summary.conversions)}</div>
         <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">Total purchases from Facebook ads</p>
       </div>
+
+      {/* Daily Breakdown - Show for custom date ranges */}
+      {dateRangeOption === "custom" && startDate && endDate && (
+        <DailyBreakdownSection startDate={new Date(startDate)} endDate={new Date(endDate)} />
+      )}
 
       {/* Breakdown Table (for Campaign/Ad Set levels) */}
       {data.breakdown && data.breakdown.length > 0 && (
