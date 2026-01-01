@@ -12,6 +12,9 @@
 import { NextResponse } from "next/server";
 import { aggregateYesterdayMetrics } from "@/lib/jobs/aggregate-daily-metrics";
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 /**
  * Cron job handler for daily metrics aggregation
  * Vercel cron jobs are automatically protected and can only be called internally

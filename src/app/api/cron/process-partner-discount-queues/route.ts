@@ -1,13 +1,13 @@
 /**
  * Partner Discount Queue Processing Cron Job
  *
- * This endpoint should be called periodically (e.g., every hour) to:
+ * This endpoint should be called periodically (daily) to:
  * 1. Process all users' partner discount queues
  * 2. Expire finished periods
  * 3. Activate next queued items
  * 4. Clean up old expired items
  *
- * Cron Schedule Recommendation: Every hour (0 * * * *)
+ * Cron Schedule: Daily at 3:00 PM UTC (0 15 * * *)
  *
  * Security:
  * - Should be protected by Vercel Cron secret or API key
@@ -21,6 +21,9 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { processPartnerDiscountQueue } from "@/utils/partner-discounts/partner-discount-queue";
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /**
  * POST /api/cron/process-partner-discount-queues
@@ -119,7 +122,7 @@ export async function GET() {
     service: "Partner Discount Queue Processing Cron",
     status: "healthy",
     message: "Use POST method to trigger processing",
-    schedule: "Recommended: Every hour (0 * * * *)",
+    schedule: "Daily at 3:00 PM UTC (0 15 * * *)",
     requiredHeaders: {
       authorization: "Bearer <CRON_SECRET>",
     },

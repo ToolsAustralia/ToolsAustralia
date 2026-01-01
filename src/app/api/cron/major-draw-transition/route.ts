@@ -41,6 +41,11 @@ import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/kla
  *
  * Note: Transitions are primarily handled by middleware, but this serves as backup
  */
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+
 export async function GET() {
   const startTime = Date.now();
   const logs: string[] = [];
