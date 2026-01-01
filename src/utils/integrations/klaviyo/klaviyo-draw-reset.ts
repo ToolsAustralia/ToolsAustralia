@@ -132,8 +132,13 @@ export async function resetDrawPropertiesForAllUsers(
     console.log(`📊 Found ${totalParticipants} users with major draw participation (optimized query)`);
     console.log(`   Total users: ${totalUsers}, Skipping: ${skippedUsers} non-participants (~${reductionPercentage}% reduction)`);
 
-    // Process users in batches of 500
+    // Process users in batches of 500 (for fetching from DB)
     const BATCH_SIZE = 500;
+    // Process Klaviyo syncs in smaller concurrent batches to avoid rate limits
+    // Klaviyo rate limit is typically 10 requests/second, so we use 5 concurrent to be safe
+    const CONCURRENT_SYNC_LIMIT = 5;
+    // Delay between batches to respect rate limits (milliseconds)
+    const BATCH_DELAY_MS = 2000; // 2 seconds between batches
     let skip = 0;
     let hasMore = true;
 
@@ -150,31 +155,42 @@ export async function resetDrawPropertiesForAllUsers(
       }
 
       console.log(`📦 Processing batch: ${skip + 1} to ${skip + users.length} users`);
+      console.log(`   ⚡ Rate limiting: Processing ${CONCURRENT_SYNC_LIMIT} users concurrently to avoid Klaviyo rate limits`);
 
-      // Process each user in the batch
-      const syncPromises = users.map(async (user) => {
-        try {
-          // Sync to Klaviyo (this will update the profile with new draw-specific properties)
-          // Note: draw-specific properties are calculated inside syncUserProfileToKlaviyo
-          // via userToKlaviyoProfile -> calculateDrawSpecificPropertiesForUser
-          await syncUserProfileToKlaviyo(user as IUser);
+      // Process users with rate limiting - split into smaller concurrent batches
+      for (let i = 0; i < users.length; i += CONCURRENT_SYNC_LIMIT) {
+        const concurrentBatch = users.slice(i, i + CONCURRENT_SYNC_LIMIT);
+        
+        // Process each user in the concurrent batch
+        const syncPromises = concurrentBatch.map(async (user) => {
+          try {
+            // Sync to Klaviyo (this will update the profile with new draw-specific properties)
+            // Note: draw-specific properties are calculated inside syncUserProfileToKlaviyo
+            // via userToKlaviyoProfile -> calculateDrawSpecificPropertiesForUser
+            await syncUserProfileToKlaviyo(user as IUser);
 
-          processed++;
-          synced++;
-        } catch (error) {
-          errors++;
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          errorDetails.push({
-            userId: String(user._id),
-            email: user.email || "unknown",
-            error: errorMessage,
-          });
-          console.error(`❌ Error processing user ${user.email}:`, errorMessage);
+            processed++;
+            synced++;
+          } catch (error) {
+            errors++;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errorDetails.push({
+              userId: String(user._id),
+              email: user.email || "unknown",
+              error: errorMessage,
+            });
+            console.error(`❌ Error processing user ${user.email}:`, errorMessage);
+          }
+        });
+
+        // Wait for all syncs in this concurrent batch to complete
+        await Promise.allSettled(syncPromises);
+        
+        // Add delay between concurrent batches to respect rate limits
+        if (i + CONCURRENT_SYNC_LIMIT < users.length) {
+          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
         }
-      });
-
-      // Wait for all syncs in this batch to complete (using allSettled to prevent cascading failures)
-      await Promise.allSettled(syncPromises);
+      }
 
       // Check if there are more users
       if (users.length < BATCH_SIZE) {
