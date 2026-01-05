@@ -2,11 +2,19 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
 import MajorDraw from "@/models/MajorDraw";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 
 export async function GET() {
   try {
     await connectDB();
+    
+    // Ensure MajorDraw model is registered before using in populate
+    // This prevents MissingSchemaError when using model name string in populate
+    // The import should register it, but we explicitly check to ensure it's available
+    if (!mongoose.models.MajorDraw) {
+      // Force model registration by accessing it
+      void MajorDraw;
+    }
 
     // Get latest major draw winner from Winner model
     const latestMajorDrawWinner = await Winner.findOne({ drawType: "major" })
@@ -14,7 +22,7 @@ export async function GET() {
       .populate("userId", "firstName lastName state")
       .populate({
         path: "drawId",
-        model: "MajorDraw",
+        model: MajorDraw,
         select: "name prize drawDate",
       })
       .lean()

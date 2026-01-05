@@ -941,7 +941,7 @@ const UserSchema = new Schema<IUser>(
 UserSchema.pre("save", function (next) {
   if (this.mobile && typeof this.mobile === "string") {
     // Remove spaces first
-    let cleaned = this.mobile.replace(/\s+/g, "");
+    const cleaned = this.mobile.replace(/\s+/g, "");
     
     // Normalize to +61 format for consistency across all systems
     if (cleaned.startsWith("+61")) {

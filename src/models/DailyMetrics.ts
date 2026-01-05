@@ -7,7 +7,7 @@ const DailyMetricsSchema = new Schema<IDailyMetrics>(
       type: Date,
       required: true,
       unique: true,
-      index: true,
+      // Note: index is created explicitly below, don't use index: true here to avoid duplicate
     },
     adSpend: {
       type: Number,
@@ -79,8 +79,8 @@ const DailyMetricsSchema = new Schema<IDailyMetrics>(
 // Compound index for date range queries
 DailyMetricsSchema.index({ date: 1, createdAt: -1 });
 
-// Ensure unique date constraint
-DailyMetricsSchema.index({ date: 1 }, { unique: true });
+// Note: Unique constraint on date field (line 9) already creates { date: 1 } index
+// No need for duplicate index definition here
 
 // Clear cached model to ensure schema updates are applied
 const modelName = "DailyMetrics";
