@@ -205,6 +205,7 @@ export interface AdminUserDetail {
     pendingChange?: Record<string, unknown>;
     lastDowngradeDate?: string;
     lastUpgradeDate?: string;
+    lastMonthAccumulatedEntries?: number;
   } | null;
 
   // Package Information

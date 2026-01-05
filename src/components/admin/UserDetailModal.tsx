@@ -1958,7 +1958,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                           <div>
                             <p className="text-xs text-gray-600 mb-1">Accumulated Entries</p>
-                            <p className="font-medium text-sm">{user.accumulatedEntries}</p>
+                            <p className="font-medium text-sm">{user.subscription?.lastMonthAccumulatedEntries ?? 0}</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-600 mb-1">Entry Wallet</p>

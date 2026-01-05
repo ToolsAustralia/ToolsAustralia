@@ -940,8 +940,26 @@ const UserSchema = new Schema<IUser>(
 // Pre-save hook to normalize mobile number
 UserSchema.pre("save", function (next) {
   if (this.mobile && typeof this.mobile === "string") {
-    // Remove spaces and normalize mobile number format
-    this.mobile = this.mobile.replace(/\s+/g, "");
+    // Remove spaces first
+    let cleaned = this.mobile.replace(/\s+/g, "");
+    
+    // Normalize to +61 format for consistency across all systems
+    if (cleaned.startsWith("+61")) {
+      // Already in +61 format
+      this.mobile = cleaned;
+    } else if (cleaned.startsWith("61") && cleaned.length > 2) {
+      // 61412345678 -> +61412345678
+      this.mobile = `+${cleaned}`;
+    } else if (cleaned.startsWith("0")) {
+      // 0412345678 -> +61412345678
+      this.mobile = `+61${cleaned.substring(1)}`;
+    } else if (cleaned.startsWith("4") || cleaned.startsWith("5")) {
+      // 412345678 -> +61412345678
+      this.mobile = `+61${cleaned}`;
+    } else {
+      // Keep as-is if format is unrecognized (validation will catch it)
+      this.mobile = cleaned;
+    }
   }
 
   // Ensure redemptionHistory is always properly initialized

@@ -304,6 +304,7 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
               : user.subscription.endDate,
           status: user.subscription.status || "incomplete",
           autoRenew: user.subscription.autoRenew,
+          lastMonthAccumulatedEntries: user.subscription.lastMonthAccumulatedEntries,
           previousSubscription: user.subscription.previousSubscription,
           pendingChange: user.subscription.pendingChange,
           lastDowngradeDate:

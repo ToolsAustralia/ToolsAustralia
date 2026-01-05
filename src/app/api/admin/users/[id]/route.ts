@@ -516,6 +516,7 @@ async function buildAdminUserProfile(userId: string) {
           endDate: user.subscription.endDate,
           status: user.subscription.status,
           autoRenew: user.subscription.autoRenew,
+          lastMonthAccumulatedEntries: user.subscription.lastMonthAccumulatedEntries,
           previousSubscription: user.subscription.previousSubscription,
           pendingChange: user.subscription.pendingChange,
           lastDowngradeDate: user.subscription.lastDowngradeDate,

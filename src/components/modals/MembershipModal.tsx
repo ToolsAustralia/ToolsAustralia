@@ -919,26 +919,55 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       // International format: +61 4XX XXX XXX
       const digits = v.substring(3);
       if (digits.length <= 9) {
-        return "+61 " + digits.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3").trim();
+        // Format with spaces if we have exactly 9 digits
+        if (digits.length === 9) {
+          return "+61 " + digits.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+        }
+        // Return partially formatted during typing/auto-fill
+        return "+61 " + digits;
       }
+      // If longer than expected, return as-is (validation will catch it)
+      return v;
     } else if (v.startsWith("61") && v.length > 2) {
       // Country code without +: 61 4XX XXX XXX
       const digits = v.substring(2);
       if (digits.length <= 9) {
-        return "+61 " + digits.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3").trim();
+        // Format with spaces if we have exactly 9 digits
+        if (digits.length === 9) {
+          return "+61 " + digits.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+        }
+        // Return partially formatted during typing/auto-fill
+        return "+61 " + digits;
       }
+      // If longer than expected, return as-is
+      return v;
     } else if (v.startsWith("0")) {
       // Domestic format: 04XX XXX XXX
       if (v.length <= 10) {
-        return v.replace(/(\d{4})(\d{3})(\d{3})/, "$1 $2 $3").trim();
+        // Format with spaces if we have exactly 10 digits
+        if (v.length === 10) {
+          return v.replace(/(\d{4})(\d{3})(\d{3})/, "$1 $2 $3");
+        }
+        // Return partially formatted during typing/auto-fill
+        return v;
       }
+      // If longer than expected, return as-is
+      return v;
     } else if (v.startsWith("4") || v.startsWith("5")) {
       // Mobile without leading 0: 4XX XXX XXX
       if (v.length <= 9) {
-        return "0" + v.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3").trim();
+        // Format with spaces if we have exactly 9 digits
+        if (v.length === 9) {
+          return "0" + v.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+        }
+        // Return partially formatted during typing/auto-fill
+        return "0" + v;
       }
+      // If longer than expected, return as-is
+      return v;
     }
 
+    // Return as-is for unrecognized patterns
     return v;
   };
 
@@ -946,13 +975,44 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     // Remove spaces and formatting
     const cleaned = mobile.replace(/\s+/g, "");
 
-    // Australian mobile number patterns
+    // Australian mobile number patterns (explicit patterns for each format)
     const patterns = [
-      /^(\+61|61)?[4-5]\d{8}$/, // +61412345678, 61412345678, 412345678
+      /^\+61[4-5]\d{8}$/, // +61412345678
+      /^61[4-5]\d{8}$/, // 61412345678
       /^0[4-5]\d{8}$/, // 0412345678
+      /^[4-5]\d{8}$/, // 412345678
     ];
 
     return patterns.some((pattern) => pattern.test(cleaned));
+  };
+
+  /**
+   * Calculate the expected max length for phone number input based on format
+   * Returns the maximum allowed length to prevent typing beyond a complete valid number
+   */
+  const getPhoneMaxLength = (value: string): number => {
+    if (!value) return 16; // Default max length
+    
+    // Remove all non-digits except +
+    const cleaned = value.replace(/[^\d+]/g, "");
+    
+    // Determine format and return appropriate max length (including spaces)
+    if (cleaned.startsWith("+61")) {
+      // +61 412 345 678 = 15 characters (with spaces)
+      return 15;
+    } else if (cleaned.startsWith("61")) {
+      // Will be formatted to +61 412 345 678 = 15 characters
+      return 15;
+    } else if (cleaned.startsWith("0")) {
+      // 0412 345 678 = 12 characters (with spaces)
+      return 12;
+    } else if (cleaned.startsWith("4") || cleaned.startsWith("5")) {
+      // Will be formatted to 0412 345 678 = 12 characters
+      return 12;
+    }
+    
+    // Default to 16 for unrecognized formats
+    return 16;
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -3362,13 +3422,26 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                     type="tel"
                     name="phone"
                     value={formData.phone}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      handleInputChange("phone", formatMobileNumber(e.target.value))
-                    }
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const rawValue = e.target.value;
+                      const formattedValue = formatMobileNumber(rawValue);
+                      
+                      // Get max length for the formatted value
+                      const maxLength = getPhoneMaxLength(formattedValue);
+                      const isDeleting = rawValue.length < formData.phone.length;
+                      
+                      // Allow input if:
+                      // 1. User is deleting (always allow)
+                      // 2. Formatted value is within expected length for the format
+                      if (isDeleting || formattedValue.length <= maxLength) {
+                        handleInputChange("phone", formattedValue);
+                      }
+                    }}
                     label="Phone Number"
                     placeholder="0412 345 678"
                     error={registrationErrors.mobile}
-                    maxLength={10}
+                    maxLength={getPhoneMaxLength(formData.phone)}
+                    autoComplete="tel"
                   />
                   <p className="text-xs sm:text-sm text-gray-500 mt-1">
                     Australian mobile number. We&apos;ll call this number if you win.
@@ -3759,7 +3832,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
               <blockquote className="text-center ">
                 <p className="text-xs sm:text-sm text-gray-700 italic">
-                  &quot;We are on the hunt for our first lucky winner! will it be you?&quot; Good luck!
+                  &quot;We are on the hunt for our next lucky winner! will it be you?&quot; Good luck!
                 </p>
               </blockquote>
 

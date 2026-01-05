@@ -24,6 +24,29 @@ import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extract
 import { IUser } from "@/models/User";
 import { stripe } from "@/lib/stripe";
 
+/**
+ * Normalize Australian mobile number to +61 format
+ * Converts various formats to consistent +61412345678 format
+ */
+function normalizeMobileNumber(mobile: string): string {
+  // Remove all spaces first
+  const cleaned = mobile.replace(/\s+/g, "");
+  
+  // Normalize to +61 format
+  if (cleaned.startsWith("+61")) {
+    return cleaned; // Already in +61 format
+  } else if (cleaned.startsWith("61") && cleaned.length > 2) {
+    return `+${cleaned}`; // 61412345678 -> +61412345678
+  } else if (cleaned.startsWith("0")) {
+    return `+61${cleaned.substring(1)}`; // 0412345678 -> +61412345678
+  } else if (cleaned.startsWith("4") || cleaned.startsWith("5")) {
+    return `+61${cleaned}`; // 412345678 -> +61412345678
+  }
+  
+  // Return as-is if format is unrecognized (validation will catch it)
+  return cleaned;
+}
+
 // Registration validation schema
 const registerSchema = z.object({
   firstName: z.string().min(1, "First name is required").max(50, "First name cannot be more than 50 characters"),
@@ -65,8 +88,8 @@ export async function POST(request: NextRequest) {
 
     // console.log(`🔄 Attempting to register user: ${validatedData.email}`);
 
-    // Clean mobile number
-    const cleanedMobile = validatedData.mobile.replace(/\s+/g, "");
+    // Clean and normalize mobile number to +61 format for consistency
+    const cleanedMobile = normalizeMobileNumber(validatedData.mobile);
 
     // Check for existing users by email and mobile separately
     const existingUserByEmail = await User.findOne({ email: validatedData.email.toLowerCase() });
