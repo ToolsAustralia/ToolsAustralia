@@ -66,14 +66,6 @@
         color: #fff;
       }
 
-      .invoice-number {
-        font-size: 16px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        margin-top: 8px;
-        opacity: 0.95;
-      }
-
       /* === CONTENT AREA === */
       .content {
         padding: 30px;
@@ -107,68 +99,47 @@
         line-height: 1.8;
       }
 
-      /* === INVOICE SUMMARY === */
-      .invoice-summary {
+      /* === PAYMENT DETAILS TABLE === */
+      .payment-details {
         border-collapse: collapse;
         width: 100%;
         margin-top: 16px;
-        border-radius: 10px;
+        border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         border: 1px solid #e5e7eb;
       }
 
-      .invoice-summary th {
-        padding: 16px 14px;
+      .payment-details th {
+        padding: 12px 14px;
         background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
         border-bottom: 2px solid #e5e7eb;
-        font-size: 13px;
+        font-size: 12px;
         color: #1f2937;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         text-align: left;
+        width: 40%;
       }
 
-      .invoice-summary td {
-        padding: 16px 14px;
+      .payment-details td {
+        padding: 12px 14px;
         border-bottom: 1px solid #f3f4f6;
-        font-size: 14px;
+        font-size: 13px;
         color: #4b5563;
         background-color: #ffffff;
+        word-break: break-word;
       }
 
-      .invoice-summary tbody tr:hover {
-        background-color: #fafbfc;
-      }
-
-      .invoice-summary tbody tr:last-child td {
+      .payment-details tbody tr:last-child td {
         border-bottom: none;
       }
 
-      .invoice-summary tfoot td {
-        font-weight: 800;
-        color: #111827;
-        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-        border-top: 3px solid #e5e7eb;
-        font-size: 16px;
-        padding: 18px 14px;
-      }
-
-      .item-description {
-        font-weight: 600;
-        color: #1e293b;
-      }
-
-      .item-price {
+      .total-amount {
         font-weight: 700;
-        color: #1e293b;
-        font-size: 15px;
-      }
-
-      .total-price {
-        font-size: 18px;
         color: #dc2626;
+        font-size: 16px;
       }
 
       /* === ENTRIES DISPLAY === */
@@ -176,27 +147,24 @@
         background: linear-gradient(135deg, #fff4f4 0%, #fff0f0 100%);
         border: 2px solid #dc2626;
         border-radius: 12px;
-        color: #dc2626;
-        font-size: 20px;
+        padding: 20px;
         text-align: center;
-        font-weight: 700;
-        padding: 24px 20px;
-        margin: 32px 0;
-        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        margin: 24px 0;
       }
 
       .entries-label {
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
+        color: #dc2626;
         margin-bottom: 8px;
-        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
 
       .entries-value {
-        font-size: 32px;
-        font-weight: 900;
+        font-size: 28px;
+        font-weight: 800;
+        color: #dc2626;
         margin: 8px 0;
       }
 
@@ -211,7 +179,7 @@
         padding: 16px 32px;
         border-radius: 8px;
         text-align: center;
-        margin: 24px 0;
+        margin: 12px 8px;
         box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
         transition: all 0.3s ease;
         text-transform: uppercase;
@@ -249,6 +217,11 @@
         color: #374151;
       }
 
+      .support-email {
+        font-weight: 700;
+        color: #1f2937;
+      }
+
       /* === MOBILE === */
       @media only screen and (max-width: 600px) {
         .content {
@@ -265,17 +238,19 @@
         .card {
           border-radius: 0;
         }
-        .invoice-summary {
-          font-size: 12px;
+        .payment-details {
+          font-size: 11px;
         }
-        .invoice-summary th,
-        .invoice-summary td {
-          padding: 12px 8px;
+        .payment-details th,
+        .payment-details td {
+          padding: 10px 8px;
         }
         .entries-value {
           font-size: 24px;
         }
         .cta-button {
+          display: block;
+          margin: 8px 0;
           padding: 14px 24px;
           font-size: 14px;
         }
@@ -291,7 +266,7 @@
           <h1>
             Invoice
           </h1>
-          <p class="invoice-number">
+          <p>
             Invoice #: {{ event.invoice_number }}
           </p>
         </div>
@@ -308,8 +283,8 @@
           <!-- Bill To -->
           <div class="section">
             <strong>Bill To:</strong>
-            <div class="info-box" style="margin-top: 12px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #cbd5e1;">
-              <div style="font-weight: 700; color: #1e293b; margin-bottom: 6px; font-size: 15px;">
+            <div class="info-box" style="margin-top: 12px;">
+              <div style="font-weight: 700; color: #1e293b; margin-bottom: 6px;">
                 {{ person.first_name }} {{ person.last_name }}
               </div>
               <div style="color: #475569; margin-bottom: 4px;">
@@ -328,42 +303,28 @@
           <!-- Order Summary -->
           <div class="section">
             <strong>Order Summary:</strong>
-            <table class="invoice-summary">
-              <thead>
-                <tr>
-                  <th align="left" width="65%">
-                    Item
-                  </th>
-                  <th align="right" width="35%">
-                    Price
-                  </th>
-                </tr>
-              </thead>
+            <table class="payment-details">
               <tbody>
                 {% for item in event.items %}
                 <tr>
-                  <td width="65%" class="item-description">
+                  <th>Item</th>
+                  <td>
                     {{ item.description }}
                     {% if item.quantity and item.quantity > 1 %}
-                    <span style="color: #64748b; font-size: 12px; font-weight: 400;">(Qty: {{ item.quantity }})</span>
+                    <span style="color: #64748b; font-size: 11px;">(Qty: {{ item.quantity }})</span>
                     {% endif %}
                   </td>
-                  <td align="right" width="35%" class="item-price">
-                    A${{ item.unit_price }}
-                  </td>
+                </tr>
+                <tr>
+                  <th>Price</th>
+                  <td>A${{ item.unit_price }}</td>
                 </tr>
                 {% endfor %}
-              </tbody>
-              <tfoot>
                 <tr>
-                  <td align="right" width="65%">
-                    <strong style="font-size: 16px;">Total Amount</strong>
-                  </td>
-                  <td align="right" width="35%" class="total-price">
-                    <strong>A${{ event.total_amount }}</strong>
-                  </td>
+                  <th>Total Amount</th>
+                  <td class="total-amount">A${{ event.total_amount }}</td>
                 </tr>
-              </tfoot>
+              </tbody>
             </table>
           </div>
 
@@ -372,23 +333,13 @@
           <div class="entries-box">
             <div class="entries-label">🎟️ Free Entries Earned</div>
             <div class="entries-value">{{ event.entries_gained }}</div>
-            <div style="font-size: 13px; font-weight: 500; margin-top: 8px; opacity: 0.9;">
+            <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
               Entries have been added to your account
             </div>
           </div>
           {% endif %}
 
           <div class="divider"></div>
-
-          <!-- Thank You Message -->
-          <div class="info-box" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #22c55e; border-radius: 10px; text-align: center; padding: 20px;">
-            <div style="font-size: 16px; font-weight: 700; color: #15803d; margin-bottom: 8px;">
-              Thank You for Your Purchase!
-            </div>
-            <div style="font-size: 13px; color: #166534; line-height: 1.6;">
-              Your order has been processed successfully. If you have any questions about this invoice, please contact our support team.
-            </div>
-          </div>
 
           <!-- CTA Button -->
           <div class="cta-container">
@@ -404,8 +355,7 @@
             Thank you for your purchase!
           </p>
           <p>
-            For inquiries, contact
-            <strong>support@toolsaustralia.com.au</strong>
+            For inquiries, contact <span class="support-email">support@toolsaustralia.com.au</span>
           </p>
           <br/>
           <a href="{% unsubscribe %}">Unsubscribe</a>
@@ -414,4 +364,3 @@
     </div>
   </body>
 </html>
-

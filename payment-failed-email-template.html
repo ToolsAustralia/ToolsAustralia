@@ -99,6 +99,86 @@
         line-height: 1.8;
       }
 
+      /* === FAILURE ALERT BOX === */
+      .failure-alert {
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        border: 2px solid #dc2626;
+        border-radius: 12px;
+        padding: 24px 20px;
+        margin: 24px 0;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+      }
+
+      .failure-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+      }
+
+      .failure-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #dc2626;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .failure-reason {
+        font-size: 16px;
+        font-weight: 600;
+        color: #991b1b;
+        margin: 12px 0;
+      }
+
+      .failure-amount {
+        font-size: 24px;
+        font-weight: 800;
+        color: #dc2626;
+        margin: 8px 0;
+      }
+
+      /* === EMPATHETIC OPENING === */
+      .opening-message {
+        font-size: 16px;
+        color: #4b5563;
+        line-height: 1.7;
+        margin-bottom: 20px;
+      }
+
+      /* === COMMON REASONS SECTION === */
+      .reasons-box {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 2px solid #f59e0b;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 24px 0;
+      }
+
+      .reasons-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #92400e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+      }
+
+      .reason-item {
+        font-size: 13px;
+        color: #78350f;
+        margin: 8px 0;
+        padding-left: 20px;
+        position: relative;
+      }
+
+      .reason-item:before {
+        content: "•";
+        position: absolute;
+        left: 8px;
+        font-weight: bold;
+      }
+
       /* === PAYMENT DETAILS TABLE === */
       .payment-details {
         border-collapse: collapse;
@@ -142,33 +222,7 @@
         color: #64748b;
       }
 
-      /* === ENTRIES DISPLAY === */
-      .entries-box {
-        background: linear-gradient(135deg, #fff4f4 0%, #fff0f0 100%);
-        border: 2px solid #dc2626;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        margin: 24px 0;
-      }
-
-      .entries-label {
-        font-size: 14px;
-        font-weight: 600;
-        color: #dc2626;
-        margin-bottom: 8px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .entries-value {
-        font-size: 28px;
-        font-weight: 800;
-        color: #dc2626;
-        margin: 8px 0;
-      }
-
-      /* === CTA BUTTON === */
+      /* === CTA BUTTONS === */
       .cta-button {
         display: inline-block;
         background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
@@ -192,9 +246,51 @@
         transform: translateY(-2px);
       }
 
+      .cta-button-secondary {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+      }
+
+      .cta-button-secondary:hover {
+        background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+        box-shadow: 0 6px 16px rgba(107, 114, 128, 0.4);
+      }
+
       .cta-container {
         text-align: center;
         margin: 32px 0;
+      }
+
+      /* === REASSURANCE MESSAGE === */
+      .reassurance-box {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border: 2px solid #22c55e;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        margin: 24px 0;
+      }
+
+      .reassurance-text {
+        font-size: 14px;
+        color: #166534;
+        line-height: 1.6;
+      }
+
+      /* === STEP NUMBERS === */
+      .step-number {
+        display: inline-block;
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        color: #ffffff;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 24px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-right: 8px;
+        vertical-align: middle;
       }
 
       /* === FOOTER === */
@@ -238,6 +334,15 @@
         .card {
           border-radius: 0;
         }
+        .failure-amount {
+          font-size: 20px;
+        }
+        .cta-button {
+          display: block;
+          margin: 8px 0;
+          padding: 14px 24px;
+          font-size: 14px;
+        }
         .payment-details {
           font-size: 11px;
         }
@@ -245,14 +350,11 @@
         .payment-details td {
           padding: 10px 8px;
         }
-        .entries-value {
-          font-size: 24px;
-        }
-        .cta-button {
-          display: block;
-          margin: 8px 0;
-          padding: 14px 24px;
-          font-size: 14px;
+        .step-number {
+          width: 20px;
+          height: 20px;
+          line-height: 20px;
+          font-size: 11px;
         }
       }
     </style>
@@ -264,28 +366,53 @@
         <div class="header">          
           <img alt="Tools Australia Logo" class="header-logo" src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png"/>
           <h1>
-            Membership Renewed
+            Payment Failed
           </h1>
           <p>
-            Payment received and confirmed
+            We couldn't process your payment
           </p>
         </div>
 
         <!-- MAIN CONTENT -->
         <div class="content">
-          <!-- Opening Message -->
-          <div class="section">
-            <strong>Dear {{ person.first_name }},</strong>
-            <div style="font-size: 16px; color: #4b5563; line-height: 1.7; margin-top: 12px;">
-              Your subscription has been successfully renewed. Thank you for continuing your membership with us.
+          <!-- Professional Opening -->
+          <div class="opening-message">
+            Dear {{ person.first_name }},
+            <br/><br/>
+            We were unable to process your membership renewal payment. Your payment method was declined, and no charges have been applied to your account.
+            <br/><br/>
+            <strong style="color: #dc2626;">Important:</strong> Please update your payment method to avoid service interruption.
+          </div>
+
+          <!-- Failure Alert Box -->
+          <div class="failure-alert">
+            <div class="failure-icon">⚠️</div>
+            <div class="failure-title">Payment Transaction Failed</div>
+            <div class="failure-reason" style="margin-top: 16px; margin-bottom: 16px;">{{ event.failure_reason }}</div>
+            <div style="font-size: 14px; color: #991b1b; margin-top: 12px; opacity: 0.9; padding-top: 12px; border-top: 1px solid rgba(220, 38, 38, 0.2);">
+              <strong>Transaction Amount:</strong> <span class="failure-amount">A${{ event.amount }}</span>
             </div>
+            {% if event.package_name %}
+            <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.8;">
+              <strong>Item:</strong> {{ event.package_name }}
+            </div>
+            {% endif %}
+            {% if event.failure_message %}
+            <div style="font-size: 11px; color: #991b1b; margin-top: 8px; opacity: 0.7; font-family: monospace;">
+              Error: {{ event.failure_message }}
+            </div>
+            {% elif event.failure_code %}
+            <div style="font-size: 11px; color: #991b1b; margin-top: 8px; opacity: 0.7; font-family: monospace;">
+              Error Code: {{ event.failure_code }}
+            </div>
+            {% endif %}
           </div>
 
           <div class="divider"></div>
 
-          <!-- Renewal Details -->
+          <!-- Payment Details Table -->
           <div class="section">
-            <strong>Renewal Details:</strong>
+            <strong>Payment Details:</strong>
             <table class="payment-details">
               <tbody>
                 {% if event.package_name %}
@@ -294,51 +421,33 @@
                   <td>{{ event.package_name }}</td>
                 </tr>
                 {% endif %}
-                {% if event.renewal_date %}
                 <tr>
-                  <th>Renewal Date</th>
-                  <td>{{ event.renewal_date }}</td>
+                  <th>Amount</th>
+                  <td><strong style="color: #dc2626;">A${{ event.amount }}</strong></td>
                 </tr>
-                {% endif %}
-                {% if event.price %}
-                <tr>
-                  <th>Amount Paid</th>
-                  <td><strong style="color: #dc2626;">A${{ event.price }}</strong></td>
-                </tr>
-                {% endif %}
                 {% if event.payment_intent_id %}
                 <tr>
                   <th>Payment ID</th>
                   <td class="payment-id">{{ event.payment_intent_id }}</td>
                 </tr>
                 {% endif %}
-                {% if person.current_draw_name %}
                 <tr>
-                  <th>Current Major Draw</th>
-                  <td>{{ person.current_draw_name }}</td>
+                  <th>Membership Status</th>
+                  <td>Renewal Payment Failed</td>
                 </tr>
-                {% endif %}
               </tbody>
             </table>
           </div>
 
-          <!-- Entries Granted -->
-          {% if event.entries_granted %}
-          <div class="entries-box">
-            <div class="entries-label">🎟️ New Entries Added This Renewal</div>
-            <div class="entries-value">{{ event.entries_granted }}</div>
-            <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
-              Entries have been added to your account
-            </div>
-          </div>
-          {% endif %}
-
           <div class="divider"></div>
 
-          <!-- CTA Button -->
+          <!-- CTA Buttons -->
           <div class="cta-container">
             <a href="https://toolsaustralia.com.au/my-account" class="cta-button">
-              View My Account
+              Update Payment Method
+            </a>
+            <a href="mailto:support@toolsaustralia.com.au?subject=Payment%20Failed%20-%20{{ event.payment_intent_id }}" class="cta-button cta-button-secondary">
+              Contact Support
             </a>
           </div>
         </div>
@@ -346,10 +455,7 @@
         <!-- FOOTER -->
         <div class="footer">          
           <p>
-            Thank you for being a valued member!
-          </p>
-          <p>
-            For inquiries, contact <span class="support-email">support@toolsaustralia.com.au</span>
+            Need help? Contact us at <span class="support-email">support@toolsaustralia.com.au</span>
           </p>
           <br/>
           <a href="{% unsubscribe %}">Unsubscribe</a>
@@ -358,3 +464,4 @@
     </div>
   </body>
 </html>
+

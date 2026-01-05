@@ -709,10 +709,51 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
 
 /**
  * Handle payment failure - Track all payment failures to Klaviyo
+ * 
+ * ✅ BEST PRACTICES:
+ * 1. For ALL subscription payments (both initial and renewals), skip this handler
+ *    - invoice.payment_failed is the canonical event for ALL subscription payment failures
+ *    - This prevents duplicate tracking when both payment_intent.payment_failed and invoice.payment_failed fire
+ * 2. Only track non-subscription payments here (one-time, mini-draw, upsell)
+ * 3. All Klaviyo tracking is wrapped in try-catch to prevent webhook failures
  */
 async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
   try {
     webhookLog("error", `Payment failed: ${paymentIntent.id}`);
+
+    // Find user by customer ID first to check subscription status
+    let user;
+    if (paymentIntent.customer) {
+      const customerId =
+        typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer.id;
+      user = await User.findOne({ stripeCustomerId: customerId });
+    }
+
+    // ✅ BEST PRACTICE: Check if this is a subscription payment
+    // For subscription payments, invoice.payment_failed is the canonical event
+    // We should skip payment_intent.payment_failed for subscription payments to prevent duplicates
+    const paymentIntentWithInvoice = paymentIntent as { invoice?: string | Stripe.Invoice };
+    const hasInvoice = !!paymentIntentWithInvoice.invoice;
+    
+    // Check if this is a subscription payment (multiple indicators)
+    const isSubscriptionPayment =
+      hasInvoice || // PaymentIntent with invoice is always a subscription payment
+      paymentIntent.metadata.type === "subscription" ||
+      paymentIntent.metadata.packageType === "membership" ||
+      !!user?.subscription; // User has an active subscription
+
+    // ✅ BEST PRACTICE: Skip ALL subscription payments - handled by invoice.payment_failed
+    // This prevents duplicate tracking when both payment_intent.payment_failed and invoice.payment_failed fire
+    // Note: Even initial subscription payments will have invoice.payment_failed fire, so we skip payment_intent.payment_failed
+    if (isSubscriptionPayment) {
+      webhookLog("info", `Skipping subscription payment failure ${paymentIntent.id} - handled by invoice.payment_failed (canonical event)`);
+      return; // Exit early - invoice.payment_failed will handle this
+    }
+
+    if (!user) {
+      webhookLog("error", `User not found for failed payment: ${paymentIntent.id}`);
+      return;
+    }
 
     // Update order status if it exists
     const order = await Order.findOne({ paymentIntentId: paymentIntent.id });
@@ -721,37 +762,48 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
       await order.save();
     }
 
-    // Find user by customer ID
-    let user;
-    if (paymentIntent.customer) {
-      const customerId =
-        typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer.id;
-      user = await User.findOne({ stripeCustomerId: customerId });
-    }
-
-    if (!user) {
-      webhookLog("error", `User not found for failed payment: ${paymentIntent.id}`);
-      return;
-    }
-
     // Extract payment type and details from metadata
-    const paymentType = paymentIntent.metadata.type || paymentIntent.metadata.packageType || "unknown";
-    const packageId = paymentIntent.metadata.packageId || "unknown";
-    const packageName = paymentIntent.metadata.packageName || "Unknown Package";
+    // Determine payment type: if has invoice, it's a subscription; otherwise check metadata
+    const paymentType = hasInvoice 
+      ? "subscription" 
+      : (paymentIntent.metadata.type || paymentIntent.metadata.packageType || "unknown");
+    
+    // Get package info - for subscription payments, get from user subscription if available
+    let packageId = paymentIntent.metadata.packageId || "unknown";
+    let packageName = paymentIntent.metadata.packageName || "Unknown Package";
+    
+    // For subscription payments, prefer user subscription data over metadata
+    if (paymentType === "subscription" && user.subscription) {
+      packageId = user.subscription.packageId || packageId;
+      // Try to get package name from package data
+      try {
+        const packageData = await getPackageById(packageId);
+        if (packageData) {
+          packageName = packageData.name || packageName;
+        }
+      } catch (error) {
+        webhookLog("warn", `Could not fetch package name for ${packageId}, using default`);
+      }
+    }
+    
     const amount = (paymentIntent.amount || 0) / 100; // Convert from cents to dollars
 
     // Get failure details from last payment error
     const lastPaymentError = paymentIntent.last_payment_error;
     const failureReason = lastPaymentError?.message || "Payment declined";
     const failureCode = lastPaymentError?.code || "";
-    const failureMessage = lastPaymentError?.decline_code || "";
+    const declineCode = lastPaymentError?.decline_code || "";
+    // Create combined failure_message as code:decline_code format (e.g., "card_declined:insufficient_funds")
+    const failureMessage = failureCode && declineCode 
+      ? `${failureCode}:${declineCode}` 
+      : failureCode || declineCode || "";
 
     // Track to Klaviyo based on payment type
     if (paymentType === "subscription") {
-      // For subscriptions, use specific subscription failure event
-      // Determine if this is initial payment or renewal
-      // Initial payments don't have invoice yet, renewals do
-      const isInitialPayment = !(paymentIntent as { invoice?: string | Stripe.Invoice }).invoice;
+      // ✅ BEST PRACTICE: For subscription payments without invoice (initial payments),
+      // track using subscription payment failed event
+      // Note: Renewals with invoices are handled by invoice.payment_failed (canonical event)
+      const isInitialPayment = !hasInvoice;
 
       // Get package tier for subscription
       const tier = packageId.toLowerCase().includes("boss")
@@ -764,18 +816,29 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
         ? "Tradie"
         : "Mate";
 
-      klaviyo.trackEventBackground(
-        createSubscriptionPaymentFailedEvent(user as never, {
-          paymentIntentId: paymentIntent.id,
-          packageId,
-          packageName,
-          tier,
-          amount,
-          failureReason,
-          failureCode,
-          isInitialPayment,
-        })
-      );
+      // ✅ BEST PRACTICE: Only track initial subscription payment failures here
+      // Renewals are handled by invoice.payment_failed (which we skip payment_intent.payment_failed for)
+      // This prevents duplicate tracking
+      try {
+        webhookLog("info", `📧 Tracking "Subscription Payment Failed" (initial) event to Klaviyo for user ${user.email}`);
+        klaviyo.trackEventBackground(
+          createSubscriptionPaymentFailedEvent(user as never, {
+            paymentIntentId: paymentIntent.id,
+            packageId,
+            packageName,
+            tier,
+            amount,
+            failureReason,
+            failureCode,
+            failureMessage,
+            isInitialPayment,
+          })
+        );
+        webhookLog("info", `✅ "Subscription Payment Failed" (initial) event queued for Klaviyo - Payment ID: ${paymentIntent.id}`);
+      } catch (klaviyoError) {
+        webhookLog("error", `❌ Failed to track "Subscription Payment Failed" event to Klaviyo for user ${user.email}: ${klaviyoError}`);
+        // Don't throw - Klaviyo tracking failure shouldn't break webhook processing
+      }
     } else {
       // For other payment types (one-time, mini-draw, upsell), use generic payment failed event
       const validPackageType =
@@ -1600,6 +1663,16 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   }
 }
 
+/**
+ * Handle invoice payment failure - Canonical event for subscription payment failures
+ * 
+ * ✅ BEST PRACTICES:
+ * 1. This is the canonical event for subscription payment failures (both initial and renewals)
+ * 2. For renewals (billing_reason: subscription_cycle), use "Subscription Renewal Failed" event
+ * 3. For initial payments (billing_reason: subscription_create), use "Subscription Payment Failed" event
+ * 4. Robustly retrieve subscriptionId from multiple sources (invoice, expanded invoice, user record)
+ * 5. All Klaviyo tracking is wrapped in try-catch to prevent webhook failures
+ */
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   try {
     webhookLog("error", `Invoice payment failed: ${invoice.id}`);
@@ -1616,11 +1689,41 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       return;
     }
 
-    // Get subscription details
-    const subscriptionId = (invoice as Stripe.Invoice & { subscription?: string }).subscription;
+    // Get subscription details - try multiple methods to get subscription ID
+    let subscriptionId: string | undefined;
+    
+    // Method 1: Try from invoice object (may be string or Subscription object)
+    const invoiceSubscription = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription }).subscription;
+    if (invoiceSubscription) {
+      subscriptionId = typeof invoiceSubscription === "string" ? invoiceSubscription : invoiceSubscription.id;
+    }
+    
+    // Method 2: If not found, retrieve invoice from Stripe with expansions
+    if (!subscriptionId && invoice.id) {
+      try {
+        const expandedInvoice = await stripe.invoices.retrieve(invoice.id, {
+          expand: ["subscription"],
+        });
+        const expandedSubscription = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription }).subscription;
+        if (expandedSubscription) {
+          subscriptionId = typeof expandedSubscription === "string" ? expandedSubscription : expandedSubscription.id;
+        }
+      } catch (error) {
+        webhookLog("warn", `Could not retrieve expanded invoice: ${error}`);
+      }
+    }
+    
+    // Method 3: Fallback to user's stored subscription ID
+    if (!subscriptionId && user.stripeSubscriptionId) {
+      subscriptionId = user.stripeSubscriptionId;
+      webhookLog("info", `Using subscription ID from user record: ${subscriptionId}`);
+    }
+    
     const billingReason = invoice.billing_reason;
     const isInitialPayment = billingReason === "subscription_create";
     const isRenewal = billingReason === "subscription_cycle";
+    
+    webhookLog("info", `Invoice billing_reason: ${billingReason}, isRenewal: ${isRenewal}, isInitialPayment: ${isInitialPayment}, subscriptionId: ${subscriptionId || 'none'}`);
 
     if (subscriptionId) {
       // Update subscription status to reflect payment failure
@@ -1661,18 +1764,46 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     }
 
     // Track failure in Klaviyo (for both initial and renewal failures)
+    webhookLog("info", `Checking Klaviyo tracking conditions: hasSubscription: ${!!user.subscription}, subscriptionId: ${subscriptionId || 'none'}`);
     if (user.subscription && subscriptionId) {
       // Extract payment intent ID from invoice
+      // ✅ BEST PRACTICE: Try multiple methods to get payment_intent ID
       const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
-      const paymentIntentId: string =
-        typeof invoiceWithPaymentIntent.payment_intent === "string"
+      let paymentIntentId: string = "unknown";
+      
+      if (invoiceWithPaymentIntent.payment_intent) {
+        paymentIntentId = typeof invoiceWithPaymentIntent.payment_intent === "string"
           ? invoiceWithPaymentIntent.payment_intent
-          : invoiceWithPaymentIntent.payment_intent?.id || invoice.id || "unknown";
+          : invoiceWithPaymentIntent.payment_intent?.id || "unknown";
+        webhookLog("info", `PaymentIntent ID from invoice: ${paymentIntentId}`);
+      } else {
+        // If payment_intent is not on invoice, try to retrieve expanded invoice
+        if (!invoice.id) {
+          webhookLog("warn", "Invoice ID is missing, cannot retrieve expanded invoice");
+        } else {
+          try {
+            const expandedInvoice = await stripe.invoices.retrieve(invoice.id, {
+              expand: ["payment_intent"],
+            });
+            const expandedPaymentIntent = (expandedInvoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent }).payment_intent;
+            if (expandedPaymentIntent) {
+              paymentIntentId = typeof expandedPaymentIntent === "string"
+                ? expandedPaymentIntent
+                : expandedPaymentIntent.id;
+              webhookLog("info", `PaymentIntent ID from expanded invoice: ${paymentIntentId}`);
+            }
+          } catch (expandError) {
+            webhookLog("warn", `Could not retrieve expanded invoice for payment_intent: ${expandError}`);
+          }
+        }
+      }
 
       // Get failure reason from invoice
       const failureReason = invoice.last_finalization_error?.message || "Payment declined";
-      const failureCode = invoice.last_finalization_error?.code || "";
+      let failureCode = invoice.last_finalization_error?.code || "";
       const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
+      
+      webhookLog("info", `Initial error extraction - failureReason: ${failureReason}, failureCode: ${failureCode || 'none'}, paymentIntentId: ${paymentIntentId}`);
 
       // Get package tier for subscription
       const packageId = user.subscription.packageId || "unknown";
@@ -1686,46 +1817,132 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         ? "Tradie"
         : "Mate";
 
+      // Get package name properly (not hardcoded)
+      let packageName = "Subscription";
+      try {
+        const packageData = await getPackageById(packageId);
+        if (packageData) {
+          packageName = packageData.name || packageName;
+        }
+      } catch (error) {
+        webhookLog("warn", `Could not fetch package name for ${packageId}, using default`);
+      }
+
+      // ✅ BEST PRACTICE: Try to get failure_code and decline_code from PaymentIntent
+      // This ensures we capture error details even if invoice doesn't have them
+      let declineCode = "";
+      try {
+        if (paymentIntentId && paymentIntentId !== "unknown" && paymentIntentId !== invoice.id) {
+          webhookLog("info", `Attempting to retrieve PaymentIntent ${paymentIntentId} for error details...`);
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          
+          // Get decline_code from PaymentIntent (this is the most reliable source)
+          declineCode = paymentIntent.last_payment_error?.decline_code || "";
+          webhookLog("info", `PaymentIntent decline_code: ${declineCode || 'none'}`);
+          
+          // Get failure_code from PaymentIntent if not already set
+          const paymentIntentErrorCode = paymentIntent.last_payment_error?.code || "";
+          if (paymentIntentErrorCode) {
+            if (!failureCode) {
+              failureCode = paymentIntentErrorCode;
+              webhookLog("info", `Retrieved failure_code from PaymentIntent: ${failureCode}`);
+            } else if (failureCode !== paymentIntentErrorCode) {
+              webhookLog("info", `PaymentIntent has different failure_code (${paymentIntentErrorCode}) than invoice (${failureCode}), using PaymentIntent value`);
+              failureCode = paymentIntentErrorCode;
+            }
+          }
+          
+          // Get more specific error message from PaymentIntent if available
+          const paymentIntentMessage = paymentIntent.last_payment_error?.message || "";
+          if (paymentIntentMessage && paymentIntentMessage !== failureReason) {
+            webhookLog("info", `PaymentIntent has more specific error message: ${paymentIntentMessage}`);
+          }
+          
+          // Log all PaymentIntent error details for debugging
+          webhookLog("info", `PaymentIntent error details - code: ${paymentIntentErrorCode || 'none'}, decline_code: ${declineCode || 'none'}, message: ${paymentIntentMessage || 'none'}`);
+        } else {
+          webhookLog("warn", `Cannot retrieve PaymentIntent - paymentIntentId: ${paymentIntentId}, invoice.id: ${invoice.id}`);
+        }
+      } catch (error) {
+        webhookLog("error", `Could not retrieve payment intent ${paymentIntentId} for error details: ${error}`);
+      }
+
+      // Create combined failure_message as code:decline_code format (e.g., "card_declined:insufficient_funds")
+      const failureMessage = failureCode && declineCode 
+        ? `${failureCode}:${declineCode}` 
+        : failureCode || declineCode || "";
+      
+      // Log extracted error details for debugging
+      webhookLog("info", `Extracted error details - failureCode: ${failureCode || 'none'}, declineCode: ${declineCode || 'none'}, failureMessage: ${failureMessage || 'none'}`);
+
+      webhookLog("info", `About to check renewal status. isRenewal: ${isRenewal}, packageId: ${packageId}, packageName: ${packageName}, amount: ${amount}`);
+      
       if (isRenewal) {
-        // Use existing renewal failed event for subscription renewals
-        klaviyo.trackEventBackground(
-          createSubscriptionRenewalFailedEvent(user as never, {
+        // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals
+        // This is the canonical event for renewal failures (invoice.payment_failed with billing_reason: subscription_cycle)
+        try {
+          const renewalFailedEvent = createSubscriptionRenewalFailedEvent(user as never, {
             packageId: packageId,
-            packageName: "Subscription",
+            packageName: packageName,
             tier,
             failureReason,
+            failureCode,
+            failureMessage,
+            amount,
             paymentIntentId: paymentIntentId,
-          })
-        );
+          });
+          webhookLog("info", `📧 Tracking "Subscription Renewal Failed" event (canonical) to Klaviyo for user ${user.email} (${user._id})`);
+          klaviyo.trackEventBackground(renewalFailedEvent);
+          webhookLog("info", `✅ "Subscription Renewal Failed" event queued for Klaviyo: ${renewalFailedEvent.event} - Payment ID: ${paymentIntentId}`);
+        } catch (klaviyoError) {
+          webhookLog("error", `❌ Failed to track "Subscription Renewal Failed" event to Klaviyo for user ${user.email}: ${klaviyoError}`);
+          // Don't throw - Klaviyo tracking failure shouldn't break webhook processing
+        }
       } else if (isInitialPayment) {
-        // Use new subscription payment failed event for initial payments
-        klaviyo.trackEventBackground(
-          createSubscriptionPaymentFailedEvent(user as never, {
-            paymentIntentId: paymentIntentId,
-            packageId: packageId,
-            packageName: "Subscription",
-            tier,
-            amount,
-            failureReason,
-            failureCode,
-            isInitialPayment: true,
-          })
-        );
+        // ✅ BEST PRACTICE: Use subscription payment failed event for initial subscription payments
+        try {
+          webhookLog("info", `📧 Tracking "Subscription Payment Failed" (initial) event to Klaviyo for user ${user.email}`);
+          klaviyo.trackEventBackground(
+            createSubscriptionPaymentFailedEvent(user as never, {
+              paymentIntentId: paymentIntentId,
+              packageId: packageId,
+              packageName: packageName,
+              tier,
+              amount,
+              failureReason,
+              failureCode,
+              failureMessage,
+              isInitialPayment: true,
+            })
+          );
+          webhookLog("info", `✅ "Subscription Payment Failed" (initial) event queued for Klaviyo - Payment ID: ${paymentIntentId}`);
+        } catch (klaviyoError) {
+          webhookLog("error", `❌ Failed to track "Subscription Payment Failed" (initial) event to Klaviyo for user ${user.email}: ${klaviyoError}`);
+          // Don't throw - Klaviyo tracking failure shouldn't break webhook processing
+        }
       } else {
-        // Fallback for other billing reasons (subscription_update, etc.)
-        // Use subscription payment failed event
-        klaviyo.trackEventBackground(
-          createSubscriptionPaymentFailedEvent(user as never, {
-            paymentIntentId: paymentIntentId,
-            packageId: packageId,
-            packageName: "Subscription",
-            tier,
-            amount,
-            failureReason,
-            failureCode,
-            isInitialPayment: false,
-          })
-        );
+        // ✅ BEST PRACTICE: Fallback for other billing reasons (subscription_update, etc.)
+        // Use subscription payment failed event with isInitialPayment: false
+        try {
+          webhookLog("info", `📧 Tracking "Subscription Payment Failed" (billing_reason: ${billingReason}) event to Klaviyo for user ${user.email}`);
+          klaviyo.trackEventBackground(
+            createSubscriptionPaymentFailedEvent(user as never, {
+              paymentIntentId: paymentIntentId,
+              packageId: packageId,
+              packageName: packageName,
+              tier,
+              amount,
+              failureReason,
+              failureCode,
+              failureMessage,
+              isInitialPayment: false,
+            })
+          );
+          webhookLog("info", `✅ "Subscription Payment Failed" event queued for Klaviyo - Payment ID: ${paymentIntentId}`);
+        } catch (klaviyoError) {
+          webhookLog("error", `❌ Failed to track "Subscription Payment Failed" event to Klaviyo for user ${user.email}: ${klaviyoError}`);
+          // Don't throw - Klaviyo tracking failure shouldn't break webhook processing
+        }
       }
     }
 

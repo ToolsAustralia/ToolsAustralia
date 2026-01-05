@@ -116,6 +116,9 @@ export function createSubscriptionRenewalFailedEvent(
     packageName: string;
     tier: string;
     failureReason: string;
+    failureCode?: string;
+    failureMessage?: string;
+    amount: number;
     paymentIntentId: string;
   }
 ): KlaviyoEvent {
@@ -128,9 +131,12 @@ export function createSubscriptionRenewalFailedEvent(
         packageId: packageData.packageId,
         packageName: packageData.packageName,
         tier: packageData.tier,
-        price: 0, // No price for failed renewal
+        price: packageData.amount, // Use actual amount for failed renewal
       }),
       failure_reason: packageData.failureReason,
+      failure_code: packageData.failureCode || "",
+      failure_message: packageData.failureMessage || "",
+      amount: packageData.amount.toFixed(2),
       payment_intent_id: packageData.paymentIntentId,
       timestamp: formatTimestampForKlaviyo(),
     },
@@ -186,6 +192,7 @@ export function createSubscriptionPaymentFailedEvent(
     amount: number;
     failureReason: string;
     failureCode?: string;
+    failureMessage?: string;
     isInitialPayment: boolean;
   }
 ): KlaviyoEvent {
@@ -203,6 +210,7 @@ export function createSubscriptionPaymentFailedEvent(
       payment_intent_id: paymentData.paymentIntentId,
       failure_reason: paymentData.failureReason,
       failure_code: paymentData.failureCode || "",
+      failure_message: paymentData.failureMessage || "",
       is_initial_payment: paymentData.isInitialPayment,
       timestamp: formatTimestampForKlaviyo(),
     },

@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import InvoicePreview from "./InvoicePreview";
 import VerificationEmailPreview from "./VerificationEmailPreview";
+import PaymentFailedPreview from "./PaymentFailedPreview";
+import SubscriptionRenewalPreview from "./SubscriptionRenewalPreview";
 
 /**
  * Email Preview Layout Component
@@ -11,7 +13,7 @@ import VerificationEmailPreview from "./VerificationEmailPreview";
  * different email template previews (Invoice and Verification).
  */
 const EmailPreviewLayout: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"invoice" | "verification">("invoice");
+  const [activeTab, setActiveTab] = useState<"invoice" | "verification" | "payment-failed" | "subscription-renewal">("invoice");
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8">
@@ -47,6 +49,26 @@ const EmailPreviewLayout: React.FC = () => {
             >
               Verification Email
             </button>
+            <button
+              onClick={() => setActiveTab("payment-failed")}
+              className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
+                activeTab === "payment-failed"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+              }`}
+            >
+              Payment Failed Email
+            </button>
+            <button
+              onClick={() => setActiveTab("subscription-renewal")}
+              className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
+                activeTab === "subscription-renewal"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+              }`}
+            >
+              Subscription Renewal Email
+            </button>
           </nav>
         </div>
 
@@ -54,6 +76,8 @@ const EmailPreviewLayout: React.FC = () => {
         <div className="rounded-lg bg-white p-6 shadow-sm">
           {activeTab === "invoice" && <InvoicePreview />}
           {activeTab === "verification" && <VerificationEmailPreview />}
+          {activeTab === "payment-failed" && <PaymentFailedPreview />}
+          {activeTab === "subscription-renewal" && <SubscriptionRenewalPreview />}
         </div>
 
         {/* Footer Info */}

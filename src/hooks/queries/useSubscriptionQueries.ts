@@ -155,6 +155,15 @@ export interface UpdateAutoRenewResponse {
   };
 }
 
+export interface UpdateSubscriptionPaymentMethodResponse {
+  success: boolean;
+  message: string;
+  data: {
+    paymentMethodId: string;
+    subscriptionId: string;
+  };
+}
+
 // ====================================
 // Hooks
 // ====================================
@@ -302,6 +311,32 @@ export const useUpdateAutoRenew = () => {
     onSettled: () => {
       // Refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
+    },
+  });
+};
+
+/**
+ * ✅ Update subscription payment method
+ * Updates the payment method used for subscription billing
+ */
+export const useUpdateSubscriptionPaymentMethod = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (paymentMethodId: string) => {
+      const response = await apiPost<UpdateSubscriptionPaymentMethodResponse>(
+        "/api/stripe/subscription/update-payment-method",
+        {
+          paymentMethodId,
+        }
+      );
+      return response;
+    },
+    onSuccess: () => {
+      // Invalidate user and payment method queries to reflect changes
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all("current-user") });
     },
   });
 };

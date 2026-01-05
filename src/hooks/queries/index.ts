@@ -182,6 +182,7 @@ export {
   useDowngradeSubscription,
   useCancelSubscription as useCancelSubscriptionMutation,
   useUpdateAutoRenew,
+  useUpdateSubscriptionPaymentMethod,
   canRenewSubscription,
   getSubscriptionStatusText,
   getSubscriptionStatusColor,
@@ -195,6 +196,7 @@ export {
   type CancelSubscriptionResponse,
   type UpdateAutoRenewData,
   type UpdateAutoRenewResponse,
+  type UpdateSubscriptionPaymentMethodResponse,
 } from "./useSubscriptionQueries";
 
 // Query keys and utilities

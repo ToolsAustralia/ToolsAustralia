@@ -6,4 +6,5 @@
 
 export { default as InvoicePreview } from "./InvoicePreview";
 export { default as VerificationEmailPreview } from "./VerificationEmailPreview";
+export { default as PaymentFailedPreview } from "./PaymentFailedPreview";
 export { default as EmailPreviewLayout } from "./EmailPreviewLayout";

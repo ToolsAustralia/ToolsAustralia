@@ -135,12 +135,16 @@ export const useAddPaymentMethod = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ paymentMethodId, setAsDefault = false }: AddPaymentMethodData) => {
-      const response = await apiPost<{ success: boolean; data: SavedPaymentMethod }>("/api/stripe/payment-methods", {
-        paymentMethodId,
-        setAsDefault,
-      });
-      return response.data;
+    mutationFn: async ({ paymentMethodId, setAsDefault = false }: AddPaymentMethodData): Promise<SavedPaymentMethod> => {
+      const response = await apiPost<{ success: boolean; paymentMethod: SavedPaymentMethod; message?: string }>(
+        "/api/stripe/payment-methods",
+        {
+          paymentMethodId,
+          setAsDefault,
+        }
+      );
+      // API returns { success, paymentMethod, message } but we return just the paymentMethod
+      return response.paymentMethod;
     },
     onMutate: async ({ paymentMethodId, setAsDefault = false, userId }) => {
       const paymentMethodsKey = queryKeys.paymentMethods.all(userId);
@@ -257,7 +261,7 @@ export const useSetDefaultPaymentMethod = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ paymentMethodId }: SetDefaultPaymentMethodVariables) => {
+    mutationFn: async ({ paymentMethodId }: SetDefaultPaymentMethodVariables): Promise<SavedPaymentMethod> => {
       const response = await apiPut<{ success: boolean; data: SavedPaymentMethod }>(
         `/api/stripe/payment-methods/${paymentMethodId}/default`,
         {}

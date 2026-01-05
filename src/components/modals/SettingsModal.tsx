@@ -4,12 +4,13 @@ import React, { useCallback, useMemo, useState } from "react";
 import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useToast } from "@/components/ui/Toast";
 import SubscriptionManagementModal from "./SubscriptionManagementModal";
+import PaymentMethodsTab from "./PaymentMethodsTab";
 import { queryKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 
-type SettingsSection = "profile" | "subscription" | "password";
+type SettingsSection = "profile" | "subscription" | "password" | "payment";
 type SubscriptionUser = React.ComponentProps<typeof SubscriptionManagementModal>["user"];
 
 type SettingsModalProps = {
@@ -29,7 +30,7 @@ type SettingsModalProps = {
 };
 
 const tabButtonClass = (active: boolean) =>
-  `flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+  `flex-1 rounded-lg border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-colors ${
     active ? "bg-[#ee0000] text-white border-[#ee0000]" : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
   }`;
 
@@ -421,14 +422,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
     </div>
   );
 
+  const paymentView = (
+    <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3 shadow-sm">
+      <PaymentMethodsTab user={user} />
+    </div>
+  );
+
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="xl" closeOnBackdrop={false}>
       <ModalHeader title="Settings" onClose={onClose} showLogo={false} />
 
       <ModalContent padding="lg">
-        <div className="mb-4 flex gap-2">
+        <div className="mb-3 sm:mb-4 flex gap-1 sm:gap-2 flex-wrap">
           <button className={tabButtonClass(activeTab === "profile")} onClick={() => setActiveTab("profile")}>
-            Profile Details
+            <span className="hidden sm:inline">Profile Details</span>
+            <span className="sm:hidden">Profile</span>
           </button>
           <button className={tabButtonClass(activeTab === "subscription")} onClick={() => setActiveTab("subscription")}>
             Subscription
@@ -436,11 +444,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
           <button className={tabButtonClass(activeTab === "password")} onClick={() => setActiveTab("password")}>
             Password
           </button>
+          <button className={tabButtonClass(activeTab === "payment")} onClick={() => setActiveTab("payment")}>
+            <span className="hidden sm:inline">Payment Methods</span>
+            <span className="sm:hidden">Payment</span>
+          </button>
         </div>
 
         {activeTab === "profile" && profileView}
         {activeTab === "subscription" && subscriptionView}
         {activeTab === "password" && passwordView}
+        {activeTab === "payment" && paymentView}
       </ModalContent>
     </ModalContainer>
   );

@@ -3,14 +3,14 @@
 import React from "react";
 
 /**
- * Invoice Preview Component
+ * Subscription Renewal Preview Component
  *
- * Displays a preview of the Klaviyo invoice email template with mock data
- * for development purposes. Shows both paid and pending payment states.
+ * Displays a preview of the Klaviyo subscription renewal email template with mock data
+ * for development purposes.
  */
-const InvoicePreview: React.FC = () => {
-  // Embedded invoice template HTML (matches invoice-email-template.html)
-  const invoiceTemplate = `<html>
+const SubscriptionRenewalPreview: React.FC = () => {
+  // Embedded subscription renewal template HTML (matches subscription-renewal-email-template.html)
+  const renewalTemplate = `<html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
@@ -32,7 +32,7 @@ const InvoicePreview: React.FC = () => {
       .payment-details th { padding: 12px 14px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-bottom: 2px solid #e5e7eb; font-size: 12px; color: #1f2937; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; width: 40%; }
       .payment-details td { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #4b5563; background-color: #ffffff; word-break: break-word; }
       .payment-details tbody tr:last-child td { border-bottom: none; }
-      .total-amount { font-weight: 700; color: #dc2626; font-size: 16px; }
+      .payment-id { font-family: monospace; font-size: 11px; color: #64748b; }
       .entries-box { background: linear-gradient(135deg, #fff4f4 0%, #fff0f0 100%); border: 2px solid #dc2626; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; }
       .entries-label { font-size: 14px; font-weight: 600; color: #dc2626; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
       .entries-value { font-size: 28px; font-weight: 800; color: #dc2626; margin: 8px 0; }
@@ -60,36 +60,22 @@ const InvoicePreview: React.FC = () => {
       <div class="card">
         <div class="header">
           <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia Logo" class="header-logo" />
-          <h1>Invoice</h1>
-          <p>Invoice #: PLACEHOLDER_INVOICE_NUMBER</p>
+          <h1>Membership Renewed</h1>
+          <p>Payment received and confirmed</p>
         </div>
         <div class="content">
-          <div class="section"><strong>Invoice Date:</strong> PLACEHOLDER_INVOICE_DATE</div>
-          <div class="divider"></div>
           <div class="section">
-            <strong>Bill To:</strong>
-            <div class="info-box" style="margin-top: 12px;">
-              <div style="font-weight: 700; color: #1e293b; margin-bottom: 6px;">
-                PLACEHOLDER_FULL_NAME
-              </div>
-              <div style="color: #475569; margin-bottom: 4px;">
-                PLACEHOLDER_EMAIL
-              </div>
-              <div style="color: #475569;">
-                PLACEHOLDER_PHONE
-              </div>
+            <strong>Dear PLACEHOLDER_FIRST_NAME,</strong>
+            <div style="font-size: 16px; color: #4b5563; line-height: 1.7; margin-top: 12px;">
+              Your subscription has been successfully renewed. Thank you for continuing your membership with us.
             </div>
           </div>
           <div class="divider"></div>
           <div class="section">
-            <strong>Order Summary:</strong>
+            <strong>Renewal Details:</strong>
             <table class="payment-details">
               <tbody>
-                PLACEHOLDER_ITEMS_ROWS
-                <tr>
-                  <th>Total Amount</th>
-                  <td class="total-amount">A$PLACEHOLDER_TOTAL_AMOUNT</td>
-                </tr>
+                PLACEHOLDER_RENEWAL_DETAILS_ROWS
               </tbody>
             </table>
           </div>
@@ -102,7 +88,7 @@ const InvoicePreview: React.FC = () => {
           </div>
         </div>
         <div class="footer">
-          <p>Thank you for your purchase!</p>
+          <p>Thank you for being a valued member!</p>
           <p>For inquiries, contact <span class="support-email">support@toolsaustralia.com.au</span></p>
           <br />
           <a href="#">Unsubscribe</a>
@@ -112,75 +98,68 @@ const InvoicePreview: React.FC = () => {
   </body>
 </html>`;
 
-  // Mock data for paid invoice (single item)
-  const mockDataPaidSingle = {
-    invoice_number: "INV-2025-001234",
-    invoice_date: "January 15, 2025",
-    items: [{ description: "Professional Membership", unit_price: "499.00" }],
-    total_amount: "499.00",
-    entries_gained: "500",
-  };
-
-  // Mock data for paid invoice (with upsell)
-  const mockDataPaidWithUpsell = {
-    invoice_number: "INV-2025-001236",
-    invoice_date: "January 15, 2025",
-    items: [
-      { description: "Professional Membership", unit_price: "499.00" },
-      { description: "Bonus Entry Pack", unit_price: "29.00" },
-    ],
-    total_amount: "528.00",
-    entries_gained: "600",
-  };
-
-  const mockPersonPaid = {
-    full_name: "John Smith",
-    email: "john.smith@example.com",
-    phone: "+61 400 123 456",
+  // Mock data for subscription renewal
+  const mockData = {
+    first_name: "John",
+    package_name: "Professional Membership",
+    renewal_date: "January 15, 2025",
+    price: "499.00",
+    payment_intent_id: "pi_3Qkz8j2eZvKYlo2C1xyz4567",
+    current_draw_name: "Summer 2025 Major Draw",
+    entries_granted: "500",
   };
 
   /**
    * Replace placeholders with mock data
    */
-  const replacePlaceholders = (
-    template: string,
-    event: {
-      invoice_number: string;
-      invoice_date: string;
-      items: Array<{ description: string; unit_price: string; quantity?: number }>;
-      total_amount: string;
-      entries_gained: string;
-    },
-    person: {
-      full_name: string;
-      email: string;
-      phone: string;
+  const replacePlaceholders = (template: string, data: typeof mockData) => {
+    const renewalDetailsRows = [];
+    
+    if (data.package_name) {
+      renewalDetailsRows.push(`
+                <tr>
+                  <th>Package</th>
+                  <td>${data.package_name}</td>
+                </tr>`);
     }
-  ) => {
-    // Generate items rows HTML
-    const itemsRows = event.items
-      .map(
-        (item) => `
+    
+    if (data.renewal_date) {
+      renewalDetailsRows.push(`
                 <tr>
-                  <th>Item</th>
-                  <td>
-                    ${item.description}
-                    ${item.quantity && item.quantity > 1 ? `<span style="color: #64748b; font-size: 11px;">(Qty: ${item.quantity})</span>` : ""}
-                  </td>
-                </tr>
+                  <th>Renewal Date</th>
+                  <td>${data.renewal_date}</td>
+                </tr>`);
+    }
+    
+    if (data.price) {
+      renewalDetailsRows.push(`
                 <tr>
-                  <th>Price</th>
-                  <td>A$${item.unit_price}</td>
-                </tr>`
-      )
-      .join("");
+                  <th>Amount Paid</th>
+                  <td><strong style="color: #dc2626;">A$${data.price}</strong></td>
+                </tr>`);
+    }
+    
+    if (data.payment_intent_id) {
+      renewalDetailsRows.push(`
+                <tr>
+                  <th>Payment ID</th>
+                  <td class="payment-id">${data.payment_intent_id}</td>
+                </tr>`);
+    }
+    
+    if (data.current_draw_name) {
+      renewalDetailsRows.push(`
+                <tr>
+                  <th>Current Major Draw</th>
+                  <td>${data.current_draw_name}</td>
+                </tr>`);
+    }
 
-    // Generate entries box HTML if entries_gained exists
-    const entriesBox = event.entries_gained
+    const entriesBox = data.entries_granted
       ? `
           <div class="entries-box">
-            <div class="entries-label">🎟️ Free Entries Earned</div>
-            <div class="entries-value">${event.entries_gained}</div>
+            <div class="entries-label">🎟️ New Entries Added This Renewal</div>
+            <div class="entries-value">${data.entries_granted}</div>
             <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
               Entries have been added to your account
             </div>
@@ -188,56 +167,32 @@ const InvoicePreview: React.FC = () => {
       : "";
 
     return template
-      .replace(/PLACEHOLDER_INVOICE_NUMBER/g, event.invoice_number)
-      .replace(/PLACEHOLDER_INVOICE_DATE/g, event.invoice_date)
-      .replace(/PLACEHOLDER_FULL_NAME/g, person.full_name)
-      .replace(/PLACEHOLDER_EMAIL/g, person.email)
-      .replace(/PLACEHOLDER_PHONE/g, person.phone)
-      .replace(/PLACEHOLDER_ITEMS_ROWS/g, itemsRows)
-      .replace(/PLACEHOLDER_TOTAL_AMOUNT/g, event.total_amount)
+      .replace(/PLACEHOLDER_FIRST_NAME/g, data.first_name)
+      .replace(/PLACEHOLDER_RENEWAL_DETAILS_ROWS/g, renewalDetailsRows.join(""))
       .replace(/PLACEHOLDER_ENTRIES_BOX/g, entriesBox);
   };
 
-  const htmlPaidSingle = replacePlaceholders(invoiceTemplate, mockDataPaidSingle, mockPersonPaid);
-  const htmlPaidWithUpsell = replacePlaceholders(invoiceTemplate, mockDataPaidWithUpsell, mockPersonPaid);
+  const html = replacePlaceholders(renewalTemplate, mockData);
 
   return (
-    <div className="space-y-12">
-      {/* Paid Invoice Preview (Single Item) */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">Paid Invoice - Single Item</h3>
-          <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">Paid Status</span>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-          <iframe
-            title="Paid Invoice Single Item Preview"
-            srcDoc={htmlPaidSingle}
-            className="h-[800px] w-full border-0"
-            sandbox="allow-same-origin"
-          />
-        </div>
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-xl font-bold text-gray-800">Subscription Renewal Email</h3>
+        <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">
+          Renewal Confirmation
+        </span>
       </div>
-
-      {/* Paid Invoice Preview (With Upsell) */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">Paid Invoice - With Upsell</h3>
-          <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">
-            Combined Items
-          </span>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-          <iframe
-            title="Paid Invoice With Upsell Preview"
-            srcDoc={htmlPaidWithUpsell}
-            className="h-[800px] w-full border-0"
-            sandbox="allow-same-origin"
-          />
-        </div>
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+        <iframe
+          title="Subscription Renewal Preview"
+          srcDoc={html}
+          className="h-[800px] w-full border-0"
+          sandbox="allow-same-origin"
+        />
       </div>
     </div>
   );
 };
 
-export default InvoicePreview;
+export default SubscriptionRenewalPreview;
+
