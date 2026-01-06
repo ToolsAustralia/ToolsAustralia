@@ -1102,8 +1102,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
             toPackageId: membershipPackage._id.toString(),
             toPackageName: membershipPackage.name,
             toTier: membershipPackage.name,
-            toPrice: membershipPackage.price,
-            upgradeAmount: membershipPackage.price * 100, // Convert to cents
+            toPrice: membershipPackage.price, // Already in dollars
+            upgradeAmount: membershipPackage.price, // Already in dollars, don't multiply
             entriesAdded: membershipPackage.entriesPerMonth || 0,
             paymentIntentId:
               (user.subscription?.pendingChange as unknown as { paymentIntentId?: string })?.paymentIntentId || "",
@@ -2935,7 +2935,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
               packageId: membershipPackage._id.toString(),
               packageName: membershipPackage.name,
               packageTier: membershipPackage.name,
-              totalAmount: invoice.amount_paid,
+              totalAmount: invoice.amount_paid / 100, // Convert from cents to dollars
               paymentIntentId:
                 (
                   invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent }
@@ -2946,8 +2946,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
                 {
                   description: `Upgrade to ${membershipPackage.name}`,
                   quantity: 1,
-                  unit_price: membershipPackage.price * 100,
-                  total_price: invoice.amount_paid,
+                  unit_price: membershipPackage.price, // Already in dollars, don't multiply
+                  total_price: invoice.amount_paid / 100, // Convert from cents to dollars
                 },
               ],
             })
