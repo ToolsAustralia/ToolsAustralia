@@ -2,9 +2,9 @@
  * Monthly Comparison Service
  * 
  * Business logic for month-over-month metrics comparison.
+ * Uses on-the-fly aggregation from DailyMetricsService (no database storage).
  */
 
-import { DailyMetricsRepository } from "@/repositories/DailyMetricsRepository";
 import { DailyMetricsService } from "./DailyMetricsService";
 import { MetricsCalculationService } from "./MetricsCalculationService";
 import type {
@@ -17,7 +17,6 @@ import { aggregateMonthlyTotals, calculateWeightedROAS } from "@/utils/metrics/a
 
 export class MonthlyComparisonService {
   constructor(
-    private dailyMetricsRepo = new DailyMetricsRepository(),
     private dailyMetricsService = new DailyMetricsService(),
     private calculationService = new MetricsCalculationService()
   ) {}

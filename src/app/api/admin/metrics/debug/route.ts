@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import PaymentEvent from "@/models/PaymentEvent";
 import FacebookAdsInsight from "@/models/FacebookAdsInsight";
-import DailyMetrics from "@/models/DailyMetrics";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 
 /**
@@ -62,18 +61,6 @@ export async function GET(request: NextRequest) {
       level: "account",
     });
 
-    // Check DailyMetrics
-    const dailyMetrics = await DailyMetrics.find({
-      date: { $gte: startOfRange, $lte: endOfRange },
-    })
-      .select("date revenue adSpend salesCount")
-      .lean()
-      .sort({ date: -1 });
-
-    const dailyMetricsCount = await DailyMetrics.countDocuments({
-      date: { $gte: startOfRange, $lte: endOfRange },
-    });
-
     return NextResponse.json({
       dateRange: {
         start: startOfRange.toISOString(),
@@ -98,15 +85,7 @@ export async function GET(request: NextRequest) {
           conversions: a.metrics?.conversions,
         })),
       },
-      dailyMetrics: {
-        count: dailyMetricsCount,
-        sample: dailyMetrics.map((m) => ({
-          date: m.date,
-          revenue: m.revenue,
-          adSpend: m.adSpend,
-          salesCount: m.salesCount,
-        })),
-      },
+      note: "DailyMetrics model removed - metrics are now aggregated on-the-fly from source data",
     });
   } catch (error) {
     return NextResponse.json(

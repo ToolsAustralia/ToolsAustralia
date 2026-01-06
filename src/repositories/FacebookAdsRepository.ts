@@ -66,6 +66,12 @@ export class FacebookAdsRepository {
 
   /**
    * Get aggregated metrics for a date range
+   * 
+   * OPTIMIZED VERSION:
+   * - For single-day queries: Only use exact date matches or single-day dateRange matches
+   * - For range queries: Use exact date matches per day, avoid double-counting from overlapping ranges
+   * - Prefer exact date matches over dateRange matches to ensure accuracy
+   * 
    * @param startDate - Start date
    * @param endDate - End date
    * @returns Aggregated metrics
@@ -77,339 +83,194 @@ export class FacebookAdsRepository {
     clicks: number;
     conversions: number;
   }> {
-    console.log(`[FacebookAdsRepo] Querying aggregated metrics:`, {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-    });
-    
-    // Facebook ads insights can be stored with:
-    // 1. date field matching the query date (daily insights)
-    // 2. dateRange that overlaps with the query range (range-based insights)
-    // We need to check both
-    
-    // First check exact date match
-    const exactDateCount = await FacebookAdsInsight.countDocuments({
+    const queryAESTDay = formatInTimeZone(startDate, "Australia/Sydney", "yyyy-MM-dd");
+    const isSingleDay = (endDate.getTime() - startDate.getTime()) < 24 * 60 * 60 * 1000;
+
+    if (isSingleDay) {
+      // SINGLE DAY QUERY - Use strict matching to prevent double-counting
+      return this.getSingleDayMetrics(startDate, endDate, queryAESTDay);
+    } else {
+      // RANGE QUERY - Aggregate per day to avoid double-counting
+      return this.getRangeMetrics(startDate, endDate);
+    }
+  }
+
+  /**
+   * Get metrics for a single day
+   * Strategy: Prefer exact date matches, only use dateRange if it's a single-day range
+   */
+  private async getSingleDayMetrics(
+    startDate: Date,
+    endDate: Date,
+    queryAESTDay: string
+  ): Promise<{
+    adSpend: number;
+    revenue: number;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+  }> {
+    // Step 1: Try exact date match first (most accurate)
+    const exactDateInsights = await FacebookAdsInsight.find({
       date: {
         $gte: startDate,
         $lte: endDate,
       },
       level: "account",
-    });
-    console.log(`[FacebookAdsRepo] Found ${exactDateCount} insights with exact date match`);
-    
-    // Check dateRange overlap (insight's dateRange overlaps with our query range)
-    const rangeOverlapCount = await FacebookAdsInsight.countDocuments({
+    })
+      .sort({ syncedAt: -1 })
+      .lean()
+      .exec();
+
+    if (exactDateInsights.length > 0) {
+      // Use the most recent exact date match
+      const insight = exactDateInsights[0];
+      return {
+        adSpend: (insight.metrics?.spend || 0) / 100,
+        revenue: (insight.metrics?.revenue || 0) / 100,
+        impressions: insight.metrics?.impressions || 0,
+        clicks: insight.metrics?.clicks || 0,
+        conversions: insight.metrics?.conversions || 0,
+      };
+    }
+
+    // Step 2: Fallback to single-day dateRange matches only
+    // Only accept dateRanges that are approximately one day (≤ 1.5 days for timezone edge cases)
+    const allRangeInsights = await FacebookAdsInsight.find({
       "dateRange.start": { $lte: endDate },
       "dateRange.end": { $gte: startDate },
       level: "account",
+    })
+      .sort({ syncedAt: -1 })
+      .lean()
+      .exec();
+
+    // Filter to only single-day dateRanges that match the query day
+    const validInsights = allRangeInsights.filter((insight) => {
+      if (!insight.dateRange) return false;
+
+      const rangeStart = new Date(insight.dateRange.start);
+      const rangeEnd = new Date(insight.dateRange.end);
+      const durationMs = rangeEnd.getTime() - rangeStart.getTime();
+      const maxDurationMs = 1.5 * 24 * 60 * 60 * 1000; // 1.5 days
+
+      // Must be approximately one day
+      if (durationMs > maxDurationMs) return false;
+
+      // Query date must fall within range
+      const queryMidpoint = new Date((startDate.getTime() + endDate.getTime()) / 2);
+      if (queryMidpoint < rangeStart || queryMidpoint > rangeEnd) return false;
+
+      // Must match same AEST day
+      const rangeStartAEST = formatInTimeZone(rangeStart, "Australia/Sydney", "yyyy-MM-dd");
+      return rangeStartAEST === queryAESTDay;
     });
-    console.log(`[FacebookAdsRepo] Found ${rangeOverlapCount} insights with dateRange overlap`);
-    
-    // Debug: Show sample dateRanges in database to understand the data structure
-    if (rangeOverlapCount === 0 && exactDateCount === 0) {
-      const sampleInsights = await FacebookAdsInsight.find({ level: "account" })
-        .select("date dateRange")
-        .sort({ date: -1 })
-        .limit(5)
-        .lean();
-      console.log(`[FacebookAdsRepo] Sample insights in database (for debugging):`, 
-        sampleInsights.map(insight => ({
-          date: insight.date,
-          dateRangeStart: insight.dateRange?.start,
-          dateRangeEnd: insight.dateRange?.end,
-        }))
-      );
-      console.log(`[FacebookAdsRepo] Query range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    if (validInsights.length === 0) {
+      return {
+        adSpend: 0,
+        revenue: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+      };
     }
+
+    // Use most recent valid insight
+    const insight = validInsights[0];
+    return {
+      adSpend: (insight.metrics?.spend || 0) / 100,
+      revenue: (insight.metrics?.revenue || 0) / 100,
+      impressions: insight.metrics?.impressions || 0,
+      clicks: insight.metrics?.clicks || 0,
+      conversions: insight.metrics?.conversions || 0,
+    };
+  }
+
+  /**
+   * Get metrics for a date range
+   * Strategy: Aggregate per day using exact date matches to avoid double-counting
+   */
+  private async getRangeMetrics(
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
+    adSpend: number;
+    revenue: number;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+  }> {
+    // For range queries, we need to aggregate per day to avoid double-counting
+    // from overlapping dateRanges. We'll use exact date matches per day.
     
-    // For daily aggregation, we want insights where the date falls within our range
-    // OR where the dateRange overlaps with our single day
-    // Since we're aggregating per day, we'll use the date field for exact matches
-    // and for range-based insights, we'll need to proportionally allocate them
-    
-    // Check what dates actually exist
-    if (exactDateCount > 0 || rangeOverlapCount > 0) {
-      const dateSamples = await FacebookAdsInsight.find({
-        $or: [
-          {
-            date: {
-              $gte: startDate,
-              $lte: endDate,
-            },
-          },
-          {
-            "dateRange.start": { $lte: endDate },
-            "dateRange.end": { $gte: startDate },
-          },
-        ],
-        level: "account",
-      })
-        .select("date dateRange level metrics")
-        .lean()
-        .limit(5);
-      console.log(`[FacebookAdsRepo] Sample insights:`, dateSamples.map((d) => ({
-        date: d.date,
-        dateRange: d.dateRange,
-        spend: d.metrics?.spend,
-        revenue: d.metrics?.revenue,
-      })));
-    }
-    
-    // For daily aggregation, we need to handle overlapping insights properly
-    // The issue: Multiple insights can cover the same day (e.g., one for Dec 2-10, another for Dec 8-9)
-    // Solution: For single-day queries, prefer the most specific (shortest dateRange) or most recent insight
-    
-    // Calculate if this is a single day query
-    const isSingleDay = startDate.getTime() === endDate.getTime() || 
-      (endDate.getTime() - startDate.getTime()) < 24 * 60 * 60 * 1000;
-    
-    let result: Array<{
+    // Get all insights with exact date matches in the range
+    const exactDateInsights = await FacebookAdsInsight.find({
+      date: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+      level: "account",
+    })
+      .lean()
+      .exec();
+
+    // Group by AEST day to handle timezone edge cases
+    const dailyMetrics = new Map<string, {
       adSpend: number;
       revenue: number;
       impressions: number;
       clicks: number;
       conversions: number;
-    }>;
-    
-    if (isSingleDay) {
-      // Single day query - find insights that match THIS SPECIFIC DAY
-      // 
-      // CRITICAL: For single-day queries, we must be strict to avoid matching
-      // wide dateRanges (e.g., Nov 1 - Dec 9) which would incorrectly attribute
-      // cumulative metrics to a single day.
-      // 
-      // Date matching strategy:
-      // 1. Exact date match: insight.date falls within query range (preferred)
-      // 2. Single-day dateRange: insight's dateRange is approximately one day
-      //    - Only use if dateRange duration is <= 2 days (to handle timezone edge cases)
-      //    - AND the query date falls within the dateRange
-      // 
-      // Note: We explicitly exclude wide dateRanges to prevent incorrect attribution
-      const allMatchingInsights = await FacebookAdsInsight.find({
-        $or: [
-          {
-            // Exact date match: insight.date is within the query day
-            date: {
-              $gte: startDate,
-              $lte: endDate,
-            },
-          },
-          {
-            // DateRange overlap: insight's dateRange includes the query day
-            // We'll filter by duration in application code below
-            "dateRange.start": { $lte: endDate },
-            "dateRange.end": { $gte: startDate },
-          },
-        ],
-        level: "account",
-      })
-        .sort({ syncedAt: -1 }) // Most recent first
-        .lean()
-        .exec();
+    }>();
+
+    for (const insight of exactDateInsights) {
+      const insightAESTDay = formatInTimeZone(insight.date, "Australia/Sydney", "yyyy-MM-dd");
       
-      // CRITICAL: Filter to only include insights that match THIS SPECIFIC DAY
-      // We must be extremely strict to prevent:
-      // 1. Matching wide dateRanges (e.g., Dec 2-10) for a single day query
-      // 2. Date mismatches (Dec 27 data showing on Dec 26)
-      // 3. Duplicate entries from multiple matching insights
-      const matchingInsights = allMatchingInsights.filter((insight) => {
-        // Strategy 1: Exact date match (preferred - most accurate)
-        // Check if insight.date falls within the query day
-        if (insight.date) {
-          const insightDate = new Date(insight.date);
-          // Check if insight date is within query range (same day)
-          if (insightDate >= startDate && insightDate <= endDate) {
-            return true;
-          }
-        }
-        
-        // Strategy 2: Single-day dateRange match (only if no exact date match)
-        // Only use dateRange insights if:
-        // - The dateRange is approximately one day (≤ 1.5 days to handle timezone edge cases)
-        // - The query date (startDate) falls within the dateRange
-        // - We verify the dateRange actually represents the query day
-        if (insight.dateRange) {
-          const rangeStart = new Date(insight.dateRange.start);
-          const rangeEnd = new Date(insight.dateRange.end);
-          const durationMs = rangeEnd.getTime() - rangeStart.getTime();
-          const maxDurationMs = 1.5 * 24 * 60 * 60 * 1000; // 1.5 days (stricter than before)
-          
-          // Check if dateRange is approximately one day
-          if (durationMs > maxDurationMs) {
-            return false; // Reject wide dateRanges
-          }
-          
-          // CRITICAL: Verify the query date actually falls within the dateRange
-          // This prevents Dec 27 data from matching Dec 26 queries
-          const queryDateMidpoint = new Date((startDate.getTime() + endDate.getTime()) / 2);
-          if (queryDateMidpoint >= rangeStart && queryDateMidpoint <= rangeEnd) {
-            // Additional check: ensure the dateRange represents the same AEST day as query
-            // Extract AEST day from both query date and dateRange start
-            const queryAESTDay = formatInTimeZone(startDate, "Australia/Sydney", "yyyy-MM-dd");
-            const rangeStartAESTDay = formatInTimeZone(rangeStart, "Australia/Sydney", "yyyy-MM-dd");
-            
-            // Only match if they're the same AEST day
-            return queryAESTDay === rangeStartAESTDay;
-          }
-        }
-        
-        return false;
-      });
+      const existing = dailyMetrics.get(insightAESTDay) || {
+        adSpend: 0,
+        revenue: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+      };
+
+      // For same-day duplicates, use the most recent one (already sorted by syncedAt)
+      // But if we already have data for this day, prefer the one with more recent syncedAt
+      const currentInsightDate = new Date(insight.syncedAt || 0);
+      const existingDate = dailyMetrics.has(insightAESTDay) ? currentInsightDate : new Date(0);
       
-      console.log(`[FacebookAdsRepo] Found ${matchingInsights.length} insights covering this day`);
-      
-      // Log query details for debugging
-      const queryAESTDay = formatInTimeZone(startDate, "Australia/Sydney", "yyyy-MM-dd");
-      console.log(`[FacebookAdsRepo] Query date (AEST): ${queryAESTDay}, UTC range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
-      
-      if (matchingInsights.length === 0) {
-        console.log(`[FacebookAdsRepo] No matching insights found for ${queryAESTDay}`);
-        result = [];
-      } else if (matchingInsights.length === 1) {
-        // Single insight - use it directly
-        // NOTE: All metrics are stored in CENTS, convert to DOLLARS
-        const insight = matchingInsights[0];
-        const insightDate = insight.date ? formatInTimeZone(insight.date, "Australia/Sydney", "yyyy-MM-dd") : "N/A";
-        const rangeStartAEST = insight.dateRange ? formatInTimeZone(insight.dateRange.start, "Australia/Sydney", "yyyy-MM-dd") : "N/A";
-        const rangeEndAEST = insight.dateRange ? formatInTimeZone(insight.dateRange.end, "Australia/Sydney", "yyyy-MM-dd") : "N/A";
-        
-        result = [{
-          adSpend: insight.metrics.spend / 100,  // Convert cents to dollars
-          revenue: insight.metrics.revenue / 100, // Convert cents to dollars
-          impressions: insight.metrics.impressions, // Already integer
-          clicks: insight.metrics.clicks, // Already integer
-          conversions: insight.metrics.conversions, // Already integer
-        }];
-        
-        console.log(`[FacebookAdsRepo] ✅ Using single insight for ${queryAESTDay}:`, {
-          insightDate: insightDate,
-          dateRange: `${rangeStartAEST} to ${rangeEndAEST}`,
-          adSpend: `$${result[0].adSpend.toFixed(2)}`,
-          revenue: `$${result[0].revenue.toFixed(2)}`,
-          conversions: result[0].conversions,
-        });
-      } else {
-        // Multiple insights - this should be rare with strict filtering
-        // Prefer exact date matches first, then shortest dateRange, then most recent
-        console.log(`[FacebookAdsRepo] ⚠️ Multiple insights found for ${queryAESTDay}, selecting best match`);
-        
-        const insightsWithDuration = matchingInsights.map((insight) => {
-          const rangeStart = new Date(insight.dateRange?.start || insight.date);
-          const rangeEnd = new Date(insight.dateRange?.end || insight.date);
-          const duration = rangeEnd.getTime() - rangeStart.getTime();
-          const hasExactDate = insight.date && insight.date >= startDate && insight.date <= endDate;
-          return { insight, duration, hasExactDate };
-        });
-        
-        // Sort by: exact date match first, then shortest duration, then most recent
-        insightsWithDuration.sort((a, b) => {
-          // Prefer exact date matches
-          if (a.hasExactDate && !b.hasExactDate) return -1;
-          if (!a.hasExactDate && b.hasExactDate) return 1;
-          
-          // Then prefer shorter duration (more specific)
-          if (a.duration !== b.duration) {
-            return a.duration - b.duration;
-          }
-          
-          // Finally, prefer most recent
-          return new Date(b.insight.syncedAt).getTime() - new Date(a.insight.syncedAt).getTime();
-        });
-        
-        const bestInsight = insightsWithDuration[0].insight;
-        const bestDateAEST = bestInsight.date ? formatInTimeZone(bestInsight.date, "Australia/Sydney", "yyyy-MM-dd") : "N/A";
-        const bestRangeStartAEST = bestInsight.dateRange ? formatInTimeZone(bestInsight.dateRange.start, "Australia/Sydney", "yyyy-MM-dd") : "N/A";
-        const bestRangeEndAEST = bestInsight.dateRange ? formatInTimeZone(bestInsight.dateRange.end, "Australia/Sydney", "yyyy-MM-dd") : "N/A";
-        
-        console.log(`[FacebookAdsRepo] ✅ Selected best insight for ${queryAESTDay}:`, {
-          insightDate: bestDateAEST,
-          dateRange: `${bestRangeStartAEST} to ${bestRangeEndAEST}`,
-          duration: `${Math.round(insightsWithDuration[0].duration / (24 * 60 * 60 * 1000) * 10) / 10} days`,
-          hasExactDate: insightsWithDuration[0].hasExactDate,
-        });
-        
-        // Convert from cents to dollars (both spend and revenue are stored in cents)
-        result = [{
-          adSpend: bestInsight.metrics.spend / 100,  // Convert cents to dollars
-          revenue: bestInsight.metrics.revenue / 100, // Convert cents to dollars
-          impressions: bestInsight.metrics.impressions, // Already integer
-          clicks: bestInsight.metrics.clicks, // Already integer
-          conversions: bestInsight.metrics.conversions, // Already integer
-        }];
-        
-        console.log(`[FacebookAdsRepo] Metrics: adSpend=$${result[0].adSpend.toFixed(2)}, revenue=$${result[0].revenue.toFixed(2)}, conversions=${result[0].conversions}`);
-        
-        console.log(`[FacebookAdsRepo] Selected best insight (shortest dateRange):`, {
-          dateRange: `${bestInsight.dateRange.start} to ${bestInsight.dateRange.end}`,
-          duration: `${(insightsWithDuration[0].duration / (24 * 60 * 60 * 1000)).toFixed(1)} days`,
-          adSpend: `$${result[0].adSpend}`,
-          revenue: `$${result[0].revenue}`,
-          conversions: result[0].conversions,
+      // Only update if this insight is more recent or we don't have data for this day
+      if (currentInsightDate >= existingDate || !dailyMetrics.has(insightAESTDay)) {
+        dailyMetrics.set(insightAESTDay, {
+          adSpend: (insight.metrics?.spend || 0) / 100,
+          revenue: (insight.metrics?.revenue || 0) / 100,
+          impressions: insight.metrics?.impressions || 0,
+          clicks: insight.metrics?.clicks || 0,
+          conversions: insight.metrics?.conversions || 0,
         });
       }
-    } else {
-      // Date range query - aggregate all matching insights
-      // Note: This might still have some overlap issues, but for ranges we sum them
-      const matchQuery = {
-        $or: [
-          {
-            date: {
-              $gte: startDate,
-              $lte: endDate,
-            },
-          },
-          {
-            "dateRange.start": { $lte: endDate },
-            "dateRange.end": { $gte: startDate },
-          },
-        ],
-        level: "account",
-      };
-      
-      console.log(`[FacebookAdsRepo] Using match query for date range`);
-      
-      result = await FacebookAdsInsight.aggregate([
-        {
-          $match: matchQuery,
-        },
-        {
-          $group: {
-            _id: null,
-            // NOTE: All metrics are stored in CENTS, will convert to dollars below
-            adSpend: { $sum: "$metrics.spend" },
-            revenue: { $sum: "$metrics.revenue" },
-            impressions: { $sum: "$metrics.impressions" },
-            clicks: { $sum: "$metrics.clicks" },
-            conversions: { $sum: "$metrics.conversions" },
-          },
-        },
-      ]).exec();
     }
 
-    const aggregated = result[0] || {
-      adSpend: 0,
-      revenue: 0,
-      impressions: 0,
-      clicks: 0,
-      conversions: 0,
-    };
+    // Sum all daily metrics
+    const aggregated = Array.from(dailyMetrics.values()).reduce(
+      (acc, day) => ({
+        adSpend: acc.adSpend + day.adSpend,
+        revenue: acc.revenue + day.revenue,
+        impressions: acc.impressions + day.impressions,
+        clicks: acc.clicks + day.clicks,
+        conversions: acc.conversions + day.conversions,
+      }),
+      {
+        adSpend: 0,
+        revenue: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+      }
+    );
 
-    console.log(`[FacebookAdsRepo] Aggregated result (raw, in cents):`, aggregated);
-
-    // Convert all monetary values from cents to dollars
-    // NOTE: Both spend and revenue are stored in CENTS in FacebookAdsInsight model
-    // This matches how Stripe stores amounts (in cents) for consistency
-    const final = {
-      adSpend: aggregated.adSpend / 100,  // Convert cents to dollars
-      revenue: aggregated.revenue / 100,  // Convert cents to dollars
-      impressions: aggregated.impressions, // Already integer
-      clicks: aggregated.clicks, // Already integer
-      conversions: aggregated.conversions, // Already integer
-    };
-    
-    console.log(`[FacebookAdsRepo] Final aggregated metrics (converted to dollars):`, final);
-    
-    return final;
+    return aggregated;
   }
 }
 

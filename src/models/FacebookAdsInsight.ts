@@ -14,12 +14,14 @@ export interface IFacebookAdsInsight extends Document {
     start: Date;
     end: Date;
   };
-  level: "account" | "campaign" | "adset";
+  level: "account" | "campaign" | "adset" | "ad";
   breakdown?: {
     campaignId?: string;
     campaignName?: string;
     adsetId?: string;
     adsetName?: string;
+    adId?: string;
+    adName?: string;
   };
   metrics: {
     spend: number; // Ad spend in cents
@@ -66,7 +68,7 @@ const FacebookAdsInsightSchema = new Schema<IFacebookAdsInsight>(
     level: {
       type: String,
       required: true,
-      enum: ["account", "campaign", "adset"],
+      enum: ["account", "campaign", "adset", "ad"],
       index: true,
     },
     breakdown: {
@@ -83,6 +85,14 @@ const FacebookAdsInsightSchema = new Schema<IFacebookAdsInsight>(
         required: false,
       },
       adsetName: {
+        type: String,
+        required: false,
+      },
+      adId: {
+        type: String,
+        required: false,
+      },
+      adName: {
         type: String,
         required: false,
       },

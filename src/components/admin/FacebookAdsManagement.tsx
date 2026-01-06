@@ -23,6 +23,7 @@ import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 import { DailyBreakdownChart } from "./DailyBreakdownChart";
 import { useDailyMetrics } from "@/hooks/useDailyMetrics";
+import { DailyMetricsView } from "./metrics/DailyMetricsView";
 
 /**
  * Facebook Ads Management Component
@@ -57,6 +58,24 @@ export default function FacebookAdsManagement() {
   const [level, setLevel] = useState<InsightLevel>("adset");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  // View mode with URL persistence
+  const urlViewMode = (searchParams.get("viewMode") as "ads" | "metrics") || "ads";
+  const [viewMode, setViewMode] = useState<"ads" | "metrics">(urlViewMode);
+
+  // Sync viewMode with URL params on mount and when URL changes
+  // Use a stable value from searchParams to avoid dependency array issues
+  const urlViewModeValue = searchParams.get("viewMode") || "ads";
+  useEffect(() => {
+    setViewMode(urlViewModeValue as "ads" | "metrics");
+  }, [urlViewModeValue]);
+
+  // Update URL when viewMode changes
+  const handleViewModeChange = (mode: "ads" | "metrics") => {
+    setViewMode(mode);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("viewMode", mode);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   // Detect mobile viewport
   useEffect(() => {
@@ -408,17 +427,48 @@ export default function FacebookAdsManagement() {
           Facebook Ads Performance
         </h2>
         <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-          {/* Date Range Toggle */}
-          <DateRangeToggle
-            selectedRange={dateRange}
-            onRangeChange={handleDateRangeChange}
-            onCustomClick={() => setIsCustomDateModalOpen(true)}
-            collapsed={isDateFilterCollapsed && shouldCollapse}
-            displayDate={displayDate || undefined}
-            onExpand={() => setIsDateFilterCollapsed(false)}
-          />
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => handleViewModeChange("ads")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === "ads"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Ads
+            </button>
+            <button
+              onClick={() => handleViewModeChange("metrics")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === "metrics"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Metrics
+            </button>
+          </div>
+          {/* Date Range Toggle - Only show for Ads view */}
+          {viewMode === "ads" && (
+            <DateRangeToggle
+              selectedRange={dateRange}
+              onRangeChange={handleDateRangeChange}
+              onCustomClick={() => setIsCustomDateModalOpen(true)}
+              collapsed={isDateFilterCollapsed && shouldCollapse}
+              displayDate={displayDate || undefined}
+              onExpand={() => setIsDateFilterCollapsed(false)}
+            />
+          )}
         </div>
       </div>
+
+      {/* Content based on view mode */}
+      {viewMode === "metrics" ? (
+        <DailyMetricsView />
+      ) : (
+        <>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -611,6 +661,8 @@ export default function FacebookAdsManagement() {
         currentEndDate={endDate}
         majorDraws={majorDraws}
       />
+        </>
+      )}
     </div>
   );
 }

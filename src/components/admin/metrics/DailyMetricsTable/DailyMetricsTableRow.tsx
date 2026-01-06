@@ -3,6 +3,9 @@
 import React from "react";
 import type { IDailyMetrics } from "@/types/metrics/DailyMetrics";
 import { formatCurrency, formatNumber, formatROAS, formatPercentage } from "@/utils/metrics/formatters";
+import { formatInTimeZone } from "date-fns-tz";
+
+const AEST_TIMEZONE = "Australia/Sydney";
 
 export interface DailyMetricsTableRowProps {
   metric: IDailyMetrics;
@@ -10,11 +13,9 @@ export interface DailyMetricsTableRowProps {
 
 export function DailyMetricsTableRow({ metric }: DailyMetricsTableRowProps) {
   const date = new Date(metric.date);
-  const formattedDate = date.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  // Format date in AEST timezone to ensure correct day is displayed
+  // The date stored is UTC representation of AEST midnight, so we need to format it in AEST
+  const formattedDate = formatInTimeZone(date, AEST_TIMEZONE, "d MMM yyyy");
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">

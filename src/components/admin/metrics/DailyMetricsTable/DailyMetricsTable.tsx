@@ -19,7 +19,16 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const sortedMetrics = useMemo(() => {
-    const sorted = [...metrics];
+    // Filter out future dates (dates after today)
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of today
+    
+    const filtered = metrics.filter((metric) => {
+      const metricDate = new Date(metric.date);
+      return metricDate <= today;
+    });
+    
+    const sorted = [...filtered];
     sorted.sort((a, b) => {
       let aValue: number | Date;
       let bValue: number | Date;
@@ -87,9 +96,16 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
     );
   };
 
-  // Calculate totals
+  // Calculate totals (only from non-future dates)
   const totals = useMemo(() => {
-    return metrics.reduce(
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const filteredMetrics = metrics.filter((metric) => {
+      const metricDate = new Date(metric.date);
+      return metricDate <= today;
+    });
+    
+    return filteredMetrics.reduce(
       (acc, metric) => ({
         adSpend: acc.adSpend + metric.adSpend,
         revenue: acc.revenue + metric.revenue,
@@ -203,9 +219,17 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
             </tr>
           </thead>
           <tbody>
-            {sortedMetrics.map((metric) => (
-              <DailyMetricsTableRow key={metric._id || new Date(metric.date).toISOString()} metric={metric} />
-            ))}
+            {sortedMetrics.map((metric, index) => {
+              // Create a unique key: use _id if available, otherwise combine date with index and breakdown info
+              const dateKey = new Date(metric.date).toISOString();
+              const breakdownKey = metric.breakdown 
+                ? `${metric.breakdown.campaignId || ''}-${metric.breakdown.adsetId || ''}-${metric.breakdown.adId || ''}`
+                : '';
+              const uniqueKey = metric._id || `${dateKey}-${breakdownKey}-${index}`;
+              return (
+                <DailyMetricsTableRow key={uniqueKey} metric={metric} />
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">

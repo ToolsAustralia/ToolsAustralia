@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Search,
   ChevronLeft,
@@ -40,6 +41,7 @@ import { useAdminUsers, useAdminUserActions } from "@/hooks/queries/useAdminQuer
 import UserDetailModal from "./UserDetailModal";
 import { useDebounce } from "@/hooks/useDebounce";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import { UserMetricsView } from "./metrics/UserMetricsView";
 import { membershipPackages } from "@/data/membershipPackages";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
@@ -50,6 +52,10 @@ import Dropdown from "@/components/modals/ui/Dropdown";
  * Provides comprehensive user management interface with stats, filtering, and modern design
  */
 export default function UsersManagement() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   // Filter state
   const [filters, setFilters] = useState<UserFilters>({
     page: 1,
@@ -66,6 +72,31 @@ export default function UsersManagement() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false); // Mobile filter collapse state
+  
+  // View mode with URL persistence
+  const urlViewMode = searchParams.get("viewMode") as "users" | "metrics" | null;
+  const [viewMode, setViewMode] = useState<"users" | "metrics">(urlViewMode || "users");
+
+  // Sync viewMode with URL params (only when URL changes, not on every render)
+  useEffect(() => {
+    const currentUrlViewMode = searchParams.get("viewMode") as "users" | "metrics" | null;
+    const newViewMode = currentUrlViewMode || "users";
+    setViewMode((prev) => {
+      // Only update if different to avoid unnecessary re-renders
+      if (prev !== newViewMode) {
+        return newViewMode;
+      }
+      return prev;
+    });
+  }, [searchParams]); // Only depend on searchParams to sync from URL to state
+
+  // Update URL when viewMode changes
+  const handleViewModeChange = (mode: "users" | "metrics") => {
+    setViewMode(mode);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("viewMode", mode);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   // Debounced search to avoid excessive API calls
   const debouncedSearch = useDebounce(filters.search || "", 300);
@@ -340,8 +371,36 @@ export default function UsersManagement() {
         <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
           User Management
         </h2>
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => handleViewModeChange("users")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              viewMode === "users"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Users
+          </button>
+          <button
+            onClick={() => handleViewModeChange("metrics")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              viewMode === "metrics"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Metrics
+          </button>
+        </div>
       </div>
 
+      {/* Content based on view mode */}
+      {viewMode === "metrics" ? (
+        <UserMetricsView />
+      ) : (
+        <>
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard title="Total Users" value={stats.totalUsers} icon={Users} color="blue" loading={isLoading} />
@@ -838,6 +897,8 @@ export default function UsersManagement() {
           </>
         )}
       </div>
+        </>
+      )}
 
       {/* User Detail Modal */}
       <UserDetailModal

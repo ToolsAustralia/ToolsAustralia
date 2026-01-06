@@ -20,6 +20,20 @@ import { addDays, addMinutes } from "date-fns";
 const AEST_TIMEZONE = "Australia/Sydney"; // Sydney follows AEST/AEDT
 
 /**
+ * Website launch date: November 27, 2024 at 8pm AEDT/AEST
+ * This is when the website was officially released
+ * Stored as a Date object representing November 27, 2024, 8:00 PM in Australia/Sydney timezone
+ */
+export const WEBSITE_LAUNCH_DATE_AEST = new Date("2024-11-27T20:00:00+11:00"); // November 27, 2024, 8pm AEDT
+
+/**
+ * Get website launch date in UTC for database queries
+ */
+export function getWebsiteLaunchDateUTC(): Date {
+  return convertAESTToUTC(WEBSITE_LAUNCH_DATE_AEST);
+}
+
+/**
  * Convert a UTC date to AEST
  * @param utcDate - Date in UTC
  * @returns Date object in AEST timezone

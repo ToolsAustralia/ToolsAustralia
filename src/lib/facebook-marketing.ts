@@ -59,7 +59,7 @@ export async function fetchFacebookInsights(
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
-      "spend,impressions,clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,date_start,date_stop",
+      "spend,impressions,clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
@@ -211,6 +211,8 @@ export function extractBreakdown(insight: FacebookInsightData): InsightBreakdown
     campaignName: insight.campaign_name,
     adsetId: insight.adset_id,
     adsetName: insight.adset_name,
+    adId: insight.ad_id,
+    adName: insight.ad_name,
   };
 }
 

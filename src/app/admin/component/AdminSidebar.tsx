@@ -45,11 +45,6 @@ const adminTabs = [
     label: "Facebook Ads",
     icon: TrendingUp,
   },
-  {
-    id: "daily-metrics",
-    label: "Daily Metrics",
-    icon: BarChart3,
-  },
   // Temporarily hidden - no content yet
   // {
   //   id: "analytics",

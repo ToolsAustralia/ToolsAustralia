@@ -3,6 +3,10 @@
  */
 
 import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
+import { createAESTDateAsUTC } from "@/utils/common/timezone";
+
+const AEST_TIMEZONE = "Australia/Sydney";
 
 /**
  * Get start and end dates for a month
@@ -34,17 +38,45 @@ export function getPreviousMonth(monthString: string): string {
 
 /**
  * Get all days in a date range
- * @param startDate - Start date
- * @param endDate - End date
- * @returns Array of dates (one per day)
+ * @param startDate - Start date (will be interpreted in AEST timezone)
+ * @param endDate - End date (will be interpreted in AEST timezone)
+ * @returns Array of dates (one per day, normalized to AEST midnight UTC)
  */
 export function getDaysInRange(startDate: Date, endDate: Date): Date[] {
   const days: Date[] = [];
-  const current = new Date(startDate);
   
-  while (current <= endDate) {
-    days.push(new Date(current));
-    current.setDate(current.getDate() + 1);
+  // Get AEST date components for start date
+  const startYear = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "yyyy"), 10);
+  const startMonth = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "M"), 10);
+  const startDay = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "d"), 10);
+  
+  // Get AEST date components for end date
+  const endYear = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "yyyy"), 10);
+  const endMonth = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "M"), 10);
+  const endDay = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "d"), 10);
+  
+  // Create dates in AEST and iterate day by day
+  let currentYear = startYear;
+  let currentMonth = startMonth;
+  let currentDay = startDay;
+  
+  while (
+    currentYear < endYear ||
+    (currentYear === endYear && currentMonth < endMonth) ||
+    (currentYear === endYear && currentMonth === endMonth && currentDay <= endDay)
+  ) {
+    // Create date for this day in AEST (converted to UTC for storage)
+    const dayDate = createAESTDateAsUTC(currentYear, currentMonth, currentDay, 0, 0);
+    days.push(dayDate);
+    
+    // Move to next day in AEST by adding 1 day to the UTC date and getting AEST components
+    const nextDate = new Date(dayDate);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    
+    // Get next day's AEST components
+    currentYear = parseInt(formatInTimeZone(nextDate, AEST_TIMEZONE, "yyyy"), 10);
+    currentMonth = parseInt(formatInTimeZone(nextDate, AEST_TIMEZONE, "M"), 10);
+    currentDay = parseInt(formatInTimeZone(nextDate, AEST_TIMEZONE, "d"), 10);
   }
   
   return days;

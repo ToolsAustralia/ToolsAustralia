@@ -29,7 +29,6 @@ import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
-import { DailyMetricsView } from "@/components/admin/metrics/DailyMetricsView";
 import {
   Users,
   DollarSign,
@@ -921,9 +920,6 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* FACEBOOK ADS TAB */}
           {selectedTab === "facebook-ads" && <FacebookAdsManagement />}
-
-          {/* DAILY METRICS TAB */}
-          {selectedTab === "daily-metrics" && <DailyMetricsView />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (

@@ -13,7 +13,7 @@ export type DateRangeOption = "today" | "yesterday" | "custom";
 /**
  * Data granularity levels for ad insights
  */
-export type InsightLevel = "account" | "campaign" | "adset";
+export type InsightLevel = "account" | "campaign" | "adset" | "ad";
 
 /**
  * Query parameters for fetching Facebook ad insights
@@ -54,6 +54,8 @@ export interface FacebookInsightData {
   campaign_name?: string;
   adset_id?: string;
   adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
   date_start?: string;
   date_stop?: string;
 }
@@ -90,13 +92,15 @@ export interface ProcessedInsightMetrics {
 }
 
 /**
- * Breakdown data for campaign/adset level insights
+ * Breakdown data for campaign/adset/ad level insights
  */
 export interface InsightBreakdown {
   campaignId?: string;
   campaignName?: string;
   adsetId?: string;
   adsetName?: string;
+  adId?: string;
+  adName?: string;
 }
 
 /**

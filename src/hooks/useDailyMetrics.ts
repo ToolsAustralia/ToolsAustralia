@@ -10,17 +10,36 @@ import type { DailyMetricsResponse } from "@/types/metrics/DailyMetrics";
 export interface UseDailyMetricsParams {
   startDate: Date;
   endDate: Date;
+  level?: "account" | "campaign" | "adset" | "ad";
+  breakdownId?: string;
   enabled?: boolean;
 }
 
-export function useDailyMetrics({ startDate, endDate, enabled = true }: UseDailyMetricsParams) {
+export function useDailyMetrics({ 
+  startDate, 
+  endDate, 
+  level,
+  breakdownId,
+  enabled = true 
+}: UseDailyMetricsParams) {
   return useQuery({
-    queryKey: queryKeys.admin.metrics.daily({ startDate: startDate.toISOString(), endDate: endDate.toISOString() }),
+    queryKey: queryKeys.admin.metrics.daily({ 
+      startDate: startDate.toISOString(), 
+      endDate: endDate.toISOString(),
+      level: level || "account",
+      breakdownId: breakdownId || "",
+    }),
     queryFn: async () => {
       const params = new URLSearchParams({
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       });
+      if (level) {
+        params.append("level", level);
+      }
+      if (breakdownId) {
+        params.append("breakdownId", breakdownId);
+      }
       const response = await apiGet<{ data: DailyMetricsResponse["data"]; meta: unknown }>(
         `/api/admin/metrics/daily?${params}`
       );
