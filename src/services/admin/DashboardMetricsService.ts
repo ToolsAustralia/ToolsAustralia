@@ -5,8 +5,9 @@
  */
 
 import { PaymentEventRepository } from "@/repositories/PaymentEventRepository";
-import { FacebookAdsRepository } from "@/repositories/FacebookAdsRepository";
 import { MetricsCalculationService } from "../metrics/MetricsCalculationService";
+import { fetchFacebookInsights } from "@/lib/facebook-marketing";
+import { formatInTimeZone } from "date-fns-tz";
 import type { EnhancedDashboardMetrics, TrendData } from "@/types/admin/EnhancedMetrics";
 import User from "@/models/User";
 import connectDB from "@/lib/mongodb";
@@ -14,7 +15,6 @@ import connectDB from "@/lib/mongodb";
 export class DashboardMetricsService {
   constructor(
     private paymentEventRepo = new PaymentEventRepository(),
-    private facebookAdsRepo = new FacebookAdsRepository(),
     private calculationService = new MetricsCalculationService()
   ) {}
 
@@ -44,7 +44,40 @@ export class DashboardMetricsService {
   async getCustomerAcquisitionCost(startDate: Date, endDate: Date): Promise<number> {
     await connectDB();
     
-    const adSpend = await this.facebookAdsRepo.getAdSpendSum(startDate, endDate);
+    // Fetch ad spend directly from Facebook API
+    const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
+    const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
+    let adSpend = 0;
+
+    if (adAccountId && accessToken) {
+      try {
+        const AEST_TIMEZONE = "Australia/Sydney";
+        const startYear = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "yyyy"), 10);
+        const startMonth = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "M"), 10);
+        const startDay = parseInt(formatInTimeZone(startDate, AEST_TIMEZONE, "d"), 10);
+        const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+
+        const endYear = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "yyyy"), 10);
+        const endMonth = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "M"), 10);
+        const endDay = parseInt(formatInTimeZone(endDate, AEST_TIMEZONE, "d"), 10);
+        const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+
+        const insightsData = await fetchFacebookInsights(
+          adAccountId,
+          accessToken,
+          { since: startDateStr, until: endDateStr },
+          "account"
+        );
+
+        if (insightsData && insightsData.length > 0) {
+          // Sum up ad spend from all insights (in cents, convert to dollars)
+          adSpend = insightsData.reduce((sum, insight) => sum + insight.metrics.spend, 0) / 100;
+        }
+      } catch (error) {
+        console.error("Error fetching Facebook ad spend:", error);
+        // Return 0 if API fails
+      }
+    }
     
     // Count new signups in date range
     const newSignups = await User.countDocuments({

@@ -7,7 +7,7 @@ import { WEBSITE_LAUNCH_DATE_AEST } from "@/utils/common/timezone";
 export type MetricsDateFilterMode = "month" | "custom" | "all-time";
 
 /**
- * Website launch date: November 27, 2024 at 8pm AEDT/AEST
+ * Website launch date: November 27, 2025 at 8pm AEDT/AEST
  * Re-exported for convenience
  */
 export const WEBSITE_LAUNCH_DATE = WEBSITE_LAUNCH_DATE_AEST;

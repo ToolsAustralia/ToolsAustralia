@@ -26,14 +26,28 @@ export class MajorDrawComparisonService {
     await connectDB();
 
     // Fetch both major draws
-    const [currentDraw, previousDraw] = await Promise.all([
+    const [currentDrawResult, previousDrawResult] = await Promise.all([
       MajorDraw.findById(currentDrawId).lean(),
       MajorDraw.findById(previousDrawId).lean(),
     ]);
 
-    if (!currentDraw || !previousDraw) {
+    if (!currentDrawResult || !previousDrawResult) {
       throw new Error("One or both major draws not found");
     }
+
+    // Type assertion to ensure we have the correct structure
+    const currentDraw = currentDrawResult as unknown as {
+      _id: unknown;
+      name: string;
+      drawDate: Date | string;
+      activationDate: Date | string;
+    };
+    const previousDraw = previousDrawResult as unknown as {
+      _id: unknown;
+      name: string;
+      drawDate: Date | string;
+      activationDate: Date | string;
+    };
 
     // Get date ranges for each draw
     // Use activationDate as start and drawDate as end
@@ -68,16 +82,16 @@ export class MajorDrawComparisonService {
       previousDrawTotal,
       comparison,
       currentDrawInfo: {
-        id: currentDraw._id.toString(),
+        id: String(currentDraw._id),
         name: currentDraw.name,
-        drawDate: currentDraw.drawDate,
-        activationDate: currentDraw.activationDate,
+        drawDate: new Date(currentDraw.drawDate),
+        activationDate: new Date(currentDraw.activationDate),
       },
       previousDrawInfo: {
-        id: previousDraw._id.toString(),
+        id: String(previousDraw._id),
         name: previousDraw.name,
-        drawDate: previousDraw.drawDate,
-        activationDate: previousDraw.activationDate,
+        drawDate: new Date(previousDraw.drawDate),
+        activationDate: new Date(previousDraw.activationDate),
       },
     };
   }
@@ -145,4 +159,5 @@ export class MajorDrawComparisonService {
     };
   }
 }
+
 

@@ -151,3 +151,4 @@ export function DailyUserMetricsTable({ metrics }: DailyUserMetricsTableProps) {
   );
 }
 
+

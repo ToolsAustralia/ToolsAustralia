@@ -5,10 +5,9 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
-import { getStartOfTodayInAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
+import { getStartOfTodayInAEST, createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
-import FacebookAdsInsight from "@/models/FacebookAdsInsight";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import mongoose from "mongoose";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
@@ -48,22 +47,39 @@ export async function GET(request: NextRequest) {
 
     // Calculate date range based on selection
     let startDate: Date;
-    let endDate: Date = new Date(); // End date is always now
+    let endDate: Date;
 
     const startOfToday = getStartOfTodayInAEST();
+    const AEST_TIMEZONE = "Australia/Sydney";
+    
+    // Get end of today in AEST (23:59:59.999) for proper date range
+    const now = new Date();
+    const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+    const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+    const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
+    const endOfToday = createAESTDateAsUTC(todayYear, todayMonth, todayDay, 23, 59);
+    endOfToday.setUTCSeconds(59, 999);
+    
+    // Default endDate to end of today
+    endDate = endOfToday;
 
     switch (dateRange) {
       case "today":
         startDate = startOfToday;
+        endDate = endOfToday;
         break;
       case "yesterday":
         // Get yesterday's start (24 hours before today's start)
         const yesterdayStart = subDays(startOfToday, 1);
         startDate = yesterdayStart;
-        endDate = startOfToday; // End at start of today
+        // End at end of yesterday (one millisecond before today starts)
+        endDate = new Date(startOfToday.getTime() - 1);
         break;
       case "all-time":
-        startDate = new Date(0); // Beginning of time
+        // Website launch date: November 27, 2025 at midnight AEST
+        // End date: End of today (January 6, 2026)
+        startDate = getWebsiteLaunchDateUTC();
+        endDate = endOfToday;
         break;
       case "custom":
         if (!startDateParam || !endDateParam) {
@@ -125,12 +141,14 @@ export async function GET(request: NextRequest) {
     // REVENUE STATISTICS
     // ========================================
     // Get revenue from PaymentEvent model filtered by date range
+    // Use aggregation for better performance, especially for large date ranges
     const revenueEvents = await PaymentEvent.find({
       eventType: "BenefitsGranted", // Only count successful payments
       timestamp: { $gte: startDate, $lte: endDate },
     })
       .select("userId packageType data timestamp")
-      .lean();
+      .lean()
+      .limit(10000); // Safety limit to prevent memory issues
 
     // Initialize detailed revenue breakdown
     let totalRevenue = 0;
@@ -321,10 +339,8 @@ export async function GET(request: NextRequest) {
             until: yesterdayDateStr,
           };
         } else if (dateRange === "all-time") {
-          // For all-time, use a large date range (last 2 years)
-          const allTimeStart = new Date();
-          allTimeStart.setFullYear(allTimeStart.getFullYear() - 2);
-          fbStartDate = allTimeStart;
+          // For all-time, use website launch date: November 27, 2025 at 8pm AEDT/AEST
+          fbStartDate = getWebsiteLaunchDateUTC();
           fbEndDate = new Date();
 
           const startYear = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "yyyy"), 10);
@@ -368,58 +384,23 @@ export async function GET(request: NextRequest) {
           };
         }
 
-        // Check cache (5 minute TTL)
-        const CACHE_TTL_MS = 5 * 60 * 1000;
-        const cacheKey = {
-          adAccountId,
-          "dateRange.start": fbStartDate,
-          "dateRange.end": fbEndDate,
-          level: "account",
-        };
-
-        const cachedData = await FacebookAdsInsight.findOne(cacheKey).sort({ syncedAt: -1 });
-        let isCached = false;
-
-        if (cachedData) {
-          const cacheAge = Date.now() - new Date(cachedData.syncedAt).getTime();
-          if (cacheAge < CACHE_TTL_MS) {
-            isCached = true;
-          }
-        }
-
+        // Fetch directly from Facebook API
         let metrics: { spend: number; revenue: number; roas: number } | null = null;
 
-        if (isCached && cachedData) {
-          // Use cached data
-          metrics = {
-            spend: cachedData.metrics.spend / 100, // Convert cents to dollars
-            revenue: cachedData.metrics.revenue / 100, // Convert cents to dollars
-            roas: cachedData.calculated.roas,
-          };
-        } else {
-          // Fetch fresh data
-          try {
-            const insightsData = await fetchFacebookInsights(adAccountId, accessToken, fbDateRange, "account");
+        try {
+          const insightsData = await fetchFacebookInsights(adAccountId, accessToken, fbDateRange, "account");
 
-            if (insightsData && insightsData.length > 0) {
-              const firstInsight = insightsData[0];
-              metrics = {
-                spend: firstInsight.metrics.spend / 100, // Convert cents to dollars
-                revenue: firstInsight.metrics.revenue / 100, // Convert cents to dollars
-                roas: firstInsight.metrics.roas,
-              };
-            }
-          } catch (error) {
-            console.error("⚠️ Error fetching Facebook Ads insights:", error);
-            // If we have cached data (even if expired), use it as fallback
-            if (cachedData) {
-              metrics = {
-                spend: cachedData.metrics.spend / 100,
-                revenue: cachedData.metrics.revenue / 100,
-                roas: cachedData.calculated.roas,
-              };
-            }
+          if (insightsData && insightsData.length > 0) {
+            const firstInsight = insightsData[0];
+            metrics = {
+              spend: firstInsight.metrics.spend / 100, // Convert cents to dollars
+              revenue: firstInsight.metrics.revenue / 100, // Convert cents to dollars
+              roas: firstInsight.metrics.roas,
+            };
           }
+        } catch (error) {
+          console.error("⚠️ Error fetching Facebook Ads insights:", error);
+          // Return null if API fails - no fallback to stale data
         }
 
         if (metrics) {

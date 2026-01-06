@@ -3,20 +3,19 @@
  * 
  * Business logic for daily metrics aggregation and retrieval.
  * 
- * ARCHITECTURE: API-First with Database Caching
+ * ARCHITECTURE: API-First with In-Memory Caching
  * - Fetches directly from Facebook Marketing API (like Facebook Ads page)
- * - Uses FacebookAdsInsight model as cache (5-minute TTL)
  * - Supports all breakdown levels: account, campaign, adset, ad
- * - In-memory caching for frequently accessed date ranges
+ * - In-memory caching for frequently accessed date ranges (5-minute TTL)
  * 
  * DATA SOURCES:
  * ============
  * 
  * 1. AD SPEND, REVENUE, CONVERSIONS, IMPRESSIONS, CLICKS
- *    - Source: Facebook Marketing API → Cached in FacebookAdsInsight
+ *    - Source: Facebook Marketing API
  *    - Storage: Stored in CENTS (e.g., 450742 = $4507.42)
  *    - Conversion: Converted to dollars when aggregating (divide by 100)
- *    - Cache: 5-minute TTL, checked before API call
+ *    - Cache: In-memory cache with 5-minute TTL
  * 
  * 2. SALES COUNT
  *    - Source: PaymentEvent model
@@ -34,8 +33,7 @@
  * DATE HANDLING:
  * =============
  * - All dates are normalized to UTC start/end of day for queries
- * - FacebookAdsInsight dateRanges are stored in UTC but represent AEST dates
- * - Date matching checks both exact date match and dateRange overlap
+ * - Dates are interpreted in AEST timezone for consistency with Facebook API
  */
 
 import { PaymentEventRepository } from "@/repositories/PaymentEventRepository";
@@ -45,7 +43,6 @@ import { getDaysInRange } from "@/utils/dates/month-helpers";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import { formatInTimeZone } from "date-fns-tz";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
-import FacebookAdsInsight from "@/models/FacebookAdsInsight";
 import connectDB from "@/lib/mongodb";
 import type { InsightLevel } from "@/types/facebook-ads";
 
@@ -158,8 +155,8 @@ export class DailyMetricsService {
   }
 
   /**
-   * Fetch and cache Facebook insights for a date range
-   * Mirrors the logic from /api/admin/facebook-ads/insights
+   * Fetch Facebook insights for a date range
+   * Fetches directly from Facebook Marketing API
    */
   private async fetchAndCacheFacebookInsights(
     date: Date,
@@ -201,161 +198,52 @@ export class DailyMetricsService {
       return null;
     }
 
-    const startOfDay = createAESTDateAsUTC(year, month, day, 0, 0);
-    const endOfDay = createAESTDateAsUTC(year, month, day, 23, 59);
-    endOfDay.setUTCSeconds(59, 999);
+    // Fetch directly from Facebook API
+    try {
+      console.log(`[AGGREGATION] 📊 Fetching from Marketing API for ${dateStr} (${level})`);
+      const insightsData = await fetchFacebookInsights(
+        adAccountId,
+        accessToken,
+        { since: dateStr, until: dateStr },
+        level
+      );
 
-    // Check cache first (5-minute TTL)
-    const cacheKey: any = {
-      adAccountId,
-      "dateRange.start": startOfDay,
-      "dateRange.end": endOfDay,
-      level,
-    };
-
-    // Add breakdown filter if provided
-    if (breakdownId) {
-      if (level === "campaign") {
-        cacheKey["breakdown.campaignId"] = breakdownId;
-      } else if (level === "adset") {
-        cacheKey["breakdown.adsetId"] = breakdownId;
-      } else if (level === "ad") {
-        cacheKey["breakdown.adId"] = breakdownId;
-      }
-    }
-
-    let cachedData = await FacebookAdsInsight.findOne(cacheKey).sort({ syncedAt: -1 });
-    let isCached = false;
-
-    if (cachedData) {
-      const cacheAge = Date.now() - new Date(cachedData.syncedAt).getTime();
-      if (cacheAge < CACHE_TTL_MS) {
-        isCached = true;
-        console.log(`[AGGREGATION] ✅ Using cached data for ${dateStr} (${level})`);
-      }
-    }
-
-    // Fetch from API if cache expired or missing
-    if (!isCached) {
-      try {
-        console.log(`[AGGREGATION] 📊 Fetching from Marketing API for ${dateStr} (${level})`);
-        const insightsData = await fetchFacebookInsights(
-          adAccountId,
-          accessToken,
-          { since: dateStr, until: dateStr },
-          level
-        );
-
-        if (insightsData && insightsData.length > 0) {
-          // For account level, save first insight
-          // For breakdown levels, save all insights
-          if (level === "account" && insightsData[0]) {
-            const insight = insightsData[0];
-            const insightDoc = new FacebookAdsInsight({
-              adAccountId,
-              date: startOfDay,
-              dateRange: {
-                start: startOfDay,
-                end: endOfDay,
-              },
-              level,
-              metrics: insight.metrics,
-              calculated: {
-                profit: insight.metrics.profit,
-                roas: insight.metrics.roas,
-                ctr: insight.metrics.ctr,
-                cpc: insight.metrics.cpc,
-              },
-              syncedAt: new Date(),
-            });
-            await insightDoc.save();
-            console.log(`[AGGREGATION] ✅ Cached account-level data for ${dateStr}`);
-          } else if (level !== "account") {
-            // Save all breakdown insights
-            for (const insight of insightsData) {
-              if (insight.breakdown) {
-                const insightDoc = new FacebookAdsInsight({
-                  adAccountId,
-                  date: startOfDay,
-                  dateRange: {
-                    start: startOfDay,
-                    end: endOfDay,
-                  },
-                  level,
-                  breakdown: insight.breakdown,
-                  metrics: insight.metrics,
-                  calculated: {
-                    profit: insight.metrics.profit,
-                    roas: insight.metrics.roas,
-                    ctr: insight.metrics.ctr,
-                    cpc: insight.metrics.cpc,
-                  },
-                  syncedAt: new Date(),
-                });
-                await insightDoc.save();
-              }
-            }
-            console.log(`[AGGREGATION] ✅ Cached ${insightsData.length} ${level}-level insights for ${dateStr}`);
-          }
-
-          // Return first insight for account level, or filter by breakdownId for other levels
-          if (level === "account") {
-            const insight = insightsData[0];
-            return {
-              adSpend: insight.metrics.spend / 100,
-              revenue: insight.metrics.revenue / 100,
-              impressions: insight.metrics.impressions,
-              clicks: insight.metrics.clicks,
-              conversions: insight.metrics.conversions,
-            };
-          } else {
-            // Find matching breakdown
-            const matchingInsight = breakdownId
-              ? insightsData.find(
-                  (insight) =>
-                    (level === "campaign" && insight.breakdown?.campaignId === breakdownId) ||
-                    (level === "adset" && insight.breakdown?.adsetId === breakdownId) ||
-                    (level === "ad" && insight.breakdown?.adId === breakdownId)
-                )
-              : insightsData[0];
-
-            if (matchingInsight) {
-              return {
-                adSpend: matchingInsight.metrics.spend / 100,
-                revenue: matchingInsight.metrics.revenue / 100,
-                impressions: matchingInsight.metrics.impressions,
-                clicks: matchingInsight.metrics.clicks,
-                conversions: matchingInsight.metrics.conversions,
-                breakdown: matchingInsight.breakdown,
-              };
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`[AGGREGATION] Error fetching from Marketing API:`, error);
-        // Fall back to cached data if available (even if expired)
-        if (cachedData) {
-          console.log(`[AGGREGATION] ⚠️ Using expired cache as fallback`);
+      if (insightsData && insightsData.length > 0) {
+        // Return first insight for account level, or filter by breakdownId for other levels
+        if (level === "account") {
+          const insight = insightsData[0];
           return {
-            adSpend: cachedData.metrics.spend / 100,
-            revenue: cachedData.metrics.revenue / 100,
-            impressions: cachedData.metrics.impressions,
-            clicks: cachedData.metrics.clicks,
-            conversions: cachedData.metrics.conversions,
-            breakdown: cachedData.breakdown,
+            adSpend: insight.metrics.spend / 100,
+            revenue: insight.metrics.revenue / 100,
+            impressions: insight.metrics.impressions,
+            clicks: insight.metrics.clicks,
+            conversions: insight.metrics.conversions,
           };
+        } else {
+          // Find matching breakdown
+          const matchingInsight = breakdownId
+            ? insightsData.find(
+                (insight) =>
+                  (level === "campaign" && insight.breakdown?.campaignId === breakdownId) ||
+                  (level === "adset" && insight.breakdown?.adsetId === breakdownId) ||
+                  (level === "ad" && insight.breakdown?.adId === breakdownId)
+              )
+            : insightsData[0];
+
+          if (matchingInsight) {
+            return {
+              adSpend: matchingInsight.metrics.spend / 100,
+              revenue: matchingInsight.metrics.revenue / 100,
+              impressions: matchingInsight.metrics.impressions,
+              clicks: matchingInsight.metrics.clicks,
+              conversions: matchingInsight.metrics.conversions,
+              breakdown: matchingInsight.breakdown,
+            };
+          }
         }
       }
-    } else if (cachedData) {
-      // Use cached data
-      return {
-        adSpend: cachedData.metrics.spend / 100,
-        revenue: cachedData.metrics.revenue / 100,
-        impressions: cachedData.metrics.impressions,
-        clicks: cachedData.metrics.clicks,
-        conversions: cachedData.metrics.conversions,
-        breakdown: cachedData.breakdown,
-      };
+    } catch (error) {
+      console.error(`[AGGREGATION] Error fetching from Marketing API:`, error);
     }
 
     return null;

@@ -519,6 +519,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             <div className="relative results-dropdown-container">
               <button
                 onClick={() => setIsResultsMenuOpen(!isResultsMenuOpen)}
+                suppressHydrationWarning
                 className={`flex items-center gap-1 text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                   isResultsActive()
                     ? "text-white bg-[#ee0000]"

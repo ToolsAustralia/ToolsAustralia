@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
-import FacebookAdsInsight from "@/models/FacebookAdsInsight";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { formatInTimeZone } from "date-fns-tz";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import { handleApiError } from "@/lib/errors/handlers";
 
 const AEST_TIMEZONE = "Australia/Sydney";
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * GET /api/admin/metrics/daily/breakdown
@@ -109,129 +107,68 @@ export async function GET(request: NextRequest) {
       const endOfDay = createAESTDateAsUTC(year, month, dayNum, 23, 59);
       endOfDay.setUTCSeconds(59, 999);
 
-      // Check cache
-      const cacheQuery: any = {
-        adAccountId,
-        "dateRange.start": startOfDay,
-        "dateRange.end": endOfDay,
-        level,
-      };
+      // Fetch directly from Facebook API
+      try {
+        const insightsData = await fetchFacebookInsights(
+          adAccountId,
+          accessToken,
+          { since: dateStr, until: dateStr },
+          level
+        );
 
-      // Add filters based on level
-      if (level === "adset" && campaignId) {
-        cacheQuery["breakdown.campaignId"] = campaignId;
-      } else if (level === "ad") {
-        if (adsetId) {
-          cacheQuery["breakdown.adsetId"] = adsetId;
-        } else if (campaignId) {
-          cacheQuery["breakdown.campaignId"] = campaignId;
-        }
-      }
+        if (insightsData && insightsData.length > 0) {
+          // Aggregate breakdown items directly from API response
+          for (const item of insightsData) {
+            if (!item.breakdown) continue;
 
-      let cachedData = await FacebookAdsInsight.find(cacheQuery).sort({ syncedAt: -1 });
-      let isCached = false;
+            let id: string;
+            let name: string;
 
-      if (cachedData.length > 0) {
-        const mostRecent = cachedData[0];
-        const cacheAge = Date.now() - new Date(mostRecent.syncedAt).getTime();
-        if (cacheAge < CACHE_TTL_MS) {
-          isCached = true;
-        }
-      }
-
-      // Fetch from API if cache expired or missing
-      if (!isCached || cachedData.length === 0) {
-        try {
-          const insightsData = await fetchFacebookInsights(
-            adAccountId,
-            accessToken,
-            { since: dateStr, until: dateStr },
-            level
-          );
-
-          if (insightsData && insightsData.length > 0) {
-            // Save to cache
-            for (const insight of insightsData) {
-              if (insight.breakdown) {
-                const insightDoc = new FacebookAdsInsight({
-                  adAccountId,
-                  date: startOfDay,
-                  dateRange: {
-                    start: startOfDay,
-                    end: endOfDay,
-                  },
-                  level,
-                  breakdown: insight.breakdown,
-                  metrics: insight.metrics,
-                  calculated: {
-                    profit: insight.metrics.profit,
-                    roas: insight.metrics.roas,
-                    ctr: insight.metrics.ctr,
-                    cpc: insight.metrics.cpc,
-                  },
-                  syncedAt: new Date(),
-                });
-                await insightDoc.save();
-              }
+            if (level === "campaign") {
+              id = item.breakdown.campaignId || "";
+              name = item.breakdown.campaignName || "Unknown Campaign";
+            } else if (level === "adset") {
+              id = item.breakdown.adsetId || "";
+              name = item.breakdown.adsetName || "Unknown Adset";
+              // Filter by campaign if specified
+              if (campaignId && item.breakdown.campaignId !== campaignId) continue;
+            } else {
+              id = item.breakdown.adId || "";
+              name = item.breakdown.adName || "Unknown Ad";
+              // Filter by adset or campaign if specified
+              if (adsetId && item.breakdown.adsetId !== adsetId) continue;
+              if (campaignId && item.breakdown.campaignId !== campaignId) continue;
             }
 
-            // Use fresh data - convert to format compatible with cachedData structure
-            // After saving to cache, query it back to get consistent structure
-            cachedData = await FacebookAdsInsight.find(cacheQuery).sort({ syncedAt: -1 });
+            if (!id) continue;
+
+            const existing = breakdownMap.get(id);
+            if (existing) {
+              existing.adSpend += item.metrics.spend / 100;
+              existing.revenue += item.metrics.revenue / 100;
+              existing.profit += item.metrics.profit / 100;
+              existing.conversions += item.metrics.conversions;
+              existing.impressions += item.metrics.impressions;
+              existing.clicks += item.metrics.clicks;
+              existing.roas = existing.adSpend > 0 ? existing.revenue / existing.adSpend : 0;
+            } else {
+              breakdownMap.set(id, {
+                id,
+                name,
+                adSpend: item.metrics.spend / 100,
+                revenue: item.metrics.revenue / 100,
+                profit: item.metrics.profit / 100,
+                roas: item.metrics.spend > 0 ? item.metrics.revenue / item.metrics.spend : 0,
+                conversions: item.metrics.conversions,
+                impressions: item.metrics.impressions,
+                clicks: item.metrics.clicks,
+              });
+            }
           }
-        } catch (error) {
-          console.error(`Error fetching breakdown for ${dateStr}:`, error);
-          // Continue with cached data if available
         }
-      }
-
-      // Aggregate breakdown items
-      for (const item of cachedData) {
-        if (!item.breakdown) continue;
-
-        let id: string;
-        let name: string;
-
-        if (level === "campaign") {
-          id = item.breakdown.campaignId || "";
-          name = item.breakdown.campaignName || "Unknown Campaign";
-        } else if (level === "adset") {
-          id = item.breakdown.adsetId || "";
-          name = item.breakdown.adsetName || "Unknown Adset";
-          // Filter by campaign if specified
-          if (campaignId && item.breakdown.campaignId !== campaignId) continue;
-        } else {
-          id = item.breakdown.adId || "";
-          name = item.breakdown.adName || "Unknown Ad";
-          // Filter by adset or campaign if specified
-          if (adsetId && item.breakdown.adsetId !== adsetId) continue;
-          if (campaignId && item.breakdown.campaignId !== campaignId) continue;
-        }
-
-        if (!id) continue;
-
-        const existing = breakdownMap.get(id);
-        if (existing) {
-          existing.adSpend += item.metrics.spend / 100;
-          existing.revenue += item.metrics.revenue / 100;
-          existing.profit += item.metrics.profit / 100;
-          existing.conversions += item.metrics.conversions;
-          existing.impressions += item.metrics.impressions;
-          existing.clicks += item.metrics.clicks;
-          existing.roas = existing.adSpend > 0 ? existing.revenue / existing.adSpend : 0;
-        } else {
-          breakdownMap.set(id, {
-            id,
-            name,
-            adSpend: item.metrics.spend / 100,
-            revenue: item.metrics.revenue / 100,
-            profit: item.metrics.profit / 100,
-            roas: item.metrics.spend > 0 ? item.metrics.revenue / item.metrics.spend : 0,
-            conversions: item.metrics.conversions,
-            impressions: item.metrics.impressions,
-            clicks: item.metrics.clicks,
-          });
-        }
+      } catch (error) {
+        console.error(`Error fetching breakdown for ${dateStr}:`, error);
+        // Continue to next day if this day fails
       }
     }
 

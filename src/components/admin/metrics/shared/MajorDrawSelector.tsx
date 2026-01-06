@@ -27,7 +27,7 @@ export function MajorDrawSelector({
 }: MajorDrawSelectorProps) {
   const { data, isLoading } = useCompletedMajorDraws();
 
-  const draws = data?.data?.draws || [];
+  const draws = data?.draws || [];
 
   if (isLoading) {
     return (
@@ -83,4 +83,5 @@ export function MajorDrawSelector({
     </div>
   );
 }
+
 

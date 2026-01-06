@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
-import FacebookAdsInsight from "@/models/FacebookAdsInsight";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { getStartOfTodayInAEST } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
@@ -27,11 +26,6 @@ const insightsQuerySchema = z.object({
   refresh: z.string().optional(),
 });
 
-/**
- * Cache TTL in milliseconds (5 minutes)
- * This balances freshness with API rate limits
- */
-const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
  * GET /api/admin/facebook-ads/insights
@@ -40,8 +34,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
  * Features:
  * - Admin-only access with session validation
  * - Query parameter validation with Zod
- * - MongoDB caching (5 min TTL) to reduce API calls
- * - Graceful error handling with fallback to cached data
+ * - Direct Facebook API calls (cached by React Query on frontend)
  * - Support for account/campaign/adset level breakdowns
  * - Real-time and custom date range support
  *
@@ -191,134 +184,73 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Check cache (unless refresh is forced)
-    let cachedData = null;
-    let isCached = false;
-
-    if (!validatedQuery.refresh) {
-      const cacheKey = {
-        adAccountId,
-        "dateRange.start": startDate,
-        "dateRange.end": endDate,
-        level: validatedQuery.level,
-      };
-
-      cachedData = await FacebookAdsInsight.findOne(cacheKey).sort({ syncedAt: -1 });
-
-      // Check if cache is still valid (within TTL)
-      if (cachedData) {
-        const cacheAge = Date.now() - new Date(cachedData.syncedAt).getTime();
-        if (cacheAge < CACHE_TTL_MS) {
-          isCached = true;
-          console.log("✅ Using cached Facebook ads insights");
-        } else {
-          // Cache expired, but we can still use it as fallback
-          console.log("⚠️ Cache expired, fetching fresh data");
-        }
-      }
-    }
-
-    // Fetch fresh data from Facebook API
+    // Fetch data from Facebook API
     let insightsData: Awaited<ReturnType<typeof fetchFacebookInsights>> | null = null;
 
-    if (!isCached) {
+    if (!validatedQuery.refresh) {
       try {
         console.log("📊 Fetching Facebook ads insights from API...");
         insightsData = await fetchFacebookInsights(adAccountId, accessToken, dateRange, validatedQuery.level);
-
-        // For campaign/adset levels, we need to fetch breakdown data
-        // The API returns breakdown data in the same response when level is set
-        // We'll process it below
-
-        // Save to cache (account-level data only for now)
-        // For campaign/adset levels, we'll process breakdown data below
-        if (validatedQuery.level === "account" && insightsData.length > 0 && insightsData[0]) {
-          const firstInsight = insightsData[0];
-          const insightDoc = new FacebookAdsInsight({
-            adAccountId,
-            date: startDate,
-            dateRange: {
-              start: startDate,
-              end: endDate,
-            },
-            level: validatedQuery.level,
-            metrics: firstInsight.metrics,
-            calculated: {
-              profit: firstInsight.metrics.profit,
-              roas: firstInsight.metrics.roas,
-              ctr: firstInsight.metrics.ctr,
-              cpc: firstInsight.metrics.cpc,
-            },
-            syncedAt: new Date(),
-          });
-
-          await insightDoc.save();
-          console.log("✅ Facebook ads insights cached");
-        }
       } catch (error) {
         console.error("❌ Error fetching Facebook insights:", error);
 
-        // If we have cached data, use it as fallback
-        if (cachedData) {
-          console.log("⚠️ Using expired cache as fallback");
-          isCached = true;
-        } else {
-          // No cache available, return error
-          if (error instanceof Error) {
-            // Handle specific Facebook API errors
-            if (error.message.includes("token expired") || error.message.includes("invalid")) {
-              return NextResponse.json(
-                {
-                  success: false,
-                  error: "Facebook access token expired or invalid",
-                  details: "Please update FACEBOOK_MARKETING_ACCESS_TOKEN in environment variables",
-                },
-                { status: 401 }
-              );
-            }
-
-            if (error.message.includes("Rate limit")) {
-              return NextResponse.json(
-                {
-                  success: false,
-                  error: "Facebook API rate limit exceeded",
-                  details: error.message,
-                },
-                { status: 429 }
-              );
-            }
+        // Handle specific Facebook API errors
+        if (error instanceof Error) {
+          if (error.message.includes("token expired") || error.message.includes("invalid")) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: "Facebook access token expired or invalid",
+                details: "Please update FACEBOOK_MARKETING_ACCESS_TOKEN in environment variables",
+              },
+              { status: 401 }
+            );
           }
 
-          return NextResponse.json(
-            {
-              success: false,
-              error: "Failed to fetch Facebook insights",
-              details: error instanceof Error ? error.message : "Unknown error",
-            },
-            { status: 500 }
-          );
+          if (error.message.includes("Rate limit")) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: "Facebook API rate limit exceeded",
+                details: error.message,
+              },
+              { status: 429 }
+            );
+          }
         }
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to fetch Facebook insights",
+            details: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Force refresh - fetch from API
+      try {
+        console.log("📊 Force refreshing Facebook ads insights from API...");
+        insightsData = await fetchFacebookInsights(adAccountId, accessToken, dateRange, validatedQuery.level);
+      } catch (error) {
+        console.error("❌ Error fetching Facebook insights:", error);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to fetch Facebook insights",
+            details: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 500 }
+        );
       }
     }
 
-    // Use cached or fresh data
+    // Process API response
     let metrics: ProcessedInsightMetrics;
     let breakdownItems: FacebookAdsBreakdownItem[] = [];
 
-    if (isCached) {
-      // Use cached data
-      metrics = {
-        spend: cachedData!.metrics.spend,
-        revenue: cachedData!.metrics.revenue,
-        impressions: cachedData!.metrics.impressions,
-        clicks: cachedData!.metrics.clicks,
-        conversions: cachedData!.metrics.conversions,
-        profit: cachedData!.calculated.profit,
-        roas: cachedData!.calculated.roas,
-        ctr: cachedData!.calculated.ctr,
-        cpc: cachedData!.calculated.cpc,
-      };
-    } else if (insightsData && insightsData.length > 0) {
+    if (insightsData && insightsData.length > 0) {
       // Use fresh data from API
       // Note: All metrics from processInsightData are in CENTS
       if (validatedQuery.level === "account") {
@@ -417,12 +349,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Enhanced logging for data verification
-    const dataSource = isCached ? "CACHE" : "MARKETING_API";
-    const cacheAge = isCached 
-      ? Math.round((Date.now() - new Date(cachedData!.syncedAt).getTime()) / 1000 / 60) 
-      : 0;
-    
-    console.log(`📊 [Facebook Ads API] Data Source: ${dataSource}${isCached ? ` (${cacheAge} minutes old)` : ""}`);
+    console.log(`📊 [Facebook Ads API] Data Source: MARKETING_API`);
     console.log(`📊 [Facebook Ads API] Summary Metrics:`, {
       spend: `$${summary.spend.toFixed(2)}`,
       revenue: `$${summary.revenue.toFixed(2)}`,
@@ -443,8 +370,8 @@ export async function GET(request: NextRequest) {
           start: dateRange.since,
           end: dateRange.until,
         },
-        syncedAt: isCached ? cachedData!.syncedAt.toISOString() : new Date().toISOString(),
-        cached: isCached,
+        syncedAt: new Date().toISOString(),
+        cached: false,
       },
     };
 

@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import PaymentEvent from "@/models/PaymentEvent";
-import FacebookAdsInsight from "@/models/FacebookAdsInsight";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 
 /**
@@ -47,20 +46,6 @@ export async function GET(request: NextRequest) {
 
     const totalRevenue = paymentEvents.reduce((sum, e) => sum + (e.data?.price || 0), 0);
 
-    // Check FacebookAdsInsights
-    const facebookAds = await FacebookAdsInsight.find({
-      date: { $gte: startOfRange, $lte: endOfRange },
-      level: "account",
-    })
-      .select("date metrics")
-      .lean()
-      .limit(10);
-
-    const facebookAdsCount = await FacebookAdsInsight.countDocuments({
-      date: { $gte: startOfRange, $lte: endOfRange },
-      level: "account",
-    });
-
     return NextResponse.json({
       dateRange: {
         start: startOfRange.toISOString(),
@@ -77,15 +62,9 @@ export async function GET(request: NextRequest) {
         totalRevenue,
       },
       facebookAds: {
-        count: facebookAdsCount,
-        sample: facebookAds.map((a) => ({
-          date: a.date,
-          spend: a.metrics?.spend,
-          revenue: a.metrics?.revenue,
-          conversions: a.metrics?.conversions,
-        })),
+        note: "Facebook Ads data is fetched on-the-fly from Facebook Marketing API. No database cache exists.",
       },
-      note: "DailyMetrics model removed - metrics are now aggregated on-the-fly from source data",
+      note: "DailyMetrics and FacebookAdsInsight models removed - metrics are now aggregated on-the-fly from source data",
     });
   } catch (error) {
     return NextResponse.json(

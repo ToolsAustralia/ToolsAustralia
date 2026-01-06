@@ -79,3 +79,4 @@ export interface MajorDrawComparisonResponse {
   data: MajorDrawComparisonData;
 }
 
+

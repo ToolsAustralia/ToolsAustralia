@@ -1859,6 +1859,45 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         }
       }
       
+      // Method 5: Try to get from subscription's latest invoice (for subscription renewals)
+      if (paymentIntentId === "unknown" && subscriptionId) {
+        try {
+          const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId, {
+            expand: ["latest_invoice.payment_intent", "latest_invoice.latest_payment_intent"],
+          });
+          
+          const latestInvoice = stripeSubscription.latest_invoice;
+          if (latestInvoice && typeof latestInvoice !== "string") {
+            const latestInvoiceTyped = latestInvoice as Stripe.Invoice & {
+              payment_intent?: string | Stripe.PaymentIntent;
+              latest_payment_intent?: string | Stripe.PaymentIntent;
+            };
+            
+            // Try payment_intent from latest invoice
+            if (latestInvoiceTyped.payment_intent) {
+              paymentIntentId = typeof latestInvoiceTyped.payment_intent === "string"
+                ? latestInvoiceTyped.payment_intent
+                : latestInvoiceTyped.payment_intent.id || "unknown";
+              if (paymentIntentId !== "unknown") {
+                webhookLog("info", `PaymentIntent ID from subscription's latest invoice.payment_intent: ${paymentIntentId}`);
+              }
+            }
+            
+            // Try latest_payment_intent from latest invoice
+            if (paymentIntentId === "unknown" && latestInvoiceTyped.latest_payment_intent) {
+              paymentIntentId = typeof latestInvoiceTyped.latest_payment_intent === "string"
+                ? latestInvoiceTyped.latest_payment_intent
+                : latestInvoiceTyped.latest_payment_intent.id || "unknown";
+              if (paymentIntentId !== "unknown") {
+                webhookLog("info", `PaymentIntent ID from subscription's latest invoice.latest_payment_intent: ${paymentIntentId}`);
+              }
+            }
+          }
+        } catch (subError) {
+          webhookLog("warn", `Could not retrieve PaymentIntent from subscription's latest invoice: ${subError}`);
+        }
+      }
+      
       if (paymentIntentId === "unknown") {
         webhookLog("warn", `Could not find PaymentIntent ID after checking all methods for invoice ${invoice.id}`);
       }
@@ -1889,7 +1928,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
       
       // ✅ BEST PRACTICE: Extract failure details from PaymentIntent (align with handlePaymentFailure pattern)
-      // Priority: PaymentIntent error > Invoice error > "Payment declined"
+      // Priority: PaymentIntent error > Invoice error > Charge error > "Payment declined"
       let failureReason = "Payment declined";
       let failureCode = "";
       let declineCode = "";
@@ -1915,15 +1954,85 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
             webhookLog("info", `PaymentIntent has no error, using invoice error: ${failureReason}`);
           }
         } else {
-          // Fallback to invoice error if PaymentIntent not available
-          failureReason = invoice.last_finalization_error?.message || "Payment declined";
-          failureCode = invoice.last_finalization_error?.code || "";
-          webhookLog("warn", `Cannot retrieve PaymentIntent - paymentIntentId: ${paymentIntentId}, invoice.id: ${invoice.id}, using invoice error`);
+          // ✅ FIX: Extract error details from invoice even when paymentIntentId is unknown
+          const invoiceError = invoice.last_finalization_error;
+          if (invoiceError) {
+            failureReason = invoiceError.message || "Payment declined";
+            failureCode = invoiceError.code || "";
+            webhookLog("info", `Using invoice error details - code: ${failureCode || 'none'}, message: ${failureReason}`);
+            
+            // ✅ FIX: Try to get decline_code from invoice's charge if available
+            try {
+              const invoiceWithCharges = invoice as Stripe.Invoice & {
+                charge?: string | Stripe.Charge;
+                charges?: Stripe.ApiList<Stripe.Charge>;
+              };
+              
+              let charge: Stripe.Charge | null = null;
+              if (invoiceWithCharges.charge) {
+                const chargeId = typeof invoiceWithCharges.charge === "string" 
+                  ? invoiceWithCharges.charge 
+                  : invoiceWithCharges.charge.id;
+                charge = await stripe.charges.retrieve(chargeId);
+              } else if (invoiceWithCharges.charges?.data?.[0]) {
+                charge = invoiceWithCharges.charges.data[0];
+              }
+              
+              const chargeOutcome = charge?.outcome as Stripe.Charge.Outcome & { decline_code?: string };
+              if (chargeOutcome?.decline_code) {
+                declineCode = chargeOutcome.decline_code;
+                webhookLog("info", `Found decline_code from charge: ${declineCode}`);
+              }
+            } catch (chargeError) {
+              webhookLog("warn", `Could not retrieve charge for decline_code: ${chargeError}`);
+            }
+          } else {
+            // If invoice has no error, try to get from subscription's latest invoice attempt
+            webhookLog("warn", `Invoice has no last_finalization_error, paymentIntentId: ${paymentIntentId}, invoice.id: ${invoice.id}`);
+            
+            // ✅ FIX: Try to get PaymentIntent from subscription's latest invoice attempt
+            if (subscriptionId) {
+              try {
+                const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId, {
+                  expand: ["latest_invoice.payment_intent"],
+                });
+                
+                const latestInvoice = stripeSubscription.latest_invoice;
+                if (latestInvoice && typeof latestInvoice !== "string") {
+                  const latestInvoiceTyped = latestInvoice as Stripe.Invoice & {
+                    payment_intent?: string | Stripe.PaymentIntent;
+                  };
+                  
+                  if (latestInvoiceTyped.payment_intent) {
+                    const latestPaymentIntentId = typeof latestInvoiceTyped.payment_intent === "string"
+                      ? latestInvoiceTyped.payment_intent
+                      : latestInvoiceTyped.payment_intent.id;
+                    
+                    if (latestPaymentIntentId && latestPaymentIntentId !== "unknown") {
+                      webhookLog("info", `Found PaymentIntent from subscription's latest invoice: ${latestPaymentIntentId}`);
+                      const paymentIntent = await stripe.paymentIntents.retrieve(latestPaymentIntentId);
+                      
+                      const lastPaymentError = paymentIntent.last_payment_error;
+                      if (lastPaymentError) {
+                        failureReason = lastPaymentError.message || "Payment declined";
+                        failureCode = lastPaymentError.code || "";
+                        declineCode = lastPaymentError.decline_code || "";
+                        webhookLog("info", `PaymentIntent error details from latest invoice - code: ${failureCode || 'none'}, decline_code: ${declineCode || 'none'}, message: ${failureReason}`);
+                      }
+                    }
+                  }
+                }
+              } catch (subError) {
+                webhookLog("warn", `Could not retrieve PaymentIntent from subscription's latest invoice: ${subError}`);
+              }
+            }
+          }
         }
       } catch (error) {
         // Fallback to invoice error if PaymentIntent retrieval fails
-        failureReason = invoice.last_finalization_error?.message || "Payment declined";
-        failureCode = invoice.last_finalization_error?.code || "";
+        const invoiceError = invoice.last_finalization_error;
+        failureReason = invoiceError?.message || "Payment declined";
+        failureCode = invoiceError?.code || "";
         webhookLog("error", `Could not retrieve payment intent ${paymentIntentId} for error details: ${error}, using invoice error`);
       }
 
@@ -1937,8 +2046,38 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
       webhookLog("info", `About to check renewal status. isRenewal: ${isRenewal}, packageId: ${packageId}, packageName: ${packageName}, amount: ${amount}`);
       
-      // Extract next_payment_attempt from invoice
-      const nextPaymentAttempt = invoice.next_payment_attempt || null;
+      // Extract next_payment_attempt from invoice with validation
+      let nextPaymentAttempt: number | null = null;
+      
+      // Primary source: invoice.next_payment_attempt (Unix timestamp)
+      if (invoice.next_payment_attempt) {
+        nextPaymentAttempt = invoice.next_payment_attempt;
+        webhookLog("info", `Next payment attempt from invoice: ${new Date(nextPaymentAttempt * 1000).toISOString()}`);
+      } else {
+        // ✅ FIX: If invoice doesn't have next_payment_attempt, check subscription's latest invoice
+        if (subscriptionId) {
+          try {
+            const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId, {
+              expand: ["latest_invoice"],
+            });
+            
+            const latestInvoice = stripeSubscription.latest_invoice;
+            if (latestInvoice && typeof latestInvoice !== "string" && latestInvoice.next_payment_attempt) {
+              nextPaymentAttempt = latestInvoice.next_payment_attempt;
+              webhookLog("info", `Next payment attempt from subscription's latest invoice: ${new Date(nextPaymentAttempt * 1000).toISOString()}`);
+            } else {
+              webhookLog("info", `No next payment attempt found - retries may be exhausted or subscription will be canceled`);
+            }
+          } catch (subError) {
+            webhookLog("warn", `Could not retrieve subscription for next_payment_attempt: ${subError}`);
+          }
+        }
+        
+        // If still null, log that retries are exhausted
+        if (nextPaymentAttempt === null) {
+          webhookLog("info", `No next payment attempt scheduled - retries exhausted or subscription will be canceled`);
+        }
+      }
       
       if (isRenewal) {
         // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals
@@ -2290,9 +2429,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const baseEntries = membershipPackage.entriesPerMonth || 0;
     const pointsToGrant = Math.floor(membershipPackage.price);
 
-    // Get promo multiplier for initial subscriptions and resubscribes
+    // Get promo multiplier for initial subscriptions, resubscribes, and upgrades
     let promoMultiplier = 1;
-    if (expandedInvoice.billing_reason === "subscription_create" || isResubscribe) {
+    if (expandedInvoice.billing_reason === "subscription_create" || isResubscribe || isUpgrade) {
       try {
         promoMultiplier = await getActivePromoMultiplier("membership");
       } catch (promoError) {
@@ -2308,6 +2447,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       console.log(
         `📈 New promo entries to add: ${baseEntries} × ${promoMultiplier} = ${baseEntries * promoMultiplier}`
       );
+    }
+
+    // ✅ CONSOLE LOG: Promo multiplier for upgrade
+    if (isUpgrade) {
+      console.log(`🎁 Active Promo Multiplier: ${promoMultiplier}x`);
+      console.log(`📈 Upgrade entries to add: ${baseEntries} × ${promoMultiplier} = ${baseEntries * promoMultiplier}`);
     }
 
     // Get current accumulated entries for upgrade calculation

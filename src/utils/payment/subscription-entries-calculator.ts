@@ -11,7 +11,7 @@
  * - Month 1 (initial): baseEntries * promoMultiplier (e.g., 100 * 10 = 1000)
  * - Month 2 (renewal): lastMonthAccumulatedEntries + baseEntries (e.g., 1000 + 100 = 1100)
  * - Month 3 (renewal): lastMonthAccumulatedEntries + baseEntries (e.g., 1100 + 100 = 1200)
- * - Upgrade: currentAccumulatedEntries + newBaseEntries (e.g., 440 + 100 = 540)
+ * - Upgrade: lastMonthAccumulatedEntries + (newBaseEntries * promoMultiplier) (e.g., 165 + (40 * 10) = 565)
  * - Resubscribe: lastMonthAccumulatedEntries + (baseEntries * promoMultiplier)
  */
 
@@ -110,12 +110,14 @@ export function calculateRenewalEntries(
  * Calculate upgrade entries (immediate grant of new base entries)
  *
  * @param newBaseEntries - Base entries per month for the new package
- * @param currentAccumulatedEntries - User's current total accumulated entries
+ * @param lastMonthAccumulatedEntries - User's last month accumulated entries (base for calculation)
+ * @param promoMultiplier - Active promo multiplier (defaults to 1 if not provided)
  * @returns Calculation result with entries to grant and new accumulated value
  */
 export function calculateUpgradeEntries(
   newBaseEntries: number,
-  currentAccumulatedEntries: number = 0
+  lastMonthAccumulatedEntries: number = 0,
+  promoMultiplier: number = 1
 ): CalculateSubscriptionEntriesResult {
   // Validate inputs
   if (newBaseEntries < 0) {
@@ -123,15 +125,20 @@ export function calculateUpgradeEntries(
     newBaseEntries = 0;
   }
 
-  if (currentAccumulatedEntries < 0) {
-    // console.warn(`Invalid currentAccumulatedEntries: ${currentAccumulatedEntries}, defaulting to 0`);
-    currentAccumulatedEntries = 0;
+  if (lastMonthAccumulatedEntries < 0) {
+    // console.warn(`Invalid lastMonthAccumulatedEntries: ${lastMonthAccumulatedEntries}, defaulting to 0`);
+    lastMonthAccumulatedEntries = 0;
   }
 
-  // Grant new base entries immediately
-  const entriesToGrant = newBaseEntries;
-  // Update accumulated to current + new entries
-  const newLastMonthAccumulatedEntries = currentAccumulatedEntries + entriesToGrant;
+  if (promoMultiplier < 1) {
+    // console.warn(`Invalid promoMultiplier: ${promoMultiplier}, defaulting to 1`);
+    promoMultiplier = 1;
+  }
+
+  // Apply promo multiplier to upgrade entries
+  const entriesToGrant = newBaseEntries * promoMultiplier;
+  // Use lastMonthAccumulatedEntries as base (not total accumulated)
+  const newLastMonthAccumulatedEntries = lastMonthAccumulatedEntries + entriesToGrant;
 
   return {
     entriesToGrant,
@@ -210,7 +217,11 @@ export function calculateSubscriptionEntries(
 
   // Handle upgrade scenario (takes precedence)
   if (isUpgrade) {
-    return calculateUpgradeEntries(baseEntries, currentAccumulatedEntries);
+    return calculateUpgradeEntries(
+      baseEntries,
+      lastMonthAccumulatedEntries ?? 0,  // Use lastMonthAccumulatedEntries
+      promoMultiplier  // Pass promo multiplier
+    );
   }
 
   // Handle resubscribe scenario

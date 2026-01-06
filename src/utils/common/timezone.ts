@@ -20,17 +20,24 @@ import { addDays, addMinutes } from "date-fns";
 const AEST_TIMEZONE = "Australia/Sydney"; // Sydney follows AEST/AEDT
 
 /**
- * Website launch date: November 27, 2024 at 8pm AEDT/AEST
+ * Website launch date: November 27, 2025 at 8pm AEDT/AEST
  * This is when the website was officially released
- * Stored as a Date object representing November 27, 2024, 8:00 PM in Australia/Sydney timezone
+ * Stored as a Date object representing November 27, 2025, 8:00 PM in Australia/Sydney timezone
  */
-export const WEBSITE_LAUNCH_DATE_AEST = new Date("2024-11-27T20:00:00+11:00"); // November 27, 2024, 8pm AEDT
+export const WEBSITE_LAUNCH_DATE_AEST = new Date("2025-11-27T20:00:00+11:00"); // November 27, 2025, 8pm AEDT
 
 /**
  * Get website launch date in UTC for database queries
+ * Returns the start of November 27, 2025 (midnight AEST) converted to UTC
+ * This is used for "all-time" date range queries
  */
 export function getWebsiteLaunchDateUTC(): Date {
-  return convertAESTToUTC(WEBSITE_LAUNCH_DATE_AEST);
+  // Get the date components from the launch date in AEST
+  const year = 2025;
+  const month = 11;
+  const day = 27;
+  // Return start of day (midnight) in AEST, converted to UTC
+  return createAESTDateAsUTC(year, month, day, 0, 0);
 }
 
 /**

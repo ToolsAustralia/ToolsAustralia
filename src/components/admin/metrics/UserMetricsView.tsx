@@ -7,7 +7,6 @@ import { useUserMetrics } from "@/hooks/useUserMetrics";
 import { SignupSourceChart } from "./users/SignupSourceChart";
 import { ProfessionBreakdown } from "./users/ProfessionBreakdown";
 import { MembershipLifecycleChart } from "./users/MembershipLifecycleChart";
-import { PurchaseHistoryChart } from "./users/PurchaseHistoryChart";
 import { DailyUserMetricsTable } from "./users/DailyUserMetricsTable";
 import { MetricsDateFilter, MetricsDateFilterMode, WEBSITE_LAUNCH_DATE } from "./shared/MetricsDateFilter";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
@@ -85,7 +84,7 @@ export function UserMetricsView() {
   // Convert dates for API calls
   const startDateObj = useMemo(() => {
     if (filterMode === "all-time") {
-      // Website launch date: November 27, 2024 at 8pm AEDT/AEST
+      // Website launch date: November 27, 2025 at 8pm AEDT/AEST
       return getWebsiteLaunchDateUTC();
     }
     if (filterMode === "custom" && startDate) {

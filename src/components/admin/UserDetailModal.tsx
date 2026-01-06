@@ -2747,7 +2747,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                           label="Total Entries"
                                           type="number"
                                           value={field.value || 0}
-                                          onChange={field.onChange}
+                                          onChange={(e) => {
+                                            const value = e.target.value === "" ? 0 : Number(e.target.value);
+                                            field.onChange(isNaN(value) ? 0 : value);
+                                          }}
                                           min={0}
                                           error={fieldState.error?.message}
                                         />
@@ -2816,7 +2819,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                           label="Total Entries"
                                           type="number"
                                           value={field.value || 0}
-                                          onChange={field.onChange}
+                                          onChange={(e) => {
+                                            const value = e.target.value === "" ? 0 : Number(e.target.value);
+                                            field.onChange(isNaN(value) ? 0 : value);
+                                          }}
                                           min={0}
                                           error={fieldState.error?.message}
                                         />

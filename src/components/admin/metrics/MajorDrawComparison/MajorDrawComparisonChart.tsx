@@ -57,12 +57,25 @@ export function MajorDrawComparisonChart({ data }: MajorDrawComparisonChartProps
     },
   ];
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  interface TooltipProps {
+    active?: boolean;
+    payload?: Array<{
+      name: string;
+      value: number;
+      dataKey: string;
+      color: string;
+      payload?: {
+        name?: string;
+      };
+    }>;
+  }
+
+  const CustomTooltip = ({ active, payload }: TooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-          <p className="font-semibold text-gray-900 mb-2">{payload[0].payload.name}</p>
-          {payload.map((entry: any, index: number) => (
+          <p className="font-semibold text-gray-900 mb-2">{payload[0].payload?.name}</p>
+          {payload.map((entry, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
               {entry.name}: {entry.dataKey === "ROAS" ? entry.value.toFixed(2) : entry.dataKey.includes("Spend") || entry.dataKey.includes("Revenue") || entry.dataKey.includes("Profit")
                 ? formatCurrency(entry.value)
@@ -115,4 +128,5 @@ export function MajorDrawComparisonChart({ data }: MajorDrawComparisonChartProps
     </div>
   );
 }
+
 

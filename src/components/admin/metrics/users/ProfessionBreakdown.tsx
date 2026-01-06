@@ -8,11 +8,21 @@ export interface ProfessionBreakdownProps {
   data: UserMetrics["profession"];
 }
 
-const CustomTooltip = ({ active, payload }: any) => {
+interface TooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    value: number;
+    payload?: {
+      name?: string;
+    };
+  }>;
+}
+
+const CustomTooltip = ({ active, payload }: TooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-        <p className="font-semibold text-gray-900">{payload[0].payload.name}</p>
+        <p className="font-semibold text-gray-900">{payload[0].payload?.name}</p>
         <p className="text-sm text-gray-600">
           Users: {payload[0].value.toLocaleString()}
         </p>
@@ -62,5 +72,6 @@ export function ProfessionBreakdown({ data }: ProfessionBreakdownProps) {
     </div>
   );
 }
+
 
 

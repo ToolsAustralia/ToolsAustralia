@@ -21,8 +21,10 @@ import { DailyMetricsBreakdownView } from "./DailyMetricsBreakdownView";
 import { RevenueBreakdown } from "./RevenueBreakdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { format, startOfDay, parseISO, startOfMonth, endOfMonth } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MonthlyComparisonData } from "@/types/metrics/MonthlyComparison";
+import type { IDailyMetrics } from "@/types/metrics/DailyMetrics";
 import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 import type { BreakdownItem } from "./DailyMetricsBreakdownTable";
 import { ChevronLeft } from "lucide-react";
@@ -149,7 +151,7 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
   // Convert dates for API calls
   const startDateObj = useMemo(() => {
     if (filterMode === "all-time") {
-      // Website launch date: November 27, 2024 at 8pm AEDT/AEST
+      // Website launch date: November 27, 2025 at 8pm AEDT/AEST
       return getWebsiteLaunchDateUTC();
     }
     if (filterMode === "custom" && startDate) {
@@ -253,11 +255,42 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
   // Combine metrics for display
   const allMetrics = useMemo(() => {
     if (!data) return [];
-    if (filterMode === "custom") {
-      return data.currentMonth || [];
+    
+    let metrics: IDailyMetrics[] = [];
+    
+    if (filterMode === "custom" || filterMode === "all-time") {
+      metrics = data.currentMonth || [];
+    } else if (filterMode === "month") {
+      // When month mode is selected, only show current month data (not previous month for comparison)
+      metrics = data.currentMonth || [];
+      
+      // Filter to ensure only dates from the selected month are shown
+      if (selectedMonth) {
+        const [year, month] = selectedMonth.split("-").map(Number);
+        const monthStart = startOfMonth(new Date(year, month - 1, 1));
+        const monthEnd = endOfMonth(new Date(year, month - 1, 1));
+        
+        metrics = metrics.filter((metric) => {
+          const metricDate = new Date(metric.date);
+          // Compare dates in AEST timezone
+          const metricYear = parseInt(formatInTimeZone(metricDate, "Australia/Sydney", "yyyy"), 10);
+          const metricMonth = parseInt(formatInTimeZone(metricDate, "Australia/Sydney", "M"), 10);
+          return metricYear === year && metricMonth === month;
+        });
+      }
     }
-    return [...data.currentMonth, ...data.previousMonth];
-  }, [data, filterMode]);
+    
+    // Deduplicate by date to avoid any duplicates
+    const uniqueMetrics = new Map<string, IDailyMetrics>();
+    for (const metric of metrics) {
+      const dateKey = new Date(metric.date).toISOString();
+      if (!uniqueMetrics.has(dateKey)) {
+        uniqueMetrics.set(dateKey, metric);
+      }
+    }
+    
+    return Array.from(uniqueMetrics.values());
+  }, [data, filterMode, selectedMonth]);
 
   // Update URL params when filter changes
   const updateURLParams = (updates: {
@@ -422,10 +455,10 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
   return (
     <MetricsErrorBoundary>
       <div className="space-y-4 sm:space-y-6">
-        {/* Header with Controls */}
+      {/* Header with Controls */}
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Daily Metrics</h2>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900">Daily Metrics</h2>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
               {/* Date Filter Toggle */}
               <MetricsDateFilter
@@ -441,37 +474,37 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
                 }
               />
 
-            {/* Month Selector */}
+          {/* Month Selector */}
             {filterMode === "month" && (
               <>
-                <div className="flex items-center gap-2 flex-1 sm:flex-none">
-                  <label htmlFor="month-select" className="text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
-                    Month:
-                  </label>
-                  <select
-                    id="month-select"
-                    value={selectedMonth}
+          <div className="flex items-center gap-2 flex-1 sm:flex-none">
+            <label htmlFor="month-select" className="text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
+              Month:
+            </label>
+            <select
+              id="month-select"
+              value={selectedMonth}
                     onChange={(e) => handleMonthSelect(e.target.value)}
                     className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white font-semibold text-gray-900 flex-1 sm:flex-none min-w-[140px]"
-                  >
-                    {monthOptions.map((month) => (
-                      <option key={month} value={month}>
-                        {formatMonthDisplay(month)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            >
+              {monthOptions.map((month) => (
+                <option key={month} value={month}>
+                  {formatMonthDisplay(month)}
+                </option>
+              ))}
+            </select>
+          </div>
                 {/* Comparison Mode Toggle */}
                 <ComparisonModeToggle mode={comparisonMode} onModeChange={handleComparisonModeChange} />
               </>
             )}
 
-              {/* View Switcher */}
-              <div className="flex-shrink-0">
+          {/* View Switcher */}
+          <div className="flex-shrink-0">
                 <ViewSwitcher currentView={viewMode} onViewChange={handleViewModeChange} />
-              </div>
-            </div>
           </div>
+        </div>
+      </div>
 
           {/* Breakdown Level Selector - Only show in custom or all-time date mode */}
           {(filterMode === "custom" || filterMode === "all-time") && (
@@ -515,18 +548,18 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
           majorDraws={majorDraws}
         />
 
-        {/* Content */}
-        {isLoading ? (
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+      {/* Content */}
+      {isLoading ? (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
             <div className="space-y-4">
               <Skeleton className="h-6 w-1/4" />
               <Skeleton className="h-10 w-full" />
-              {[...Array(5)].map((_, i) => (
+            {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-8 w-full" />
-              ))}
-            </div>
+            ))}
           </div>
-        ) : data ? (
+        </div>
+      ) : data ? (
           <>
             {/* Breakdown View - Show when level is campaign/adset/ad */}
             {showBreakdownView && startDateObj && endDateObj && (
@@ -542,8 +575,8 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
 
             {/* Main Metrics View - Show when account level or in month mode */}
             {showMainMetricsView && (
-              <>
-                {viewMode === "table" && (
+        <>
+          {viewMode === "table" && (
                   <DailyMetricsTable metrics={allMetrics} />
                 )}
                 {viewMode === "chart" && (
@@ -583,14 +616,9 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
                         </button>
                       </div>
                     </div>
-                    {data && data.currentMonth && data.currentMonth.length > 0 ? (
+                    {allMetrics && allMetrics.length > 0 ? (
                       <DailyMetricsChart
-                        metrics={data.currentMonth.filter((metric) => {
-                          const metricDate = new Date(metric.date);
-                          const today = new Date();
-                          today.setHours(23, 59, 59, 999);
-                          return metricDate <= today;
-                        })}
+                        metrics={allMetrics}
                         type={chartType}
                         metricsToShow={["revenue", "adSpend", "profit"]}
                         height={400}
@@ -603,7 +631,7 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
                       </div>
                     )}
                   </div>
-                )}
+          )}
                 {viewMode === "side-by-side" && (
                   filterMode === "month" ? (
                     <>
@@ -637,7 +665,7 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
                     <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
                       <p className="text-gray-600 mb-2">Comparison is only available in Month view mode.</p>
                       <p className="text-sm text-gray-500">
-                        Please switch to "Month" filter mode to see comparisons.
+                        Please switch to &quot;Month&quot; filter mode to see comparisons.
                       </p>
                     </div>
                   )
@@ -649,15 +677,15 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
                 )}
               </>
             )}
-          </>
-        ) : (
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
-            <p className="text-gray-600 mb-2">No metrics data available for the selected period.</p>
-            <p className="text-sm text-gray-500">
+        </>
+      ) : (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
+          <p className="text-gray-600 mb-2">No metrics data available for the selected period.</p>
+          <p className="text-sm text-gray-500">
               Data will be automatically aggregated from Facebook Ads and Payment Events.
-            </p>
-          </div>
-        )}
+          </p>
+        </div>
+      )}
       </div>
     </MetricsErrorBoundary>
   );

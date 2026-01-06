@@ -20,3 +20,4 @@ export function MajorDrawComparison({ data, viewMode }: MajorDrawComparisonProps
   return <MajorDrawComparisonTable data={data} />;
 }
 
+
