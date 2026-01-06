@@ -124,14 +124,28 @@ export function createSubscriptionRenewalFailedEvent(
     nextPaymentAttempt?: number | null; // Unix timestamp of next payment retry attempt
   }
 ): KlaviyoEvent {
-  // Format next_payment_attempt as ISO string if available, otherwise empty string
+  // Format next_payment_attempt as human-readable string if available, otherwise empty string
+  // Format: "January 15, 2026 at 2:30 PM" (user-friendly format for email template)
   let nextPaymentAttemptFormatted = "";
   if (packageData.nextPaymentAttempt) {
     try {
-      nextPaymentAttemptFormatted = new Date(packageData.nextPaymentAttempt * 1000).toISOString();
+      const date = new Date(packageData.nextPaymentAttempt * 1000);
+      // Format as "January 15, 2026 at 2:30 PM"
+      nextPaymentAttemptFormatted = date.toLocaleString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
     } catch {
-      // If date conversion fails, use the timestamp as string
-      nextPaymentAttemptFormatted = packageData.nextPaymentAttempt.toString();
+      // If date conversion fails, use ISO string as fallback
+      try {
+        nextPaymentAttemptFormatted = new Date(packageData.nextPaymentAttempt * 1000).toISOString();
+      } catch {
+        nextPaymentAttemptFormatted = packageData.nextPaymentAttempt.toString();
+      }
     }
   }
 
@@ -151,8 +165,9 @@ export function createSubscriptionRenewalFailedEvent(
       failure_message: packageData.failureMessage || "",
       amount: packageData.amount.toFixed(2),
       payment_intent_id: packageData.paymentIntentId,
-      entries: packageData.entries !== undefined ? packageData.entries : 0, // Expected entries user should receive
-      next_payment_attempt: nextPaymentAttemptFormatted, // ISO string of next retry date, or empty if null/exhausted
+      entries: packageData.entries !== undefined ? packageData.entries : 0, // Expected entries user should receive (number)
+      entries_formatted: packageData.entries !== undefined ? packageData.entries.toLocaleString("en-US") : "0", // Formatted entries with commas (e.g., "1,100")
+      next_payment_attempt: nextPaymentAttemptFormatted, // Human-readable date string (e.g., "January 15, 2026 at 2:30 PM"), or empty if null/exhausted
       timestamp: formatTimestampForKlaviyo(),
     },
   };

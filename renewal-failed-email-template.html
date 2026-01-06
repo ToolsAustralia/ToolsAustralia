@@ -439,7 +439,7 @@
                 <tr>
                   <th>Next Automatic Retry</th>
                   <td>
-                    <strong style="color: #1f2937;">{{ event.next_payment_attempt | date: "%B %d, %Y at %I:%M %p" }}</strong>
+                    <strong style="color: #1f2937;">{{ event.next_payment_attempt }}</strong>
                     <br/>
                     <span style="font-size: 11px; color: #6b7280; font-style: italic;">Stripe will automatically retry this payment. Update your payment method to ensure success.</span>
                   </td>
@@ -467,7 +467,7 @@
               Entries You Should Receive
             </div>
             <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-              {{ event.entries | number_format }} entries
+              {{ event.entries_formatted }} entries
             </div>
             <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
               These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
