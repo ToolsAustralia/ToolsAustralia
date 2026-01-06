@@ -102,6 +102,7 @@ const PaymentFailedPreview: React.FC = () => {
           </table>
         </div>
         <div class="divider"></div>
+        PLACEHOLDER_ENTRIES_SECTION
         <div class="cta-container">
           PLACEHOLDER_CTA_BUTTONS
         </div>
@@ -130,6 +131,8 @@ const PaymentFailedPreview: React.FC = () => {
       error_specific_guidance: "",
       package_type: "",
       payment_intent_id: "pi_3Qkz8j2eZvKYlo2C1xyz9012",
+      entries: 1100,
+      next_payment_attempt: "2026-01-15T14:30:00.000Z",
       payment_details_rows: `
         <tr>
           <th>Package</th>
@@ -147,6 +150,27 @@ const PaymentFailedPreview: React.FC = () => {
           <th>Membership Status</th>
           <td>Renewal Payment Failed</td>
         </tr>
+        <tr>
+          <th>Next Automatic Retry</th>
+          <td>
+            <strong style="color: #1f2937;">January 15, 2026 at 2:30 PM</strong>
+            <br/>
+            <span style="font-size: 11px; color: #6b7280; font-style: italic;">Stripe will automatically retry this payment. Update your payment method to ensure success.</span>
+          </td>
+        </tr>
+      `,
+      entries_section: `
+        <div class="info-box" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin: 24px 0;">
+          <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            Entries You Should Receive
+          </div>
+          <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
+            PLACEHOLDER_ENTRIES_COUNT entries
+          </div>
+          <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
+            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+          </div>
+        </div>
       `,
       next_steps: "",
       subscription_status: "",
@@ -168,6 +192,8 @@ const PaymentFailedPreview: React.FC = () => {
       error_specific_guidance: "",
       package_type: "",
       payment_intent_id: "pi_3Qkz8j2eZvKYlo2C1xyz7890",
+      entries: 550,
+      next_payment_attempt: "2026-01-12T10:00:00.000Z",
       payment_details_rows: `
         <tr>
           <th>Package</th>
@@ -185,6 +211,27 @@ const PaymentFailedPreview: React.FC = () => {
           <th>Membership Status</th>
           <td>Renewal Payment Failed</td>
         </tr>
+        <tr>
+          <th>Next Automatic Retry</th>
+          <td>
+            <strong style="color: #1f2937;">January 12, 2026 at 10:00 AM</strong>
+            <br/>
+            <span style="font-size: 11px; color: #6b7280; font-style: italic;">Stripe will automatically retry this payment. Update your payment method to ensure success.</span>
+          </td>
+        </tr>
+      `,
+      entries_section: `
+        <div class="info-box" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin: 24px 0;">
+          <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            Entries You Should Receive
+          </div>
+          <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
+            550 entries
+          </div>
+          <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
+            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+          </div>
+        </div>
       `,
       next_steps: "",
       subscription_status: "",
@@ -206,6 +253,8 @@ const PaymentFailedPreview: React.FC = () => {
       error_specific_guidance: "",
       package_type: "",
       payment_intent_id: "pi_3Qkz8j2eZvKYlo2C1xyz1234",
+      entries: 2200,
+      next_payment_attempt: null, // No retry scheduled (retries exhausted)
       payment_details_rows: `
         <tr>
           <th>Package</th>
@@ -223,6 +272,27 @@ const PaymentFailedPreview: React.FC = () => {
           <th>Membership Status</th>
           <td>Renewal Payment Failed</td>
         </tr>
+        <tr>
+          <th>Next Automatic Retry</th>
+          <td>
+            <span style="color: #991b1b; font-weight: 600;">No automatic retry scheduled</span>
+            <br/>
+            <span style="font-size: 11px; color: #6b7280; font-style: italic;">Please update your payment method to continue</span>
+          </td>
+        </tr>
+      `,
+      entries_section: `
+        <div class="info-box" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin: 24px 0;">
+          <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            Entries You Should Receive
+          </div>
+          <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
+            2,200 entries
+          </div>
+          <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
+            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+          </div>
+        </div>
       `,
       next_steps: "",
       subscription_status: "",
@@ -235,10 +305,38 @@ const PaymentFailedPreview: React.FC = () => {
   };
 
   /**
+   * Format date for display
+   */
+  const formatDate = (isoString: string | null | undefined): string => {
+    if (!isoString) return "";
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      return isoString;
+    }
+  };
+
+  /**
+   * Format number with commas
+   */
+  const formatNumber = (num: number | undefined): string => {
+    if (num === undefined || num === null) return "0";
+    return num.toLocaleString("en-US");
+  };
+
+  /**
    * Replace placeholders with mock data
    */
   const replacePlaceholders = (template: string, scenario: typeof mockScenarios[keyof typeof mockScenarios]) => {
-    return template
+    let result = template
       .replace(/PLACEHOLDER_FIRST_NAME/g, scenario.first_name)
       .replace(/PLACEHOLDER_FAILURE_REASON/g, scenario.failure_reason)
       .replace(/PLACEHOLDER_AMOUNT/g, scenario.amount)
@@ -247,6 +345,16 @@ const PaymentFailedPreview: React.FC = () => {
       .replace(/PLACEHOLDER_IMPORTANT_NOTE/g, scenario.important_note || "")
       .replace(/PLACEHOLDER_PAYMENT_DETAILS_ROWS/g, scenario.payment_details_rows)
       .replace(/PLACEHOLDER_CTA_BUTTONS/g, scenario.cta_buttons);
+    
+    // Replace entries section with formatted entries count
+    if (scenario.entries_section) {
+      const entriesCount = formatNumber(scenario.entries);
+      result = result.replace(/PLACEHOLDER_ENTRIES_SECTION/g, scenario.entries_section.replace(/PLACEHOLDER_ENTRIES_COUNT/g, entriesCount));
+    } else {
+      result = result.replace(/PLACEHOLDER_ENTRIES_SECTION/g, "");
+    }
+    
+    return result;
   };
 
   const currentScenario = mockScenarios[selectedScenario as keyof typeof mockScenarios];
@@ -307,6 +415,13 @@ const PaymentFailedPreview: React.FC = () => {
           <li>Failure Message: {currentScenario.failure_message}</li>
           <li>Amount: A${currentScenario.amount}</li>
           <li>Payment Intent ID: {currentScenario.payment_intent_id}</li>
+          <li>Expected Entries: {formatNumber(currentScenario.entries)} entries</li>
+          <li>
+            Next Payment Retry:{" "}
+            {currentScenario.next_payment_attempt
+              ? formatDate(currentScenario.next_payment_attempt)
+              : "No retry scheduled (retries exhausted)"}
+          </li>
         </ul>
       </div>
     </div>

@@ -1768,42 +1768,100 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     if (user.subscription && subscriptionId) {
       // Extract payment intent ID from invoice
       // ✅ BEST PRACTICE: Try multiple methods to get payment_intent ID
-      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
+      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { 
+        payment_intent?: string | Stripe.PaymentIntent;
+        latest_payment_intent?: string | Stripe.PaymentIntent;
+        charges?: Stripe.ApiList<Stripe.Charge>;
+      };
       let paymentIntentId: string = "unknown";
       
+      // Method 1: Try invoice.payment_intent (direct or expanded)
       if (invoiceWithPaymentIntent.payment_intent) {
         paymentIntentId = typeof invoiceWithPaymentIntent.payment_intent === "string"
           ? invoiceWithPaymentIntent.payment_intent
           : invoiceWithPaymentIntent.payment_intent?.id || "unknown";
-        webhookLog("info", `PaymentIntent ID from invoice: ${paymentIntentId}`);
-      } else {
-        // If payment_intent is not on invoice, try to retrieve expanded invoice
-        if (!invoice.id) {
-          webhookLog("warn", "Invoice ID is missing, cannot retrieve expanded invoice");
-        } else {
-          try {
-            const expandedInvoice = await stripe.invoices.retrieve(invoice.id, {
-              expand: ["payment_intent"],
-            });
-            const expandedPaymentIntent = (expandedInvoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent }).payment_intent;
-            if (expandedPaymentIntent) {
-              paymentIntentId = typeof expandedPaymentIntent === "string"
-                ? expandedPaymentIntent
-                : expandedPaymentIntent.id;
-              webhookLog("info", `PaymentIntent ID from expanded invoice: ${paymentIntentId}`);
-            }
-          } catch (expandError) {
-            webhookLog("warn", `Could not retrieve expanded invoice for payment_intent: ${expandError}`);
+        if (paymentIntentId !== "unknown") {
+          webhookLog("info", `PaymentIntent ID from invoice.payment_intent: ${paymentIntentId}`);
+        }
+      }
+      
+      // Method 2: Try invoice.latest_payment_intent (if Method 1 didn't work)
+      if (paymentIntentId === "unknown" && invoiceWithPaymentIntent.latest_payment_intent) {
+        paymentIntentId = typeof invoiceWithPaymentIntent.latest_payment_intent === "string"
+          ? invoiceWithPaymentIntent.latest_payment_intent
+          : invoiceWithPaymentIntent.latest_payment_intent?.id || "unknown";
+        if (paymentIntentId !== "unknown") {
+          webhookLog("info", `PaymentIntent ID from invoice.latest_payment_intent: ${paymentIntentId}`);
+        }
+      }
+      
+      // Method 3: Try invoice.charges.data[0].payment_intent (from charges array)
+      if (paymentIntentId === "unknown" && invoiceWithPaymentIntent.charges?.data?.[0]) {
+        const charge = invoiceWithPaymentIntent.charges.data[0];
+        const chargeWithPaymentIntent = charge as Stripe.Charge & { payment_intent?: string | Stripe.PaymentIntent };
+        if (chargeWithPaymentIntent.payment_intent) {
+          paymentIntentId = typeof chargeWithPaymentIntent.payment_intent === "string"
+            ? chargeWithPaymentIntent.payment_intent
+            : chargeWithPaymentIntent.payment_intent?.id || "unknown";
+          if (paymentIntentId !== "unknown") {
+            webhookLog("info", `PaymentIntent ID from invoice.charges.data[0].payment_intent: ${paymentIntentId}`);
           }
         }
       }
-
-      // Get failure reason from invoice
-      const failureReason = invoice.last_finalization_error?.message || "Payment declined";
-      let failureCode = invoice.last_finalization_error?.code || "";
-      const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
       
-      webhookLog("info", `Initial error extraction - failureReason: ${failureReason}, failureCode: ${failureCode || 'none'}, paymentIntentId: ${paymentIntentId}`);
+      // Method 4: Retrieve expanded invoice with charges.data.payment_intent expansion (if still unknown)
+      if (paymentIntentId === "unknown" && invoice.id) {
+        try {
+          const expandedInvoice = await stripe.invoices.retrieve(invoice.id, {
+            expand: ["payment_intent", "latest_payment_intent", "charges.data.payment_intent"],
+          });
+          const expandedInvoiceTyped = expandedInvoice as Stripe.Invoice & { 
+            payment_intent?: string | Stripe.PaymentIntent;
+            latest_payment_intent?: string | Stripe.PaymentIntent;
+            charges?: Stripe.ApiList<Stripe.Charge>;
+          };
+          
+          // Try payment_intent from expanded invoice
+          if (expandedInvoiceTyped.payment_intent) {
+            paymentIntentId = typeof expandedInvoiceTyped.payment_intent === "string"
+              ? expandedInvoiceTyped.payment_intent
+              : expandedInvoiceTyped.payment_intent?.id || "unknown";
+            if (paymentIntentId !== "unknown") {
+              webhookLog("info", `PaymentIntent ID from expanded invoice.payment_intent: ${paymentIntentId}`);
+            }
+          }
+          
+          // Try latest_payment_intent from expanded invoice
+          if (paymentIntentId === "unknown" && expandedInvoiceTyped.latest_payment_intent) {
+            paymentIntentId = typeof expandedInvoiceTyped.latest_payment_intent === "string"
+              ? expandedInvoiceTyped.latest_payment_intent
+              : expandedInvoiceTyped.latest_payment_intent?.id || "unknown";
+            if (paymentIntentId !== "unknown") {
+              webhookLog("info", `PaymentIntent ID from expanded invoice.latest_payment_intent: ${paymentIntentId}`);
+            }
+          }
+          
+          // Try charges from expanded invoice
+          if (paymentIntentId === "unknown" && expandedInvoiceTyped.charges?.data?.[0]) {
+            const charge = expandedInvoiceTyped.charges.data[0];
+            const chargeWithPaymentIntent = charge as Stripe.Charge & { payment_intent?: string | Stripe.PaymentIntent };
+            if (chargeWithPaymentIntent.payment_intent) {
+              paymentIntentId = typeof chargeWithPaymentIntent.payment_intent === "string"
+                ? chargeWithPaymentIntent.payment_intent
+                : chargeWithPaymentIntent.payment_intent?.id || "unknown";
+              if (paymentIntentId !== "unknown") {
+                webhookLog("info", `PaymentIntent ID from expanded invoice.charges.data[0].payment_intent: ${paymentIntentId}`);
+              }
+            }
+          }
+        } catch (expandError) {
+          webhookLog("warn", `Could not retrieve expanded invoice for payment_intent: ${expandError}`);
+        }
+      }
+      
+      if (paymentIntentId === "unknown") {
+        webhookLog("warn", `Could not find PaymentIntent ID after checking all methods for invoice ${invoice.id}`);
+      }
 
       // Get package tier for subscription
       const packageId = user.subscription.packageId || "unknown";
@@ -1828,43 +1886,45 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         webhookLog("warn", `Could not fetch package name for ${packageId}, using default`);
       }
 
-      // ✅ BEST PRACTICE: Try to get failure_code and decline_code from PaymentIntent
-      // This ensures we capture error details even if invoice doesn't have them
+      const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
+      
+      // ✅ BEST PRACTICE: Extract failure details from PaymentIntent (align with handlePaymentFailure pattern)
+      // Priority: PaymentIntent error > Invoice error > "Payment declined"
+      let failureReason = "Payment declined";
+      let failureCode = "";
       let declineCode = "";
+      
+      // First, try to get error details from PaymentIntent (most reliable source)
       try {
         if (paymentIntentId && paymentIntentId !== "unknown" && paymentIntentId !== invoice.id) {
           webhookLog("info", `Attempting to retrieve PaymentIntent ${paymentIntentId} for error details...`);
           const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
           
-          // Get decline_code from PaymentIntent (this is the most reliable source)
-          declineCode = paymentIntent.last_payment_error?.decline_code || "";
-          webhookLog("info", `PaymentIntent decline_code: ${declineCode || 'none'}`);
-          
-          // Get failure_code from PaymentIntent if not already set
-          const paymentIntentErrorCode = paymentIntent.last_payment_error?.code || "";
-          if (paymentIntentErrorCode) {
-            if (!failureCode) {
-              failureCode = paymentIntentErrorCode;
-              webhookLog("info", `Retrieved failure_code from PaymentIntent: ${failureCode}`);
-            } else if (failureCode !== paymentIntentErrorCode) {
-              webhookLog("info", `PaymentIntent has different failure_code (${paymentIntentErrorCode}) than invoice (${failureCode}), using PaymentIntent value`);
-              failureCode = paymentIntentErrorCode;
-            }
+          const lastPaymentError = paymentIntent.last_payment_error;
+          if (lastPaymentError) {
+            // Prioritize PaymentIntent error message (most specific)
+            failureReason = lastPaymentError.message || invoice.last_finalization_error?.message || "Payment declined";
+            failureCode = lastPaymentError.code || invoice.last_finalization_error?.code || "";
+            declineCode = lastPaymentError.decline_code || "";
+            
+            webhookLog("info", `PaymentIntent error details - code: ${failureCode || 'none'}, decline_code: ${declineCode || 'none'}, message: ${failureReason}`);
+          } else {
+            // Fallback to invoice error if PaymentIntent has no error
+            failureReason = invoice.last_finalization_error?.message || "Payment declined";
+            failureCode = invoice.last_finalization_error?.code || "";
+            webhookLog("info", `PaymentIntent has no error, using invoice error: ${failureReason}`);
           }
-          
-          // Get more specific error message from PaymentIntent if available
-          const paymentIntentMessage = paymentIntent.last_payment_error?.message || "";
-          if (paymentIntentMessage && paymentIntentMessage !== failureReason) {
-            webhookLog("info", `PaymentIntent has more specific error message: ${paymentIntentMessage}`);
-          }
-          
-          // Log all PaymentIntent error details for debugging
-          webhookLog("info", `PaymentIntent error details - code: ${paymentIntentErrorCode || 'none'}, decline_code: ${declineCode || 'none'}, message: ${paymentIntentMessage || 'none'}`);
         } else {
-          webhookLog("warn", `Cannot retrieve PaymentIntent - paymentIntentId: ${paymentIntentId}, invoice.id: ${invoice.id}`);
+          // Fallback to invoice error if PaymentIntent not available
+          failureReason = invoice.last_finalization_error?.message || "Payment declined";
+          failureCode = invoice.last_finalization_error?.code || "";
+          webhookLog("warn", `Cannot retrieve PaymentIntent - paymentIntentId: ${paymentIntentId}, invoice.id: ${invoice.id}, using invoice error`);
         }
       } catch (error) {
-        webhookLog("error", `Could not retrieve payment intent ${paymentIntentId} for error details: ${error}`);
+        // Fallback to invoice error if PaymentIntent retrieval fails
+        failureReason = invoice.last_finalization_error?.message || "Payment declined";
+        failureCode = invoice.last_finalization_error?.code || "";
+        webhookLog("error", `Could not retrieve payment intent ${paymentIntentId} for error details: ${error}, using invoice error`);
       }
 
       // Create combined failure_message as code:decline_code format (e.g., "card_declined:insufficient_funds")
@@ -1873,13 +1933,33 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         : failureCode || declineCode || "";
       
       // Log extracted error details for debugging
-      webhookLog("info", `Extracted error details - failureCode: ${failureCode || 'none'}, declineCode: ${declineCode || 'none'}, failureMessage: ${failureMessage || 'none'}`);
+      webhookLog("info", `Extracted error details - failureReason: ${failureReason}, failureCode: ${failureCode || 'none'}, declineCode: ${declineCode || 'none'}, failureMessage: ${failureMessage || 'none'}`);
 
       webhookLog("info", `About to check renewal status. isRenewal: ${isRenewal}, packageId: ${packageId}, packageName: ${packageName}, amount: ${amount}`);
+      
+      // Extract next_payment_attempt from invoice
+      const nextPaymentAttempt = invoice.next_payment_attempt || null;
       
       if (isRenewal) {
         // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals
         // This is the canonical event for renewal failures (invoice.payment_failed with billing_reason: subscription_cycle)
+        
+        // Calculate expected entries for renewal (lastMonthAccumulatedEntries + baseEntries)
+        let expectedEntries: number | undefined = undefined;
+        try {
+          const packageData = await getPackageById(packageId);
+          if (packageData && packageData.entriesPerMonth !== undefined) {
+            const baseEntries = packageData.entriesPerMonth;
+            const lastMonthAccumulatedEntries = user.subscription?.lastMonthAccumulatedEntries || baseEntries;
+            expectedEntries = lastMonthAccumulatedEntries + baseEntries;
+            webhookLog("info", `Calculated expected entries for renewal: ${lastMonthAccumulatedEntries} + ${baseEntries} = ${expectedEntries}`);
+          } else {
+            webhookLog("warn", `Could not get baseEntries from package ${packageId} for entries calculation`);
+          }
+        } catch (error) {
+          webhookLog("warn", `Error calculating expected entries: ${error}`);
+        }
+        
         try {
           const renewalFailedEvent = createSubscriptionRenewalFailedEvent(user as never, {
             packageId: packageId,
@@ -1890,6 +1970,8 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
             failureMessage,
             amount,
             paymentIntentId: paymentIntentId,
+            entries: expectedEntries,
+            nextPaymentAttempt: nextPaymentAttempt,
           });
           webhookLog("info", `📧 Tracking "Subscription Renewal Failed" event (canonical) to Klaviyo for user ${user.email} (${user._id})`);
           klaviyo.trackEventBackground(renewalFailedEvent);
@@ -1950,22 +2032,52 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     ensureUserProfileSynced(user);
 
     // Track payment failure to Facebook Pixel (server-side)
+    // ✅ BEST PRACTICE: Use improved error extraction (same as Klaviyo event)
     try {
+      // Get payment intent ID (simplified version for pixel tracking)
       const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
-      const paymentIntentId: string =
-        typeof invoiceWithPaymentIntent.payment_intent === "string"
+      let pixelPaymentIntentId: string = "unknown";
+      
+      if (invoiceWithPaymentIntent.payment_intent) {
+        pixelPaymentIntentId = typeof invoiceWithPaymentIntent.payment_intent === "string"
           ? invoiceWithPaymentIntent.payment_intent
-          : invoiceWithPaymentIntent.payment_intent?.id || invoice.id || "unknown";
+          : invoiceWithPaymentIntent.payment_intent?.id || "unknown";
+      }
+      
+      if (pixelPaymentIntentId === "unknown") {
+        pixelPaymentIntentId = invoice.id || "unknown";
+      }
 
       const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
       const packageId = user.subscription?.packageId || "unknown";
-      const failureReason = invoice.last_finalization_error?.message || "Payment declined";
-      const failureCode = invoice.last_finalization_error?.code || "";
-
+      
+      // ✅ BEST PRACTICE: Extract error details from PaymentIntent (same improved logic as Klaviyo event)
+      let pixelFailureReason = invoice.last_finalization_error?.message || "Payment declined";
+      let pixelFailureCode = invoice.last_finalization_error?.code || "";
+      let pixelFailureMessage = "";
+      
+      // Try to get error details from PaymentIntent if available
+      if (pixelPaymentIntentId && pixelPaymentIntentId !== "unknown" && pixelPaymentIntentId !== invoice.id) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(pixelPaymentIntentId);
+          const lastPaymentError = paymentIntent.last_payment_error;
+          if (lastPaymentError) {
+            pixelFailureReason = lastPaymentError.message || invoice.last_finalization_error?.message || "Payment declined";
+            pixelFailureCode = lastPaymentError.code || invoice.last_finalization_error?.code || "";
+            const declineCode = lastPaymentError.decline_code || "";
+            pixelFailureMessage = pixelFailureCode && declineCode 
+              ? `${pixelFailureCode}:${declineCode}` 
+              : pixelFailureCode || declineCode || "";
+          }
+        } catch (error) {
+          webhookLog("warn", `Could not retrieve PaymentIntent for Facebook Pixel error details: ${error}`);
+        }
+      }
+      
       await trackPixelPaymentFailed({
         value: amount,
         currency: invoice.currency.toUpperCase() || "AUD",
-        paymentIntentId,
+        paymentIntentId: pixelPaymentIntentId,
         packageId,
         packageName: "Subscription",
         packageType: "membership",
@@ -1974,11 +2086,11 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         userPhone: user.mobile,
         userFirstName: user.firstName,
         userLastName: user.lastName,
-        errorMessage: failureReason,
-        errorCode: failureCode,
-        failureReason: failureReason,
+        errorMessage: pixelFailureReason, // Use improved failureReason from PaymentIntent
+        errorCode: pixelFailureCode, // Use improved failureCode from PaymentIntent
+        failureReason: pixelFailureMessage || pixelFailureReason, // Use failureMessage (code:decline_code) or fallback to failureReason
       });
-      webhookLog("info", `✅ Invoice payment failure tracked to Facebook Pixel`);
+      webhookLog("info", `✅ Invoice payment failure tracked to Facebook Pixel with improved error details`);
     } catch (pixelError) {
       webhookLog("error", `Error tracking invoice payment failure to Facebook Pixel: ${pixelError}`);
       // Don't throw - pixel tracking should not break webhook processing

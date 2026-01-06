@@ -120,8 +120,21 @@ export function createSubscriptionRenewalFailedEvent(
     failureMessage?: string;
     amount: number;
     paymentIntentId: string;
+    entries?: number; // Expected entries user should receive (lastMonthAccumulatedEntries + baseEntries)
+    nextPaymentAttempt?: number | null; // Unix timestamp of next payment retry attempt
   }
 ): KlaviyoEvent {
+  // Format next_payment_attempt as ISO string if available, otherwise empty string
+  let nextPaymentAttemptFormatted = "";
+  if (packageData.nextPaymentAttempt) {
+    try {
+      nextPaymentAttemptFormatted = new Date(packageData.nextPaymentAttempt * 1000).toISOString();
+    } catch {
+      // If date conversion fails, use the timestamp as string
+      nextPaymentAttemptFormatted = packageData.nextPaymentAttempt.toString();
+    }
+  }
+
   return {
     event: "Subscription Renewal Failed",
     customer_properties: getCustomerProperties(user),
@@ -138,6 +151,8 @@ export function createSubscriptionRenewalFailedEvent(
       failure_message: packageData.failureMessage || "",
       amount: packageData.amount.toFixed(2),
       payment_intent_id: packageData.paymentIntentId,
+      entries: packageData.entries !== undefined ? packageData.entries : 0, // Expected entries user should receive
+      next_payment_attempt: nextPaymentAttemptFormatted, // ISO string of next retry date, or empty if null/exhausted
       timestamp: formatTimestampForKlaviyo(),
     },
   };

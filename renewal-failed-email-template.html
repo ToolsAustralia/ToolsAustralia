@@ -435,11 +435,45 @@
                   <th>Membership Status</th>
                   <td>Renewal Payment Failed</td>
                 </tr>
+                {% if event.next_payment_attempt and event.next_payment_attempt != "" %}
+                <tr>
+                  <th>Next Automatic Retry</th>
+                  <td>
+                    <strong style="color: #1f2937;">{{ event.next_payment_attempt | date: "%B %d, %Y at %I:%M %p" }}</strong>
+                    <br/>
+                    <span style="font-size: 11px; color: #6b7280; font-style: italic;">Stripe will automatically retry this payment. Update your payment method to ensure success.</span>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <th>Next Automatic Retry</th>
+                  <td>
+                    <span style="color: #991b1b; font-weight: 600;">No automatic retry scheduled</span>
+                    <br/>
+                    <span style="font-size: 11px; color: #6b7280; font-style: italic;">Please update your payment method to continue</span>
+                  </td>
+                </tr>
+                {% endif %}
               </tbody>
             </table>
           </div>
 
           <div class="divider"></div>
+
+          <!-- Expected Entries Section -->
+          {% if event.entries and event.entries > 0 %}
+          <div class="info-box" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin: 24px 0;">
+            <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+              Entries You Should Receive
+            </div>
+            <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
+              {{ event.entries | number_format }} entries
+            </div>
+            <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
+              These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+            </div>
+          </div>
+          {% endif %}
 
           <!-- CTA Buttons -->
           <div class="cta-container">
