@@ -94,7 +94,8 @@ function applySubscriptionUpdate(user: IUser, subscription?: AdminUserUpdatePayl
   }
 
   if (subscription.packageId !== undefined) {
-    user.subscription.packageId = subscription.packageId;
+    // Allow clearing packageId by setting it to null or empty string
+    user.subscription.packageId = subscription.packageId === null || subscription.packageId === "" ? null : subscription.packageId;
   }
 
   if (subscription.status !== undefined) {

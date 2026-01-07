@@ -26,9 +26,10 @@ export interface IUser extends Document {
 
   // Subscription Information (only one active at a time)
   subscription?: {
-    packageId: string; // Changed from ObjectId to string for static data (CURRENT package after any changes)
+    packageId: string | null; // Changed from ObjectId to string for static data (CURRENT package after any changes), can be null to clear
     startDate: Date;
     endDate?: Date;
+    cancelledAt?: Date; // Track when user actually triggered the cancellation (not the endDate which is future)
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;
@@ -353,6 +354,10 @@ const UserSchema = new Schema<IUser>(
       },
       startDate: Date,
       endDate: Date,
+      cancelledAt: {
+        type: Date,
+        required: false, // Track when user actually triggered the cancellation (not the endDate which is future)
+      },
       isActive: {
         type: Boolean,
         default: false,

@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
     console.log(`🔧 DEBUG: Previous packageId: ${user.subscription.previousSubscription.packageId}`);
 
     // Get current package info for display
-    const currentPackage = getPackageById(user.subscription.packageId);
-    const previousPackage = getPackageById(user.subscription.previousSubscription.packageId);
+    const currentPackage = user.subscription.packageId ? getPackageById(user.subscription.packageId) : null;
+    const previousPackage = user.subscription.previousSubscription?.packageId ? getPackageById(user.subscription.previousSubscription.packageId) : null;
 
     if (!currentPackage || !previousPackage) {
       return NextResponse.json({ error: "Package not found" }, { status: 400 });

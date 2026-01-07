@@ -9,6 +9,7 @@ export interface SubscriptionWithAccumulatedEntries {
   packageId: string;
   startDate: Date;
   endDate?: Date;
+  cancelledAt?: Date; // Track when user actually triggered the cancellation (not the endDate which is future)
   isActive: boolean;
   autoRenew?: boolean;
   status?: string;

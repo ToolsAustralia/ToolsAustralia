@@ -257,14 +257,11 @@ export async function GET(request: NextRequest) {
       $or: [
         { "subscription.lastUpgradeDate": { $gte: startDate } },
         { "subscription.lastDowngradeDate": { $gte: startDate } },
-        {
-          "subscription.isActive": false,
-          "subscription.endDate": { $gte: startDate },
-        },
+        { "subscription.cancelledAt": { $gte: startDate } },
       ],
       isActive: true,
     })
-      .sort({ "subscription.lastUpgradeDate": -1, "subscription.lastDowngradeDate": -1, "subscription.endDate": -1 })
+      .sort({ "subscription.lastUpgradeDate": -1, "subscription.lastDowngradeDate": -1, "subscription.cancelledAt": -1 })
       .select("firstName lastName email subscription");
 
     usersWithChanges.forEach((user) => {
@@ -308,24 +305,24 @@ export async function GET(request: NextRequest) {
         });
       }
 
+      // Check for cancellations - use cancelledAt (when cancellation was triggered) instead of endDate (future period end)
       if (
-        !user.subscription.isActive &&
-        user.subscription.endDate &&
-        user.subscription.endDate >= startDate &&
+        user.subscription.cancelledAt &&
+        user.subscription.cancelledAt >= startDate &&
         (!user.subscription.lastDowngradeDate ||
-          user.subscription.endDate.getTime() !== user.subscription.lastDowngradeDate.getTime())
+          user.subscription.cancelledAt.getTime() !== user.subscription.lastDowngradeDate.getTime())
       ) {
-        const timeAgo = getTimeAgo(user.subscription.endDate);
+        const timeAgo = getTimeAgo(user.subscription.cancelledAt);
         const packageName = getPackageName(user.subscription.packageId || "Unknown");
 
         activities.push({
-          id: `cancel-${user._id}-${user.subscription.endDate.getTime()}`,
+          id: `cancel-${user._id}-${user.subscription.cancelledAt.getTime()}`,
           type: "membership_upgrade",
           user: `${user.firstName} ${user.lastName}`,
           action: `Cancelled ${packageName} membership`,
           time: timeAgo,
           status: "warning",
-          timestamp: user.subscription.endDate,
+          timestamp: user.subscription.cancelledAt,
         });
       }
     });

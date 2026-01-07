@@ -36,7 +36,7 @@ export function MembershipLifecycleChart({ data }: MembershipLifecycleChartProps
   const chartData = [
     { name: "Active", value: data.active, color: "#10b981" },
     { name: "Cancelled", value: data.cancelled, color: "#ef4444" },
-    { name: "Expired", value: data.expired, color: "#f59e0b" },
+    { name: "Past Due", value: data.pastDue, color: "#f59e0b" },
     { name: "Renewed", value: data.renewed, color: "#3b82f6" },
   ];
 

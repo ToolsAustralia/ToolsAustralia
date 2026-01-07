@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     // Get current package from Stripe metadata (most accurate)
     const currentPackageId = currentStripeSubscription.metadata.packageId || user.subscription.packageId;
-    const currentPackage = getPackageById(currentPackageId);
+    const currentPackage = currentPackageId ? getPackageById(currentPackageId) : null;
     const newPackage = getPackageById(validatedData.newPackageId);
 
     if (!currentPackage || !newPackage) {

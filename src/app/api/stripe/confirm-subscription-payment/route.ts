@@ -17,9 +17,10 @@ interface UserData {
   lastName: string;
   role: string;
   subscription?: {
-    packageId: string;
+    packageId: string | null;
     startDate: Date;
     endDate?: Date;
+    cancelledAt?: Date;
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;

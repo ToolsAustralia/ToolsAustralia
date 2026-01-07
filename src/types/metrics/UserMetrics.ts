@@ -16,7 +16,7 @@ export interface UserMetrics {
   membershipStatus: {
     active: number;
     cancelled: number;
-    expired: number;
+    pastDue: number;
     renewed: number;
   };
   purchaseHistory: {

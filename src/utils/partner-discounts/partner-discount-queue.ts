@@ -190,7 +190,7 @@ export function calculateActivePartnerDiscountPeriod(user: IUser): {
       const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
 
       // Get subscription package info
-      const subscriptionPackage = getPackageById(user.subscription.packageId);
+      const subscriptionPackage = user.subscription.packageId ? getPackageById(user.subscription.packageId) : null;
 
       return {
         isActive: true,
@@ -219,7 +219,7 @@ export function calculateActivePartnerDiscountPeriod(user: IUser): {
       const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
 
       // Get subscription package info
-      const subscriptionPackage = getPackageById(user.subscription.packageId);
+      const subscriptionPackage = user.subscription.packageId ? getPackageById(user.subscription.packageId) : null;
 
       return {
         isActive: true,

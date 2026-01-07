@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current and target packages
-    const currentPackage = getPackageById(user.subscription.packageId);
+    const currentPackage = user.subscription.packageId ? getPackageById(user.subscription.packageId) : null;
     const targetPackage = getPackageById(targetPackageId);
 
     if (!currentPackage || !targetPackage) {

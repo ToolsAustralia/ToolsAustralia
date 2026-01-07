@@ -112,6 +112,8 @@ export async function POST(request: NextRequest) {
     // Update user's subscription status in database
     if (user.subscription) {
       user.subscription.autoRenew = false;
+      // Track when the cancellation was actually triggered (now, not the future endDate)
+      user.subscription.cancelledAt = new Date();
       if (!validatedData.cancelAtPeriodEnd) {
         user.subscription.isActive = false;
         user.subscription.endDate = new Date();

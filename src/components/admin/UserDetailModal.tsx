@@ -890,7 +890,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const handleSubscriptionSubmit = async (values: SubscriptionFormValues) => {
     const payload: AdminUserUpdatePayload = {
       subscription: {
-        packageId: values.packageId || undefined,
+        // Explicitly send null if empty string to clear packageId, otherwise send the value or undefined
+        packageId: values.packageId && values.packageId.trim() ? values.packageId : null,
         status: values.status || undefined,
         isActive: values.isActive,
         autoRenew: values.autoRenew,

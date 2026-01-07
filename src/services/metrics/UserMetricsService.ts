@@ -69,7 +69,7 @@ export class UserMetricsService {
     const membershipStatus = {
       active: 0,
       cancelled: 0,
-      expired: 0,
+      pastDue: 0,
       renewed: 0,
     };
 
@@ -97,25 +97,37 @@ export class UserMetricsService {
 
       // Check membership status
       if (user.subscription) {
-        if (user.subscription.isActive) {
-          membershipStatus.active++;
-        } else if (user.subscription.status === "canceled" || user.subscription.status === "cancelled") {
+        // Cancelled: Users with "active" or "past_due" status who have an endDate set
+        // (meaning they cancelled at period end but are still in their billing period)
+        // This check must come first to prioritize cancelled over past_due
+        if (
+          (user.subscription.status === "active" || user.subscription.status === "past_due") &&
+          user.subscription.endDate &&
+          user.subscription.endDate !== null
+        ) {
           membershipStatus.cancelled++;
           
           // Check if user has renewed (has subscription history indicating renewal)
           // This is a simplified check - in production, you might want to track renewal events explicitly
-          if (user.subscription.endDate && user.subscription.startDate) {
-            const endDate = new Date(user.subscription.endDate);
-            const startDate = new Date(user.subscription.startDate);
-            // If end date is after start date, it might indicate a renewal
-            // For now, we'll check if there's a subscription that was reactivated
+          if (user.subscription.startDate) {
             const userId = user._id.toString();
             if (!userRenewalMap.has(userId)) {
               userRenewalMap.set(userId, false);
             }
           }
-        } else if (user.subscription.endDate && new Date(user.subscription.endDate) < new Date()) {
-          membershipStatus.expired++;
+        }
+        // Past Due: status = "past_due" without an endDate (payment issue, not cancelled)
+        // (regardless of isActive, as payment failures set isActive = false)
+        else if (user.subscription.status === "past_due") {
+          membershipStatus.pastDue++;
+        }
+        // Active: isActive = true and status = "active"
+        else if (user.subscription.isActive && user.subscription.status === "active") {
+          membershipStatus.active++;
+        }
+        // Legacy cancelled status (for backwards compatibility)
+        else if (user.subscription.status === "canceled" || user.subscription.status === "cancelled") {
+          membershipStatus.cancelled++;
         }
       }
     }

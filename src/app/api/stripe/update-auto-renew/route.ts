@@ -67,6 +67,11 @@ export async function PATCH(request: NextRequest) {
     // Update user's subscription status in database
     if (user.subscription) {
       user.subscription.autoRenew = validatedData.autoRenew;
+      // If enabling auto-renew (cancelling the cancellation), clear cancelledAt
+      if (validatedData.autoRenew) {
+        user.subscription.cancelledAt = undefined;
+        user.subscription.endDate = undefined;
+      }
     }
 
     await user.save();

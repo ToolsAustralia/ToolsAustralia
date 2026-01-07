@@ -57,7 +57,7 @@ export function getEffectiveBenefits(user: IUser) {
   }
 
   // Normal case: use current subscription package
-  const currentPackage = getPackageById(user.subscription.packageId);
+  const currentPackage = user.subscription.packageId ? getPackageById(user.subscription.packageId) : null;
   if (currentPackage) {
     return {
       packageId: currentPackage._id,

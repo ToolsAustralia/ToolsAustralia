@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // Get current and target packages
     const currentPackageId = user.subscription.packageId;
-    const currentPackage = getPackageById(currentPackageId);
+    const currentPackage = currentPackageId ? getPackageById(currentPackageId) : null;
     const newPackage = getPackageById(newPackageId);
 
     if (!currentPackage || !newPackage) {

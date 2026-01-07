@@ -148,7 +148,7 @@ export function UserMetricsView() {
         newSignups: totalUsers, // For the date range, new signups = total users in range
         activeMemberships: aggregateData.membershipStatus.active,
         cancelledMemberships: aggregateData.membershipStatus.cancelled,
-        expiredMemberships: aggregateData.membershipStatus.expired,
+        expiredMemberships: aggregateData.membershipStatus.pastDue,
         renewedMemberships: aggregateData.membershipStatus.renewed,
         totalPurchases: aggregateData.purchaseHistory.totalPurchases,
         totalRevenue: aggregateData.purchaseHistory.totalRevenue,

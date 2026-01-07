@@ -241,6 +241,7 @@ export async function POST(request: NextRequest) {
           user.subscription.isActive = true;
           user.subscription.status = "active";
           user.subscription.autoRenew = true;
+          user.subscription.cancelledAt = undefined; // Clear cancellation timestamp when reactivated
         }
 
         await user.save();
@@ -332,6 +333,7 @@ export async function POST(request: NextRequest) {
         user.subscription.autoRenew = true;
         user.subscription.packageId = targetPackage._id;
         user.subscription.endDate = undefined;
+        user.subscription.cancelledAt = undefined; // Clear cancellation timestamp when reactivated
       }
 
       await user.save();

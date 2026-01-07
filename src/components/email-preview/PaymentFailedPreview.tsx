@@ -80,7 +80,7 @@ const PaymentFailedPreview: React.FC = () => {
           Dear PLACEHOLDER_FIRST_NAME,<br/><br/>
           We were unable to process your membership renewal payment. Your payment method was declined, and no charges have been applied to your account.
           <br/><br/>
-          <strong style="color: #dc2626;">Important:</strong> Please update your payment method to avoid service interruption.
+          <strong style="color: #dc2626;">Important:</strong> Please update your payment to ensure you are in the giveaway and do not lose all your entries!
         </div>
         <div class="failure-alert">
           <div class="failure-icon">⚠️</div>
@@ -160,14 +160,14 @@ const PaymentFailedPreview: React.FC = () => {
         </tr>
       `,
       entries_section: `
-        <div class="info-box" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin: 24px 0;">
+        <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
             Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
             PLACEHOLDER_ENTRIES_COUNT entries
           </div>
-          <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
+          <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
             These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
@@ -221,14 +221,14 @@ const PaymentFailedPreview: React.FC = () => {
         </tr>
       `,
       entries_section: `
-        <div class="info-box" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin: 24px 0;">
+        <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
             Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
             550 entries
           </div>
-          <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
+          <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
             These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
@@ -282,14 +282,14 @@ const PaymentFailedPreview: React.FC = () => {
         </tr>
       `,
       entries_section: `
-        <div class="info-box" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin: 24px 0;">
+        <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
             Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
             2,200 entries
           </div>
-          <div style="font-size: 13px; color: #1e3a8a; line-height: 1.6; margin-top: 8px;">
+          <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
             These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>

@@ -194,11 +194,12 @@ export interface AdminUserDetail {
 
   // Subscription Information
   subscription?: {
-    packageId: string;
+    packageId: string | null;
     packageName?: string;
     isActive: boolean;
     startDate: string;
     endDate?: string;
+    cancelledAt?: string | null;
     status: string;
     autoRenew?: boolean;
     previousSubscription?: Record<string, unknown>;
@@ -338,7 +339,7 @@ export interface UserFilters {
   page?: number;
   limit?: number;
   search?: string;
-  subscriptionStatus?: "active" | "inactive" | "none";
+  subscriptionStatus?: "active" | "none" | "past_due";
   autoRenew?: "true" | "false"; // Filter by auto-renewal status
   membershipPackage?: string;
   role?: "user" | "admin";
@@ -416,12 +417,13 @@ export interface AdminUserUpdatePayload {
     profileSetupCompleted?: boolean;
   };
   subscription?: {
-    packageId?: string;
+    packageId?: string | null;
     status?: string;
     isActive?: boolean;
     autoRenew?: boolean;
     startDate?: string;
     endDate?: string;
+    cancelledAt?: string | null;
     lastDowngradeDate?: string;
     lastUpgradeDate?: string;
   } | null;

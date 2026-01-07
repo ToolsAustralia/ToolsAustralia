@@ -42,7 +42,9 @@ const basicInfoSchema = z
 
 const subscriptionSchema = z
   .object({
-    packageId: z.string().min(1, "Package id is required").optional(),
+    packageId: z
+      .union([z.string().min(1, "Package id is required"), z.null()])
+      .optional(),
     status: z.string().min(1, "Subscription status is required").optional(),
     isActive: z.boolean().optional(),
     autoRenew: z.boolean().optional(),

@@ -950,6 +950,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       user.subscription.status = "active";
       user.subscription.autoRenew = true;
       user.subscription.pendingChange = undefined;
+      user.subscription.cancelledAt = undefined; // Clear cancellation timestamp when subscription is created/activated
       user.stripeSubscriptionId = subscription.id;
 
       // ✅ CRITICAL FIX: Don't add entries/points here!
@@ -1067,6 +1068,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.status = "active";
         user.subscription.autoRenew = true;
         user.subscription.pendingChange = undefined; // Clear pending change
+        user.subscription.cancelledAt = undefined; // Clear cancellation timestamp when subscription is reactivated
         user.stripeSubscriptionId = subscription.id;
 
         // ✅ CRITICAL FIX: Don't add entries/points here!
@@ -1316,6 +1318,14 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       if (wasActive && wasStatus === "active") {
         // Subscription already processed as active, only update autoRenew
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
+        // If cancel_at_period_end is true and cancelledAt is not set, this is a new cancellation
+        if (subscription.cancel_at_period_end && !user.subscription.cancelledAt) {
+          user.subscription.cancelledAt = new Date();
+        } else if (!subscription.cancel_at_period_end && user.subscription.cancelledAt) {
+          // If cancel_at_period_end is false (cancellation cancelled), clear cancelledAt
+          user.subscription.cancelledAt = undefined;
+          user.subscription.endDate = undefined;
+        }
       } else if (subscription.status === "canceled" || subscription.status === "past_due") {
         // Only update for explicit cancellations or past due
         console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: ${subscription.status} for user ${user.email}`);
@@ -1333,6 +1343,10 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.status = subscription.status;
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         user.subscription.endDate = endDate; // ✅ Set endDate consistently
+        // Set cancelledAt if not already set (to track when cancellation was triggered)
+        if (!user.subscription.cancelledAt) {
+          user.subscription.cancelledAt = new Date();
+        }
 
         // Explicitly preserve lastMonthAccumulatedEntries
         if (preservedAccumulatedEntries !== undefined) {

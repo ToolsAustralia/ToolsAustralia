@@ -195,11 +195,22 @@ export default function UsersManagement() {
 
   // Handle sorting
   const handleSort = (sortBy: UserFilters["sortBy"]) => {
-    setFilters((prev) => ({
-      ...prev,
-      sortBy,
-      sortOrder: prev.sortBy === sortBy && prev.sortOrder === "asc" ? "desc" : "asc",
-    }));
+    setFilters((prev) => {
+      // First click on any column should be descending
+      if (prev.sortBy !== sortBy) {
+        return {
+          ...prev,
+          sortBy,
+          sortOrder: "desc",
+        };
+      }
+      // Subsequent clicks toggle between asc and desc
+      return {
+        ...prev,
+        sortBy,
+        sortOrder: prev.sortOrder === "asc" ? "desc" : "asc",
+      };
+    });
   };
 
   // Get sort icon
@@ -332,10 +343,29 @@ export default function UsersManagement() {
       );
     }
 
+    // Check if status is incomplete or cancelled - show "No Subscription"
+    const status = user.subscription.status?.toLowerCase();
+    if (status === "incomplete" || status === "cancelled" || status === "canceled") {
+      return (
+        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+          No Subscription
+        </span>
+      );
+    }
+
     if (user.subscription.isActive) {
       return (
         <span className="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
           Active
+        </span>
+      );
+    }
+
+    // Check for past_due status
+    if (status === "past_due") {
+      return (
+        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
+          Past Due
         </span>
       );
     }
@@ -470,7 +500,7 @@ export default function UsersManagement() {
                 options={[
                   { value: "", label: "Subscriptions", icon: ClipboardList },
                   { value: "active", label: "Active", icon: CheckCircle },
-                  { value: "inactive", label: "Inactive", icon: XCircle },
+                  { value: "past_due", label: "Past Due", icon: AlertTriangle },
                   { value: "none", label: "No Subscription", icon: Ban },
                 ]}
                 value={filters.subscriptionStatus || ""}
