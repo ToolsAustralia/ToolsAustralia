@@ -2,24 +2,60 @@
  * Default Text Manager Utility
  * 
  * Manages alternating default texts when no scheduled text is active.
- * Uses localStorage to track which default text was last used.
+ * Alternates once per day (AEST) between "BOOST ACTIVATED" and "FIRST 500 PEOPLE".
+ * Uses localStorage to track which default text was shown for the current day.
  */
 
-const STORAGE_KEY = "promoBannerDefaultIndex";
+import { getNowInAEST } from "@/utils/common/timezone";
+
+const STORAGE_KEY_DATE = "promoBannerDefaultDate";
+const STORAGE_KEY_INDEX = "promoBannerDefaultIndex";
 const DEFAULT_TEXTS = ["BOOST ACTIVATED", "FIRST 500 PEOPLE"];
 
 /**
- * Get the next alternating default text
- * Alternates between "BOOST ACTIVATED" and "FIRST 500 PEOPLE"
- * @returns The default text to display
+ * Get the current date string in AEST (YYYY-MM-DD format)
+ * @returns Date string in format YYYY-MM-DD
+ */
+function getCurrentDateStringAEST(): string {
+  const nowAEST = getNowInAEST();
+  const year = nowAEST.getFullYear();
+  const month = String(nowAEST.getMonth() + 1).padStart(2, "0");
+  const day = String(nowAEST.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get the alternating default text for the current day (AEST)
+ * Alternates between "BOOST ACTIVATED" and "FIRST 500 PEOPLE" once per day
+ * @returns The default text to display for today
  */
 export function getAlternatingDefaultText(): string {
   try {
-    const lastIndex = localStorage.getItem(STORAGE_KEY);
-    const currentIndex = lastIndex ? (parseInt(lastIndex, 10) + 1) % DEFAULT_TEXTS.length : 0;
-    
-    localStorage.setItem(STORAGE_KEY, currentIndex.toString());
-    return DEFAULT_TEXTS[currentIndex];
+    if (typeof window === "undefined") {
+      // Server-side rendering: default to first text
+      return DEFAULT_TEXTS[0];
+    }
+
+    const currentDateStr = getCurrentDateStringAEST();
+    const storedDateStr = localStorage.getItem(STORAGE_KEY_DATE);
+    const storedIndex = localStorage.getItem(STORAGE_KEY_INDEX);
+
+    // If it's a new day, alternate to the next text
+    if (storedDateStr !== currentDateStr) {
+      // Calculate next index
+      const lastIndex = storedIndex ? parseInt(storedIndex, 10) : 0;
+      const nextIndex = (lastIndex + 1) % DEFAULT_TEXTS.length;
+      
+      // Store new date and index
+      localStorage.setItem(STORAGE_KEY_DATE, currentDateStr);
+      localStorage.setItem(STORAGE_KEY_INDEX, nextIndex.toString());
+      
+      return DEFAULT_TEXTS[nextIndex];
+    }
+
+    // Same day: return the text that was already shown today
+    const currentIndex = storedIndex ? parseInt(storedIndex, 10) : 0;
+    return DEFAULT_TEXTS[currentIndex] || DEFAULT_TEXTS[0];
   } catch (error) {
     // If localStorage is not available, default to first text
     return DEFAULT_TEXTS[0];
@@ -31,7 +67,10 @@ export function getAlternatingDefaultText(): string {
  */
 export function resetDefaultTextAlternation(): void {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(STORAGE_KEY_DATE);
+      localStorage.removeItem(STORAGE_KEY_INDEX);
+    }
   } catch (error) {
     // Ignore errors
   }
