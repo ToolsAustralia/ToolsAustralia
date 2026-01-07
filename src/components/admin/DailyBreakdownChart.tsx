@@ -42,12 +42,12 @@ export function DailyBreakdownChart({ metrics, loading = false }: DailyBreakdown
           const date = new Date(metric.date);
           return (
             <div key={metric._id || date.toISOString()} className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <span className="text-sm font-medium text-gray-700">{format(date, "MMM d, yyyy")}</span>
-                <div className="flex items-center gap-4 text-xs text-gray-600">
-                  <span>Spend: {formatCurrency(metric.adSpend)}</span>
-                  <span>Revenue: {formatCurrency(metric.revenue)}</span>
-                  <span>ROAS: {formatROAS(metric.roas)}</span>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-gray-600">
+                  <span className="whitespace-nowrap">Spend: {formatCurrency(metric.adSpend)}</span>
+                  <span className="whitespace-nowrap">Revenue: {formatCurrency(metric.revenue)}</span>
+                  <span className="whitespace-nowrap">ROAS: {formatROAS(metric.roas)}</span>
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-4 relative overflow-hidden">

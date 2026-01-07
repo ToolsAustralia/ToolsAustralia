@@ -23,6 +23,7 @@ import {
   useRevenueBreakdown,
   useProjectedIncome,
   useMajorDrawsForDateRange,
+  useCurrentAndLastDrawDates,
 } from "@/hooks/queries/useAdminQueries";
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import UsersManagement from "@/components/admin/UsersManagement";
@@ -98,8 +99,38 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     setCustomEndDate(urlEndDate);
   }, [searchParams]); // Only depend on searchParams to sync from URL to state
 
+  // Fetch current and last draw dates
+  const { data: drawDates } = useCurrentAndLastDrawDates();
+
   // Update URL params when date filter changes
   const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
+    // Handle draw-based date ranges
+    if (range === "current-draw" && drawDates?.currentDraw) {
+      setDateRange(range);
+      setCustomStartDate(drawDates.currentDraw.startDate);
+      setCustomEndDate(drawDates.currentDraw.endDate);
+      
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("dateRange", range);
+      params.set("startDate", drawDates.currentDraw.startDate);
+      params.set("endDate", drawDates.currentDraw.endDate);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      return;
+    }
+
+    if (range === "last-draw" && drawDates?.lastDraw) {
+      setDateRange(range);
+      setCustomStartDate(drawDates.lastDraw.startDate);
+      setCustomEndDate(drawDates.lastDraw.endDate);
+      
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("dateRange", range);
+      params.set("startDate", drawDates.lastDraw.startDate);
+      params.set("endDate", drawDates.lastDraw.endDate);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      return;
+    }
+
     // Update state immediately for responsive UI
     setDateRange(range);
     if (range === "custom" && start && end) {
@@ -143,10 +174,10 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     }
   };
 
-  // Determine if filter should be collapsible (only on mobile, and only for custom range or all-time)
+  // Determine if filter should be collapsible (disabled on mobile since title is hidden)
   const shouldCollapse = useMemo(() => {
-    return isMobile && (dateRange === "custom" || dateRange === "all-time");
-  }, [isMobile, dateRange]);
+    return false; // Don't collapse on mobile anymore since title is hidden
+  }, []);
 
   // Get display date for collapsed view
   const displayDate = useMemo(() => {
@@ -156,8 +187,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     if (dateRange === "all-time") {
       return "All Time";
     }
+    if (dateRange === "current-draw" && drawDates?.currentDraw) {
+      return `Current Draw`;
+    }
+    if (dateRange === "last-draw" && drawDates?.lastDraw) {
+      return `Last Draw`;
+    }
     return null;
-  }, [dateRange, customStartDate, customEndDate]);
+  }, [dateRange, customStartDate, customEndDate, drawDates]);
 
   // Fetch major draws for date range selection
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
@@ -556,10 +593,10 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
             <div className="space-y-4 sm:space-y-6">
               {/* Date Range Toggle */}
               <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-                <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+                <h2 className="hidden sm:block text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
                   Dashboard Overview
                 </h2>
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 sm:flex-shrink-0 w-full sm:w-auto">
                   <DateRangeToggle
                     selectedRange={dateRange}
                     onRangeChange={(range) => {
@@ -567,16 +604,12 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                         setIsCustomDateModalOpen(true);
                       } else {
                         updateDateFilter(range);
-                        // Only collapse if the new filter is collapsible (all-time)
-                        if (range === "all-time") {
-                          setIsDateFilterCollapsed(true);
-                        }
                       }
                     }}
                     onCustomClick={() => setIsCustomDateModalOpen(true)}
-                    collapsed={isDateFilterCollapsed && shouldCollapse}
+                    collapsed={false}
                     displayDate={displayDate || undefined}
-                    onExpand={() => setIsDateFilterCollapsed(false)}
+                    onExpand={() => {}}
                   />
                 </div>
               </div>
@@ -973,7 +1006,6 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         onClose={() => setIsCustomDateModalOpen(false)}
         onApply={(startDate, endDate) => {
           updateDateFilter("custom", startDate, endDate);
-          setIsDateFilterCollapsed(true);
         }}
         currentStartDate={customStartDate}
         currentEndDate={customEndDate}

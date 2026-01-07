@@ -138,7 +138,7 @@ export interface MajorDrawForDateRange {
  * @param endDate - End date for custom range (ISO string)
  */
 export function useAdminDashboardStats(
-  dateRange: "today" | "yesterday" | "all-time" | "custom" = "today",
+  dateRange: "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw" = "today",
   startDate?: string,
   endDate?: string
 ) {
@@ -146,7 +146,8 @@ export function useAdminDashboardStats(
     queryKey: ["admin", "dashboard", "stats", dateRange, startDate, endDate],
     queryFn: async (): Promise<AdminDashboardStats> => {
       const params = new URLSearchParams({ dateRange });
-      if (dateRange === "custom" && startDate && endDate) {
+      // Append dates for custom and draw-based ranges
+      if ((dateRange === "custom" || dateRange === "current-draw" || dateRange === "last-draw") && startDate && endDate) {
         params.append("startDate", startDate);
         params.append("endDate", endDate);
       }
@@ -270,6 +271,55 @@ export function useMajorDrawsForDateRange() {
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 15 * 60 * 1000, // 15 minutes
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch current and last draw date ranges
+ * Returns formatted dates as YYYY-MM-DD strings for API compatibility
+ */
+export function useCurrentAndLastDrawDates() {
+  return useQuery<{
+    currentDraw: { startDate: string; endDate: string; name: string } | null;
+    lastDraw: { startDate: string; endDate: string; name: string } | null;
+  }>({
+    queryKey: ["admin", "major-draw", "current-and-last"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/major-draw/current-and-last");
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch draw dates: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch draw dates");
+      }
+
+      const { currentDraw, lastDraw } = result.data;
+
+      // Format dates and handle null cases
+      return {
+        currentDraw: currentDraw?.activationDate && currentDraw?.drawDate
+          ? {
+              startDate: currentDraw.activationDate,
+              endDate: currentDraw.drawDate,
+              name: currentDraw.name,
+            }
+          : null,
+        lastDraw: lastDraw?.activationDate && lastDraw?.drawDate
+          ? {
+              startDate: lastDraw.activationDate,
+              endDate: lastDraw.drawDate,
+              name: lastDraw.name,
+            }
+          : null,
+      };
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
     retry: 2,
   });
 }

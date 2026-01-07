@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
-    const dateRange = (searchParams.get("dateRange") as "today" | "yesterday" | "all-time" | "custom") || "today";
+    const dateRange = (searchParams.get("dateRange") as "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw") || "today";
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
 
@@ -75,6 +75,39 @@ export async function GET(request: NextRequest) {
         // End at end of yesterday (one millisecond before today starts)
         endDate = new Date(startOfToday.getTime() - 1);
         break;
+      case "current-draw":
+      case "last-draw": {
+        // For draw-based ranges, use the provided startDate and endDate params
+        // These are set by the frontend from the draw dates
+        if (!startDateParam || !endDateParam) {
+          return NextResponse.json(
+            { error: "startDate and endDate are required for draw-based ranges" },
+            { status: 400 }
+          );
+        }
+        // Parse dates and normalize to AEST start/end of day
+        const drawStartDateParsed = new Date(startDateParam);
+        const drawEndDateParsed = new Date(endDateParam);
+        
+        // Get date components in AEST
+        const drawStartYear = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "yyyy"), 10);
+        const drawStartMonth = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "M"), 10);
+        const drawStartDay = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "d"), 10);
+        
+        const drawEndYear = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "yyyy"), 10);
+        const drawEndMonth = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "M"), 10);
+        const drawEndDay = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "d"), 10);
+        
+        // Set startDate to start of day (00:00:00) in AEST
+        startDate = createAESTDateAsUTC(drawStartYear, drawStartMonth, drawStartDay, 0, 0);
+        
+        // Set endDate to end of day (23:59:59.999) in AEST
+        const drawNextDayStart = createAESTDateAsUTC(drawEndYear, drawEndMonth, drawEndDay, 0, 0);
+        const drawNextDay = new Date(drawNextDayStart);
+        drawNextDay.setUTCDate(drawNextDay.getUTCDate() + 1);
+        endDate = new Date(drawNextDay.getTime() - 1);
+        break;
+      }
       case "all-time":
         // Website launch date: November 27, 2025 at midnight AEST
         // End date: End of today (January 6, 2026)
@@ -90,7 +123,6 @@ export async function GET(request: NextRequest) {
         const endDateParsed = new Date(endDateParam);
         
         // Get date components in AEST
-        const AEST_TIMEZONE = "Australia/Sydney";
         const startYear = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "yyyy"), 10);
         const startMonth = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "M"), 10);
         const startDay = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "d"), 10);

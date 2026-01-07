@@ -401,8 +401,8 @@ export default function UsersManagement() {
         <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
           User Management
         </h2>
-        {/* View Mode Toggle */}
-        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+        {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
+        <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg p-1">
           <button
             onClick={() => handleViewModeChange("users")}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -939,6 +939,34 @@ export default function UsersManagement() {
           setSelectedUserId(null);
         }}
       />
+
+      {/* Floating View Toggle Buttons - Mobile Only */}
+      <div className="fixed bottom-6 right-6 z-50 sm:hidden">
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => handleViewModeChange("users")}
+            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
+              viewMode === "users"
+                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
+                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
+            }`}
+            aria-label="Users View"
+          >
+            Users
+          </button>
+          <button
+            onClick={() => handleViewModeChange("metrics")}
+            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
+              viewMode === "metrics"
+                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
+                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
+            }`}
+            aria-label="Metrics View"
+          >
+            Metrics
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

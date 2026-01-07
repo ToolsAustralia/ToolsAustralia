@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { format } from "date-fns";
 import {
   DollarSign,
   TrendingUp,
@@ -20,7 +21,7 @@ import type { DateRangeOption, InsightLevel } from "@/types/facebook-ads";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
-import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
+import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
 import { DailyBreakdownChart } from "./DailyBreakdownChart";
 import { useDailyMetrics } from "@/hooks/useDailyMetrics";
 import { DailyMetricsView } from "./metrics/DailyMetricsView";
@@ -53,8 +54,6 @@ export default function FacebookAdsManagement() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
-  const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
   const [level, setLevel] = useState<InsightLevel>("adset");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -76,16 +75,6 @@ export default function FacebookAdsManagement() {
     params.set("viewMode", mode);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
-
-  // Detect mobile viewport
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
 
   // Sync date filter state with URL params on mount and when URL changes
   useEffect(() => {
@@ -120,24 +109,24 @@ export default function FacebookAdsManagement() {
     setStartDate((prev) => (prev !== urlStartDate ? urlStartDate : prev));
     setEndDate((prev) => (prev !== urlEndDate ? urlEndDate : prev));
 
-    // Auto-collapse on mobile for "all-time" or "custom"
-    if (isMobile && (urlDateRange === "all-time" || urlDateRange === "custom")) {
-      setIsDateFilterCollapsed(true);
-    }
-  }, [searchParams, pathname, router, isMobile]);
+    // Don't auto-collapse on mobile anymore since title is hidden
+  }, [searchParams, pathname, router]);
 
   // Fetch major draws for date range selection
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
 
+  // Fetch current and last draw dates
+  const { data: drawDates } = useCurrentAndLastDrawDates();
+
   // Convert DateRange to DateRangeOption
-  // Note: "all-time" is converted to "custom" with 2 years range for API compatibility
+  // Note: "all-time", "current-draw", and "last-draw" are converted to "custom" with dates for API compatibility
   const dateRangeOption: DateRangeOption = useMemo(() => {
-    if (dateRange === "all-time") {
+    if (dateRange === "all-time" || dateRange === "current-draw" || dateRange === "last-draw") {
       // If we have dates already (from URL), use them
       if (startDate && endDate) {
         return "custom";
       }
-      // Otherwise, calculate 2 years range (but don't set state here - let updateDateFilter handle it)
+      // Otherwise, return "custom" (dates will be set by updateDateFilter)
       return "custom";
     }
     return dateRange as DateRangeOption;
@@ -156,13 +145,26 @@ export default function FacebookAdsManagement() {
       level,
     };
 
-    if (dateRangeOption === "custom" && startDate && endDate) {
-      params.startDate = startDate;
-      params.endDate = endDate;
+    // Include dates for custom ranges (including converted draw-based ranges)
+    if (dateRangeOption === "custom") {
+      // For draw-based ranges, ensure dates are available
+      if ((dateRange === "current-draw" || dateRange === "last-draw") && drawDates) {
+        if (dateRange === "current-draw" && drawDates.currentDraw) {
+          params.startDate = drawDates.currentDraw.startDate;
+          params.endDate = drawDates.currentDraw.endDate;
+        } else if (dateRange === "last-draw" && drawDates.lastDraw) {
+          params.startDate = drawDates.lastDraw.startDate;
+          params.endDate = drawDates.lastDraw.endDate;
+        }
+      } else if (startDate && endDate) {
+        // For regular custom ranges or all-time (which has dates in state)
+        params.startDate = startDate;
+        params.endDate = endDate;
+      }
     }
 
     return params;
-  }, [dateRangeOption, startDate, endDate, level]);
+  }, [dateRangeOption, startDate, endDate, level, dateRange, drawDates]);
 
   // Fetch insights data
   const { data, isLoading, error } = useFacebookAdsInsights(queryParams);
@@ -199,8 +201,17 @@ export default function FacebookAdsManagement() {
     let finalStart = start;
     let finalEnd = end;
 
-    // Handle "all-time" by converting to "custom" with 2 years range
-    if (range === "all-time") {
+    // Handle draw-based date ranges
+    if (range === "current-draw" && drawDates?.currentDraw) {
+      finalRange = range;
+      finalStart = drawDates.currentDraw.startDate;
+      finalEnd = drawDates.currentDraw.endDate;
+    } else if (range === "last-draw" && drawDates?.lastDraw) {
+      finalRange = range;
+      finalStart = drawDates.lastDraw.startDate;
+      finalEnd = drawDates.lastDraw.endDate;
+    } else if (range === "all-time") {
+      // Handle "all-time" by converting to "custom" with 2 years range
       finalRange = "all-time"; // Keep as "all-time" in URL for UI
       const today = new Date();
       const twoYearsAgo = new Date();
@@ -219,10 +230,7 @@ export default function FacebookAdsManagement() {
       setEndDate("");
     }
 
-    // Auto-collapse on mobile for "all-time" or "custom"
-    if (isMobile && (finalRange === "all-time" || finalRange === "custom")) {
-      setIsDateFilterCollapsed(true);
-    }
+    // Don't auto-collapse on mobile anymore since title is hidden
 
     // Update URL params
     const params = new URLSearchParams(searchParams.toString());
@@ -246,38 +254,42 @@ export default function FacebookAdsManagement() {
     }
   };
 
-  // Determine if filter should be collapsible (only on mobile, and only for custom range or all-time)
-  const shouldCollapse = useMemo(() => {
-    return isMobile && (dateRange === "custom" || dateRange === "all-time");
-  }, [isMobile, dateRange]);
+  // Format abbreviated date for collapsed view (matching AdminPage)
+  const formatAbbreviatedDate = (startDate: string, endDate: string): string => {
+    if (!startDate || !endDate) return "";
+    
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // Check if same date
+      if (format(start, "yyyy-MM-dd") === format(end, "yyyy-MM-dd")) {
+        return format(start, "MMM d, yyyy"); // "Dec 27, 2025"
+      }
+      
+      // Different dates - show abbreviated range
+      return `${format(start, "MMM d")} - ${format(end, "MMM d, yyyy")}`; // "Nov 27 - Dec 27, 2025"
+    } catch {
+      return "";
+    }
+  };
 
-  // Get display date for collapsed view
+  // Get display date for collapsed view (matching AdminPage)
   const displayDate = useMemo(() => {
     if (dateRange === "custom" && startDate && endDate) {
-      try {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const format = (date: Date) => {
-          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-        };
-        if (startDate === endDate) {
-          return format(start);
-        }
-        const formatShort = (date: Date) => {
-          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          return `${months[date.getMonth()]} ${date.getDate()}`;
-        };
-        return `${formatShort(start)} - ${format(end)}`;
-      } catch {
-        return "";
-      }
+      return formatAbbreviatedDate(startDate, endDate);
     }
     if (dateRange === "all-time") {
       return "All Time";
     }
+    if (dateRange === "current-draw" && drawDates?.currentDraw) {
+      return `Current Draw`;
+    }
+    if (dateRange === "last-draw" && drawDates?.lastDraw) {
+      return `Last Draw`;
+    }
     return null;
-  }, [dateRange, startDate, endDate]);
+  }, [dateRange, startDate, endDate, drawDates]);
 
   // Table sorting functions
   const handleSort = (column: string) => {
@@ -420,15 +432,15 @@ export default function FacebookAdsManagement() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header with Controls - Simple like Dashboard Overview */}
-      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      {/* Header with Controls - Matching Dashboard Overview */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 min-w-0">
+        <h2 className="hidden sm:block text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
           Facebook Ads Performance
         </h2>
-        <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 min-w-0 max-w-full">
+          {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
+          <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg p-1 flex-shrink-0">
             <button
               onClick={() => handleViewModeChange("ads")}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -452,14 +464,16 @@ export default function FacebookAdsManagement() {
           </div>
           {/* Date Range Toggle - Only show for Ads view */}
           {viewMode === "ads" && (
-            <DateRangeToggle
-              selectedRange={dateRange}
-              onRangeChange={handleDateRangeChange}
-              onCustomClick={() => setIsCustomDateModalOpen(true)}
-              collapsed={isDateFilterCollapsed && shouldCollapse}
-              displayDate={displayDate || undefined}
-              onExpand={() => setIsDateFilterCollapsed(false)}
-            />
+            <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
+              <DateRangeToggle
+                selectedRange={dateRange}
+                onRangeChange={handleDateRangeChange}
+                onCustomClick={() => setIsCustomDateModalOpen(true)}
+                collapsed={false}
+                displayDate={displayDate || undefined}
+                onExpand={() => {}}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -527,8 +541,8 @@ export default function FacebookAdsManagement() {
 
       {/* Breakdown Table (for Campaign/Ad Set levels) */}
       {data.breakdown && data.breakdown.length > 0 && (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
-          <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6 overflow-hidden">
+          <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4 min-w-0">
             <h3 className="text-sm sm:text-lg font-semibold text-gray-900 flex-1 min-w-0 truncate">
               {level === "campaign" ? "Campaign Breakdown" : "Ad Set Breakdown"}
             </h3>
@@ -552,8 +566,8 @@ export default function FacebookAdsManagement() {
               </select>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
+            <table className="w-full min-w-[600px]">
               <thead>
                 <tr className="border-b-2 border-gray-200 bg-gray-50">
                   <th
@@ -663,6 +677,34 @@ export default function FacebookAdsManagement() {
       />
         </>
       )}
+
+      {/* Floating View Toggle Buttons - Mobile Only */}
+      <div className="fixed bottom-6 right-6 z-50 sm:hidden">
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => handleViewModeChange("ads")}
+            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
+              viewMode === "ads"
+                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
+                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
+            }`}
+            aria-label="Ads View"
+          >
+            Ads
+          </button>
+          <button
+            onClick={() => handleViewModeChange("metrics")}
+            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
+              viewMode === "metrics"
+                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
+                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
+            }`}
+            aria-label="Metrics View"
+          >
+            Metrics
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
