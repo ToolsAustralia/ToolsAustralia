@@ -5,6 +5,11 @@ import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
 import { format } from "date-fns";
+import { addDays } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
+import { createAESTDateAsUTC } from "@/utils/common/timezone";
+
+const AEST_TIMEZONE = "Australia/Sydney";
 
 /**
  * GET /api/admin/major-draw/current-and-last
@@ -41,26 +46,61 @@ export async function GET(request: NextRequest) {
         .select("activationDate drawDate name");
     }
 
-    // Format dates as YYYY-MM-DD strings
+    // Format dates as YYYY-MM-DD strings in AEST timezone
     const formatDate = (date: Date | undefined): string | null => {
       if (!date) return null;
-      return format(new Date(date), "yyyy-MM-dd");
+      // Format the date in AEST timezone to ensure correct date representation
+      return formatInTimeZone(new Date(date), AEST_TIMEZONE, "yyyy-MM-dd");
     };
+
+    // Calculate date ranges ensuring no overlap
+    let currentDrawStartDate: string | null = null;
+    let currentDrawEndDate: string | null = null;
+    let lastDrawStartDate: string | null = null;
+    let lastDrawEndDate: string | null = null;
+
+    if (currentDraw?.drawDate) {
+      // For current draw, start date should be the day after last draw's end date
+      // This ensures no overlap between draws
+      if (lastDraw?.drawDate) {
+        // Get last draw's drawDate in AEST
+        const lastDrawEndYear = parseInt(formatInTimeZone(lastDraw.drawDate, AEST_TIMEZONE, "yyyy"), 10);
+        const lastDrawEndMonth = parseInt(formatInTimeZone(lastDraw.drawDate, AEST_TIMEZONE, "M"), 10);
+        const lastDrawEndDay = parseInt(formatInTimeZone(lastDraw.drawDate, AEST_TIMEZONE, "d"), 10);
+        
+        // Add 1 day to last draw's end date to get current draw's start date
+        const lastDrawEndDateAEST = createAESTDateAsUTC(lastDrawEndYear, lastDrawEndMonth, lastDrawEndDay, 0, 0);
+        const currentDrawStart = addDays(lastDrawEndDateAEST, 1);
+        
+        // Format the start date in AEST
+        currentDrawStartDate = formatInTimeZone(currentDrawStart, AEST_TIMEZONE, "yyyy-MM-dd");
+      } else {
+        // No last draw, use activationDate as is
+        currentDrawStartDate = formatDate(currentDraw.activationDate);
+      }
+      currentDrawEndDate = formatDate(currentDraw.drawDate);
+    }
+
+    if (lastDraw?.activationDate && lastDraw?.drawDate) {
+      lastDrawStartDate = formatDate(lastDraw.activationDate);
+      // Last draw ends on its drawDate (inclusive)
+      lastDrawEndDate = formatDate(lastDraw.drawDate);
+    }
 
     const response = {
       success: true,
       data: {
-        currentDraw: currentDraw
+        currentDraw: currentDraw && currentDrawStartDate && currentDrawEndDate
           ? {
-              activationDate: formatDate(currentDraw.activationDate),
-              drawDate: formatDate(currentDraw.drawDate),
+              activationDate: currentDrawStartDate,
+              drawDate: currentDrawEndDate,
               name: currentDraw.name,
             }
           : null,
-        lastDraw: lastDraw
+        lastDraw: lastDraw && lastDrawStartDate && lastDrawEndDate
           ? {
-              activationDate: formatDate(lastDraw.activationDate),
-              drawDate: formatDate(lastDraw.drawDate),
+              activationDate: lastDrawStartDate,
+              drawDate: lastDrawEndDate,
               name: lastDraw.name,
             }
           : null,
@@ -79,4 +119,6 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+
 
