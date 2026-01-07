@@ -6,9 +6,12 @@ import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
+import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
 import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST } from "@/utils/common/timezone";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
+import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
+import { getAlternatingDefaultText } from "@/utils/promo-banner/default-text-manager";
 
 // Helper function to get current timezone abbreviation (AEST or AEDT)
 const getTimezoneAbbr = (): string => {
@@ -70,6 +73,21 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const bannerRef = useRef<HTMLDivElement>(null);
   const [bannerHeight, setBannerHeight] = useState<number | null>(null);
   const [timezoneAbbr, setTimezoneAbbr] = useState<string>("AEDT");
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Fetch active scheduled banner text
+  const { data: activeBannerTextData } = useActivePromoBannerText();
+  const activeScheduledText = activeBannerTextData?.data?.text;
+
+  // Detect mobile viewport for font sizing
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640); // sm breakpoint
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Get promos for each type (use initial data if available, fallback to client-side fetch)
   const { data: membershipPromoClient } = usePromoByType("membership-packages");
@@ -242,17 +260,31 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return null;
   };
 
-  // Determine badge text based on draw status
+  // Determine badge text based on priority:
+  // 1. Draw status ("DRAWN TONIGHT" / "DRAWN TOMORROW") - Highest priority
+  // 2. Active scheduled text (from service layer, resolved in AEST)
+  // 3. Alternating default texts ("BOOST ACTIVATED" / "FIRST 500 PEOPLE")
   const getBadgeText = (): string => {
+    // Priority 1: Draw status (highest priority)
     const drawStatus = getDrawDateStatus();
     if (drawStatus === "today") {
       return "DRAWN TONIGHT";
     } else if (drawStatus === "tomorrow") {
       return "DRAWN TOMORROW";
     }
-    // Default fallback
-    return "First 500 People";
+
+    // Priority 2: Active scheduled text
+    if (activeScheduledText) {
+      return activeScheduledText;
+    }
+
+    // Priority 3: Alternating default fallback
+    return getAlternatingDefaultText();
   };
+
+  // Calculate dynamic font size based on text length
+  const badgeText = getBadgeText();
+  const fontSize = calculateFontSize(badgeText, isMobile);
 
   // Get formatted draw time for display
   const getDrawTimeText = (): string | null => {
@@ -396,10 +428,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       }}
                     />
 
-                    {/* Text content - centered */}
+                    {/* Text content - centered with dynamic font size */}
                     <span
-                      className="relative z-10 text-white font-black tracking-wider uppercase text-[12px] sm:text-[16px] whitespace-nowrap"
+                      className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
                       style={{
+                        fontSize: fontSize,
                         textShadow: `
                         0 0 6px rgba(255, 255, 255, 0.8),
                         0 0 12px rgba(255, 240, 180, 0.6),
@@ -409,7 +442,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
                       }}
                     >
-                      {getBadgeText()}
+                      {badgeText}
                     </span>
                   </div>
                 </div>

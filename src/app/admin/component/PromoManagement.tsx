@@ -7,13 +7,16 @@ import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoM
 import BonusEntryPromoList from "@/components/admin/BonusEntryPromoList";
 import AdminPromoLinkModal from "@/components/modals/AdminPromoLinkModal";
 import PromoLinkList from "@/components/admin/PromoLinkList";
+import AdminPromoBannerTextModal from "@/components/modals/AdminPromoBannerTextModal";
+import PromoBannerTextList from "@/components/admin/PromoBannerTextList";
 import PromoBadge from "@/components/ui/PromoBadge";
-import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2 } from "lucide-react";
+import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar } from "lucide-react";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
   const [isBonusEntryModalOpen, setIsBonusEntryModalOpen] = useState(false);
   const [isPromoLinkModalOpen, setIsPromoLinkModalOpen] = useState(false);
+  const [isBannerTextModalOpen, setIsBannerTextModalOpen] = useState(false);
 
   const { data: activePromos = [], isLoading: activeLoading, refetch: refetchActive } = useAdminActivePromos();
 
@@ -142,6 +145,31 @@ export default function PromoManagement() {
         <PromoLinkList />
       </div>
 
+      {/* Promo Banner Text Schedule Section */}
+      <div className="mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-red-600" />
+              Promo Banner Text Schedule
+            </h3>
+            <p className="text-gray-600 mt-1 text-sm">
+              Schedule custom banner text for holidays and special occasions. Supports one-time date ranges and
+              recurring patterns (weekdays, weekends, or specific days). All dates are in AEST timezone.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsBannerTextModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            <Plus className="w-4 h-4" />
+            Create Scheduled Text
+          </button>
+        </div>
+
+        <PromoBannerTextList />
+      </div>
+
       {/* Toggle Promo Modal */}
       <AdminPromoToggle isOpen={isToggleModalOpen} onClose={() => setIsToggleModalOpen(false)} />
 
@@ -160,6 +188,15 @@ export default function PromoManagement() {
         onClose={() => setIsPromoLinkModalOpen(false)}
         onSuccess={() => {
           setIsPromoLinkModalOpen(false);
+        }}
+      />
+
+      {/* Banner Text Modal */}
+      <AdminPromoBannerTextModal
+        isOpen={isBannerTextModalOpen}
+        onClose={() => setIsBannerTextModalOpen(false)}
+        onSuccess={() => {
+          setIsBannerTextModalOpen(false);
         }}
       />
     </div>

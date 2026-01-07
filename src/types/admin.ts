@@ -595,3 +595,70 @@ export interface PromoLinkResponse {
   success: boolean;
   data: PromoLink | null;
 }
+
+// ========================================
+// PROMO BANNER TEXT TYPES
+// ========================================
+
+export type PromoBannerTextScheduleType = "one-time" | "recurring";
+export type PromoBannerTextRecurrencePattern =
+  | "weekdays"
+  | "weekends"
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+
+export interface PromoBannerText {
+  id: string;
+  text: string;
+  scheduleType: PromoBannerTextScheduleType;
+  startDate?: string; // ISO date string in AEST
+  endDate?: string; // ISO date string in AEST
+  recurrencePattern?: PromoBannerTextRecurrencePattern;
+  isActive: boolean;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+}
+
+export interface CreatePromoBannerTextPayload {
+  text: string;
+  scheduleType: PromoBannerTextScheduleType;
+  startDate?: string; // ISO date string in AEST (required for one-time)
+  endDate?: string; // ISO date string in AEST (required for one-time)
+  recurrencePattern?: PromoBannerTextRecurrencePattern; // Required for recurring
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface UpdatePromoBannerTextPayload {
+  text?: string;
+  scheduleType?: PromoBannerTextScheduleType;
+  startDate?: string; // ISO date string in AEST
+  endDate?: string; // ISO date string in AEST
+  recurrencePattern?: PromoBannerTextRecurrencePattern;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface PromoBannerTextListResponse {
+  success: boolean;
+  data: PromoBannerText[];
+  count: number;
+}
+
+export interface PromoBannerTextResponse {
+  success: boolean;
+  data: PromoBannerText | null;
+  message?: string;
+}
