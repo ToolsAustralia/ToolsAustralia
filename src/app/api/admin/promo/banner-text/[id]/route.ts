@@ -90,7 +90,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Convert dates from UTC to AEST for response
     const response: PromoBannerText = {
-      id: updatedText._id.toString(),
+      id: (updatedText._id as { toString(): string }).toString(),
       text: updatedText.text,
       scheduleType: updatedText.scheduleType,
       startDate: updatedText.startDate ? convertUTCToAEST(updatedText.startDate).toISOString() : undefined,

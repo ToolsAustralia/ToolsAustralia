@@ -67,7 +67,8 @@ export default function PromoBannerTextList() {
         sunday: "Every Sunday",
       };
 
-      let schedule = patternLabels[text.recurrencePattern || ""] || text.recurrencePattern;
+      const pattern = text.recurrencePattern || "";
+      let schedule = patternLabels[pattern] || pattern || "No pattern set";
 
       if (text.startDate || text.endDate) {
         const boundaries: string[] = [];
