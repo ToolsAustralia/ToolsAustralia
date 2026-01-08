@@ -2,7 +2,7 @@
  * Default Text Manager Utility
  * 
  * Manages alternating default texts when no scheduled text is active.
- * Alternates once per day (AEST) between "BOOST ACTIVATED" and "FIRST 500 PEOPLE".
+ * Alternates once per day (AEST) between "BIGGEST BONUS" and "FIRST 500 PEOPLE".
  * Uses localStorage to track which default text was shown for the current day.
  */
 
@@ -10,7 +10,7 @@ import { getNowInAEST } from "@/utils/common/timezone";
 
 const STORAGE_KEY_DATE = "promoBannerDefaultDate";
 const STORAGE_KEY_INDEX = "promoBannerDefaultIndex";
-const DEFAULT_TEXTS = ["BOOST ACTIVATED", "FIRST 500 PEOPLE"];
+const DEFAULT_TEXTS = ["BIGGEST BONUS", "FIRST 500 PEOPLE"];
 
 /**
  * Get the current date string in AEST (YYYY-MM-DD format)
@@ -26,7 +26,7 @@ function getCurrentDateStringAEST(): string {
 
 /**
  * Get the alternating default text for the current day (AEST)
- * Alternates between "BOOST ACTIVATED" and "FIRST 500 PEOPLE" once per day
+ * Alternates between "BIGGEST BONUS" and "FIRST 500 PEOPLE" once per day
  * @returns The default text to display for today
  */
 export function getAlternatingDefaultText(): string {

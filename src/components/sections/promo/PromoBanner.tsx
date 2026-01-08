@@ -84,7 +84,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     if (typeof window !== "undefined") {
       return getAlternatingDefaultText();
     }
-    return "BOOST ACTIVATED"; // Default for SSR
+    return "BIGGEST BONUS"; // Default for SSR
   });
 
   // Detect mobile viewport for font sizing
@@ -294,7 +294,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Determine badge text based on priority:
   // 1. Draw status ("DRAWN TONIGHT" / "DRAWN TOMORROW") - Highest priority
   // 2. Active scheduled text (from service layer, resolved in AEST)
-  // 3. Alternating default texts ("BOOST ACTIVATED" / "FIRST 500 PEOPLE")
+  // 3. Alternating default texts ("BIGGEST BONUS" / "FIRST 500 PEOPLE")
   const getBadgeText = (): string => {
     // Priority 1: Draw status (highest priority)
     const drawStatus = getDrawDateStatus();
