@@ -14,14 +14,17 @@ export function useActivePromoBannerText() {
   return useQuery<PromoBannerTextResponse>({
     queryKey: ["promo-banner-text", "active"],
     queryFn: async () => {
-      const response = await fetch("/api/admin/promo/banner-text/active");
+      const response = await fetch("/api/admin/promo/banner-text/active", {
+        cache: "no-store", // Prevent browser caching
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch active banner text");
       }
       return response.json();
     },
-    staleTime: 60 * 1000, // 1 minute
-    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // Refetch every 1 minute
+    refetchOnWindowFocus: true,
   });
 }
 

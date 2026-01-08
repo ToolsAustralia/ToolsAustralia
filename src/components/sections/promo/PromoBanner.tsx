@@ -7,7 +7,8 @@ import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
-import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST } from "@/utils/common/timezone";
+import { useQueryClient } from "@tanstack/react-query";
+import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST, getNowInAEST } from "@/utils/common/timezone";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
@@ -54,6 +55,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
 
   const [timeLeft, setTimeLeft] = useState({
@@ -115,28 +117,62 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => clearInterval(interval);
   }, []);
 
-  // Check if day has changed and update alternating default text accordingly
-  // This ensures the text only changes once per day, not on every render
+  // Automatic midnight AEST/AEDT detection and update
+  // This ensures banner text updates automatically at midnight without manual intervention
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const checkAndUpdateDefaultText = () => {
-      const currentText = getAlternatingDefaultText();
-      setAlternatingDefault((prev) => {
-        // Only update if the text actually changed (new day)
-        return prev !== currentText ? currentText : prev;
-      });
+    const scheduleMidnightUpdate = () => {
+      const now = new Date();
+      const nextMidnight = getNextMidnightAEST();
+      const msUntilMidnight = nextMidnight.getTime() - now.getTime();
+
+      // Schedule update exactly at midnight AEST/AEDT
+      const timeoutId = setTimeout(() => {
+        // Invalidate React Query cache to force refetch of active scheduled text
+        queryClient.invalidateQueries({ queryKey: ["promo-banner-text", "active"] });
+        
+        // Update alternating default text for new day
+        setAlternatingDefault(getAlternatingDefaultText());
+        
+        // Reschedule for next midnight
+        scheduleMidnightUpdate();
+      }, Math.max(0, msUntilMidnight)); // Ensure non-negative
+
+      return timeoutId;
     };
 
-    // Check immediately on mount
-    checkAndUpdateDefaultText();
+    // Initial schedule
+    let timeoutId = scheduleMidnightUpdate();
 
-    // Check every minute to catch day changes while user is on page
-    // (The function itself handles day-based alternation, so we just need to sync state)
-    const interval = setInterval(checkAndUpdateDefaultText, 60 * 1000);
+    // Fallback: Check every minute to catch any missed updates
+    const fallbackInterval = setInterval(() => {
+      const nowAEST = getNowInAEST();
+      const currentDateStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
+      const lastCheckedDate = sessionStorage.getItem("lastBannerCheckDate");
+      
+      if (lastCheckedDate !== currentDateStr) {
+        // Day changed - update everything
+        sessionStorage.setItem("lastBannerCheckDate", currentDateStr);
+        queryClient.invalidateQueries({ queryKey: ["promo-banner-text", "active"] });
+        setAlternatingDefault(getAlternatingDefaultText());
+        
+        // Reschedule midnight timeout
+        clearTimeout(timeoutId);
+        timeoutId = scheduleMidnightUpdate();
+      }
+    }, 60 * 1000); // Check every minute
 
-    return () => clearInterval(interval);
-  }, []);
+    // Initialize last checked date
+    const nowAEST = getNowInAEST();
+    const currentDateStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
+    sessionStorage.setItem("lastBannerCheckDate", currentDateStr);
+
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(fallbackInterval);
+    };
+  }, [queryClient]);
 
   // Countdown strategy:
   // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).

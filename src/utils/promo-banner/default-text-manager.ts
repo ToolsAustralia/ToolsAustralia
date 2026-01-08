@@ -40,11 +40,13 @@ export function getAlternatingDefaultText(): string {
     const storedDateStr = localStorage.getItem(STORAGE_KEY_DATE);
     const storedIndex = localStorage.getItem(STORAGE_KEY_INDEX);
 
-    // If it's a new day, alternate to the next text
+    // If it's a new day, start with BIGGEST BONUS (index 0) and alternate from there
     if (storedDateStr !== currentDateStr) {
-      // Calculate next index
-      const lastIndex = storedIndex ? parseInt(storedIndex, 10) : 0;
-      const nextIndex = (lastIndex + 1) % DEFAULT_TEXTS.length;
+      // Get the last index to determine what to show today
+      const lastIndex = storedIndex ? parseInt(storedIndex, 10) : -1;
+      // If lastIndex was -1 (no previous day) or 1 (was "FIRST 500 PEOPLE"), start with "BIGGEST BONUS" (0)
+      // If lastIndex was 0 (was "BIGGEST BONUS"), show "FIRST 500 PEOPLE" (1)
+      const nextIndex = lastIndex === 0 ? 1 : 0;
       
       // Store new date and index
       localStorage.setItem(STORAGE_KEY_DATE, currentDateStr);
