@@ -79,6 +79,14 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const { data: activeBannerTextData } = useActivePromoBannerText();
   const activeScheduledText = activeBannerTextData?.data?.text;
 
+  // Store alternating default text in state - only updates once per day (AEST)
+  const [alternatingDefault, setAlternatingDefault] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return getAlternatingDefaultText();
+    }
+    return "BOOST ACTIVATED"; // Default for SSR
+  });
+
   // Detect mobile viewport for font sizing
   useEffect(() => {
     const checkMobile = () => {
@@ -104,6 +112,29 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     const interval = setInterval(() => {
       setTimezoneAbbr(getTimezoneAbbr());
     }, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check if day has changed and update alternating default text accordingly
+  // This ensures the text only changes once per day, not on every render
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const checkAndUpdateDefaultText = () => {
+      const currentText = getAlternatingDefaultText();
+      setAlternatingDefault((prev) => {
+        // Only update if the text actually changed (new day)
+        return prev !== currentText ? currentText : prev;
+      });
+    };
+
+    // Check immediately on mount
+    checkAndUpdateDefaultText();
+
+    // Check every minute to catch day changes while user is on page
+    // (The function itself handles day-based alternation, so we just need to sync state)
+    const interval = setInterval(checkAndUpdateDefaultText, 60 * 1000);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -278,8 +309,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       return activeScheduledText;
     }
 
-    // Priority 3: Alternating default fallback
-    return getAlternatingDefaultText();
+    // Priority 3: Alternating default fallback (use state, not function call)
+    // This prevents the text from changing on every render
+    return alternatingDefault;
   };
 
   // Calculate dynamic font size based on text length
