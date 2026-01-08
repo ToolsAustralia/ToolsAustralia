@@ -208,7 +208,7 @@ export function useRecentActivities() {
  * @param endDate - End date for custom range (ISO string)
  */
 export function useRevenueBreakdown(
-  period: "days" | "months" | "years" = "months",
+  period: "days" | "months" | "years" | "major-draws" = "months",
   startDate?: string,
   endDate?: string
 ) {

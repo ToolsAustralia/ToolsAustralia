@@ -4,12 +4,13 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { TrendingUp, TrendingDown, DollarSign, ChevronLeft, ChevronRight } from "lucide-react";
 import { ChartData, useRevenueBreakdown } from "@/hooks/queries/useAdminQueries";
 import { formatInTimeZone } from "date-fns-tz";
-import { startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
+import { subMonths, addMonths } from "date-fns";
+import { createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 
 // Component now manages its own data fetching
 // No props needed
 
-type Period = "days" | "months" | "years";
+type Period = "days" | "months" | "years" | "major-draws";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -26,7 +27,10 @@ export default function RevenueOverview() {
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
   const [clickedBar, setClickedBar] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+  const [tooltipData, setTooltipData] = useState<ChartData | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartAreaRef = useRef<HTMLDivElement>(null);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -38,71 +42,130 @@ export default function RevenueOverview() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Fetch revenue data based on selected period
-  const { data: revenueData, isLoading, error } = useRevenueBreakdown(selectedPeriod);
+  // Calculate date range for days period with launch date cap
+  const daysDateRange = useMemo(() => {
+    if (selectedPeriod !== "days") {
+      return { startDate: undefined, endDate: undefined };
+    }
+
+    const year = selectedMonth.getFullYear();
+    const month = selectedMonth.getMonth() + 1; // getMonth() returns 0-11
+    
+    // Calculate month start (first day of selected month)
+    const monthStart = createAESTDateAsUTC(year, month, 1, 0, 0);
+    
+    // Calculate month end (last day of selected month)
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextMonthYear = month === 12 ? year + 1 : year;
+    const nextMonthStart = createAESTDateAsUTC(nextMonthYear, nextMonth, 1, 0, 0);
+    const monthEnd = new Date(nextMonthStart.getTime() - 1);
+    
+    // Get launch date
+    const launchDate = getWebsiteLaunchDateUTC();
+    
+    // Cap start date at launch date (if month starts before launch)
+    const startDate = monthStart < launchDate ? launchDate : monthStart;
+    
+    // Cap end date at today (if month extends into future)
+    const today = new Date();
+    const endDate = monthEnd > today ? today : monthEnd;
+    
+    // Only return dates if startDate <= endDate (valid range)
+    if (startDate > endDate) {
+      return { startDate: undefined, endDate: undefined };
+    }
+    
+    return {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    };
+  }, [selectedPeriod, selectedMonth]);
+
+  // Fetch revenue data based on selected period with date range for days
+  const { data: revenueData, isLoading, error } = useRevenueBreakdown(
+    selectedPeriod,
+    daysDateRange.startDate,
+    daysDateRange.endDate
+  );
+
+  // Fetch ALL-TIME totals separately (for summary cards)
+  const { data: allTimeRevenueData } = useRevenueBreakdown("years");
 
   const allChartData: ChartData[] = useMemo(() => revenueData?.chartData || [], [revenueData?.chartData]);
 
   // Filter chart data based on selected period and date
   const chartData: ChartData[] = useMemo(() => {
     if (selectedPeriod === "days") {
-      // Filter days for the selected month using dateKey
-      const monthStart = startOfMonth(selectedMonth);
-      const monthEnd = endOfMonth(selectedMonth);
-
+      // Filter days for the selected month - FIX: Use AEST timezone
+      const selectedYear = selectedMonth.getFullYear();
+      const selectedMonthNum = selectedMonth.getMonth() + 1; // getMonth() returns 0-11, we need 1-12
+      
       return allChartData.filter((data) => {
         if (!data.dateKey) {
           // Fallback: try to parse date label
           try {
             const dataDate = new Date(data.date);
             if (!isNaN(dataDate.getTime())) {
-              return dataDate >= monthStart && dataDate <= monthEnd;
+              // Convert to AEST month/year for comparison
+              const dataYear = parseInt(formatInTimeZone(dataDate, AEST_TIMEZONE, "yyyy"), 10);
+              const dataMonth = parseInt(formatInTimeZone(dataDate, AEST_TIMEZONE, "M"), 10);
+              return dataYear === selectedYear && dataMonth === selectedMonthNum;
             }
           } catch {
             // If parsing fails, try string matching
-            const monthName = formatInTimeZone(monthStart, AEST_TIMEZONE, "MMM");
+            const monthStartAEST = createAESTDateAsUTC(selectedYear, selectedMonthNum, 1, 0, 0);
+            const monthName = formatInTimeZone(monthStartAEST, AEST_TIMEZONE, "MMM");
             return data.date.startsWith(monthName);
           }
           return false;
-    }
+        }
 
-        // Use dateKey for accurate filtering
+        // Use dateKey for accurate filtering - compare in AEST
         const dataDate = new Date(data.dateKey);
-        return dataDate >= monthStart && dataDate <= monthEnd;
+        const dataYear = parseInt(formatInTimeZone(dataDate, AEST_TIMEZONE, "yyyy"), 10);
+        const dataMonth = parseInt(formatInTimeZone(dataDate, AEST_TIMEZONE, "M"), 10);
+        return dataYear === selectedYear && dataMonth === selectedMonthNum;
       });
     } else if (selectedPeriod === "months") {
-      // Filter months for the selected year
-      const yearStart = new Date(selectedYear.getFullYear(), 0, 1);
-      const yearEnd = new Date(selectedYear.getFullYear(), 11, 31, 23, 59, 59);
+      // Filter months for the selected year - FIX: Use AEST timezone
+      const selectedYearNum = selectedYear.getFullYear();
 
       return allChartData.filter((data) => {
         if (!data.dateKey) {
           try {
             const dataDate = new Date(data.date);
             if (!isNaN(dataDate.getTime())) {
-              return dataDate >= yearStart && dataDate <= yearEnd;
+              // Convert to AEST year for comparison
+              const dataYear = parseInt(formatInTimeZone(dataDate, AEST_TIMEZONE, "yyyy"), 10);
+              return dataYear === selectedYearNum;
             }
           } catch {
-            const yearStr = selectedYear.getFullYear().toString();
+            const yearStr = selectedYearNum.toString();
             return data.date.includes(yearStr);
           }
           return false;
         }
 
+        // Use dateKey for accurate filtering - compare in AEST
         const dataDate = new Date(data.dateKey);
-        return dataDate >= yearStart && dataDate <= yearEnd;
+        const dataYear = parseInt(formatInTimeZone(dataDate, AEST_TIMEZONE, "yyyy"), 10);
+        return dataYear === selectedYearNum;
       });
+    } else if (selectedPeriod === "major-draws") {
+      // Major draws view - show all data (no filtering needed)
+      return allChartData;
     } else {
       // Years view - show all data
       return allChartData;
     }
   }, [allChartData, selectedPeriod, selectedMonth, selectedYear]);
 
+  // FIX: Use all-time totals for summary cards (not filtered by period)
   const totals = useMemo(
-    () => revenueData?.totals || { total: 0, oneTime: 0, memberships: 0, miniDraw: 0 },
-    [revenueData?.totals]
+    () => allTimeRevenueData?.totals || { total: 0, oneTime: 0, memberships: 0, miniDraw: 0 },
+    [allTimeRevenueData?.totals]
   );
-  const growthRate = revenueData?.growthRate || 0;
+  const growthRate = revenueData?.growthRate || 0; // Keep growth rate from filtered data
 
   // Navigate to previous/next month for days view
   const navigateMonth = (direction: "prev" | "next") => {
@@ -163,6 +226,11 @@ export default function RevenueOverview() {
 
   // Format date label based on period
   const formatDateLabel = (data: ChartData, period: Period): string => {
+    // For major-draws, return the draw name directly (stored in data.date)
+    if (period === "major-draws") {
+      return data.date;
+    }
+    
     try {
       // Use dateKey if available (ISO string), otherwise try to parse date label
       const date = data.dateKey ? new Date(data.dateKey) : new Date(data.date);
@@ -257,7 +325,7 @@ export default function RevenueOverview() {
           <div className="flex-shrink-0">
             <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30">
               <div className="flex items-center gap-1 sm:gap-2">
-                {(["days", "months", "years"] as Period[]).map((period) => (
+                {(["days", "months", "years", "major-draws"] as Period[]).map((period) => (
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
@@ -267,7 +335,7 @@ export default function RevenueOverview() {
                         : "text-slate-300 hover:text-white hover:bg-slate-700/50"
                   }`}
                 >
-                    <span className="capitalize">{period}</span>
+                    <span className="capitalize">{period === "major-draws" ? "Major Draws" : period}</span>
                 </button>
               ))}
             </div>
@@ -367,7 +435,16 @@ export default function RevenueOverview() {
         )}
 
         {/* Chart Area */}
-        <div className="relative" style={{ minHeight: "300px" }}>
+        <div
+          ref={chartAreaRef}
+          className="relative"
+          style={{ minHeight: "300px", paddingTop: "40px" }}
+          onMouseLeave={() => {
+            setHoveredBar(null);
+            setTooltipPosition(null);
+            setTooltipData(null);
+          }}
+        >
           {/* Y-Axis Labels */}
           <div className="absolute left-0 top-0 bottom-16 flex flex-col justify-between text-[8px] sm:text-[10px] text-slate-400 font-['Poppins'] pr-2 z-10 w-8 sm:w-10">
             <span>{formatCurrency(maxValue)}</span>
@@ -397,7 +474,7 @@ export default function RevenueOverview() {
           {/* Chart Container */}
           <div
             ref={chartContainerRef}
-            className="absolute left-8 sm:left-10 right-0 top-0 bottom-16 overflow-x-auto overflow-y-hidden custom-scrollbar"
+            className="absolute left-8 sm:left-10 right-0 top-0 bottom-16 overflow-x-auto overflow-y-clip custom-scrollbar"
             style={{
               scrollbarWidth: "thin",
               scrollbarColor: "#fbbf24 #1e293b",
@@ -408,7 +485,6 @@ export default function RevenueOverview() {
                 const barId = `${data.date}-${index}`;
                 const isHovered = hoveredBar === barId;
                 const isClicked = clickedBar === barId;
-                const showValue = isHovered || isClicked;
 
                 // Calculate column and bar widths - maximized for desktop
                 // Desktop gets much larger columns to fill available space
@@ -419,11 +495,15 @@ export default function RevenueOverview() {
                     ? "50px"
                     : selectedPeriod === "months"
                     ? "70px"
+                    : selectedPeriod === "major-draws"
+                    ? "100px"
                     : "100px"
                   : selectedPeriod === "days"
                   ? "80px"
                   : selectedPeriod === "months"
                   ? "120px"
+                  : selectedPeriod === "major-draws"
+                  ? "200px"
                   : "200px";
 
                 const maxColumnWidth = isMobile
@@ -431,11 +511,15 @@ export default function RevenueOverview() {
                     ? "60px"
                     : selectedPeriod === "months"
                     ? "90px"
+                    : selectedPeriod === "major-draws"
+                    ? "120px"
                     : "120px"
                   : selectedPeriod === "days"
                   ? "100px"
                   : selectedPeriod === "months"
                   ? "150px"
+                  : selectedPeriod === "major-draws"
+                  ? "250px"
                   : "250px";
 
                 // Fixed column width for better consistency (not percentage-based)
@@ -458,8 +542,75 @@ export default function RevenueOverview() {
                     {/* Three Bars Container */}
                     <div
                       className="flex items-end justify-center gap-1.5 sm:gap-2 lg:gap-2.5 w-full flex-1 mb-10"
-                      onMouseEnter={() => setHoveredBar(barId)}
-                      onMouseLeave={() => setHoveredBar(null)}
+                      onMouseEnter={(e) => {
+                        setHoveredBar(barId);
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const tooltipX = rect.left + rect.width / 2;
+                        const tooltipY = rect.top - 10;
+                        
+                        // On mobile, adjust X position if near right edge
+                        if (isMobile) {
+                          const viewportWidth = window.innerWidth;
+                          const tooltipWidth = 180; // Approximate tooltip width in pixels
+                          
+                          // If tooltip would extend beyond right edge, adjust position
+                          if (tooltipX + tooltipWidth / 2 > viewportWidth - 10) {
+                            // Position tooltip so it stays within viewport
+                            const adjustedX = viewportWidth - tooltipWidth / 2 - 10;
+                            setTooltipPosition({
+                              x: adjustedX,
+                              y: tooltipY,
+                            });
+                          } else {
+                            setTooltipPosition({
+                              x: tooltipX,
+                              y: tooltipY,
+                            });
+                          }
+                        } else {
+                          setTooltipPosition({
+                            x: tooltipX,
+                            y: tooltipY,
+                          });
+                        }
+                        setTooltipData(data);
+                      }}
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const tooltipX = rect.left + rect.width / 2;
+                        const tooltipY = rect.top - 10;
+                        
+                        // On mobile, adjust X position if near right edge
+                        if (isMobile) {
+                          const viewportWidth = window.innerWidth;
+                          const tooltipWidth = 180; // Approximate tooltip width in pixels
+                          
+                          // If tooltip would extend beyond right edge, adjust position
+                          if (tooltipX + tooltipWidth / 2 > viewportWidth - 10) {
+                            // Position tooltip so it stays within viewport
+                            const adjustedX = viewportWidth - tooltipWidth / 2 - 10;
+                            setTooltipPosition({
+                              x: adjustedX,
+                              y: tooltipY,
+                            });
+                          } else {
+                            setTooltipPosition({
+                              x: tooltipX,
+                              y: tooltipY,
+                            });
+                          }
+                        } else {
+                          setTooltipPosition({
+                            x: tooltipX,
+                            y: tooltipY,
+                          });
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredBar(null);
+                        setTooltipPosition(null);
+                        setTooltipData(null);
+                      }}
                       onClick={() => setClickedBar(clickedBar === barId ? null : barId)}
                     >
                       {/* One-Time Bar */}
@@ -470,15 +621,11 @@ export default function RevenueOverview() {
                         <div
                           className="w-full bg-gradient-to-t from-blue-600 via-blue-500 to-cyan-600 rounded-t relative border border-blue-500/50"
                       style={{
-                            height: `${maxValue > 0 ? (data.oneTime / maxValue) * 100 : 0}%`,
+                            height: `${maxValue > 0 ? Math.min((data.oneTime / maxValue) * 100, 100) : 0}%`,
                             minHeight: data.oneTime > 0 ? "3px" : "0px",
+                            maxHeight: "100%",
                       }}
                     >
-                          {data.oneTime > 0 && showValue && (
-                            <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
-                              {formatCurrency(data.oneTime)}
-                            </div>
-                          )}
                         </div>
                       </div>
 
@@ -490,15 +637,11 @@ export default function RevenueOverview() {
                         <div
                           className="w-full bg-gradient-to-t from-orange-500 via-amber-500 to-yellow-500 rounded-t relative border border-orange-500/50"
                           style={{
-                            height: `${maxValue > 0 ? (data.memberships / maxValue) * 100 : 0}%`,
+                            height: `${maxValue > 0 ? Math.min((data.memberships / maxValue) * 100, 100) : 0}%`,
                             minHeight: data.memberships > 0 ? "3px" : "0px",
+                            maxHeight: "100%",
                           }}
                         >
-                          {data.memberships > 0 && showValue && (
-                            <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
-                              {formatCurrency(data.memberships)}
-                            </div>
-                          )}
                       </div>
                     </div>
 
@@ -510,15 +653,11 @@ export default function RevenueOverview() {
                         <div
                           className="w-full bg-gradient-to-t from-green-500 via-emerald-500 to-green-600 rounded-t relative border border-green-500/50"
                       style={{
-                            height: `${maxValue > 0 ? (data.miniDraw / maxValue) * 100 : 0}%`,
+                            height: `${maxValue > 0 ? Math.min((data.miniDraw / maxValue) * 100, 100) : 0}%`,
                             minHeight: data.miniDraw > 0 ? "3px" : "0px",
+                            maxHeight: "100%",
                       }}
                     >
-                          {data.miniDraw > 0 && showValue && (
-                            <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
-                              {formatCurrency(data.miniDraw)}
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -532,6 +671,92 @@ export default function RevenueOverview() {
               })}
             </div>
           </div>
+
+          {/* Tooltip - Positioned outside overflow container */}
+          {tooltipPosition && tooltipData && (
+            <div
+              className={`${isMobile ? "absolute" : "fixed"} z-50 pointer-events-none`}
+              style={
+                isMobile
+                  ? {
+                      left: chartAreaRef.current
+                        ? (() => {
+                            const chartRect = chartAreaRef.current!.getBoundingClientRect();
+                            const viewportWidth = window.innerWidth;
+                            const tooltipWidth = 180;
+                            const absoluteX = tooltipPosition.x;
+                            
+                            // Check if tooltip would overflow right edge
+                            if (absoluteX + tooltipWidth / 2 > viewportWidth - 10) {
+                              // Adjust to keep within viewport
+                              const adjustedAbsoluteX = viewportWidth - tooltipWidth / 2 - 10;
+                              return `${adjustedAbsoluteX - chartRect.left}px`;
+                            }
+                            
+                            return `${tooltipPosition.x - chartRect.left}px`;
+                          })()
+                        : `${tooltipPosition.x}px`,
+                      top: chartAreaRef.current
+                        ? `${tooltipPosition.y - chartAreaRef.current.getBoundingClientRect().top - 5}px`
+                        : `${tooltipPosition.y - 5}px`,
+                      transform: "translate(-50%, -100%)",
+                      maxWidth: "90vw",
+                    }
+                  : {
+                      left: `${tooltipPosition.x}px`,
+                      top: `${tooltipPosition.y}px`,
+                      transform: "translate(-50%, -100%)",
+                      maxWidth: "90vw",
+                    }
+              }
+            >
+              <div className="bg-slate-900/95 border border-slate-700 rounded-lg shadow-xl p-2 sm:p-3 min-w-[140px] sm:min-w-[180px] backdrop-blur-sm">
+                <div className="text-xs sm:text-sm font-bold text-white font-['Poppins'] mb-2 border-b border-slate-700 pb-1">
+                  {formatDateLabel(tooltipData, selectedPeriod)}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded bg-gradient-to-t from-blue-600 via-blue-500 to-cyan-600"></div>
+                      <span className="text-[10px] sm:text-xs text-slate-300 font-['Poppins']">One-Time:</span>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins']">
+                      {formatCurrency(tooltipData.oneTime)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded bg-gradient-to-t from-orange-500 via-amber-500 to-yellow-500"></div>
+                      <span className="text-[10px] sm:text-xs text-slate-300 font-['Poppins']">Memberships:</span>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins']">
+                      {formatCurrency(tooltipData.memberships)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded bg-gradient-to-t from-green-500 via-emerald-500 to-green-600"></div>
+                      <span className="text-[10px] sm:text-xs text-slate-300 font-['Poppins']">Mini-Draw:</span>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins']">
+                      {formatCurrency(tooltipData.miniDraw)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pt-1 mt-1 border-t border-slate-700">
+                    <span className="text-[10px] sm:text-xs font-semibold text-slate-200 font-['Poppins']">Total:</span>
+                    <span className="text-[10px] sm:text-xs font-bold text-yellow-400 font-['Poppins']">
+                      {formatCurrency(tooltipData.total)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {/* Tooltip arrow */}
+              <div
+                className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-700"
+                style={{ marginTop: "-1px" }}
+              ></div>
+            </div>
+          )}
                       </div>
 
         {/* Legend */}
