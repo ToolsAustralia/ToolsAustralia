@@ -240,6 +240,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ✅ CRITICAL: Set payment method as default on customer (matches subscription pattern)
+    // This ensures Stripe properly saves it and webhook can find it via customer default
+    try {
+      await stripe.customers.update(customer.id, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+      });
+      console.log(`✅ Set ${paymentMethodId} as default payment method for customer ${customer.id}`);
+    } catch (error) {
+      console.error("⚠️ Failed to set default payment method (non-critical):", error);
+      // Continue - payment method is still attached, just not set as default
+    }
+
     // console.log(`💳 Using payment method ${paymentMethodId} for one-time purchase`);
 
     // Create payment intent for one-time purchase

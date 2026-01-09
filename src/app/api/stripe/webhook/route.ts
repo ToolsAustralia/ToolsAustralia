@@ -403,6 +403,36 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         }
       }
 
+      // 5. ✅ NEW: List customer's payment methods (critical for setup_future_usage)
+      // When setup_future_usage is used, Stripe attaches the payment method to the customer
+      // but it might not be immediately available on PaymentIntent.payment_method
+      // This is especially important in production/staging where timing can be different
+      if (!paymentMethodId && paymentIntent.customer) {
+        try {
+          const customerId = typeof paymentIntent.customer === "string"
+            ? paymentIntent.customer
+            : paymentIntent.customer.id;
+          
+          // List all payment methods for this customer
+          const paymentMethods = await stripe.paymentMethods.list({
+            customer: customerId,
+            type: "card",
+            limit: 10, // Get recent payment methods
+          });
+          
+          if (paymentMethods.data.length > 0) {
+            // Use the most recently created payment method (should be the one from this purchase)
+            // Sort by created timestamp descending
+            const sortedMethods = paymentMethods.data.sort((a, b) => b.created - a.created);
+            paymentMethodId = sortedMethods[0].id;
+            paymentMethodSource = "customerList";
+            webhookLog("info", `💳 Found payment method from customer payment methods list: ${paymentMethodId} (${paymentMethods.data.length} total)`);
+          }
+        } catch (listError) {
+          webhookLog("warn", `Failed to list customer payment methods: ${listError}`);
+        }
+      }
+
       if (paymentMethodId) {
         // Check if payment method is already saved
         const hasPaymentMethod = user.savedPaymentMethods?.some(
@@ -412,6 +442,28 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         if (!hasPaymentMethod) {
           // ✅ ENHANCED: Save payment method with retry logic for transient failures
           webhookLog("info", `💳 Saving payment method to user account (source: ${paymentMethodSource}): ${paymentMethodId}`);
+          
+          // ✅ CRITICAL: Verify payment method is attached to customer before saving
+          // This is especially important with setup_future_usage in production/staging
+          if (user.stripeCustomerId) {
+            try {
+              const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+              const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
+              
+              if (!pmCustomerId || pmCustomerId !== user.stripeCustomerId) {
+                webhookLog("info", `🔄 Payment method not attached to customer, attaching now: ${paymentMethodId}`);
+                await stripe.paymentMethods.attach(paymentMethodId, {
+                  customer: user.stripeCustomerId,
+                });
+                webhookLog("info", `✅ Payment method attached to customer: ${paymentMethodId}`);
+              } else {
+                webhookLog("info", `✅ Payment method already attached to customer: ${paymentMethodId}`);
+              }
+            } catch (attachError) {
+              webhookLog("warn", `⚠️ Failed to verify/attach payment method, continuing anyway: ${attachError}`);
+              // Continue - ensurePaymentMethodAttached in savePaymentMethodToUser will try again
+            }
+          }
           
           let saveSuccess = false;
           let lastError: string | undefined;
