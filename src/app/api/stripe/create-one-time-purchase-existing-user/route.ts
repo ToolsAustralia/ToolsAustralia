@@ -12,6 +12,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import Promo from "@/models/Promo";
+import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 
@@ -313,6 +314,35 @@ export async function POST(request: NextRequest) {
       const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
 
       if (verifiedPaymentIntent.status === "succeeded") {
+        // ✅ CRITICAL: Save payment method IMMEDIATELY after payment succeeds (PRIMARY METHOD)
+        // This prevents "No Payment Method" error when upsell modal opens
+        // Webhook will also try to save as backup, but this ensures it's saved synchronously
+        try {
+          const freshUser = await User.findById(existingUser._id);
+          if (freshUser && paymentMethodId) {
+            console.log(`💳 [SYNC] Saving payment method immediately after payment success: ${paymentMethodId}`);
+            
+            const saveResult = await savePaymentMethodToUser(freshUser, paymentMethodId, {
+              setAsDefault: !freshUser.savedPaymentMethods || freshUser.savedPaymentMethods.length === 0,
+            });
+            
+            if (saveResult.success) {
+              console.log(`✅ [SYNC] Payment method saved successfully: ${paymentMethodId}`);
+              // Refresh user from database to get updated payment methods
+              const refreshedUser = await User.findById(existingUser._id);
+              if (refreshedUser) {
+                existingUser = refreshedUser;
+              }
+            } else {
+              console.error(`❌ [SYNC] Failed to save payment method: ${saveResult.error}`);
+              // Continue - webhook will try as backup
+            }
+          }
+        } catch (pmError) {
+          console.error(`❌ [SYNC] Error saving payment method: ${pmError}`);
+          // Continue - webhook will try as backup
+        }
+        
         // console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
         // console.log(`✅ Payment completed successfully for user: ${existingUser.email}`);
@@ -342,6 +372,35 @@ export async function POST(request: NextRequest) {
       // console.log(`🔍 Final payment status: ${finalPaymentIntent.status}`);
 
       if (finalPaymentIntent.status === "succeeded") {
+        // ✅ CRITICAL: Save payment method IMMEDIATELY after payment succeeds (PRIMARY METHOD)
+        // This prevents "No Payment Method" error when upsell modal opens
+        // Webhook will also try to save as backup, but this ensures it's saved synchronously
+        try {
+          const freshUser = await User.findById(existingUser._id);
+          if (freshUser && paymentMethodId) {
+            console.log(`💳 [SYNC] Saving payment method immediately after payment success: ${paymentMethodId}`);
+            
+            const saveResult = await savePaymentMethodToUser(freshUser, paymentMethodId, {
+              setAsDefault: !freshUser.savedPaymentMethods || freshUser.savedPaymentMethods.length === 0,
+            });
+            
+            if (saveResult.success) {
+              console.log(`✅ [SYNC] Payment method saved successfully: ${paymentMethodId}`);
+              // Refresh user from database to get updated payment methods
+              const refreshedUser = await User.findById(existingUser._id);
+              if (refreshedUser) {
+                existingUser = refreshedUser;
+              }
+            } else {
+              console.error(`❌ [SYNC] Failed to save payment method: ${saveResult.error}`);
+              // Continue - webhook will try as backup
+            }
+          }
+        } catch (pmError) {
+          console.error(`❌ [SYNC] Error saving payment method: ${pmError}`);
+          // Continue - webhook will try as backup
+        }
+        
         // console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
         // console.log(`✅ Payment completed successfully for user: ${existingUser.email}`);
@@ -430,6 +489,10 @@ export async function POST(request: NextRequest) {
         };
 
         // Process benefits as fallback
+        if (!existingUser) {
+          console.error(`❌ User not found for fallback processing`);
+          return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
         const processResult = await processPaymentBenefits(
           paymentIntent.id,
           existingUser._id.toString(),
@@ -454,7 +517,9 @@ export async function POST(request: NextRequest) {
         if (processResult.success) {
           console.log(`✅ Fallback processing successful: ${finalEntriesCount} entries granted`);
           // Refresh user data to get updated entries
-          existingUser = await User.findById(existingUser._id);
+          if (existingUser) {
+            existingUser = await User.findById(existingUser._id) ?? existingUser;
+          }
         } else if (processResult.alreadyProcessed) {
           console.log(`ℹ️ Payment already processed by webhook (race condition resolved)`);
         } else {
@@ -481,7 +546,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ✅ CRITICAL: Final refresh to ensure we have latest user data including saved payment methods
     if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    const finalUser = await User.findById(existingUser._id);
+    if (!finalUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
@@ -490,7 +560,7 @@ export async function POST(request: NextRequest) {
       message: "One-time package purchase successful",
       data: {
         entriesAdded: membershipPackage.totalEntries,
-        totalEntries: existingUser.accumulatedEntries || 0,
+        totalEntries: finalUser.accumulatedEntries || 0,
         packageName: membershipPackage.name,
         source: "one-time-package",
         paymentVerified: true,
@@ -501,13 +571,14 @@ export async function POST(request: NextRequest) {
         clientSecret: paymentIntent.client_secret,
       },
       user: {
-        id: existingUser._id,
-        email: existingUser.email,
-        subscription: existingUser.subscription,
-        oneTimePackages: existingUser.oneTimePackages,
-        entryWallet: existingUser.entryWallet,
-        accumulatedEntries: existingUser.accumulatedEntries,
-        rewardsPoints: existingUser.rewardsPoints,
+        id: finalUser._id,
+        email: finalUser.email,
+        subscription: finalUser.subscription,
+        oneTimePackages: finalUser.oneTimePackages,
+        entryWallet: finalUser.entryWallet,
+        accumulatedEntries: finalUser.accumulatedEntries,
+        rewardsPoints: finalUser.rewardsPoints,
+        savedPaymentMethods: finalUser.savedPaymentMethods || [], // ✅ CRITICAL: Include saved payment methods
       },
     });
   } catch (error) {
