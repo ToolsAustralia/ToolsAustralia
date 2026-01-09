@@ -317,3 +317,129 @@ export async function setDefaultPaymentMethod(
   }
 }
 
+/**
+ * Deduplicates payment methods in a user's savedPaymentMethods array
+ * Removes duplicate paymentMethodIds, keeping the first occurrence
+ * Merges metadata (preserves most recent lastUsed, oldest createdAt)
+ * 
+ * @param user - User document to deduplicate payment methods for
+ * @returns Object with success status, number of duplicates removed, and updated user
+ */
+export async function deduplicatePaymentMethods(
+  user: IUser
+): Promise<{
+  success: boolean;
+  duplicatesRemoved: number;
+  user: IUser;
+  error?: string;
+}> {
+  try {
+    if (!user.savedPaymentMethods || user.savedPaymentMethods.length === 0) {
+      return {
+        success: true,
+        duplicatesRemoved: 0,
+        user,
+      };
+    }
+
+    // ✅ CRITICAL: Always refresh user from database to avoid stale data
+    const freshUser = await User.findById(user._id);
+    if (!freshUser) {
+      return {
+        success: false,
+        duplicatesRemoved: 0,
+        user,
+        error: "User not found in database",
+      };
+    }
+    user = freshUser;
+
+    const originalCount = user.savedPaymentMethods.length;
+
+    // Use Map to track unique payment methods (key: paymentMethodId)
+    const uniquePaymentMethodsMap = new Map<
+      string,
+      {
+        paymentMethodId: string;
+        isDefault: boolean;
+        createdAt: Date;
+        lastUsed?: Date;
+      }
+    >();
+
+    // Process each payment method, keeping first occurrence and merging metadata
+    for (const pm of user.savedPaymentMethods) {
+      const existing = uniquePaymentMethodsMap.get(pm.paymentMethodId);
+
+      if (!existing) {
+        // First occurrence - add to map
+        uniquePaymentMethodsMap.set(pm.paymentMethodId, {
+          paymentMethodId: pm.paymentMethodId,
+          isDefault: pm.isDefault,
+          createdAt: pm.createdAt,
+          lastUsed: pm.lastUsed,
+        });
+      } else {
+        // Duplicate found - merge metadata
+        // Keep oldest createdAt
+        if (pm.createdAt < existing.createdAt) {
+          existing.createdAt = pm.createdAt;
+        }
+        // Keep most recent lastUsed
+        if (pm.lastUsed) {
+          if (!existing.lastUsed || pm.lastUsed > existing.lastUsed) {
+            existing.lastUsed = pm.lastUsed;
+          }
+        }
+        // If either is default, keep default status (prioritize existing)
+        if (pm.isDefault && !existing.isDefault) {
+          existing.isDefault = true;
+        }
+      }
+    }
+
+    // Convert map back to array
+    const deduplicatedMethods = Array.from(uniquePaymentMethodsMap.values());
+
+    // Ensure only one default payment method
+    const defaultMethods = deduplicatedMethods.filter((pm) => pm.isDefault);
+    if (defaultMethods.length > 1) {
+      // Keep the first default, remove default from others
+      for (let i = 1; i < defaultMethods.length; i++) {
+        defaultMethods[i].isDefault = false;
+      }
+    } else if (defaultMethods.length === 0 && deduplicatedMethods.length > 0) {
+      // No default found - set first one as default
+      deduplicatedMethods[0].isDefault = true;
+    }
+
+    // Update user's payment methods
+    user.savedPaymentMethods = deduplicatedMethods;
+
+    // Save changes
+    await user.save();
+
+    const duplicatesRemoved = originalCount - deduplicatedMethods.length;
+
+    if (duplicatesRemoved > 0) {
+      console.log(
+        `✅ Deduplicated payment methods for user ${user._id}: removed ${duplicatesRemoved} duplicate(s)`
+      );
+    }
+
+    return {
+      success: true,
+      duplicatesRemoved,
+      user,
+    };
+  } catch (error) {
+    console.error("Error deduplicating payment methods:", error);
+    return {
+      success: false,
+      duplicatesRemoved: 0,
+      user,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+

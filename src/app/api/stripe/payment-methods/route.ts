@@ -5,6 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { savePaymentMethodToUser, deduplicatePaymentMethods } from "@/utils/payment/payment-method-manager";
 
 const savePaymentMethodSchema = z.object({
   paymentMethodId: z.string().min(1, "Payment method ID is required"),
@@ -30,10 +31,32 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // ✅ SAFETY NET: Deduplicate payment methods before processing
+    // This ensures API always returns unique payment methods even if database has duplicates
+    const dedupeResult = await deduplicatePaymentMethods(user);
+    if (dedupeResult.success && dedupeResult.duplicatesRemoved > 0) {
+      // Refresh user to get deduplicated payment methods
+      const refreshedUser = await User.findById(user._id);
+      if (refreshedUser) {
+        user = refreshedUser;
+      }
+    }
+
+    // ✅ Additional client-side deduplication as final safety net
+    // Use Map to ensure unique paymentMethodIds before fetching Stripe details
+    const uniquePaymentMethodsMap = new Map<string, Record<string, unknown>>();
+    for (const pm of user.savedPaymentMethods || []) {
+      const pmId = pm.paymentMethodId as string;
+      if (pmId && !uniquePaymentMethodsMap.has(pmId)) {
+        uniquePaymentMethodsMap.set(pmId, pm);
+      }
+    }
+    const uniquePaymentMethods = Array.from(uniquePaymentMethodsMap.values());
+
     // PCI-COMPLIANT: Fetch card details from Stripe when needed for display
     // We only store payment method IDs in our database, card details come from Stripe
     const paymentMethodsWithDetails = await Promise.all(
-      (user.savedPaymentMethods || []).map(async (pm: Record<string, unknown>) => {
+      uniquePaymentMethods.map(async (pm: Record<string, unknown>) => {
         try {
           // For test payment methods, return mock data
           if (typeof pm.paymentMethodId === "string" && pm.paymentMethodId.startsWith("pm_test_")) {
@@ -127,60 +150,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
 
-    // Attach payment method to customer if not already attached
-    if (paymentMethod.customer !== user.stripeCustomerId) {
-      await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: user.stripeCustomerId,
-      });
+    // ✅ FIX: Use savePaymentMethodToUser utility instead of direct push
+    // This ensures duplicate checking and proper idempotency
+    const saveResult = await savePaymentMethodToUser(user, paymentMethodId, {
+      setAsDefault: setAsDefault,
+    });
+
+    if (!saveResult.success) {
+      return NextResponse.json(
+        { success: false, error: saveResult.error || "Failed to save payment method" },
+        { status: 500 }
+      );
     }
 
-    // Prepare payment method data
-    const paymentMethodData = {
-      paymentMethodId,
-      type: paymentMethod.type as "card" | "bank_account",
-      card:
-        paymentMethod.type === "card"
-          ? {
-              brand: paymentMethod.card?.brand || "",
-              last4: paymentMethod.card?.last4 || "",
-              expMonth: paymentMethod.card?.exp_month || 0,
-              expYear: paymentMethod.card?.exp_year || 0,
-            }
-          : undefined,
-      isDefault: setAsDefault,
-      createdAt: new Date(),
-    };
+    // Refresh user to get updated payment methods
+    const updatedUser = await User.findById(user._id);
+    if (!updatedUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
-    if (setAsDefault) {
-      user.savedPaymentMethods.forEach((pm: Record<string, unknown>) => {
-        pm.isDefault = false;
-      });
+    // Find the saved payment method to return in response
+    const savedPaymentMethod = updatedUser.savedPaymentMethods?.find(
+      (pm) => pm.paymentMethodId === paymentMethodId
+    );
 
-      try {
-        await stripe.customers.update(user.stripeCustomerId, {
-          invoice_settings: {
-            default_payment_method: paymentMethodId,
-          },
-        });
-      } catch (error) {
-        console.error("Stripe customer update failed:", error);
-        return NextResponse.json(
-          { success: false, error: "Failed to set Stripe default payment method" },
-          { status: 502 }
-        );
+    if (!savedPaymentMethod) {
+      return NextResponse.json(
+        { success: false, error: "Payment method was not saved correctly" },
+        { status: 500 }
+      );
+    }
+
+    // Fetch card details from Stripe for response
+    let cardDetails;
+    try {
+      const stripePaymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+      if (stripePaymentMethod.type === "card") {
+        cardDetails = {
+          brand: stripePaymentMethod.card?.brand || "",
+          last4: stripePaymentMethod.card?.last4 || "",
+          expMonth: stripePaymentMethod.card?.exp_month || 0,
+          expYear: stripePaymentMethod.card?.exp_year || 0,
+        };
       }
+    } catch (error) {
+      console.warn("Could not fetch payment method details for response:", error);
     }
-
-    user.savedPaymentMethods.push(paymentMethodData);
-
-    await user.save();
 
     // console.log(`✅ Payment method saved successfully: ${paymentMethodId}`);
 
     return NextResponse.json({
       success: true,
-      paymentMethod: paymentMethodData,
-      message: "Payment method saved successfully",
+      paymentMethod: {
+        paymentMethodId: savedPaymentMethod.paymentMethodId,
+        isDefault: savedPaymentMethod.isDefault,
+        createdAt: savedPaymentMethod.createdAt,
+        lastUsed: savedPaymentMethod.lastUsed,
+        ...(cardDetails && { card: cardDetails }),
+      },
+      message: saveResult.wasNew
+        ? "Payment method saved successfully"
+        : "Payment method already exists, updated successfully",
     });
   } catch (error) {
     console.error("Error saving payment method:", error);

@@ -487,7 +487,18 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
 
       {!loading && !showAddForm && paymentMethods.length > 0 && (
         <div className="space-y-2 sm:space-y-3">
-          {paymentMethods.map((paymentMethod) => {
+          {(() => {
+            // ✅ SAFETY NET: Deduplicate payment methods before rendering to prevent React key errors
+            // Use Map to ensure unique paymentMethodIds (keeps first occurrence)
+            const uniquePaymentMethodsMap = new Map<string, SavedPaymentMethod>();
+            for (const pm of paymentMethods) {
+              if (pm.paymentMethodId && !uniquePaymentMethodsMap.has(pm.paymentMethodId)) {
+                uniquePaymentMethodsMap.set(pm.paymentMethodId, pm);
+              }
+            }
+            const uniquePaymentMethods = Array.from(uniquePaymentMethodsMap.values());
+            
+            return uniquePaymentMethods.map((paymentMethod) => {
             const isSubscriptionPaymentMethod = subscriptionPaymentMethodId === paymentMethod.paymentMethodId;
             const isUpdating = updatingSubscriptionId === paymentMethod.paymentMethodId;
 
@@ -573,7 +584,8 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                 </div>
               </div>
             );
-          })}
+          });
+          })()}
 
           <div className="pt-3 sm:pt-4 border-t border-gray-200">
             <Button
