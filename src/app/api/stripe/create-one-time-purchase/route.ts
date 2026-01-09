@@ -11,6 +11,7 @@ import { z } from "zod";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import Promo from "@/models/Promo";
+import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 
@@ -439,6 +440,7 @@ export async function POST(request: NextRequest) {
         payment_method: finalPaymentMethodId, // Use the final payment method ID
         confirm: true, // Auto-confirm for testing
         return_url: `${getBaseUrl()}/purchase-success`,
+        setup_future_usage: "off_session", // ✅ Save payment method for future use (required for production/staging)
         automatic_payment_methods: {
           enabled: true,
           allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
@@ -662,6 +664,37 @@ export async function POST(request: NextRequest) {
       );
 
       if (verifiedPaymentIntent.status === "succeeded") {
+        // ✅ CRITICAL: Save payment method IMMEDIATELY after payment succeeds (PRIMARY METHOD)
+        // This prevents "No Payment Method" error when upsell modal opens
+        // For existing users, save synchronously. For new users, webhook will save during account creation.
+        if (user && finalPaymentMethodId) {
+          try {
+            const freshUser = await User.findById(user._id);
+            if (freshUser) {
+              console.log(`💳 [SYNC] Saving payment method immediately after payment success: ${finalPaymentMethodId}`);
+              
+              const saveResult = await savePaymentMethodToUser(freshUser, finalPaymentMethodId, {
+                setAsDefault: !freshUser.savedPaymentMethods || freshUser.savedPaymentMethods.length === 0,
+              });
+              
+              if (saveResult.success) {
+                console.log(`✅ [SYNC] Payment method saved successfully: ${finalPaymentMethodId}`);
+                // Refresh user from database to get updated payment methods
+                const refreshedUser = await User.findById(user._id);
+                if (refreshedUser) {
+                  user = refreshedUser;
+                }
+              } else {
+                console.error(`❌ [SYNC] Failed to save payment method: ${saveResult.error}`);
+                // Continue - webhook will try as backup
+              }
+            }
+          } catch (pmError) {
+            console.error(`❌ [SYNC] Error saving payment method: ${pmError}`);
+            // Continue - webhook will try as backup
+          }
+        }
+        
         console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
         console.log(
@@ -689,6 +722,37 @@ export async function POST(request: NextRequest) {
       console.log(`🔍 Final payment status: ${finalPaymentIntent.status}, metadata:`, finalPaymentIntent.metadata);
 
       if (finalPaymentIntent.status === "succeeded") {
+        // ✅ CRITICAL: Save payment method IMMEDIATELY after payment succeeds (PRIMARY METHOD)
+        // This prevents "No Payment Method" error when upsell modal opens
+        // For existing users, save synchronously. For new users, webhook will save during account creation.
+        if (user && finalPaymentMethodId) {
+          try {
+            const freshUser = await User.findById(user._id);
+            if (freshUser) {
+              console.log(`💳 [SYNC] Saving payment method immediately after payment success: ${finalPaymentMethodId}`);
+              
+              const saveResult = await savePaymentMethodToUser(freshUser, finalPaymentMethodId, {
+                setAsDefault: !freshUser.savedPaymentMethods || freshUser.savedPaymentMethods.length === 0,
+              });
+              
+              if (saveResult.success) {
+                console.log(`✅ [SYNC] Payment method saved successfully: ${finalPaymentMethodId}`);
+                // Refresh user from database to get updated payment methods
+                const refreshedUser = await User.findById(user._id);
+                if (refreshedUser) {
+                  user = refreshedUser;
+                }
+              } else {
+                console.error(`❌ [SYNC] Failed to save payment method: ${saveResult.error}`);
+                // Continue - webhook will try as backup
+              }
+            }
+          } catch (pmError) {
+            console.error(`❌ [SYNC] Error saving payment method: ${pmError}`);
+            // Continue - webhook will try as backup
+          }
+        }
+        
         console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
         // Benefits will be processed by webhook - just log success
         console.log(
@@ -742,31 +806,38 @@ export async function POST(request: NextRequest) {
     // ✅ FIX: Return response based on whether user exists
     // For new users, don't return user data - webhook will create account and handle login
     if (user) {
+      // ✅ CRITICAL: Final refresh to ensure we have latest user data including saved payment methods
+      const finalUser = await User.findById(user._id);
+      if (!finalUser) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+      
       // Existing user - return user data for auto-login
       return NextResponse.json({
         success: true,
         message: "One-time package purchase successful",
         data: {
           entriesAdded: membershipPackage.totalEntries || 0,
-          totalEntries: user.accumulatedEntries || 0,
+          totalEntries: finalUser.accumulatedEntries || 0,
           packageName: membershipPackage.name,
           source: "one-time-package",
           paymentVerified: true,
           paymentIntentId: paymentIntent.id,
           customerId: customer.id,
-          userId: user._id,
+          userId: finalUser._id,
           clientSecret: paymentIntent.client_secret,
           status: paymentIntent.status,
           user: {
-            id: user._id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-            subscription: user.subscription,
-            entryWallet: user.entryWallet,
-            accumulatedEntries: user.accumulatedEntries,
-            rewardsPoints: user.rewardsPoints,
+            id: finalUser._id,
+            email: finalUser.email,
+            firstName: finalUser.firstName,
+            lastName: finalUser.lastName,
+            role: finalUser.role,
+            subscription: finalUser.subscription,
+            entryWallet: finalUser.entryWallet,
+            accumulatedEntries: finalUser.accumulatedEntries,
+            rewardsPoints: finalUser.rewardsPoints,
+            savedPaymentMethods: finalUser.savedPaymentMethods || [], // ✅ CRITICAL: Include saved payment methods
           },
           autoLogin: true, // Flag to indicate auto-login should be triggered
         },
