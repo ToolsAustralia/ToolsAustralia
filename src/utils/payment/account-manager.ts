@@ -2,6 +2,7 @@ import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
 import Stripe from "stripe";
 import bcrypt from "bcryptjs";
+import { stripe } from "@/lib/stripe";
 
 /**
  * Account Manager
@@ -92,11 +93,53 @@ export async function createUserFromPaymentMetadata(
     // Clean mobile number
     const cleanedMobile = metadata.mobile?.replace(/\s+/g, "") || "";
 
-    // Get payment method ID from payment intent
-    const paymentMethodId =
-      typeof paymentIntent.payment_method === "string"
+    // ✅ ENHANCED: Get payment method ID from multiple sources
+    // Check in order: PaymentIntent.payment_method -> metadata.paymentMethodId -> charge.payment_method
+    let paymentMethodId: string | undefined;
+    let paymentMethodSource = "none";
+
+    // 1. Try PaymentIntent.payment_method (most direct)
+    if (paymentIntent.payment_method) {
+      paymentMethodId = typeof paymentIntent.payment_method === "string"
         ? paymentIntent.payment_method
-        : paymentIntent.payment_method?.id;
+        : paymentIntent.payment_method.id;
+      if (paymentMethodId) {
+        paymentMethodSource = "paymentIntent";
+      }
+    }
+
+    // 2. Try metadata.paymentMethodId (from one-time purchase API)
+    if (!paymentMethodId && metadata.paymentMethodId) {
+      paymentMethodId = metadata.paymentMethodId;
+      paymentMethodSource = "metadata";
+      console.log(`💳 Found payment method in metadata: ${paymentMethodId}`);
+    }
+
+    // 3. Try charge's payment method (some payment methods are on charges)
+    if (!paymentMethodId && paymentIntent.latest_charge) {
+      try {
+        const chargeId = typeof paymentIntent.latest_charge === "string"
+          ? paymentIntent.latest_charge
+          : paymentIntent.latest_charge.id;
+        const charge = await stripe.charges.retrieve(chargeId);
+        
+        if (charge.payment_method) {
+          const pm = charge.payment_method;
+          if (typeof pm === "string") {
+            paymentMethodId = pm;
+          } else if (pm && typeof pm === "object") {
+            const pmObj = pm as { id?: string };
+            paymentMethodId = pmObj.id || undefined;
+          }
+          if (paymentMethodId) {
+            paymentMethodSource = "charge";
+            console.log(`💳 Found payment method on charge: ${paymentMethodId}`);
+          }
+        }
+      } catch (chargeError) {
+        console.warn(`Failed to retrieve charge for payment method: ${chargeError}`);
+      }
+    }
 
     // Create payment method data if payment method exists
     const savedPaymentMethodData = paymentMethodId
@@ -107,6 +150,12 @@ export async function createUserFromPaymentMetadata(
           lastUsed: new Date(),
         }
       : undefined;
+
+    if (paymentMethodId) {
+      console.log(`💳 Using payment method from ${paymentMethodSource}: ${paymentMethodId}`);
+    } else {
+      console.warn(`⚠️ No payment method found for new user account creation`);
+    }
 
     // Create new user account
     const newUser = new User({

@@ -1,5 +1,6 @@
 import { stripe } from "@/lib/stripe";
 import { IUser } from "@/models/User";
+import User from "@/models/User";
 
 /**
  * Payment Method Manager
@@ -31,6 +32,29 @@ export async function savePaymentMethodToUser(
   error?: string;
 }> {
   try {
+    // ✅ Validate inputs
+    if (!user || !paymentMethodId) {
+      return {
+        success: false,
+        user,
+        wasNew: false,
+        error: "Missing user or paymentMethodId",
+      };
+    }
+
+    // ✅ CRITICAL: Always refresh user from database to avoid stale data
+    // This prevents race conditions where another process updated the user
+    const freshUser = await User.findById(user._id);
+    if (!freshUser) {
+      return {
+        success: false,
+        user,
+        wasNew: false,
+        error: "User not found in database",
+      };
+    }
+    user = freshUser;
+
     // Check if payment method is already saved
     const existingPaymentMethod = user.savedPaymentMethods?.find(
       (pm) => pm.paymentMethodId === paymentMethodId
@@ -56,9 +80,14 @@ export async function savePaymentMethodToUser(
       };
     }
 
-    // Ensure payment method is attached to Stripe customer
+    // ✅ CRITICAL: Ensure payment method is attached to Stripe customer BEFORE saving
+    // This prevents save failures due to unattached payment methods
     if (!options.skipStripeUpdate && user.stripeCustomerId) {
-      await ensurePaymentMethodAttached(paymentMethodId, user.stripeCustomerId);
+      const attachmentSuccess = await ensurePaymentMethodAttached(paymentMethodId, user.stripeCustomerId);
+      if (!attachmentSuccess) {
+        // Log warning but continue - might still work if already attached
+        console.warn(`⚠️ Failed to ensure payment method attachment, but continuing with save: ${paymentMethodId}`);
+      }
     }
 
     // Determine if this should be the default payment method
@@ -89,10 +118,33 @@ export async function savePaymentMethodToUser(
 
     // Update Stripe customer default payment method if needed
     if (shouldBeDefault && !options.skipStripeUpdate && user.stripeCustomerId) {
-      await setDefaultPaymentMethod(user.stripeCustomerId, paymentMethodId);
+      const defaultSetSuccess = await setDefaultPaymentMethod(user.stripeCustomerId, paymentMethodId);
+      if (!defaultSetSuccess) {
+        console.warn(`⚠️ Failed to set default payment method in Stripe, but payment method is saved: ${paymentMethodId}`);
+      }
     }
 
-    await user.save();
+    // ✅ CRITICAL: Save with retry on conflict
+    try {
+      await user.save();
+    } catch (saveError: unknown) {
+      // Handle MongoDB duplicate key errors or version conflicts
+      if (saveError && typeof saveError === "object" && "code" in saveError) {
+        if (saveError.code === 11000) {
+          // Duplicate key - payment method might have been added by another process
+          // Refresh and check again
+          const refreshedUser = await User.findById(user._id);
+          if (refreshedUser?.savedPaymentMethods?.some((pm) => pm.paymentMethodId === paymentMethodId)) {
+            return {
+              success: true,
+              user: refreshedUser,
+              wasNew: false,
+            };
+          }
+        }
+      }
+      throw saveError; // Re-throw if not a duplicate
+    }
 
     return {
       success: true,

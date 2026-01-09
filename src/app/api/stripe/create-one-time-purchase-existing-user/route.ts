@@ -273,6 +273,8 @@ export async function POST(request: NextRequest) {
         packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
+        // ✅ ADD: Store payment method ID for webhook to save after payment succeeds
+        paymentMethodId: paymentMethodId,
         ...(normalizedAffiliateCode
           ? { affiliateCode: normalizedAffiliateCode }
           : existingUser.affiliateReferral?.affiliateCode

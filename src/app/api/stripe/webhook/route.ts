@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
+import User, { IUser } from "@/models/User";
 // import { Types } from "mongoose"; // No longer needed with Option 1
 import Order from "@/models/Order";
 import MajorDraw from "@/models/MajorDraw";
@@ -331,13 +331,78 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       }
     }
     
-    // ✅ FIX: For existing users, ensure payment method is saved if not already saved
+    // ✅ ENHANCED: For existing users, ensure payment method is saved if not already saved
     // For new users, payment method is already saved during account creation
-    if (user && paymentIntent.payment_method) {
-      const paymentMethodId = typeof paymentIntent.payment_method === "string"
-        ? paymentIntent.payment_method
-        : paymentIntent.payment_method.id;
-      
+    // Check multiple sources for payment method ID to handle all edge cases
+    if (user) {
+      let paymentMethodId: string | null = null;
+      let paymentMethodSource = "none";
+
+      // Try multiple sources in order of reliability
+      // 1. PaymentIntent.payment_method (most direct)
+      if (paymentIntent.payment_method) {
+        paymentMethodId = typeof paymentIntent.payment_method === "string"
+          ? paymentIntent.payment_method
+          : paymentIntent.payment_method.id;
+        if (paymentMethodId) {
+          paymentMethodSource = "paymentIntent";
+        }
+      }
+
+      // 2. PaymentIntent.metadata.paymentMethodId (from one-time purchase API)
+      if (!paymentMethodId && paymentIntent.metadata.paymentMethodId) {
+        paymentMethodId = paymentIntent.metadata.paymentMethodId;
+        paymentMethodSource = "metadata";
+        webhookLog("info", `💳 Found payment method in metadata: ${paymentMethodId}`);
+      }
+
+      // 3. Charge's payment method (some payment methods are on charges)
+      if (!paymentMethodId && paymentIntent.latest_charge) {
+        try {
+          const chargeId = typeof paymentIntent.latest_charge === "string"
+            ? paymentIntent.latest_charge
+            : paymentIntent.latest_charge.id;
+          const charge = await stripe.charges.retrieve(chargeId);
+          
+          if (charge.payment_method) {
+            const pm = charge.payment_method;
+            if (typeof pm === "string") {
+              paymentMethodId = pm;
+            } else if (pm && typeof pm === "object") {
+              const pmObj = pm as { id?: string };
+              paymentMethodId = pmObj.id || null;
+            }
+            if (paymentMethodId) {
+              paymentMethodSource = "charge";
+              webhookLog("info", `💳 Found payment method on charge: ${paymentMethodId}`);
+            }
+          }
+        } catch (chargeError) {
+          webhookLog("warn", `Failed to retrieve charge for payment method: ${chargeError}`);
+        }
+      }
+
+      // 4. Customer's default payment method (last resort)
+      if (!paymentMethodId && paymentIntent.customer) {
+        try {
+          const customerId = typeof paymentIntent.customer === "string"
+            ? paymentIntent.customer
+            : paymentIntent.customer.id;
+          const customer = await stripe.customers.retrieve(customerId);
+          
+          if (!("deleted" in customer) && customer.invoice_settings?.default_payment_method) {
+            const defaultPm = customer.invoice_settings.default_payment_method;
+            paymentMethodId = typeof defaultPm === "string" ? defaultPm : defaultPm?.id || null;
+            if (paymentMethodId) {
+              paymentMethodSource = "customerDefault";
+              webhookLog("info", `💳 Found payment method from customer default: ${paymentMethodId}`);
+            }
+          }
+        } catch (customerError) {
+          webhookLog("warn", `Failed to retrieve customer for payment method: ${customerError}`);
+        }
+      }
+
       if (paymentMethodId) {
         // Check if payment method is already saved
         const hasPaymentMethod = user.savedPaymentMethods?.some(
@@ -345,28 +410,59 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         );
         
         if (!hasPaymentMethod) {
-          // Save payment method now that payment succeeded
-          webhookLog("info", `💳 Saving payment method to user account: ${paymentMethodId}`);
+          // ✅ ENHANCED: Save payment method with retry logic for transient failures
+          webhookLog("info", `💳 Saving payment method to user account (source: ${paymentMethodSource}): ${paymentMethodId}`);
           
-          const saveResult = await savePaymentMethodToUser(
-            user,
-            paymentMethodId,
-            {
-              setAsDefault: user.savedPaymentMethods?.length === 0, // Set as default if no other payment methods
+          let saveSuccess = false;
+          let lastError: string | undefined;
+          
+          // Try once, then one quick retry (max 500ms total delay)
+          // This keeps webhook response time fast while improving success rate
+          for (let attempt = 1; attempt <= 2 && !saveSuccess; attempt++) {
+            // ✅ CRITICAL: Refresh user object before each attempt to get latest data
+            const freshUser: IUser | null = await User.findById(user._id);
+            if (!freshUser) {
+              webhookLog("error", `❌ User not found during payment method save attempt ${attempt}`);
+              break;
             }
-          );
+            user = freshUser;
+            
+            const saveResult = await savePaymentMethodToUser(
+              user,
+              paymentMethodId,
+              {
+                setAsDefault: user.savedPaymentMethods?.length === 0, // Set as default if no other payment methods
+              }
+            );
+            
+            if (saveResult.success) {
+              webhookLog("info", `✅ Saved payment method to user account (attempt ${attempt}/2): ${paymentMethodId}`);
+              user = saveResult.user;
+              saveSuccess = true;
+            } else {
+              lastError = saveResult.error;
+              webhookLog("warn", `⚠️ Failed to save payment method (attempt ${attempt}/2): ${lastError}`);
+              
+              // Quick retry with short delay (200ms) - only if first attempt failed
+              if (attempt === 1) {
+                await new Promise((resolve) => setTimeout(resolve, 200));
+              }
+            }
+          }
           
-          if (saveResult.success) {
-            webhookLog("info", `✅ Saved payment method to user account: ${paymentMethodId}`);
-            // Refresh user object to get updated payment methods
-            user = saveResult.user;
-          } else {
-            webhookLog("warn", `⚠️ Failed to save payment method: ${saveResult.error}`);
-            // Non-critical error - continue processing
+          if (!saveSuccess) {
+            // ✅ CRITICAL: Log as error but don't block webhook processing
+            // Payment succeeded, but payment method wasn't saved - this needs attention
+            webhookLog("error", `❌ CRITICAL: Failed to save payment method after 2 attempts: ${paymentMethodId}. Error: ${lastError}. Payment succeeded but payment method not saved.`);
+            
+            // TODO: Consider adding to a monitoring/alerting system
+            // For now, we continue processing to avoid blocking the webhook
           }
         } else {
           webhookLog("info", `ℹ️ Payment method already saved to user account: ${paymentMethodId}`);
         }
+      } else {
+        webhookLog("warn", `⚠️ No payment method found for PaymentIntent ${paymentIntent.id}. Payment succeeded but cannot save payment method.`);
       }
     }
 
