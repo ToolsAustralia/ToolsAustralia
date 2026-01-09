@@ -55,6 +55,7 @@ export interface OriginalPurchaseContext {
   packageType: "membership" | "one-time" | "mini-draw";
   price: number;
   entries: number;
+  baseEntries?: number; // Base entries from package definition (before promo multiplier)
   miniDrawId?: string; // For mini-draw package purchases, link to the specific mini-draw
   miniDrawName?: string; // Optional mini-draw name for display in upsell modal
 }

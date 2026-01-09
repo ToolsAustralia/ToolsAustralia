@@ -540,22 +540,48 @@ async function checkAndApplyBonusEntryPromo(
     packageType?: string;
     miniDrawId?: string;
     promoLinkCode?: string;
+    originalPackageType?: "membership" | "one-time" | "mini-draw";
   },
   user?: UserDocument
 ): Promise<number> {
   try {
+    // ✅ For upsells, use the original package type for promo checks
+    // Upsells should inherit the promo multiplier from the original package (membership/one-time)
+    let effectivePackageType: "membership" | "one-time" | "mini-draw" = packageType as
+      | "membership"
+      | "one-time"
+      | "mini-draw";
+
+    if (packageType === "upsell") {
+      if (paymentMetadata?.originalPackageType) {
+        effectivePackageType = paymentMetadata.originalPackageType;
+        console.log(
+          `✅ Upsell using original package type for bonus entry promo: ${effectivePackageType}`
+        );
+      } else {
+        // No original package type available - upsells don't get bonus entry promos
+        console.log(
+          `ℹ️ Upsell without originalPackageType in metadata - bonus entry promos will not apply`
+        );
+        return 0;
+      }
+    }
+
     // Map package types to promo types
     const promoType =
-      packageType === "membership"
+      effectivePackageType === "membership"
         ? "membership-packages"
-        : packageType === "one-time"
+        : effectivePackageType === "one-time"
         ? "one-time-packages"
-        : packageType === "mini-draw"
+        : effectivePackageType === "mini-draw"
         ? "mini-packages"
-        : null; // Upsells don't have bonus entry promos (they follow the package they're attached to)
+        : null;
 
     if (!promoType) {
-      // Upsells don't have bonus entry promos - this is expected, no logging needed
+      // Invalid package type - this shouldn't happen but handle gracefully
+      console.warn(
+        `⚠️ Could not determine promo type for packageType: ${packageType}, effectivePackageType: ${effectivePackageType}`
+      );
       return 0;
     }
 
@@ -599,6 +625,7 @@ async function checkAndApplyBonusEntryPromo(
       userId: user?._id?.toString(),
       userEmail: user?.email,
       packageType: packageType,
+      ...(packageType === "upsell" && { originalPackageType: effectivePackageType }),
     });
 
     // Return bonus entries amount

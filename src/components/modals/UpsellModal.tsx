@@ -16,6 +16,9 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { generateEventID } from "@/utils/tracking/facebook-helpers";
+import { useActivePromos } from "@/hooks/queries/usePromoQueries";
+import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
+import { getUpsellPackageById } from "@/data/upsellPackages";
 
 /**
  * UpsellModal Component
@@ -53,7 +56,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // Get user context and payment methods
   const { userData } = useUserContext();
   // const { isAuthenticated } = useUserContext(); // TODO: Use for authentication checks
-  const { data: paymentMethods } = usePaymentMethods(userData?._id);
+  // ✅ Get refetch function to poll for payment methods when modal opens
+  const { data: paymentMethods, refetch: refetchPaymentMethods } = usePaymentMethods(userData?._id);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();
@@ -215,6 +219,52 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     onClose();
   }, [onClose, userData, invoiceFinalized, originalPurchaseContext, finalizeInvoice]);
 
+  // ✅ Auto-refetch payment methods when modal opens (webhook may still be processing)
+  // This ensures payment methods are available even if webhook hasn't finished saving them
+  useEffect(() => {
+    if (isOpen && userData?._id) {
+      // Immediately refetch payment methods when modal opens
+      // This ensures we get the latest payment method saved by webhook
+      console.log("🔄 Refetching payment methods on modal open...");
+      refetchPaymentMethods();
+
+      // Set up polling to refetch payment methods every 2 seconds while modal is open
+      // This ensures we catch the payment method as soon as webhook finishes
+      let pollCount = 0;
+      const maxPolls = 15; // 15 polls × 2 seconds = 30 seconds max
+      const userId = userData._id; // Capture userId to avoid closure issues
+
+      const pollInterval = setInterval(() => {
+        pollCount++;
+        
+        // Check current payment methods from the query cache
+        const currentPaymentMethods = queryClient.getQueryData<typeof paymentMethods>(
+          queryKeys.paymentMethods.all(userId)
+        );
+        const currentDefaultMethod = currentPaymentMethods?.find((pm) => pm.isDefault);
+
+        // Only poll if we don't have a default payment method yet and haven't exceeded max polls
+        if (!currentDefaultMethod && pollCount < maxPolls) {
+          console.log(`🔄 Polling for payment methods (attempt ${pollCount}/${maxPolls}, webhook may still be processing)...`);
+          refetchPaymentMethods();
+        } else {
+          // Stop polling once we have a payment method or max polls reached
+          if (currentDefaultMethod) {
+            console.log("✅ Payment method found, stopping poll");
+          } else {
+            console.log("⏰ Stopped polling for payment methods (max attempts reached)");
+          }
+          clearInterval(pollInterval);
+        }
+      }, 2000); // Poll every 2 seconds
+
+      // Cleanup interval when modal closes or component unmounts
+      return () => {
+        clearInterval(pollInterval);
+      };
+    }
+  }, [isOpen, userData?._id, refetchPaymentMethods, queryClient]);
+
   // Animation effect and reset payment processing state
   useEffect(() => {
     if (isOpen) {
@@ -237,6 +287,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         invoiceFinalized,
         hasUserContextUserId: !!userContext?.userId,
         hasUserDataId: !!userData?._id,
+        hasPaymentMethod: !!defaultPaymentMethod,
       });
 
       // CRITICAL: Start 30-second timeout for invoice finalization if we have purchase context
@@ -272,7 +323,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     } else {
       setIsVisible(false);
     }
-  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice]);
+  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice, defaultPaymentMethod]);
 
   // Countdown timer for urgency - TODO: Implement countdown timer
   // useEffect(() => {
@@ -347,6 +398,13 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           userId: userData?._id || "",
           originalPurchaseContext: originalPurchaseContext
             ? {
+                paymentIntentId: originalPurchaseContext.paymentIntentId,
+                packageId: originalPurchaseContext.packageId,
+                packageName: originalPurchaseContext.packageName,
+                packageType: originalPurchaseContext.packageType,
+                price: originalPurchaseContext.price,
+                entries: originalPurchaseContext.entries,
+                baseEntries: originalPurchaseContext.baseEntries,
                 miniDrawId: originalPurchaseContext.miniDrawId,
                 miniDrawName: originalPurchaseContext.miniDrawName,
               }
@@ -534,53 +592,62 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }, 100);
   };
 
+  // Get active promos to determine which image to show
+  const { data: activePromos } = useActivePromos();
+
   /**
-   * Maps offer ID to the corresponding image filename
+   * Dynamically selects upsell image based on active promo multiplier
    * Returns the image path for the upsell promotional image
    *
-   * Note: Some packages share the same image (e.g., subscription "tradie-plus-package"
-   * and one-time "tradie-plus-pack" both use "Tradie Plus.png")
+   * Logic:
+   * - If no promo active (1x): Use base images from /images/upsells/
+   * - If 2x/3x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} {Pack|Upgrade}.png
+   * - If 10x promo active (membership packages): Use /images/upsells/active-promo/10X {Package} Package.png
+   * - Falls back to base images if promo-specific image is unavailable
    */
-  const getUpsellImagePath = (): string => {
-    const imageMap: Record<string, string> = {
-      // === SUBSCRIPTION PLUS PACKAGES ===
-      "tradie-plus-package": "Tradie Package.png", // Subscription: Tradie Plus Package (shows Tradie Package image)
-      "foreman-plus-package": "Foreman Package.png", // Subscription: Foreman Plus Package (shows Foreman Package image)
-      "boss-plus-package": "Boss Package.png", // Subscription: Boss Plus Package (shows Boss Package image)
+  const getUpsellImagePathValue = (): string => {
+    // Get full upsell package data to access category
+    const upsellPackage = getUpsellPackageById(offer.id);
 
-      // === ONE-TIME PLUS PACKAGES ===
-      "apprentice-plus-pack": "Apprentice Plus.png", // One-time: Apprentice Plus Pack
-      "tradie-plus-pack": "Tradie Plus.png", // One-time: Tradie Plus Pack (shares image with subscription)
-      "foreman-plus-pack": "Foreman Plus.png", // One-time: Foreman Plus Pack (shares image with subscription)
-      "boss-plus-pack": "Boss Plus.png", // One-time: Boss Plus Pack (shares image with subscription)
-      "power-plus-pack": "Power Plus.png", // One-time: Power Plus Pack
-
-      // === ADDITIONAL UPGRADE PACKAGES ===
-      "additional-apprentice-pack-upgrade": "Apprentice Upgrade.png", // Additional: Apprentice Pack Upgrade
-      "additional-tradie-pack-upgrade": "Tradie Upgrade.png", // Additional: Tradie Pack Upgrade
-      "additional-foreman-pack-upgrade": "Foreman Upgrade.png", // Additional: Foreman Pack Upgrade
-      "additional-boss-pack-upgrade": "Boss Upgrade.png", // Additional: Boss Pack Upgrade
-      "additional-power-pack-upgrade": "Power Upgrade.png", // Additional: Power Pack Upgrade
-
-      // === MINI PACK UPGRADES ===
-      "mini-pack-1-upgrade": "Mini Pack 1.png",
-      "mini-pack-2-upgrade": "Mini Pack 2.png",
-      "mini-pack-3-upgrade": "Mini Pack 3.png",
-      "mini-pack-4-upgrade": "Mini Pack 4.png",
-      "mini-pack-5-upgrade": "Mini Pack 5.png",
-      "mini-pack-6-upgrade": "Mini Pack 6.png",
-      "mini-pack-7-upgrade": "Mini Pack 7.png",
-      "mini-pack-8-upgrade": "Mini Pack 8.png",
-    };
-
-    const imageName = imageMap[offer.id];
-    if (imageName) {
-      return `/images/upsells/${imageName}`;
+    // Determine package type from originalPurchaseContext or offer category
+    let packageType: "membership" | "one-time" | "mini-draw" | undefined;
+    if (originalPurchaseContext?.packageType) {
+      packageType = originalPurchaseContext.packageType;
+    } else if (offer.category === "membership") {
+      packageType = "membership";
+    } else if (offer.category === "mini-draw") {
+      packageType = "mini-draw";
+    } else {
+      // Default to one-time for one-time-plus and additional-upgrade
+      packageType = "one-time";
     }
 
-    // Fallback: return a default image or the offer's imageUrl if available
-    // console.warn(`⚠️ No image mapping found for upsell ID: ${offer.id}`);
-    return offer.imageUrl || "/images/upsells/Tradie Plus.png";
+    // Get active promo multiplier for the package type
+    let promoMultiplier = 1;
+    if (activePromos && packageType) {
+      const promoType =
+        packageType === "membership"
+          ? "membership-packages"
+          : packageType === "one-time"
+          ? "one-time-packages"
+          : "mini-packages";
+
+      const activePromo = activePromos.find((p) => p.type === promoType && p.isActive);
+      if (activePromo) {
+        promoMultiplier = activePromo.multiplier;
+      }
+    }
+
+    // Get upsell category from package data (more reliable than inferring from offer)
+    const category = upsellPackage?.category;
+
+    // Use the utility function to get the correct image path
+    return getUpsellImagePath({
+      offerId: offer.id,
+      packageType,
+      promoMultiplier,
+      category,
+    });
   };
 
   if (!isOpen) return null;
@@ -609,7 +676,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         <div className="relative w-full overflow-hidden">
           <div className="relative w-full">
             <Image
-              src={getUpsellImagePath()}
+              src={getUpsellImagePathValue()}
               alt={offer.title || "Special Offer"}
               width={600}
               height={800}

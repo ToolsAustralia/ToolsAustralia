@@ -11,6 +11,7 @@ import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScree
 import type { PaymentStatusResponse } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
+import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
@@ -276,6 +277,12 @@ export default function MiniDrawPackages({
         setShowPaymentProcessing(true);
 
         // Store original purchase context for upsell (only after webhook confirms)
+        // Get base entries for upsell calculation
+        const baseEntries = getPackageBaseEntries({
+          packageId: pkg._id,
+          packageType: "mini-draw",
+        });
+
         setOriginalPurchaseContext({
           paymentIntentId: extractedPaymentIntentId,
           packageId: pkg._id,
@@ -283,6 +290,7 @@ export default function MiniDrawPackages({
           packageType: "mini-draw",
           price: pkg.price,
           entries: pkg.entries,
+          baseEntries,
           miniDrawId,
         });
       } else {

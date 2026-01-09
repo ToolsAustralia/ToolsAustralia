@@ -204,7 +204,17 @@ export const usePurchaseUpsell = () => {
       useDefaultPayment: boolean;
       paymentMethodId?: string;
       userId: string;
-      originalPurchaseContext?: { miniDrawId?: string; miniDrawName?: string };
+      originalPurchaseContext?: {
+        paymentIntentId?: string;
+        packageId?: string;
+        packageName?: string;
+        packageType?: "membership" | "one-time" | "mini-draw";
+        price?: number;
+        entries?: number;
+        baseEntries?: number;
+        miniDrawId?: string;
+        miniDrawName?: string;
+      };
     }) => {
       const response = await apiPost<{
         success: boolean;

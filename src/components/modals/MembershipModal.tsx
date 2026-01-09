@@ -26,6 +26,9 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { convertUpsellToLocalPlan } from "@/utils/membership/membership-adapters";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
+import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageById } from "@/data/membershipPackages";
+import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
@@ -1670,6 +1673,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         }
       }
 
+      // Get base entries for upsell calculation
+      const baseEntries = getPackageBaseEntries({
+        packageId: packageId || "",
+        packageType: packageTypeForUpsell,
+      });
+
       // Create context object in local variable to pass directly (avoids closure issue)
       contextToPass = {
         paymentIntentId,
@@ -1678,6 +1687,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         packageType: packageTypeForUpsell,
         price: activePlan.price,
         entries: status.data?.entries || 0,
+        baseEntries,
         miniDrawId,
         miniDrawName,
       };
@@ -1832,15 +1842,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             if (paymentIntentId) {
               const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
               const entriesCount = activePlan.metadata?.entriesCount || 0;
+              const packageType = activePlan.period === "mo" ? "membership" : "one-time";
+
+              // Get base entries for upsell calculation
+              const baseEntries = getPackageBaseEntries({
+                packageId: packageId || "",
+                packageType,
+              });
 
               // Create context object in local variable to pass directly (avoids closure issue)
               contextToPass = {
                 paymentIntentId,
                 packageId: packageId || "",
                 packageName: activePlan.name,
-                packageType: activePlan.period === "mo" ? "membership" : "one-time",
+                packageType,
                 price: activePlan.price,
                 entries: entriesCount,
+                baseEntries,
               };
 
               // Also update state for other component uses
@@ -1974,6 +1992,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
       if (paymentIntentId && activePlan.period === "one-time") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        
+        // Get base entries for upsell calculation
+        const baseEntries = getPackageBaseEntries({
+          packageId: packageId || "",
+          packageType: "one-time",
+        });
+
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {
           paymentIntentId,
@@ -1982,12 +2007,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageType: "one-time",
           price: activePlan.price,
           entries: entriesCount,
+          baseEntries,
         };
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);
         // console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
       } else if (paymentIntentId && activePlan.period === "mo") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        
+        // Get base entries for upsell calculation
+        const baseEntries = getPackageBaseEntries({
+          packageId: packageId || "",
+          packageType: "membership",
+        });
+
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {
           paymentIntentId,
@@ -1996,6 +2029,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageType: "membership",
           price: activePlan.price,
           entries: entriesCount,
+          baseEntries,
         };
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);
@@ -2613,6 +2647,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
               const entriesCount = activePlan.metadata?.entriesCount || 0;
 
+              // Get base entries for upsell calculation
+              const baseEntries = getPackageBaseEntries({
+                packageId: packageId || "",
+                packageType: "one-time",
+              });
+
               fallbackContext = {
                 paymentIntentId: fallbackPaymentIntentId,
                 packageId: packageId || "",
@@ -2620,6 +2660,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 packageType: "one-time",
                 price: activePlan.price,
                 entries: entriesCount,
+                baseEntries,
               };
 
               setOriginalPurchaseContext(fallbackContext);
@@ -2907,15 +2948,25 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
                     // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
                     const oneTimePaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
+                    const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "";
                     const oneTimeOriginalContext: OriginalPurchaseContext | null = oneTimePaymentIntentId
-                      ? {
-                          paymentIntentId: oneTimePaymentIntentId,
-                          packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
-                          packageName: activePlan.name,
-                          packageType: "one-time",
-                          price: activePlan.price,
-                          entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
-                        }
+                      ? (() => {
+                          // Get base entries for upsell calculation
+                          const baseEntries = getPackageBaseEntries({
+                            packageId,
+                            packageType: "one-time",
+                          });
+
+                          return {
+                            paymentIntentId: oneTimePaymentIntentId,
+                            packageId,
+                            packageName: activePlan.name,
+                            packageType: "one-time",
+                            price: activePlan.price,
+                            entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
+                            baseEntries,
+                          };
+                        })()
                       : null;
 
                     // Add delay to allow authentication to complete before triggering upsell

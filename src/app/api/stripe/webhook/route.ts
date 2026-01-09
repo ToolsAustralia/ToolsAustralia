@@ -500,8 +500,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
  */
 async function handleUpsellWebhook(user: { _id: { toString: () => string } }, paymentIntent: Stripe.PaymentIntent) {
   const offerId = paymentIntent.metadata.offerId;
-  const entriesCount = parseInt(paymentIntent.metadata.entriesCount || "0");
-
+  
   // Get upsell package details
   const upsellPackage = getUpsellPackageById(offerId);
   if (!upsellPackage) {
@@ -509,14 +508,65 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
     return;
   }
 
-  // Use final entries count (from metadata or fallback to package data)
-  const finalEntriesCount = entriesCount > 0 ? entriesCount : upsellPackage.entriesCount;
+  // ✅ Prioritize calculated entries from metadata (new dynamic calculation)
+  // Fallback order: calculated entriesCount > staticEntriesCount > package entriesCount
+  const calculatedEntriesCount = parseInt(paymentIntent.metadata.entriesCount || "0");
+  const staticEntriesCount = parseInt(paymentIntent.metadata.staticEntriesCount || "0");
+  
+  let finalEntriesCount: number;
+  let entriesSource: string;
+  
+  if (calculatedEntriesCount > 0) {
+    // Use calculated entries (from dynamic calculation)
+    finalEntriesCount = calculatedEntriesCount;
+    entriesSource = "calculated";
+    webhookLog(
+      "info",
+      `✅ Using calculated upsell entries: ${finalEntriesCount} (package: ${upsellPackage.entriesCount}, static: ${staticEntriesCount})`
+    );
+  } else if (staticEntriesCount > 0) {
+    // Fallback to static entries from metadata
+    finalEntriesCount = staticEntriesCount;
+    entriesSource = "static-metadata";
+    webhookLog(
+      "info",
+      `ℹ️ Using static entries from metadata: ${finalEntriesCount} (package fallback: ${upsellPackage.entriesCount})`
+    );
+  } else {
+    // Final fallback to package static value (backward compatibility)
+    finalEntriesCount = upsellPackage.entriesCount;
+    entriesSource = "package-static";
+    webhookLog(
+      "info",
+      `⚠️ Using package static entries (backward compatibility): ${finalEntriesCount}`
+    );
+  }
 
   // Extract miniDrawId from payment intent metadata (for mini-draw upsells)
   const miniDrawId = paymentIntent.metadata.miniDrawId;
 
   if (miniDrawId) {
     webhookLog("info", `Upsell ${offerId} is for mini-draw: ${miniDrawId}`);
+  }
+
+  // ✅ Extract original package type for bonus entry promo checks
+  // Upsells should use the promo multiplier from the original package type (membership/one-time)
+  const originalPackageType = paymentIntent.metadata.originalPackageType as
+    | "membership"
+    | "one-time"
+    | "mini-draw"
+    | undefined;
+
+  if (originalPackageType) {
+    webhookLog(
+      "info",
+      `✅ Upsell ${offerId} will use promo from original package type: ${originalPackageType}`
+    );
+  } else {
+    webhookLog(
+      "warn",
+      `⚠️ No originalPackageType in metadata for upsell ${offerId}, bonus entry promos will not apply`
+    );
   }
 
   // Extract request context from payment intent metadata for improved Facebook CAPI match quality
@@ -539,6 +589,8 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
       created: paymentIntent.created * 1000, // Convert Stripe timestamp (seconds) to milliseconds
       type: "upsell",
       packageType: "upsell",
+      // ✅ Pass original package type for bonus entry promo checks
+      ...(originalPackageType && { originalPackageType: originalPackageType }),
       ...(miniDrawId && { miniDrawId: miniDrawId }), // Include miniDrawId if present
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,

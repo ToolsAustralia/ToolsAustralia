@@ -8,6 +8,37 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUpsellPackageById, type StaticUpsellPackage } from "@/data/upsellPackages";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import {
+  calculateUpsellEntriesFromContext,
+  getPackageBaseEntries,
+} from "@/utils/payment/upsell-entries-calculator";
+import Promo from "@/models/Promo";
+
+/**
+ * Get active promo multiplier for a package type
+ * Similar to function in webhook route but accessible here
+ */
+async function getActivePromoMultiplier(packageType: "membership" | "one-time" | "mini-draw"): Promise<number> {
+  try {
+    await connectDB();
+    const promoType =
+      packageType === "membership"
+        ? "membership-packages"
+        : packageType === "one-time"
+        ? "one-time-packages"
+        : "mini-packages";
+
+    const activePromo = await Promo.findOne({
+      type: promoType,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    return activePromo?.multiplier || 1;
+  } catch (error) {
+    console.error(`Error fetching active promo for ${packageType}: ${error}`);
+    return 1; // Default to no multiplier on error
+  }
+}
 // Benefits are now granted via webhook processing only
 
 const upsellPurchaseSchema = z.object({
@@ -16,6 +47,13 @@ const upsellPurchaseSchema = z.object({
   paymentMethodId: z.string().optional(),
   originalPurchaseContext: z
     .object({
+      paymentIntentId: z.string().optional(),
+      packageId: z.string().optional(),
+      packageName: z.string().optional(),
+      packageType: z.enum(["membership", "one-time", "mini-draw"]).optional(),
+      price: z.number().optional(),
+      entries: z.number().optional(),
+      baseEntries: z.number().optional(),
       miniDrawId: z.string().optional(),
       miniDrawName: z.string().optional(),
     })
@@ -182,8 +220,69 @@ export async function POST(request: NextRequest) {
       validatedData.originalPurchaseContext
     );
 
+    // ✅ Calculate dynamic upsell entries based on original package and active promo
+    let calculatedEntriesCount = offer.entriesCount; // Fallback to static value
+    
+    // Log originalPurchaseContext for debugging
+    if (validatedData.originalPurchaseContext) {
+      console.log(`📦 OriginalPurchaseContext received:`, {
+        packageId: validatedData.originalPurchaseContext.packageId,
+        packageType: validatedData.originalPurchaseContext.packageType,
+        baseEntries: validatedData.originalPurchaseContext.baseEntries,
+        hasPackageType: !!validatedData.originalPurchaseContext.packageType,
+      });
+    } else {
+      console.log(`⚠️ No originalPurchaseContext provided for upsell purchase`);
+    }
+    
+    if (validatedData.originalPurchaseContext?.packageId && validatedData.originalPurchaseContext?.packageType) {
+      try {
+        // Get base entries from context or look up from package
+        const baseEntries =
+          validatedData.originalPurchaseContext.baseEntries ??
+          getPackageBaseEntries({
+            packageId: validatedData.originalPurchaseContext.packageId,
+            packageType: validatedData.originalPurchaseContext.packageType,
+          });
+
+        if (baseEntries > 0) {
+          // Get active promo multiplier
+          const promoMultiplier = await getActivePromoMultiplier(
+            validatedData.originalPurchaseContext.packageType
+          );
+
+          // Calculate: 2 × (baseEntries × promoMultiplier)
+          calculatedEntriesCount = calculateUpsellEntriesFromContext(
+            {
+              packageId: validatedData.originalPurchaseContext.packageId,
+              packageType: validatedData.originalPurchaseContext.packageType,
+              baseEntries,
+            },
+            promoMultiplier
+          );
+
+          console.log(
+            `🎯 Calculated upsell entries: ${baseEntries} base × ${promoMultiplier} promo × 2 = ${calculatedEntriesCount} (fallback: ${offer.entriesCount})`
+          );
+        } else {
+          console.warn(
+            `⚠️ Could not determine base entries for package ${validatedData.originalPurchaseContext.packageId}, using static value: ${offer.entriesCount}`
+          );
+        }
+      } catch (error) {
+        console.error(`❌ Error calculating dynamic upsell entries:`, error);
+        // Fall back to static value on error
+        calculatedEntriesCount = offer.entriesCount;
+      }
+    } else {
+      console.log(
+        `ℹ️ No originalPurchaseContext provided, using static entriesCount: ${offer.entriesCount}`
+      );
+    }
+
     // ✅ Validate mini-draw entry limits for upsells (if it's a mini-draw upsell)
-    if (miniDrawInfo?.miniDrawId && offer.entriesCount > 0) {
+    // Use calculated entries for validation
+    if (miniDrawInfo?.miniDrawId && calculatedEntriesCount > 0) {
       const miniDraw = await MiniDraw.findById(miniDrawInfo.miniDrawId);
 
       if (!miniDraw) {
@@ -217,7 +316,7 @@ export async function POST(request: NextRequest) {
 
       // Check if upsell entries would exceed remaining entries
       const remainingEntries = Math.max(miniDraw.minimumEntries - miniDraw.totalEntries, 0);
-      if (offer.entriesCount > remainingEntries) {
+      if (calculatedEntriesCount > remainingEntries) {
         return NextResponse.json(
           {
             error: `Mini draw "${miniDraw.name}" only has ${remainingEntries} entries remaining`,
@@ -234,11 +333,21 @@ export async function POST(request: NextRequest) {
         offer,
         validatedData.paymentMethodId,
         miniDrawInfo,
-        requestContext
+        requestContext,
+        calculatedEntriesCount,
+        validatedData.originalPurchaseContext
       );
     } else {
       // Create payment intent for manual confirmation
-      return await handlePaymentIntentCreation(user, offer, validatedData.paymentMethodId, miniDrawInfo, requestContext);
+      return await handlePaymentIntentCreation(
+        user,
+        offer,
+        validatedData.paymentMethodId,
+        miniDrawInfo,
+        requestContext,
+        calculatedEntriesCount,
+        validatedData.originalPurchaseContext
+      );
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -272,7 +381,9 @@ async function handleOneClickPurchase(
   offer: StaticUpsellPackage,
   paymentMethodId: string | undefined,
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  calculatedEntriesCount: number,
+  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw" }
 ) {
   try {
     if (!paymentMethodId) {
@@ -358,6 +469,35 @@ async function handleOneClickPurchase(
     // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
     let paymentIntent;
     try {
+      // Prepare metadata with original package type
+      const paymentMetadata = {
+        type: "upsell",
+        offerId: offer.id,
+        userId: user._id.toString(),
+        entriesCount: calculatedEntriesCount.toString(), // Use calculated entries
+        staticEntriesCount: offer.entriesCount.toString(), // Keep static value for fallback
+        offerTitle: offer.name, // Ensure offer title is included for webhook
+        // Store original package type for bonus entry promo checks
+        ...(originalPurchaseContext?.packageType && {
+          originalPackageType: originalPurchaseContext.packageType,
+        }),
+        ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
+        ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),
+        // Store request context for Facebook CAPI (webhook will extract and use)
+        ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      };
+
+      // Log metadata for debugging
+      console.log(`📝 Creating payment intent with metadata:`, {
+        offerId: offer.id,
+        originalPackageType: paymentMetadata.originalPackageType || "NOT SET",
+        hasOriginalPackageType: !!paymentMetadata.originalPackageType,
+        entriesCount: paymentMetadata.entriesCount,
+      });
+
       paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(offer.discountedPrice * 100), // Convert to cents
         currency: "aud",
@@ -368,20 +508,7 @@ async function handleOneClickPurchase(
         confirmation_method: "automatic", // Use this OR automatic_payment_methods, not both
         setup_future_usage: "off_session", // Store payment method for future use
         description: `${offer.name}`, // Add meaningful description
-        metadata: {
-          type: "upsell",
-          offerId: offer.id,
-          userId: user._id.toString(),
-          entriesCount: offer.entriesCount.toString(),
-          offerTitle: offer.name, // Ensure offer title is included for webhook
-          ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
-          ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),
-          // Store request context for Facebook CAPI (webhook will extract and use)
-          ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-          ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-          ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
-          ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
-        },
+        metadata: paymentMetadata,
       });
     } catch (stripeError) {
       console.error("Stripe payment intent creation failed:", stripeError);
@@ -415,7 +542,7 @@ async function handleOneClickPurchase(
             id: offer.id,
             name: offer.name,
             price: offer.discountedPrice,
-            entriesCount: offer.entriesCount,
+            entriesCount: calculatedEntriesCount,
           },
           paymentIntent.id
         );
@@ -508,9 +635,39 @@ async function handlePaymentIntentCreation(
   offer: StaticUpsellPackage,
   paymentMethodId: string | undefined,
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  calculatedEntriesCount: number,
+  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw" }
 ) {
   try {
+    // Prepare metadata with original package type
+    const paymentMetadata = {
+      type: "upsell",
+      offerId: offer.id,
+      userId: user._id.toString(),
+      entriesCount: calculatedEntriesCount.toString(), // Use calculated entries
+      staticEntriesCount: offer.entriesCount.toString(), // Keep static value for fallback
+      // Store original package type for bonus entry promo checks
+      ...(originalPurchaseContext?.packageType && {
+        originalPackageType: originalPurchaseContext.packageType,
+      }),
+      ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
+      ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),
+      // Store request context for Facebook CAPI (webhook will extract and use)
+      ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+      ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+      ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
+      ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+    };
+
+    // Log metadata for debugging
+    console.log(`📝 Creating payment intent (manual) with metadata:`, {
+      offerId: offer.id,
+      originalPackageType: paymentMetadata.originalPackageType || "NOT SET",
+      hasOriginalPackageType: !!paymentMetadata.originalPackageType,
+      entriesCount: paymentMetadata.entriesCount,
+    });
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(offer.discountedPrice * 100), // Convert to cents
       currency: "aud",
@@ -523,19 +680,7 @@ async function handlePaymentIntentCreation(
         allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
       },
       description: `${offer.name}`, // Add meaningful description
-      metadata: {
-        type: "upsell",
-        offerId: offer.id,
-        userId: user._id.toString(),
-        entriesCount: offer.entriesCount.toString(),
-        ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
-        ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),
-        // Store request context for Facebook CAPI (webhook will extract and use)
-        ...(requestContext?.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-        ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-        ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
-        ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
-      },
+      metadata: paymentMetadata,
     });
 
     return NextResponse.json({
@@ -545,7 +690,7 @@ async function handlePaymentIntentCreation(
       data: {
         offerId: offer.id,
         amount: offer.discountedPrice,
-        entriesCount: offer.entriesCount,
+        entriesCount: calculatedEntriesCount,
         paymentIntentId: paymentIntent.id,
         processingStatus: "pending",
       },

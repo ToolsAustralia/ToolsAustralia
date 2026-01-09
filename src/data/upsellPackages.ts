@@ -4,6 +4,14 @@
  *
  * This file contains all upsell offers that appear after membership purchases
  * with their complete configuration and targeting rules.
+ *
+ * ⚠️ IMPORTANT: entriesCount is now a FALLBACK value
+ * - Upsell entries are dynamically calculated as: 2 × (packageBaseEntries × activePromoMultiplier)
+ * - The entriesCount field here is only used as a fallback when:
+ *   1. OriginalPurchaseContext is not available
+ *   2. Package lookup fails
+ *   3. Promo multiplier cannot be determined
+ * - For new purchases, entries are calculated dynamically based on the triggering package
  */
 
 export interface StaticUpsellPackage {
@@ -14,6 +22,11 @@ export interface StaticUpsellPackage {
   originalPrice: number;
   discountedPrice: number;
   discountPercentage: number;
+  /**
+   * @deprecated This is now a fallback value. Upsell entries are dynamically calculated
+   * as 2 × (packageBaseEntries × activePromoMultiplier) when OriginalPurchaseContext is available.
+   * This value is only used for backward compatibility or when calculation is not possible.
+   */
   entriesCount: number;
   shopDiscountPercent?: number;
   partnerDiscountDays?: number;

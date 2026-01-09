@@ -10,6 +10,7 @@ import { useLoading } from "@/contexts/LoadingContext";
 // Upsell store removed - using unified modal priority system
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
+import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
@@ -289,6 +290,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
     // Store original purchase context for invoice finalization
     if (paymentIntentId && selectedPackage) {
+      // Get base entries for upsell calculation
+      const baseEntries = getPackageBaseEntries({
+        packageId: selectedPackage._id || "",
+        packageType: "one-time",
+      });
+
       setOriginalPurchaseContext({
         paymentIntentId,
         packageId: selectedPackage._id || "",
@@ -296,6 +303,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         packageType: "one-time",
         price: selectedPackage.price,
         entries: status.data?.entries || 0,
+        baseEntries,
       });
       // console.log("📧 Stored original purchase context for invoice finalization (special package)");
     }
