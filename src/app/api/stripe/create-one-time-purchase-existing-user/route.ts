@@ -251,6 +251,7 @@ export async function POST(request: NextRequest) {
       payment_method: paymentMethodId,
       confirm: true,
       return_url: `${getBaseUrl()}/purchase-success`,
+      setup_future_usage: "off_session", // ✅ Save payment method for future use (required for production/staging)
       automatic_payment_methods: {
         enabled: true,
         allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
