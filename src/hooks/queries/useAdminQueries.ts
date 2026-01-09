@@ -57,6 +57,7 @@ export interface AdminDashboardStats {
     activeSubscriptions: number;
     newInRange: number;
     profileCompletion: number;
+    cancelledMemberships: number;
   };
   revenue: {
     total: number;

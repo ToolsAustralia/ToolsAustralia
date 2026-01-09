@@ -769,7 +769,9 @@ export async function trackPixelPaymentFailed(params: {
 
 /**
  * Track subscription renewal events
- * Tracks recurring revenue separately from initial purchases
+ * NOTE: Renewals are NOT sent to Facebook as Purchase events per best practices.
+ * Only tracks to TikTok/Klaviyo for internal analytics.
+ * Facebook should only receive new purchase events, not renewals.
  */
 export async function trackPixelSubscriptionRenewal(params: {
   value: number;
@@ -823,7 +825,7 @@ export async function trackPixelSubscriptionRenewal(params: {
     const eventID = generateEventID("renewal", subscriptionId);
     const eventTime = Math.floor(Date.now() / 1000);
 
-    // Prepare common parameters for browser pixel
+    // Prepare common parameters for TikTok/Klaviyo tracking
     const commonParams = {
       eventID,
       value,
@@ -840,81 +842,11 @@ export async function trackPixelSubscriptionRenewal(params: {
       platform: "tools-australia",
     };
 
-    // 1. Track Browser Pixel (if in browser context)
-    if (typeof window !== "undefined") {
-      trackFacebookEvent("Purchase", commonParams);
-      // console.log(`📘 Facebook Pixel (Browser): Subscription renewal tracked - $${value} ${currency}`);
-    }
+    // ✅ CRITICAL: Renewals are NOT sent to Facebook as Purchase events per best practices
+    // Facebook should only receive new purchase events, not subscription renewals
+    // This ensures accurate conversion tracking and prevents inflated revenue metrics
 
-    // 2. Track Conversions API (server-side)
-    try {
-      const userData = prepareUserData({
-        email: userEmail,
-        phone: userPhone,
-        firstName: userFirstName,
-        lastName: userLastName,
-      });
-
-      // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract
-      let fbc = requestContext?.fbc || providedFbc;
-      let fbp = requestContext?.fbp || providedFbp;
-
-      if (!fbc && typeof window !== "undefined") {
-        fbc = getFBCFromURL();
-      }
-
-      if (!fbp && typeof window !== "undefined") {
-        fbp = getFBPFromCookie();
-      }
-
-      // Extract IP address and user agent - CRITICAL for Event Match Quality
-      const clientIp = requestContext?.client_ip_address || clientIpAddress;
-      const userAgent = requestContext?.client_user_agent || clientUserAgent;
-
-      // Add IP address and user agent to user data (required by Meta for optimal match quality)
-      if (clientIp) {
-        userData.client_ip_address = clientIp;
-      }
-      if (userAgent) {
-        userData.client_user_agent = userAgent;
-      }
-
-      if (fbc) userData.fbc = fbc;
-      if (fbp) userData.fbp = fbp;
-
-      const facebookEvent: FacebookEvent = {
-        event_name: "Purchase",
-        event_time: eventTime,
-        event_id: eventID,
-        action_source: "website",
-        user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
-        custom_data: {
-          currency,
-          value,
-          order_id: invoiceId,
-          content_type: "subscription_renewal",
-          content_ids: [packageId],
-          content_name: packageName,
-        },
-        event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
-      };
-
-      // Get test event code if in development
-      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
-      if (apiSuccess) {
-        // console.log(
-        //   `📘 Facebook Conversions API: Subscription renewal tracked - $${value} ${currency} (EventID: ${eventID})`
-        // );
-      } else {
-        // console.warn(`⚠️ Facebook Conversions API: Failed to send renewal event (EventID: ${eventID})`);
-      }
-    } catch (apiError) {
-      // console.error("❌ Error sending renewal to Facebook Conversions API:", apiError);
-    }
-
-    // 3. Track TikTok Pixel
+    // Track TikTok Pixel (optional - for internal analytics)
     await trackTikTokEvent("CompletePayment", commonParams);
     // console.log(`📱 TikTok Pixel: Subscription renewal tracked - $${value} ${currency}`);
   } catch (error) {

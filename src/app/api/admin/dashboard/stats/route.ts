@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
     // ========================================
     // For user stats, we always show all-time totals (not filtered by date range)
     // But new signups are filtered by date range
-    const [totalUsers, activeSubscriptions, newSignupsInRange, usersWithCompletedProfiles] = await Promise.all([
+    const [totalUsers, activeSubscriptions, newSignupsInRange, usersWithCompletedProfiles, cancelledMemberships] = await Promise.all([
       User.countDocuments({ isActive: true }),
       User.countDocuments({
         "subscription.isActive": true,
@@ -162,6 +162,13 @@ export async function GET(request: NextRequest) {
       }),
       User.countDocuments({
         profileSetupCompleted: true,
+        isActive: true,
+      }),
+      // Cancelled memberships: users with scheduled cancellation
+      // (endDate set, meaning they cancelled at period end but are still in billing period)
+      User.countDocuments({
+        "subscription.endDate": { $exists: true, $ne: null },
+        "subscription.status": { $in: ["active", "past_due"] },
         isActive: true,
       }),
     ]);
@@ -466,6 +473,7 @@ export async function GET(request: NextRequest) {
         activeSubscriptions,
         newInRange: newSignupsInRange,
         profileCompletion: profileCompletionRate,
+        cancelledMemberships,
       },
       revenue: {
         total: totalRevenue,

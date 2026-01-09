@@ -52,6 +52,7 @@ import {
   ShoppingBag,
   ChevronDown,
   ChevronUp,
+  UserX,
 } from "lucide-react";
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
@@ -615,11 +616,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
               </div>
 
               {/* Real-time Metrics */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
                 {statsLoading || activitiesLoading ? (
                   // Loading state - show skeleton cards
                   <>
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                       <div
                         key={i}
                         className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-3 sm:p-4 animate-pulse"
@@ -642,38 +643,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                     </p>
                   </div>
                 ) : dashboardStats ? (
-                  // Real data
+                  // Real data - Arranged for better logical grouping
                   <>
-                    <MetricCard
-                      title="Total Users"
-                      value={dashboardStats.users.total.toLocaleString()}
-                      icon={Users}
-                      subtitle="Active users"
-                      color="indigo"
-                    />
-                    <MetricCard
-                      title={
-                        dateRange === "today"
-                          ? "New Signups"
-                          : dateRange === "yesterday"
-                          ? "New Signups"
-                          : dateRange === "all-time"
-                          ? "Total Signups"
-                          : "New Signups"
-                      }
-                      value={dashboardStats.users.newInRange.toLocaleString()}
-                      icon={UserCheck}
-                      subtitle={
-                        dateRange === "today"
-                          ? "Signed up today"
-                          : dateRange === "yesterday"
-                          ? "Signed up yesterday"
-                          : dateRange === "all-time"
-                          ? "All-time signups"
-                          : "In selected period"
-                      }
-                      color="blue"
-                    />
+                    {/* Revenue Metrics - Most Important */}
                     {/* Total Revenue - Prominent Display (Clickable) */}
                     <div
                       onClick={() => setIsRevenueBreakdownExpanded(!isRevenueBreakdownExpanded)}
@@ -718,10 +690,46 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                         maximumFractionDigits: 2,
                       })}`}
                       icon={TrendingUp}
-                      subtitle="Next month's expected revenue"
+                      subtitle={
+                        <span className="text-xs">
+                          {projectedIncome?.activeSubscriptions || 0} memberships
+                        </span>
+                      }
                       color="purple"
                       loading={projectedIncomeLoading}
                     />
+                    {/* User Metrics */}
+                    <MetricCard
+                      title="Total Users"
+                      value={dashboardStats.users.total.toLocaleString()}
+                      icon={Users}
+                      subtitle="Active users"
+                      color="indigo"
+                    />
+                    <MetricCard
+                      title={
+                        dateRange === "today"
+                          ? "New Signups"
+                          : dateRange === "yesterday"
+                          ? "New Signups"
+                          : dateRange === "all-time"
+                          ? "Total Signups"
+                          : "New Signups"
+                      }
+                      value={dashboardStats.users.newInRange.toLocaleString()}
+                      icon={UserCheck}
+                      subtitle={
+                        dateRange === "today"
+                          ? "Signed up today"
+                          : dateRange === "yesterday"
+                          ? "Signed up yesterday"
+                          : dateRange === "all-time"
+                          ? "All-time signups"
+                          : "In selected period"
+                      }
+                      color="blue"
+                    />
+                    {/* Performance Metrics */}
                     <MetricCard
                       title="Conversion Rate"
                       value={`${dashboardStats.conversionRate}%`}
@@ -761,6 +769,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       icon={Target}
                       subtitle="Return on ad spend"
                       color="green"
+                    />
+                    {/* Churn Metric */}
+                    <MetricCard
+                      title="Cancelled Memberships"
+                      value={dashboardStats.users.cancelledMemberships.toLocaleString()}
+                      icon={UserX}
+                      subtitle="Scheduled cancellation"
+                      color="red"
                     />
                   </>
                 ) : null}

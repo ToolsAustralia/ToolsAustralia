@@ -3075,7 +3075,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         webhookLog("info", `✅ Subscription Started event tracked to Klaviyo for: ${user.email}`);
       }
 
-      // Track subscription renewal to Facebook Pixel (if this is a renewal)
+      // Track subscription renewal to TikTok/Klaviyo (if this is a renewal)
+      // NOTE: Renewals are NOT sent to Facebook as Purchase events per best practices
+      // Facebook should only receive new purchase events, not renewals
       if (invoice.billing_reason === "subscription_cycle") {
         try {
           await trackPixelSubscriptionRenewal({
@@ -3092,9 +3094,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
             userLastName: user.lastName,
             entriesPerMonth: entriesToGrant,
           });
-          webhookLog("info", `✅ Subscription renewal tracked to Facebook Pixel for: ${user.email}`);
+          webhookLog("info", `✅ Subscription renewal tracked to TikTok/Klaviyo (not Facebook) for: ${user.email}`);
         } catch (pixelError) {
-          webhookLog("error", `Error tracking subscription renewal to Facebook Pixel: ${pixelError}`);
+          webhookLog("error", `Error tracking subscription renewal: ${pixelError}`);
           // Don't throw - pixel tracking should not break webhook processing
         }
       }

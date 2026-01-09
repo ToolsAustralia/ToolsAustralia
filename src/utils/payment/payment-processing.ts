@@ -382,7 +382,7 @@ async function processPaymentBenefitsInternal(
         type: packageData.packageType,
         packageType: packageData.packageType,
       };
-      await grantBenefits(user as UserDocument, packageData, finalPaymentMetadata, paymentIntentId, requestContext);
+      await grantBenefits(user as UserDocument, packageData, finalPaymentMetadata, paymentIntentId, requestContext, billingReason);
 
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
       // Store the payment ID as-is to match webhook expectations
@@ -858,7 +858,8 @@ async function grantBenefits(
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
-  }
+  },
+  billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
 ): Promise<void> {
   // ✅ DEBUG: Log function call with all parameters
   // console.log(`🎯 grantBenefits called with:`, {
@@ -1110,37 +1111,50 @@ async function grantBenefits(
   });
 
   // ✅ NEW: Track pixel events for all purchase types
-  try {
-    await trackPixelPurchase({
-      value: packageData.price,
-      currency: "AUD",
-      orderId: paymentIntentId || `order-${Date.now()}`,
-      packageType: packageData.packageType,
-      packageId: packageData.packageId,
-      packageName: packageData.packageName,
-      userId: user._id.toString(),
-      userEmail: user.email,
-      entriesAdded: packageData.entries,
-      pointsEarned: packageData.points,
-      paymentIntentId: paymentIntentId,
-      content_type:
-        packageData.packageType === "membership"
-          ? "subscription"
-          : packageData.packageType === "one-time"
-          ? "membership_package"
-          : packageData.packageType === "mini-draw"
-          ? "mini_draw_package"
-          : packageData.packageType === "upsell"
-          ? "upsell_package"
-          : "product",
-      content_ids: packageData.packageId ? [packageData.packageId] : [],
-      num_items: 1,
-      requestContext: requestContext, // Pass request context for improved match quality
-    });
-    // console.log(`📊 Pixel tracking completed for ${packageData.packageType} purchase`);
-  } catch (_pixelError) {
-    console.error("❌ Pixel tracking failed (non-blocking):", _pixelError);
-    // Don't throw - pixel tracking should not break purchase flow
+  // ✅ CRITICAL: Skip Facebook tracking for subscription renewals (billingReason === "subscription_cycle")
+  // Renewals should NOT be sent as Purchase events to Facebook per best practices
+  const isRenewal = billingReason === "subscription_cycle";
+  
+  if (!isRenewal) {
+    // Only track new purchases to Facebook (not renewals)
+    try {
+      // Log for debugging (can be enabled if needed)
+      // console.log(`📊 Tracking Facebook Purchase event for ${packageData.packageType} purchase (billingReason: ${billingReason || "new purchase"})`);
+      await trackPixelPurchase({
+        value: packageData.price,
+        currency: "AUD",
+        orderId: paymentIntentId || `order-${Date.now()}`,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        packageName: packageData.packageName,
+        userId: user._id.toString(),
+        userEmail: user.email,
+        entriesAdded: packageData.entries,
+        pointsEarned: packageData.points,
+        paymentIntentId: paymentIntentId,
+        content_type:
+          packageData.packageType === "membership"
+            ? "subscription"
+            : packageData.packageType === "one-time"
+            ? "membership_package"
+            : packageData.packageType === "mini-draw"
+            ? "mini_draw_package"
+            : packageData.packageType === "upsell"
+            ? "upsell_package"
+            : "product",
+        content_ids: packageData.packageId ? [packageData.packageId] : [],
+        num_items: 1,
+        requestContext: requestContext, // Pass request context for improved match quality
+      });
+      // console.log(`📊 Pixel tracking completed for ${packageData.packageType} purchase`);
+    } catch (_pixelError) {
+      console.error("❌ Pixel tracking failed (non-blocking):", _pixelError);
+      // Don't throw - pixel tracking should not break purchase flow
+    }
+  } else {
+    // Log that we're skipping Facebook tracking for renewal (for debugging)
+    // This ensures renewals are not counted as conversions in Facebook
+    // console.log(`📊 Skipping Facebook Purchase event for renewal (billingReason: ${billingReason}) - Renewals should not be sent to Facebook per best practices`);
   }
 
   // ✅ CRITICAL: Process affiliate commissions (non-blocking, only on successful payments)

@@ -6,7 +6,7 @@ import { LucideIcon } from "lucide-react";
 export interface MetricCardProps {
   title: string | React.ReactNode;
   value: string | number;
-  subtitle?: string;
+  subtitle?: string | React.ReactNode;
   icon: LucideIcon;
   color?: "red" | "emerald" | "blue" | "purple" | "yellow" | "indigo" | "orange" | "pink" | "green";
   trend?: {
@@ -32,7 +32,7 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
 }) {
   if (loading) {
     return (
-      <div className={`bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 animate-pulse ${className}`}>
+      <div className={`bg-white rounded-xl shadow-lg border-2 border-gray-100 p-3 sm:p-4 lg:p-6 animate-pulse ${className}`}>
         <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
         <div className="h-8 bg-gray-200 rounded w-3/4"></div>
         {subtitle && <div className="h-3 bg-gray-200 rounded w-1/2 mt-2"></div>}
@@ -81,21 +81,21 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-lg border-2 ${colorClasses[normalizedColor]} p-4 sm:p-6 ${className}`}
+      className={`bg-white rounded-xl shadow-lg border-2 ${colorClasses[normalizedColor]} p-3 sm:p-4 lg:p-6 ${className}`}
       aria-label={ariaLabel || `${titleString}: ${displayValue}`}
     >
       <div className="flex items-center justify-between mb-2">
         {typeof title === "string" ? (
-          <h3 className="text-sm font-semibold text-gray-600">{title}</h3>
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-600">{title}</h3>
         ) : (
-          <div className="text-sm font-semibold text-gray-600">{title}</div>
+          <div className="text-xs sm:text-sm font-semibold text-gray-600">{title}</div>
         )}
-        <div className={`p-2 ${colorClasses[normalizedColor]} rounded-lg`}>
-          <Icon className={`w-4 h-4 ${iconColorClasses[normalizedColor]}`} aria-hidden="true" />
+        <div className={`p-1.5 sm:p-2 ${colorClasses[normalizedColor]} rounded-lg`}>
+          <Icon className={`w-3 h-3 sm:w-4 sm:h-4 ${iconColorClasses[normalizedColor]}`} aria-hidden="true" />
         </div>
       </div>
       <div className="flex items-baseline justify-between">
-        <p className="text-2xl font-bold text-gray-900">{displayValue}</p>
+        <p className="text-xl sm:text-2xl font-bold text-gray-900">{displayValue}</p>
         {trend && trendDirection && (
           <div
             className={`text-xs font-semibold ${
@@ -111,9 +111,9 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         )}
       </div>
       {subtitle && (
-        <p className="text-xs text-gray-500 mt-1" aria-label={`${titleString} subtitle`}>
+        <div className="text-xs text-gray-500 mt-1" aria-label={`${titleString} subtitle`}>
           {subtitle}
-        </p>
+        </div>
       )}
     </div>
   );
