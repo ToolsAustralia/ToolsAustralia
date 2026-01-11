@@ -24,7 +24,9 @@ export function useActivePromoBannerText() {
     },
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 60 * 1000, // Refetch every 1 minute
+    refetchIntervalInBackground: true, // Allow refetch in background for production reliability
     refetchOnWindowFocus: true,
+    refetchOnMount: true, // Ensure fresh data on mount
   });
 }
 

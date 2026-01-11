@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
-import { useQueryClient } from "@tanstack/react-query";
 import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST, getNowInAEST } from "@/utils/common/timezone";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
@@ -55,7 +54,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
 
   const [timeLeft, setTimeLeft] = useState({
@@ -117,62 +115,36 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => clearInterval(interval);
   }, []);
 
-  // Automatic midnight AEST/AEDT detection and update
-  // This ensures banner text updates automatically at midnight without manual intervention
+  // Helper function to get current date string in AEST (YYYY-MM-DD format)
+  const getCurrentDateStringAEST = (): string => {
+    const nowAEST = getNowInAEST();
+    return `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
+  };
+
+  // Simple interval to detect date changes (every 2 minutes)
+  // Updates alternating default text when date changes
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const scheduleMidnightUpdate = () => {
-      const now = new Date();
-      const nextMidnight = getNextMidnightAEST();
-      const msUntilMidnight = nextMidnight.getTime() - now.getTime();
+    let lastDateStr = getCurrentDateStringAEST();
 
-      // Schedule update exactly at midnight AEST/AEDT
-      const timeoutId = setTimeout(() => {
-        // Invalidate React Query cache to force refetch of active scheduled text
-        queryClient.invalidateQueries({ queryKey: ["promo-banner-text", "active"] });
-        
-        // Update alternating default text for new day
+    const checkDateChange = () => {
+      const currentDateStr = getCurrentDateStringAEST();
+      if (currentDateStr !== lastDateStr) {
+        // Date changed - update alternating default text
+        lastDateStr = currentDateStr;
         setAlternatingDefault(getAlternatingDefaultText());
-        
-        // Reschedule for next midnight
-        scheduleMidnightUpdate();
-      }, Math.max(0, msUntilMidnight)); // Ensure non-negative
-
-      return timeoutId;
-    };
-
-    // Initial schedule
-    let timeoutId = scheduleMidnightUpdate();
-
-    // Fallback: Check every minute to catch any missed updates
-    const fallbackInterval = setInterval(() => {
-      const nowAEST = getNowInAEST();
-      const currentDateStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
-      const lastCheckedDate = sessionStorage.getItem("lastBannerCheckDate");
-      
-      if (lastCheckedDate !== currentDateStr) {
-        // Day changed - update everything
-        sessionStorage.setItem("lastBannerCheckDate", currentDateStr);
-        queryClient.invalidateQueries({ queryKey: ["promo-banner-text", "active"] });
-        setAlternatingDefault(getAlternatingDefaultText());
-        
-        // Reschedule midnight timeout
-        clearTimeout(timeoutId);
-        timeoutId = scheduleMidnightUpdate();
       }
-    }, 60 * 1000); // Check every minute
-
-    // Initialize last checked date
-    const nowAEST = getNowInAEST();
-    const currentDateStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
-    sessionStorage.setItem("lastBannerCheckDate", currentDateStr);
-
-    return () => {
-      clearTimeout(timeoutId);
-      clearInterval(fallbackInterval);
     };
-  }, [queryClient]);
+
+    // Check immediately on mount
+    checkDateChange();
+
+    // Check every 2 minutes (sufficient for date change detection)
+    const interval = setInterval(checkDateChange, 2 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Countdown strategy:
   // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
@@ -327,32 +299,26 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return null;
   };
 
-  // Determine badge text based on priority:
+  // Memoize badge text calculation for performance and reactivity
+  // Priority order:
   // 1. Draw status ("DRAWN TONIGHT" / "DRAWN TOMORROW") - Highest priority
   // 2. Active scheduled text (from service layer, resolved in AEST)
   // 3. Alternating default texts ("BIGGEST BONUS" / "FIRST 500 PEOPLE")
-  const getBadgeText = (): string => {
+  const badgeText = useMemo(() => {
     // Priority 1: Draw status (highest priority)
     const drawStatus = getDrawDateStatus();
-    if (drawStatus === "today") {
-      return "DRAWN TONIGHT";
-    } else if (drawStatus === "tomorrow") {
-      return "DRAWN TOMORROW";
-    }
+    if (drawStatus === "today") return "DRAWN TONIGHT";
+    if (drawStatus === "tomorrow") return "DRAWN TOMORROW";
 
     // Priority 2: Active scheduled text
-    if (activeScheduledText) {
-      return activeScheduledText;
-    }
+    if (activeScheduledText) return activeScheduledText;
 
-    // Priority 3: Alternating default fallback (use state, not function call)
-    // This prevents the text from changing on every render
+    // Priority 3: Alternating default fallback
     return alternatingDefault;
-  };
+  }, [currentDraw?.drawDate, activeScheduledText, alternatingDefault]);
 
-  // Calculate dynamic font size based on text length
-  const badgeText = getBadgeText();
-  const fontSize = calculateFontSize(badgeText, isMobile);
+  // Memoize font size calculation
+  const fontSize = useMemo(() => calculateFontSize(badgeText, isMobile), [badgeText, isMobile]);
 
   // Get formatted draw time for display
   const getDrawTimeText = (): string | null => {
