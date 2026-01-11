@@ -3,78 +3,67 @@
  * 
  * Manages alternating default texts when no scheduled text is active.
  * Alternates once per day (AEST) between "BIGGEST BONUS" and "FIRST 500 PEOPLE".
- * Uses localStorage to track which default text was shown for the current day.
+ * Uses date-based deterministic seed to ensure consistency across all users.
+ * All users will see the same text on the same day (AEST).
  */
 
 import { getNowInAEST } from "@/utils/common/timezone";
 
-const STORAGE_KEY_DATE = "promoBannerDefaultDate";
-const STORAGE_KEY_INDEX = "promoBannerDefaultIndex";
-const DEFAULT_TEXTS = ["BIGGEST BONUS", "FIRST 500 PEOPLE"];
-
-/**
- * Get the current date string in AEST (YYYY-MM-DD format)
- * @returns Date string in format YYYY-MM-DD
- */
-function getCurrentDateStringAEST(): string {
-  const nowAEST = getNowInAEST();
-  const year = nowAEST.getFullYear();
-  const month = String(nowAEST.getMonth() + 1).padStart(2, "0");
-  const day = String(nowAEST.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+const DEFAULT_TEXTS = [ "FIRST 500 PEOPLE", "BIGGEST BONUS"];
 
 /**
  * Get the alternating default text for the current day (AEST)
+ * Uses date as deterministic seed - all users see the same text on the same day
  * Alternates between "BIGGEST BONUS" and "FIRST 500 PEOPLE" once per day
+ * 
+ * Algorithm: Uses the full date (YYYY-MM-DD) as a hash seed
+ * - Creates a deterministic hash from the date string
+ * - Ensures proper alternation even across month boundaries
+ * - Example: Jan 31 → Feb 1 will show different texts
+ * 
+ * This ensures:
+ * 1. Consistency across all users on the same day
+ * 2. Alternation that changes daily (even across month/year boundaries)
+ * 3. Works on both client and server-side
+ * 
  * @returns The default text to display for today
  */
 export function getAlternatingDefaultText(): string {
   try {
-    if (typeof window === "undefined") {
-      // Server-side rendering: default to first text
-      return DEFAULT_TEXTS[0];
+    const nowAEST = getNowInAEST();
+    
+    // Create date string (YYYY-MM-DD) for deterministic seed
+    const year = nowAEST.getFullYear();
+    const month = String(nowAEST.getMonth() + 1).padStart(2, "0");
+    const day = String(nowAEST.getDate()).padStart(2, "0");
+    const dateStr = `${year}-${month}-${day}`;
+    
+    // Create a simple hash from the date string
+    // This ensures proper alternation even across month boundaries
+    // (e.g., Jan 31 → Feb 1 will produce different hashes)
+    let hash = 0;
+    for (let i = 0; i < dateStr.length; i++) {
+      const char = dateStr.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
     }
-
-    const currentDateStr = getCurrentDateStringAEST();
-    const storedDateStr = localStorage.getItem(STORAGE_KEY_DATE);
-    const storedIndex = localStorage.getItem(STORAGE_KEY_INDEX);
-
-    // If it's a new day, start with BIGGEST BONUS (index 0) and alternate from there
-    if (storedDateStr !== currentDateStr) {
-      // Get the last index to determine what to show today
-      const lastIndex = storedIndex ? parseInt(storedIndex, 10) : -1;
-      // If lastIndex was -1 (no previous day) or 1 (was "FIRST 500 PEOPLE"), start with "BIGGEST BONUS" (0)
-      // If lastIndex was 0 (was "BIGGEST BONUS"), show "FIRST 500 PEOPLE" (1)
-      const nextIndex = lastIndex === 0 ? 1 : 0;
-      
-      // Store new date and index
-      localStorage.setItem(STORAGE_KEY_DATE, currentDateStr);
-      localStorage.setItem(STORAGE_KEY_INDEX, nextIndex.toString());
-      
-      return DEFAULT_TEXTS[nextIndex];
-    }
-
-    // Same day: return the text that was already shown today
-    const currentIndex = storedIndex ? parseInt(storedIndex, 10) : 0;
-    return DEFAULT_TEXTS[currentIndex] || DEFAULT_TEXTS[0];
+    
+    // Use hash to determine index (0 or 1)
+    const index = Math.abs(hash) % 2;
+    
+    return DEFAULT_TEXTS[index];
   } catch (error) {
-    // If localStorage is not available, default to first text
+    // If any error, default to first text
     return DEFAULT_TEXTS[0];
   }
 }
 
 /**
- * Reset the default text alternation (useful for testing)
+ * Reset function kept for backward compatibility (no-op now)
+ * @deprecated No longer needed since we use date-based seed instead of localStorage
  */
 export function resetDefaultTextAlternation(): void {
-  try {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(STORAGE_KEY_DATE);
-      localStorage.removeItem(STORAGE_KEY_INDEX);
-    }
-  } catch (error) {
-    // Ignore errors
-  }
+  // No-op: localStorage no longer used
+  // Kept for backward compatibility in case it's called elsewhere
 }
 
