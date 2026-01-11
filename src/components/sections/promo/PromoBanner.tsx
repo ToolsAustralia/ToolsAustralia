@@ -86,7 +86,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     if (typeof window !== "undefined") {
       return getAlternatingDefaultText();
     }
-    return "BIGGEST BONUS"; // Default for SSR
+    return "FIRST 500 PEOPLE"; // Default for SSR
   });
 
   // Detect mobile viewport for font sizing
