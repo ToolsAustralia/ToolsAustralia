@@ -14,6 +14,16 @@ const AEST_TIMEZONE = "Australia/Sydney";
 
 export class PromoBannerTextService {
   /**
+   * Format a date as YYYY-MM-DD string (timezone-independent comparison)
+   * Used for reliable date comparisons across different server timezones
+   * @param date - Date object (should already be in AEST timezone)
+   * @returns Date string in YYYY-MM-DD format
+   */
+  private formatDateString(date: Date): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  /**
    * Check if a date matches a recurring pattern
    * @param pattern - The recurrence pattern to check
    * @param date - The date in AEST timezone
@@ -33,6 +43,7 @@ export class PromoBannerTextService {
 
   /**
    * Check if a one-time schedule is active for a given date
+   * Uses string-based date comparison (YYYY-MM-DD) for timezone-independent reliability
    * @param text - The promo banner text
    * @param date - The date in AEST timezone
    * @returns True if schedule is active
@@ -46,16 +57,18 @@ export class PromoBannerTextService {
     const startAEST = convertUTCToAEST(text.startDate);
     const endAEST = convertUTCToAEST(text.endDate);
 
-    // Compare dates (ignore time, only compare dates)
-    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const startDateOnly = new Date(startAEST.getFullYear(), startAEST.getMonth(), startAEST.getDate());
-    const endDateOnly = new Date(endAEST.getFullYear(), endAEST.getMonth(), endAEST.getDate());
+    // Compare dates using string format (YYYY-MM-DD) - timezone-independent
+    // This ensures consistent behavior across different server timezones (dev vs production)
+    const dateStr = this.formatDateString(date);
+    const startDateStr = this.formatDateString(startAEST);
+    const endDateStr = this.formatDateString(endAEST);
 
-    return dateOnly >= startDateOnly && dateOnly <= endDateOnly;
+    return dateStr >= startDateStr && dateStr <= endDateStr;
   }
 
   /**
    * Check if a recurring schedule is active for a given date
+   * Uses string-based date comparison (YYYY-MM-DD) for timezone-independent reliability
    * @param text - The promo banner text
    * @param date - The date in AEST timezone
    * @returns True if schedule is active
@@ -65,19 +78,19 @@ export class PromoBannerTextService {
       return false;
     }
 
-    // Check date boundaries if set
+    // Check date boundaries if set (using string comparison for timezone-independence)
     if (text.startDate) {
       const startAEST = convertUTCToAEST(text.startDate);
-      const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      const startDateOnly = new Date(startAEST.getFullYear(), startAEST.getMonth(), startAEST.getDate());
-      if (dateOnly < startDateOnly) return false;
+      const dateStr = this.formatDateString(date);
+      const startDateStr = this.formatDateString(startAEST);
+      if (dateStr < startDateStr) return false;
     }
 
     if (text.endDate) {
       const endAEST = convertUTCToAEST(text.endDate);
-      const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      const endDateOnly = new Date(endAEST.getFullYear(), endAEST.getMonth(), endAEST.getDate());
-      if (dateOnly > endDateOnly) return false;
+      const dateStr = this.formatDateString(date);
+      const endDateStr = this.formatDateString(endAEST);
+      if (dateStr > endDateStr) return false;
     }
 
     // Check if day matches pattern
