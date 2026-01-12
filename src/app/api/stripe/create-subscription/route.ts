@@ -400,11 +400,13 @@ export async function POST(request: NextRequest) {
 
         // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
         // Don't confirm it - let PaymentElement handle confirmation
+        // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
+        // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
         const newPaymentIntent = await stripe.paymentIntents.create({
           amount: invoiceAmount,
           currency: invoiceCurrency,
           customer: customer.id,
-          payment_method: finalPaymentMethodId,
+          // ✅ REMOVED: payment_method - PaymentElement will collect it from user selection
           setup_future_usage: "off_session",
           confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
           automatic_payment_methods: {

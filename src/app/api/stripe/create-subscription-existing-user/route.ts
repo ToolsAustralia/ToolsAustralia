@@ -281,11 +281,13 @@ export async function POST(request: NextRequest) {
         const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
         const invoiceCurrency = (latestInvoice.currency as string) || "aud";
 
+        // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
+        // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
         const newPaymentIntent = await stripe.paymentIntents.create({
           amount: invoiceAmount,
           currency: invoiceCurrency,
           customer: stripeCustomerId,
-          payment_method: finalPaymentMethodId,
+          // ✅ REMOVED: payment_method - PaymentElement will collect it from user selection
           setup_future_usage: "off_session",
           confirm: false,
           automatic_payment_methods: {
