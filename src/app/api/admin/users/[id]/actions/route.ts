@@ -507,7 +507,7 @@ async function handleClearPaymentMethods(user: any) {
       try {
         await stripe.customers.update(user.stripeCustomerId, {
           invoice_settings: {
-            default_payment_method: null,
+            default_payment_method: undefined,
           },
         });
       } catch (stripeError) {

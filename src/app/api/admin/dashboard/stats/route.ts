@@ -9,7 +9,6 @@ import { getStartOfTodayInAEST, createAESTDateAsUTC, getWebsiteLaunchDateUTC } f
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
-import mongoose from "mongoose";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
 
 /**
