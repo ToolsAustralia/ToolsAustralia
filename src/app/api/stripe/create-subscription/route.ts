@@ -183,8 +183,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Payment method is already attached to customer via SetupIntent
-    // Just set it as the default payment method
+    // ✅ CRITICAL FIX: Only set default payment method for subscription creation (required by Stripe)
+    // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
+    // This prevents saving payment methods when payments fail due to insufficient funds
     if (finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
       await stripe.customers.update(customer.id, {
         invoice_settings: {
@@ -278,7 +279,10 @@ export async function POST(request: NextRequest) {
           // Payment will still be collected via PaymentElement (not auto-paid)
           default_payment_method: finalPaymentMethodId,
           payment_behavior: "default_incomplete", // ✅ Stripe creates PaymentIntent automatically with correct amount
-          payment_settings: { save_default_payment_method: "on_subscription" },
+          // ✅ CRITICAL FIX: Do NOT save payment method automatically on subscription creation
+          // Payment method will only be saved AFTER payment succeeds (handled by webhook)
+          // This prevents saving payment methods when payments fail due to insufficient funds
+          // payment_settings: { save_default_payment_method: "on_subscription" }, // REMOVED
           expand: ["latest_invoice.payment_intent"], // ✅ Get PaymentIntent from invoice
           description: `${membershipPackage.name}`,
           metadata: {
@@ -551,19 +555,15 @@ export async function POST(request: NextRequest) {
     let user;
 
     if (registeredUser) {
-      // User already exists (registered in step 1), update their Stripe customer ID, subscription ID and payment method
+      // User already exists (registered in step 1), update their Stripe customer ID and subscription ID
+      // ✅ CRITICAL FIX: Do NOT save payment method to user database here
+      // Payment method will only be saved AFTER payment succeeds (handled by webhook)
+      // This prevents saving payment methods when payments fail due to insufficient funds
       // console.log(
       //   `🔄 Updating existing user with Stripe customer ID: ${customer.id} and subscription ID: ${subscription.id}`
       // );
 
-      // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
-      const savedPaymentMethodData = {
-        paymentMethodId: finalPaymentMethodId,
-        isDefault: true, // Set as default since it's the first payment method
-        createdAt: new Date(),
-      };
-
-      // Update existing user with Stripe customer ID, subscription ID and payment method
+      // Update existing user with Stripe customer ID and subscription ID (NO payment method saved yet)
       user = await User.findByIdAndUpdate(
         registeredUser._id,
         {
@@ -579,7 +579,8 @@ export async function POST(request: NextRequest) {
               status: subscription.status, // Track subscription status
             },
           },
-          $push: { savedPaymentMethods: savedPaymentMethodData },
+          // ✅ REMOVED: $push: { savedPaymentMethods: savedPaymentMethodData }
+          // Payment method will be saved by webhook after payment succeeds
         },
         { new: true }
       );
@@ -605,12 +606,9 @@ export async function POST(request: NextRequest) {
 
       // console.log("👤 Creating user account...");
 
-      // PCI-COMPLIANT: Only store Stripe payment method IDs, never card details
-      const savedPaymentMethodData = {
-        paymentMethodId: finalPaymentMethodId,
-        isDefault: true, // Set as default since it's the first payment method
-        createdAt: new Date(),
-      };
+      // ✅ CRITICAL FIX: Do NOT save payment method to user database here
+      // Payment method will only be saved AFTER payment succeeds (handled by webhook)
+      // This prevents saving payment methods when payments fail due to insufficient funds
 
       user = new User({
         firstName: validatedData.firstName,
@@ -637,7 +635,8 @@ export async function POST(request: NextRequest) {
         rewardsPoints: 0, // ⏳ Will be added via webhook only
         isEmailVerified: false, // TODO: Implement email verification
         isActive: true, // User account is active
-        savedPaymentMethods: [savedPaymentMethodData], // Save the payment method directly
+        savedPaymentMethods: [], // ✅ REMOVED: Do NOT save payment method until payment succeeds
+        // Payment method will be saved by webhook after payment succeeds
       });
 
       try {

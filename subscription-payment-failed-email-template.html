@@ -90,15 +90,6 @@
         margin: 24px 0;
       }
 
-      .info-box {
-        background-color: #fafbfc;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 16px;
-        font-size: 14px;
-        line-height: 1.8;
-      }
-
       /* === FAILURE ALERT BOX === */
       .failure-alert {
         background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
@@ -144,39 +135,6 @@
         color: #4b5563;
         line-height: 1.7;
         margin-bottom: 20px;
-      }
-
-      /* === COMMON REASONS SECTION === */
-      .reasons-box {
-        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-        border: 2px solid #f59e0b;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 24px 0;
-      }
-
-      .reasons-title {
-        font-size: 14px;
-        font-weight: 700;
-        color: #92400e;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 12px;
-      }
-
-      .reason-item {
-        font-size: 13px;
-        color: #78350f;
-        margin: 8px 0;
-        padding-left: 20px;
-        position: relative;
-      }
-
-      .reason-item:before {
-        content: "•";
-        position: absolute;
-        left: 8px;
-        font-weight: bold;
       }
 
       /* === PAYMENT DETAILS TABLE === */
@@ -247,13 +205,13 @@
       }
 
       .cta-button-secondary {
-        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-        box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
       }
 
       .cta-button-secondary:hover {
-        background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
-        box-shadow: 0 6px 16px rgba(107, 114, 128, 0.4);
+        background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+        box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4);
       }
 
       .cta-container {
@@ -275,22 +233,6 @@
         font-size: 14px;
         color: #166534;
         line-height: 1.6;
-      }
-
-      /* === STEP NUMBERS === */
-      .step-number {
-        display: inline-block;
-        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-        color: #ffffff;
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        text-align: center;
-        line-height: 24px;
-        font-size: 12px;
-        font-weight: 700;
-        margin-right: 8px;
-        vertical-align: middle;
       }
 
       /* === FOOTER === */
@@ -350,12 +292,6 @@
         .payment-details td {
           padding: 10px 8px;
         }
-        .step-number {
-          width: 20px;
-          height: 20px;
-          line-height: 20px;
-          font-size: 11px;
-        }
       }
     </style>
   </head>
@@ -366,10 +302,10 @@
         <div class="header">          
           <img alt="Tools Australia Logo" class="header-logo" src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png"/>
           <h1>
-            Payment Failed
+            Membership Payment Failed
           </h1>
           <p>
-            We couldn't process your payment
+            We couldn't process your membership payment
           </p>
         </div>
 
@@ -379,23 +315,22 @@
           <div class="opening-message">
             Dear {{ person.first_name }},
             <br/><br/>
-            We were unable to process your membership renewal payment. Your payment method was declined, and no charges have been applied to your account.
+            Thank you for your interest in joining Tools Australia! Unfortunately, we were unable to process your membership payment. Your payment method was declined, and no charges have been applied to your account.
             <br/><br/>
-            <strong style="color: #dc2626;">Important:</strong> Please update your payment method or ensure your card has sufficient balance to continue your membership and ensure you remain in the giveaway without losing your entries. 
-
+            This may have happened if your card has insufficient funds, if the card details were incorrect, or if your bank declined the transaction. Please ensure your card has sufficient balance and try again.
           </div>
 
           <!-- Failure Alert Box -->
           <div class="failure-alert">
             <div class="failure-icon">⚠️</div>
-            <div class="failure-title">Payment Transaction Failed</div>
+            <div class="failure-title">Membership Payment Failed</div>
             <div class="failure-reason" style="margin-top: 16px; margin-bottom: 16px;">{{ event.failure_reason }}</div>
             <div style="font-size: 14px; color: #991b1b; margin-top: 12px; opacity: 0.9; padding-top: 12px; border-top: 1px solid rgba(220, 38, 38, 0.2);">
               <strong>Transaction Amount:</strong> <span class="failure-amount">A${{ event.amount }}</span>
             </div>
             {% if event.package_name %}
             <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.8;">
-              <strong>Item:</strong> {{ event.package_name }}
+              <strong>Package:</strong> {{ event.package_name }}
             </div>
             {% endif %}
             {% if event.failure_message %}
@@ -433,56 +368,19 @@
                 </tr>
                 {% endif %}
                 <tr>
-                  <th>Membership Status</th>
-                  <td>Renewal Payment Failed</td>
+                  <th>Status</th>
+                  <td>Membership Not Activated</td>
                 </tr>
-                {% if event.next_payment_attempt and event.next_payment_attempt != "" %}
-                <tr>
-                  <th>Next Automatic Retry</th>
-                  <td>
-                    <strong style="color: #1f2937;">{{ event.next_payment_attempt }}</strong>
-                    <br/>
-                    <span style="font-size: 11px; color: #6b7280; font-style: italic;">Stripe will automatically retry this payment. Please update your payment method or ensure your card has sufficient balance to ensure success.</span>
-                  </td>
-                </tr>
-                {% else %}
-                <tr>
-                  <th>Next Automatic Retry</th>
-                  <td>
-                    <span style="color: #991b1b; font-weight: 600;">No automatic retry scheduled</span>
-                    <br/>
-                    <span style="font-size: 11px; color: #6b7280; font-style: italic;">Please update your payment method or ensure your card has sufficient balance to continue</span>
-                  </td>
-                </tr>
-                {% endif %}
               </tbody>
             </table>
           </div>
 
           <div class="divider"></div>
 
-          <!-- Expected Entries Section -->
-          {% if event.entries and event.entries > 0 %}
-          <div style="text-align: center; margin: 24px 0;">
-            <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-              Entries You Should Receive
-            </div>
-            <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-              {{ event.entries_formatted }} entries
-            </div>
-            <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
-              These entries will be added to your account once your payment succeeds. Please update your payment method or ensure your card has sufficient balance to receive them.
-            </div>
-          </div>
-          {% endif %}
-
           <!-- CTA Buttons -->
           <div class="cta-container">
-            <a href="https://toolsaustralia.com.au/my-account" class="cta-button">
-              Update Payment Method
-            </a>
-            <a href="mailto:support@toolsaustralia.com.au?subject=Payment%20Failed%20-%20{{ event.payment_intent_id }}" class="cta-button cta-button-secondary">
-              Contact Support
+            <a href="https://toolsaustralia.com.au/promotions" class="cta-button">
+              Get My Entries Now
             </a>
           </div>
         </div>

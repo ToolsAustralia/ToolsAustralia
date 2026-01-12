@@ -43,6 +43,9 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const finalizationTimeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
   // ✅ FIX: Track if finalization is in progress to prevent race conditions
   const isFinalizingRef = React.useRef<boolean>(false);
+  // ✅ Track polling state to show loading instead of "No Payment Method"
+  const [isPollingPaymentMethods, setIsPollingPaymentMethods] = useState(false);
+  const pollingStoppedRef = React.useRef<boolean>(false);
   // const [timeLeft, setTimeLeft] = useState({ // TODO: Implement countdown timer
   //   hours: 0,
   //   minutes: 0,
@@ -56,8 +59,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // Get user context and payment methods
   const { userData } = useUserContext();
   // const { isAuthenticated } = useUserContext(); // TODO: Use for authentication checks
-  // ✅ Get refetch function to poll for payment methods when modal opens
-  const { data: paymentMethods, refetch: refetchPaymentMethods } = usePaymentMethods(userData?._id);
+  // ✅ Get refetch function and loading state to poll for payment methods when modal opens
+  const { data: paymentMethods, refetch: refetchPaymentMethods, isLoading: isLoadingPaymentMethods } = usePaymentMethods(userData?._id);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();
@@ -80,6 +83,10 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
   // Get default payment method
   const defaultPaymentMethod = paymentMethods?.find((pm) => pm.isDefault);
+  
+  // ✅ Determine if we should show loading state
+  // Show loading if: actively polling OR initial load AND no payment method found yet
+  const isCheckingPaymentMethod = isPollingPaymentMethods || (isLoadingPaymentMethods && !defaultPaymentMethod);
 
   /**
    * Finalize invoice and send to Klaviyo
@@ -219,49 +226,100 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     onClose();
   }, [onClose, userData, invoiceFinalized, originalPurchaseContext, finalizeInvoice]);
 
-  // ✅ Auto-refetch payment methods when modal opens (webhook may still be processing)
-  // This ensures payment methods are available even if webhook hasn't finished saving them
+  // ✅ OPTIMIZED: Smart payment method polling with loading state and efficient intervals
+  // Polls only when needed and stops immediately when payment method is found
+  // Uses reasonable intervals to prevent database/API overload
   useEffect(() => {
-    if (isOpen && userData?._id) {
-      // Immediately refetch payment methods when modal opens
-      // This ensures we get the latest payment method saved by webhook
-      console.log("🔄 Refetching payment methods on modal open...");
-      refetchPaymentMethods();
+    if (isOpen && userData?._id && !pollingStoppedRef.current) {
+      const userId = userData._id;
+      
+      // Reset polling state when modal opens
+      setIsPollingPaymentMethods(true);
+      pollingStoppedRef.current = false;
+      
+      // ✅ Step 1: Invalidate cache and do initial fetch immediately
+      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
+      refetchPaymentMethods().then((result) => {
+        // Check if payment method already exists after initial fetch
+        const methods = result.data;
+        const hasDefault = methods?.find((pm) => pm.isDefault);
+        if (hasDefault) {
+          console.log("✅ Payment method found on initial fetch, skipping poll");
+          setIsPollingPaymentMethods(false);
+          pollingStoppedRef.current = true;
+          return; // Exit early if payment method already exists
+        }
+      }).catch((error) => {
+        console.error("Error during initial payment method fetch:", error);
+        // Continue with polling even if initial fetch fails
+      });
 
-      // Set up polling to refetch payment methods every 2 seconds while modal is open
-      // This ensures we catch the payment method as soon as webhook finishes
+      // ✅ Step 2: Set up efficient polling with reasonable intervals
+      // Poll every 2 seconds (not 500ms) to reduce database load
+      // Total duration: ~30 seconds max (15 polls × 2 seconds)
       let pollCount = 0;
       const maxPolls = 15; // 15 polls × 2 seconds = 30 seconds max
-      const userId = userData._id; // Capture userId to avoid closure issues
-
-      const pollInterval = setInterval(() => {
+      const pollIntervalMs = 2000; // 2 seconds - reasonable interval to prevent overload
+      
+      const pollInterval = setInterval(async () => {
+        // ✅ Early exit if already found (prevents unnecessary refetches)
+        if (pollingStoppedRef.current) {
+          clearInterval(pollInterval);
+          return;
+        }
+        
         pollCount++;
         
-        // Check current payment methods from the query cache
-        const currentPaymentMethods = queryClient.getQueryData<typeof paymentMethods>(
-          queryKeys.paymentMethods.all(userId)
-        );
-        const currentDefaultMethod = currentPaymentMethods?.find((pm) => pm.isDefault);
-
-        // Only poll if we don't have a default payment method yet and haven't exceeded max polls
-        if (!currentDefaultMethod && pollCount < maxPolls) {
-          console.log(`🔄 Polling for payment methods (attempt ${pollCount}/${maxPolls}, webhook may still be processing)...`);
-          refetchPaymentMethods();
-        } else {
-          // Stop polling once we have a payment method or max polls reached
-          if (currentDefaultMethod) {
-            console.log("✅ Payment method found, stopping poll");
-          } else {
-            console.log("⏰ Stopped polling for payment methods (max attempts reached)");
+        try {
+          // ✅ Refetch to get latest payment methods
+          const refetchResult = await refetchPaymentMethods();
+          
+          // Check payment methods from refetched data
+          const freshPaymentMethods = refetchResult.data;
+          const freshDefaultMethod = freshPaymentMethods?.find((pm) => pm.isDefault);
+          
+          // ✅ CRITICAL: Stop polling immediately if payment method is found
+          if (freshDefaultMethod) {
+            console.log(`✅ Payment method found after ${pollCount} poll(s), stopping`);
+            pollingStoppedRef.current = true;
+            setIsPollingPaymentMethods(false);
+            
+            // Final cache invalidation to ensure UI updates
+            queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+            
+            clearInterval(pollInterval);
+            return;
           }
+          
+          // Continue polling if not found and haven't exceeded max polls
+          if (pollCount < maxPolls) {
+            console.log(`🔄 Polling for payment methods (attempt ${pollCount}/${maxPolls})...`);
+          } else {
+            // Max polls reached - stop polling
+            console.log("⏰ Stopped polling for payment methods (max attempts reached)");
+            pollingStoppedRef.current = true;
+            setIsPollingPaymentMethods(false);
+            clearInterval(pollInterval);
+          }
+        } catch (error) {
+          console.error("Error polling for payment methods:", error);
+          // On error, stop polling to prevent infinite retries
+          pollingStoppedRef.current = true;
+          setIsPollingPaymentMethods(false);
           clearInterval(pollInterval);
         }
-      }, 2000); // Poll every 2 seconds
+      }, pollIntervalMs); // 2 second interval - optimized for performance
 
       // Cleanup interval when modal closes or component unmounts
       return () => {
         clearInterval(pollInterval);
+        setIsPollingPaymentMethods(false);
       };
+    } else if (!isOpen) {
+      // Reset polling state when modal closes
+      pollingStoppedRef.current = false;
+      setIsPollingPaymentMethods(false);
     }
   }, [isOpen, userData?._id, refetchPaymentMethods, queryClient]);
 
@@ -700,13 +758,18 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 // });
                 handleAccept();
               }}
-              disabled={isProcessing || !defaultPaymentMethod}
+              disabled={isProcessing || !defaultPaymentMethod || isCheckingPaymentMethod}
               className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isProcessing ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   Processing...
+                </div>
+              ) : isCheckingPaymentMethod ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Loading payment method...</span>
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
@@ -720,7 +783,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                       </div>
                     </>
                   ) : (
-                    "No Payment Method"
+                    "No Payment Method Available"
                   )}
                 </div>
               )}

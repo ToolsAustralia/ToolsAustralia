@@ -766,6 +766,11 @@ export async function POST(request: NextRequest) {
         console.log(`📧 User email for webhook lookup: ${finalPaymentIntent.metadata.userEmail}`);
       } else {
         console.error(`❌ Payment failed after waiting: ${finalPaymentIntent.status}`);
+        
+        // ✅ CRITICAL FIX: Payment method is NOT saved to user database when payment fails
+        // Payment methods are only saved after payment succeeds (lines 726-755, 668-697)
+        // This ensures failed payment methods (e.g., insufficient funds) are not saved
+        
         return NextResponse.json(
           {
             success: false,
@@ -777,6 +782,11 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.error(`❌ Payment intent status: ${paymentIntent.status} for package: ${membershipPackage._id}`);
+      
+      // ✅ CRITICAL FIX: Payment method is NOT saved to user database when payment fails
+      // Payment methods are only saved after payment succeeds (lines 726-755, 668-697)
+      // This ensures failed payment methods (e.g., insufficient funds) are not saved
+      
       return NextResponse.json(
         {
           success: false,

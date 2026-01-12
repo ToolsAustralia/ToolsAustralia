@@ -1934,30 +1934,153 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     webhookLog("info", `Invoice billing_reason: ${billingReason}, isRenewal: ${isRenewal}, isInitialPayment: ${isInitialPayment}, subscriptionId: ${subscriptionId || 'none'}`);
 
     if (subscriptionId) {
-      // Update subscription status to reflect payment failure
+      // ✅ CRITICAL FIX: Handle initial subscription creation failures differently from renewal failures
+      // - Initial failures (subscription_create): Set status to "incomplete" or "incomplete_expired", NOT "past_due"
+      // - Renewal failures (subscription_cycle): Set status to "past_due" (existing behavior is correct)
+      
       if (user.subscription) {
-        user.subscription.status = "past_due";
-        user.subscription.isActive = false;
-
-        // ✅ If subscription will be canceled after max retries, set endDate
-        // Retrieve subscription from Stripe to check cancel_at_period_end
-        try {
-          const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
-          const subscriptionWithPeriod = stripeSubscription as Stripe.Subscription & { current_period_end?: number };
-          if (stripeSubscription.cancel_at_period_end && subscriptionWithPeriod.current_period_end) {
-            const endDate = new Date(subscriptionWithPeriod.current_period_end * 1000);
-            user.subscription.endDate = endDate;
-            console.log(
-              `📅 [INVOICE PAYMENT FAILED] Set endDate to ${endDate.toISOString()} for subscription that will be canceled`
-            );
+        if (isInitialPayment) {
+          // Initial subscription creation failed - this is NOT a past_due situation
+          // The subscription never became active, so it should be marked as incomplete
+          webhookLog("info", `Initial subscription creation failed - setting status to incomplete (not past_due)`);
+          
+          // Get Stripe subscription to check its actual status
+          try {
+            const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+            
+            // Use Stripe's subscription status as source of truth
+            // Stripe will set it to "incomplete" or "incomplete_expired" for failed initial payments
+            const stripeStatus = stripeSubscription.status;
+            
+            // Map Stripe status to our database status
+            if (stripeStatus === "incomplete" || stripeStatus === "incomplete_expired") {
+              user.subscription.status = stripeStatus; // Use Stripe's status
+              user.subscription.isActive = false;
+              
+              webhookLog("info", `Subscription status set to ${stripeStatus} for initial payment failure`);
+            } else {
+              // Fallback: if Stripe status is unexpected, set to incomplete
+              user.subscription.status = "incomplete";
+              user.subscription.isActive = false;
+              
+              webhookLog("warn", `Unexpected Stripe subscription status ${stripeStatus} for initial payment failure, setting to incomplete`);
+            }
+          } catch (stripeError) {
+            // If we can't retrieve subscription, default to incomplete
+            webhookLog("warn", `Failed to retrieve subscription status: ${stripeError}, defaulting to incomplete`);
+            user.subscription.status = "incomplete";
+            user.subscription.isActive = false;
           }
-        } catch (stripeError) {
-          console.error(`❌ [INVOICE PAYMENT FAILED] Error retrieving subscription: ${stripeError}`);
-          // Continue without endDate if we can't retrieve subscription
+        } else if (isRenewal) {
+          // Renewal payment failed - this IS a past_due situation
+          // The subscription was active but payment for renewal failed
+          webhookLog("info", `Renewal payment failed - setting status to past_due`);
+          
+          user.subscription.status = "past_due";
+          user.subscription.isActive = false;
+
+          // ✅ If subscription will be canceled after max retries, set endDate
+          // Only check for renewal failures - initial failures don't have a period to end
+          try {
+            const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+            const subscriptionWithPeriod = stripeSubscription as Stripe.Subscription & { current_period_end?: number };
+            if (stripeSubscription.cancel_at_period_end && subscriptionWithPeriod.current_period_end) {
+              const endDate = new Date(subscriptionWithPeriod.current_period_end * 1000);
+              user.subscription.endDate = endDate;
+              console.log(
+                `📅 [INVOICE PAYMENT FAILED] Set endDate to ${endDate.toISOString()} for subscription that will be canceled`
+              );
+            }
+          } catch (stripeError) {
+            console.error(`❌ [INVOICE PAYMENT FAILED] Error retrieving subscription: ${stripeError}`);
+            // Continue without endDate if we can't retrieve subscription
+          }
+        } else {
+          // Unknown billing reason - default to past_due for safety (conservative approach)
+          webhookLog("warn", `Unknown billing_reason: ${billingReason}, defaulting to past_due`);
+          user.subscription.status = "past_due";
+          user.subscription.isActive = false;
         }
 
         // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
         user.markModified("subscription");
+      }
+      
+      // ✅ CRITICAL FIX: If initial subscription creation failed, detach payment method to prevent it from being saved
+      // This prevents payment methods from being saved when subscription creation fails due to insufficient funds
+      if (isInitialPayment) {
+        try {
+          // Get payment method from invoice or payment intent
+          const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { 
+            payment_intent?: string | Stripe.PaymentIntent;
+            latest_payment_intent?: string | Stripe.PaymentIntent;
+          };
+          
+          let paymentMethodId: string | undefined;
+          
+          // Try to get payment method ID from invoice payment intent
+          if (invoiceWithPaymentIntent.payment_intent) {
+            const piId = typeof invoiceWithPaymentIntent.payment_intent === "string"
+              ? invoiceWithPaymentIntent.payment_intent
+              : invoiceWithPaymentIntent.payment_intent?.id;
+            
+            if (piId) {
+              const paymentIntent = await stripe.paymentIntents.retrieve(piId);
+              if (paymentIntent.payment_method) {
+                paymentMethodId = typeof paymentIntent.payment_method === "string"
+                  ? paymentIntent.payment_method
+                  : paymentIntent.payment_method.id;
+              }
+            }
+          }
+          
+          // Try latest_payment_intent if payment_intent didn't work
+          if (!paymentMethodId && invoiceWithPaymentIntent.latest_payment_intent) {
+            const piId = typeof invoiceWithPaymentIntent.latest_payment_intent === "string"
+              ? invoiceWithPaymentIntent.latest_payment_intent
+              : invoiceWithPaymentIntent.latest_payment_intent?.id;
+            
+            if (piId) {
+              const paymentIntent = await stripe.paymentIntents.retrieve(piId);
+              if (paymentIntent.payment_method) {
+                paymentMethodId = typeof paymentIntent.payment_method === "string"
+                  ? paymentIntent.payment_method
+                  : paymentIntent.payment_method.id;
+              }
+            }
+          }
+          
+          // Detach payment method if found
+          if (paymentMethodId && user.stripeCustomerId) {
+            try {
+              const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+              const pmCustomerId = typeof paymentMethod.customer === "string" 
+                ? paymentMethod.customer 
+                : paymentMethod.customer?.id;
+              
+              // Only detach if it's attached to this customer
+              if (pmCustomerId === user.stripeCustomerId) {
+                await stripe.paymentMethods.detach(paymentMethodId);
+                webhookLog("info", `✅ Detached payment method ${paymentMethodId} after initial subscription creation failure`);
+                
+                // Also remove from user's saved payment methods if it exists
+                if (user.savedPaymentMethods && user.savedPaymentMethods.length > 0) {
+                  const pmIndex = user.savedPaymentMethods.findIndex(pm => pm.paymentMethodId === paymentMethodId);
+                  if (pmIndex !== -1) {
+                    user.savedPaymentMethods.splice(pmIndex, 1);
+                    webhookLog("info", `✅ Removed payment method ${paymentMethodId} from user's saved payment methods`);
+                  }
+                }
+              }
+            } catch (detachError) {
+              webhookLog("warn", `Failed to detach payment method ${paymentMethodId}: ${detachError}`);
+              // Continue - not critical if detach fails
+            }
+          }
+        } catch (pmCleanupError) {
+          webhookLog("warn", `Error during payment method cleanup for initial subscription failure: ${pmCleanupError}`);
+          // Continue - cleanup failure shouldn't block the rest of the process
+        }
       }
     }
 

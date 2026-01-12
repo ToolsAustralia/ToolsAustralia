@@ -3135,7 +3135,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 }
               : null;
 
-            // Trigger upsell modal
+            // Trigger upsell modal (cache invalidation now handled inside triggerUpsellModal)
             triggerUpsellModal(
               "one-time-purchase",
               activePlan.name,
@@ -3206,11 +3206,33 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           },
         });
       } else {
-        // Show detailed error toast for other errors
+        // ✅ ENHANCED: Improve error message for payment failures (especially insufficient funds)
+        // Check if error message contains payment failure indicators
+        const isPaymentFailure = 
+          errorMessage.toLowerCase().includes("insufficient") ||
+          errorMessage.toLowerCase().includes("card_declined") ||
+          errorMessage.toLowerCase().includes("payment_failed") ||
+          errorMessage.toLowerCase().includes("payment failed") ||
+          errorCode === "card_declined" ||
+          errorCode === "insufficient_funds";
+        
+        let finalErrorMessage = errorMessage;
+        let finalErrorTitle = errorTitle;
+        
+        // Provide user-friendly message for insufficient funds
+        if (isPaymentFailure && (errorMessage.toLowerCase().includes("insufficient") || errorCode === "insufficient_funds")) {
+          finalErrorTitle = "Payment Failed - Insufficient Funds";
+          finalErrorMessage = "Your card was declined due to insufficient funds. Please try a different payment method or contact your bank.";
+        } else if (isPaymentFailure && (errorMessage.toLowerCase().includes("declined") || errorCode === "card_declined")) {
+          finalErrorTitle = "Payment Declined";
+          finalErrorMessage = "Your card was declined. Please check your card details or try a different payment method.";
+        }
+        
+        // Show detailed error toast for all errors
         showToast({
           type: "error",
-          title: errorTitle,
-          message: errorMessage,
+          title: finalErrorTitle,
+          message: finalErrorMessage,
           duration: 8000, // Longer duration for detailed errors
         });
       }
@@ -3237,6 +3259,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     originalPurchaseContextParam?: OriginalPurchaseContext | null
   ) => {
     try {
+      // ✅ CRITICAL: Invalidate payment methods cache before triggering upsell modal
+      // This ensures the upsell modal has the latest payment method available
+      // Payment method was just saved during purchase, so we need to refresh the cache
+      if (userData?._id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userData._id) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userData._id) });
+        console.log("🔄 Invalidated payment methods cache before showing upsell modal");
+      }
       // If we have package information, use the new trigger API
       if (packageId && packageType) {
         // console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);

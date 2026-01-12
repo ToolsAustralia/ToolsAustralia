@@ -1,6 +1,7 @@
 import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
 import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
 import { removePaymentMethodFromUser } from "./payment-method-manager";
 
 /**
@@ -161,6 +162,87 @@ export async function handlePaymentCancellation(
     return cleanupSuccess;
   } catch (error) {
     console.error("Error handling payment cancellation:", error);
+    return false;
+  }
+}
+
+/**
+ * Detaches a payment method from a Stripe customer when subscription creation fails
+ * This prevents payment methods from being saved when initial subscription payments fail
+ * (e.g., due to insufficient funds)
+ * 
+ * @param paymentMethodId - Stripe payment method ID to detach
+ * @param customerId - Stripe customer ID that the payment method is attached to
+ * @returns Success status and any error message
+ */
+export async function detachPaymentMethodOnFailure(
+  paymentMethodId: string,
+  customerId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Retrieve payment method to verify it's attached to this customer
+    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+    const pmCustomerId = typeof paymentMethod.customer === "string" 
+      ? paymentMethod.customer 
+      : paymentMethod.customer?.id;
+    
+    // Only detach if it's attached to this customer
+    if (pmCustomerId === customerId) {
+      await stripe.paymentMethods.detach(paymentMethodId);
+      console.log(`✅ Detached payment method ${paymentMethodId} from customer ${customerId} after payment failure`);
+      return { success: true };
+    } else {
+      // Payment method not attached to this customer - nothing to do
+      console.log(`ℹ️ Payment method ${paymentMethodId} not attached to customer ${customerId}, nothing to detach`);
+      return { success: true };
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error(`❌ Failed to detach payment method ${paymentMethodId}: ${errorMessage}`);
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Removes a payment method from user's saved payment methods and detaches it from Stripe customer
+ * This is used when subscription creation fails to prevent saving failed payment methods
+ * 
+ * @param user - User document to remove payment method from
+ * @param paymentMethodId - Stripe payment method ID to remove
+ * @returns Success status
+ */
+export async function cleanupFailedPaymentMethod(
+  user: IUser,
+  paymentMethodId: string
+): Promise<boolean> {
+  try {
+    await connectDB();
+
+    // Remove from user's saved payment methods if it exists
+    if (user.savedPaymentMethods && user.savedPaymentMethods.length > 0) {
+      const pmIndex = user.savedPaymentMethods.findIndex(pm => pm.paymentMethodId === paymentMethodId);
+      if (pmIndex !== -1) {
+        user.savedPaymentMethods.splice(pmIndex, 1);
+        await user.save();
+        console.log(`✅ Removed payment method ${paymentMethodId} from user ${user._id} saved payment methods`);
+      }
+    }
+
+    // Detach from Stripe customer
+    if (user.stripeCustomerId) {
+      const detachResult = await detachPaymentMethodOnFailure(paymentMethodId, user.stripeCustomerId);
+      if (detachResult.success) {
+        console.log(`✅ Cleaned up payment method ${paymentMethodId} for user ${user._id}`);
+        return true;
+      } else {
+        console.error(`❌ Failed to detach payment method: ${detachResult.error}`);
+        return false;
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error(`❌ Error cleaning up failed payment method: ${error}`);
     return false;
   }
 }

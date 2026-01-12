@@ -93,22 +93,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If we have a valid payment method ID, attach it to the customer
-    if (finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
-      // Attach to customer
-      await stripe.paymentMethods.attach(finalPaymentMethodId, {
-        customer: stripeCustomerId,
-      });
-      // console.log(`💳 Attached payment method: ${finalPaymentMethodId}`);
-
-      // Set as default payment method for the customer
-      await stripe.customers.update(stripeCustomerId, {
-        invoice_settings: {
-          default_payment_method: finalPaymentMethodId,
-        },
-      });
-      // console.log(`💳 Set ${finalPaymentMethodId} as default payment method for customer ${stripeCustomerId}`);
-    }
+    // ✅ CRITICAL FIX: DO NOT attach payment method to customer before payment confirmation
+    // Payment method will be attached during subscription creation via default_payment_method parameter
+    // We only attach/save payment method AFTER payment succeeds (handled by webhook)
+    // This prevents saving payment methods when payments fail due to insufficient funds
+    // 
+    // Note: Stripe subscription.create() requires default_payment_method to be set,
+    // but we can set it without attaching first - Stripe will handle attachment
+    // We will NOT set save_default_payment_method: "on_subscription" to prevent premature saving
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
     // This prevents creating duplicate products in Stripe dashboard
@@ -141,7 +133,10 @@ export async function POST(request: NextRequest) {
         items: [{ price: stripePriceId }], // ✅ Use existing Price ID
         default_payment_method: finalPaymentMethodId,
         payment_behavior: "default_incomplete", // Creates incomplete subscription requiring payment confirmation
-        payment_settings: { save_default_payment_method: "on_subscription" },
+        // ✅ CRITICAL FIX: Do NOT save payment method automatically on subscription creation
+        // Payment method will only be saved AFTER payment succeeds (handled by webhook)
+        // This prevents saving payment methods when payments fail due to insufficient funds
+        // payment_settings: { save_default_payment_method: "on_subscription" }, // REMOVED
         expand: ["latest_invoice.payment_intent"],
         description: `${membershipPackage.name}`, // Set description directly on subscription
         metadata: {

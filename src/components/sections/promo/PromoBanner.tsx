@@ -129,7 +129,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
   };
 
-  // Simple interval to detect date changes (every 2 minutes)
+
   // Updates alternating default text when date changes
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -148,8 +148,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     // Check immediately on mount
     checkDateChange();
 
-    // Check every 2 minutes (sufficient for date change detection)
-    const interval = setInterval(checkDateChange, 2 * 60 * 1000);
+   
 
     // Development helper: Expose testing function to window
     if (process.env.NODE_ENV === "development") {
@@ -173,7 +172,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
     // Cleanup on unmount
     return () => {
-      clearInterval(interval);
+    
       // Remove test function in development mode
       if (process.env.NODE_ENV === "development") {
         type WindowWithTest = Window & {

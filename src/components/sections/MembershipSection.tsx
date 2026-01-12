@@ -341,7 +341,7 @@ export default function MembershipSection({
       if (effectiveTab === "one-time" && plan.period === "one-time") {
         // Only apply multiplier if it exists and is greater than 1
         if (resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
-          const originalEntries = plan.metadata?.entriesCount || 0;
+        const originalEntries = plan.metadata?.entriesCount || 0;
           const promoEntries = originalEntries * resolvedOneTimeMultiplier;
 
           // Update features array to show multiplied entries
@@ -360,17 +360,17 @@ export default function MembershipSection({
             return feature;
           });
 
-          return {
-            ...plan,
+        return {
+          ...plan,
             features: updatedFeatures, // Update features to show multiplied entries
-            metadata: {
-              ...plan.metadata,
-              entriesCount: promoEntries,
-              originalEntries,
+          metadata: {
+            ...plan.metadata,
+            entriesCount: promoEntries,
+            originalEntries,
               promoMultiplier: resolvedOneTimeMultiplier,
               isPromoActive: !!oneTimePromo, // True if active promo, false if alternating
-            },
-          };
+          },
+        };
         }
       }
 
@@ -378,21 +378,21 @@ export default function MembershipSection({
       if (effectiveTab === "membership" && plan.period !== "one-time") {
         // Only apply multiplier if it exists and is greater than 1
         if (resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1) {
-          const originalEntries = plan.metadata?.entriesCount || 0;
+        const originalEntries = plan.metadata?.entriesCount || 0;
           const promoEntries = originalEntries * resolvedMembershipMultiplier;
 
-          return {
-            ...plan,
-            // Keep features unchanged - they already have original entries
-            metadata: {
-              ...plan.metadata,
-              entriesCount: promoEntries,
-              originalEntries,
+        return {
+          ...plan,
+          // Keep features unchanged - they already have original entries
+          metadata: {
+            ...plan.metadata,
+            entriesCount: promoEntries,
+            originalEntries,
               promoMultiplier: resolvedMembershipMultiplier,
               isPromoActive: !!membershipPromo, // True if active promo, false if alternating
-              isInitialPurchaseOnly: true, // Mark as initial purchase only
-            },
-          };
+            isInitialPurchaseOnly: true, // Mark as initial purchase only
+          },
+        };
         }
       }
 
