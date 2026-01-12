@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { PromoBannerTextService } from "@/services/admin/PromoBannerTextService";
-import { convertUTCToAEST, convertAESTToUTC } from "@/utils/common/timezone";
+import { convertUTCToAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
 import { z } from "zod";
 import type { PromoBannerText, CreatePromoBannerTextPayload } from "@/types/admin";
 
@@ -127,9 +127,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Convert AEST dates to UTC for storage
-    const startDateUTC = data.startDate ? convertAESTToUTC(new Date(data.startDate)) : undefined;
-    const endDateUTC = data.endDate ? convertAESTToUTC(new Date(data.endDate)) : undefined;
+    // Convert dates: Extract date components from ISO string and create as AEST dates
+    // Frontend sends ISO strings representing AEST dates, we extract components and recreate as AEST
+    const startDateUTC = data.startDate 
+      ? (() => {
+          const date = new Date(data.startDate);
+          const year = date.getUTCFullYear();
+          const month = date.getUTCMonth() + 1; // getUTCMonth() returns 0-11
+          const day = date.getUTCDate();
+          return createAESTDateAsUTC(year, month, day, 0, 0);
+        })()
+      : undefined;
+
+    const endDateUTC = data.endDate 
+      ? (() => {
+          const date = new Date(data.endDate);
+          const year = date.getUTCFullYear();
+          const month = date.getUTCMonth() + 1;
+          const day = date.getUTCDate();
+          return createAESTDateAsUTC(year, month, day, 0, 0);
+        })()
+      : undefined;
 
     const service = new PromoBannerTextService();
     const createdText = await service.createBannerText(
