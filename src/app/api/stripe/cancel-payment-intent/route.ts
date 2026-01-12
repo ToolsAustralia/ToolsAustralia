@@ -28,31 +28,51 @@ export async function POST(request: NextRequest) {
     // Retrieve the PaymentIntent to check its status
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-    // Only cancel if it's still in a cancellable state
-    // ✅ CRITICAL: For manual capture PaymentIntents, they'll be in "requires_capture" status after confirmation
-    // This gives us time to cancel them before they're captured and charged
-    if (
-      paymentIntent.status === "requires_payment_method" ||
-      paymentIntent.status === "requires_confirmation" ||
-      paymentIntent.status === "requires_action" ||
-      paymentIntent.status === "requires_capture" // ✅ NEW: Can cancel manual capture PaymentIntents
-    ) {
-      const cancelledPaymentIntent = await stripe.paymentIntents.cancel(paymentIntentId);
-      console.log(`✅ Cancelled PaymentIntent ${paymentIntentId} - status: ${cancelledPaymentIntent.status}`);
+    // ✅ ENHANCED: Check all cancellable states
+    const cancellableStates = [
+      "requires_payment_method",
+      "requires_confirmation", 
+      "requires_action",
+      "requires_capture" // Manual capture - can cancel before capture
+    ];
 
-      return NextResponse.json({
-        success: true,
-        paymentIntentId: cancelledPaymentIntent.id,
-        status: cancelledPaymentIntent.status,
-      });
+    if (cancellableStates.includes(paymentIntent.status)) {
+      try {
+        const cancelledPaymentIntent = await stripe.paymentIntents.cancel(paymentIntentId);
+        console.log(`✅ Cancelled PaymentIntent ${paymentIntentId} - status: ${cancelledPaymentIntent.status}`);
+
+        return NextResponse.json({
+          success: true,
+          paymentIntentId: cancelledPaymentIntent.id,
+          status: cancelledPaymentIntent.status,
+        });
+      } catch (cancelError: unknown) {
+        // Handle race condition: PaymentIntent might have been canceled by another request
+        const stripeError = cancelError as { code?: string; raw?: { payment_intent?: { status?: string } } };
+        if (stripeError?.code === 'payment_intent_unexpected_state') {
+          // Re-check status - it might be canceled now
+          const updatedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          if (updatedPaymentIntent.status === "canceled") {
+            console.log(`ℹ️ PaymentIntent ${paymentIntentId} was already cancelled by another request`);
+            return NextResponse.json({
+              success: true,
+              paymentIntentId: paymentIntentId,
+              status: 'canceled',
+              message: "Already cancelled by another request",
+            });
+          }
+        }
+        throw cancelError; // Re-throw other errors
+      }
     } else if (paymentIntent.status === "succeeded") {
       // PaymentIntent already succeeded - cannot cancel
-      console.warn(`⚠️ PaymentIntent ${paymentIntentId} already succeeded - cannot cancel`);
+      console.warn(`⚠️ PaymentIntent ${paymentIntentId} already succeeded - cannot cancel (double charge attempt detected)`);
       return NextResponse.json(
         {
           success: false,
           error: "PaymentIntent already succeeded - cannot cancel",
           status: paymentIntent.status,
+          warning: "Double charge attempt detected",
         },
         { status: 400 }
       );

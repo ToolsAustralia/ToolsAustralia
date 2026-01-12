@@ -49,11 +49,15 @@ export async function GET() {
         ? winner.drawId
         : null;
       
+      const drawIdString = typeof winner.drawId === 'object' && 'name' in winner.drawId
+        ? (winner.drawId as { _id?: Types.ObjectId })._id?.toString() || winner.drawId.toString()
+        : (winner.drawId as Types.ObjectId).toString();
+      
       return NextResponse.json({
         success: true,
         winner: {
           id: winner._id.toString(),
-          drawId: winner.drawId.toString(),
+          drawId: drawIdString,
           drawName: majorDraw?.name || "Major Draw",
           drawType: "major" as const,
           prize: {
@@ -97,11 +101,13 @@ export async function GET() {
         ? miniWinner.userId 
         : null;
       
+      const miniDrawIdString = (miniWinner.drawId as Types.ObjectId).toString();
+      
       return NextResponse.json({
         success: true,
         winner: {
           id: miniWinner._id.toString(),
-          drawId: miniWinner.drawId.toString(),
+          drawId: miniDrawIdString,
           drawName: miniWinner.prizeSnapshot?.name || "Mini Draw",
           drawType: "mini" as const,
           prize: {

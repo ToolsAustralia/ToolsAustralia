@@ -288,36 +288,22 @@ const StripeCardForm = React.forwardRef<
               console.error("Stripe PaymentIntent error:", error);
               return { error: error.message || "Payment confirmation failed." };
             } else if (paymentIntent?.payment_method) {
-              // ✅ STRIPE BEST PRACTICE: For upfront PaymentIntents (subscriptions), cancel immediately after getting payment method
+              // ✅ CRITICAL FIX: For upfront PaymentIntents, cancel immediately without blocking
+              // Fire and forget - don't wait for response
               // This prevents double charging - the upfront PaymentIntent is ONLY for wallet display
               // The invoice PaymentIntent (from Stripe Price catalog) is the one that should be charged
               if (isUpfrontPaymentIntent && paymentIntent.id) {
-                try {
-                  // Cancel the upfront PaymentIntent immediately to prevent it from being charged
-                  // This must happen BEFORE the payment succeeds
-                  const cancelResponse = await fetch("/api/stripe/cancel-payment-intent", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                      paymentIntentId: paymentIntent.id,
-                    }),
-                  });
-
-                  if (cancelResponse.ok) {
-                    console.log(
-                      `✅ Cancelled upfront PaymentIntent ${paymentIntent.id} immediately after payment method extraction`
-                    );
-                  } else {
-                    console.warn(
-                      `⚠️ Failed to cancel upfront PaymentIntent ${paymentIntent.id} - may cause double charge`
-                    );
-                  }
-                } catch (cancelError) {
-                  console.error(`❌ Error cancelling upfront PaymentIntent: ${cancelError}`);
-                  // Continue - backend will also try to cancel it
-                }
+                // Cancel immediately without blocking - fire and forget
+                fetch("/api/stripe/cancel-payment-intent", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
+                }).catch((err) => {
+                  console.error(`❌ Error cancelling upfront PaymentIntent: ${err}`);
+                });
+                
+                console.log(`🔄 Cancellation request sent for upfront PaymentIntent ${paymentIntent.id}`);
+                // Don't wait - continue immediately
               }
 
               console.log("✅ PaymentIntent succeeded:", paymentIntent);

@@ -36,6 +36,42 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = createSubscriptionExistingUserSchema.parse(body);
 
+    // ✅ CRITICAL FIX: Cancel upfront PaymentIntent FIRST, before any other operations
+    // This prevents it from being confirmed while we're processing
+    if (validatedData.paymentIntentId) {
+      try {
+        const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
+        
+        // Cancel if it's in ANY cancellable state
+        if (
+          upfrontPaymentIntent.status === "requires_payment_method" ||
+          upfrontPaymentIntent.status === "requires_confirmation" ||
+          upfrontPaymentIntent.status === "requires_action" ||
+          upfrontPaymentIntent.status === "requires_capture" // Manual capture - can still cancel
+        ) {
+          await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
+          console.log(`✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} at start of subscription creation (status: ${upfrontPaymentIntent.status})`);
+        } else if (upfrontPaymentIntent.status === "succeeded") {
+          console.error(`❌ CRITICAL: Upfront PaymentIntent ${upfrontPaymentIntent.id} already succeeded - system attempted double charge`, {
+            paymentIntentId: upfrontPaymentIntent.id,
+            amount: upfrontPaymentIntent.amount,
+            currency: upfrontPaymentIntent.currency,
+            customer: upfrontPaymentIntent.customer,
+            metadata: upfrontPaymentIntent.metadata,
+            timestamp: new Date().toISOString(),
+          });
+          // Continue - invoice PaymentIntent will be used, but log error for investigation
+        } else if (upfrontPaymentIntent.status === "canceled") {
+          console.log(`ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} already cancelled`);
+        } else {
+          console.log(`ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, no action needed`);
+        }
+      } catch (cancelError) {
+        console.error(`❌ Failed to cancel upfront PaymentIntent ${validatedData.paymentIntentId}: ${cancelError}`);
+        // Continue - invoice PaymentIntent will be used anyway
+      }
+    }
+
     // console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
 
     // Get the existing user
@@ -236,44 +272,6 @@ export async function POST(request: NextRequest) {
         console.log(`✅ Invoice finalized: ${latestInvoice.id}, status: ${latestInvoice.status}`);
       } catch (finalizeError) {
         console.error("❌ Failed to finalize invoice:", finalizeError);
-      }
-    }
-
-    // ✅ STRIPE BEST PRACTICE: Cancel upfront PaymentIntent BEFORE creating subscription
-    // This prevents the upfront PaymentIntent from being confirmed, which would cause double charging
-    // The upfront PaymentIntent was ONLY for wallet display (Google Pay/Apple Pay)
-    // The invoice PaymentIntent (from Stripe Price catalog) is the one that should be charged
-    if (validatedData.paymentIntentId) {
-      try {
-        const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
-
-        // Only cancel if it's still in a cancellable state (not already succeeded/cancelled)
-        // ✅ CRITICAL: Must check for "requires_capture" status (shown as "Uncaptured" in Stripe dashboard)
-        // With capture_method: "manual", PaymentIntent goes to "requires_capture" after confirmation
-        // This means funds are AUTHORIZED but not yet CAPTURED - we MUST cancel to release the hold
-        if (
-          upfrontPaymentIntent.status === "requires_payment_method" ||
-          upfrontPaymentIntent.status === "requires_confirmation" ||
-          upfrontPaymentIntent.status === "requires_action" ||
-          upfrontPaymentIntent.status === "requires_capture" // ✅ CRITICAL: Handle uncaptured PaymentIntents
-        ) {
-          await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
-          console.log(
-            `✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} BEFORE subscription creation (was for display only) - prevents double charge. Status was: ${upfrontPaymentIntent.status}`
-          );
-        } else if (upfrontPaymentIntent.status === "succeeded") {
-          console.error(
-            `❌ CRITICAL: Upfront PaymentIntent ${upfrontPaymentIntent.id} already succeeded BEFORE subscription creation! This will cause double charge.`
-          );
-          // Still continue - we'll use invoice PaymentIntent, but log error
-        } else {
-          console.log(
-            `ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, no action needed`
-          );
-        }
-      } catch (cancelError) {
-        console.error(`❌ Failed to cancel upfront PaymentIntent: ${cancelError}`);
-        // Continue - invoice PaymentIntent will be used anyway, but log error for investigation
       }
     }
 
