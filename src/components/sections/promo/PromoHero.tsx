@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { convertUTCToAEST } from "@/utils/common/timezone";
@@ -24,6 +24,9 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   // Use initial data if available, otherwise fall back to fetched data
   const promo = initialPromo || activePromo;
   const majorDraw = initialMajorDraw || currentDraw;
+
+  // Get resolved multiplier (Active Promo > Alternating > Default 10x for display)
+  const resolvedMultiplier = useResolvedMultiplier("membership-packages", "display");
 
   const handleEnterNow = () => {
     // Shared handler ensures the membership modal opens via the global event.
@@ -71,17 +74,14 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
     }
 
     // Otherwise, fall back to multiplier-based logic
-    if (!promo) {
-      return "/images/background/promo/$20.png";
-    }
-
-    switch (promo.multiplier) {
+    // Use resolved multiplier (includes alternating multiplier if no active promo)
+    switch (resolvedMultiplier) {
       case 10:
         return "/images/background/promo/x10 entries.webp";
       case 5:
-        return "/images/background/promo/x5 entries.png";
+        return "/images/background/promo/x5 entries.webp";
       case 3:
-        return "/images/background/promo/x3 entries.png";
+        return "/images/background/promo/x3 entries.webp";
       case 2:
         return "/images/background/promo/$20.png";
       default:
@@ -112,11 +112,11 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       <div
         className="main-banner-image absolute inset-0 z-0"
         role="img"
-        aria-label={`Win Ford F-150 & Luxury Float - ${promo?.multiplier || 1}x Entries Active`}
-      >
+          aria-label={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
+        >
         <Image
           src={heroImageSrc}
-          alt={`Win Ford F-150 & Luxury Float - ${promo?.multiplier || 1}x Entries Active`}
+          alt={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
           fill
           priority
           unoptimized

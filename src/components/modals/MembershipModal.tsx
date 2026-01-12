@@ -36,7 +36,7 @@ import { trackCompleteRegistration, trackFacebookEvent } from "@/components/Face
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePaymentIntent } from "@/hooks/usePaymentIntent";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
@@ -207,9 +207,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
 
-  // Get active promos for different package types
+  // Get active promos for different package types (for checking if promo is active)
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
   const { data: miniPromo } = usePromoByType("mini-packages");
+
+  // Get resolved multipliers (includes alternating multiplier if no active promo)
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
   // Apply promo multiplier to activePlan if applicable
   const promoEnhancedPlan = React.useMemo(() => {
@@ -307,12 +311,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       };
     };
 
-    if (activePlan.period === "one-time" && oneTimePromo) {
-      return applyMultiplier(oneTimePromo.multiplier);
+    // Use resolved multiplier (includes alternating if no active promo)
+    if (activePlan.period === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
+      return applyMultiplier(resolvedOneTimeMultiplier);
     }
 
-    if (activePlan.id.startsWith("mini-pack-") && miniPromo) {
-      return applyMultiplier(miniPromo.multiplier);
+    if (activePlan.id.startsWith("mini-pack-") && resolvedMiniMultiplier !== null && resolvedMiniMultiplier > 1) {
+      return applyMultiplier(resolvedMiniMultiplier);
     }
 
     return activePlan;

@@ -440,16 +440,17 @@ export async function POST(request: NextRequest) {
           `🔄 Webhook hasn't processed payment yet (race condition), processing as fallback: ${paymentIntent.id}`
         );
 
-        // Get promo multiplier for one-time packages
+        // Get resolved promo multiplier for one-time packages (payment context)
+        // Priority: Active Promo > Alternating Multiplier > null (use 1x)
         let promoMultiplier = 1;
         try {
-          const activePromo = await Promo.findOne({
-            type: "one-time-packages",
-            isActive: true,
-          }).sort({ createdAt: -1 });
-          promoMultiplier = activePromo?.multiplier || 1;
+          const { PromoMultiplierResolverService } = await import("@/services/admin/PromoMultiplierResolverService");
+          const resolver = new PromoMultiplierResolverService();
+          const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
+          const resolved = await resolver.resolveMultiplierForPayment(packageTypeValue);
+          promoMultiplier = resolved ?? 1; // Use 1x if no promo
         } catch (promoError) {
-          console.error("Failed to fetch promo multiplier:", promoError);
+          console.error("Failed to fetch resolved promo multiplier:", promoError);
           // Default to 1 if promo fetch fails
         }
 

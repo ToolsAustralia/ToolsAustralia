@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
+import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
 import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST, getNowInAEST } from "@/utils/common/timezone";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
@@ -79,6 +80,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const { data: activeBannerTextData } = useActivePromoBannerText();
   const activeScheduledText = activeBannerTextData?.data?.text;
 
+  // Fetch current alternating multipliers
+  const { data: currentAlternatingMultipliers } = useCurrentAlternatingMultipliers();
+
   // Store alternating default text in state - only updates once per day (AEST)
   const [alternatingDefault, setAlternatingDefault] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -86,6 +90,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     }
     return "FIRST 500 PEOPLE"; // Default for SSR
   });
+
+  // Store alternating multiplier in state - only updates once per day (AEST)
+  // Initialize to null to avoid hydration mismatch (will be set in useEffect)
+  const [alternatingMultiplier, setAlternatingMultiplier] = useState<number | null>(null);
 
   // Detect mobile viewport for font sizing
   useEffect(() => {
@@ -143,8 +151,94 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     // Check every 2 minutes (sufficient for date change detection)
     const interval = setInterval(checkDateChange, 2 * 60 * 1000);
 
-    return () => clearInterval(interval);
+    // Development helper: Expose testing function to window
+    if (process.env.NODE_ENV === "development") {
+      type WindowWithTest = Window & {
+        testPromoBannerDateChange?: () => { date: string; text: string };
+      };
+      (window as WindowWithTest).testPromoBannerDateChange = () => {
+        const currentDateStr = getCurrentDateStringAEST();
+        const currentText = getAlternatingDefaultText();
+        setAlternatingDefault(currentText);
+        console.log("✅ Manually triggered promo banner date change check");
+        console.log("📅 Current AEST date:", currentDateStr);
+        console.log("📝 Current alternating text:", currentText);
+        console.log("🔄 Component state will update...");
+        return {
+          date: currentDateStr,
+          text: currentText,
+        };
+      };
+    }
+
+    // Cleanup on unmount
+    return () => {
+      clearInterval(interval);
+      // Remove test function in development mode
+      if (process.env.NODE_ENV === "development") {
+        type WindowWithTest = Window & {
+          testPromoBannerDateChange?: () => { date: string; text: string };
+        };
+        const windowWithTest = window as WindowWithTest;
+        if (windowWithTest.testPromoBannerDateChange) {
+          delete windowWithTest.testPromoBannerDateChange;
+        }
+      }
+    };
   }, []);
+
+  // Determine which promo to display based on active tab
+  const getActivePromo = () => {
+    if (activeTab === "membership") {
+      return membershipPromo;
+    } else {
+      return oneTimePromo;
+    }
+  };
+
+  const activePromo = getActivePromo();
+
+  // Update alternating multiplier when date changes or currentAlternatingMultipliers changes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const currentType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
+    const current = currentAlternatingMultipliers?.data?.[currentType] ?? null;
+    
+    // Debug logging (development only)
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔄 PromoBanner alternating multiplier update:", {
+        activeTab,
+        currentType,
+        hasActivePromo: !!activePromo,
+        currentAlternatingValue: current,
+        currentAlternatingData: currentAlternatingMultipliers?.data,
+      });
+    }
+    
+    // Only update if there's no active promo (alternating only applies when no active promo)
+    if (!activePromo) {
+      // If there's an alternating multiplier available, use it
+      if (current !== null && current !== undefined) {
+        setAlternatingMultiplier(current);
+        if (process.env.NODE_ENV === "development") {
+          console.log("✅ Set alternating multiplier to:", current);
+        }
+      } else {
+        // If no alternating multiplier is available, clear it
+        setAlternatingMultiplier(null);
+        if (process.env.NODE_ENV === "development") {
+          console.log("⚠️ No alternating multiplier available for", currentType);
+        }
+      }
+    } else {
+      // Clear alternating multiplier when active promo exists
+      setAlternatingMultiplier(null);
+      if (process.env.NODE_ENV === "development") {
+        console.log("🚫 Active promo exists, clearing alternating multiplier");
+      }
+    }
+  }, [currentAlternatingMultipliers, activeTab, activePromo]);
 
   // Countdown strategy:
   // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
@@ -259,19 +353,45 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
   }, []);
 
-  // Determine which promo to display based on active tab
-  const getActivePromo = () => {
-    if (activeTab === "membership") {
-      return membershipPromo;
-    } else {
-      return oneTimePromo;
+  // Resolve multiplier with priority: Active Promo > Alternating > null (no promo)
+  const multiplier = useMemo(() => {
+    // Priority 1: Active promo
+    if (activePromo?.multiplier) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("🎯 PromoBanner multiplier: Using active promo", activePromo.multiplier);
+      }
+      return activePromo.multiplier;
     }
-  };
 
-  const activePromo = getActivePromo();
+    // Priority 2: Alternating multiplier (for current tab type)
+    const currentType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
+    // Check both state and query data
+    const alternatingFromState = alternatingMultiplier;
+    const alternatingFromQuery = currentAlternatingMultipliers?.data?.[currentType];
+    const alternating = alternatingFromState ?? alternatingFromQuery ?? null;
+    
+    if (alternating !== null && alternating !== undefined && alternating > 0) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("🎯 PromoBanner multiplier: Using alternating", {
+          alternating,
+          fromState: alternatingFromState,
+          fromQuery: alternatingFromQuery,
+          currentType,
+        });
+      }
+      return alternating;
+    }
 
-  // Get multiplier for dynamic text (default to 10x if no promo)
-  const multiplier = activePromo?.multiplier || 10;
+    // No promo active
+    if (process.env.NODE_ENV === "development") {
+      console.log("🎯 PromoBanner multiplier: No promo active", {
+        alternatingFromState,
+        alternatingFromQuery,
+        currentAlternatingMultipliers: currentAlternatingMultipliers?.data,
+      });
+    }
+    return null;
+  }, [activePromo?.multiplier, alternatingMultiplier, currentAlternatingMultipliers, activeTab]);
 
   // Helper function to determine if draw is today or tomorrow (in AEST)
   const getDrawDateStatus = (): "today" | "tomorrow" | null => {
@@ -346,8 +466,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Don't render if:
   // - On 404 page
   // - Sidebar is open
-  // - No active promo for current context
-  if (pathname === "/not-found" || isAnySidebarOpen || !activePromo) {
+  // - No badge text AND no multiplier (no promo active)
+  if (pathname === "/not-found" || isAnySidebarOpen || (!badgeText && !multiplier)) {
     return null;
   }
 

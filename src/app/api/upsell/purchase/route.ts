@@ -15,27 +15,19 @@ import {
 import Promo from "@/models/Promo";
 
 /**
- * Get active promo multiplier for a package type
- * Similar to function in webhook route but accessible here
+ * Get resolved promo multiplier for a package type (payment context)
+ * Priority: Active Promo > Alternating Multiplier > Default (1x)
+ * Uses PromoMultiplierResolverService for centralized resolution
  */
 async function getActivePromoMultiplier(packageType: "membership" | "one-time" | "mini-draw"): Promise<number> {
   try {
-    await connectDB();
-    const promoType =
-      packageType === "membership"
-        ? "membership-packages"
-        : packageType === "one-time"
-        ? "one-time-packages"
-        : "mini-packages";
-
-    const activePromo = await Promo.findOne({
-      type: promoType,
-      isActive: true,
-    }).sort({ createdAt: -1 });
-
-    return activePromo?.multiplier || 1;
+    const { PromoMultiplierResolverService } = await import("@/services/admin/PromoMultiplierResolverService");
+    const resolver = new PromoMultiplierResolverService();
+    // Use payment context (returns null if no active/alternating, use 1x)
+    const resolved = await resolver.resolveMultiplierForPayment(packageType);
+    return resolved ?? 1; // Use 1x if no promo
   } catch (error) {
-    console.error(`Error fetching active promo for ${packageType}: ${error}`);
+    console.error(`Error fetching resolved promo multiplier for ${packageType}: ${error}`);
     return 1; // Default to no multiplier on error
   }
 }

@@ -16,7 +16,7 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { generateEventID } from "@/utils/tracking/facebook-helpers";
-import { useActivePromos } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 
@@ -592,16 +592,19 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }, 100);
   };
 
-  // Get active promos to determine which image to show
-  const { data: activePromos } = useActivePromos();
+  // Get resolved multiplier (includes alternating if no active promo)
+  // This ensures seamless integration with alternating multiplier feature
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
   /**
-   * Dynamically selects upsell image based on active promo multiplier
+   * Dynamically selects upsell image based on resolved promo multiplier (includes alternating)
    * Returns the image path for the upsell promotional image
    *
    * Logic:
-   * - If no promo active (1x): Use base images from /images/upsells/
-   * - If 2x/3x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} {Pack|Upgrade}.png
+   * - If no promo active (null): Use base images from /images/upsells/
+   * - If 2x/3x/5x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} Plus.png or {multiplier}x {Package} Upgrade.png
    * - If 10x promo active (membership packages): Use /images/upsells/active-promo/10X {Package} Package.png
    * - Falls back to base images if promo-specific image is unavailable
    */
@@ -622,20 +625,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       packageType = "one-time";
     }
 
-    // Get active promo multiplier for the package type
-    let promoMultiplier = 1;
-    if (activePromos && packageType) {
-      const promoType =
-        packageType === "membership"
-          ? "membership-packages"
-          : packageType === "one-time"
-          ? "one-time-packages"
-          : "mini-packages";
-
-      const activePromo = activePromos.find((p) => p.type === promoType && p.isActive);
-      if (activePromo) {
-        promoMultiplier = activePromo.multiplier;
-      }
+    // Get resolved multiplier for the package type (includes alternating if no active promo)
+    let promoMultiplier: number | null = null;
+    if (packageType === "membership") {
+      promoMultiplier = resolvedMembershipMultiplier;
+    } else if (packageType === "one-time") {
+      promoMultiplier = resolvedOneTimeMultiplier;
+    } else if (packageType === "mini-draw") {
+      promoMultiplier = resolvedMiniMultiplier;
     }
 
     // Get upsell category from package data (more reliable than inferring from offer)
@@ -645,7 +642,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     return getUpsellImagePath({
       offerId: offer.id,
       packageType,
-      promoMultiplier,
+      promoMultiplier: promoMultiplier ?? undefined, // Pass undefined if null (no promo)
       category,
     });
   };

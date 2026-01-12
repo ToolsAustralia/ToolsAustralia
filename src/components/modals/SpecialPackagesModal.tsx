@@ -19,7 +19,7 @@ import { type StaticMembershipPackage } from "@/data/membershipPackages";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { generateEventID } from "@/utils/tracking/facebook-helpers";
 import { usePromoLink } from "@/hooks/usePromoLink";
@@ -61,31 +61,39 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   // Get promo link code from URL/sessionStorage (for bonus entries)
   const { promoCode: promoLinkCode } = usePromoLink();
 
-  // Get active one-time promo (same as MembershipSection)
+  // Get resolved multiplier (includes alternating multiplier if no active promo)
+  // This ensures seamless integration with alternating multiplier feature
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  // Only fetch oneTimePromo to determine if multiplier is from active promo (for display purposes)
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
   // Get packages with promo applied (same logic as MembershipSection)
+  // Uses resolved multiplier which includes alternating multipliers
+  // CRITICAL: Only depends on resolvedOneTimeMultiplier, not oneTimePromo
+  // This ensures alternating multipliers work seamlessly when active promos are disabled
   const packagesWithPromo = React.useMemo(() => {
-    // Apply promo multiplier to packages if there's an active one-time promo
+    // Apply resolved multiplier to packages (includes alternating if no active promo)
     return packages.map((pkg) => {
-      // Check if this is a one-time package with active promo
-      if (oneTimePromo && pkg.type === "one-time") {
+      // Check if this is a one-time package and multiplier is greater than 1
+      if (pkg.type === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
         const originalEntries = pkg.totalEntries || 0;
-        const promoEntries = originalEntries * oneTimePromo.multiplier;
+        const promoEntries = originalEntries * resolvedOneTimeMultiplier;
 
         return {
           ...pkg,
           totalEntries: promoEntries,
           originalEntries, // Store original for display purposes
-          promoMultiplier: oneTimePromo.multiplier,
-          isPromoActive: true,
+          promoMultiplier: resolvedOneTimeMultiplier,
+          isPromoActive: !!oneTimePromo, // True if active promo, false if alternating (for display only)
         };
       }
 
-      // Return package unchanged if no promo applies
+      // Return package unchanged if no multiplier applies
       return pkg;
     });
-  }, [packages, oneTimePromo]);
+    // IMPORTANT: Only depend on resolvedOneTimeMultiplier for calculation
+    // oneTimePromo is only used for isPromoActive flag (display), not for calculation
+  }, [packages, resolvedOneTimeMultiplier]);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();

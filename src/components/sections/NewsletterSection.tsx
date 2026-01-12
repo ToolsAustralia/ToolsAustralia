@@ -57,6 +57,7 @@ export default function NewsletterSection() {
                     placeholder="Enter email"
                     className="w-full bg-white rounded-[10px] sm:rounded-[12px] lg:rounded-[16px] pl-10 pr-4 sm:pl-12 sm:pr-4 lg:pl-14 lg:pr-4 py-2 sm:py-2 lg:py-4 text-sm sm:text-sm lg:text-[16px] text-gray-900 placeholder-gray-500 border-0 focus:ring-2 focus:ring-yellow-300 focus:outline-none transition-all duration-200"
                     required
+                    suppressHydrationWarning
                   />
                 </div>
 

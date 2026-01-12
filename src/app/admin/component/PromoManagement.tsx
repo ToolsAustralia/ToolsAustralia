@@ -9,14 +9,17 @@ import AdminPromoLinkModal from "@/components/modals/AdminPromoLinkModal";
 import PromoLinkList from "@/components/admin/PromoLinkList";
 import AdminPromoBannerTextModal from "@/components/modals/AdminPromoBannerTextModal";
 import PromoBannerTextList from "@/components/admin/PromoBannerTextList";
+import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatingMultiplierModal";
+import AlternatingMultiplierList from "@/components/admin/AlternatingMultiplierList";
 import PromoBadge from "@/components/ui/PromoBadge";
-import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar } from "lucide-react";
+import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat } from "lucide-react";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
   const [isBonusEntryModalOpen, setIsBonusEntryModalOpen] = useState(false);
   const [isPromoLinkModalOpen, setIsPromoLinkModalOpen] = useState(false);
   const [isBannerTextModalOpen, setIsBannerTextModalOpen] = useState(false);
+  const [isAlternatingMultiplierModalOpen, setIsAlternatingMultiplierModalOpen] = useState(false);
 
   const { data: activePromos = [], isLoading: activeLoading, refetch: refetchActive } = useAdminActivePromos();
 
@@ -170,6 +173,32 @@ export default function PromoManagement() {
         <PromoBannerTextList />
       </div>
 
+      {/* Alternating Multiplier Settings Section */}
+      <div className="mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Repeat className="w-5 h-5 text-red-600" />
+              Alternating Multiplier Settings
+            </h3>
+            <p className="text-gray-600 mt-1 text-sm">
+              Configure multipliers that automatically alternate daily at midnight AEST. Only applies when no active
+              promo exists for the package type. Priority: Active Promo &gt; Alternating Multiplier &gt; Default (10x
+              display, 1x payment).
+            </p>
+          </div>
+          <button
+            onClick={() => setIsAlternatingMultiplierModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            <Plus className="w-4 h-4" />
+            Create Configuration
+          </button>
+        </div>
+
+        <AlternatingMultiplierList />
+      </div>
+
       {/* Toggle Promo Modal */}
       <AdminPromoToggle isOpen={isToggleModalOpen} onClose={() => setIsToggleModalOpen(false)} />
 
@@ -197,6 +226,15 @@ export default function PromoManagement() {
         onClose={() => setIsBannerTextModalOpen(false)}
         onSuccess={() => {
           setIsBannerTextModalOpen(false);
+        }}
+      />
+
+      {/* Alternating Multiplier Modal */}
+      <AdminAlternatingMultiplierModal
+        isOpen={isAlternatingMultiplierModalOpen}
+        onClose={() => setIsAlternatingMultiplierModalOpen(false)}
+        onSuccess={() => {
+          setIsAlternatingMultiplierModalOpen(false);
         }}
       />
     </div>

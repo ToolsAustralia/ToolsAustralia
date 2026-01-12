@@ -9,7 +9,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserData } from "@/hooks/queries";
 import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
@@ -129,9 +129,13 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   // Fetch real membership data from API
   const { subscriptionPackages, oneTimePackages, loading, error } = useMemberships();
 
-  // Get active promos
+  // Get active promos (for checking if promo is active)
   const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
+
+  // Get resolved multipliers (includes alternating multiplier if no active promo)
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
   // Debug logging
   // console.log("🔍 PackageSelectionModal Debug:", {
@@ -172,11 +176,11 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
       const showingMembership =
         activeTab === "membership" || (activeTab === "one-time" && oneTimeSubTab === "membership");
 
-      // Check if this is a one-time package with active promo
-      if (showingOneTime && plan.period === "one-time" && oneTimePromo?.multiplier) {
-        // Apply promo multiplier to entries
+      // Check if this is a one-time package (use resolved multiplier)
+      if (showingOneTime && plan.period === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
+        // Apply resolved multiplier to entries (includes alternating if no active promo)
         const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoMultiplier = oneTimePromo.multiplier;
+        const promoMultiplier = resolvedOneTimeMultiplier;
         const promoEntries = originalEntries * promoMultiplier;
 
         // Update features to show promo effect
@@ -203,16 +207,16 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             entriesCount: promoEntries,
             originalEntries,
             promoMultiplier,
-            isPromoActive: true,
+            isPromoActive: !!oneTimePromo, // True if active promo, false if alternating
           },
         };
       }
 
-      // Check if this is a subscription package with active membership promo
-      if (showingMembership && plan.period !== "one-time" && membershipPromo?.multiplier) {
-        // Apply promo multiplier to entries for subscription packages (initial purchase only)
+      // Check if this is a subscription package (use resolved multiplier)
+      if (showingMembership && plan.period !== "one-time" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1) {
+        // Apply resolved multiplier to entries (includes alternating if no active promo)
         const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoMultiplier = membershipPromo.multiplier;
+        const promoMultiplier = resolvedMembershipMultiplier;
         const promoEntries = originalEntries * promoMultiplier;
 
         // Update features to show promo effect
@@ -401,11 +405,11 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
           ? allOneTimePackages.filter((pkg) => !isNonMemberPackage(pkg.id))
           : allOneTimePackages;
 
-        // Apply promo multiplier to one-time packages if there's an active promo
-        if (oneTimePromo) {
+        // Apply resolved multiplier to one-time packages (includes alternating if no active promo)
+        if (resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
           return filteredPackages.map((plan) => {
             const originalEntries = plan.metadata?.entriesCount || 0;
-            const promoEntries = originalEntries * oneTimePromo.multiplier;
+            const promoEntries = originalEntries * resolvedOneTimeMultiplier;
 
             // Update features to show promo effect
             const updatedFeatures = plan.features.map((feature) => {
@@ -415,7 +419,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
                 if (match) {
                   const originalNumber = parseInt(match[1]);
-                  const newNumber = originalNumber * oneTimePromo.multiplier;
+                  const newNumber = originalNumber * resolvedOneTimeMultiplier;
                   // Replace the number in the feature text
                   return { text: feature.text.replace(originalNumber.toString(), newNumber.toString()) };
                 }
@@ -430,8 +434,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 ...plan.metadata,
                 entriesCount: promoEntries,
                 originalEntries,
-                promoMultiplier: oneTimePromo.multiplier,
-                isPromoActive: true,
+                promoMultiplier: resolvedOneTimeMultiplier,
+                isPromoActive: !!oneTimePromo, // True if active promo, false if alternating
               },
             };
           });
@@ -599,8 +603,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 >
                   One-Time
                   {/* Multiplier Badge - Upper right */}
-                  {oneTimePromo && oneTimeSubTab === "one-time" && (
-                    <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
+                  {resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && oneTimeSubTab === "one-time" && (
+                    <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
                   )}
                 </button>
                 <button

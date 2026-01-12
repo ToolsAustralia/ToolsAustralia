@@ -123,16 +123,20 @@ function getPromoImagePath(
   }
 
   // Construct image filename based on category
-  // Note: File naming convention - Upgrades use lowercase "x", Packs and Packages use uppercase "X"
+  // Note: File naming convention:
+  // - Packages (membership): "10X Tradie Package.png" (uppercase X)
+  // - Plus (one-time packs): "2X Apprentice Plus.png" (uppercase X, use "Plus" not "Pack")
+  // - Upgrades (additional packs): "2x Apprentice Upgrade.png" (lowercase x)
   let imageFileName: string;
   if (imageCategory === "Package") {
     // Membership packages: "10X Tradie Package.png"
     imageFileName = `${multiplier}X ${normalizedPackageName} Package.png`;
   } else if (imageCategory === "Pack") {
-    // One-time packs: "2X Apprentice Pack.png" or "3X Tradie Pack.png"
-    imageFileName = `${multiplier}X ${normalizedPackageName} ${imageCategory}.png`;
+    // One-time packs: "2X Apprentice Plus.png" or "3X Tradie Plus.png"
+    // Note: Category is "Pack" internally but filename uses "Plus"
+    imageFileName = `${multiplier}X ${normalizedPackageName} Plus.png`;
   } else {
-    // Upgrades: "2x Apprentice Upgrade.png" or "3x Tradie Upgrade.png"
+    // Upgrades (additional packs): "2x Apprentice Upgrade.png" or "3x Tradie Upgrade.png"
     // Note: Upgrades use lowercase "x" in the filename (matching actual file names)
     imageFileName = `${multiplier}x ${normalizedPackageName} ${imageCategory}.png`;
   }
@@ -147,10 +151,10 @@ function getPromoImagePath(
  * @returns Image path string
  */
 export function getUpsellImagePath(params: UpsellImageParams): string {
-  const { offerId, packageType, promoMultiplier = 1, category } = params;
+  const { offerId, packageType, promoMultiplier, category } = params;
 
-  // If no promo is active (multiplier === 1) or package type is missing, use base images
-  if (promoMultiplier === 1 || !packageType) {
+  // If no promo is active (null or undefined) or package type is missing, use base images
+  if (promoMultiplier == null || promoMultiplier === 1 || !packageType) {
     const baseImageName = getBaseImagePath(offerId);
     return `/images/upsells/${baseImageName}`;
   }
@@ -158,8 +162,8 @@ export function getUpsellImagePath(params: UpsellImageParams): string {
   // Extract package info from offer ID
   const { packageName, imageCategory } = extractPackageInfo(offerId);
 
-  // Handle one-time packages with 2x or 3x promo
-  if (packageType === "one-time" && (promoMultiplier === 2 || promoMultiplier === 3)) {
+  // Handle one-time packages with 2x, 3x, or 5x promo
+  if (packageType === "one-time" && (promoMultiplier === 2 || promoMultiplier === 3 || promoMultiplier === 5)) {
     // Check if this is a mini-pack (they don't have promo images, use base)
     if (offerId.startsWith("mini-pack-")) {
       const baseImageName = getBaseImagePath(offerId);

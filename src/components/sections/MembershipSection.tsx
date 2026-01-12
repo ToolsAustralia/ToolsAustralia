@@ -9,7 +9,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
@@ -152,9 +152,13 @@ export default function MembershipSection({
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
 
-  // Get active promos for each package type
+  // Get active promos for each package type (for checking if promo is active)
   const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
+
+  // Get resolved multipliers (includes alternating multiplier if no active promo)
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
   // Listen for upsell modal requests
   useEffect(() => {
@@ -331,46 +335,68 @@ export default function MembershipSection({
 
     const convertedPlans = apiPlans.map(convertToLocalPlan);
 
-    // Apply promo multiplier to packages if there's an active promo
+    // Apply resolved multiplier to packages (includes alternating multiplier if no active promo)
     const finalPlans = convertedPlans.map((plan) => {
-      // Check if this is a one-time package with active promo
-      if (effectiveTab === "one-time" && oneTimePromo && plan.period === "one-time") {
-        const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoEntries = originalEntries * oneTimePromo.multiplier;
+      // Check if this is a one-time package
+      if (effectiveTab === "one-time" && plan.period === "one-time") {
+        // Only apply multiplier if it exists and is greater than 1
+        if (resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
+          const originalEntries = plan.metadata?.entriesCount || 0;
+          const promoEntries = originalEntries * resolvedOneTimeMultiplier;
 
-        return {
-          ...plan,
-          // Keep features unchanged - they already have original entries
-          metadata: {
-            ...plan.metadata,
-            entriesCount: promoEntries,
-            originalEntries,
-            promoMultiplier: oneTimePromo.multiplier,
-            isPromoActive: true,
-          },
-        };
+          // Update features array to show multiplied entries
+          const updatedFeatures = plan.features.map((feature) => {
+            // Check if this feature mentions entries
+            if (feature.text.includes("Entries") || feature.text.includes("entries")) {
+              // Extract the number from the feature text
+              const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
+              if (match) {
+                const originalNumber = parseInt(match[1]);
+                const newNumber = originalNumber * resolvedOneTimeMultiplier;
+                // Replace the number in the feature text
+                return { text: feature.text.replace(originalNumber.toString(), newNumber.toString()) };
+              }
+            }
+            return feature;
+          });
+
+          return {
+            ...plan,
+            features: updatedFeatures, // Update features to show multiplied entries
+            metadata: {
+              ...plan.metadata,
+              entriesCount: promoEntries,
+              originalEntries,
+              promoMultiplier: resolvedOneTimeMultiplier,
+              isPromoActive: !!oneTimePromo, // True if active promo, false if alternating
+            },
+          };
+        }
       }
 
-      // Check if this is a subscription package with active membership promo
-      if (effectiveTab === "membership" && membershipPromo && plan.period !== "one-time") {
-        const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoEntries = originalEntries * membershipPromo.multiplier;
+      // Check if this is a subscription package
+      if (effectiveTab === "membership" && plan.period !== "one-time") {
+        // Only apply multiplier if it exists and is greater than 1
+        if (resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1) {
+          const originalEntries = plan.metadata?.entriesCount || 0;
+          const promoEntries = originalEntries * resolvedMembershipMultiplier;
 
-        return {
-          ...plan,
-          // Keep features unchanged - they already have original entries
-          metadata: {
-            ...plan.metadata,
-            entriesCount: promoEntries,
-            originalEntries,
-            promoMultiplier: membershipPromo.multiplier,
-            isPromoActive: true,
-            isInitialPurchaseOnly: true, // Mark as initial purchase only
-          },
-        };
+          return {
+            ...plan,
+            // Keep features unchanged - they already have original entries
+            metadata: {
+              ...plan.metadata,
+              entriesCount: promoEntries,
+              originalEntries,
+              promoMultiplier: resolvedMembershipMultiplier,
+              isPromoActive: !!membershipPromo, // True if active promo, false if alternating
+              isInitialPurchaseOnly: true, // Mark as initial purchase only
+            },
+          };
+        }
       }
 
-      // Return plan unchanged if no promo applies
+      // Return plan unchanged if no multiplier applies
       return plan;
     });
 
@@ -431,8 +457,9 @@ export default function MembershipSection({
                 >
                   One-Time
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                  {oneTimePromo && activeTab === "one-time" && (
-                    <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />
+                  {/* Show badge if there's an active promo OR an alternating multiplier */}
+                  {activeTab === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
+                    <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
                   )}
                 </button>
                 <button
@@ -456,8 +483,9 @@ export default function MembershipSection({
                 >
                   Membership Packs
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                  {membershipPromo && activeTab === "membership" && (
-                    <PromoMultiplierBadge multiplier={membershipPromo.multiplier as 2 | 3 | 5 | 10} />
+                  {/* Show badge if there's an active promo OR an alternating multiplier */}
+                  {activeTab === "membership" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
+                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
                   )}
                 </button>
               </div>
@@ -473,7 +501,10 @@ export default function MembershipSection({
                 <div className="px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)] relative whitespace-nowrap">
                   One-Time Packs
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                  {oneTimePromo && <PromoMultiplierBadge multiplier={oneTimePromo.multiplier as 2 | 3 | 5 | 10} />}
+                  {/* Show badge if there's an active promo OR an alternating multiplier */}
+                  {resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
+                    <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
+                  )}
                 </div>
               </div>
             </div>
@@ -708,15 +739,20 @@ export default function MembershipSection({
                                     const entriesText = entriesFeature.text;
                                     const entriesNumber = entriesText.match(/(\d+)/)?.[1] || "0";
 
-                                    // Check if promo is active
-                                    const isPromoActive = plan.metadata?.isPromoActive;
-                                    const originalEntries = isPromoActive
+                                    // Check if multiplier is being applied (active promo OR alternating multiplier)
+                                    // Show original → multiplied format when multiplier > 1
+                                    const promoMultiplier = typeof plan.metadata?.promoMultiplier === 'number' ? plan.metadata.promoMultiplier : 0;
+                                    const hasMultiplier = promoMultiplier > 1;
+                                    const originalEntries = hasMultiplier
                                       ? plan.metadata?.originalEntries || parseInt(entriesNumber)
+                                      : parseInt(entriesNumber);
+                                    const displayEntries = hasMultiplier
+                                      ? plan.metadata?.entriesCount || parseInt(entriesNumber)
                                       : parseInt(entriesNumber);
 
                                     return (
                                       <div className={`${colorScheme.text}`}>
-                                        {isPromoActive ? (
+                                        {hasMultiplier ? (
                                           <div className="flex items-center justify-center gap-2">
                                             <span
                                               className={`${
@@ -745,7 +781,7 @@ export default function MembershipSection({
                                                 colorScheme.gradient
                                               } bg-clip-text text-transparent`}
                                             >
-                                              {plan.metadata?.entriesCount || entriesNumber}
+                                              {displayEntries}
                                             </span>
                                           </div>
                                         ) : (
@@ -854,12 +890,14 @@ export default function MembershipSection({
                               {/* Additional packages: skip features list to save space (entries shown in header) */}
                               {!(isTwoColumn && plan.isMemberOnly) &&
                                 plan.features.map((feature, index) => {
-                                  // Check if this feature mentions entries and we have promo data
-                                  const isPromoActive = plan.metadata?.isPromoActive;
+                                  // Check if this feature mentions entries and we have multiplier data
+                                  // Show original → multiplied format when multiplier > 1 (active promo OR alternating)
+                                  const promoMultiplier = typeof plan.metadata?.promoMultiplier === 'number' ? plan.metadata.promoMultiplier : 0;
+                                  const hasMultiplier = promoMultiplier > 1;
                                   const originalEntries = plan.metadata?.originalEntries;
 
                                   if (
-                                    isPromoActive &&
+                                    hasMultiplier &&
                                     originalEntries &&
                                     (feature.text.includes("Entries") || feature.text.includes("entries"))
                                   ) {
@@ -1206,15 +1244,20 @@ export default function MembershipSection({
                               const entriesText = entriesFeature.text;
                               const entriesNumber = entriesText.match(/(\d+)/)?.[1] || "0";
 
-                              // Check if promo is active
-                              const isPromoActive = plan.metadata?.isPromoActive;
-                              const originalEntries = isPromoActive
+                              // Check if multiplier is being applied (active promo OR alternating multiplier)
+                              // Show original → multiplied format when multiplier > 1
+                              const promoMultiplier = typeof plan.metadata?.promoMultiplier === 'number' ? plan.metadata.promoMultiplier : 0;
+                              const hasMultiplier = promoMultiplier > 1;
+                              const originalEntries = hasMultiplier
                                 ? plan.metadata?.originalEntries || parseInt(entriesNumber)
+                                : parseInt(entriesNumber);
+                              const displayEntries = hasMultiplier
+                                ? plan.metadata?.entriesCount || parseInt(entriesNumber)
                                 : parseInt(entriesNumber);
 
                               return (
                                 <div className={`${colorScheme.text}`}>
-                                  {isPromoActive ? (
+                                  {hasMultiplier ? (
                                     <div className="flex items-center justify-center gap-2">
                                       <span className="text-[20px] sm:text-[24px] font-bold line-through opacity-40 text-slate-400">
                                         {originalEntries}
@@ -1223,7 +1266,7 @@ export default function MembershipSection({
                                       <span
                                         className={`text-[36px] sm:text-[44px] font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
                                       >
-                                        {plan.metadata?.entriesCount || entriesNumber}
+                                        {displayEntries}
                                       </span>
                                     </div>
                                   ) : (

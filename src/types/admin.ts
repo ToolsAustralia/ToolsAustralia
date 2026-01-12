@@ -662,3 +662,54 @@ export interface PromoBannerTextResponse {
   data: PromoBannerText | null;
   message?: string;
 }
+
+// ALTERNATING PROMO MULTIPLIER TYPES
+// ========================================
+
+export type AlternatingPromoMultiplierType = "membership-packages" | "one-time-packages" | "mini-packages";
+
+export interface AlternatingPromoMultiplier {
+  id: string;
+  type: AlternatingPromoMultiplierType;
+  multipliers: [number, number]; // Tuple of exactly 2 multipliers (e.g., [5, 10])
+  isEnabled: boolean;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+}
+
+export interface CreateAlternatingPromoMultiplierPayload {
+  type: AlternatingPromoMultiplierType;
+  multipliers: [number, number]; // Must be exactly 2 multipliers, each must be 2, 3, 5, or 10
+  isEnabled?: boolean;
+  description?: string;
+}
+
+export interface UpdateAlternatingPromoMultiplierPayload {
+  multipliers?: [number, number];
+  isEnabled?: boolean;
+  description?: string;
+}
+
+export interface AlternatingPromoMultiplierListResponse {
+  success: boolean;
+  data: AlternatingPromoMultiplier[];
+  count: number;
+}
+
+export interface AlternatingPromoMultiplierResponse {
+  success: boolean;
+  data: AlternatingPromoMultiplier | null;
+  message?: string;
+}
+
+export interface CurrentAlternatingMultipliersResponse {
+  success: boolean;
+  data: Record<AlternatingPromoMultiplierType, number | null>;
+}

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import type {
   BonusEntryPromo,
   CreateBonusEntryPromoPayload,
@@ -7,6 +8,7 @@ import type {
   CreatePromoLinkPayload,
   UpdatePromoLinkPayload,
 } from "@/types/admin";
+import { useCurrentAlternatingMultipliers } from "./useAlternatingMultiplierQueries";
 
 // Types
 export interface ActivePromo {
@@ -134,6 +136,37 @@ export const usePromoByType = (type: "one-time-packages" | "mini-packages" | "me
   };
 };
 
+/**
+ * Resolve multiplier with priority: Active Promo > Alternating > null (no promo)
+ * @param type - Package type (full form: "membership-packages" | "one-time-packages" | "mini-packages")
+ * @param context - "display" or "payment" (both return null if no promo, no defaults)
+ * @returns Resolved multiplier or null if no active/alternating promo
+ */
+export const useResolvedMultiplier = (
+  type: "one-time-packages" | "mini-packages" | "membership-packages",
+  context: "display" | "payment" = "display"
+): number | null => {
+  const { data: promos } = useActivePromos();
+  const { data: currentAlternating } = useCurrentAlternatingMultipliers();
+
+  return useMemo(() => {
+    // Priority 1: Active promo
+    const activePromo = promos?.find((p) => p.type === type && p.isActive);
+    if (activePromo?.multiplier) {
+      return activePromo.multiplier;
+    }
+
+    // Priority 2: Alternating multiplier
+    const alternating = currentAlternating?.data?.[type];
+    if (alternating !== null && alternating !== undefined) {
+      return alternating;
+    }
+
+    // No promo active
+    return null;
+  }, [promos, currentAlternating, type, context]);
+};
+
 // useCreatePromo hook removed - replaced with useTogglePromo
 
 export const useTogglePromo = () => {
@@ -145,6 +178,8 @@ export const useTogglePromo = () => {
       // Invalidate and refetch all promo-related queries
       queryClient.invalidateQueries({ queryKey: ["promos", "active"] });
       queryClient.invalidateQueries({ queryKey: ["promos", "admin", "active"] });
+      // Also invalidate alternating multiplier query since it depends on active promos
+      queryClient.invalidateQueries({ queryKey: ["alternating-multiplier", "current"] });
     },
   });
 };

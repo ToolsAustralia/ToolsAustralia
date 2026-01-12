@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import { Check } from "lucide-react";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import { apprentice, tradie, foreman, boss, power, type PackageIconData } from "@/utils/images/package-icons";
 
@@ -307,8 +307,15 @@ export default function MembershipPackagesChart() {
   const { data: membershipPromo } = usePromoByType("membership-packages");
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
-  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
-  const oneTimePromoMultiplier = oneTimePromo?.multiplier ?? 1;
+  // Use resolved multipliers (includes alternating multipliers if no active promo)
+  // This ensures seamless integration with alternating multiplier feature
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  
+  // Keep old variables for backward compatibility in calculations
+  // Default to 1 if no promo (null means no multiplier)
+  const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
+  const oneTimePromoMultiplier = resolvedOneTimeMultiplier ?? 1;
 
   // Get current package list based on active tab
   const getCurrentPackages = (): PackageData[] => {
