@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
       eventType: "BenefitsGranted", // Only count successful payments
       timestamp: { $gte: startDate, $lte: endDate },
     })
-      .select("userId packageType data timestamp")
+      .select("userId packageType packageId data timestamp")
       .lean()
       .limit(10000); // Safety limit to prevent memory issues
 
@@ -197,35 +197,6 @@ export async function GET(request: NextRequest) {
     let additionalOneTimePurchase = 0;
     let miniDraw = 0;
     let upsell = 0;
-
-    // Get all one-time purchase events in the date range
-    const oneTimeEvents = revenueEvents.filter((e) => e.packageType === "one-time");
-
-    // For each one-time event, we need to check if there's a previous purchase
-    // We'll batch this by getting all previous purchases for all users at once
-    const userIds = [...new Set(oneTimeEvents.map((e) => e.userId.toString()))];
-    const userIdObjectIds = userIds.map((id) => new mongoose.Types.ObjectId(id));
-
-    // Get all previous one-time purchases for these users (before the date range)
-    // This gives us users who definitely have previous purchases
-    const usersWithPreviousPurchases = new Set<string>();
-    if (userIds.length > 0) {
-      const previousPurchases = await PaymentEvent.find({
-        userId: { $in: userIdObjectIds },
-        packageType: "one-time",
-        eventType: "BenefitsGranted",
-        timestamp: { $lt: startDate }, // Before the date range
-      })
-        .select("userId")
-        .lean();
-
-      previousPurchases.forEach((purchase) => {
-        usersWithPreviousPurchases.add(purchase.userId.toString());
-      });
-    }
-
-    // Track first purchase per user within the date range
-    const firstPurchaseInRange = new Map<string, Date>();
 
     // Categorize revenue by package type and context
     // Sort events by timestamp to process them chronologically
@@ -250,25 +221,21 @@ export async function GET(request: NextRequest) {
       } else if (event.packageType === "upsell") {
         upsell += price;
       } else if (event.packageType === "one-time") {
-        const userId = event.userId.toString();
-        const eventTimestamp = new Date(event.timestamp);
-
-        // Check if user has previous purchases before the date range
-        if (usersWithPreviousPurchases.has(userId)) {
-          // User has purchases before the range, so all purchases in range are additional
+        // Categorize based on packageId:
+        // - "One-Time Additional" = packages that start with "additional-" (e.g., "additional-apprentice-pack")
+        // - "One-Time First" = packages that end with "-pack" but NOT "additional-*-pack" (e.g., "apprentice-pack", "tradie-pack")
+        const packageId = event.packageId || "";
+        
+        if (packageId.startsWith("additional-")) {
+          // This is an additional package (member-only packages)
           additionalOneTimePurchase += price;
+        } else if (packageId.endsWith("-pack")) {
+          // This is a first-time package (regular one-time packages)
+          oneTimePurchase += price;
         } else {
-          // User has no purchases before the range
-          // Check if this is their first purchase in the current range
-          const firstInRange = firstPurchaseInRange.get(userId);
-          if (!firstInRange) {
-            // This is their first purchase (both in range and ever)
-            firstPurchaseInRange.set(userId, eventTimestamp);
-            oneTimePurchase += price;
-          } else {
-            // User already made a first purchase in this range, this is additional
-            additionalOneTimePurchase += price;
-          }
+          // Fallback: If packageId doesn't match expected pattern, treat as first-time
+          // This handles edge cases where packageId might be missing or in unexpected format
+          oneTimePurchase += price;
         }
       }
     }

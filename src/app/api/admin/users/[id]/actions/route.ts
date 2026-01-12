@@ -10,6 +10,7 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { sendCustomEmail } from "@/lib/email";
+import { stripe } from "@/lib/stripe";
 
 /**
  * POST /api/admin/users/[id]/actions
@@ -23,6 +24,7 @@ import { sendCustomEmail } from "@/lib/email";
  * - toggle_status: Activate/deactivate account
  * - add_note: Add internal admin note
  * - resend_sms_verification: Resend SMS verification code
+ * - clear_payment_methods: Clear all saved payment methods from database and Stripe
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       "resend_sms_verification",
       "send_email",
       "admin_set_password",
+      "clear_payment_methods",
     ];
 
     if (!validActions.includes(action)) {
@@ -126,6 +129,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       case "resend_sms_verification":
         result = await handleResendSMSVerification(user);
+        break;
+
+      case "clear_payment_methods":
+        result = await handleClearPaymentMethods(user);
         break;
 
       default:
@@ -451,6 +458,91 @@ async function handleResendSMSVerification(user: any) {
       success: false,
       action: "resend_sms_verification",
       error: "Failed to send SMS verification code",
+    };
+  }
+}
+
+/**
+ * Handle clearing all saved payment methods
+ * Removes all payment methods from both database and Stripe
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleClearPaymentMethods(user: any) {
+  try {
+    // Get count of payment methods before clearing
+    const paymentMethodsCount = user.savedPaymentMethods?.length || 0;
+
+    // If no payment methods, return early
+    if (paymentMethodsCount === 0) {
+      return {
+        success: true,
+        action: "clear_payment_methods",
+        message: "No payment methods to clear",
+        methodsCleared: 0,
+      };
+    }
+
+    // Track successful and failed detachments
+    let successfullyDetached = 0;
+    let failedDetachments = 0;
+    const errors: string[] = [];
+
+    // Detach each payment method from Stripe
+    for (const paymentMethod of user.savedPaymentMethods || []) {
+      try {
+        await stripe.paymentMethods.detach(paymentMethod.paymentMethodId);
+        successfullyDetached++;
+      } catch (stripeError) {
+        // Continue even if some detachments fail (payment method might already be detached)
+        failedDetachments++;
+        const errorMessage =
+          stripeError instanceof Error ? stripeError.message : "Unknown Stripe error";
+        errors.push(`Failed to detach ${paymentMethod.paymentMethodId}: ${errorMessage}`);
+        console.warn(`Warning: Could not detach payment method ${paymentMethod.paymentMethodId}:`, stripeError);
+      }
+    }
+
+    // Clear default payment method in Stripe customer if exists
+    if (user.stripeCustomerId) {
+      try {
+        await stripe.customers.update(user.stripeCustomerId, {
+          invoice_settings: {
+            default_payment_method: null,
+          },
+        });
+      } catch (stripeError) {
+        // Log but don't fail - customer might not exist or already have no default
+        console.warn(
+          `Warning: Could not clear default payment method for customer ${user.stripeCustomerId}:`,
+          stripeError
+        );
+      }
+    }
+
+    // Clear payment methods array in database
+    user.savedPaymentMethods = [];
+    await user.save();
+
+    // Build success message
+    let message = `Successfully cleared ${successfullyDetached} payment method(s)`;
+    if (failedDetachments > 0) {
+      message += `. ${failedDetachments} payment method(s) could not be detached from Stripe (may already be detached)`;
+    }
+
+    return {
+      success: true,
+      action: "clear_payment_methods",
+      message,
+      methodsCleared: successfullyDetached,
+      methodsFailed: failedDetachments,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  } catch (error) {
+    console.error("Error clearing payment methods:", error);
+    return {
+      success: false,
+      action: "clear_payment_methods",
+      error: error instanceof Error ? error.message : "Failed to clear payment methods",
     };
   }
 }

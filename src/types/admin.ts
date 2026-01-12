@@ -356,7 +356,8 @@ export type UserActionType =
   | "add_note"
   | "resend_sms_verification"
   | "send_email"
-  | "admin_set_password";
+  | "admin_set_password"
+  | "clear_payment_methods";
 
 export interface UserActionRequest {
   action: UserActionType;

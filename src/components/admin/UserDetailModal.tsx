@@ -1695,18 +1695,17 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     <button
                       onClick={() =>
                         showActionConfirmation(
-                          "add_note",
-                          "Add Admin Note",
-                          "Add an internal note about this user for other admins.",
-                          true,
-                          "Enter your note here..."
+                          "clear_payment_methods",
+                          "Clear Payment Methods",
+                          "This will remove all saved payment methods from both the database and Stripe. This action cannot be undone.",
+                          false
                         )
                       }
-                      disabled={actionLoading === "add_note"}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                      disabled={actionLoading === "clear_payment_methods" || !user?.savedPaymentMethods || user.savedPaymentMethods.length === 0}
+                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-colors disabled:opacity-50"
                     >
-                      <MessageSquare className="w-5 h-5 text-purple-600" />
-                      <span className="text-xs font-medium text-gray-700">Add Note</span>
+                      <CreditCard className="w-5 h-5 text-orange-600" />
+                      <span className="text-xs font-medium text-gray-700">Clear Payment Methods</span>
                     </button>
 
                     <button
