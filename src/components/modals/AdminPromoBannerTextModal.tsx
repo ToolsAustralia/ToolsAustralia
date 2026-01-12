@@ -25,7 +25,7 @@ import type {
   PromoBannerTextRecurrencePattern,
 } from "@/types/admin";
 import DateRangeCalendar from "@/components/admin/DateRangeCalendar";
-import { convertUTCToAEST } from "@/utils/common/timezone";
+import { convertUTCToAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
 
 interface AdminPromoBannerTextModalProps {
   isOpen: boolean;
@@ -152,6 +152,27 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // Helper function to convert Date object to AEST date string
+  // DateRangeCalendar creates dates using new Date(year, month, day) which creates
+  // dates in the browser's local timezone. We extract the date components the user
+  // selected (using local date methods) and treat them as AEST dates.
+  const convertDateToAESTISO = (date: Date | null): string | undefined => {
+    if (!date) return undefined;
+
+    // DateRangeCalendar creates dates in browser's local timezone using new Date(year, month, day)
+    // Extract date components using local methods (getFullYear, getMonth, getDate)
+    // These represent what the user actually selected
+    const selectedYear = date.getFullYear();
+    const selectedMonth = date.getMonth() + 1; // getMonth() returns 0-11
+    const selectedDay = date.getDate();
+
+    // Now treat these selected date components as if they were in AEST/AEDT
+    // and create the proper UTC date representing AEST midnight
+    const aestDateUTC = createAESTDateAsUTC(selectedYear, selectedMonth, selectedDay, 0, 0);
+
+    return aestDateUTC.toISOString();
+  };
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,8 +189,8 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
         const updateData: UpdatePromoBannerTextPayload = {
           text: formData.text.trim(),
           scheduleType: formData.scheduleType,
-          startDate: formData.startDate ? formData.startDate.toISOString() : undefined,
-          endDate: formData.endDate ? formData.endDate.toISOString() : undefined,
+          startDate: convertDateToAESTISO(formData.startDate),
+          endDate: convertDateToAESTISO(formData.endDate),
           recurrencePattern: formData.recurrencePattern,
           description: formData.description.trim() || undefined,
           isActive: formData.isActive,
@@ -181,8 +202,8 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
         const createData: CreatePromoBannerTextPayload = {
           text: formData.text.trim(),
           scheduleType: formData.scheduleType,
-          startDate: formData.startDate ? formData.startDate.toISOString() : undefined,
-          endDate: formData.endDate ? formData.endDate.toISOString() : undefined,
+          startDate: convertDateToAESTISO(formData.startDate),
+          endDate: convertDateToAESTISO(formData.endDate),
           recurrencePattern: formData.recurrencePattern,
           description: formData.description.trim() || undefined,
           isActive: formData.isActive,

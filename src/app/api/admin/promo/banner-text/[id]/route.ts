@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { PromoBannerTextService } from "@/services/admin/PromoBannerTextService";
-import { convertUTCToAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
+import { convertUTCToAEST } from "@/utils/common/timezone";
 import { z } from "zod";
 import mongoose from "mongoose";
 import type { PromoBannerText, UpdatePromoBannerTextPayload } from "@/types/admin";
@@ -63,27 +63,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const data = validationResult.data;
 
-    // Convert dates: Extract date components from ISO string and create as AEST dates
-    // Frontend sends ISO strings representing AEST dates, we extract components and recreate as AEST
-    const startDateUTC = data.startDate 
-      ? (() => {
-          const date = new Date(data.startDate);
-          const year = date.getUTCFullYear();
-          const month = date.getUTCMonth() + 1; // getUTCMonth() returns 0-11
-          const day = date.getUTCDate();
-          return createAESTDateAsUTC(year, month, day, 0, 0);
-        })()
-      : undefined;
-
-    const endDateUTC = data.endDate 
-      ? (() => {
-          const date = new Date(data.endDate);
-          const year = date.getUTCFullYear();
-          const month = date.getUTCMonth() + 1;
-          const day = date.getUTCDate();
-          return createAESTDateAsUTC(year, month, day, 0, 0);
-        })()
-      : undefined;
+    // Frontend now sends ISO strings representing AEST dates (already converted)
+    // We can use them directly as they represent AEST dates converted to UTC
+    const startDateUTC = data.startDate ? new Date(data.startDate) : undefined;
+    const endDateUTC = data.endDate ? new Date(data.endDate) : undefined;
 
     const service = new PromoBannerTextService();
     const updatedText = await service.updateBannerText(id, {
