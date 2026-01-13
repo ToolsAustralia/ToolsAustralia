@@ -570,9 +570,28 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         webhookLog("error", `❌ Missing packageId in one-time payment metadata: ${paymentIntent.id}`);
         return false;
       }
+      
+      // ✅ RESILIENT: Attempt to retrieve entriesCount from package data if missing in metadata
       if (!paymentIntent.metadata.entriesCount) {
-        webhookLog("error", `❌ Missing entriesCount in one-time payment metadata: ${paymentIntent.id}`);
-        return false;
+        webhookLog("warn", `⚠️ Missing entriesCount in metadata, attempting to retrieve from package data`);
+        
+        const packageId = paymentIntent.metadata.packageId;
+        if (packageId) {
+          const packageData = getPackageById(packageId);
+          if (packageData?.totalEntries || packageData?.entriesPerMonth) {
+            // Use totalEntries for one-time packages, entriesPerMonth for subscription packages
+            const entriesCount = packageData.totalEntries || packageData.entriesPerMonth || 0;
+            // Update metadata object (create a mutable copy)
+            paymentIntent.metadata.entriesCount = String(entriesCount);
+            webhookLog("info", `✅ Retrieved entriesCount from package data: ${paymentIntent.metadata.entriesCount}`);
+          }
+        }
+        
+        // Only fail if we couldn't retrieve entriesCount from package data
+        if (!paymentIntent.metadata.entriesCount) {
+          webhookLog("error", `❌ Missing entriesCount in one-time payment metadata and package lookup failed: ${paymentIntent.id}`);
+          return false;
+        }
       }
 
       webhookLog("info", `📋 One-time payment details:`, {
@@ -1094,15 +1113,28 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   try {
     webhookLog("info", `Processing subscription created: ${subscription.id}`);
-    // Find user by customer ID
+    
+    // ✅ RACE CONDITION HANDLING: Find user by customer ID with retry logic
+    // This handles cases where the webhook fires before the user record is saved to the database
+    // The invoice.payment_succeeded webhook will handle the actual activation, so this is non-critical
     let user;
-    if (subscription.customer) {
-      const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
-      user = await User.findOne({ stripeCustomerId: customerId });
+    let retries = 3;
+    while (!user && retries > 0) {
+      if (subscription.customer) {
+        const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+        user = await User.findOne({ stripeCustomerId: customerId });
+      }
+      
+      if (!user && retries > 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms delay
+        retries--;
+      } else {
+        break;
+      }
     }
 
     if (!user) {
-      webhookLog("error", `User not found for subscription: ${subscription.id}`);
+      webhookLog("warn", `User not found for subscription: ${subscription.id} (race condition - invoice.payment_succeeded will handle activation)`);
       return;
     }
 

@@ -57,6 +57,9 @@ export interface PixelPurchaseParams {
   // Alternative: Direct parameters (for flexibility)
   clientIpAddress?: string;
   clientUserAgent?: string;
+  // A/B Testing fields (optional)
+  experimentId?: string;
+  variantId?: string;
 }
 
 /**
@@ -94,6 +97,8 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       requestContext,
       clientIpAddress,
       clientUserAgent,
+      experimentId,
+      variantId,
     } = params;
 
     // Generate unique event ID for deduplication
@@ -120,6 +125,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       user_id: userId,
       user_email: userEmail,
       platform: "tools-australia",
+      // A/B Testing metadata (if provided)
+      ...(experimentId && { experiment_id: experimentId }),
+      ...(variantId && { variant_id: variantId }),
     };
 
     // 1. Track Browser Pixel (client-side) - only if in browser context
@@ -196,6 +204,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
           content_ids: content_ids || (packageId ? [packageId] : []),
           num_items: num_items || 1,
           content_name: packageName,
+          // A/B Testing metadata (if provided)
+          ...(experimentId && { experiment_id: experimentId }),
+          ...(variantId && { variant_id: variantId }),
         },
         event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };

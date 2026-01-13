@@ -23,6 +23,9 @@ export interface IPaymentEvent extends Document {
   };
   processedBy: "api" | "webhook";
   timestamp: Date;
+  // A/B Testing fields (optional)
+  experimentId?: string;
+  variantId?: string;
 }
 
 const PaymentEventSchema = new Schema<IPaymentEvent>(
@@ -85,6 +88,15 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
       default: Date.now,
       index: true, // For time-based queries
     },
+    // A/B Testing fields (optional)
+    experimentId: {
+      type: String,
+      required: false,
+    },
+    variantId: {
+      type: String,
+      required: false,
+    },
   },
   {
     timestamps: false, // We use custom timestamp field
@@ -99,6 +111,8 @@ PaymentEventSchema.index({ paymentIntentId: 1, eventType: 1 }, { unique: true })
 // Other indexes for efficient queries
 PaymentEventSchema.index({ userId: 1, timestamp: -1 });
 PaymentEventSchema.index({ packageType: 1, timestamp: -1 });
+// A/B Testing analytics index
+PaymentEventSchema.index({ experimentId: 1, variantId: 1 });
 
 // ✅ CRITICAL: Clear cached model to ensure schema updates (especially enum changes) are applied
 // This is necessary when enum values like "RefundProcessed" and "BenefitsReversed" are added

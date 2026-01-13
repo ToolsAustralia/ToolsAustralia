@@ -17,12 +17,14 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
+import { VariantConfig } from "@/models/ab-testing/Variant";
 
 interface MembershipSectionProps {
   title?: string;
   padding?: string;
   titleColor?: string;
   onPlanSelect?: (plan: LocalMembershipPlan) => void;
+  variantConfig?: VariantConfig["packages"]; // Optional variant config for packages
 }
 
 // Helper function to extract gradient colors for rounded borders
@@ -125,6 +127,7 @@ export default function MembershipSection({
   padding = "py-12 sm:py-16 lg:py-20",
   titleColor = "text-black",
   onPlanSelect,
+  variantConfig,
 }: MembershipSectionProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -400,10 +403,38 @@ export default function MembershipSection({
       return plan;
     });
 
+    // Apply variant config if provided (reorder, highlight, hide)
+    let variantAdjustedPlans = [...finalPlans];
+    
+    if (variantConfig) {
+      try {
+        // Filter out hidden packages
+        if (variantConfig.hidePackages && variantConfig.hidePackages.length > 0) {
+          variantAdjustedPlans = variantAdjustedPlans.filter(
+            (plan) => !variantConfig.hidePackages!.includes(plan.id)
+          );
+        }
+
+        // Reorder packages if displayOrder is provided
+        if (variantConfig.displayOrder && variantConfig.displayOrder.length > 0) {
+          const orderMap = new Map(variantConfig.displayOrder.map((id, index) => [id, index]));
+          variantAdjustedPlans.sort((a, b) => {
+            const aIndex = orderMap.get(a.id) ?? Infinity;
+            const bIndex = orderMap.get(b.id) ?? Infinity;
+            return aIndex - bIndex;
+          });
+        }
+      } catch (error) {
+        // Gracefully handle errors - fall back to default order
+        console.error("Error applying variant config to packages:", error);
+        variantAdjustedPlans = finalPlans;
+      }
+    }
+
     console.log(
       "🔍 Final converted plans:",
-      finalPlans.length,
-      finalPlans.map((p) => ({
+      variantAdjustedPlans.length,
+      variantAdjustedPlans.map((p) => ({
         id: p.id,
         name: p.name,
         entries: p.metadata?.entriesCount,
@@ -411,8 +442,13 @@ export default function MembershipSection({
         promoMultiplier: p.metadata?.promoMultiplier,
       }))
     );
-    return finalPlans;
+    return variantAdjustedPlans;
   })();
+  
+  // Check if a plan should be highlighted (from variant config)
+  const isHighlighted = (planId: string): boolean => {
+    return variantConfig?.highlightPackage === planId;
+  };
 
   return (
     <section id="membership" className={`${padding} w-full overflow-visible`}>
@@ -531,10 +567,13 @@ export default function MembershipSection({
                     const isLastCard = index === membershipPlans.length - 1;
                     const isOddCount = membershipPlans.length % 2 !== 0;
                     const shouldCenterLastCard = isTwoColumn && isLastCard && isOddCount;
+                    const highlighted = isHighlighted(plan.id);
                     return (
                       <div
                         key={plan.id}
                         className={`relative ${
+                          highlighted ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105" : ""
+                        } ${
                           shouldCenterLastCard
                             ? "col-span-2 justify-self-center w-[calc(50%-0.125rem)] sm:w-[calc(50%-1rem)]"
                             : "w-full"
@@ -545,7 +584,9 @@ export default function MembershipSection({
                             ? "h-[320px] sm:h-[340px]"
                             : "h-[480px]"
                         } rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 lg:hover:scale-105 lg:hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible ${
-                          isCurrentSubscription(plan)
+                          highlighted
+                            ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105"
+                            : isCurrentSubscription(plan)
                             ? "ring-4 ring-green-400 ring-opacity-60 shadow-green-500/30"
                             : plan.isPopular
                             ? "ring-4 ring-gray-400 ring-opacity-60 shadow-gray-500/30"
@@ -1080,11 +1121,14 @@ export default function MembershipSection({
           {membershipPlans.length > 0 ? (
             membershipPlans.map((plan) => {
               const colorScheme = getPackageColorScheme(plan.id);
+              const highlighted = isHighlighted(plan.id);
               return (
                 <div
                   key={plan.id}
                   className={`relative w-[290px] max-w-[320px] h-[520px] rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible isolate ${
-                    isCurrentSubscription(plan)
+                    highlighted
+                      ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105"
+                      : isCurrentSubscription(plan)
                       ? "ring-4 ring-green-400 ring-opacity-60 shadow-green-500/30"
                       : plan.isPopular
                       ? "ring-4 ring-gray-400 ring-opacity-60 shadow-gray-500/30"

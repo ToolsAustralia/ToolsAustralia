@@ -8,6 +8,8 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { convertUTCToAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
 
 interface PromoHeroProps {
   initialPromo?: ServerPromo | null;
@@ -20,6 +22,10 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   const { data: activePromo } = usePromoByType("membership-packages");
   const heroRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
+  
+  // Get variant config from context
+  const { experimentId, variantId, variantConfig } = useVariantContext();
+  const { trackEvent } = useExperimentTracking();
 
   // Use initial data if available, otherwise fall back to fetched data
   const promo = initialPromo || activePromo;
@@ -29,6 +35,16 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   const resolvedMultiplier = useResolvedMultiplier("membership-packages", "display");
 
   const handleEnterNow = () => {
+    // Track CTA click event if experiment is active
+    if (experimentId && variantId) {
+      trackEvent(experimentId, variantId, "click", {
+        element: "hero_cta",
+      }).catch((error) => {
+        // Silently fail - tracking should not break user experience
+        console.error("Error tracking CTA click:", error);
+      });
+    }
+    
     // Shared handler ensures the membership modal opens via the global event.
     openEntryFlow({ openLocalModal: false });
   };
@@ -59,13 +75,18 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
     return null;
   };
 
-  // Conditionally render hero image based on draw date proximity or active promo multiplier
-  // Priority: Draw date (today/tomorrow) > multiplier-based images
-  // 10x → x10 entries.webp, 5x → x5 entries.png, 3x → x3 entries.png, no promo → $20.png
+  // Conditionally render hero image based on variant config, draw date, or active promo multiplier
+  // Priority: Variant config > Draw date (today/tomorrow) > multiplier-based images
+  // 10x → x10 entries.webp, 5x → x5 entries.webp, 3x → x3 entries.webp, no promo → $20.png
   const getHeroImageSrc = () => {
+    // Priority 1: Variant config override
+    if (variantConfig?.hero?.imageSrc) {
+      return variantConfig.hero.imageSrc;
+    }
+
     const drawStatus = getDrawDateStatus();
 
-    // If draw is today or tomorrow, use date-based images
+    // Priority 2: If draw is today or tomorrow, use date-based images
     if (drawStatus === "tomorrow") {
       return "/images/background/promo/drawn tomorrow.webp";
     }
@@ -73,7 +94,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       return "/images/background/promo/drawn tonight.webp";
     }
 
-    // Otherwise, fall back to multiplier-based logic
+    // Priority 3: Fall back to multiplier-based logic
     // Use resolved multiplier (includes alternating multiplier if no active promo)
     switch (resolvedMultiplier) {
       case 10:
@@ -90,6 +111,12 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   };
 
   const heroImageSrc = getHeroImageSrc();
+  
+  // Get CTA text from variant config or use default
+  const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";
+  
+  // Get CTA style from variant config
+  const ctaStyle = variantConfig?.hero?.ctaStyle;
 
   if (isLoading) {
     return (
@@ -127,8 +154,14 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
         />
       </div>
 
-      {/* Hero Content (optional title or info can go here) */}
-      <div className="relative z-20 w-full text-center"></div>
+      {/* Hero Content - Optional messaging overlay from variant config */}
+      {variantConfig?.hero?.messaging && (
+        <div className="relative z-20 w-full text-center px-4">
+          <p className="text-white text-lg sm:text-xl font-bold drop-shadow-lg">
+            {variantConfig.hero.messaging}
+          </p>
+        </div>
+      )}
 
       {/* Elevated ENTER NOW button - Absolutely positioned at bottom */}
       {/* Positioned above the rounded bottom curve with adequate clearance */}
@@ -138,9 +171,13 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
           className="group relative inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white 
                       bg-gradient-to-br from-red-600 via-red-700 to-red-800
                       backdrop-blur-lg transition-all duration-300 hover:scale-110 animate-pulse-button"
-          style={{ border: "3px solid #ee4927" }}
+          style={{
+            border: "3px solid #ee4927",
+            ...(ctaStyle?.backgroundColor && { backgroundColor: ctaStyle.backgroundColor }),
+            ...(ctaStyle?.textColor && { color: ctaStyle.textColor }),
+          }}
         >
-          <span className="relative z-10">ENTER NOW</span>
+          <span className="relative z-10">{ctaText}</span>
 
           {/* Expanding and fading pulse animation rings with complementary background */}
           {/* First pulse */}

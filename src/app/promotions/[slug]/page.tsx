@@ -36,6 +36,9 @@ import { getPrizeBySlug, listPrizes } from "@/config/prizes";
 import { getActivePromos } from "@/utils/database/queries/promo-queries";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
+import mongoose from "mongoose";
+import ExperimentService from "@/services/ab-testing/ExperimentService";
+import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -124,38 +127,45 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
     notFound();
   }
 
-  // Fetch promo and major draw data server-side in parallel
-  const [activePromos, majorDraw] = await Promise.all([
+  // Fetch promo, major draw, and A/B testing experiment data server-side in parallel
+  const [activePromos, majorDraw, activeExperiment] = await Promise.all([
     getActivePromos().catch(() => []), // Gracefully handle errors
     getCurrentMajorDrawServer().catch(() => null), // Gracefully handle errors
+    ExperimentService.getActiveExperimentForSlug(slug).catch(() => null), // Gracefully handle errors
   ]);
 
   // Extract promo data for components
   const membershipPromo = activePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = activePromos.find((p) => p.type === "one-time-packages") || null;
 
-  // Determine hero image for preloading
+  // Determine hero image for preloading (will be overridden by variant config if present)
   const heroImageSrc = getHeroImageSrc(membershipPromo?.multiplier);
+
+  // Get experiment ID for variant assignment
+  const experimentId = activeExperiment?._id 
+    ? (activeExperiment._id instanceof mongoose.Types.ObjectId ? activeExperiment._id.toString() : String(activeExperiment._id))
+    : null;
 
   return (
     <>
       {/* Preload hero image for faster LCP */}
       <link rel="preload" as="image" href={heroImageSrc} imageSizes="100vw" />
 
-      <div className="min-h-screen bg-white w-full overflow-hidden scroll-smooth">
-        <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
+      <VariantAssignmentWrapper experimentId={experimentId}>
+        <div className="min-h-screen bg-white w-full overflow-hidden scroll-smooth">
+          <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
-        <main className="w-full overflow-hidden ">
-          {/* Ensure hero + brands share the first mobile viewport for better context */}
-          <div className="flex flex-col  lg:min-h-0 w-full ">
-            <PromoHero initialPromo={membershipPromo} initialMajorDraw={majorDraw} />
-            <BrandsShowcase />
-          </div>
+          <main className="w-full overflow-hidden ">
+            {/* Ensure hero + brands share the first mobile viewport for better context */}
+            <div className="flex flex-col  lg:min-h-0 w-full ">
+              <PromoHero initialPromo={membershipPromo} initialMajorDraw={majorDraw} />
+              <BrandsShowcase />
+            </div>
 
-          {/* Lazy load below-fold components */}
-          <Suspense fallback={<div className="min-h-[400px]" />}>
-            <PromoPackages />
-          </Suspense>
+            {/* Lazy load below-fold components */}
+            <Suspense fallback={<div className="min-h-[400px]" />}>
+              <PromoPackages />
+            </Suspense>
 
           <Suspense fallback={<div className="min-h-[600px]" />}>
             <PrizeShowcase slug={prize.slug} />
@@ -180,6 +190,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
 
         <FloatingGetEntriesButton />
       </div>
+      </VariantAssignmentWrapper>
     </>
   );
 }

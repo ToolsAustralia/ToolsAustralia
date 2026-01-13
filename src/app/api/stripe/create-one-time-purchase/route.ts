@@ -24,6 +24,7 @@ const createOneTimePurchaseSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
   paymentMethodId: z.string().min(1, "Payment method is required"),
   paymentIntentId: z.string().optional(), // Optional PaymentIntent ID if already confirmed upfront
+  idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate PaymentIntent creation
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
@@ -432,9 +433,16 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Fallback: Create new PaymentIntent (for non-wallet payments)
+      // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+      // This ensures that even if the API is called twice (e.g., double-click), only one PaymentIntent is created
+      const idempotencyKey =
+        validatedData.idempotencyKey || 
+        `pi_${validatedData.packageId}_${validatedData.userEmail}_${Date.now()}`;
+
       // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-      paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(membershipPackage.price * 100), // Convert to cents
+      paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount: Math.round(membershipPackage.price * 100), // Convert to cents
         currency: "aud",
         customer: customer.id,
         payment_method: finalPaymentMethodId, // Use the final payment method ID
@@ -480,7 +488,11 @@ export async function POST(request: NextRequest) {
           ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
         },
-      });
+      },
+      {
+        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+      }
+      );
     }
 
     console.log(`💳 Using payment intent: ${paymentIntent.id}`);

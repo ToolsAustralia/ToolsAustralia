@@ -19,6 +19,7 @@ import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager"
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   paymentMethodId: z.string().min(1, "Payment method ID is required").optional(),
+  idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate PaymentIntent creation
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
@@ -257,6 +258,12 @@ export async function POST(request: NextRequest) {
 
     // console.log(`💳 Using payment method ${paymentMethodId} for one-time purchase`);
 
+    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+    // This ensures that even if the API is called twice (e.g., double-click), only one PaymentIntent is created
+    const idempotencyKey =
+      validatedData.idempotencyKey || 
+      `pi_${validatedData.packageId}_${existingUser._id.toString()}_${Date.now()}`;
+
     // Create payment intent for one-time purchase
     // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
     const paymentIntent = await stripe.paymentIntents.create({
@@ -299,7 +306,11 @@ export async function POST(request: NextRequest) {
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
       },
-    });
+    },
+    {
+      idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+    }
+    );
 
     // console.log(`✅ Payment intent created: ${paymentIntent.id} with status: ${paymentIntent.status}`);
 

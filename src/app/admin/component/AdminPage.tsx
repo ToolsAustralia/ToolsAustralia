@@ -30,6 +30,7 @@ import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
+import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import {
   Users,
   DollarSign,
@@ -566,6 +567,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "submissions" && "Partner applications and contact form submissions"}
                   {selectedTab === "users" && "User account management and administration"}
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
+                  {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
                 </p>
               </div>
             </div>
@@ -966,6 +968,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* AFFILIATES TAB */}
           {selectedTab === "affiliates" && <AffiliatesManagement />}
+
+          {/* A/B TESTING TAB */}
+          {selectedTab === "ab-testing" && <ABTestingManagement />}
 
           {/* FACEBOOK ADS TAB */}
           {selectedTab === "facebook-ads" && <FacebookAdsManagement />}

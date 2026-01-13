@@ -13,6 +13,7 @@ import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
 import { getAlternatingDefaultText } from "@/utils/promo-banner/default-text-manager";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
 // Helper function to get current timezone abbreviation (AEST or AEDT)
 const getTimezoneAbbr = (): string => {
@@ -56,6 +57,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
+  
+  // Get variant config from context
+  const { variantConfig } = useVariantContext();
 
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
@@ -352,8 +356,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
   }, []);
 
-  // Resolve multiplier with priority: Active Promo > Alternating > null (no promo)
+  // Resolve multiplier with priority: Variant config > Active Promo > Alternating > null (no promo)
   const multiplier = useMemo(() => {
+    // Priority 0: Variant config override (highest priority)
+    if (variantConfig?.banner?.multiplier !== undefined) {
+      return variantConfig.banner.multiplier;
+    }
+
     // Priority 1: Active promo
     if (activePromo?.multiplier) {
       if (process.env.NODE_ENV === "development") {
@@ -390,7 +399,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       });
     }
     return null;
-  }, [activePromo?.multiplier, alternatingMultiplier, currentAlternatingMultipliers, activeTab]);
+  }, [variantConfig?.banner?.multiplier, activePromo?.multiplier, alternatingMultiplier, currentAlternatingMultipliers, activeTab]);
 
   // Helper function to determine if draw is today or tomorrow (in AEST)
   const getDrawDateStatus = (): "today" | "tomorrow" | null => {
@@ -420,11 +429,17 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
   // Memoize badge text calculation for performance and reactivity
   // Priority order:
-  // 1. Draw status ("DRAWN TONIGHT" / "DRAWN TOMORROW") - Highest priority
+  // 0. Variant config override (highest priority)
+  // 1. Draw status ("DRAWN TONIGHT" / "DRAWN TOMORROW")
   // 2. Active scheduled text (from service layer, resolved in AEST)
   // 3. Alternating default texts ("BIGGEST BONUS" / "FIRST 500 PEOPLE")
   const badgeText = useMemo(() => {
-    // Priority 1: Draw status (highest priority)
+    // Priority 0: Variant config override (highest priority)
+    if (variantConfig?.banner?.badgeText) {
+      return variantConfig.banner.badgeText;
+    }
+
+    // Priority 1: Draw status
     const drawStatus = getDrawDateStatus();
     if (drawStatus === "today") return "DRAWN TONIGHT";
     if (drawStatus === "tomorrow") return "DRAWN TOMORROW";
@@ -434,7 +449,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
     // Priority 3: Alternating default fallback
     return alternatingDefault;
-  }, [currentDraw?.drawDate, activeScheduledText, alternatingDefault]);
+  }, [variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault]);
 
   // Memoize font size calculation
   const fontSize = useMemo(() => calculateFontSize(badgeText, isMobile), [badgeText, isMobile]);
@@ -619,6 +634,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
             {/* Right Side - Draw Date Text or Countdown */}
             {(() => {
+              // Check if countdown should be hidden (variant config override)
+              const showCountdown = variantConfig?.banner?.showCountdown !== false; // Default to true unless explicitly false
+              
+              if (!showCountdown) {
+                return null; // Hide countdown if variant config says so
+              }
+
               const drawStatus = getDrawDateStatus();
               const drawTime = getDrawTimeText();
 

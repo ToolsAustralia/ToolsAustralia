@@ -4,6 +4,7 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
 import { recordReferralPurchase } from "@/lib/referral";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -39,6 +40,10 @@ export async function POST(request: NextRequest) {
     // console.log("🔌 Connecting to database...");
     await connectDB();
     // console.log("✅ Database connected successfully");
+
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Store in payment metadata so webhook can use it for improved match quality
+    const requestContext = extractRequestContext(request);
 
     // console.log("📥 Parsing request body...");
     const body = await request.json();
@@ -136,6 +141,7 @@ export async function POST(request: NextRequest) {
 
     // Determine which customer to use
     let customer;
+    let canUsePaymentMethod = true;
 
     // First, check if we have a registered user with an existing Stripe customer
     if (registeredUser && registeredUser.stripeCustomerId) {
@@ -152,9 +158,19 @@ export async function POST(request: NextRequest) {
           });
           // console.log(`✅ Attached payment method to existing customer: ${customer.id}`);
         }
-      } catch (attachError) {
-        console.error("❌ Failed to attach payment method to customer:", attachError);
-        // Continue - payment method might already be attached or error is non-critical
+      } catch (attachError: unknown) {
+        // Check if error is due to payment method being "consumed" (used without attachment)
+        const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+        if (
+          errorMessage.includes("previously used without being attached") ||
+          errorMessage.includes("may not be used again")
+        ) {
+          console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused, will collect fresh payment method");
+          canUsePaymentMethod = false;
+        } else {
+          console.error("❌ Failed to attach payment method to customer:", attachError);
+          // Continue - payment method might already be attached or error is non-critical
+        }
       }
     } else {
       // For guest users or new users, get the customer ID from the payment method
@@ -200,11 +216,25 @@ export async function POST(request: NextRequest) {
           });
 
           // Attach payment method to the newly created customer
-          await stripe.paymentMethods.attach(finalPaymentMethodId, {
-            customer: customer.id,
-          });
-
-          // console.log(`✅ Created customer ${customer.id} and attached payment method`);
+          try {
+            await stripe.paymentMethods.attach(finalPaymentMethodId, {
+              customer: customer.id,
+            });
+            // console.log(`✅ Created customer ${customer.id} and attached payment method`);
+          } catch (attachError: unknown) {
+            // Check if error is due to payment method being "consumed" (used without attachment)
+            const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+            if (
+              errorMessage.includes("previously used without being attached") ||
+              errorMessage.includes("may not be used again")
+            ) {
+              console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused, will collect fresh payment method");
+              canUsePaymentMethod = false;
+            } else {
+              console.error("❌ Failed to attach payment method to customer:", attachError);
+              throw attachError; // Re-throw unexpected errors
+            }
+          }
 
           // If registered user exists, update them with the customer ID
           if (registeredUser) {
@@ -222,7 +252,8 @@ export async function POST(request: NextRequest) {
     // ✅ CRITICAL FIX: Only set default payment method for subscription creation (required by Stripe)
     // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
     // This prevents saving payment methods when payments fail due to insufficient funds
-    if (finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
+    // Only set default payment method if we can use the payment method (not consumed)
+    if (canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
       await stripe.customers.update(customer.id, {
         invoice_settings: {
           default_payment_method: finalPaymentMethodId,
@@ -275,7 +306,10 @@ export async function POST(request: NextRequest) {
           ],
           // ✅ Include default_payment_method so Stripe creates PaymentIntent immediately
           // Payment will still be collected via PaymentElement (not auto-paid)
-          default_payment_method: finalPaymentMethodId,
+          // Only set default_payment_method if we can use the payment method (not consumed)
+          ...(canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"
+            ? { default_payment_method: finalPaymentMethodId }
+            : {}),
           payment_behavior: "default_incomplete", // ✅ Stripe creates PaymentIntent automatically with correct amount
           // ✅ CRITICAL FIX: Do NOT save payment method automatically on subscription creation
           // Payment method will only be saved AFTER payment succeeds (handled by webhook)
@@ -289,6 +323,11 @@ export async function POST(request: NextRequest) {
             userEmail: validatedData.userEmail,
             ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
             ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+            // Store request context for Facebook CAPI (webhook will extract and use)
+            ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+            ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+            ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+            ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
           },
         },
         {
@@ -426,15 +465,25 @@ export async function POST(request: NextRequest) {
             isUpfrontPayment: "true", // ✅ Mark as upfront payment so webhook skips it
             ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
             ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+            // Store request context for Facebook CAPI (webhook will extract and use)
+            ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+            ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+            ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+            ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
           },
         });
 
-        // Update invoice metadata to track PaymentIntent (optional, but helps with tracking)
+        // Update invoice metadata to track PaymentIntent and request context (optional, but helps with tracking)
         if (latestInvoice.id) {
           await stripe.invoices.update(latestInvoice.id, {
             metadata: {
               ...(latestInvoice.metadata || {}),
               payment_intent_id: newPaymentIntent.id,
+              // Store request context for Facebook CAPI (webhook will extract and use)
+              ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+              ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+              ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+              ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
             },
           });
         }

@@ -25,6 +25,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
+import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
@@ -267,6 +268,17 @@ async function processPaymentBenefitsInternal(
           ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
         };
 
+        // Get user's active experiment assignment (non-blocking - don't fail if this errors)
+        let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+        try {
+          // Try to get experiment assignment from payment metadata or lookup
+          const slug = paymentMetadata?.type; // Could store slug in metadata
+          experimentAssignment = await getUserActiveExperimentAssignment(user._id.toString(), slug);
+        } catch (error) {
+          // Silently fail - experiment tracking should not block payment processing
+          console.error("Error getting experiment assignment for payment:", error);
+        }
+
         await PaymentEvent.create({
           _id: eventId,
           paymentIntentId,
@@ -278,6 +290,10 @@ async function processPaymentBenefitsInternal(
           data: paymentEventData,
           processedBy,
           timestamp: new Date(),
+          ...(experimentAssignment && {
+            experimentId: experimentAssignment.experimentId,
+            variantId: experimentAssignment.variantId,
+          }),
         });
         paymentEventCreated = true;
 
@@ -1120,6 +1136,16 @@ async function grantBenefits(
     try {
       // Log for debugging (can be enabled if needed)
       // console.log(`📊 Tracking Facebook Purchase event for ${packageData.packageType} purchase (billingReason: ${billingReason || "new purchase"})`);
+      // Get experiment assignment for this purchase (if available)
+      let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+      try {
+        const slug = paymentMetadata?.type; // Could store slug in metadata
+        experimentAssignment = await getUserActiveExperimentAssignment(user._id.toString(), slug);
+      } catch (error) {
+        // Silently fail - experiment tracking should not block pixel tracking
+        console.error("Error getting experiment assignment for pixel tracking:", error);
+      }
+
       await trackPixelPurchase({
         value: packageData.price,
         currency: "AUD",
@@ -1145,6 +1171,10 @@ async function grantBenefits(
         content_ids: packageData.packageId ? [packageData.packageId] : [],
         num_items: 1,
         requestContext: requestContext, // Pass request context for improved match quality
+        ...(experimentAssignment && {
+          experimentId: experimentAssignment.experimentId,
+          variantId: experimentAssignment.variantId,
+        }),
       });
       // console.log(`📊 Pixel tracking completed for ${packageData.packageType} purchase`);
     } catch (_pixelError) {
