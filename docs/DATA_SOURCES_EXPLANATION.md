@@ -21,8 +21,8 @@
   
 - **Fallback Source:** `FacebookAdsInsight` model (`metrics.revenue` field)
   - **Unit:** Stored in CENTS, converted to DOLLARS (÷ 100)
-  - **When:** Revenue attributed to ads via 28-day click attribution window
-  - **Note:** May include sales from previous days due to attribution window
+  - **When:** Revenue attributed to ads via 7-day click attribution window (Meta best practice 2024+)
+  - **Note:** May include sales from previous days due to attribution window (up to 7 days)
   - **Used only when:** PaymentEvent revenue is 0
 
 - **Strategy:** 
@@ -44,7 +44,7 @@
 - **Source:** Facebook Marketing API → `FacebookAdsInsight` model
 - **Storage:** Purchase count from Facebook's `actions` array
 - **Unit:** Integer (number of conversions)
-- **Note:** Uses 28-day click attribution window
+- **Note:** Uses 7-day click attribution window (Meta best practice 2024+)
 
 ### 6. **Impressions & Clicks** 👁️
 - **Source:** Facebook Marketing API → `FacebookAdsInsight` model

@@ -45,8 +45,8 @@ Aggregated: adSpend = 4507.42 (dollars)
 **Storage:**
 - Stored in **CENTS** in database
 - Converted to **DOLLARS** when aggregating (divide by 100)
-- Represents revenue attributed to ads via 28-day click attribution window
-- May include sales from previous days due to attribution window
+- Represents revenue attributed to ads via 7-day click attribution window (Meta best practice 2024+)
+- May include sales from previous days due to attribution window (up to 7 days)
 
 **Strategy:**
 1. Use PaymentEvent revenue as primary (actual sales on that day)
@@ -107,7 +107,7 @@ Profit: -$4007.42
 **Storage:**
 - Purchase count from Facebook's `actions` array
 - Integer value (number of conversions)
-- Uses 28-day click attribution window
+- Uses 7-day click attribution window (Meta best practice 2024+)
 
 **Query:**
 - Extracted from `insight.actions` where `action_type` is "purchase"
@@ -214,7 +214,7 @@ For single-day queries:
 
 ## Important Notes
 
-1. **Revenue Strategy**: PaymentEvent revenue is preferred because it represents actual sales on that day. Facebook ads revenue uses a 28-day attribution window and may include sales from previous days.
+1. **Revenue Strategy**: PaymentEvent revenue is preferred because it represents actual sales on that day. Facebook ads revenue uses a 7-day attribution window and may include sales from previous days (up to 7 days earlier).
 
 2. **No Double-Counting**: The system uses PaymentEvent revenue when available, and only falls back to Facebook ads revenue if PaymentEvent revenue is 0.
 
@@ -222,5 +222,5 @@ For single-day queries:
 
 4. **Currency Consistency**: All final metrics are in dollars for consistency, even though Facebook ads data is stored in cents.
 
-5. **Attribution Window**: Facebook ads conversions and revenue use a 28-day click attribution window, meaning they may attribute sales to ads that were clicked up to 28 days earlier.
+5. **Attribution Window**: Facebook ads conversions and revenue use a 7-day click attribution window (Meta best practice 2024+), meaning they may attribute sales to ads that were clicked up to 7 days earlier.
 

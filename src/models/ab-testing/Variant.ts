@@ -46,7 +46,6 @@ const VariantSchema = new Schema<IVariant>(
       type: Schema.Types.ObjectId,
       ref: "Experiment",
       required: [true, "Experiment ID is required"],
-      index: true,
     },
     name: {
       type: String,

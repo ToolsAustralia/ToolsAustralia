@@ -21,24 +21,20 @@ const VariantAssignmentSchema = new Schema<IVariantAssignment>(
       type: Schema.Types.ObjectId,
       ref: "Experiment",
       required: [true, "Experiment ID is required"],
-      index: true,
     },
     variantId: {
       type: Schema.Types.ObjectId,
       ref: "Variant",
       required: [true, "Variant ID is required"],
-      index: true,
     },
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: false,
-      index: true,
     },
     anonymousId: {
       type: String,
       required: false,
-      index: true,
       validate: {
         validator: function (value: string | undefined) {
           // If provided, must start with "anon_"

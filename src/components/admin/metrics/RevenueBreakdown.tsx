@@ -78,7 +78,7 @@ export function RevenueBreakdown({ metrics }: RevenueBreakdownProps) {
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Facebook-Attributed Revenue</h3>
-            <p className="text-sm text-gray-600">Revenue attributed to Facebook ads via 28-day click window</p>
+            <p className="text-sm text-gray-600">Revenue attributed to Facebook ads via 7-day click window</p>
           </div>
         </div>
         <div className="text-3xl font-bold text-gray-900">

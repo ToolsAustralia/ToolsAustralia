@@ -53,9 +53,10 @@ export async function fetchFacebookInsights(
   const baseUrl = `https://graph.facebook.com/${apiVersion}/${adAccountId}/insights`;
 
   // Build query parameters
-  // Use single attribution window (28d_click) to ensure accurate revenue reporting
-  // Multiple windows can cause duplicate counting or inconsistent data
-  // 28d_click is the standard attribution window that captures all conversions
+  // Use 7-day click attribution window (7d_click) - Meta's current best practice (2024+)
+  // 28-day window was deprecated in October 2020
+  // 7-day click balances accuracy with recency and aligns with Meta's default attribution model
+  // Single window prevents duplicate counting while maintaining accurate revenue reporting
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
@@ -65,7 +66,7 @@ export async function fetchFacebookInsights(
       until: dateRange.until,
     }),
     level: level,
-    action_attribution_windows: JSON.stringify(["28d_click"]), // Single window for accurate revenue
+    action_attribution_windows: JSON.stringify(["7d_click"]), // 7-day click attribution window (Meta best practice)
   });
 
   const url = `${baseUrl}?${params.toString()}`;

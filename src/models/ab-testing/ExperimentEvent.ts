@@ -26,19 +26,16 @@ const ExperimentEventSchema = new Schema<IExperimentEvent>(
       type: Schema.Types.ObjectId,
       ref: "Experiment",
       required: [true, "Experiment ID is required"],
-      index: true,
     },
     variantId: {
       type: Schema.Types.ObjectId,
       ref: "Variant",
       required: [true, "Variant ID is required"],
-      index: true,
     },
     eventType: {
       type: String,
       enum: ["page_view", "click", "conversion", "lead", "purchase", "other"],
       required: [true, "Event type is required"],
-      index: true,
     },
     userId: {
       type: Schema.Types.ObjectId,
@@ -58,7 +55,6 @@ const ExperimentEventSchema = new Schema<IExperimentEvent>(
       type: Date,
       default: Date.now,
       required: true,
-      index: true,
     },
   },
   {

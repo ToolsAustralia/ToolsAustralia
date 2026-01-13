@@ -26,7 +26,6 @@ const ExperimentHistorySchema = new Schema<IExperimentHistory>(
       type: Schema.Types.ObjectId,
       ref: "Experiment",
       required: [true, "Experiment ID is required"],
-      index: true,
     },
     action: {
       type: String,
@@ -46,7 +45,6 @@ const ExperimentHistorySchema = new Schema<IExperimentHistory>(
       type: Date,
       default: Date.now,
       required: true,
-      index: true,
     },
   },
   {
