@@ -17,6 +17,7 @@ import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import type { MiniDrawType } from "@/types/mini-draw";
+import { generateEventID } from "@/utils/tracking/facebook-helpers";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -361,7 +362,8 @@ export default function MiniDrawPackages({
           const currency = "AUD";
 
           // Generate EventID matching server-side format for deduplication
-          const eventID = `purchase_${paymentIntentId}_${Date.now()}`;
+          // Use generateEventID helper to ensure consistency with server-side format
+          const eventID = generateEventID("purchase", paymentIntentId);
 
           // Import trackFacebookEvent dynamically to avoid SSR issues
           const { trackFacebookEvent } = await import("@/components/FacebookPixel");
