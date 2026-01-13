@@ -107,7 +107,7 @@ export default function GiveawayDetails() {
     {
       icon: IdCard,
       title: "License Numbers",
-      description: "TP/04720 and NTP/15117",
+      description: "TP/04720 and NTP/15438",
       color: "text-red-500",
       bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
     },
