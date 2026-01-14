@@ -304,19 +304,39 @@ const StripeCardForm = React.forwardRef<
         }
 
         try {
-          // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmation
-          // This validates the form and prepares it for confirmation
-          const { error: submitError } = await elements.submit();
-
-          if (submitError) {
-            console.error("PaymentElement validation error:", submitError);
-            return { error: submitError.message || "Please complete all required fields." };
-          }
-
           const billingDetailsData = buildBillingDetails();
 
           // Handle PaymentIntent (for wallet payments with amount display)
           if (intentType === "payment") {
+            // ✅ FIX: For PaymentIntent (wallet payments), submit() may fail with wallet-specific errors
+            // We should still attempt confirmation as wallet payments handle validation differently
+            const submitResult = await elements.submit();
+            
+            // Check if this is a wallet payment error (google_pay.payment_exception, apple_pay.payment_exception)
+            // Wallet payment errors have specific codes or messages indicating wallet payment failures
+            const isWalletPaymentError = submitResult.error && (
+              submitResult.error.code === "google_pay.payment_exception" ||
+              submitResult.error.code === "apple_pay.payment_exception" ||
+              String(submitResult.error.type || "").toLowerCase().includes("google_pay") ||
+              String(submitResult.error.type || "").toLowerCase().includes("apple_pay") ||
+              submitResult.error.message?.toLowerCase().includes("google pay") ||
+              submitResult.error.message?.toLowerCase().includes("apple pay") ||
+              submitResult.error.message?.toLowerCase().includes("wallet") ||
+              submitResult.error.message?.toLowerCase().includes("payment_exception")
+            );
+
+            if (submitResult.error && !isWalletPaymentError) {
+              // Real validation error for card payments - block and return
+              console.error("PaymentElement validation error:", submitResult.error);
+              return { error: submitResult.error.message || "Please complete all required fields." };
+            }
+
+            // For wallet payment errors or if submit succeeded, proceed with confirmation
+            // Wallet payments may fail during submit but succeed during confirmation
+            if (isWalletPaymentError) {
+              console.warn("⚠️ Wallet payment error during submit, attempting confirmation anyway:", submitResult.error);
+            }
+
             const { paymentIntent, error } = await stripe.confirmPayment({
               elements,
               clientSecret,
@@ -330,6 +350,31 @@ const StripeCardForm = React.forwardRef<
 
             if (error) {
               console.error("Stripe PaymentIntent error:", error);
+              
+              // ✅ FIX: Provide better error messages for wallet payment failures
+              const errorCode = error.code || "";
+              const errorType = String(error.type || "").toLowerCase();
+              const errorMessage = error.message?.toLowerCase() || "";
+              
+              if (
+                errorCode === "google_pay.payment_exception" ||
+                errorType.includes("google_pay") ||
+                errorMessage.includes("google pay")
+              ) {
+                return { 
+                  error: "Google Pay failed to open. Please try again or use a different payment method. If the issue persists, try using a card payment instead." 
+                };
+              }
+              if (
+                errorCode === "apple_pay.payment_exception" ||
+                errorType.includes("apple_pay") ||
+                errorMessage.includes("apple pay")
+              ) {
+                return { 
+                  error: "Apple Pay failed to open. Please try again or use a different payment method. If the issue persists, try using a card payment instead." 
+                };
+              }
+              
               return { error: error.message || "Payment confirmation failed." };
             } else if (paymentIntent?.payment_method) {
               // ✅ CRITICAL FIX: For upfront PaymentIntents, cancel immediately without blocking
@@ -359,7 +404,14 @@ const StripeCardForm = React.forwardRef<
               throw new Error("Unexpected error during payment confirmation.");
             }
           } else {
-            // Handle SetupIntent (backward compatibility)
+            // Handle SetupIntent (backward compatibility - card-only, always validate)
+            const { error: submitError } = await elements.submit();
+
+            if (submitError) {
+              console.error("PaymentElement validation error:", submitError);
+              return { error: submitError.message || "Please complete all required fields." };
+            }
+
             const { setupIntent, error } = await stripe.confirmSetup({
               elements,
               clientSecret,

@@ -105,9 +105,10 @@ ExperimentDailyMetricsSchema.index(
 );
 
 // Indexes for efficient queries
+// Note: the `date` field already has `index: true` in the schema definition.
+// We avoid adding a separate `{ date: 1 }` index here to prevent duplicate index warnings.
 ExperimentDailyMetricsSchema.index({ experimentId: 1, date: 1 });
 ExperimentDailyMetricsSchema.index({ variantId: 1, date: 1 });
-ExperimentDailyMetricsSchema.index({ date: 1 });
 
 const ExperimentDailyMetrics =
   mongoose.models.ExperimentDailyMetrics ||

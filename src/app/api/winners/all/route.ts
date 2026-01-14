@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
-// Import ensures MajorDraw model is registered before populate
+// Import ensures User & MajorDraw models are registered before populate
+import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
 import { Types } from "mongoose";
 import type { WinnerSummary } from "@/types/winner";
 
-// Suppress unused import warning - import is needed for model registration
+// Suppress unused import warning - imports are needed for model registration
+void User;
 void MajorDraw;
 
 // Helper to safely extract ObjectId string from populated or unpopulated fields
