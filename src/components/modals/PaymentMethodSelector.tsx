@@ -308,15 +308,40 @@ const StripeCardForm = React.forwardRef<
 
           // Handle PaymentIntent (for wallet payments with amount display)
           if (intentType === "payment") {
-            // ✅ CRITICAL FIX: DO NOT call elements.submit() for PaymentIntent/wallet payments
-            // Wallet payments (Google Pay/Apple Pay) require direct user interaction
-            // Calling submit() programmatically triggers "NotAllowedError: Delegation is not allowed without transient user activation"
-            // Stripe's confirmPayment() will handle wallet payments properly when triggered by user click
-            // Only validate card fields if user is using card payment (not wallet)
+            // ✅ CRITICAL: Stripe REQUIRES elements.submit() before confirmPayment()
+            // However, for wallet payments, submit() may return wallet-specific errors
+            // We need to call submit() to maintain user activation chain (called from button click)
+            // But proceed with confirmPayment() even if submit() fails with wallet errors
             
-            // Directly call confirmPayment - it will handle both card and wallet payments
-            // For card payments, Stripe will validate automatically
-            // For wallet payments, it will open the wallet UI on user interaction
+            const submitResult = await elements.submit();
+            
+            // Check if this is a wallet payment error (not a card validation error)
+            const isWalletPaymentError = submitResult.error && (
+              submitResult.error.code === "google_pay.payment_exception" ||
+              submitResult.error.code === "apple_pay.payment_exception" ||
+              String(submitResult.error.type || "").toLowerCase().includes("google_pay") ||
+              String(submitResult.error.type || "").toLowerCase().includes("apple_pay") ||
+              submitResult.error.message?.toLowerCase().includes("google pay") ||
+              submitResult.error.message?.toLowerCase().includes("apple pay") ||
+              submitResult.error.message?.toLowerCase().includes("wallet") ||
+              submitResult.error.message?.toLowerCase().includes("payment_exception") ||
+              submitResult.error.message?.toLowerCase().includes("unable to show")
+            );
+
+            // Block only if it's a real card validation error (not wallet payment error)
+            if (submitResult.error && !isWalletPaymentError) {
+              console.error("PaymentElement validation error:", submitResult.error);
+              return { error: submitResult.error.message || "Please complete all required fields." };
+            }
+
+            // For wallet payment errors, log but proceed - confirmPayment() will handle wallet payments
+            if (isWalletPaymentError) {
+              console.log("⚠️ Wallet payment error during submit (expected for wallet payments), proceeding with confirmPayment:", submitResult.error);
+            }
+
+            // ✅ CRITICAL: Must call confirmPayment() after submit() (Stripe requirement)
+            // For wallet payments, confirmPayment() will handle the wallet UI
+            // For card payments, confirmPayment() will process the validated card
             const { paymentIntent, error } = await stripe.confirmPayment({
               elements,
               clientSecret,
