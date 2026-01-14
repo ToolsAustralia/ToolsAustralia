@@ -226,6 +226,77 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       // Don't throw - continue with browser pixel tracking
     }
 
+    // ✅ Track purchase as experiment event (for A/B testing analytics)
+    // This ensures purchases are counted in conversion rates and analytics
+    // ✅ DEDUPLICATION: Uses orderId to prevent duplicate tracking
+    if (experimentId && variantId) {
+      try {
+        // Track both "purchase" and "conversion" events
+        // Purchase = specific purchase event
+        // Conversion = any conversion (includes purchases)
+        // ✅ Both events use the same orderId for deduplication
+        if (typeof window !== "undefined") {
+          // Client-side: Use fetch API
+          // Use Promise.allSettled to ensure both events are attempted even if one fails
+          const results = await Promise.allSettled([
+            fetch("/api/ab-testing/track", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                experimentId,
+                variantId,
+                eventType: "purchase",
+                metadata: {
+                  orderId, // ✅ Critical for deduplication
+                  value,
+                  currency,
+                  packageType,
+                  packageId,
+                  packageName,
+                },
+              }),
+            }),
+            fetch("/api/ab-testing/track", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                experimentId,
+                variantId,
+                eventType: "conversion",
+                metadata: {
+                  orderId, // ✅ Critical for deduplication
+                  value,
+                  currency,
+                  packageType,
+                  source: "purchase",
+                },
+              }),
+            }),
+          ]);
+
+          // Log any failures (but don't throw - tracking should not block purchase flow)
+          results.forEach((result, index) => {
+            if (result.status === "rejected") {
+              console.error(`Error tracking ${index === 0 ? "purchase" : "conversion"} event:`, result.reason);
+            } else if (!result.value.ok) {
+              const eventType = index === 0 ? "purchase" : "conversion";
+              // Check if it's a duplicate (which is OK)
+              result.value.json().then((data: { duplicate?: boolean }) => {
+                if (!data.duplicate) {
+                  console.warn(`Failed to track ${eventType} event:`, result.value.status);
+                }
+              }).catch(() => {
+                // Ignore JSON parse errors
+              });
+            }
+          });
+        }
+      } catch (error) {
+        // Silently fail - experiment tracking should not block purchase flow
+        console.error("Error tracking experiment events for purchase:", error);
+      }
+    }
+
     // 3. Track TikTok Pixel Purchase (client-side only)
     // ✅ FIX: Skip TikTok tracking on server-side - it's a client component function
     if (typeof window !== "undefined") {

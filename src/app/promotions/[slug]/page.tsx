@@ -39,6 +39,7 @@ import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import mongoose from "mongoose";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
+import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -146,12 +147,23 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
     ? (activeExperiment._id instanceof mongoose.Types.ObjectId ? activeExperiment._id.toString() : String(activeExperiment._id))
     : null;
 
+  // Attempt server-side variant assignment (optional optimization)
+  // If this fails, client-side fallback will handle it
+  const serverAssignment = experimentId 
+    ? await getServerVariantAssignment(experimentId, slug).catch(() => null)
+    : null;
+
   return (
     <>
       {/* Preload hero image for faster LCP */}
       <link rel="preload" as="image" href={heroImageSrc} imageSizes="100vw" />
 
-      <VariantAssignmentWrapper experimentId={experimentId}>
+      <VariantAssignmentWrapper 
+        experimentId={experimentId}
+        initialVariantId={serverAssignment?.variantId}
+        initialVariantConfig={serverAssignment?.variantConfig}
+        initialAnonymousId={serverAssignment?.anonymousId}
+      >
         <div className="min-h-screen bg-white w-full overflow-hidden scroll-smooth">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 

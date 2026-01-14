@@ -1,6 +1,14 @@
 import ExperimentEventRepository from "@/repositories/ab-testing/ExperimentEventRepository";
 import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssignmentRepository";
 import PaymentEvent from "@/models/PaymentEvent";
+import {
+  calculateStatisticalSignificance,
+  determineWinner,
+  calculateConfidenceInterval,
+  calculateLift,
+} from "@/utils/ab-testing/statistical-tests";
+import Experiment from "@/models/ab-testing/Experiment";
+import mongoose from "mongoose";
 
 interface DateRange {
   startDate: Date;
@@ -57,15 +65,23 @@ export class ExperimentAnalyticsService {
     }, 0);
 
     // Calculate derived metrics
-    const conversionRate = events.pageViews > 0 ? (events.conversions / events.pageViews) * 100 : 0;
+    // Conversion rate = (Conversions + Purchases) / Page Views * 100
+    // Purchases are also conversions, so we include them in the conversion count
+    const totalConversions = events.conversions + events.purchases;
+    const conversionRate = events.pageViews > 0 ? (totalConversions / events.pageViews) * 100 : 0;
+    
+    // CTR (Click-Through Rate) = Clicks / Page Views * 100
+    // This measures how many visitors clicked the CTA button
     const ctr = events.pageViews > 0 ? (events.clicks / events.pageViews) * 100 : 0;
+    
+    // Revenue per user = Total Revenue / Unique Visitors
     const revenuePerUser = events.uniqueVisitors > 0 ? revenue / events.uniqueVisitors : 0;
 
     return {
       pageViews: events.pageViews,
       uniqueVisitors: events.uniqueVisitors,
       clicks: events.clicks,
-      conversions: events.conversions,
+      conversions: totalConversions, // Include purchases in conversions
       leads: events.leads,
       purchases: events.purchases,
       revenue,
@@ -197,9 +213,14 @@ export class ExperimentAnalyticsService {
   }
 
   /**
-   * Calculate statistical significance (simplified chi-square test)
+   * Calculate statistical significance using chi-square test
+   * Compares control variant against all other variants
    */
-  async getStatisticalSignificance(experimentId: string, dateRange?: DateRange) {
+  async getStatisticalSignificance(
+    experimentId: string,
+    dateRange?: DateRange,
+    confidenceThreshold: number = 95
+  ) {
     const comparison = await this.getExperimentComparison(experimentId, dateRange);
 
     if (comparison.variants.length < 2) {
@@ -208,29 +229,133 @@ export class ExperimentAnalyticsService {
         pValue: 1,
         confidence: 0,
         message: "Need at least 2 variants for statistical significance",
+        lift: 0,
+        controlRate: 0,
+        variantRate: 0,
+        controlInterval: { lower: 0, upper: 0 },
+        variantInterval: { lower: 0, upper: 0 },
+        chiSquare: 0,
       };
     }
 
-    // Simplified chi-square test for conversion rates
-    // This is a basic implementation - production should use proper statistical libraries
-    const controlVariant = comparison.variants.find((v) => v.metrics.conversions > 0);
-    if (!controlVariant) {
+    // Get experiment to find control variant
+    const experiment = await Experiment.findById(experimentId).lean();
+    if (!experiment) {
+      throw new Error("Experiment not found");
+    }
+
+    // Find control variant (first variant or explicitly marked as control)
+    // For now, assume first variant is control
+    const controlVariant = comparison.variants[0];
+    const testVariant = comparison.variants[1];
+
+    if (!controlVariant || !testVariant) {
       return {
         significant: false,
         pValue: 1,
         confidence: 0,
-        message: "Insufficient data for statistical analysis",
+        message: "Need at least 2 variants with data",
+        lift: 0,
+        controlRate: 0,
+        variantRate: 0,
+        controlInterval: { lower: 0, upper: 0 },
+        variantInterval: { lower: 0, upper: 0 },
+        chiSquare: 0,
       };
     }
 
-    // For now, return placeholder values
-    // In production, use a proper statistical library like 'jstat' or 'ml-matrix'
+    // Calculate statistical significance
+    const result = calculateStatisticalSignificance(
+      controlVariant.metrics.uniqueVisitors,
+      controlVariant.metrics.conversions,
+      testVariant.metrics.uniqueVisitors,
+      testVariant.metrics.conversions,
+      confidenceThreshold
+    );
+
     return {
-      significant: false, // Would be calculated based on actual statistical test
-      pValue: 0.5, // Placeholder
-      confidence: 50, // Placeholder
-      message: "Statistical significance calculation requires proper statistical library",
+      significant: result.significant,
+      pValue: result.pValue,
+      confidence: result.confidence,
+      lift: result.lift,
+      controlRate: result.controlRate,
+      variantRate: result.variantRate,
+      controlInterval: result.controlInterval,
+      variantInterval: result.variantInterval,
+      chiSquare: result.chiSquare,
+      message: result.significant
+        ? `Results are statistically significant (${result.confidence.toFixed(2)}% confidence)`
+        : `Results are not statistically significant (${result.confidence.toFixed(2)}% confidence < ${confidenceThreshold}%)`,
     };
+  }
+
+  /**
+   * Calculate and cache statistical results for an experiment
+   * Updates the experiment's statisticalResults field
+   */
+  async calculateAndCacheStatisticalResults(
+    experimentId: string,
+    dateRange?: DateRange,
+    confidenceThreshold: number = 95
+  ) {
+    const significance = await this.getStatisticalSignificance(experimentId, dateRange, confidenceThreshold);
+
+    // Update experiment with cached results
+    await Experiment.findByIdAndUpdate(experimentId, {
+      $set: {
+        statisticalResults: {
+          pValue: significance.pValue,
+          confidence: significance.confidence,
+          significant: significance.significant,
+          lift: significance.lift,
+          confidenceInterval: significance.controlInterval, // Store control interval as primary
+          calculatedAt: new Date(),
+        },
+      },
+    });
+
+    return significance;
+  }
+
+  /**
+   * Determine winner for an experiment
+   * Uses statistical significance and lift to determine winner
+   */
+  async determineWinner(
+    experimentId: string,
+    dateRange?: DateRange,
+    confidenceThreshold: number = 95
+  ) {
+    const comparison = await this.getExperimentComparison(experimentId, dateRange);
+
+    if (comparison.variants.length < 2) {
+      return {
+        winner: "inconclusive" as const,
+        reason: "Need at least 2 variants for winner determination",
+        significance: null,
+      };
+    }
+
+    const controlVariant = comparison.variants[0];
+    const testVariant = comparison.variants[1];
+
+    if (!controlVariant || !testVariant) {
+      return {
+        winner: "inconclusive" as const,
+        reason: "Insufficient data for winner determination",
+        significance: null,
+      };
+    }
+
+    const result = determineWinner(
+      controlVariant.metrics.uniqueVisitors,
+      controlVariant.metrics.conversions,
+      testVariant.metrics.uniqueVisitors,
+      testVariant.metrics.conversions,
+      confidenceThreshold
+    );
+
+    return result;
   }
 
   /**

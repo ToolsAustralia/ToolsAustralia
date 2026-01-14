@@ -269,6 +269,7 @@ export default function MajorDrawTestControls() {
           onClick={() => setIsOpen(!isOpen)}
           className="bg-gray-900 hover:bg-gray-800 text-white rounded-full p-4 shadow-2xl border border-gray-700 transition-all duration-200 hover:scale-110 flex items-center gap-2"
           title="Major Draw Test Controls"
+          suppressHydrationWarning
         >
           <Beaker className="w-6 h-6 text-blue-400" />
           {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronUp className="w-4 h-4 text-gray-400" />}

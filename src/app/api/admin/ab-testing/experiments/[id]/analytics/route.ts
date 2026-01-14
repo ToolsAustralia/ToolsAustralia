@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import ExperimentAnalyticsService from "@/services/ab-testing/ExperimentAnalyticsService";
 import ExperimentStoppingRulesService from "@/services/ab-testing/ExperimentStoppingRulesService";
+import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -58,12 +59,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const significance = await ExperimentAnalyticsService.getStatisticalSignificance(experimentId, dateRange);
       const stoppingRules = await ExperimentStoppingRulesService.evaluateStoppingRules(experimentId);
 
+      // Get winner determination
+      const experiment = await ExperimentRepository.findById(experimentId);
+      const confidenceThreshold = experiment?.stoppingRules?.confidenceThreshold || 95;
+      const winner = await ExperimentAnalyticsService.determineWinner(experimentId, dateRange, confidenceThreshold);
+
       return NextResponse.json({
         success: true,
         data: {
           comparison,
           significance,
           stoppingRules,
+          winner,
         },
       });
     }

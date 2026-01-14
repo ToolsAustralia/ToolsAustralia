@@ -24,7 +24,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   const { openEntryFlow } = useMajorDrawEntryCta();
   
   // Get variant config from context
-  const { experimentId, variantId, variantConfig } = useVariantContext();
+  const { experimentId, variantId, variantConfig, isLoading: isVariantLoading } = useVariantContext();
   const { trackEvent } = useExperimentTracking();
 
   // Use initial data if available, otherwise fall back to fetched data
@@ -118,12 +118,14 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   // Get CTA style from variant config
   const ctaStyle = variantConfig?.hero?.ctaStyle;
 
+  // Show loading state only if major draw is loading (not variant - variant loads in background)
   if (isLoading) {
     return (
-      <section className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white pt-12 sm:pt-14">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600"> Are you our next winner?...</p>
+      <section className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 h-[50vh] min-h-[430px] lg:h-[83vh] lg:min-h-0">
+        {/* Skeleton loader matching final layout */}
+        <div className="main-banner-image absolute inset-0 z-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse" />
+        <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30">
+          <div className="h-12 sm:h-16 w-32 sm:w-48 bg-gray-400 rounded-full animate-pulse" />
         </div>
       </section>
     );
@@ -155,8 +157,9 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       </div>
 
       {/* Hero Content - Optional messaging overlay from variant config */}
+      {/* Use suppressHydrationWarning to prevent hydration mismatch when variant config loads */}
       {variantConfig?.hero?.messaging && (
-        <div className="relative z-20 w-full text-center px-4">
+        <div className="relative z-20 w-full text-center px-4" suppressHydrationWarning>
           <p className="text-white text-lg sm:text-xl font-bold drop-shadow-lg">
             {variantConfig.hero.messaging}
           </p>
@@ -176,8 +179,9 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
             ...(ctaStyle?.backgroundColor && { backgroundColor: ctaStyle.backgroundColor }),
             ...(ctaStyle?.textColor && { color: ctaStyle.textColor }),
           }}
+          suppressHydrationWarning
         >
-          <span className="relative z-10">{ctaText}</span>
+          <span className="relative z-10" suppressHydrationWarning>{ctaText}</span>
 
           {/* Expanding and fading pulse animation rings with complementary background */}
           {/* First pulse */}

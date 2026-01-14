@@ -65,11 +65,28 @@ export class VariantAssignmentService {
       return null;
     }
 
+    // Validate traffic split percentages sum to 100% (with tolerance for rounding)
+    const totalPercentage = variants.reduce((sum, v) => sum + v.trafficPercentage, 0);
+    const tolerance = 0.01; // Allow 0.01% tolerance for floating point rounding
+    if (Math.abs(totalPercentage - 100) > tolerance) {
+      console.warn(
+        `[A/B Testing] Traffic split validation failed for experiment ${experimentId}: ` +
+        `Total percentage is ${totalPercentage}% (expected 100%). ` +
+        `Variants: ${variants.map(v => `${v.name}: ${v.trafficPercentage}%`).join(", ")}`
+      );
+      // Continue with assignment but log warning
+    }
+
     // Create hash input: experimentId + userId/anonymousId
     const identifier = userId || anonymousId || "";
     const hashInput = `${experimentId}_${identifier}`;
     const hashValue = this.hash(hashInput);
     const bucket = hashValue % 100; // 0-99 bucket
+
+    // Handle edge case: bucket = 100 (should map to last variant)
+    // Since bucket is 0-99, bucket 99 should map to last variant if percentages sum correctly
+    // But we handle bucket = 100 explicitly for safety
+    const normalizedBucket = bucket === 100 ? 99 : bucket;
 
     // Map bucket to variant based on traffic split
     let cumulativePercentage = 0;
@@ -77,10 +94,20 @@ export class VariantAssignmentService {
 
     for (const variant of variants) {
       cumulativePercentage += variant.trafficPercentage;
-      if (bucket < cumulativePercentage) {
+      // Use <= for the last variant to ensure bucket 99 always maps somewhere
+      if (normalizedBucket < cumulativePercentage || (normalizedBucket === 99 && cumulativePercentage >= 100)) {
         selectedVariant = variant;
         break;
       }
+    }
+
+    // Log assignment for debugging (only in development)
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[A/B Testing] Variant assignment: experiment=${experimentId}, ` +
+        `bucket=${normalizedBucket}, variant=${selectedVariant.name} (${selectedVariant.trafficPercentage}%), ` +
+        `identifier=${identifier.substring(0, 8)}...`
+      );
     }
 
     // Create assignment

@@ -1,6 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Types
+export interface StoppingRules {
+  minConversions?: number;
+  confidenceThreshold?: number;
+  maxDuration?: number;
+  autoEndEnabled?: boolean;
+}
+
+export interface StatisticalResults {
+  pValue?: number;
+  confidence?: number;
+  significant?: boolean;
+  lift?: number;
+  confidenceInterval?: {
+    lower: number;
+    upper: number;
+  };
+  calculatedAt?: string;
+}
+
 export interface Experiment {
   _id: string;
   name: string;
@@ -8,6 +27,11 @@ export interface Experiment {
   slugTargets: string[];
   startDate?: string;
   endDate?: string;
+  stoppingRules?: StoppingRules;
+  winnerVariantId?: string;
+  endedReason?: "manual" | "date_reached" | "stopping_rule_met" | "auto_significant";
+  statisticalResults?: StatisticalResults;
+  archived?: boolean;
   createdBy: {
     _id: string;
     firstName?: string;
@@ -76,6 +100,7 @@ export interface CreateExperimentPayload {
   slugTargets: string[];
   startDate?: string;
   endDate?: string;
+  stoppingRules?: StoppingRules;
 }
 
 export interface UpdateExperimentPayload {
@@ -84,6 +109,7 @@ export interface UpdateExperimentPayload {
   slugTargets?: string[];
   startDate?: string;
   endDate?: string;
+  stoppingRules?: StoppingRules;
 }
 
 export interface CreateVariantPayload {

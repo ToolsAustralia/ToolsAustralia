@@ -7,12 +7,20 @@ import ExperimentService from "@/services/ab-testing/ExperimentService";
 import ExperimentHistoryRepository from "@/repositories/ab-testing/ExperimentHistoryRepository";
 import mongoose from "mongoose";
 
+const stoppingRulesSchema = z.object({
+  minConversions: z.number().min(0).optional(),
+  confidenceThreshold: z.number().min(0).max(100).optional(),
+  maxDuration: z.number().min(1).optional(),
+  autoEndEnabled: z.boolean().optional(),
+}).optional();
+
 const createExperimentSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name cannot exceed 200 characters"),
   status: z.enum(["draft", "active", "paused", "ended"]).default("draft"),
   slugTargets: z.array(z.string()).min(1, "At least one slug target is required"),
   startDate: z.string().datetime().optional().transform((val) => (val ? new Date(val) : undefined)),
   endDate: z.string().datetime().optional().transform((val) => (val ? new Date(val) : undefined)),
+  stoppingRules: stoppingRulesSchema,
 });
 
 /**

@@ -26,6 +26,7 @@ interface StoppingRuleResult {
 export class ExperimentStoppingRulesService {
   /**
    * Evaluate all stopping rules for an experiment
+   * Uses experiment's stoppingRules config if available, otherwise uses provided config
    */
   async evaluateStoppingRules(
     experimentId: string,
@@ -36,12 +37,22 @@ export class ExperimentStoppingRulesService {
       throw new Error("Experiment not found");
     }
 
+    // Use experiment's stoppingRules if available, otherwise use provided config
+    const stoppingRules = experiment.stoppingRules || config;
+    if (!stoppingRules) {
+      return {
+        shouldStop: false,
+        reasons: [],
+        details: {},
+      };
+    }
+
     const reasons: string[] = [];
     const details: StoppingRuleResult["details"] = {};
 
     // Check minimum conversions
-    if (config?.minConversions) {
-      const minConvResult = await this.checkMinimumConversions(experimentId, config.minConversions);
+    if (stoppingRules.minConversions) {
+      const minConvResult = await this.checkMinimumConversions(experimentId, stoppingRules.minConversions);
       details.minConversions = minConvResult;
       if (minConvResult.met) {
         reasons.push(`Minimum conversions met: ${minConvResult.current}/${minConvResult.required}`);
@@ -49,8 +60,8 @@ export class ExperimentStoppingRulesService {
     }
 
     // Check confidence threshold
-    if (config?.confidenceThreshold) {
-      const confidenceResult = await this.checkConfidenceThreshold(experimentId, config.confidenceThreshold);
+    if (stoppingRules.confidenceThreshold) {
+      const confidenceResult = await this.checkConfidenceThreshold(experimentId, stoppingRules.confidenceThreshold);
       details.confidenceThreshold = confidenceResult;
       if (confidenceResult.met) {
         reasons.push(`Confidence threshold met: ${confidenceResult.current}% >= ${confidenceResult.required}%`);
@@ -58,8 +69,8 @@ export class ExperimentStoppingRulesService {
     }
 
     // Check max duration
-    if (config?.maxDuration) {
-      const durationResult = await this.checkMaxDuration(experimentId, config.maxDuration);
+    if (stoppingRules.maxDuration) {
+      const durationResult = await this.checkMaxDuration(experimentId, stoppingRules.maxDuration);
       details.maxDuration = durationResult;
       if (durationResult.met) {
         reasons.push(`Maximum duration exceeded: ${durationResult.current} days >= ${durationResult.required} days`);

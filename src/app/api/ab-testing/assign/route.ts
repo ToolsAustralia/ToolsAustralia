@@ -7,6 +7,9 @@ import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentSer
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import ExperimentEventRepository from "@/repositories/ab-testing/ExperimentEventRepository";
 import VariantConfigService from "@/services/ab-testing/VariantConfigService";
+import connectDB from "@/lib/mongodb";
+import ExperimentEvent from "@/models/ab-testing/ExperimentEvent";
+import mongoose from "mongoose";
 
 const assignRequestSchema = z.object({
   experimentId: z.string().min(1, "Experiment ID is required"),
@@ -25,6 +28,75 @@ export async function POST(request: NextRequest) {
     // Get session (if logged in)
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
+    const isAdmin = session?.user?.role === "admin";
+
+    // Check for preview mode cookie (admin only)
+    const previewCookieName = `ta_ab_preview_${validatedData.experimentId}`;
+    const previewVariantId = request.cookies.get(previewCookieName)?.value;
+
+    if (previewVariantId && isAdmin) {
+      // Preview mode: Return preview variant without creating assignment
+      const previewVariant = await VariantRepository.findById(previewVariantId);
+      if (!previewVariant) {
+        return NextResponse.json({ error: "Preview variant not found" }, { status: 404 });
+      }
+
+      // Merge config with defaults
+      const defaultConfig = VariantConfigService.getDefaultConfig();
+      const mergedConfig = VariantConfigService.mergeVariantConfig(defaultConfig, previewVariant.config);
+
+      // Track preview page view event (marked as preview)
+      try {
+        await connectDB();
+        const anonymousId = AnonymousIdService.extractAnonymousId(request) || await AnonymousIdService.getOrCreateAnonymousId(request);
+        
+        // ✅ DEDUPLICATION: Check for recent page view (within 1 minute)
+        const now = new Date();
+        const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+        
+        const query: Record<string, unknown> = {
+          experimentId: new mongoose.Types.ObjectId(validatedData.experimentId),
+          variantId: new mongoose.Types.ObjectId(previewVariantId),
+          eventType: "page_view",
+          timestamp: { $gte: oneMinuteAgo },
+        };
+
+        // Check by userId if logged in, otherwise by anonymousId
+        if (userId) {
+          query.userId = new mongoose.Types.ObjectId(userId);
+        } else {
+          query.anonymousId = anonymousId;
+          query.userId = { $exists: false };
+        }
+
+        const existingPageView = await ExperimentEvent.findOne(query).lean();
+
+        // Only track if no recent page view exists
+        if (!existingPageView) {
+          await ExperimentEventRepository.createEvent({
+            experimentId: validatedData.experimentId,
+            variantId: previewVariantId,
+            eventType: "page_view",
+            userId,
+            anonymousId,
+            metadata: {
+              slug: validatedData.slug,
+              isPreview: true,
+            },
+          });
+        }
+      } catch (error) {
+        // Don't fail the request if event tracking fails
+        console.error("Failed to track preview page view event:", error);
+      }
+
+      return NextResponse.json({
+        variantId: previewVariantId,
+        variantConfig: mergedConfig,
+        anonymousId: AnonymousIdService.extractAnonymousId(request) || null,
+        isPreview: true,
+      });
+    }
 
     // Get or create anonymous ID
     const anonymousId = await AnonymousIdService.getOrCreateAnonymousId(request);
@@ -38,7 +110,8 @@ export async function POST(request: NextRequest) {
 
     if (!assignment) {
       // Admin user or no assignment possible
-      return NextResponse.json(
+      // Still set anonymous ID cookie if it's new
+      const response = NextResponse.json(
         {
           variantId: null,
           variantConfig: null,
@@ -47,6 +120,18 @@ export async function POST(request: NextRequest) {
         },
         { status: 200 }
       );
+
+      // Always set anonymous ID cookie to ensure persistence
+      const cookieSettings = AnonymousIdService.getCookieSettings();
+      response.cookies.set(cookieSettings.name, anonymousId, {
+        httpOnly: cookieSettings.httpOnly,
+        sameSite: cookieSettings.sameSite,
+        secure: cookieSettings.secure,
+        maxAge: cookieSettings.maxAge,
+        path: cookieSettings.path,
+      });
+
+      return response;
     }
 
     // Get variant config
@@ -60,17 +145,43 @@ export async function POST(request: NextRequest) {
     const mergedConfig = VariantConfigService.mergeVariantConfig(defaultConfig, variant.config);
 
     // Track page view event
+    // ✅ DEDUPLICATION: Prevent duplicate page views within 1 minute
     try {
-      await ExperimentEventRepository.createEvent({
-        experimentId: validatedData.experimentId,
-        variantId: assignment.variantId,
+      await connectDB();
+      
+      const now = new Date();
+      const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+      
+      const query: Record<string, unknown> = {
+        experimentId: new mongoose.Types.ObjectId(validatedData.experimentId),
+        variantId: new mongoose.Types.ObjectId(assignment.variantId),
         eventType: "page_view",
-        userId,
-        anonymousId,
-        metadata: {
-          slug: validatedData.slug,
-        },
-      });
+        timestamp: { $gte: oneMinuteAgo },
+      };
+
+      // Check by userId if logged in, otherwise by anonymousId
+      if (userId) {
+        query.userId = new mongoose.Types.ObjectId(userId);
+      } else {
+        query.anonymousId = anonymousId;
+        query.userId = { $exists: false };
+      }
+
+      const existingPageView = await ExperimentEvent.findOne(query).lean();
+
+      // Only track if no recent page view exists
+      if (!existingPageView) {
+        await ExperimentEventRepository.createEvent({
+          experimentId: validatedData.experimentId,
+          variantId: assignment.variantId,
+          eventType: "page_view",
+          userId,
+          anonymousId,
+          metadata: {
+            slug: validatedData.slug,
+          },
+        });
+      }
     } catch (error) {
       // Don't fail the request if event tracking fails
       console.error("Failed to track page view event:", error);
@@ -83,7 +194,7 @@ export async function POST(request: NextRequest) {
       anonymousId,
     });
 
-    // Set anonymous ID cookie if it's new
+    // Always set anonymous ID cookie to ensure persistence and refresh expiration
     const cookieSettings = AnonymousIdService.getCookieSettings();
     response.cookies.set(cookieSettings.name, anonymousId, {
       httpOnly: cookieSettings.httpOnly,

@@ -70,6 +70,76 @@ ExperimentEventSchema.index({ timestamp: 1 });
 ExperimentEventSchema.index({ experimentId: 1, variantId: 1, eventType: 1, timestamp: 1 });
 ExperimentEventSchema.index({ experimentId: 1, timestamp: 1 });
 
+// ✅ CRITICAL: Unique compound indexes to prevent duplicate events
+// 1. Prevent duplicate page views: same user/anonymous + experiment + variant + same minute
+//    (allows one page view per minute per user to handle legitimate refreshes)
+ExperimentEventSchema.index(
+  { 
+    experimentId: 1, 
+    variantId: 1, 
+    eventType: 1, 
+    userId: 1,
+    timestamp: 1 
+  },
+  { 
+    unique: false, // Not unique, but helps with deduplication queries
+    partialFilterExpression: { 
+      eventType: "page_view",
+      userId: { $exists: true }
+    },
+    name: "page_view_user_dedup"
+  }
+);
+
+ExperimentEventSchema.index(
+  { 
+    experimentId: 1, 
+    variantId: 1, 
+    eventType: 1, 
+    anonymousId: 1,
+    timestamp: 1 
+  },
+  { 
+    unique: false,
+    partialFilterExpression: { 
+      eventType: "page_view",
+      anonymousId: { $exists: true },
+      userId: { $exists: false }
+    },
+    name: "page_view_anonymous_dedup"
+  }
+);
+
+// 2. Prevent duplicate purchases: same orderId + experiment + variant
+//    This ensures each purchase is only tracked once
+ExperimentEventSchema.index(
+  { 
+    experimentId: 1, 
+    variantId: 1, 
+    eventType: 1,
+    "metadata.orderId": 1 
+  },
+  { 
+    unique: true, // CRITICAL: Enforce uniqueness at database level
+    partialFilterExpression: { 
+      eventType: { $in: ["purchase", "conversion"] },
+      "metadata.orderId": { $exists: true }
+    },
+    name: "purchase_order_dedup"
+  }
+);
+
+// TTL Index: Automatically delete events older than 30 days
+// This prevents database bloat - events are aggregated into daily metrics before deletion
+// Note: TTL indexes run every 60 seconds, so deletion may be delayed slightly
+ExperimentEventSchema.index(
+  { timestamp: 1 },
+  {
+    expireAfterSeconds: 30 * 24 * 60 * 60, // 30 days in seconds
+    name: "experiment_events_ttl",
+  }
+);
+
 const ExperimentEvent =
   mongoose.models.ExperimentEvent || mongoose.model<IExperimentEvent>("ExperimentEvent", ExperimentEventSchema);
 

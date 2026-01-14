@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { FlaskConical, AlertTriangle, Loader2, Target, Calendar } from "lucide-react";
+import { FlaskConical, AlertTriangle, Loader2, Target, Calendar, Settings } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -12,7 +12,7 @@ import {
   FormSection,
   Checkbox,
 } from "@/components/modals/ui";
-import { useCreateExperiment, CreateExperimentPayload } from "@/hooks/queries/useABTestingQueries";
+import { useCreateExperiment, CreateExperimentPayload, StoppingRules } from "@/hooks/queries/useABTestingQueries";
 import { listPrizes } from "@/config/prizes";
 import DateRangeCalendar from "@/components/admin/DateRangeCalendar";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
@@ -39,6 +39,9 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
   const [selectAll, setSelectAll] = useState(false);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [stoppingRules, setStoppingRules] = useState<StoppingRules>({
+    autoEndEnabled: false,
+  });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,6 +62,7 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
       setSelectAll(false);
       setStartDate(null);
       setEndDate(null);
+      setStoppingRules({ autoEndEnabled: false });
       setErrors({});
     }
   }, [isOpen]);
@@ -104,6 +108,7 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
         slugTargets: selectAll ? ["*"] : selectedSlugs.length > 0 ? selectedSlugs : [],
         startDate: convertDateToISO(startDate) || undefined,
         endDate: convertDateToISO(endDate) || undefined,
+        stoppingRules: stoppingRules.autoEndEnabled ? stoppingRules : undefined,
       });
       onSuccess();
     } catch (error) {
@@ -282,6 +287,107 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
                 </p>
               )}
               <p className="text-sm text-gray-500">All dates are in AEST timezone.</p>
+            </div>
+          </FormSection>
+
+          {/* Stopping Rules */}
+          <FormSection title="Stopping Rules (Optional)" icon={Settings}>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Configure automatic stopping rules to end the experiment when certain conditions are met.
+              </p>
+
+              <Checkbox
+                id="autoEndEnabled"
+                name="autoEndEnabled"
+                checked={stoppingRules.autoEndEnabled || false}
+                onChange={(e) => {
+                  setStoppingRules({
+                    ...stoppingRules,
+                    autoEndEnabled: e.target.checked,
+                  });
+                }}
+                label="Enable Automatic Ending"
+                description="Automatically end experiment when stopping rules are met"
+                disabled={isSubmitting}
+              />
+
+              {stoppingRules.autoEndEnabled && (
+                <div className="space-y-4 pl-6 border-l-2 border-gray-200">
+                  <div>
+                    <Input
+                      id="minConversions"
+                      name="minConversions"
+                      type="number"
+                      value={stoppingRules.minConversions?.toString() || ""}
+                      onChange={(e) => {
+                        const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                        setStoppingRules({
+                          ...stoppingRules,
+                          minConversions: value && value > 0 ? value : undefined,
+                        });
+                      }}
+                      label="Minimum Conversions per Variant"
+                      placeholder="e.g., 100"
+                      min={0}
+                      disabled={isSubmitting}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      End experiment when each variant reaches this many conversions
+                    </p>
+                  </div>
+
+                  <div>
+                    <Select
+                      id="confidenceThreshold"
+                      name="confidenceThreshold"
+                      value={stoppingRules.confidenceThreshold?.toString() || ""}
+                      onChange={(e) => {
+                        const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                        setStoppingRules({
+                          ...stoppingRules,
+                          confidenceThreshold: value,
+                        });
+                      }}
+                      label="Confidence Threshold (%)"
+                      options={[
+                        { value: "", label: "Select threshold..." },
+                        { value: "80", label: "80% (Low)" },
+                        { value: "90", label: "90% (Medium)" },
+                        { value: "95", label: "95% (High - Recommended)" },
+                        { value: "99", label: "99% (Very High)" },
+                      ]}
+                      disabled={isSubmitting}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      End experiment when statistical significance reaches this confidence level
+                    </p>
+                  </div>
+
+                  <div>
+                    <Input
+                      id="maxDuration"
+                      name="maxDuration"
+                      type="number"
+                      value={stoppingRules.maxDuration?.toString() || ""}
+                      onChange={(e) => {
+                        const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                        setStoppingRules({
+                          ...stoppingRules,
+                          maxDuration: value && value > 0 ? value : undefined,
+                        });
+                      }}
+                      label="Maximum Duration (Days)"
+                      placeholder="e.g., 30"
+                      min={1}
+                      disabled={isSubmitting}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Automatically end experiment after this many days
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </FormSection>
 

@@ -609,6 +609,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       `,
                         filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
                       }}
+                      suppressHydrationWarning
                     >
                       {badgeText}
                     </span>
@@ -617,13 +618,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
                 {/* Second Line - "GET 2x ENTRIES" with Metallic Text */}
                 {/* Second Line - "GET 2x ENTRIES" - Matches width of first line */}
-                <div className="w-full">
+                <div className="w-full" suppressHydrationWarning>
                   <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
                     {/* "GET" text - White */}
                     <span className="text-white">GET </span>
 
                     {/* "2X" with fiery effect - readable on dark background */}
-                    <span className="text-red-500">{multiplier}X</span>
+                    <span className="text-red-500" suppressHydrationWarning>{multiplier}X</span>
 
                     {/* "ENTRIES" text - White */}
                     <span className="text-white"> ENTRIES</span>

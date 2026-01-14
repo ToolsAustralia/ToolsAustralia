@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { FlaskConical, Plus, Edit, Trash2, Play, Pause, Square, AlertTriangle, Target, Calendar } from "lucide-react";
+import { FlaskConical, Plus, Edit, Trash2, Play, Pause, Square, AlertTriangle, Target, Calendar, Eye, BarChart3, ExternalLink } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -17,7 +17,10 @@ import {
 } from "@/hooks/queries/useABTestingQueries";
 import { format } from "date-fns";
 import VariantConfigEditor from "./VariantConfigEditor";
+import ExperimentResultsDashboard from "./ExperimentResultsDashboard";
 import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { DEFAULT_PRIZE_SLUG, listPrizes } from "@/config/prizes";
 
 interface ExperimentDetailModalProps {
   isOpen: boolean;
@@ -37,6 +40,8 @@ export default function ExperimentDetailModal({
   const { data: experimentData, isLoading, refetch } = useExperiment(experimentId);
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [isCreatingVariant, setIsCreatingVariant] = useState(false);
+  const [activeTab, setActiveTab] = useState<"variants" | "results">("variants");
+  const router = useRouter();
 
   const createVariantMutation = useCreateVariant();
   const updateVariantMutation = useUpdateVariant();
@@ -83,7 +88,69 @@ export default function ExperimentDetailModal({
   const handleClose = () => {
     setEditingVariantId(null);
     setIsCreatingVariant(false);
+    setActiveTab("variants");
     onClose();
+  };
+
+  const handlePreviewVariant = async (variantId: string) => {
+    try {
+      // Set preview cookie
+      const response = await fetch("/api/admin/ab-testing/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          experimentId,
+          variantId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to set preview");
+      }
+
+      // Determine which slug to preview
+      let previewSlug: string;
+      
+      if (experiment.slugTargets.includes("*")) {
+        // If targeting all pages, use the default prize slug
+        previewSlug = DEFAULT_PRIZE_SLUG;
+      } else if (experiment.slugTargets.length > 0) {
+        // Use the first slug target
+        previewSlug = experiment.slugTargets[0];
+        
+        // Validate that the slug exists in the prize catalog
+        const availablePrizes = listPrizes();
+        const isValidSlug = availablePrizes.some((prize) => prize.slug === previewSlug);
+        
+        if (!isValidSlug) {
+          // If the slug doesn't exist, fall back to default
+          console.warn(`Slug "${previewSlug}" not found in prize catalog, using default: ${DEFAULT_PRIZE_SLUG}`);
+          previewSlug = DEFAULT_PRIZE_SLUG;
+        }
+      } else {
+        // No slug targets specified, use default
+        previewSlug = DEFAULT_PRIZE_SLUG;
+      }
+
+      // Open preview in new tab
+      const previewUrl = `/promotions/${previewSlug}`;
+      window.open(previewUrl, "_blank");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to preview variant");
+    }
+  };
+
+  const handleClearPreview = async () => {
+    try {
+      await fetch("/api/admin/ab-testing/preview", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ experimentId }),
+      });
+      alert("Preview mode cleared");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to clear preview");
+    }
   };
 
   return (
@@ -96,6 +163,34 @@ export default function ExperimentDetailModal({
       />
 
       <ModalContent>
+        {/* Tabs */}
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="flex space-x-4">
+            <button
+              onClick={() => setActiveTab("variants")}
+              className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "variants"
+                  ? "border-red-600 text-red-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <Target className="w-4 h-4 inline mr-2" />
+              Variants
+            </button>
+            <button
+              onClick={() => setActiveTab("results")}
+              className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "results"
+                  ? "border-red-600 text-red-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 inline mr-2" />
+              Results & Statistics
+            </button>
+          </nav>
+        </div>
+
         <div className="space-y-6">
           {/* Experiment Info */}
           <FormSection title="Experiment Information" icon={FlaskConical}>
@@ -121,8 +216,11 @@ export default function ExperimentDetailModal({
             </div>
           </FormSection>
 
-          {/* Variants Section */}
-          <FormSection title="Variants" icon={Target}>
+          {/* Variants Tab */}
+          {activeTab === "variants" && (
+            <>
+              {/* Variants Section */}
+              <FormSection title="Variants" icon={Target}>
             <div className="space-y-4">
               {/* Traffic Split Validation */}
               {!trafficValid && (
@@ -168,28 +266,42 @@ export default function ExperimentDetailModal({
                           {variant.trafficPercentage}% traffic
                         </span>
                       </div>
-                      {!isLocked && (
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        {/* Preview Button */}
+                        <div title="Preview this variant">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setEditingVariantId(variant._id)}
-                            icon={Edit}
+                            onClick={() => handlePreviewVariant(variant._id)}
+                            icon={Eye}
                             iconPosition="left"
                           >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => handleDeleteVariant(variant._id)}
-                            icon={Trash2}
-                            iconPosition="left"
-                          >
-                            Delete
+                            Preview
                           </Button>
                         </div>
-                      )}
+                        {!isLocked && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingVariantId(variant._id)}
+                              icon={Edit}
+                              iconPosition="left"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDeleteVariant(variant._id)}
+                              icon={Trash2}
+                              iconPosition="left"
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {/* Variant Config Preview */}
@@ -272,6 +384,31 @@ export default function ExperimentDetailModal({
               }}
               onCancel={() => setIsCreatingVariant(false)}
             />
+          )}
+            </>)}
+
+          {/* Results Tab */}
+          {activeTab === "results" && (
+            <>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Experiment Results</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    View statistical analysis, conversion rates, and performance metrics
+                  </p>
+                </div>
+                <div title="Clear preview mode">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleClearPreview}
+                  >
+                    Clear Preview
+                  </Button>
+                </div>
+              </div>
+              <ExperimentResultsDashboard experimentId={experimentId} />
+            </>
           )}
         </div>
       </ModalContent>

@@ -17,6 +17,7 @@ export class ExperimentHistoryRepository {
     changes?: {
       before?: Record<string, unknown>;
       after?: Record<string, unknown>;
+      metadata?: Record<string, unknown>;
     }
   ): Promise<IExperimentHistory> {
     await connectDB();

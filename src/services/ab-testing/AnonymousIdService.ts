@@ -18,15 +18,31 @@ export class AnonymousIdService {
   }
 
   /**
+   * Validate anonymous ID format
+   */
+  private isValidAnonymousId(id: string): boolean {
+    return id.startsWith("anon_") && id.length > 5 && id.length < 100;
+  }
+
+  /**
    * Get or create anonymous ID from cookie
    * Reads existing cookie or creates new one if not present
+   * Validates and regenerates if corrupted
    */
   async getOrCreateAnonymousId(request: NextRequest): Promise<string> {
     const cookieStore = await cookies();
     const existingId = cookieStore.get(this.COOKIE_NAME);
 
-    if (existingId?.value && existingId.value.startsWith("anon_")) {
+    // Validate existing cookie
+    if (existingId?.value && this.isValidAnonymousId(existingId.value)) {
       return existingId.value;
+    }
+
+    // If cookie exists but is invalid, log warning (but don't fail)
+    if (existingId?.value && !this.isValidAnonymousId(existingId.value)) {
+      console.warn(
+        `[A/B Testing] Invalid anonymous ID cookie format detected: ${existingId.value.substring(0, 20)}..., regenerating...`
+      );
     }
 
     // Generate new anonymous ID
@@ -39,11 +55,12 @@ export class AnonymousIdService {
 
   /**
    * Extract existing anonymous ID from request
+   * Validates format and returns null if invalid
    */
   extractAnonymousId(request: NextRequest): string | null {
     const cookie = request.cookies.get(this.COOKIE_NAME);
     
-    if (cookie?.value && cookie.value.startsWith("anon_")) {
+    if (cookie?.value && this.isValidAnonymousId(cookie.value)) {
       return cookie.value;
     }
 
