@@ -6,6 +6,9 @@ import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSave
 import SavedPaymentMethodsModal from "./SavedPaymentMethodsModal";
 import { PaymentElement, useStripe, useElements, Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
+import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
+import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
+import { useToast } from "@/components/ui/Toast";
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -88,13 +91,54 @@ const StripeCardForm = React.forwardRef<
     const stripe = useStripe();
     const elements = useElements();
     const [isStripeLoading, setIsStripeLoading] = useState(true);
+    const { showToast } = useToast();
 
-    // Handle Stripe loading state
+    // Handle Stripe loading state and validate StripeElements
     useEffect(() => {
       if (stripe && elements) {
         setIsStripeLoading(false);
+      } else {
+        // Check if Stripe failed to load after a timeout
+        const timeout = setTimeout(async () => {
+          if (!stripe || !elements) {
+            // Auto-log Stripe loading failure
+            await autoLogStripeError(new Error("Stripe Elements failed to load"), {
+              component: "StripeCardForm",
+              stripeLoaded: !!stripe,
+              elementsLoaded: !!elements,
+            });
+
+            // Show user-friendly error toast with report option
+            try {
+              const errorContext = await collectErrorContext(
+                new Error("Stripe payment form failed to load"),
+                {
+                  url: window.location.href,
+                  method: "GET",
+                }
+              );
+
+              showToast({
+                type: "error",
+                title: "Payment Form Error",
+                message: "Failed to load payment form. Please refresh the page and try again.",
+                reportable: true,
+                errorContext,
+              });
+            } catch (error) {
+              // Fallback if context collection fails
+              showToast({
+                type: "error",
+                title: "Payment Form Error",
+                message: "Failed to load payment form. Please refresh the page and try again.",
+              });
+            }
+          }
+        }, 5000); // 5 second timeout
+
+        return () => clearTimeout(timeout);
       }
-    }, [stripe, elements]);
+    }, [stripe, elements, showToast]);
 
     // Inject custom CSS for wallet payment method layout (icons and text on same row)
     // Note: Stripe uses shadow DOM, so we inject styles that target the iframe content

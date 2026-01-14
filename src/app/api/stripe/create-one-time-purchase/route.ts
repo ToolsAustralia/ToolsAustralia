@@ -12,6 +12,7 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import Promo from "@/models/Promo";
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
+import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 
@@ -85,6 +86,17 @@ function getBaseUrl(): string {
  * Create a one-time purchase payment intent and user account
  */
 export async function POST(request: NextRequest) {
+  // Store request body and context for error logging
+  let requestBody: Record<string, unknown> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let membershipPackage: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
+  let user: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
+  let customer: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
+  let paymentIntent: any = null;
+  
   try {
     await connectDB();
 
@@ -93,6 +105,7 @@ export async function POST(request: NextRequest) {
     const requestContext = extractRequestContext(request);
 
     const body = await request.json();
+    requestBody = body; // Store for error logging
     const validatedData = createOneTimePurchaseSchema.parse(body);
     const normalizedAffiliateCode = validatedData.affiliateCode?.trim().toUpperCase();
 
@@ -106,7 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the package (check both regular membership packages and mini draw packages)
-    let membershipPackage = getPackageById(validatedData.packageId);
+    membershipPackage = getPackageById(validatedData.packageId);
     let isMiniDrawPackage = false;
 
     // If not found in regular packages, check mini draw packages
@@ -890,6 +903,40 @@ export async function POST(request: NextRequest) {
     }
 
     console.error("❌ Error creating one-time purchase:", error);
+    
+    // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log payment failures
+    // Extract error information
+    let errorCode: string | undefined;
+    let declineCode: string | undefined;
+    let errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
+    // Check if it's a Stripe error
+    if (error && typeof error === "object" && "type" in error) {
+      const stripeError = error as { code?: string; decline_code?: string; message?: string };
+      errorCode = stripeError.code;
+      declineCode = stripeError.decline_code;
+      errorMessage = stripeError.message || errorMessage;
+    }
+    
+    // Use stored request body and context for error logging
+    const errorContext = {
+      packageId: typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,
+      packageName: membershipPackage?.name,
+      userEmail: typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,
+      userId: user?._id?.toString(),
+      customerId: customer?.id,
+      paymentIntentId: paymentIntent?.id,
+      amount: membershipPackage?.price ? Math.round(membershipPackage.price * 100) : undefined,
+      errorCode,
+      declineCode,
+      errorMessage,
+    };
+    
+    // Auto-log payment error (fire and forget - don't block response)
+    autoLogPaymentErrorServer(error, request, errorContext).catch((logError) => {
+      console.warn("Failed to auto-log payment error:", logError);
+    });
+    
     return NextResponse.json({ error: "Failed to create one-time purchase" }, { status: 500 });
   }
 }

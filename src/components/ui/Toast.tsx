@@ -30,7 +30,8 @@
  */
 
 import React, { useState, useEffect, useContext, createContext, useCallback } from "react";
-import { CheckCircle, AlertCircle, XCircle, Info, X } from "lucide-react";
+import { CheckCircle, AlertCircle, XCircle, Info, X, Bug } from "lucide-react";
+import { ErrorContext } from "@/types/error-reporting";
 
 export interface ToastProps {
   id?: string;
@@ -43,6 +44,10 @@ export interface ToastProps {
     onClick: () => void;
   };
   onClose?: () => void;
+  // Error reporting features
+  reportable?: boolean; // Whether this error can be reported
+  errorContext?: ErrorContext; // Error context for reporting
+  onReportProblem?: (errorContext: ErrorContext) => void; // Callback to open report modal
 }
 
 interface ToastState extends ToastProps {
@@ -76,6 +81,9 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
   action,
   onRemove,
   index,
+  reportable = false,
+  errorContext,
+  onReportProblem,
 }) => {
   const [visible, setVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -277,6 +285,20 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
                 {action.label}
               </button>
             )}
+
+            {/* Report Problem Button (only for error toasts with reportable=true) */}
+            {type === "error" && reportable && errorContext && onReportProblem && (
+              <button
+                onClick={() => {
+                  onReportProblem(errorContext);
+                  // Don't close toast when reporting - let user see the report was triggered
+                }}
+                className="mt-1 sm:mt-2 flex items-center gap-1 text-xs sm:text-sm font-medium text-red-600 hover:text-red-800 transition-colors"
+              >
+                <Bug className="w-3 h-3 sm:w-4 sm:h-4" />
+                Report Problem
+              </button>
+            )}
           </div>
 
           {/* Close Button - Increased size on mobile for easier tapping */}
@@ -300,10 +322,11 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
  * Note: onRemove is a client-side callback (not a Server Action) since this
  * is a "use client" component. The linter warning can be safely ignored.
  */
-export const ToastContainer: React.FC<{ toasts: ToastState[]; onRemove: (id: string) => void }> = ({
-  toasts,
-  onRemove,
-}) => {
+export const ToastContainer: React.FC<{
+  toasts: ToastState[];
+  onRemove: (id: string) => void;
+  onReportProblem?: (errorContext: ErrorContext) => void;
+}> = ({ toasts, onRemove, onReportProblem }) => {
   // Limit maximum visible toasts to prevent overflow
   const MAX_VISIBLE_TOASTS = 5;
   const visibleToasts = toasts.slice(0, MAX_VISIBLE_TOASTS);
@@ -312,7 +335,13 @@ export const ToastContainer: React.FC<{ toasts: ToastState[]; onRemove: (id: str
     <div className="fixed top-1 right-1 sm:top-4 sm:right-4 z-[9999] pointer-events-none max-w-[calc(100vw-0.5rem)] sm:max-w-md">
       <div className="flex flex-col gap-1 sm:gap-2 pointer-events-auto">
         {visibleToasts.map((toast, index) => (
-          <Toast key={toast.id} {...toast} index={index} onRemove={() => onRemove(toast.id)} />
+          <Toast
+            key={toast.id}
+            {...toast}
+            index={index}
+            onRemove={() => onRemove(toast.id)}
+            onReportProblem={onReportProblem}
+          />
         ))}
       </div>
     </div>
@@ -333,6 +362,8 @@ export const ToastContainer: React.FC<{ toasts: ToastState[]; onRemove: (id: str
  */
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastState[]>([]);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportErrorContext, setReportErrorContext] = useState<ErrorContext | null>(null);
 
   /**
    * Show a new toast notification
@@ -357,12 +388,66 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts([]);
   }, []);
 
+  /**
+   * Handle report problem button click
+   * Opens the report problem modal with the error context
+   */
+  const handleReportProblem = useCallback((errorContext: ErrorContext) => {
+    setReportErrorContext(errorContext);
+    setReportModalOpen(true);
+  }, []);
+
+  /**
+   * Close report problem modal
+   */
+  const handleCloseReportModal = useCallback(() => {
+    setReportModalOpen(false);
+    setReportErrorContext(null);
+  }, []);
+
   return (
     <ToastContext.Provider value={{ showToast, hideToast, clearAllToasts }}>
       {children}
-      <ToastContainer toasts={toasts} onRemove={hideToast} />
+      <ToastContainer
+        toasts={toasts}
+        onRemove={hideToast}
+        onReportProblem={handleReportProblem}
+      />
+      {/* Report Problem Modal */}
+      {reportErrorContext && (
+        <ReportProblemModalWrapper
+          isOpen={reportModalOpen}
+          onClose={handleCloseReportModal}
+          errorContext={reportErrorContext}
+        />
+      )}
     </ToastContext.Provider>
   );
+};
+
+/**
+ * Lazy-loaded Report Problem Modal wrapper
+ * This prevents the modal from being included in the initial bundle
+ */
+const ReportProblemModalWrapper: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  errorContext: ErrorContext;
+}> = ({ isOpen, onClose, errorContext }) => {
+  const [ModalComponent, setModalComponent] = useState<React.ComponentType<{ isOpen: boolean; onClose: () => void; errorContext: ErrorContext }> | null>(null);
+
+  useEffect(() => {
+    if (isOpen && !ModalComponent) {
+      // Dynamically import the modal component
+      import("@/components/modals/ReportProblemModal").then((mod) => {
+        setModalComponent(() => mod.default);
+      });
+    }
+  }, [isOpen, ModalComponent]);
+
+  if (!ModalComponent) return null;
+
+  return <ModalComponent isOpen={isOpen} onClose={onClose} errorContext={errorContext} />;
 };
 
 /**

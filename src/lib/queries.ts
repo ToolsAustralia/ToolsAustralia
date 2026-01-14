@@ -19,6 +19,8 @@
  */
 
 import { getSession, signOut } from "next-auth/react";
+import { ErrorContext } from "@/types/error-reporting";
+import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 
 // JWT signing is server-side only - removed client-side import
 
@@ -29,7 +31,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 // Custom error class for API errors
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public data?: unknown) {
+  constructor(
+    message: string,
+    public status: number,
+    public data?: unknown,
+    public errorContext?: ErrorContext
+  ) {
     super(message);
 
     this.name = "ApiError";
@@ -142,7 +149,25 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
         }
       }
 
-      throw new ApiError(errorMessage, response.status, data);
+      // Collect error context for reportable errors (client-side only)
+      let errorContext: ErrorContext | undefined;
+      if (typeof window !== "undefined") {
+        try {
+          errorContext = await collectErrorContext(
+            new Error(errorMessage),
+            {
+              url: `${API_BASE_URL}${endpoint}`,
+              method: options.method as string,
+              status: response.status,
+            }
+          );
+        } catch (contextError) {
+          // Silently fail if context collection fails
+          console.warn("Failed to collect error context:", contextError);
+        }
+      }
+
+      throw new ApiError(errorMessage, response.status, data, errorContext);
     }
 
     return data;
@@ -150,7 +175,23 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
     // Handle network errors
 
     if (error instanceof TypeError && error.message.includes("fetch")) {
-      throw new ApiError("Network error - please check your connection", 0);
+      // Collect error context for network errors (client-side only)
+      let errorContext: ErrorContext | undefined;
+      if (typeof window !== "undefined") {
+        try {
+          errorContext = await collectErrorContext(
+            error,
+            {
+              url: `${API_BASE_URL}${endpoint}`,
+              method: options.method as string,
+            }
+          );
+        } catch (contextError) {
+          // Silently fail if context collection fails
+          console.warn("Failed to collect error context:", contextError);
+        }
+      }
+      throw new ApiError("Network error - please check your connection", 0, undefined, errorContext);
     }
 
     // Re-throw ApiError instances
@@ -160,8 +201,26 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
     }
 
     // Handle other errors
+    // Collect error context for unknown errors (client-side only)
+    let errorContext: ErrorContext | undefined;
+    if (typeof window !== "undefined") {
+      try {
+        errorContext = await collectErrorContext(error, {
+          url: `${API_BASE_URL}${endpoint}`,
+          method: options.method as string,
+        });
+      } catch (contextError) {
+        // Silently fail if context collection fails
+        console.warn("Failed to collect error context:", contextError);
+      }
+    }
 
-    throw new ApiError(error instanceof Error ? error.message : "An unknown error occurred", 0);
+    throw new ApiError(
+      error instanceof Error ? error.message : "An unknown error occurred",
+      0,
+      undefined,
+      errorContext
+    );
   }
 }
 

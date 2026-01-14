@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
 import MajorDraw from "@/models/MajorDraw";
 import mongoose, { Types } from "mongoose";
+import "@/models/User";
 
 export async function GET() {
   try {

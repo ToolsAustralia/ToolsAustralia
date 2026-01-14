@@ -1,5 +1,12 @@
 "use client";
 
+// Initialize console error tracking for error reporting system
+if (typeof window !== "undefined") {
+  import("@/utils/error-reporting/collect-error-context").then((module) => {
+    module.initializeConsoleErrorTracking();
+  });
+}
+
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
 // import { DevTools } from "@/components/dev";

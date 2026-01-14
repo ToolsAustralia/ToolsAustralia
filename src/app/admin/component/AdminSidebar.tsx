@@ -20,6 +20,7 @@ import {
   UserCheck,
   TrendingUp,
   FlaskConical,
+  Bug,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -117,6 +118,11 @@ const adminTabs = [
     id: "ab-testing",
     label: "A/B Testing",
     icon: FlaskConical,
+  },
+  {
+    id: "error-reports",
+    label: "Error Reports",
+    icon: Bug,
   },
   // Temporarily hidden - no content yet
   // {

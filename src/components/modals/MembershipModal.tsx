@@ -44,6 +44,9 @@ import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { autoLogPaymentError, autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
+import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
+import { ErrorContext } from "@/types/error-reporting";
 // Member package mapping utilities imported but using inline mapping for simplicity
 
 // Type for one-time purchase response data
@@ -2111,6 +2114,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       isAuthenticated ? "Activating your membership" : "Creating your account",
     ]);
 
+    // Declare variables in outer scope for error handling
+    let packageId: string | null = null;
+    let confirmedPaymentIntentId: string | undefined = undefined;
+
     try {
       // Check if this is an upsell purchase using metadata flag
       const isUpsellOffer = activePlan?.metadata?.isUpsellOffer === true;
@@ -2153,8 +2160,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
       // Check if this is a mini draw package first
       const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
-
-      let packageId: string | null = null;
 
       if (isMiniDrawPackage) {
         // For mini draw packages, use the ID directly
@@ -2205,7 +2210,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       let paymentMethodId: string;
       let isNewPaymentMethod = false;
       // ✅ SINGLE SOURCE OF TRUTH: Capture paymentIntentId from PaymentIntent confirmation
-      let confirmedPaymentIntentId: string | undefined = undefined;
+      // (confirmedPaymentIntentId is already declared in outer scope)
 
       if (useSavedPaymentMethod && selectedPaymentMethod) {
         // Use saved payment method
@@ -3161,22 +3166,73 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       let errorMessage = "An unexpected error occurred";
       const errorTitle = isAuthenticated ? "Purchase Failed" : "Account Creation Failed";
       let errorCode: string | undefined;
+      let declineCode: string | undefined;
+
+      // Helper function to extract Stripe error codes
+      const extractStripeErrorCode = (err: unknown): string | undefined => {
+        if (err && typeof err === "object") {
+          // Check for Stripe error structure
+          if ("code" in err) return err.code as string;
+          if ("type" in err) return err.type as string;
+          // Check nested error objects
+          if ("error" in err && typeof err.error === "object" && err.error !== null) {
+            if ("code" in err.error) return err.error.code as string;
+            if ("type" in err.error) return err.error.type as string;
+          }
+          // Check response.data structure
+          if ("response" in err) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const response = (err as any).response;
+            if (response?.data?.code) return response.data.code;
+            if (response?.data?.error?.code) return response.data.error.code;
+            if (response?.data?.error?.type) return response.data.error.type;
+          }
+        }
+        return undefined;
+      };
+
+      // Helper function to extract Stripe decline code
+      const extractStripeDeclineCode = (err: unknown): string | undefined => {
+        if (err && typeof err === "object") {
+          if ("decline_code" in err) return err.decline_code as string;
+          if ("error" in err && typeof err.error === "object" && err.error !== null) {
+            if ("decline_code" in err.error) return err.error.decline_code as string;
+          }
+          if ("response" in err) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const response = (err as any).response;
+            if (response?.data?.decline_code) return response.data.decline_code;
+            if (response?.data?.error?.decline_code) return response.data.error.decline_code;
+          }
+        }
+        return undefined;
+      };
 
       if (error && typeof error === "object" && "response" in error) {
-        const apiError = error as { response?: { data?: { error?: string; details?: string; code?: string } } };
+        const apiError = error as { response?: { data?: { error?: string; details?: string; code?: string; decline_code?: string } } };
         if (apiError.response?.data?.error) {
           errorMessage = apiError.response.data.error;
           errorCode = apiError.response.data.code;
+          declineCode = apiError.response.data.decline_code;
           if (apiError.response.data.details) {
             errorMessage += `: ${apiError.response.data.details}`;
           }
         }
       } else if (error && typeof error === "object" && "message" in error) {
-        const err = error as { message: string; code?: string };
+        const err = error as { message: string; code?: string; decline_code?: string };
         errorMessage = err.message;
-        errorCode = err.code; // Check for code directly on error object
+        errorCode = err.code || extractStripeErrorCode(error); // Check for code directly on error object
+        declineCode = err.decline_code || extractStripeDeclineCode(error);
       } else if (typeof error === "string") {
         errorMessage = error;
+      }
+
+      // Extract error codes if not already extracted
+      if (!errorCode) {
+        errorCode = extractStripeErrorCode(error);
+      }
+      if (!declineCode) {
+        declineCode = extractStripeDeclineCode(error);
       }
 
       // Debug logging for error handling
@@ -3228,12 +3284,50 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           finalErrorMessage = "Your card was declined. Please check your card details or try a different payment method.";
         }
         
-        // Show detailed error toast for all errors
+        // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log critical payment failures
+        // This ensures all payment errors are tracked, even if user doesn't click "Report Problem"
+        if (isPaymentFailure || errorCode || declineCode) {
+          // Calculate amount in cents
+          const amountInCents = activePlan?.price ? Math.round(activePlan.price * 100) : undefined;
+          
+          // Auto-log payment error with full context
+          autoLogPaymentError(error, {
+            paymentIntentId: confirmedPaymentIntentId || paymentIntentId || undefined,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            customerId: (userData as any)?.stripeCustomerId || undefined, // stripeCustomerId may not be in type definition
+            amount: amountInCents,
+            packageId: packageId || undefined,
+            packageName: activePlan?.name,
+            errorCode: errorCode,
+            declineCode: declineCode,
+            errorMessage: errorMessage,
+          }).catch((logError) => {
+            // Silently fail if auto-logging fails - don't disrupt user experience
+            console.warn("Failed to auto-log payment error:", logError);
+          });
+        }
+        
+        // Collect error context for user reporting
+        let errorContextForToast: ErrorContext | undefined = undefined;
+        try {
+          errorContextForToast = await collectErrorContext(error, {
+            url: "/api/stripe/create-subscription",
+            method: "POST",
+            status: errorCode ? 400 : undefined,
+          });
+        } catch (contextError) {
+          // Fallback if context collection fails
+          console.warn("Failed to collect error context:", contextError);
+        }
+        
+        // Show detailed error toast for all errors with "Report Problem" button
         showToast({
           type: "error",
           title: finalErrorTitle,
           message: finalErrorMessage,
           duration: 8000, // Longer duration for detailed errors
+          reportable: true, // Enable "Report Problem" button
+          errorContext: errorContextForToast, // Pass error context for reporting
         });
       }
 

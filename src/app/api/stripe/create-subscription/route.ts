@@ -8,6 +8,7 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
 // Klaviyo integration handled by webhook for best practices
 
 // Interface for Stripe errors
@@ -36,6 +37,15 @@ const createSubscriptionSchema = z.object({
  * Create a new Stripe subscription and user account (registration + subscription in one flow)
  */
 export async function POST(request: NextRequest) {
+  // Store request body and context for error logging
+  let requestBody: Record<string, unknown> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let membershipPackage: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
+  let user: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
+  let customer: any = null;
+  
   try {
     // console.log("🔌 Connecting to database...");
     await connectDB();
@@ -47,6 +57,7 @@ export async function POST(request: NextRequest) {
 
     // console.log("📥 Parsing request body...");
     const body = await request.json();
+    requestBody = body; // Store for error logging
     // console.log("📋 Request body received:", { ...body, password: "[HIDDEN]" });
 
     // console.log("✅ Validating request data...");
@@ -99,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get membership package
-    const membershipPackage = getPackageById(validatedData.packageId);
+    membershipPackage = getPackageById(validatedData.packageId);
     if (!membershipPackage) {
       return NextResponse.json(
         {
@@ -759,12 +770,30 @@ export async function POST(request: NextRequest) {
     if (error && typeof error === "object" && "type" in error) {
       console.error("❌ Stripe error:", error);
       const stripeError = error as StripeError;
+      
+      // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log Stripe payment failures
+      // Use stored request body and context for error logging
+      const paymentContext = {
+        packageId: typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,
+        packageName: membershipPackage?.name,
+        userEmail: typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,
+        userId: user?._id?.toString(),
+        customerId: customer?.id,
+        errorCode: stripeError.code,
+        errorMessage: stripeError.message,
+      };
+      
+      // Auto-log payment error (fire and forget - don't block response)
+      autoLogPaymentErrorServer(error, request, paymentContext).catch((logError) => {
+        console.warn("Failed to auto-log payment error:", logError);
+      });
+      
       return NextResponse.json(
         {
           success: false,
           error: "Payment processing error",
           details: stripeError.message || "Stripe API error",
-          stripeCode: stripeError.code,
+          code: stripeError.code,
         },
         { status: 400 }
       );
@@ -774,6 +803,22 @@ export async function POST(request: NextRequest) {
     console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
     console.error("❌ Error type:", typeof error);
     console.error("❌ Error message:", error instanceof Error ? error.message : "No message");
+
+    // ✅ AUTO-LOG CRITICAL ERRORS: Automatically log server errors
+    // Use stored request body and context for error logging
+    const errorContext = {
+      packageId: typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,
+      packageName: membershipPackage?.name,
+      userEmail: typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,
+      userId: user?._id?.toString(),
+      customerId: customer?.id,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    };
+    
+    // Auto-log server error (fire and forget - don't block response)
+    autoLogPaymentErrorServer(error, request, errorContext).catch((logError) => {
+      console.warn("Failed to auto-log server error:", logError);
+    });
 
     return NextResponse.json(
       {
