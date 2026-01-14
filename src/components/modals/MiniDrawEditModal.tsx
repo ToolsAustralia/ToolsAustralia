@@ -15,6 +15,7 @@ import {
   Select,
   Textarea,
 } from "./ui";
+import RichTextEditor from "@/components/ui/RichTextEditor";
 
 interface MiniDrawPrizeForm {
   name: string;
@@ -320,17 +321,23 @@ export default function MiniDrawEditModal({
               disabled={disableConfigFields}
             />
 
-            <Textarea
-              id="description"
-              name="description"
-              label="Description"
-              value={formState.description}
-              onChange={(event) => handleFieldChange("description", event.target.value)}
-              error={errors.description}
-              rows={4}
-              required
-              disabled={disableConfigFields}
-            />
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                Description <span className="text-red-500">*</span>
+              </label>
+              {errors.description && (
+                <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  {errors.description}
+                </p>
+              )}
+              <RichTextEditor
+                value={formState.description}
+                onChange={(html) => handleFieldChange("description", html)}
+                placeholder="Enter the mini draw description..."
+                minHeight="150px"
+              />
+            </div>
           </FormSection>
 
           <FormSection title="Prize Details" icon={Trophy}>
@@ -345,17 +352,23 @@ export default function MiniDrawEditModal({
               disabled={disableConfigFields}
             />
 
-            <Textarea
-              id="prize.description"
-              name="prize.description"
-              label="Prize Description"
-              value={formState.prize.description}
-              onChange={(event) => handleFieldChange("prize", event.target.value, "description")}
-              error={errors["prize.description"]}
-              rows={3}
-              required
-              disabled={disableConfigFields}
-            />
+            <div>
+              <label htmlFor="prize.description" className="block text-sm font-medium text-gray-700 mb-2">
+                Prize Description <span className="text-red-500">*</span>
+              </label>
+              {errors["prize.description"] && (
+                <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  {errors["prize.description"]}
+                </p>
+              )}
+              <RichTextEditor
+                value={formState.prize.description}
+                onChange={(html) => handleFieldChange("prize", html, "description")}
+                placeholder="Enter the prize description..."
+                minHeight="150px"
+              />
+            </div>
 
           <Select
             id="brandId"

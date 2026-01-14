@@ -13,6 +13,7 @@ import {
   DateTimePicker,
   ImageUpload,
 } from "./ui";
+import RichTextEditor from "@/components/ui/RichTextEditor";
 
 // Types
 interface MajorDrawData {
@@ -359,14 +360,20 @@ export default function MajorDrawEditModal({
               </div>
 
               <div className="mt-4">
-                <Textarea
-                  label="Description"
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description <span className="text-red-500">*</span>
+                </label>
+                {errors.description && (
+                  <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors.description}
+                  </p>
+                )}
+                <RichTextEditor
                   value={formData.description || ""}
-                  onChange={(e) => handleInputChange("description", e.target.value)}
-                  error={errors.description}
-                  required
-                  rows={3}
-                  disabled={majorDraw.configurationLocked}
+                  onChange={(html) => handleInputChange("description", html)}
+                  placeholder="Enter the major draw description..."
+                  minHeight="150px"
                 />
               </div>
             </div>
@@ -404,14 +411,20 @@ export default function MajorDrawEditModal({
               </div>
 
               <div className="mt-4">
-                <Textarea
-                  label="Prize Description"
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Prize Description <span className="text-red-500">*</span>
+                </label>
+                {errors["prize.description"] && (
+                  <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors["prize.description"]}
+                  </p>
+                )}
+                <RichTextEditor
                   value={formData.prize?.description || ""}
-                  onChange={(e) => handlePrizeChange("description", e.target.value)}
-                  error={errors["prize.description"]}
-                  required
-                  rows={3}
-                  disabled={majorDraw.configurationLocked}
+                  onChange={(html) => handlePrizeChange("description", html)}
+                  placeholder="Enter the prize description..."
+                  minHeight="150px"
                 />
               </div>
 

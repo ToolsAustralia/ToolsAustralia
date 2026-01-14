@@ -890,6 +890,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   <button
                     onClick={() => setIsSpecsModalOpen(true)}
                     className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
+                    suppressHydrationWarning
                   >
                     <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`} />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />

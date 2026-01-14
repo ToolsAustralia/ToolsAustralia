@@ -627,6 +627,7 @@ export default function MiniDrawPackages({
                   (entriesRemaining !== undefined && pkg.entries > entriesRemaining)
                 }
                 className="w-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-black py-2 sm:py-3 px-2 sm:px-3 rounded-md sm:rounded-lg font-bold text-xs sm:text-sm hover:from-yellow-500 hover:via-orange-500 hover:to-red-500 transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                suppressHydrationWarning
               >
                 {purchasingPackageId === pkg._id ? (
                   <div className="flex items-center justify-center gap-1">
@@ -666,6 +667,7 @@ export default function MiniDrawPackages({
                   // Open modal on click
                   setSelectedPackageId(pkg._id);
                 }}
+                suppressHydrationWarning
               >
                 <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[10px] sm:text-sm" />
               </button>

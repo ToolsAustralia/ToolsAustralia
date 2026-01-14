@@ -67,6 +67,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                   ? "border-[#ee0000] text-[#ee0000]"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
+              suppressHydrationWarning
             >
               Prize Details
             </button>
@@ -77,6 +78,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                   ? "border-[#ee0000] text-[#ee0000]"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
+              suppressHydrationWarning
             >
               Recent Winners
             </button>
@@ -87,6 +89,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                   ? "border-[#ee0000] text-[#ee0000]"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
+              suppressHydrationWarning
             >
               Draw Rules
             </button>
@@ -127,8 +130,11 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
               </div>
               <div>
                 <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">Prize Description</h3>
-                <div className="prose prose-sm max-w-none">
-                  <p className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-4">{miniDraw.prize.description}</p>
+                <div className="prose prose-sm sm:prose-base max-w-none">
+                  <div
+                    className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-4"
+                    dangerouslySetInnerHTML={{ __html: miniDraw.prize.description }}
+                  />
                 </div>
               </div>
             </div>

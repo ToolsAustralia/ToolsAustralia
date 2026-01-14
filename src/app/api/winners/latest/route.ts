@@ -41,6 +41,8 @@ export async function GET() {
         imageUrl?: string;
         selectedDate: Date;
         entryNumber?: number;
+        selectedPrize?: string;
+        selectedPrizeSlug?: string;
       };
       const winnerUser = (typeof winner.userId === 'object' && 'firstName' in winner.userId) 
         ? winner.userId 
@@ -76,6 +78,7 @@ export async function GET() {
           selectedDate: winner.selectedDate,
           drawDate: majorDraw?.drawDate || winner.selectedDate,
           entryNumber: winner.entryNumber,
+          selectedPrize: winner.selectedPrize || winner.selectedPrizeSlug || undefined,
         },
       });
     }

@@ -12,6 +12,7 @@ import HomeMiniDraws from "./components/HomeMiniDraws";
 import LandingPageTrigger from "./components/LandingPageTrigger";
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
+import WinnerTestimoniesClient from "./components/WinnerTestimoniesClient";
 
 export const metadata: Metadata = {
   title: "Tools Australia | Professional Tools, Mini Draws & Partner Deals",
@@ -61,7 +62,23 @@ export default function HomePage() {
         <LatestWinnerHero className="mb-8" />
         </div>
 
-        
+        {/* Winner Testimonies Section - Client-side fetch */}
+        <Suspense
+          fallback={
+            <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center">
+                  <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
+                    Winner Testimonies
+                  </div>
+                  <div className="text-gray-500">Loading testimonies...</div>
+                </div>
+              </div>
+            </section>
+          }
+        >
+          <WinnerTestimoniesClient />
+        </Suspense>
 
         {/* Mini Draws Section - Client-side fetch */}
         <Suspense

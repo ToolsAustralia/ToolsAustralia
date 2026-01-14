@@ -405,6 +405,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 hover:bg-white/20 rounded-full transition-colors flex items-center justify-center touch-manipulation"
             onClick={() => setIsTopBarHidden(true)}
             aria-label="Close banner"
+            suppressHydrationWarning
           >
             <X className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
           </button>
@@ -421,6 +422,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 text-gray-700 hover:text-white transition-all duration-300 rounded-full hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 hover:scale-105 flex items-center justify-center touch-manipulation mr-1 sm:mr-2 group"
               onClick={() => (isMobileMenuOpen ? handleCloseMobileMenu() : setIsMobileMenuOpen(true))}
               aria-label="Toggle mobile menu"
+              suppressHydrationWarning
             >
               <div className="relative w-5 h-5 sm:w-6 sm:h-6">
                 {/* Animated Hamburger/X Icon */}
@@ -816,6 +818,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             <button
               onClick={() => (isCartOpen ? handleCloseCart() : setIsCartOpen(true))}
               className="relative w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 text-gray-700 hover:text-red-600 transition-all duration-200 rounded-full hover:bg-gray-50 hover:scale-105 flex items-center justify-center touch-manipulation bg-gray-100 group z-10"
+              suppressHydrationWarning
             >
               <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
               {cartItemCount > 0 && (

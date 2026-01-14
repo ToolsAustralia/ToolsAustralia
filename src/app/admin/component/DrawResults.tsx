@@ -21,6 +21,7 @@ import { Button, Input, Select } from "@/components/modals/ui";
 import { useToast } from "@/components/ui/Toast";
 import { formatDateInAEST } from "@/utils/common/timezone";
 import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
+import WinnerEditModal from "@/components/modals/WinnerEditModal";
 import ExportModal from "@/components/modals/ExportModal";
 
 // Types
@@ -173,6 +174,13 @@ export default function DrawResults() {
   const [selectedDraw, setSelectedDraw] = useState<DrawResult | null>(null);
   const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isEditWinnerModalOpen, setIsEditWinnerModalOpen] = useState(false);
+  const [editingWinner, setEditingWinner] = useState<{
+    winnerId: string;
+    winnerName: string;
+    testimony?: string | null;
+    selectedPrize?: string | null;
+  } | null>(null);
 
   // Fetch draws
   const fetchDraws = useCallback(
@@ -236,6 +244,51 @@ export default function DrawResults() {
     setIsWinnerModalOpen(true);
   };
 
+  // Handle edit winner - fetch winner details and open edit modal
+  const handleEditWinner = async (draw: DrawResult) => {
+    if (!draw.winner || !draw.winner.userId) return;
+
+    try {
+      // First, find the winner document ID by querying all winners
+      const allWinnersResponse = await fetch(`/api/winners/all?drawType=major&limit=100`);
+      if (allWinnersResponse.ok) {
+        const allWinnersData = await allWinnersResponse.json();
+        if (allWinnersData.success && allWinnersData.winners) {
+          const winnerForDraw = allWinnersData.winners.find(
+            (w: { drawId: string; drawType: string }) =>
+              w.drawId === draw._id && w.drawType === "major"
+          );
+
+          if (winnerForDraw) {
+            // Fetch full winner details
+            const winnerDetailsResponse = await fetch(`/api/admin/winners/${winnerForDraw.id}`);
+            if (winnerDetailsResponse.ok) {
+              const winnerDetailsData = await winnerDetailsResponse.json();
+              if (winnerDetailsData.success && winnerDetailsData.winner) {
+                setEditingWinner({
+                  winnerId: winnerDetailsData.winner.id,
+                  winnerName: `${winnerDetailsData.winner.winnerFirstName} ${winnerDetailsData.winner.winnerLastName}`.trim(),
+                  testimony: winnerDetailsData.winner.testimony,
+                  selectedPrize: winnerDetailsData.winner.selectedPrize || winnerDetailsData.winner.selectedPrizeSlug,
+                });
+                setSelectedDraw(draw);
+                setIsEditWinnerModalOpen(true);
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching winner details:", error);
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to load winner details. Please try again.",
+        duration: 5000,
+      });
+    }
+  };
+
   const handleWinnerSelected = async (winnerData: WinnerSelectionData) => {
     if (winnerData.drawType !== "major") {
       return;
@@ -246,6 +299,8 @@ export default function DrawResults() {
         majorDrawId: string;
         winnerUserId: string;
         imageUrl?: string;
+        testimony?: string;
+        selectedPrize?: string;
       } = {
         majorDrawId: winnerData.drawId,
         winnerUserId: winnerData.winnerUserId,
@@ -253,6 +308,14 @@ export default function DrawResults() {
       
       if (winnerData.imageUrl) {
         requestBody.imageUrl = winnerData.imageUrl;
+      }
+
+      if (winnerData.testimony !== undefined) {
+        requestBody.testimony = winnerData.testimony || undefined;
+      }
+
+      if (winnerData.selectedPrize !== undefined) {
+        requestBody.selectedPrize = winnerData.selectedPrize;
       }
 
       const response = await fetch("/api/admin/major-draw/select-winner", {
@@ -564,7 +627,7 @@ export default function DrawResults() {
                           </Button>
                         )}
                       {draw.winner && draw.winner.userId && (
-                        <Button onClick={() => handleSelectWinner(draw)} size="sm" variant="outline" icon={Edit}>
+                        <Button onClick={() => handleEditWinner(draw)} size="sm" variant="outline" icon={Edit}>
                           Edit Winner
                         </Button>
                       )}
@@ -642,6 +705,28 @@ export default function DrawResults() {
             majorDrawId={selectedDraw._id}
             majorDrawName={selectedDraw.name}
             totalParticipants={selectedDraw.totalEntries}
+          />
+        )}
+
+        {/* Winner Edit Modal */}
+        {selectedDraw && editingWinner && (
+          <WinnerEditModal
+            isOpen={isEditWinnerModalOpen}
+            onClose={() => {
+              setIsEditWinnerModalOpen(false);
+              setEditingWinner(null);
+              setSelectedDraw(null);
+            }}
+            winnerId={editingWinner.winnerId}
+            winnerName={editingWinner.winnerName}
+            drawName={selectedDraw.name}
+            drawType="major"
+            currentTestimony={editingWinner.testimony}
+            currentSelectedPrize={editingWinner.selectedPrize}
+            onUpdate={async () => {
+              // Refresh the draws list after update
+              await fetchDraws(pagination.currentPage);
+            }}
           />
         )}
       </div>

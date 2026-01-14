@@ -22,7 +22,11 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
   try {
     await connectDB();
     // We rely on the Winner collection so the gallery still works after draws are reopened
-    const winners = await Winner.find({ drawType: "mini" }).sort({ selectedDate: -1 }).limit(limit).lean();
+    const winners = await Winner.find({ drawType: "mini" })
+      .sort({ selectedDate: -1 })
+      .limit(limit)
+      .populate("userId", "firstName lastName state")
+      .lean();
 
     if (winners.length === 0) {
       return [];
@@ -41,9 +45,21 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
     );
 
     return winners.map((winner) => {
-      const drawId = (winner.drawId as Types.ObjectId).toString();
+      const w = winner as unknown as {
+        _id: Types.ObjectId | string;
+        drawId: Types.ObjectId | string;
+        userId: Types.ObjectId | string | { firstName?: string; lastName?: string; state?: string };
+        prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
+        imageUrl?: string;
+        selectedDate: Date;
+        entryNumber?: number;
+        selectedBy?: Types.ObjectId | string;
+        cycle?: number;
+      };
+      
+      const drawId = (w.drawId as Types.ObjectId).toString();
       const drawRecord = drawMap.get(drawId);
-      const prizeSnapshot = winner.prizeSnapshot ||
+      const prizeSnapshot = w.prizeSnapshot ||
         drawRecord?.prize || {
           name: drawRecord?.name ?? "Mini Draw",
           description: "",
@@ -51,8 +67,12 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
           images: [],
         };
 
+      const winnerUser = (typeof w.userId === 'object' && !(w.userId instanceof Types.ObjectId) && 'firstName' in w.userId) 
+        ? w.userId 
+        : null;
+
       return {
-        id: (winner._id as Types.ObjectId).toString(),
+        id: (w._id as Types.ObjectId).toString(),
         drawId,
         drawName: drawRecord?.name ?? prizeSnapshot.name,
         drawType: "mini",
@@ -62,11 +82,14 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
           value: prizeSnapshot.value ?? 0,
           images: prizeSnapshot.images ?? [],
         },
-        entryNumber: winner.entryNumber ?? 0,
-        selectedDate: winner.selectedDate.toISOString(),
-        imageUrl: winner.imageUrl,
-        selectedBy: winner.selectedBy ? (winner.selectedBy as Types.ObjectId).toString() : undefined,
-        cycle: winner.cycle ?? 1,
+        winnerFirstName: winnerUser?.firstName || "",
+        winnerLastName: winnerUser?.lastName || "",
+        winnerState: winnerUser?.state || undefined,
+        entryNumber: w.entryNumber ?? 0,
+        selectedDate: w.selectedDate.toISOString(),
+        imageUrl: w.imageUrl,
+        selectedBy: w.selectedBy ? (w.selectedBy as Types.ObjectId).toString() : undefined,
+        cycle: w.cycle ?? 1,
       } satisfies WinnerSummary;
     });
   } catch (error) {

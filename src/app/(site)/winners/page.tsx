@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trophy } from "lucide-react";
+import { Trophy, Sparkles } from "lucide-react";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import MembershipSection from "@/components/sections/MembershipSection";
 import WinnerCard, { type WinnerCardData } from "@/components/cards/WinnerCard";
 import WinnerFilterToggle from "@/components/filters/WinnerFilterToggle";
+import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection";
 
 // Use WinnerCardData type from WinnerCard component
 type Winner = WinnerCardData;
@@ -120,7 +121,7 @@ export default function WinnersPage() {
       </section>
 
       {/* Winners Grid */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             {[...Array(6)].map((_, i) => (
@@ -137,11 +138,33 @@ export default function WinnersPage() {
             ))}
           </div>
         ) : filteredWinners.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-            {filteredWinners.map((winner) => (
-              <WinnerCard key={winner.id} winner={winner} />
-            ))}
-          </div>
+          <>
+            {/* Special messaging for single winner (inaugural winner) */}
+            {filteredWinners.length === 1 && !searchQuery && filter === "all" && (
+              <div className="mb-8 text-center">
+                <div className="inline-flex items-center gap-2 mb-3 px-4 py-2 bg-gradient-to-r from-yellow-50 to-amber-50 rounded-full border border-yellow-200">
+                  <Sparkles className="w-4 h-4 text-yellow-600" />
+                  <span className="text-sm font-semibold text-yellow-800">Our Inaugural Winner</span>
+                </div>
+                <p className="text-gray-600 font-['Inter'] max-w-2xl mx-auto">
+                  We&apos;re thrilled to celebrate our first winner! This is just the beginning of many amazing winners to come.
+                </p>
+              </div>
+            )}
+
+            {/* Winners Grid - Centered for single winner, normal grid for multiple */}
+            <div
+              className={`grid gap-4 sm:gap-6 lg:gap-8 ${
+                filteredWinners.length === 1 && !searchQuery && filter === "all"
+                  ? "grid-cols-1 max-w-2xl mx-auto"
+                  : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+              }`}
+            >
+              {filteredWinners.map((winner) => (
+                <WinnerCard key={winner.id} winner={winner} />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full mb-4">
@@ -155,14 +178,20 @@ export default function WinnersPage() {
             </p>
           </div>
         )}
-         {/* Membership Section - Be Our Next Winner */}
+      </section>
+
+      {/* Testimony Section - Display below winners grid */}
+      {!loading && winners.length > 0 && (
+        <WinnerTestimonySection winners={winners} />
+      )}
+
+      {/* Membership Section - Be Our Next Winner */}
       <section className="bg-gradient-to-br from-gray-50 via-white to-gray-50">
         <MembershipSection
           title="BE OUR NEXT WINNER"
           padding="py-12 sm:py-16 lg:py-20"
           titleColor="text-gray-900"
         />
-      </section>
       </section>
 
      

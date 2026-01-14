@@ -22,6 +22,10 @@ const selectWinnerSchema = z.object({
   majorDrawId: z.string(),
   winnerUserId: z.string(),
   imageUrl: z.string().url().optional().nullable(),
+  testimony: z.string().trim().optional().nullable(),
+  selectedPrize: z.string().trim().optional().nullable(),
+  // Legacy field - kept for backward compatibility
+  selectedPrizeSlug: z.string().optional().nullable(),
 });
 
 /**
@@ -97,8 +101,19 @@ export async function POST(request: NextRequest) {
       // Update existing winner document
       existingWinner.userId = new Types.ObjectId(validatedData.winnerUserId);
       existingWinner.selectedBy = new Types.ObjectId(session.user.id);
-      if (validatedData.imageUrl) {
-        existingWinner.imageUrl = validatedData.imageUrl;
+      if (validatedData.imageUrl !== undefined) {
+        existingWinner.imageUrl = validatedData.imageUrl || undefined;
+      }
+      // Update testimony if provided
+      if (validatedData.testimony !== undefined) {
+        existingWinner.testimony = validatedData.testimony || undefined;
+      }
+      // Update selected prize if provided (prefer new field, fallback to legacy)
+      if (validatedData.selectedPrize !== undefined) {
+        existingWinner.selectedPrize = validatedData.selectedPrize || undefined;
+      } else if (validatedData.selectedPrizeSlug !== undefined) {
+        // Legacy support: migrate selectedPrizeSlug to selectedPrize
+        existingWinner.selectedPrize = validatedData.selectedPrizeSlug || undefined;
       }
       // Update prize snapshot if prize changed
       if (majorDraw.prize) {
@@ -169,6 +184,9 @@ export async function POST(request: NextRequest) {
           images: string[];
         };
         imageUrl?: string;
+        testimony?: string;
+        selectedPrize?: string;
+        selectedPrizeSlug?: string; // Legacy field
         cycle: number;
       } = {
         drawId: majorDraw._id,
@@ -184,6 +202,9 @@ export async function POST(request: NextRequest) {
           images: majorDraw.prize?.images || [],
         },
         imageUrl: imageUrlToSave || undefined, // Convert null to undefined
+        testimony: validatedData.testimony || undefined,
+        selectedPrize: validatedData.selectedPrize || (validatedData.selectedPrizeSlug || undefined), // Prefer new field, fallback to legacy
+        selectedPrizeSlug: validatedData.selectedPrizeSlug || undefined,
         cycle: 1, // Major draws are single-cycle
       };
       
@@ -326,6 +347,8 @@ export async function GET(request: NextRequest) {
           selectedDate: winner.selectedDate,
           selectionMethod: winner.selectionMethod,
           imageUrl: winner.imageUrl,
+          testimony: winner.testimony,
+          selectedPrizeSlug: winner.selectedPrizeSlug,
         },
         majorDraw: {
           id: majorDraw._id,

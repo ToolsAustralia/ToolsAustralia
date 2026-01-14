@@ -14,6 +14,7 @@ import {
   ImageUpload,
 } from "./ui";
 import { convertUTCToAEST, createAESTDateAsUTC, calculateActivationDate } from "@/utils/common/timezone";
+import RichTextEditor from "@/components/ui/RichTextEditor";
 
 interface AdminMajorDrawModalProps {
   isOpen: boolean;
@@ -509,18 +510,28 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
               className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
             />
 
-            <Textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              label="Description"
-              placeholder="Describe the major draw and what makes it special..."
-              required
-              error={errors.description}
-              rows={4}
-              className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-            />
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                Description <span className="text-red-500">*</span>
+              </label>
+              {errors.description && (
+                <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  {errors.description}
+                </p>
+              )}
+              <RichTextEditor
+                value={formData.description}
+                onChange={(html) => {
+                  const syntheticEvent = {
+                    target: { name: "description", value: html },
+                  } as React.ChangeEvent<HTMLInputElement>;
+                  handleInputChange(syntheticEvent);
+                }}
+                placeholder="Describe the major draw and what makes it special..."
+                minHeight="150px"
+              />
+            </div>
           </FormSection>
 
           <FormSection title="Prize Details" icon={Trophy}>
@@ -553,18 +564,28 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
               />
             </div>
 
-            <Textarea
-              id="prize.description"
-              name="prize.description"
-              value={formData.prize.description}
-              onChange={handleInputChange}
-              label="Prize Description"
-              placeholder="Describe the prize, its features, and what makes it special..."
-              required
-              error={errors["prize.description"]}
-              rows={3}
-              className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-            />
+            <div>
+              <label htmlFor="prize.description" className="block text-sm font-medium text-gray-700 mb-2">
+                Prize Description <span className="text-red-500">*</span>
+              </label>
+              {errors["prize.description"] && (
+                <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  {errors["prize.description"]}
+                </p>
+              )}
+              <RichTextEditor
+                value={formData.prize.description}
+                onChange={(html) => {
+                  const syntheticEvent = {
+                    target: { name: "prize.description", value: html },
+                  } as React.ChangeEvent<HTMLInputElement>;
+                  handleInputChange(syntheticEvent);
+                }}
+                placeholder="Describe the prize, its features, and what makes it special..."
+                minHeight="150px"
+              />
+            </div>
 
             <Input
               id="prize.brand"

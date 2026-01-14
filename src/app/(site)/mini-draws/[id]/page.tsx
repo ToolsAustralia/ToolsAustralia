@@ -291,7 +291,10 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
             {/* Description */}
             <div>
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">Description</h3>
-              <p className="text-sm sm:text-base text-gray-600 leading-relaxed">{miniDrawData.description}</p>
+              <div
+                className="text-sm sm:text-base text-gray-600 leading-relaxed prose prose-sm sm:prose-base max-w-none"
+                dangerouslySetInnerHTML={{ __html: miniDrawData.description }}
+              />
             </div>
           </div>
         </div>

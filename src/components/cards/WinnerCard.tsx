@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, Calendar, Award } from "lucide-react";
+import { MapPin, Calendar, Award, Gift } from "lucide-react";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
@@ -23,6 +23,8 @@ export interface WinnerCardData {
   imageUrl?: string;
   selectedDate: string;
   entryNumber?: number;
+  testimony?: string;
+  selectedPrize?: string;
 }
 
 interface WinnerCardProps {
@@ -48,7 +50,7 @@ export default function WinnerCard({ winner, className = "" }: WinnerCardProps) 
       <div className="absolute inset-0 bg-gradient-to-br from-red-500/0 via-red-500/0 to-red-500/0 group-hover:from-red-500/5 group-hover:via-red-500/3 group-hover:to-red-500/5 transition-all duration-500 rounded-3xl pointer-events-none z-0"></div>
 
       {/* Winner Image Section */}
-      <div className="relative h-72 sm:h-80 bg-gradient-to-br from-slate-100 via-gray-100 to-slate-200 overflow-hidden">
+      <div className="relative h-72 sm:h-80 lg:h-96 bg-gradient-to-br from-slate-100 via-gray-100 to-slate-200 overflow-hidden">
         <Image
           src={displayImage}
           alt={`${formattedName} - ${winner.drawName}`}
@@ -74,6 +76,20 @@ export default function WinnerCard({ winner, className = "" }: WinnerCardProps) 
             {winner.drawType === "major" ? "Major Draw" : "Mini Draw"}
           </div>
         </div>
+
+        {/* Selected Prize Badge - Overlayed on Image (Top Right) - Only for major draws */}
+        {winner.drawType === "major" && winner.selectedPrize && (
+          <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-20">
+            <div className="bg-black/80 backdrop-blur-md rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+                <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins'] max-w-[120px] sm:max-w-[150px] truncate">
+                  {winner.selectedPrize}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Winner Name Overlay - Elevated Design */}
         <div className="absolute bottom-0 left-0 right-0 z-20 p-3 sm:p-6">
@@ -124,32 +140,33 @@ export default function WinnerCard({ winner, className = "" }: WinnerCardProps) 
 
       {/* Content Section */}
       <div className="relative z-10 p-4 sm:p-7 bg-white">
-        {/* Draw Name - Prominent Display */}
-        <div className="mb-3 sm:mb-5">
-          <div className="inline-flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-red-50 via-orange-50 to-red-50 rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-5 sm:py-4 border border-red-100/80 shadow-sm hover:shadow-md transition-shadow duration-300">
-            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-[#ee0000] to-red-700 rounded-lg sm:rounded-xl shadow-lg">
+        {/* Draw Name and Win Date - Same Row */}
+        <div className="flex items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-5 pb-4 sm:pb-6 border-b border-gray-100">
+          {/* Draw Name */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-[#ee0000] to-red-700 rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
               <Award className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <span className="text-sm sm:text-xl font-bold text-gray-900 font-['Poppins'] tracking-tight">
+            <span className="text-sm sm:text-lg font-bold text-gray-900 font-['Poppins'] tracking-tight truncate">
               {winner.drawName}
             </span>
           </div>
-        </div>
 
-        {/* Win Date - Elegant Display */}
-        <div className="flex items-center gap-2 sm:gap-3  pb-4 sm:pb-6 border-b border-gray-100">
-          <div className="p-1.5 sm:p-2 bg-gray-50 rounded-lg sm:rounded-xl">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-          </div>
-          <div>
-            <span className="text-xs sm:text-sm text-gray-500 font-['Inter'] font-medium">Won on</span>
-            <p className="text-sm sm:text-base text-gray-900 font-['Inter'] font-semibold">
-              {selectedDate.toLocaleDateString("en-AU", {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </p>
+          {/* Win Date */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            <div className="p-1 sm:p-1.5 bg-gray-50 rounded-lg sm:rounded-xl">
+              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] sm:text-xs text-gray-500 font-['Inter'] font-medium block">Won on</span>
+              <p className="text-xs sm:text-sm text-gray-900 font-['Inter'] font-semibold whitespace-nowrap">
+                {selectedDate.toLocaleDateString("en-AU", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
           </div>
         </div>
 

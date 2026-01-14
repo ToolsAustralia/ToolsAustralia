@@ -15,6 +15,7 @@ import MajorDrawSection from "@/components/sections/MajorDrawSection";
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
+import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -132,6 +133,48 @@ export default function MyAccountPage() {
     sortBy: "createdAt",
     sortOrder: "desc",
   });
+
+  // Fetch winners for testimony section
+  const [winners, setWinners] = React.useState<Array<{
+    id: string;
+    drawId: string;
+    drawName: string;
+    drawType: "major" | "mini";
+    prize: {
+      name: string;
+      description: string;
+      value: number;
+      images: string[];
+    };
+    winnerFirstName: string;
+    winnerLastName: string;
+    winnerState?: string;
+    imageUrl?: string;
+    selectedDate: string;
+    testimony?: string;
+    selectedPrize?: string;
+    cycle: number;
+  }>>([]);
+  const [winnersLoading, setWinnersLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchWinners = async () => {
+      try {
+        const response = await fetch("/api/winners/all?limit=100");
+        const data = await response.json();
+
+        if (data.success && data.winners) {
+          setWinners(data.winners);
+        }
+      } catch (error) {
+        console.error("Error fetching winners:", error);
+      } finally {
+        setWinnersLoading(false);
+      }
+    };
+
+    fetchWinners();
+  }, []);
 
   // Get membership packages and promo for modal integration
   const { subscriptionPackages } = useMemberships();
@@ -1014,6 +1057,11 @@ export default function MyAccountPage() {
 
           {/* Latest Winner Hero Section */}
           <LatestWinnerHero className="mb-12" />
+
+          {/* Winner Testimony Section */}
+          {!winnersLoading && winners.length > 0 && (
+            <WinnerTestimonySection winners={winners} className="mb-12" />
+          )}
 
           {/* Mini Draw Section */}
           <div className="">

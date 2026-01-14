@@ -14,6 +14,7 @@ import {
   ImageUpload,
 } from "./ui";
 import { brandOptions } from "@/utils/brand-utils";
+import RichTextEditor from "@/components/ui/RichTextEditor";
 
 interface AdminMiniDrawModalProps {
   isOpen: boolean;
@@ -204,17 +205,28 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
               error={errors.name}
             />
 
-            <Textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              label="Description"
-              placeholder="Describe the mini draw..."
-              required
-              error={errors.description}
-              rows={4}
-            />
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                Description <span className="text-red-500">*</span>
+              </label>
+              {errors.description && (
+                <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  {errors.description}
+                </p>
+              )}
+              <RichTextEditor
+                value={formData.description}
+                onChange={(html) => {
+                  const syntheticEvent = {
+                    target: { name: "description", value: html },
+                  } as React.ChangeEvent<HTMLInputElement>;
+                  handleInputChange(syntheticEvent);
+                }}
+                placeholder="Describe the mini draw..."
+                minHeight="150px"
+              />
+            </div>
           </FormSection>
 
           <FormSection title="Prize Details" icon={Trophy}>
@@ -229,17 +241,28 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
               error={errors["prize.name"]}
             />
 
-            <Textarea
-              id="prize.description"
-              name="prize.description"
-              value={formData.prize.description}
-              onChange={handleInputChange}
-              label="Prize Description"
-              placeholder="Describe the prize..."
-              required
-              error={errors["prize.description"]}
-              rows={3}
-            />
+            <div>
+              <label htmlFor="prize.description" className="block text-sm font-medium text-gray-700 mb-2">
+                Prize Description <span className="text-red-500">*</span>
+              </label>
+              {errors["prize.description"] && (
+                <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  {errors["prize.description"]}
+                </p>
+              )}
+              <RichTextEditor
+                value={formData.prize.description}
+                onChange={(html) => {
+                  const syntheticEvent = {
+                    target: { name: "prize.description", value: html },
+                  } as React.ChangeEvent<HTMLInputElement>;
+                  handleInputChange(syntheticEvent);
+                }}
+                placeholder="Describe the prize..."
+                minHeight="150px"
+              />
+            </div>
 
             <Select
               id="brandId"

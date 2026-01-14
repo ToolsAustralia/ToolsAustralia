@@ -6,6 +6,7 @@ import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { formatDateInAEST, formatCountdown } from "@/utils/common/timezone";
 import { useToast } from "@/components/ui/Toast";
 import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
+import WinnerEditModal from "@/components/modals/WinnerEditModal";
 import ParticipantsModal from "@/components/modals/ParticipantsModal";
 import {
   Trophy,
@@ -39,8 +40,13 @@ export default function MajorDrawManagement() {
     selectedDate: Date;
     selectionMethod?: string;
     imageUrl?: string;
+    testimony?: string | null;
+    selectedPrize?: string | null;
+    winnerId?: string;
+    winnerName?: string;
   } | null>(null);
   const [isLoadingWinner, setIsLoadingWinner] = useState(false);
+  const [isEditWinnerModalOpen, setIsEditWinnerModalOpen] = useState(false);
 
   // Fetch current winner from Winner model
   useEffect(() => {
@@ -49,17 +55,117 @@ export default function MajorDrawManagement() {
     const fetchWinner = async () => {
       setIsLoadingWinner(true);
       try {
+        // First, get basic winner info
         const response = await fetch(`/api/admin/major-draw/select-winner?majorDrawId=${currentMajorDraw._id}`);
         const data = await response.json();
         
         if (data.hasWinner && data.winner) {
-          setCurrentWinner({
-            userId: data.winner.userId.toString(),
-            entryNumber: data.winner.entryNumber || 0,
-            selectedDate: new Date(data.winner.selectedDate),
-            selectionMethod: data.winner.selectionMethod,
-            imageUrl: data.winner.imageUrl,
-          });
+          // Now fetch full winner details using the winners API
+          // We need to find the winner document by drawId and drawType
+          // Since we don't have the winner document ID yet, let's query all winners for this draw
+          try {
+            const allWinnersResponse = await fetch(`/api/winners/all?drawType=major&limit=100`);
+            if (allWinnersResponse.ok) {
+              const allWinnersData = await allWinnersResponse.json();
+              if (allWinnersData.success && allWinnersData.winners) {
+                // Find the winner for this specific draw
+                const winnerForDraw = allWinnersData.winners.find(
+                  (w: { drawId: string; drawType: string }) =>
+                    w.drawId === currentMajorDraw._id?.toString() && w.drawType === "major"
+                );
+                
+                if (winnerForDraw) {
+                  // Now fetch full details using the winner ID
+                  const winnerDetailsResponse = await fetch(`/api/admin/winners/${winnerForDraw.id}`);
+                  if (winnerDetailsResponse.ok) {
+                    const winnerDetailsData = await winnerDetailsResponse.json();
+                    if (winnerDetailsData.success && winnerDetailsData.winner) {
+                      setCurrentWinner({
+                        userId: data.winner.userId.toString(),
+                        entryNumber: data.winner.entryNumber || 0,
+                        selectedDate: new Date(data.winner.selectedDate),
+                        selectionMethod: data.winner.selectionMethod,
+                        imageUrl: data.winner.imageUrl,
+                        testimony: winnerDetailsData.winner.testimony,
+                        selectedPrize: winnerDetailsData.winner.selectedPrize || winnerDetailsData.winner.selectedPrizeSlug,
+                        winnerId: winnerDetailsData.winner.id,
+                        winnerName: `${winnerDetailsData.winner.winnerFirstName} ${winnerDetailsData.winner.winnerLastName}`.trim(),
+                      });
+                    } else {
+                      // Fallback
+                      setCurrentWinner({
+                        userId: data.winner.userId.toString(),
+                        entryNumber: data.winner.entryNumber || 0,
+                        selectedDate: new Date(data.winner.selectedDate),
+                        selectionMethod: data.winner.selectionMethod,
+                        imageUrl: data.winner.imageUrl,
+                        testimony: winnerForDraw.testimony,
+                        selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
+                        winnerId: winnerForDraw.id,
+                      });
+                    }
+                  } else {
+                    // Fallback
+                    setCurrentWinner({
+                      userId: data.winner.userId.toString(),
+                      entryNumber: data.winner.entryNumber || 0,
+                      selectedDate: new Date(data.winner.selectedDate),
+                      selectionMethod: data.winner.selectionMethod,
+                      imageUrl: data.winner.imageUrl,
+                      testimony: winnerForDraw.testimony,
+                      selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
+                      winnerId: winnerForDraw.id,
+                    });
+                  }
+                } else {
+                  // No winner found in all winners, use basic data
+                  setCurrentWinner({
+                    userId: data.winner.userId.toString(),
+                    entryNumber: data.winner.entryNumber || 0,
+                    selectedDate: new Date(data.winner.selectedDate),
+                    selectionMethod: data.winner.selectionMethod,
+                    imageUrl: data.winner.imageUrl,
+                    testimony: data.winner.testimony,
+                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                  });
+                }
+              } else {
+                // Fallback to basic winner data
+                setCurrentWinner({
+                  userId: data.winner.userId.toString(),
+                  entryNumber: data.winner.entryNumber || 0,
+                  selectedDate: new Date(data.winner.selectedDate),
+                  selectionMethod: data.winner.selectionMethod,
+                  imageUrl: data.winner.imageUrl,
+                  testimony: data.winner.testimony,
+                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                });
+              }
+            } else {
+              // Fallback to basic winner data
+              setCurrentWinner({
+                userId: data.winner.userId.toString(),
+                entryNumber: data.winner.entryNumber || 0,
+                selectedDate: new Date(data.winner.selectedDate),
+                selectionMethod: data.winner.selectionMethod,
+                imageUrl: data.winner.imageUrl,
+                testimony: data.winner.testimony,
+                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+              });
+            }
+          } catch (detailError) {
+            console.error("Error fetching winner details:", detailError);
+            // Fallback to basic winner data
+            setCurrentWinner({
+              userId: data.winner.userId.toString(),
+              entryNumber: data.winner.entryNumber || 0,
+              selectedDate: new Date(data.winner.selectedDate),
+              selectionMethod: data.winner.selectionMethod,
+              imageUrl: data.winner.imageUrl,
+              testimony: data.winner.testimony,
+                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+            });
+          }
         } else {
           setCurrentWinner(null);
         }
@@ -217,6 +323,8 @@ export default function MajorDrawManagement() {
         majorDrawId: string;
         winnerUserId: string;
         imageUrl?: string;
+        testimony?: string;
+        selectedPrize?: string;
       } = {
         majorDrawId: winnerData.drawId,
         winnerUserId: winnerData.winnerUserId,
@@ -232,6 +340,14 @@ export default function MajorDrawManagement() {
           imageUrlValue: winnerData.imageUrl,
           winnerDataKeys: Object.keys(winnerData),
         });
+      }
+
+      // Include testimony and selectedPrizeSlug if provided
+      if (winnerData.testimony !== undefined) {
+        requestBody.testimony = winnerData.testimony || undefined;
+      }
+      if (winnerData.selectedPrize !== undefined) {
+        requestBody.selectedPrize = winnerData.selectedPrize;
       }
 
       const response = await fetch("/api/admin/major-draw/select-winner", {
@@ -256,20 +372,7 @@ export default function MajorDrawManagement() {
       });
 
       setIsWinnerModalOpen(false);
-      // Refetch winner from Winner model
-      const winnerResponse = await fetch(`/api/admin/major-draw/select-winner?majorDrawId=${majorDraw._id}`);
-      const winnerResponseData = await winnerResponse.json();
-      if (winnerResponseData.hasWinner && winnerResponseData.winner) {
-        setCurrentWinner({
-          userId: winnerResponseData.winner.userId.toString(),
-          entryNumber: winnerResponseData.winner.entryNumber || 0,
-          selectedDate: new Date(winnerResponseData.winner.selectedDate),
-          selectionMethod: winnerResponseData.winner.selectionMethod,
-          imageUrl: winnerResponseData.winner.imageUrl,
-        });
-      } else {
-        setCurrentWinner(null);
-      }
+      // Refetch winner from Winner model - trigger the useEffect to reload
       refetch();
     } catch (error) {
       console.error("Winner selection error:", error);
@@ -479,12 +582,23 @@ export default function MajorDrawManagement() {
 
         {/* Winner Display */}
         {currentWinner && (
-          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl shadow-lg border-2 border-yellow-400 p-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-yellow-600" />
-              Winner Selected
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl shadow-lg border-2 border-yellow-400 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-yellow-600" />
+                Winner Selected
+              </h3>
+              {currentWinner.winnerId && (
+                <button
+                  onClick={() => setIsEditWinnerModalOpen(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-red-700 text-white rounded-lg hover:from-red-700 hover:to-[#ee0000] transition-all duration-200 shadow-md hover:shadow-lg font-medium text-sm flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Edit Winner
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="text-sm text-gray-600">Winner User ID</p>
                 <p className="font-semibold text-gray-900">{currentWinner.userId}</p>
@@ -508,6 +622,20 @@ export default function MajorDrawManagement() {
                 </p>
               </div>
             </div>
+            {/* Display selected prize if available */}
+            {currentWinner.selectedPrize && (
+              <div className="mt-4 p-3 bg-white rounded-lg border border-yellow-300">
+                <p className="text-sm text-gray-600 mb-1">Selected Prize</p>
+                <p className="font-semibold text-gray-900">{currentWinner.selectedPrize}</p>
+              </div>
+            )}
+            {/* Display testimony preview if available */}
+            {currentWinner.testimony && (
+              <div className="mt-4 p-3 bg-white rounded-lg border border-yellow-300">
+                <p className="text-sm text-gray-600 mb-1">Testimony Preview</p>
+                <p className="text-sm text-gray-700 line-clamp-3">{currentWinner.testimony}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -555,6 +683,24 @@ export default function MajorDrawManagement() {
               : undefined
           }
         />
+
+        {/* Winner Edit Modal */}
+        {currentWinner && currentWinner.winnerId && (
+          <WinnerEditModal
+            isOpen={isEditWinnerModalOpen}
+            onClose={() => setIsEditWinnerModalOpen(false)}
+            winnerId={currentWinner.winnerId}
+            winnerName={currentWinner.winnerName || "Winner"}
+            drawName={majorDraw.name || ""}
+            drawType="major"
+            currentTestimony={currentWinner.testimony}
+            currentSelectedPrize={currentWinner.selectedPrize}
+            onUpdate={async () => {
+              // Refetch winner data after update
+              refetch();
+            }}
+          />
+        )}
 
         {/* Participants Modal */}
         <ParticipantsModal

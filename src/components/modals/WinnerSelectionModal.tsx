@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Trophy, User, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { Trophy, User, CheckCircle, AlertCircle, Image as ImageIcon, MessageSquare, Gift } from "lucide-react";
 import UserSearchModal from "./UserSearchModal";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import ImageUpload from "./ui/ImageUpload";
+import RichTextEditor from "@/components/ui/RichTextEditor";
 
 // Types
 interface UserSearchResult {
@@ -36,6 +37,8 @@ export interface WinnerSelectionData {
   drawType: WinnerSelectionDrawType;
   winnerUserId: string;
   imageUrl?: string;
+  testimony?: string;
+  selectedPrize?: string;
 }
 
 interface WinnerSelectionModalProps {
@@ -49,6 +52,8 @@ interface WinnerSelectionModalProps {
   currentWinner?: {
     userId: string;
     imageUrl?: string;
+    selectedPrize?: string;
+    testimony?: string;
   };
   enableImageField?: boolean;
 }
@@ -69,15 +74,25 @@ export default function WinnerSelectionModal({
   const [error, setError] = useState<string | null>(null);
   const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
   const [winnerImages, setWinnerImages] = useState<(File | string)[]>([]);
+  // Prize selection and testimony state
+  const [selectedPrize, setSelectedPrize] = useState("");
+  const [testimony, setTestimony] = useState("");
+
   useEffect(() => {
     if (!isOpen) {
       setSelectedUser(null);
       setWinnerImages([]);
       setError(null);
+          setSelectedPrize("");
+      setTestimony("");
     } else if (enableImageField && currentWinner?.imageUrl) {
       setWinnerImages([currentWinner.imageUrl]);
+      setSelectedPrize(currentWinner.selectedPrize || "");
+      setTestimony(currentWinner.testimony || "");
     } else if (enableImageField) {
       setWinnerImages([]);
+      setSelectedPrize("");
+      setTestimony("");
     }
   }, [isOpen, enableImageField, currentWinner]);
 
@@ -104,6 +119,8 @@ export default function WinnerSelectionModal({
         drawId,
         drawType,
         winnerUserId: selectedUser._id,
+        testimony: testimony.trim() || undefined,
+        selectedPrize: selectedPrize || undefined,
       };
 
       // Handle image upload for both draw types
@@ -272,6 +289,47 @@ export default function WinnerSelectionModal({
                   </div>
                 </button>
               )}
+            </div>
+
+            {/* Prize Selection - Only for major draws */}
+            {drawType === "major" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-gray-500" />
+                    Selected Prize (Optional)
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  value={selectedPrize}
+                  onChange={(e) => setSelectedPrize(e.target.value)}
+                  placeholder="e.g., $10,000 Cash, Milwaukee + Sidchrome, DeWalt + Sidchrome, etc."
+                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ee0000] focus:border-[#ee0000] font-['Inter'] bg-white transition-all duration-200"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Enter the prize selected by the winner. This will be displayed on the winners page. You can enter any prize description (e.g., &quot;$15,000 Cash&quot;, &quot;Milwaukee + Sidchrome Tool Set&quot;, etc.). You can set this now or update it later.
+                </p>
+              </div>
+            )}
+
+            {/* Testimony Field - Rich Text Editor */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-gray-500" />
+                  Winner Testimony (Optional)
+                </div>
+              </label>
+              <RichTextEditor
+                value={testimony}
+                onChange={(html) => setTestimony(html)}
+                placeholder="Enter the winner's testimony here. You can format text, highlight important parts, and adjust line spacing."
+                minHeight="250px"
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                The winner&apos;s testimony will be displayed on the winners page. Use the toolbar to format text, add highlights, and adjust line spacing. You can add or update this later.
+              </p>
             </div>
 
             {/* Image Upload - Always enabled for major draws, optional for mini draws */}

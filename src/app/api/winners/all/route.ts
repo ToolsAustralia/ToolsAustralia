@@ -4,6 +4,7 @@ import Winner from "@/models/Winner";
 // Import ensures MajorDraw model is registered before populate
 import MajorDraw from "@/models/MajorDraw";
 import { Types } from "mongoose";
+import type { WinnerSummary } from "@/types/winner";
 
 // Suppress unused import warning - import is needed for model registration
 void MajorDraw;
@@ -27,24 +28,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20", 20);
     const drawType = searchParams.get("drawType"); // "major" | "mini" | null (all)
 
-    const winners: Array<{
-      id: string;
-      drawId: string;
-      drawName: string;
-      drawType: "major" | "mini";
-      prize: {
-        name: string;
-        description: string;
-        value: number;
-        images: string[];
-      };
-      winnerFirstName: string;
-      winnerLastName: string;
-      winnerState?: string;
-      imageUrl?: string;
-      selectedDate: Date;
-      entryNumber?: number;
-    }> = [];
+    const winners: WinnerSummary[] = [];
 
     // Fetch major draw winners if needed
     if (!drawType || drawType === "major") {
@@ -69,6 +53,10 @@ export async function GET(request: NextRequest) {
           imageUrl?: string;
           selectedDate: Date;
           entryNumber?: number;
+          testimony?: string;
+          selectedPrize?: string;
+          selectedPrizeSlug?: string; // Legacy field
+          cycle?: number;
         };
         const winnerUser = (typeof w.userId === 'object' && !(w.userId instanceof Types.ObjectId) && 'firstName' in w.userId) 
           ? w.userId 
@@ -78,6 +66,10 @@ export async function GET(request: NextRequest) {
         const majorDraw = (typeof w.drawId === 'object' && !(w.drawId instanceof Types.ObjectId) && 'name' in w.drawId) 
           ? w.drawId 
           : null;
+        
+        // Extract testimony and selectedPrize directly from the lean result (prefer new field, fallback to legacy)
+        const testimonyValue = w.testimony || undefined;
+        const selectedPrizeValue = w.selectedPrize || w.selectedPrizeSlug || undefined;
         
         winners.push({
           id: toIdString(w._id),
@@ -94,8 +86,11 @@ export async function GET(request: NextRequest) {
           winnerLastName: winnerUser?.lastName || "",
           winnerState: winnerUser?.state || "",
           imageUrl: w.imageUrl,
-          selectedDate: w.selectedDate,
+          selectedDate: w.selectedDate.toISOString(),
           entryNumber: w.entryNumber,
+          testimony: testimonyValue,
+          selectedPrize: selectedPrizeValue,
+          cycle: w.cycle || 1,
         });
       });
     }
@@ -109,6 +104,7 @@ export async function GET(request: NextRequest) {
 
       miniDrawWinners.forEach((winner) => {
         // Type assertion for lean() result with populated fields
+        // Note: .lean() returns plain objects, so all fields should be included
         const w = winner as unknown as {
           _id: Types.ObjectId | string;
           drawId: Types.ObjectId | string;
@@ -117,10 +113,18 @@ export async function GET(request: NextRequest) {
           imageUrl?: string;
           selectedDate: Date;
           entryNumber?: number;
+          testimony?: string;
+          selectedPrize?: string;
+          selectedPrizeSlug?: string; // Legacy field
+          cycle?: number;
         };
         const winnerUser = (typeof w.userId === 'object' && !(w.userId instanceof Types.ObjectId) && 'firstName' in w.userId) 
           ? w.userId 
           : null;
+        // Extract testimony and selectedPrize directly from the lean result (prefer new field, fallback to legacy)
+        const testimonyValue = w.testimony || undefined;
+        const selectedPrizeValue = w.selectedPrize || w.selectedPrizeSlug || undefined;
+        
         winners.push({
           id: toIdString(w._id),
           drawId: toIdString(w.drawId),
@@ -136,8 +140,11 @@ export async function GET(request: NextRequest) {
           winnerLastName: winnerUser?.lastName || "",
           winnerState: winnerUser?.state || "",
           imageUrl: w.imageUrl,
-          selectedDate: w.selectedDate,
+          selectedDate: w.selectedDate.toISOString(),
           entryNumber: w.entryNumber,
+          testimony: testimonyValue,
+          selectedPrize: selectedPrizeValue,
+          cycle: w.cycle || 1,
         });
       });
     }

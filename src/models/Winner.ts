@@ -19,6 +19,13 @@ export interface IWinner extends Document {
     category?: string;
   };
   imageUrl?: string;
+  // Testimony from the winner (optional, can be added later)
+  testimony?: string;
+  // Selected prize text for major draws (optional, only for major draw winners)
+  // This is a free-form text field to allow flexibility as prize values change
+  selectedPrize?: string;
+  // Legacy field - kept for backward compatibility, will be migrated to selectedPrize
+  selectedPrizeSlug?: string;
   cycle: number;
   createdAt: Date;
   updatedAt: Date;
@@ -72,6 +79,21 @@ const WinnerSchema = new Schema<IWinner>(
       category: { type: String },
     },
     imageUrl: {
+      type: String,
+    },
+    // Testimony from the winner (optional, can be added later)
+    testimony: {
+      type: String,
+      trim: true,
+    },
+    // Selected prize text for major draws (optional, only for major draw winners)
+    // Free-form text field to allow flexibility as prize values change
+    selectedPrize: {
+      type: String,
+      trim: true,
+    },
+    // Legacy field - kept for backward compatibility
+    selectedPrizeSlug: {
       type: String,
     },
     cycle: {

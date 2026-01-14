@@ -1195,3 +1195,45 @@ export function getPrizeBySlug(slug: string): PrizeCatalogEntry | undefined {
 export function listPrizes(): PrizeCatalogEntry[] {
   return PRIZE_CATALOG.slice();
 }
+
+/**
+ * Get a short, user-friendly label for a prize slug
+ * Useful for displaying selected prize in winner cards and admin interfaces
+ * @param slug - The prize slug to get the label for
+ * @returns A short label string, or undefined if slug is invalid
+ */
+export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | undefined {
+  if (!slug) return undefined;
+  const prize = getPrizeBySlug(slug);
+  if (!prize) return undefined;
+  
+  // Return a shorter, more display-friendly version of the label
+  if (slug === "cash-prize") {
+    return "$10,000 Cash";
+  }
+  
+  // For tool prizes, extract the key brand names
+  if (slug === "milwaukee-sidchrome") {
+    return "Sidchrome + Milwaukee + $5,000 Cash";
+  }
+  if (slug === "dewalt-sidchrome") {
+    return "Sidchrome + DeWalt + $5,000 Cash";
+  }
+  if (slug === "makita-sidchrome") {
+    return "Sidchrome + Makita + $5,000 Cash";
+  }
+  
+  // Fallback to full label
+  return prize.label;
+}
+
+/**
+ * Get full prize details from a slug
+ * Returns the complete PrizeCatalogEntry for the given slug
+ * @param slug - The prize slug to get details for
+ * @returns The prize catalog entry, or undefined if slug is invalid
+ */
+export function getPrizeDetails(slug: PrizeSlug | string | undefined): PrizeCatalogEntry | undefined {
+  if (!slug) return undefined;
+  return getPrizeBySlug(slug);
+}

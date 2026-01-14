@@ -11,9 +11,17 @@ export interface WinnerSummary {
     value: number;
     images: string[];
   };
+  winnerFirstName: string;
+  winnerLastName: string;
+  winnerState?: string;
   entryNumber?: number;
   selectedDate: string;
   imageUrl?: string;
   selectedBy?: string;
   cycle: number;
+  // Testimony from the winner (optional)
+  testimony?: string;
+  // Selected prize text for major draws (optional, only for major draw winners)
+  // Free-form text field to allow flexibility as prize values change
+  selectedPrize?: string;
 }

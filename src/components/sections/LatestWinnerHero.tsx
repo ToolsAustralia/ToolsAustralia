@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Trophy, MapPin, Calendar, Sparkles, Facebook, ExternalLink } from "lucide-react";
+import { Trophy, MapPin, Calendar, Sparkles, Facebook, ExternalLink, Gift } from "lucide-react";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 
 interface LatestWinner {
@@ -24,6 +24,7 @@ interface LatestWinner {
   selectedDate: string;
   drawDate?: string;
   entryNumber?: number;
+  selectedPrize?: string;
 }
 
 interface LatestWinnerHeroProps {
@@ -131,8 +132,22 @@ export default function LatestWinnerHero({ className = "" }: LatestWinnerHeroPro
                   </div>
                 )}
                 
-                {/* Winner Badge - Top Right */}
-                <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gradient-to-r from-[#ee0000] via-red-600 to-red-700 text-white px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl flex items-center gap-1.5 sm:gap-2 z-20 ring-2 ring-white/50 animate-bounce">
+                {/* Selected Prize Badge - Overlayed on Image (Top Right) - Only for major draws */}
+                {winner.drawType === "major" && winner.selectedPrize && (
+                  <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20">
+                    <div className="bg-black/80 backdrop-blur-md rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+                        <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins'] max-w-[120px] sm:max-w-[150px] truncate">
+                          {winner.selectedPrize}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Winner Badge - Top Left (if no prize badge) or below prize badge */}
+                <div className={`absolute ${winner.drawType === "major" && winner.selectedPrize ? "top-2 left-2 sm:top-4 sm:left-4" : "top-2 right-2 sm:top-4 sm:right-4"} bg-gradient-to-r from-[#ee0000] via-red-600 to-red-700 text-white px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl flex items-center gap-1.5 sm:gap-2 z-20 ring-2 ring-white/50 animate-bounce`}>
                   <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 animate-pulse" />
                   <span>Winner</span>
                 </div>
