@@ -31,17 +31,27 @@ export default function UpgradeSuccessToast() {
     // Handle Upgrade Success
     if (upgradeData) {
       try {
-        const { packageName, timestamp, entriesPerMonth, shopDiscountPercent } = JSON.parse(upgradeData);
+        const {
+          packageName,
+          timestamp,
+          entriesPerMonth,
+          totalEntriesAfterUpgrade,
+          shopDiscountPercent,
+        } = JSON.parse(upgradeData);
 
         // Only show toast if the upgrade happened within the last 15 seconds
         // This prevents showing the toast on subsequent page loads
         const timeDiff = Date.now() - timestamp;
         if (timeDiff < 15000) {
           // 15 seconds
+          // Use totalEntriesAfterUpgrade if available (includes accumulated + new upgrade entries)
+          // Otherwise fall back to entriesPerMonth for backward compatibility
+          const displayEntries = totalEntriesAfterUpgrade || entriesPerMonth;
+
           showToast({
             type: "success",
             title: "Membership Upgraded Successfully!",
-            message: `Welcome to ${packageName} membership! You now get ${entriesPerMonth} entries/month and ${shopDiscountPercent}% shop discounts. Your new benefits are active immediately!`,
+            message: `Welcome to ${packageName} membership! You now have ${displayEntries} Free Accumulated Entries and ${shopDiscountPercent}% shop discounts. Your new benefits are active immediately!`,
             duration: 25000, // Show for 25 seconds for important upgrade info
             action: {
               label: "View Benefits",

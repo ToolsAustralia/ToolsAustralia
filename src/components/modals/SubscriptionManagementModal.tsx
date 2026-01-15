@@ -644,6 +644,23 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const handleStripePaymentConfirm = async () => {
     // console.log("✅ Payment confirmed, webhook will handle subscription activation");
 
+    // Calculate the total entries after upgrade for the toast message
+    // This matches what's displayed in the upgrade cards
+    let totalEntriesAfterUpgrade = selectedUpgrade?.entriesPerMonth || 0;
+    if (selectedUpgrade) {
+      const subscriptionWithEntries = user.subscription as {
+        lastMonthAccumulatedEntries?: number;
+      } | undefined;
+      const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+      // Use active promo multiplier for membership packages (same as upgrade cards)
+      const upgradeCalculation = calculateUpgradeEntries(
+        selectedUpgrade.entriesPerMonth,
+        lastMonthAccumulated,
+        membershipPromoMultiplier
+      );
+      totalEntriesAfterUpgrade = upgradeCalculation.newLastMonthAccumulatedEntries;
+    }
+
     // Set flag in localStorage to show enhanced success toast after page reload
     // Include comprehensive upgrade information for the toast
     localStorage.setItem(
@@ -651,6 +668,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       JSON.stringify({
         packageName: selectedUpgrade?.name || "subscription",
         entriesPerMonth: selectedUpgrade?.entriesPerMonth || 0,
+        totalEntriesAfterUpgrade: totalEntriesAfterUpgrade, // Total entries user will have after upgrade
         shopDiscountPercent: selectedUpgrade?.shopDiscountPercent || 0,
         partnerDiscountDays: selectedUpgrade?.partnerDiscountDays || 0,
         timestamp: Date.now(),

@@ -903,6 +903,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
               {/* Choose from Saved Methods */}
               {paymentMethods.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => {
                     setHasUserInteracted(true);
                     setShowPaymentMethodsModal(true);
@@ -929,6 +930,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
 
               {/* Add New Payment Method */}
               <button
+                type="button"
                 onClick={() => {
                   setHasUserInteracted(true);
                   onAddNewPaymentMethod();
