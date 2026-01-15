@@ -181,6 +181,15 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     // Use fresh PaymentIntent for all processing
     paymentIntent = freshPaymentIntent;
 
+    // ✅ FIX: Check if payment is already processed BEFORE trying to find user
+    // This prevents "User not found" errors for duplicate webhooks
+    // Duplicate webhooks are common when Stripe retries or when webhooks are sent multiple times
+    const alreadyProcessed = await isPaymentProcessed(paymentIntent.id);
+    if (alreadyProcessed) {
+      webhookLog("info", `✅ Payment ${paymentIntent.id} already processed, skipping duplicate webhook`);
+      return true; // Return true to indicate webhook was handled (even though it was a duplicate)
+    }
+
     // Remove database connection tests - they're unnecessary overhead
 
     // Find user by customer ID
@@ -548,14 +557,6 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       } else {
         webhookLog("warn", `⚠️ No payment method found for PaymentIntent ${paymentIntent.id}. Payment succeeded but cannot save payment method.`);
       }
-    }
-
-    // ✅ NEW: Use event-based idempotency check
-    const alreadyProcessed = await isPaymentProcessed(paymentIntent.id);
-
-    if (alreadyProcessed) {
-      webhookLog("info", `Payment ${paymentIntent.id} already processed, skipping`);
-      return;
     }
 
     // ✅ WEBHOOK-FIRST: Process only explicit non-subscription payments here
