@@ -339,6 +339,21 @@ const StripeCardForm = React.forwardRef<
               console.log("⚠️ Wallet payment error during submit (expected for wallet payments), proceeding with confirmPayment:", submitResult.error);
             }
 
+            // ✅ FIX: Check PaymentIntent status before confirming (for upfront PaymentIntents)
+            // Note: We can't easily check status in frontend without API route, so we rely on error handling
+            // The error handling below will catch canceled PaymentIntent errors
+            if (isUpfrontPaymentIntent && clientSecret) {
+              // Log that we're about to confirm an upfront PaymentIntent
+              console.log("⚠️ Confirming upfront PaymentIntent - will be canceled by backend");
+            }
+
+            // ✅ ADD: Detailed logging to track PaymentIntent status
+            console.log("🔍 Confirming PaymentIntent:", {
+              isUpfrontPaymentIntent,
+              clientSecretPrefix: clientSecret?.split("_secret_")[0],
+              intentType,
+            });
+
             // ✅ CRITICAL: Must call confirmPayment() after submit() (Stripe requirement)
             // For wallet payments, confirmPayment() will handle the wallet UI
             // For card payments, confirmPayment() will process the validated card
@@ -356,7 +371,38 @@ const StripeCardForm = React.forwardRef<
             if (error) {
               console.error("Stripe PaymentIntent error:", error);
               
-              // ✅ FIX: Provide better error messages for wallet payment failures
+              // ✅ CRITICAL FIX: Handle canceled PaymentIntent error
+              if (error.code === "payment_intent_unexpected_state") {
+                const errorMessage = error.message || "";
+                
+                // Check if PaymentIntent was canceled
+                if (errorMessage.includes("canceled") || errorMessage.includes("canceled")) {
+                  // If this is an upfront PaymentIntent, this is expected behavior
+                  // The payment method should already be extracted, so we can continue
+                  if (isUpfrontPaymentIntent) {
+                    console.log("⚠️ Upfront PaymentIntent was canceled (expected) - payment method should already be extracted");
+                    // Try to extract payment method from the error's payment_intent object if available
+                    const paymentIntentFromError = (error as { payment_intent?: { payment_method?: string; id?: string } })?.payment_intent;
+                    if (paymentIntentFromError?.payment_method) {
+                      return {
+                        paymentMethodId: paymentIntentFromError.payment_method as string,
+                        paymentIntentId: paymentIntentFromError.id,
+                      };
+                    }
+                    // If we can't extract it, return error to retry with invoice PaymentIntent
+                    return { 
+                      error: "Payment processing was interrupted. Please wait 30 seconds before trying again. Do not retry immediately, as this can create multiple authorization holds." 
+                    };
+                  } else {
+                    // For non-upfront PaymentIntents, this is unexpected
+                    return { 
+                      error: "This payment attempt was canceled. Please wait 30 seconds before trying again with a fresh payment method." 
+                    };
+                  }
+                }
+              }
+              
+              // ✅ ADD: Better error handling for Google Pay sandbox errors
               const errorCode = error.code || "";
               const errorType = String(error.type || "").toLowerCase();
               const errorMessage = error.message?.toLowerCase() || "";
@@ -364,10 +410,13 @@ const StripeCardForm = React.forwardRef<
               if (
                 errorCode === "google_pay.payment_exception" ||
                 errorType.includes("google_pay") ||
-                errorMessage.includes("google pay")
+                errorMessage.includes("google pay") ||
+                errorMessage.includes("notallowederror") ||
+                errorMessage.includes("delegation is not allowed without transient user activation") ||
+                errorMessage.includes("failed to open window")
               ) {
                 return { 
-                  error: "Google Pay failed to open. Please try again or use a different payment method. If the issue persists, try using a card payment instead." 
+                  error: "Google Pay requires a direct click on the Google Pay button. Please click the Google Pay button directly in the payment form, not the main submit button. If the issue persists, try using a card payment instead." 
                 };
               }
               if (

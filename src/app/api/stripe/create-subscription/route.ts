@@ -79,6 +79,8 @@ export async function POST(request: NextRequest) {
         ) {
           await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
           console.log(`✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} at start of subscription creation (status: ${upfrontPaymentIntent.status})`);
+          // ✅ ADD: Log that frontend should use invoice PaymentIntent's clientSecret
+          console.log(`ℹ️ Frontend should use invoice PaymentIntent's clientSecret, not upfront PaymentIntent ${upfrontPaymentIntent.id}`);
         } else if (upfrontPaymentIntent.status === "succeeded") {
           console.error(`❌ CRITICAL: Upfront PaymentIntent ${upfrontPaymentIntent.id} already succeeded - system attempted double charge`, {
             paymentIntentId: upfrontPaymentIntent.id,
@@ -584,6 +586,29 @@ export async function POST(request: NextRequest) {
         }
       } catch (retrieveError) {
         console.error("❌ Failed to retrieve invoice with expansion:", retrieveError);
+      }
+    }
+
+    // ✅ FIX: Validate that we're returning invoice PaymentIntent, not canceled upfront PaymentIntent
+    if (clientSecret) {
+      try {
+        // Extract PaymentIntent ID from clientSecret to verify it's not canceled
+        const paymentIntentId = clientSecret.split("_secret_")[0];
+        const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        if (retrievedPI.status === "canceled") {
+          console.error(`❌ CRITICAL: Attempted to return canceled PaymentIntent ${paymentIntentId} as clientSecret`);
+          // This should never happen, but if it does, try to get invoice PaymentIntent again
+          // Fallback logic already exists below (lines 557-588)
+          clientSecret = null; // Force fallback
+        } else if (retrievedPI.metadata?.isUpfrontPayment === "true") {
+          console.error(`❌ CRITICAL: Attempted to return upfront PaymentIntent ${paymentIntentId} as clientSecret`);
+          // Upfront PaymentIntent should not be returned - use invoice PaymentIntent instead
+          clientSecret = null; // Force fallback
+        }
+      } catch (verifyError) {
+        console.warn("Could not verify PaymentIntent status:", verifyError);
+        // Continue - clientSecret might still be valid
       }
     }
 
