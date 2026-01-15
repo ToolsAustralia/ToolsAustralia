@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
+import { getActiveSubscriptionFilter } from "@/utils/admin/userFilterBuilder";
 
 /**
  * GET /api/admin/dashboard/projected-income
@@ -28,9 +29,8 @@ export async function GET(request: NextRequest) {
     // Find users with active subscriptions that WILL auto-renew
     // Only count subscriptions where autoRenew !== false (includes true and undefined, since default is true)
     const activeSubscribers = await User.find({
-      "subscription.isActive": true,
-      "subscription.autoRenew": { $ne: false }, // Only count if autoRenew is true or undefined
-      isActive: true,
+      ...getActiveSubscriptionFilter(),
+      // Note: projected income doesn't require subscription.status: "active", but we keep it for consistency
     }).select("subscription.packageId subscription.autoRenew");
 
     // Calculate projected income

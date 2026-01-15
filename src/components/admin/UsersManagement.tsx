@@ -34,11 +34,13 @@ import {
   Filter,
   ChevronUp,
   ChevronDown,
+  Download,
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
 import { useAdminUsers, useAdminUserActions } from "@/hooks/queries/useAdminQueries";
 import UserDetailModal from "./UserDetailModal";
+import UserExportModal from "./UserExportModal";
 import { useDebounce } from "@/hooks/useDebounce";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { UserMetricsView } from "./metrics/UserMetricsView";
@@ -71,6 +73,7 @@ export default function UsersManagement() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false); // Mobile filter collapse state
   
   // View mode with URL persistence
@@ -401,28 +404,41 @@ export default function UsersManagement() {
         <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
           User Management
         </h2>
-        {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
-        <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+        {/* Actions - Export button and View Mode Toggle */}
+        <div className="flex items-center gap-2">
+          {/* Export Button */}
           <button
-            onClick={() => handleViewModeChange("users")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              viewMode === "users"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
+            onClick={() => setIsExportModalOpen(true)}
+            disabled={isLoading || !usersData || usersData.users.length === 0}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white text-xs sm:text-sm font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shadow-sm hover:shadow-md"
+            title="Export users"
           >
-            Users
+            <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Export</span>
           </button>
-          <button
-            onClick={() => handleViewModeChange("metrics")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              viewMode === "metrics"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Metrics
-          </button>
+          {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
+          <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => handleViewModeChange("users")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === "users"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Users
+            </button>
+            <button
+              onClick={() => handleViewModeChange("metrics")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === "metrics"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Metrics
+            </button>
+          </div>
         </div>
       </div>
 
@@ -938,6 +954,14 @@ export default function UsersManagement() {
           setIsDetailModalOpen(false);
           setSelectedUserId(null);
         }}
+      />
+
+      {/* User Export Modal */}
+      <UserExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        filters={filters}
+        totalUsers={usersData?.pagination.totalCount}
       />
 
       {/* Floating View Toggle Buttons - Mobile Only */}

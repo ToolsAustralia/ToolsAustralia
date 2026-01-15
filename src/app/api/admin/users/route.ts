@@ -6,6 +6,7 @@ import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 import { getPackageById } from "@/data/membershipPackages";
+import { getActiveSubscriptionFilter, getActiveSubscriptionSubFilter } from "@/utils/admin/userFilterBuilder";
 
 /**
  * GET /api/admin/users
@@ -101,6 +102,8 @@ export async function GET(request: NextRequest) {
         case "active":
           subscriptionStatusFilter["subscription.isActive"] = true;
           subscriptionStatusFilter["subscription.status"] = "active";
+          subscriptionStatusFilter["subscription.autoRenew"] = { $ne: false }; // Only count if autoRenew is true or undefined (matches projected income calculation)
+          subscriptionStatusFilter["isActive"] = true; // Ensure user account is active (matches projected income stats calculation)
           break;
       case "past_due":
         subscriptionStatusFilter["subscription.status"] = "past_due";
@@ -426,11 +429,13 @@ export async function GET(request: NextRequest) {
     // Conversions = users who have made at least one purchase (subscription OR one-time package OR mini-draw package)
     const [totalUsers, activeSubscriptionsCount, verifiedUsersCount, convertedUsersCount] = await Promise.all([
       User.countDocuments({ isActive: true }),
-      User.countDocuments({ "subscription.isActive": true, isActive: true }),
+      // Active subscriptions: only count subscriptions that will auto-renew (matches projected income calculation)
+      User.countDocuments(getActiveSubscriptionFilter()),
       User.countDocuments({ isEmailVerified: true, isActive: true }),
       User.countDocuments({
         $or: [
-          { "subscription.isActive": true },
+          // For conversions, count subscriptions that will auto-renew (true active subscriptions)
+          getActiveSubscriptionSubFilter(),
           { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
           { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
         ],

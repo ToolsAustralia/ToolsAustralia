@@ -10,6 +10,7 @@ import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
+import { getActiveSubscriptionFilter, getActiveSubscriptionSubFilter } from "@/utils/admin/userFilterBuilder";
 
 /**
  * GET /api/admin/dashboard/stats
@@ -151,10 +152,8 @@ export async function GET(request: NextRequest) {
     // But new signups are filtered by date range
     const [totalUsers, activeSubscriptions, newSignupsInRange, usersWithCompletedProfiles, cancelledMemberships] = await Promise.all([
       User.countDocuments({ isActive: true }),
-      User.countDocuments({
-        "subscription.isActive": true,
-        isActive: true,
-      }),
+      // Active subscriptions: only count subscriptions that will auto-renew (matches projected income calculation)
+      User.countDocuments(getActiveSubscriptionFilter()),
       User.countDocuments({
         createdAt: { $gte: startDate, $lte: endDate },
         isActive: true,
@@ -262,7 +261,8 @@ export async function GET(request: NextRequest) {
       // All-time conversion rate: all paying users / all users
       const payingUsers = await User.countDocuments({
         $or: [
-          { "subscription.isActive": true },
+          // For subscriptions, count only true active subscriptions (will auto-renew, matches projected income)
+          getActiveSubscriptionSubFilter(),
           { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
           { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
         ],
@@ -279,7 +279,8 @@ export async function GET(request: NextRequest) {
       const convertedUsersInRange = await User.countDocuments({
         createdAt: { $gte: startDate, $lte: endDate },
         $or: [
-          { "subscription.isActive": true },
+          // For subscriptions, count only true active subscriptions (will auto-renew, matches projected income)
+          getActiveSubscriptionSubFilter(),
           { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
           { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
         ],

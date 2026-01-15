@@ -15,6 +15,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { REFERRAL_CONSTANTS } from "@/lib/referral";
 import type { UserFilters, AdminUserDetail } from "@/types/admin";
+import { getActiveSubscriptionFilter, getActiveSubscriptionSubFilter } from "@/utils/admin/userFilterBuilder";
 
 /**
  * Calculate engagement score based on user activity
@@ -468,8 +469,8 @@ export async function getUsers(filters: UserFilters) {
   if (subscriptionStatus) {
     switch (subscriptionStatus) {
       case "active":
-        subscriptionStatusFilter["subscription.isActive"] = true;
-        subscriptionStatusFilter["subscription.status"] = "active";
+        // Use reusable filter function for consistency
+        Object.assign(subscriptionStatusFilter, getActiveSubscriptionFilter());
         break;
       case "past_due":
         subscriptionStatusFilter["subscription.status"] = "past_due";
@@ -779,11 +780,13 @@ export async function getUsers(filters: UserFilters) {
   // Conversions = users who have made at least one purchase (subscription OR one-time package OR mini-draw package)
   const [totalUsers, activeSubscriptionsCount, verifiedUsersCount, convertedUsersCount] = await Promise.all([
     User.countDocuments({ isActive: true }),
-    User.countDocuments({ "subscription.isActive": true, isActive: true }),
+    // Active subscriptions: only count subscriptions that will auto-renew (matches projected income calculation)
+    User.countDocuments(getActiveSubscriptionFilter()),
     User.countDocuments({ isEmailVerified: true, isActive: true }),
     User.countDocuments({
       $or: [
-        { "subscription.isActive": true },
+        // For conversions, count subscriptions that will auto-renew (true active subscriptions)
+        getActiveSubscriptionSubFilter(),
         { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
         { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
       ],
