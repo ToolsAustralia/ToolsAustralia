@@ -475,7 +475,8 @@ export async function POST(request: NextRequest) {
             userEmail: validatedData.userEmail,
             type: "subscription", // ✅ Set 'type' for webhook compatibility
             packageType: "membership",
-            isUpfrontPayment: "true", // ✅ Mark as upfront payment so webhook skips it
+            // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
+            // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
             ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
             ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
             // Store request context for Facebook CAPI (webhook will extract and use)
@@ -502,7 +503,11 @@ export async function POST(request: NextRequest) {
         }
 
         paymentIntent = newPaymentIntent;
-        console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`);
+        console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`, {
+          hasClientSecret: !!newPaymentIntent.client_secret,
+          status: newPaymentIntent.status,
+          amount: newPaymentIntent.amount,
+        });
       } catch (createError) {
         console.error("❌ Failed to create PaymentIntent for invoice:", createError);
         return NextResponse.json(
@@ -596,6 +601,13 @@ export async function POST(request: NextRequest) {
         const paymentIntentId = clientSecret.split("_secret_")[0];
         const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntentId);
         
+        console.log(`🔍 Validating PaymentIntent ${paymentIntentId}:`, {
+          status: retrievedPI.status,
+          isUpfrontPayment: retrievedPI.metadata?.isUpfrontPayment,
+          hasInvoiceId: !!retrievedPI.metadata?.invoice_id,
+          hasSubscriptionId: !!retrievedPI.metadata?.subscription_id,
+        });
+        
         if (retrievedPI.status === "canceled") {
           console.error(`❌ CRITICAL: Attempted to return canceled PaymentIntent ${paymentIntentId} as clientSecret`);
           // This should never happen, but if it does, try to get invoice PaymentIntent again
@@ -605,6 +617,8 @@ export async function POST(request: NextRequest) {
           console.error(`❌ CRITICAL: Attempted to return upfront PaymentIntent ${paymentIntentId} as clientSecret`);
           // Upfront PaymentIntent should not be returned - use invoice PaymentIntent instead
           clientSecret = null; // Force fallback
+        } else {
+          console.log(`✅ PaymentIntent ${paymentIntentId} validation passed - returning clientSecret`);
         }
       } catch (verifyError) {
         console.warn("Could not verify PaymentIntent status:", verifyError);
