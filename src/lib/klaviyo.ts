@@ -221,6 +221,93 @@ class KlaviyoClient {
   }
 
   /**
+   * PATCH profile with retry logic for 409 errors
+   * Handles concurrent update conflicts with exponential backoff
+   * 
+   * @param profileId - Klaviyo profile ID to update
+   * @param updatePayload - Update payload
+   * @param email - Profile email (for logging)
+   * @param maxRetries - Maximum retry attempts (default: 3)
+   * @returns Response from Klaviyo API
+   */
+  private async patchWithRetry(
+    profileId: string,
+    updatePayload: Record<string, unknown>,
+    email: string,
+    maxRetries: number = 3
+  ): Promise<Response> {
+    const baseDelayMs = 500; // Base delay for 409 retries (longer than regular retries)
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await this.retryRequest(
+          () => this.makeRequest(`/profiles/${profileId}/`, "PATCH", updatePayload),
+          1, // Don't retry 5xx errors here - we handle 409 specifically
+          this.BASE_RETRY_DELAY_MS
+        );
+
+        // ✅ ENHANCED: Handle 409 errors on PATCH with exponential backoff
+        if (response.status === 409) {
+          if (attempt < maxRetries) {
+            // Extract duplicate profile ID from error (might be different if profile was merged)
+            const errorData = await response.json().catch(() => ({}));
+            const duplicateProfileId = errorData.errors?.[0]?.meta?.duplicate_profile_id;
+            
+            // Use the duplicate profile ID if provided, otherwise use original
+            const targetProfileId = duplicateProfileId || profileId;
+            
+            // Calculate exponential backoff delay with jitter
+            const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
+            const jitter = Math.random() * 200; // Add 0-200ms jitter
+            const totalDelay = delayMs + jitter;
+
+            if (this.mode === "development") {
+              console.log(
+                `🔄 Klaviyo 409 conflict on PATCH (attempt ${attempt}/${maxRetries}) for ${email}, retrying in ${Math.round(totalDelay)}ms...`
+              );
+            }
+
+            // Wait before retrying
+            await new Promise((resolve) => setTimeout(resolve, totalDelay));
+
+            // Update payload with correct profile ID if it changed
+            if (duplicateProfileId && duplicateProfileId !== profileId) {
+              (updatePayload.data as { id: string }).id = duplicateProfileId;
+            }
+
+            // Continue to next retry attempt
+            continue;
+          } else {
+            // All retries exhausted - return the 409 response
+            if (this.mode === "development") {
+              console.warn(`⚠️ Klaviyo 409 conflict on PATCH persisted after ${maxRetries} attempts for ${email}`);
+            }
+            return response;
+          }
+        }
+
+        // Success or non-409 error - return response
+        return response;
+      } catch (error) {
+        // If this is the last attempt, throw the error
+        if (attempt >= maxRetries) {
+          throw error;
+        }
+
+        // Calculate delay and retry
+        const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
+        const jitter = Math.random() * 200;
+        const totalDelay = delayMs + jitter;
+
+        await new Promise((resolve) => setTimeout(resolve, totalDelay));
+      }
+    }
+
+    // Should never reach here, but TypeScript requires it
+    throw new Error("Patch retry logic exhausted");
+  }
+
+  /**
    * Retry request with exponential backoff and jitter
    *
    * Implements Klaviyo best practices for handling temporary failures:
@@ -401,6 +488,33 @@ class KlaviyoClient {
     }
 
     try {
+      // ✅ ENHANCED: Idempotency check - query profile existence before creating to prevent unnecessary 409 errors
+      // This reduces race conditions and unnecessary API calls
+      let existingProfileId: string | null = null;
+      try {
+        const searchResponse = await this.retryRequest(
+          () => this.makeRequest(`/profiles/?filter=equals(email,"${profile.email}")`, "GET"),
+          2, // Fewer retries for idempotency check (non-critical)
+          1000 // Shorter delay for idempotency check
+        );
+        
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json();
+          const existingProfile = searchData.data?.[0];
+          if (existingProfile?.id) {
+            existingProfileId = existingProfile.id;
+            if (this.mode === "development") {
+              // console.log(`🔄 Profile already exists (idempotency check): ${existingProfileId}`);
+            }
+          }
+        }
+      } catch (searchError) {
+        // Non-critical - continue with create/update flow if search fails
+        if (this.mode === "development") {
+          // console.log("⚠️ Idempotency check failed, continuing with create/update:", searchError);
+        }
+      }
+
       // Build attributes object with email consent
       // Note: SMS consent is handled separately via subscribeToSMSList method
       // sms_consent is NOT a valid field in profile attributes
@@ -447,15 +561,41 @@ class KlaviyoClient {
         });
       }
 
-      // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
-      // This ensures resilience during Klaviyo API outages
-      let response = await this.retryRequest(
-        () => this.makeRequest("/profiles/", "POST", payload),
-        this.MAX_RETRIES,
-        this.BASE_RETRY_DELAY_MS
-      );
+      let response: Response;
+      
+      // ✅ ENHANCED: If profile exists (from idempotency check), skip POST and go directly to PATCH
+      if (existingProfileId) {
+        // Profile exists - update it directly using PATCH
+        const updateAttributes: Record<string, unknown> = {
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+          phone_number: profile.phone_number,
+          properties: cleanedProperties,
+        };
 
-      // If we get a 409 conflict, it means the profile already exists
+        const updatePayload = {
+          data: {
+            type: "profile",
+            id: existingProfileId,
+            attributes: updateAttributes,
+          },
+        };
+
+        // Use PATCH with retry logic for 409 errors
+        response = await this.patchWithRetry(existingProfileId, updatePayload, profile.email);
+      } else {
+        // Profile doesn't exist - try to create it
+        // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
+        // This ensures resilience during Klaviyo API outages
+        response = await this.retryRequest(
+          () => this.makeRequest("/profiles/", "POST", payload),
+          this.MAX_RETRIES,
+          this.BASE_RETRY_DELAY_MS
+        );
+      }
+
+      // ✅ ENHANCED: If we get a 409 conflict, it means the profile already exists
+      // Use patchWithRetry to handle concurrent update conflicts
       if (response.status === 409) {
         if (this.mode === "development") {
           // console.log("🔄 Profile already exists, attempting to update:", { email: profile.email });
@@ -466,7 +606,7 @@ class KlaviyoClient {
         const duplicateProfileId = errorData.errors?.[0]?.meta?.duplicate_profile_id;
 
         if (duplicateProfileId) {
-          // Update the existing profile using PATCH
+          // Update the existing profile using PATCH with retry logic for 409 errors
           // Note: SMS consent is handled separately via subscribeToSMSList method
           // ✅ Clean properties to remove undefined values before sending
           const cleanedProperties = this.cleanProperties(profile.properties);
@@ -488,9 +628,8 @@ class KlaviyoClient {
             },
           };
 
-          response = await this.retryRequest(() =>
-            this.makeRequest(`/profiles/${duplicateProfileId}/`, "PATCH", updatePayload)
-          );
+          // ✅ ENHANCED: Use patchWithRetry to handle 409 errors on PATCH with exponential backoff
+          response = await this.patchWithRetry(duplicateProfileId, updatePayload, profile.email);
         } else {
           // Fallback: try to find profile by email and update
           // ✅ FIX: Use retryRequest with explicit retry configuration for profile search
@@ -527,12 +666,8 @@ class KlaviyoClient {
                 },
               };
 
-              // ✅ FIX: Use retryRequest with explicit retry configuration for profile update
-              response = await this.retryRequest(
-                () => this.makeRequest(`/profiles/${existingProfile.id}/`, "PATCH", updatePayload),
-                this.MAX_RETRIES,
-                this.BASE_RETRY_DELAY_MS
-              );
+              // ✅ ENHANCED: Use patchWithRetry to handle 409 errors on PATCH with exponential backoff
+              response = await this.patchWithRetry(existingProfile.id, updatePayload, profile.email);
             }
           }
         }

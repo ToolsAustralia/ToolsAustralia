@@ -129,14 +129,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ CRITICAL FIX: DO NOT attach payment method to customer before payment confirmation
-    // Payment method will be attached during subscription creation via default_payment_method parameter
-    // We only attach/save payment method AFTER payment succeeds (handled by webhook)
+    // ✅ CRITICAL FIX: Ensure payment method is attached and set as default BEFORE creating subscription
+    // This prevents "No payment method found" errors when confirming subscription payment
+    // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
     // This prevents saving payment methods when payments fail due to insufficient funds
-    // 
-    // Note: Stripe subscription.create() requires default_payment_method to be set,
-    // but we can set it without attaching first - Stripe will handle attachment
-    // We will NOT set save_default_payment_method: "on_subscription" to prevent premature saving
+    try {
+      // ✅ ENHANCED: Verify payment method exists and is properly attached
+      const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+      const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer?.id;
+      
+      // ✅ ENHANCED: Ensure payment method is attached to customer (idempotent check)
+      if (!pmCustomerId || pmCustomerId !== stripeCustomerId) {
+        await stripe.paymentMethods.attach(finalPaymentMethodId, {
+          customer: stripeCustomerId,
+        });
+        console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${stripeCustomerId} before subscription creation`);
+      }
+      
+      // ✅ ENHANCED: Set as default payment method and verify it was set
+      await stripe.customers.update(stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: finalPaymentMethodId,
+        },
+      });
+      
+      // ✅ ENHANCED: Verify default payment method was set correctly
+      const updatedCustomer = await stripe.customers.retrieve(stripeCustomerId);
+      const defaultPm = (updatedCustomer as { invoice_settings?: { default_payment_method?: string } })
+        .invoice_settings?.default_payment_method;
+      
+      if (defaultPm !== finalPaymentMethodId) {
+        console.warn(`⚠️ Default payment method may not have been set correctly. Expected: ${finalPaymentMethodId}, Got: ${defaultPm}`);
+      } else {
+        console.log(`✅ Verified default payment method ${finalPaymentMethodId} is set for customer ${stripeCustomerId}`);
+      }
+    } catch (pmError) {
+      console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
+      // ✅ ENHANCED: Return clear error before subscription creation if payment method can't be attached
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment method setup failed",
+          details: "Unable to attach payment method to customer. Please try again or use a different payment method.",
+          suggestion: "Please refresh the page and try again, or contact support if the issue persists.",
+        },
+        { status: 400 }
+      );
+    }
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
     // This prevents creating duplicate products in Stripe dashboard

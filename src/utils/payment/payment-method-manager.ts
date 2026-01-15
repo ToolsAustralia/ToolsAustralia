@@ -399,7 +399,7 @@ export async function deduplicatePaymentMethods(
     }
 
     // Convert map back to array
-    const deduplicatedMethods = Array.from(uniquePaymentMethodsMap.values());
+    let deduplicatedMethods = Array.from(uniquePaymentMethodsMap.values());
 
     // Ensure only one default payment method
     const defaultMethods = deduplicatedMethods.filter((pm) => pm.isDefault);
@@ -413,24 +413,152 @@ export async function deduplicatePaymentMethods(
       deduplicatedMethods[0].isDefault = true;
     }
 
-    // Update user's payment methods
-    user.savedPaymentMethods = deduplicatedMethods;
+    // ✅ ENHANCED: Use atomic update with retry logic to handle VersionError
+    // Retry with exponential backoff: 100ms, 200ms, 400ms (max 3 attempts)
+    const maxRetries = 3;
+    const baseDelayMs = 100;
+    let lastError: Error | null = null;
+    let duplicatesRemoved = originalCount - deduplicatedMethods.length;
 
-    // Save changes
-    await user.save();
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // ✅ CRITICAL: Refresh user from database before each attempt to get latest version
+        const freshUser = await User.findById(user._id);
+        if (!freshUser) {
+          return {
+            success: false,
+            duplicatesRemoved: 0,
+            user,
+            error: "User not found in database",
+          };
+        }
 
-    const duplicatesRemoved = originalCount - deduplicatedMethods.length;
+        // ✅ ENHANCED: Use findByIdAndUpdate with atomic $set operator to prevent version conflicts
+        // This ensures the update is atomic and handles concurrent modifications
+        const updateResult = await User.findByIdAndUpdate(
+          user._id,
+          {
+            $set: {
+              savedPaymentMethods: deduplicatedMethods,
+            },
+          },
+          {
+            new: true, // Return updated document
+            runValidators: true, // Run schema validators
+          }
+        );
 
-    if (duplicatesRemoved > 0) {
-      console.log(
-        `✅ Deduplicated payment methods for user ${user._id}: removed ${duplicatesRemoved} duplicate(s)`
-      );
+        if (!updateResult) {
+          throw new Error("User not found during update");
+        }
+
+        // Update user reference for return value
+        user = updateResult;
+
+        if (duplicatesRemoved > 0) {
+          console.log(
+            `✅ Deduplicated payment methods for user ${user._id}: removed ${duplicatesRemoved} duplicate(s) (attempt ${attempt})`
+          );
+        }
+
+        return {
+          success: true,
+          duplicatesRemoved,
+          user,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // ✅ ENHANCED: Check if this is a VersionError (optimistic concurrency conflict)
+        const isVersionError =
+          lastError.name === "VersionError" ||
+          lastError.message.includes("No matching document found") ||
+          lastError.message.includes("version");
+
+        if (isVersionError && attempt < maxRetries) {
+          // Calculate exponential backoff delay with jitter
+          const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
+          const jitter = Math.random() * 50; // Add 0-50ms jitter
+          const totalDelay = delayMs + jitter;
+
+          console.warn(
+            `⚠️ VersionError on attempt ${attempt}/${maxRetries} for user ${user._id}, retrying in ${Math.round(totalDelay)}ms...`
+          );
+
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, totalDelay));
+
+          // Re-deduplicate with fresh data (may have changed)
+          const freshUser = await User.findById(user._id);
+          if (freshUser && freshUser.savedPaymentMethods) {
+            // Re-run deduplication logic with fresh data
+            const freshOriginalCount = freshUser.savedPaymentMethods.length;
+            const freshUniqueMap = new Map<
+              string,
+              {
+                paymentMethodId: string;
+                isDefault: boolean;
+                createdAt: Date;
+                lastUsed?: Date;
+              }
+            >();
+
+            for (const pm of freshUser.savedPaymentMethods) {
+              const existing = freshUniqueMap.get(pm.paymentMethodId);
+              if (!existing) {
+                freshUniqueMap.set(pm.paymentMethodId, {
+                  paymentMethodId: pm.paymentMethodId,
+                  isDefault: pm.isDefault,
+                  createdAt: pm.createdAt,
+                  lastUsed: pm.lastUsed,
+                });
+              } else {
+                if (pm.createdAt < existing.createdAt) {
+                  existing.createdAt = pm.createdAt;
+                }
+                if (pm.lastUsed) {
+                  if (!existing.lastUsed || pm.lastUsed > existing.lastUsed) {
+                    existing.lastUsed = pm.lastUsed;
+                  }
+                }
+                if (pm.isDefault && !existing.isDefault) {
+                  existing.isDefault = true;
+                }
+              }
+            }
+
+            const freshDeduplicated = Array.from(freshUniqueMap.values());
+            const freshDefaultMethods = freshDeduplicated.filter((pm) => pm.isDefault);
+            if (freshDefaultMethods.length > 1) {
+              for (let i = 1; i < freshDefaultMethods.length; i++) {
+                freshDefaultMethods[i].isDefault = false;
+              }
+            } else if (freshDefaultMethods.length === 0 && freshDeduplicated.length > 0) {
+              freshDeduplicated[0].isDefault = true;
+            }
+
+            deduplicatedMethods = freshDeduplicated;
+            duplicatesRemoved = freshOriginalCount - freshDeduplicated.length;
+          }
+
+          // Continue to next retry attempt
+          continue;
+        }
+
+        // If not a VersionError or we've exhausted retries, throw the error
+        if (!isVersionError || attempt >= maxRetries) {
+          throw lastError;
+        }
+      }
     }
 
+    // If we get here, all retries failed
+    console.error(`❌ Failed to deduplicate payment methods after ${maxRetries} attempts:`, lastError);
     return {
-      success: true,
-      duplicatesRemoved,
+      success: false,
+      duplicatesRemoved: 0,
       user,
+      error: lastError?.message || "Unknown error after retries",
     };
   } catch (error) {
     console.error("Error deduplicating payment methods:", error);

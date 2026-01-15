@@ -78,10 +78,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Retrieve the subscription from Stripe
+    // Retrieve the subscription from Stripe with expanded payment intent
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ["latest_invoice.payment_intent"],
     });
+    
+    // ✅ ENHANCED: Also try to extract payment method from subscription metadata if available
+    // This helps recover payment methods that were set during subscription creation
 
     if (!subscription) {
       return NextResponse.json({ error: "Subscription not found in Stripe" }, { status: 404 });
@@ -124,7 +127,8 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // ✅ FIX: Only try default payment method if PaymentIntent still doesn't exist
+        // ✅ ENHANCED: Only try default payment method if PaymentIntent still doesn't exist
+        // Use multiple fallback strategies to find payment method
         if (!paymentIntent) {
           // Try to get the customer's default payment method
           const customer = await stripe.customers.retrieve(subscription.customer as string);
@@ -136,26 +140,57 @@ export async function POST(request: NextRequest) {
                 success: false,
                 error: "Customer not found",
                 details: "Stripe customer has been deleted",
+                suggestion: "Please contact support to resolve this issue.",
               },
               { status: 404 }
             );
           }
 
-          let defaultPaymentMethod = (customer as { invoice_settings?: { default_payment_method?: string } })
-            .invoice_settings?.default_payment_method;
+          let defaultPaymentMethod: string | null = null;
+          let paymentMethodSource = "none";
 
-          // ✅ FIX: Fallback to user's saved payment methods if default doesn't exist
+          // ✅ ENHANCED FALLBACK STRATEGY 1: Customer's default payment method
+          const customerDefaultPm = (customer as { invoice_settings?: { default_payment_method?: string } })
+            .invoice_settings?.default_payment_method;
+          
+          if (customerDefaultPm) {
+            defaultPaymentMethod = customerDefaultPm;
+            paymentMethodSource = "customerDefault";
+            console.log(`💳 Found payment method from customer default: ${defaultPaymentMethod}`);
+          }
+
+          // ✅ ENHANCED FALLBACK STRATEGY 2: List customer's payment methods (most recent first)
+          if (!defaultPaymentMethod) {
+            try {
+              const customerPaymentMethods = await stripe.paymentMethods.list({
+                customer: customer.id,
+                type: "card",
+                limit: 10,
+              });
+              
+              if (customerPaymentMethods.data.length > 0) {
+                // Use the most recently created payment method
+                const sortedMethods = customerPaymentMethods.data.sort((a, b) => b.created - a.created);
+                defaultPaymentMethod = sortedMethods[0].id;
+                paymentMethodSource = "customerList";
+                console.log(`💳 Found payment method from customer payment methods list: ${defaultPaymentMethod} (${customerPaymentMethods.data.length} total)`);
+              }
+            } catch (listError) {
+              console.warn(`⚠️ Failed to list customer payment methods: ${listError}`);
+            }
+          }
+
+          // ✅ ENHANCED FALLBACK STRATEGY 3: User's saved payment methods
           if (!defaultPaymentMethod && user?.savedPaymentMethods && user.savedPaymentMethods.length > 0) {
             // Try to use user's saved payment methods
             const savedMethod = user.savedPaymentMethods.find((pm: { isDefault?: boolean }) => pm.isDefault) 
               || user.savedPaymentMethods[0];
             
             if (savedMethod?.paymentMethodId) {
-              // ✅ SAFETY: Verify payment method exists and attach to customer if needed
               try {
                 const pm = await stripe.paymentMethods.retrieve(savedMethod.paymentMethodId);
                 
-                // ✅ SAFETY: Attach payment method to customer if not already attached
+                // ✅ ENHANCED: Automatic recovery - attach payment method if found but not attached
                 const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
                 if (!pmCustomerId || pmCustomerId !== customer.id) {
                   await stripe.paymentMethods.attach(savedMethod.paymentMethodId, {
@@ -165,27 +200,78 @@ export async function POST(request: NextRequest) {
                 }
                 
                 defaultPaymentMethod = savedMethod.paymentMethodId;
+                paymentMethodSource = "userSaved";
                 console.log(`💳 Using saved payment method as fallback: ${savedMethod.paymentMethodId}`);
               } catch (pmError) {
                 console.warn(`⚠️ Failed to use saved payment method: ${pmError}`);
-                // Continue to check default payment method or throw error
+                // Continue to next fallback strategy
               }
             }
           }
 
+          // ✅ ENHANCED: If still no payment method found, provide detailed error message
           if (!defaultPaymentMethod) {
-            console.error("❌ No default payment method found for customer", {
+            console.error("❌ No payment method found for customer after all fallback strategies", {
               customerId: customer.id,
               hasSavedPaymentMethods: !!(user?.savedPaymentMethods && user.savedPaymentMethods.length > 0),
               subscriptionId: subscription.id,
               subscriptionStatus: subscription.status,
+              invoiceId: latestInvoice?.id,
             });
+            
+            // ✅ ENHANCED: Provide actionable error message based on context
+            const errorMessage = subscription.status === "incomplete"
+              ? "Your subscription was created but no payment method was found to complete the payment. This usually happens when the payment method wasn't properly saved during checkout."
+              : "No payment method found to complete this subscription payment.";
+            
+            const suggestion = user?.savedPaymentMethods && user.savedPaymentMethods.length > 0
+              ? "Please try again, or go to your account settings to add a new payment method."
+              : "Please go to your account settings to add a payment method, then try completing your subscription again.";
+            
             return NextResponse.json(
               {
                 success: false,
                 error: "No payment method found",
-                details: "Customer does not have a default payment method. Please add a payment method first.",
-                suggestion: "Add a payment method in your account settings or try again after adding a card.",
+                details: errorMessage,
+                suggestion: suggestion,
+                recoverySteps: [
+                  "Go to your account settings",
+                  "Add or verify your payment method",
+                  "Return here to complete your subscription",
+                ],
+              },
+              { status: 400 }
+            );
+          }
+
+          // ✅ ENHANCED: Verify payment method is attached before using it
+          try {
+            const pm = await stripe.paymentMethods.retrieve(defaultPaymentMethod);
+            const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
+            
+            // ✅ ENHANCED: Automatic recovery - attach if not already attached
+            if (!pmCustomerId || pmCustomerId !== customer.id) {
+              await stripe.paymentMethods.attach(defaultPaymentMethod, {
+                customer: customer.id,
+              });
+              console.log(`✅ Attached payment method ${defaultPaymentMethod} to customer ${customer.id} (source: ${paymentMethodSource})`);
+              
+              // Set as default for future use
+              await stripe.customers.update(customer.id, {
+                invoice_settings: {
+                  default_payment_method: defaultPaymentMethod,
+                },
+              });
+              console.log(`✅ Set payment method ${defaultPaymentMethod} as default for customer ${customer.id}`);
+            }
+          } catch (verifyError) {
+            console.error(`❌ Failed to verify/attach payment method ${defaultPaymentMethod}:`, verifyError);
+            return NextResponse.json(
+              {
+                success: false,
+                error: "Payment method verification failed",
+                details: "The payment method could not be verified or attached to your account.",
+                suggestion: "Please try again with a different payment method or contact support if the issue persists.",
               },
               { status: 400 }
             );

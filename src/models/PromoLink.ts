@@ -92,7 +92,8 @@ const PromoLinkSchema = new Schema<IPromoLink>(
 );
 
 // Indexes for efficient queries
-PromoLinkSchema.index({ code: 1 }, { unique: true }); // Unique index on code
+// ✅ FIX: Removed duplicate index on code field - unique: true in field definition (line 40) already creates the index
+// PromoLinkSchema.index({ code: 1 }, { unique: true }); // REMOVED - duplicate of unique: true in field definition
 PromoLinkSchema.index({ isActive: 1, expiresAt: 1 }); // For finding active, non-expired links
 PromoLinkSchema.index({ createdBy: 1 }); // For admin queries
 
