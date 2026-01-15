@@ -31,11 +31,11 @@ async function verifyEmailForPurchasers() {
       throw new Error("MONGODB_URI environment variable is not set");
     }
 
-    await mongoose.connect(process.env.MONGODB_URI);
+    await 
+    (process.env.MONGODB_URI);
     console.log("✅ Connected to MongoDB\n");
 
     // Find all unique user IDs who have made actual purchases
-    // Only checking for confirmed purchases, not just Stripe customer IDs
     // (Stripe customer ID can be created without completing a purchase)
     
     // Method 1: Users with orders (products, tickets/mini-draws, or memberships)
