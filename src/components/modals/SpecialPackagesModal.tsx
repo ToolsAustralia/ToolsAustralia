@@ -350,7 +350,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
   /**
    * Trigger upsell modal after successful purchase
-   * EXACT COPY from MembershipModal
+   * EXACT COPY from MembershipModal - ensures single source of truth
    */
   const triggerUpsellModal = async (
     triggerEvent: "membership-purchase" | "ticket-purchase" | "one-time-purchase",
@@ -361,9 +361,37 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     originalPurchaseContextParam?: OriginalPurchaseContext | null
   ) => {
     try {
+      // ✅ CRITICAL: Invalidate payment methods cache before triggering upsell modal
+      // This ensures the upsell modal has the latest payment method available
+      // Payment method was just saved during purchase, so we need to refresh the cache
+      if (userData?._id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userData._id) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userData._id) });
+        console.log("🔄 Invalidated payment methods cache before showing upsell modal");
+      }
+      
       // If we have package information, use the new trigger API
       if (packageId && packageType) {
         // console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
+
+        // ✅ FIX: Determine correct userType based on package ID and type (same as MembershipModal)
+        // Mini draw packages (mini-pack-1, mini-pack-2, etc.) should use "mini-draw-buyer"
+        // Regular one-time packages should use "returning-user" or "new-user"
+        const isMiniDrawPackage = packageId.startsWith("mini-pack-");
+
+        // Check if this is an additional package (additional- packages)
+        const isAdditionalPackage = packageId.startsWith("additional-");
+
+        // If user doesn't have access, skip upsell trigger for additional packages
+        if (isAdditionalPackage && !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
+          // console.log("⚠️ Skipping upsell trigger: User doesn't have access to additional packages");
+          return;
+        }
+
+        const userType = isMiniDrawPackage ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";
+
+        // ✅ FIX: Calculate if user has access to additional packages (subscription OR major draw entries)
+        const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
         const response = await fetch("/api/upsell/trigger", {
           method: "POST",
@@ -371,8 +399,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           body: JSON.stringify({
             packageId,
             packageType,
-            userType: "special-package-buyer", // User type for special package purchases
+            userType, // ✅ FIX: Correctly determined based on package type (not hardcoded)
             isMember: hasActiveSubscription, // Pass membership status
+            hasAccessToAdditionalPackages: hasAccessToAdditionalPackages, // ✅ NEW: Pass access status
             triggerEvent,
           }),
         });
@@ -385,56 +414,65 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
             const offer = result.data.offer;
             // console.log(`✅ Found targeted upsell offer: ${offer.name}`);
 
-            // Show the targeted upsell with a delay
-            setTimeout(() => {
-              // Convert offer to UpsellOffer format and show upsell modal
-              const upsellOffer: UpsellOffer = {
-                id: offer.id,
-                title: offer.name,
-                description: offer.description,
-                category: offer.category as "major-draw" | "mini-draw" | "membership",
-                originalPrice: offer.originalPrice,
-                discountedPrice: offer.discountedPrice,
-                discountPercentage: offer.discountPercentage,
-                entriesCount: offer.entriesCount,
-                buttonText: offer.buttonText,
-                conditions: offer.conditions,
-                urgencyText: offer.urgencyText,
-                validUntil: offer.validUntil,
-                priority: offer.priority,
-                imageUrl: offer.imageUrl,
-                isActive: offer.isActive,
-                targetAudience: offer.targetAudience || ["all-users"],
-                userSegments: offer.userSegments || ["new-user", "returning-user"],
-                maxShowsPerUser: offer.maxShowsPerUser || 3,
-                cooldownHours: offer.cooldownHours || 24,
-              };
+            // Convert offer to UpsellOffer format
+            const upsellOffer: UpsellOffer = {
+              id: offer.id,
+              title: offer.name,
+              description: offer.description,
+              category: offer.category as "major-draw" | "mini-draw" | "membership",
+              originalPrice: offer.originalPrice,
+              discountedPrice: offer.discountedPrice,
+              discountPercentage: offer.discountPercentage,
+              entriesCount: offer.entriesCount,
+              buttonText: offer.buttonText,
+              conditions: offer.conditions,
+              urgencyText: offer.urgencyText,
+              validUntil: offer.validUntil,
+              priority: offer.priority,
+              imageUrl: offer.imageUrl,
+              isActive: offer.isActive,
+              targetAudience: offer.targetAudience || ["all-users"],
+              userSegments: offer.userSegments || ["new-user", "returning-user"],
+              maxShowsPerUser: offer.maxShowsPerUser || 3,
+              cooldownHours: offer.cooldownHours || 24,
+            };
 
-              // Prepare user context
-              const userContext: UpsellUserContext = {
-                isAuthenticated: isAuthenticated,
-                hasDefaultPayment: isAuthenticated && !!defaultPaymentMethod,
-                recentPurchase: recentPurchase,
-                userType: "special-package-buyer", // User type for special package purchases
-                totalSpent: purchaseAmount,
-                upsellsShown: 0,
-              };
+            // Prepare user context (same as MembershipModal)
+            const userContext: UpsellUserContext = {
+              userId: userData?._id || undefined,
+              isAuthenticated: isAuthenticated,
+              hasDefaultPayment: isAuthenticated && (userData?.savedPaymentMethods?.length ?? 0) > 0,
+              recentPurchase: recentPurchase,
+              userType: isAuthenticated ? "returning-user" : "new-user", // ✅ FIX: Match MembershipModal logic
+              totalSpent: purchaseAmount,
+              upsellsShown: 0,
+            };
 
-              // Use passed parameter or fallback to state
-              const finalOriginalPurchaseContext = originalPurchaseContextParam ?? originalPurchaseContext;
+            // CRITICAL FIX: Set pending upsell IMMEDIATELY (not delayed) - same as MembershipModal
+            // This ensures sessionStorage is set BEFORE page navigation
+            // Use passed parameter or fallback to state
+            const finalOriginalPurchaseContext = originalPurchaseContextParam ?? originalPurchaseContext;
 
-              // Use modal priority system to show upsell
-              const { requestModal } = useModalPriorityStore.getState();
-              // console.log("🎯 Requesting upsell modal via priority system:", {
-              //   upsellOffer: upsellOffer.title,
-              //   userContext,
-              // });
-              requestModal("upsell", false, {
+            if (!isAuthenticated) {
+              const { setPendingUpsellAfterSetup } = useModalPriorityStore.getState();
+              setPendingUpsellAfterSetup(true, {
                 offer: upsellOffer,
                 userContext,
                 originalPurchaseContext: finalOriginalPurchaseContext || undefined,
               });
-            }, offer.showAfterDelay * 1000 || 2000);
+              // console.log("🎯 Set pending upsell IMMEDIATELY for first-time user (before navigation)");
+            } else {
+              // For existing users, show upsell with a delay
+              setTimeout(() => {
+                const { requestModal } = useModalPriorityStore.getState();
+                requestModal("upsell", false, {
+                  offer: upsellOffer,
+                  userContext,
+                  originalPurchaseContext: finalOriginalPurchaseContext || undefined,
+                });
+                // console.log("🎯 Showing upsell for existing user (after delay)");
+              }, offer.showAfterDelay * 1000 || 2000);
+            }
 
             return;
           } else {
@@ -445,47 +483,11 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         }
       }
 
-      // Fallback to modal priority system with default upsell
-      // console.log(`🎯 Using fallback upsell system for: ${recentPurchase}`);
-
-      // Create a default upsell offer for fallback
-      const defaultUpsellOffer: UpsellOffer = {
-        id: "fallback-upsell",
-        title: "Complete Your Experience",
-        description: "Get the most out of your membership with our premium features!",
-        category: "membership",
-        discountPercentage: 20,
-        originalPrice: 99,
-        discountedPrice: 79,
-        entriesCount: 200,
-        buttonText: "Complete Experience - $79",
-        conditions: ["200 Monthly Entries", "Premium member benefits", "Priority support", "Special member-only draws"],
-        validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
-        priority: 5,
-        isActive: true,
-        targetAudience: ["all-users"],
-        userSegments: ["new-user", "returning-user"],
-        maxShowsPerUser: 1,
-        cooldownHours: 24,
-      };
-
-      const fallbackUserContext: UpsellUserContext = {
-        isAuthenticated,
-        hasDefaultPayment: isAuthenticated && !!defaultPaymentMethod,
-        recentPurchase: recentPurchase || "special-package",
-        userType: isAuthenticated ? "returning-user" : "new-user",
-        totalSpent: purchaseAmount,
-        upsellsShown: 0,
-      };
-
-      // Use modal priority system for fallback
-      const { requestModal } = useModalPriorityStore.getState();
-      // console.log("🎯 Requesting fallback upsell modal via priority system");
-      requestModal("upsell", false, { offer: defaultUpsellOffer, userContext: fallbackUserContext });
+      // Fallback: No upsell available (same as MembershipModal)
+      // console.log(`🎯 No upsell available for: ${recentPurchase}`);
     } catch (error) {
       console.error("Error triggering upsell:", error);
-      // Skip upsell on error to avoid blocking the user experience
-      // console.log("🎯 Skipping upsell due to error");
+      // No fallback available - upsell system removed (same as MembershipModal)
     }
   };
 
