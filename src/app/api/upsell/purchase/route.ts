@@ -37,19 +37,20 @@ const upsellPurchaseSchema = z.object({
   offerId: z.string().min(1, "Offer ID is required"),
   useDefaultPayment: z.boolean().optional().default(false),
   paymentMethodId: z.string().optional(),
-  originalPurchaseContext: z
-    .object({
-      paymentIntentId: z.string().optional(),
-      packageId: z.string().optional(),
-      packageName: z.string().optional(),
-      packageType: z.enum(["membership", "one-time", "mini-draw"]).optional(),
-      price: z.number().optional(),
-      entries: z.number().optional(),
-      baseEntries: z.number().optional(),
-      miniDrawId: z.string().optional(),
-      miniDrawName: z.string().optional(),
-    })
-    .optional(),
+      originalPurchaseContext: z
+        .object({
+          paymentIntentId: z.string().optional(),
+          packageId: z.string().optional(),
+          packageName: z.string().optional(),
+          packageType: z.enum(["membership", "one-time", "mini-draw"]).optional(),
+          price: z.number().optional(),
+          entries: z.number().optional(),
+          baseEntries: z.number().optional(),
+          promoMultiplier: z.number().optional(), // ✅ NEW: Promo multiplier that was applied during original purchase
+          miniDrawId: z.string().optional(),
+          miniDrawName: z.string().optional(),
+        })
+        .optional(),
 });
 
 /**
@@ -221,7 +222,9 @@ export async function POST(request: NextRequest) {
         packageId: validatedData.originalPurchaseContext.packageId,
         packageType: validatedData.originalPurchaseContext.packageType,
         baseEntries: validatedData.originalPurchaseContext.baseEntries,
+        promoMultiplier: validatedData.originalPurchaseContext.promoMultiplier,
         hasPackageType: !!validatedData.originalPurchaseContext.packageType,
+        hasPromoMultiplier: !!validatedData.originalPurchaseContext.promoMultiplier,
       });
     } else {
       console.log(`⚠️ No originalPurchaseContext provided for upsell purchase`);
@@ -238,10 +241,23 @@ export async function POST(request: NextRequest) {
           });
 
         if (baseEntries > 0) {
-          // Get active promo multiplier
-          const promoMultiplier = await getActivePromoMultiplier(
-            validatedData.originalPurchaseContext.packageType
-          );
+          // ✅ FIX: Use stored multiplier from original purchase if available, otherwise query current active promo
+          // This ensures the multiplier used matches the original purchase, even if promo expired/changed
+          let promoMultiplier: number;
+          if (validatedData.originalPurchaseContext.promoMultiplier && validatedData.originalPurchaseContext.promoMultiplier > 1) {
+            promoMultiplier = validatedData.originalPurchaseContext.promoMultiplier;
+            console.log(
+              `✅ Using stored promo multiplier from original purchase: ${promoMultiplier}x`
+            );
+          } else {
+            // Fall back to querying current active promo (for backward compatibility)
+            promoMultiplier = await getActivePromoMultiplier(
+              validatedData.originalPurchaseContext.packageType
+            );
+            console.log(
+              `ℹ️ No stored multiplier found, using current active promo multiplier: ${promoMultiplier}x`
+            );
+          }
 
           // Calculate: 2 × (baseEntries × promoMultiplier)
           calculatedEntriesCount = calculateUpsellEntriesFromContext(
@@ -255,6 +271,9 @@ export async function POST(request: NextRequest) {
 
           console.log(
             `🎯 Calculated upsell entries: ${baseEntries} base × ${promoMultiplier} promo × 2 = ${calculatedEntriesCount} (fallback: ${offer.entriesCount})`
+          );
+          console.log(
+            `📊 Calculation breakdown: baseEntries=${baseEntries}, promoMultiplier=${promoMultiplier}, formula=2 × (${baseEntries} × ${promoMultiplier}) = ${calculatedEntriesCount}`
           );
         } else {
           console.warn(
@@ -488,6 +507,8 @@ async function handleOneClickPurchase(
         originalPackageType: paymentMetadata.originalPackageType || "NOT SET",
         hasOriginalPackageType: !!paymentMetadata.originalPackageType,
         entriesCount: paymentMetadata.entriesCount,
+        calculatedEntriesCount: calculatedEntriesCount,
+        staticEntriesCount: paymentMetadata.staticEntriesCount,
       });
 
       paymentIntent = await stripe.paymentIntents.create({

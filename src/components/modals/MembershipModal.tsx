@@ -1816,6 +1816,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 packageType,
               });
 
+              // ✅ FIX: Get the multiplier that was actually applied during the original purchase
+              const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+              const multiplierValue = typeof multiplierFromMetadata === "number" 
+                ? multiplierFromMetadata 
+                : typeof multiplierFromMetadata === "string" 
+                ? parseFloat(multiplierFromMetadata) 
+                : undefined;
+              const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
+                ? multiplierValue
+                : (packageType === "one-time" ? resolvedOneTimeMultiplier : null)
+                ?? 1;
+
               // Create context object in local variable to pass directly (avoids closure issue)
               contextToPass = {
                 paymentIntentId,
@@ -1825,6 +1837,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 price: activePlan.price,
                 entries: entriesCount,
                 baseEntries,
+                promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
               };
 
               // Also update state for other component uses
@@ -1965,6 +1978,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageType: "one-time",
         });
 
+        // ✅ FIX: Get the multiplier that was actually applied during the original purchase
+        const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+        const multiplierValue = typeof multiplierFromMetadata === "number" 
+          ? multiplierFromMetadata 
+          : typeof multiplierFromMetadata === "string" 
+          ? parseFloat(multiplierFromMetadata) 
+          : undefined;
+        const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
+          ? multiplierValue
+          : resolvedOneTimeMultiplier ?? 1;
+
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {
           paymentIntentId,
@@ -1974,6 +1998,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           price: activePlan.price,
           entries: entriesCount,
           baseEntries,
+          promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
         };
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);
@@ -1987,6 +2012,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           packageType: "membership",
         });
 
+        // ✅ FIX: Get the multiplier that was actually applied during the original purchase
+        const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+        const multiplierValue = typeof multiplierFromMetadata === "number" 
+          ? multiplierFromMetadata 
+          : typeof multiplierFromMetadata === "string" 
+          ? parseFloat(multiplierFromMetadata) 
+          : undefined;
+        const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
+          ? multiplierValue
+          : 1;
+
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {
           paymentIntentId,
@@ -1996,6 +2032,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           price: activePlan.price,
           entries: entriesCount,
           baseEntries,
+          promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
         };
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);

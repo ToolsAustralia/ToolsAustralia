@@ -56,6 +56,7 @@ export interface OriginalPurchaseContext {
   price: number;
   entries: number;
   baseEntries?: number; // Base entries from package definition (before promo multiplier)
+  promoMultiplier?: number; // Promo multiplier that was actually applied during the original purchase
   miniDrawId?: string; // For mini-draw package purchases, link to the specific mini-draw
   miniDrawName?: string; // Optional mini-draw name for display in upsell modal
 }

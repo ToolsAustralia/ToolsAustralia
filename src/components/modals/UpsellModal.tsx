@@ -462,6 +462,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 price: originalPurchaseContext.price,
                 entries: originalPurchaseContext.entries,
                 baseEntries: originalPurchaseContext.baseEntries,
+                promoMultiplier: originalPurchaseContext.promoMultiplier, // ✅ CRITICAL: Include multiplier for correct upsell calculation
                 miniDrawId: originalPurchaseContext.miniDrawId,
                 miniDrawName: originalPurchaseContext.miniDrawName,
               }

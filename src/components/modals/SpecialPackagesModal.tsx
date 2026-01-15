@@ -252,7 +252,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
     // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
 
+    // ✅ CRITICAL FIX: Create local variable to avoid React state closure issue (same as MembershipModal)
     // Store original purchase context for invoice finalization
+    let contextToPass: OriginalPurchaseContext | null = null;
+    
     if (paymentIntentId && selectedPackage) {
       // Get base entries for upsell calculation
       const baseEntries = getPackageBaseEntries({
@@ -260,7 +263,13 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         packageType: "one-time",
       });
 
-      setOriginalPurchaseContext({
+      // ✅ FIX: Get the multiplier that was actually applied during the original purchase
+      // Find the package in packagesWithPromo to get the promoMultiplier that was applied
+      const packageWithPromo = packagesWithPromo.find((p) => p._id === selectedPackage._id);
+      const appliedMultiplier = packageWithPromo?.promoMultiplier ?? resolvedOneTimeMultiplier ?? 1;
+
+      // Create context object in local variable to pass directly (avoids closure issue)
+      contextToPass = {
         paymentIntentId,
         packageId: selectedPackage._id || "",
         packageName: processingPackageName,
@@ -268,8 +277,16 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         price: selectedPackage.price,
         entries: status.data?.entries || 0,
         baseEntries,
-      });
-      // console.log("📧 Stored original purchase context for invoice finalization (special package)");
+        promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
+      };
+      
+      // Also update state for other component uses
+      setOriginalPurchaseContext(contextToPass);
+      // console.log("📧 Stored original purchase context for invoice finalization (special package)", {
+      //   baseEntries,
+      //   appliedMultiplier,
+      //   entries: status.data?.entries || 0,
+      // });
     }
 
     // Invalidate user caches to update UI immediately
@@ -305,6 +322,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     // Show success modal with entry information
     showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits, 3000);
 
+    // ✅ CRITICAL FIX: Capture contextToPass in closure to ensure it's available when setTimeout executes
+    // This matches the pattern used in MembershipModal to avoid React state closure issues
+    const finalContextToPass = contextToPass;
+
     // Trigger upsell modal for one-time purchase after success modal
     // console.log("🔍 About to check upsellTriggered:", upsellTriggered);
     if (!upsellTriggered) {
@@ -319,13 +340,14 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         // });
 
         // Use the EXACT same pattern as MembershipModal - call triggerUpsellModal function
+        // ✅ CRITICAL: Pass finalContextToPass (local variable) instead of originalPurchaseContext (state)
         triggerUpsellModal(
           "one-time-purchase",
           processingPackageName,
           selectedPackage?.price || 0,
           selectedPackage?._id, // packageId
           "one-time", // packageType
-          originalPurchaseContext
+          finalContextToPass // ✅ FIX: Use local variable instead of state to avoid closure issue
         );
       }, 2000); // 2 second delay
     } else {
