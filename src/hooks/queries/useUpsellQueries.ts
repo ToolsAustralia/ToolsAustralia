@@ -212,6 +212,7 @@ export const usePurchaseUpsell = () => {
         price?: number;
         entries?: number;
         baseEntries?: number;
+        promoMultiplier?: number; // ✅ CRITICAL: Store multiplier from original purchase for correct upsell calculation
         miniDrawId?: string;
         miniDrawName?: string;
       };
