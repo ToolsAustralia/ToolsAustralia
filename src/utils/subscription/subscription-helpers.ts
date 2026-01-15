@@ -19,18 +19,31 @@ import type { IUser } from "@/models/User";
  * A failed renewal is when:
  * - Subscription status is "past_due"
  * - Subscription is not active
+ * - Auto-renewal is enabled (user wants subscription to continue)
+ *
+ * Note: We check autoRenew to avoid showing the modal to users who have
+ * cancelled their subscription, even if the status is still "past_due"
+ * (which can happen if cancellation occurs during the past_due state).
  *
  * @param user - User object with subscription data
  * @returns true if user has a failed renewal, false otherwise
  */
 export function hasFailedRenewal(
-  user: IUser | { subscription?: { status?: string; isActive?: boolean } } | null | undefined
+  user: IUser | { subscription?: { status?: string; isActive?: boolean; autoRenew?: boolean } } | null | undefined
 ): boolean {
   if (!user?.subscription) {
     return false;
   }
 
-  return user.subscription.status === "past_due" && !user.subscription.isActive;
+  // Only show renewal failed modal if:
+  // 1. Status is past_due (payment failed)
+  // 2. Subscription is not active
+  // 3. Auto-renewal is enabled (user wants subscription to continue, not cancelled)
+  return (
+    user.subscription.status === "past_due" &&
+    !user.subscription.isActive &&
+    user.subscription.autoRenew === true
+  );
 }
 
 /**
