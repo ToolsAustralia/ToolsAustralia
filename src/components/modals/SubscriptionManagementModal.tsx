@@ -15,6 +15,7 @@ import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
 import type { IUser } from "@/models/User";
 
 interface User {
@@ -340,22 +341,47 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     };
   }, [isOpen, onClose, user.subscription?.isActive, fetchSubscriptionBenefits]);
 
-  const activeSubscription = user.subscription?.isActive ? user.subscription : null;
+  // Active subscription: either isActive=true OR past_due with autoRenew=true (failed renewal)
+  // This allows us to show subscription details for past_due subscriptions
+  const activeSubscription =
+    user.subscription?.isActive ||
+    (user.subscription?.status === "past_due" && user.subscription?.autoRenew === true)
+      ? user.subscription
+      : null;
   const activeOneTimePackage = user.oneTimePackages?.find((pkg) => pkg.isActive);
 
   // Get the full package data by finding it in the fetched packages
   // Handle the new data structure:
-  // For subscriptions: use subscriptionPackageData (full package detail)
+  // For subscriptions: use subscriptionPackageData (full package detail), or fallback to looking up by packageId
   // For one-time: enrichedOneTimePackages contains full packageData
   const membershipPackage = (() => {
     if (packagesLoading) return null;
 
+    // Priority 1: Use subscriptionPackageData if available
     if (activeSubscription && user.subscriptionPackageData) {
       return user.subscriptionPackageData;
-    } else {
-      const activeOneTimeData = user.enrichedOneTimePackages?.find((pkg) => pkg.isActive);
-      return activeOneTimeData?.packageData;
     }
+
+    // Priority 2: If activeSubscription exists but no subscriptionPackageData, look it up by packageId
+    if (activeSubscription?.packageId) {
+      const packageId =
+        typeof activeSubscription.packageId === "string"
+          ? activeSubscription.packageId
+          : (activeSubscription.packageId as { _id: string })?._id;
+      
+      if (packageId) {
+        const foundPackage = subscriptionPackages.find(
+          (pkg) => pkg.id === packageId || pkg._id === packageId
+        );
+        if (foundPackage) {
+          return foundPackage;
+        }
+      }
+    }
+
+    // Priority 3: Check for active one-time packages
+    const activeOneTimeData = user.enrichedOneTimePackages?.find((pkg) => pkg.isActive);
+    return activeOneTimeData?.packageData || null;
   })();
 
   const handleUpgradeSubscription = async () => {
@@ -664,10 +690,10 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
       <ModalContent padding="lg">
         {membershipPackage && activeSubscription ? (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Current Plan Info */}
             <div
-              className={`rounded-lg p-6 text-white ${
+              className={`rounded-lg p-4 sm:p-6 text-white ${
                 // Dynamic gradient based on plan type - matching MembershipSection.tsx
                 membershipPackage.name?.toLowerCase().includes("tradie") ||
                 membershipPackage._id?.includes("tradie") ||
@@ -686,23 +712,23 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800"
               }`}
             >
-              <div className="flex items-center gap-3 mb-4">
-                <Settings className="w-6 h-6" />
-                <h2 className="text-xl font-bold">Current Plan</h2>
+              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
+                <h2 className="text-lg sm:text-xl font-bold">Current Plan</h2>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90">Plan:</span>
-                  <span className="font-semibold">{membershipPackage.name}</span>
+                  <span className="text-white/90 text-xs sm:text-sm">Plan:</span>
+                  <span className="font-semibold text-xs sm:text-sm">{membershipPackage.name}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90">Price:</span>
-                  <span className="font-semibold">${membershipPackage.price}/month</span>
+                  <span className="text-white/90 text-xs sm:text-sm">Price:</span>
+                  <span className="font-semibold text-xs sm:text-sm">${membershipPackage.price}/month</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90">Started:</span>
-                  <span className="font-semibold">
+                  <span className="text-white/90 text-xs sm:text-sm">Started:</span>
+                  <span className="font-semibold text-xs sm:text-sm">
                     {new Date(activeSubscription.startDate).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "long",
@@ -712,26 +738,26 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 </div>
                 {subscriptionBenefits?.isCancelled ? (
                   <div className="flex justify-between items-center">
-                    <span className="text-white/90">Subscription Ends:</span>
-                    <span className="font-semibold text-yellow-300">
+                    <span className="text-white/90 text-xs sm:text-sm">Subscription Ends:</span>
+                    <span className="font-semibold text-yellow-300 text-xs sm:text-sm">
                       {formatDate(subscriptionBenefits.endDate || activeSubscription.endDate) ?? "Unknown"}
                     </span>
                   </div>
                 ) : activeSubscription.endDate ? (
                   <div className="flex justify-between items-center">
-                    <span className="text-white/90">Next Billing:</span>
-                    <span className="font-semibold">{formatDate(activeSubscription.endDate) ?? "Unknown"}</span>
+                    <span className="text-white/90 text-xs sm:text-sm">Next Billing:</span>
+                    <span className="font-semibold text-xs sm:text-sm">{formatDate(activeSubscription.endDate) ?? "Unknown"}</span>
                   </div>
                 ) : null}
 
                 {/* Cancellation Status */}
                 {subscriptionBenefits?.isCancelled && (
-                  <div className="bg-yellow-600/20 border border-yellow-500/30 rounded-lg p-3 mt-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="w-4 h-4 text-yellow-300" />
-                      <span className="text-yellow-300 font-semibold text-sm">Subscription Cancelled</span>
+                  <div className="bg-yellow-600/20 border border-yellow-500/30 rounded-lg p-2 sm:p-3 mt-2 sm:mt-3">
+                    <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
+                      <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-300" />
+                      <span className="text-yellow-300 font-semibold text-xs sm:text-sm">Subscription Cancelled</span>
                     </div>
-                    <p className="text-yellow-100 text-xs">
+                    <p className="text-yellow-100 text-[10px] sm:text-xs">
                       Your subscription will end on{" "}
                       {formatDate(subscriptionBenefits.endDate || activeSubscription.endDate) ||
                         "the end of your billing period"}
@@ -741,9 +767,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 )}
 
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90">Auto Renewal:</span>
+                  <span className="text-white/90 text-xs sm:text-sm">Auto Renewal:</span>
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${
                       activeSubscription.autoRenew ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"
                     }`}
                   >
@@ -753,48 +779,120 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               </div>
             </div>
 
-            {/* Failed Renewal Alert */}
-            {hasFailed && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <h4 className="text-base font-semibold text-red-900 mb-2">Subscription Renewal Failed</h4>
-                    <p className="text-sm text-red-700 mb-4">
-                      Your subscription renewal payment failed. Please resolve this issue to reactivate your
-                      subscription and restore your benefits. Upgrade and downgrade options are unavailable until this is
-                      resolved.
-                    </p>
-                    <Button
-                      onClick={() => setIsRenewalFailedModalOpen(true)}
-                      variant="primary"
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Pay Now
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Plan Features */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-3">Plan Benefits</h3>
-              <div className="space-y-2">
+            <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+              <h3 className="font-semibold text-gray-900 mb-2 sm:mb-3 text-sm sm:text-base">Plan Benefits</h3>
+              <div className="space-y-1.5 sm:space-y-2">
                 {packagesLoading ? (
                   <div className="text-sm text-gray-500">Loading benefits...</div>
                 ) : membershipPackage?.features ? (
-                  membershipPackage.features.map((feature, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                      <span className="text-sm text-gray-700">{feature}</span>
-                    </div>
-                  ))
+                  membershipPackage.features.map((feature, index) => {
+                    // Get feature text (handle both string and object formats)
+                    let featureText: string;
+                    if (typeof feature === "string") {
+                      featureText = feature;
+                    } else if (typeof feature === "object" && feature !== null && "text" in feature) {
+                      featureText = (feature as { text: string }).text;
+                    } else {
+                      featureText = String(feature);
+                    }
+                    const featureLower = featureText.toLowerCase();
+                    
+                    // For first feature (Free Accumulated Entries), show current entries user has OR renewal entries if failed renewal
+                    const isFirstFeature = index === 0;
+                    const isEntriesFeature = featureLower.includes("entries");
+                    const isMiniDrawsFeature = featureLower.includes("mini draw") || featureLower.includes("minidraw");
+                    
+                    let displayText = featureText;
+                    
+                    // For Plan Benefits display:
+                    // - If subscription is past_due (failed renewal): Show renewal entries (what they'll get/are losing)
+                    // - Otherwise: Show current accumulated entries (what they currently have)
+                    if ((isFirstFeature && isEntriesFeature) || isMiniDrawsFeature) {
+                      if (activeSubscription && membershipPackage && user.subscription) {
+                        // Get base entries from membershipPackage
+                        const baseEntries = 
+                          (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth ?? 
+                          (membershipPackage as { metadata?: { entriesCount?: number } }).metadata?.entriesCount ?? 
+                          (membershipPackage as { metadata?: { originalEntries?: number } }).metadata?.originalEntries ??
+                          15;
+                        
+                        const subscriptionWithEntries = user.subscription as {
+                          lastMonthAccumulatedEntries?: number;
+                        };
+                        const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? baseEntries;
+                        
+                        // Check if subscription is past_due (failed renewal)
+                        // In this case, show renewal entries (what they'll get when they resolve payment)
+                        if (hasFailed) {
+                          const renewalCalculation = calculateRenewalEntries(baseEntries, lastMonthAccumulated);
+                          const renewalEntries = renewalCalculation.entriesToGrant; // What user will get on renewal
+                          
+                          if (isFirstFeature && isEntriesFeature) {
+                            // Replace the number in the feature text with renewal entries (+baseEntries)
+                            displayText = featureText.replace(/\d+/, renewalEntries.toString());
+                          } else if (isMiniDrawsFeature) {
+                            // Show same renewal entries for minidraws
+                            displayText = `${renewalEntries} Free Entries for All Mini Draws`;
+                          }
+                        } else {
+                          // Show current accumulated entries (what they currently have)
+                          if (isFirstFeature && isEntriesFeature) {
+                            // Replace the number in the feature text with current accumulated entries
+                            displayText = featureText.replace(/\d+/, lastMonthAccumulated.toString());
+                          } else if (isMiniDrawsFeature) {
+                            // Show same current entries for minidraws
+                            displayText = `${lastMonthAccumulated} Free Entries for All Mini Draws`;
+                          }
+                        }
+                      }
+                    }
+                    
+                    return (
+                      <div key={index} className="flex items-center gap-2">
+                        <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 flex-shrink-0" />
+                        <span className="text-xs sm:text-sm text-gray-700">{displayText}</span>
+                      </div>
+                    );
+                  })
                 ) : (
                   <div className="text-sm text-gray-500">No benefits information available</div>
                 )}
               </div>
             </div>
+
+            {/* Failed Renewal Alert - Informational, not blocking */}
+            {hasFailed && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3 sm:p-4">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm sm:text-base font-semibold text-red-900 mb-1.5 sm:mb-2">Subscription Renewal Failed</h4>
+                    <p className="text-xs sm:text-sm text-red-700 mb-3 sm:mb-4">
+                      Renew your subscription now to keep your benefits active. Don&apos;t lose your accumulated entries and access to exclusive features.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                      <Button
+                        onClick={() => setIsRenewalFailedModalOpen(true)}
+                        variant="primary"
+                        className="bg-red-600 hover:bg-red-700 text-sm sm:text-base"
+                        size="sm"
+                      >
+                        Resolve Payment Issue
+                      </Button>
+                      <Button
+                        onClick={() => setShowCancelConfirm(true)}
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50 text-sm sm:text-base"
+                        size="sm"
+                      >
+                        Cancel Subscription
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Pending Changes Countdown */}
             {subscriptionBenefits?.currentBenefits?.isPendingChange &&
@@ -833,11 +931,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 />
               )}
 
-            {/* Management Actions */}
+            {/* Management Actions - Hidden for past_due subscriptions (only for active subscriptions) */}
+            {!hasFailed && (
             <div className="space-y-4">
               <h3 className="font-semibold text-gray-900">Subscription Management</h3>
 
-              {/* Upgrade Options - Hidden if failed renewal */}
+              {/* Upgrade Options - Hidden for past_due subscriptions (must pay invoice first) */}
               {!hasFailed &&
                 !subscriptionBenefits?.isCancelled &&
                 subscriptionBenefits?.availableUpgrades &&
@@ -847,42 +946,60 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       <ArrowUp className="w-4 h-4 text-green-600" />
                       Available Upgrades
                     </h4>
-                    {subscriptionBenefits.availableUpgrades.map((upgrade) => (
-                      <div
-                        key={upgrade.packageId}
-                        className="flex items-center justify-between p-4 bg-white border border-green-200 rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                            <h5 className="font-medium text-gray-900">{upgrade.name}</h5>
-                            <span className="text-lg font-bold text-green-600">${upgrade.price}/month</span>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-2">{upgrade.description}</p>
-                          <div className="flex gap-4 text-xs text-gray-500">
-                            <span>{upgrade.entriesPerMonth} entries/month</span>
-                            <span>{upgrade.shopDiscountPercent}% shop discount</span>
-                            <span>{upgrade.partnerDiscountDays} days partner access</span>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => {
-                            setSelectedUpgrade(upgrade);
-                            setShowUpgradeConfirm(true);
-                          }}
-                          disabled={isLoading || benefitsLoading}
-                          variant="primary"
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 ml-4"
+                    {subscriptionBenefits.availableUpgrades.map((upgrade) => {
+                      // Calculate upgrade entries - what user will have after upgrading
+                      // Upgrade adds: newBaseEntries * promoMultiplier to lastMonthAccumulatedEntries
+                      // So total after upgrade = lastMonthAccumulatedEntries + (newBaseEntries * promoMultiplier)
+                      const subscriptionWithEntries = user.subscription as {
+                        lastMonthAccumulatedEntries?: number;
+                      } | undefined;
+                      const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+                      // Use active promo multiplier for membership packages (not defaulting to 1)
+                      const upgradeCalculation = calculateUpgradeEntries(
+                        upgrade.entriesPerMonth,
+                        lastMonthAccumulated,
+                        membershipPromoMultiplier // Use current active promo multiplier
+                      );
+                      // After upgrade, user will have: lastMonthAccumulatedEntries + (newBaseEntries * promoMultiplier)
+                      const totalEntriesAfterUpgrade = upgradeCalculation.newLastMonthAccumulatedEntries;
+
+                      return (
+                        <div
+                          key={upgrade.packageId}
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-white border border-green-200 rounded-lg gap-3 sm:gap-4"
                         >
-                          Upgrade Now
-                        </Button>
-                      </div>
-                    ))}
+                          <div className="flex-1 w-full sm:w-auto">
+                            <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
+                              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-green-500 rounded-full flex-shrink-0"></div>
+                              <h5 className="font-medium text-gray-900 text-sm sm:text-base">{upgrade.name}</h5>
+                              <span className="text-base sm:text-lg font-bold text-green-600">${upgrade.price}/month</span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">{upgrade.description}</p>
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500">
+                              <span>{totalEntriesAfterUpgrade} Free Accumulated Entries</span>
+                              <span>{totalEntriesAfterUpgrade} Free Entries for All Mini Draws</span>
+                              <span>{upgrade.partnerDiscountDays} days partner access</span>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => {
+                              setSelectedUpgrade(upgrade);
+                              setShowUpgradeConfirm(true);
+                            }}
+                            disabled={isLoading || benefitsLoading}
+                            variant="primary"
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 w-full sm:w-auto ml-0 sm:ml-4 text-xs sm:text-sm"
+                          >
+                            Upgrade Now
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
-              {/* Downgrade Options - Hidden if failed renewal */}
+              {/* Downgrade Options - Hidden for past_due subscriptions (must pay invoice first) */}
               {!hasFailed &&
                 !subscriptionBenefits?.isCancelled &&
                 subscriptionBenefits?.availableDowngrades &&
@@ -892,58 +1009,72 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       <ArrowDown className="w-4 h-4 text-orange-600" />
                       Available Downgrades
                     </h4>
-                    {subscriptionBenefits.availableDowngrades.map((downgrade) => (
-                      <div
-                        key={downgrade.packageId}
-                        className="flex items-center justify-between p-4 bg-white border border-orange-200 rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                            <h5 className="font-medium text-gray-900">{downgrade.name}</h5>
-                            <span className="text-lg font-bold text-orange-600">${downgrade.price}/month</span>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-2">{downgrade.description}</p>
-                          <div className="flex gap-4 text-xs text-gray-500">
-                            <span>{downgrade.entriesPerMonth} entries/month</span>
-                            <span>{downgrade.shopDiscountPercent}% shop discount</span>
-                            <span>{downgrade.partnerDiscountDays} days partner access</span>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => {
-                            setSelectedDowngrade(downgrade);
-                            setShowDowngradeConfirm(true);
-                          }}
-                          disabled={isLoading || benefitsLoading}
-                          variant="secondary"
-                          size="sm"
-                          className="border-orange-300 text-orange-600 hover:bg-orange-50 ml-4"
+                    {subscriptionBenefits.availableDowngrades.map((downgrade) => {
+                      // Calculate downgrade entries - what user will receive when downgrading
+                      // Downgrade uses renewal calculation since it happens at next billing cycle
+                      const subscriptionWithEntries = user.subscription as {
+                        lastMonthAccumulatedEntries?: number;
+                      } | undefined;
+                      const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+                      const downgradeCalculation = calculateRenewalEntries(
+                        downgrade.entriesPerMonth,
+                        lastMonthAccumulated
+                      );
+                      const downgradeEntries = downgradeCalculation.entriesToGrant;
+
+                      return (
+                        <div
+                          key={downgrade.packageId}
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-white border border-orange-200 rounded-lg gap-3 sm:gap-4"
                         >
-                          Schedule Downgrade
-                        </Button>
-                      </div>
-                    ))}
+                          <div className="flex-1 w-full sm:w-auto">
+                            <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
+                              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-orange-500 rounded-full flex-shrink-0"></div>
+                              <h5 className="font-medium text-gray-900 text-sm sm:text-base">{downgrade.name}</h5>
+                              <span className="text-base sm:text-lg font-bold text-orange-600">${downgrade.price}/month</span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">{downgrade.description}</p>
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500">
+                              <span>{downgradeEntries} Free Accumulated Entries</span>
+                              <span>{downgradeEntries} Free Entries for All Mini Draws</span>
+                              <span>{downgrade.partnerDiscountDays} days partner access</span>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => {
+                              setSelectedDowngrade(downgrade);
+                              setShowDowngradeConfirm(true);
+                            }}
+                            disabled={isLoading || benefitsLoading}
+                            variant="secondary"
+                            size="sm"
+                            className="border-orange-300 text-orange-600 hover:bg-orange-50 w-full sm:w-auto ml-0 sm:ml-4 text-xs sm:text-sm"
+                          >
+                            Schedule Downgrade
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
               {/* Cancel Subscription */}
               <div
-                className={`flex items-center justify-between p-4 rounded-lg ${
+                className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 rounded-lg gap-3 sm:gap-4 ${
                   subscriptionBenefits?.isCancelled
                     ? "bg-yellow-50 border border-yellow-200"
                     : "bg-white border border-red-200"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-start sm:items-center gap-2 sm:gap-3 flex-1 min-w-0">
                   <XCircle
-                    className={`w-5 h-5 ${subscriptionBenefits?.isCancelled ? "text-yellow-600" : "text-red-600"}`}
+                    className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0 ${subscriptionBenefits?.isCancelled ? "text-yellow-600" : "text-red-600"}`}
                   />
-                  <div>
-                    <p className="font-medium text-gray-900">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 text-sm sm:text-base">
                       {subscriptionBenefits?.isCancelled ? "Subscription Cancelled" : "Cancel Subscription"}
                     </p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs sm:text-sm text-gray-600">
                       {subscriptionBenefits?.isCancelled
                         ? `Beneftis ends on ${formatDate(subscriptionBenefits.endDate) ?? "end of billing period"}`
                         : "You'll retain access until the end of your billing period"}
@@ -956,7 +1087,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     disabled={isLoading}
                     variant="secondary"
                     size="sm"
-                    className="border-red-300 text-red-600 hover:bg-red-50"
+                    className="border-red-300 text-red-600 hover:bg-red-50 w-full sm:w-auto text-xs sm:text-sm"
                   >
                     Cancel
                   </Button>
@@ -966,13 +1097,14 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     disabled={isLoading}
                     variant="primary"
                     size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto text-xs sm:text-sm"
                   >
                     Reactivate
                   </Button>
                 )}
               </div>
             </div>
+            )}
           </div>
         ) : activeOneTimePackage ? (
           <div className="text-center py-8">
@@ -1004,7 +1136,35 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               </Button>
             </div>
           </div>
+        ) : user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due" ? (
+          // User has a subscription but it's not active and not past_due (e.g., cancelled, incomplete, etc.)
+          // past_due subscriptions are handled above in the activeSubscription section
+          <div className="text-center py-8">
+            <div className="bg-gray-50 rounded-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                {user.subscription.status === "canceled" ? "Subscription Cancelled" : "Subscription Inactive"}
+              </h2>
+              <p className="text-gray-600 mb-4">
+                {user.subscription.status === "canceled"
+                  ? "Your subscription has been cancelled. You can reactivate it anytime."
+                  : "Your subscription is currently inactive."}
+              </p>
+              <Button
+                onClick={() => {
+                  onClose(); // Close SubscriptionManagementModal
+                  const tradiePlan = getTradiePackage(); // Get Tradie package directly
+                  membershipModal.setSelectedPlan(tradiePlan);
+                  membershipModal.openModal(); // Open MembershipModal
+                }}
+                variant="primary"
+                className="mt-4 bg-[#ee0000] hover:bg-red-700"
+              >
+                {user.subscription.status === "canceled" ? "Reactivate Subscription" : "Subscribe to Membership Packages"}
+              </Button>
+            </div>
+          </div>
         ) : (
+          // No subscription at all
           <div className="text-center py-8">
             <div className="bg-gray-50 rounded-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-2">No Active Subscription</h2>

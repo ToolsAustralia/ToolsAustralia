@@ -131,93 +131,218 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ✅ STRIPE BEST PRACTICE: Reuse existing PaymentIntent from invoice
+    // If no PaymentIntent found, we need to get Stripe to create/reuse one via invoice operations
+    // We should NEVER manually create a PaymentIntent - let Stripe handle it
     if (!paymentIntent) {
-      return NextResponse.json({ error: "No PaymentIntent found for invoice" }, { status: 404 });
-    }
-
-    // If customer has default payment method, pay invoice immediately
-    if (invoiceData.hasDefaultPaymentMethod && invoiceData.invoice.customer) {
       try {
-        // Extract customer ID with proper type handling
-        const customer = invoiceData.invoice.customer;
-        
-        // Extract customer ID safely - explicit type narrowing
-        let customerId: string | undefined;
+        // If invoice is draft, finalize it first (this will create a PaymentIntent if needed)
+        if (invoiceData.invoice.status === "draft" && invoiceData.invoice.id) {
+          const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoiceData.invoice.id, {
+            expand: ["payment_intent"],
+          });
+          paymentIntent = extractPaymentIntentFromInvoice(finalizedInvoice);
+          
+          // If still not expanded, retrieve by ID
+          if (!paymentIntent) {
+            const finalizedWithPI = finalizedInvoice as Stripe.Invoice & {
+              payment_intent?: string | Stripe.PaymentIntent;
+              latest_payment_intent?: string | Stripe.PaymentIntent;
+            };
+            
+            const paymentIntentIdString =
+              typeof finalizedWithPI.payment_intent === "string"
+                ? finalizedWithPI.payment_intent
+                : typeof finalizedWithPI.latest_payment_intent === "string"
+                ? finalizedWithPI.latest_payment_intent
+                : null;
 
-        if (typeof customer === "string") {
-          customerId = customer;
-        } else if (customer && typeof customer === "object") {
-          // Check if customer.id exists and is a string
-          const customerIdFromObj = customer.id;
-          if (customerIdFromObj && typeof customerIdFromObj === "string") {
-            customerId = customerIdFromObj;
+            if (paymentIntentIdString) {
+              paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdString, {
+                expand: ["payment_method"],
+              });
+            }
           }
         }
+        
+        // If still no PaymentIntent and invoice is open, retrieve the invoice again with proper expansion
+        // Sometimes the PaymentIntent exists but wasn't expanded in the initial retrieval
+        if (!paymentIntent && invoiceData.invoice.status === "open" && invoiceData.invoice.id) {
+          try {
+            // ✅ STRIPE BEST PRACTICE: Retrieve invoice again with full expansion to get PaymentIntent
+            // Stripe should have created a PaymentIntent for the failed subscription invoice
+            const refreshedInvoice = await stripe.invoices.retrieve(invoiceData.invoice.id, {
+              expand: ["payment_intent"],
+            });
+            
+            paymentIntent = extractPaymentIntentFromInvoice(refreshedInvoice);
+            
+            // If still not expanded, retrieve by ID
+            if (!paymentIntent) {
+              const refreshedWithPI = refreshedInvoice as Stripe.Invoice & {
+                payment_intent?: string | Stripe.PaymentIntent;
+                latest_payment_intent?: string | Stripe.PaymentIntent;
+              };
+              
+              const paymentIntentIdString =
+                typeof refreshedWithPI.payment_intent === "string"
+                  ? refreshedWithPI.payment_intent
+                  : typeof refreshedWithPI.latest_payment_intent === "string"
+                  ? refreshedWithPI.latest_payment_intent
+                  : null;
 
-        // Early return if no customerId - this ensures TypeScript knows customerId is string below
-        if (!customerId) {
-          console.error("❌ No customer ID found on invoice");
-          return NextResponse.json({ error: "Failed to retrieve customer information" }, { status: 500 });
+              if (paymentIntentIdString) {
+                paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdString, {
+                  expand: ["payment_method"],
+                });
+              }
+            }
+          } catch (retrieveError) {
+            console.error("Error retrieving invoice with PaymentIntent expansion:", retrieveError);
+            // Continue - we'll return an error below if still no PaymentIntent
+          }
         }
-
-        // Assign to const after validation - use type assertion since we've already validated above
-        // TypeScript's control flow analysis doesn't always narrow let variables properly,
-        // but we know customerId is a string at this point due to the early return above
-        const validatedCustomerId = customerId as string;
-
-        // Ensure invoice ID exists (Stripe invoices always have an id, but TypeScript needs help)
-        if (!invoiceData.invoice?.id) {
-          return NextResponse.json({ error: "Invoice ID not found" }, { status: 500 });
-        }
-
-        const paidInvoice = await payInvoiceWithDefaultMethod(
-          invoiceData.invoice.id,
-          validatedCustomerId
-        );
-
-        return NextResponse.json({
-          success: true,
-          message: "Invoice paid successfully. Subscription will be reactivated shortly.",
-          data: {
-            invoiceId: paidInvoice.id,
-            status: paidInvoice.status,
-            paymentIntentId: paymentIntent.id,
-          },
-        });
-      } catch (paymentError) {
-        console.error("Error paying invoice with default payment method:", paymentError);
-
-        // If payment failed, return PaymentIntent client secret for user to try different payment method
-        if (paymentIntent.client_secret) {
-          return NextResponse.json({
-            success: false,
-            requiresPaymentConfirmation: true,
-            message: "Default payment method failed. Please use a different payment method.",
-            data: {
-              paymentIntent: {
-                id: paymentIntent.id,
-                clientSecret: paymentIntent.client_secret,
-                amount: paymentIntent.amount,
-                currency: paymentIntent.currency,
-                status: paymentIntent.status,
-              },
-              invoiceId: invoiceData.invoice.id,
-            },
-          });
-        }
-
+      } catch (error) {
+        console.error("Error retrieving PaymentIntent from invoice:", error);
         return NextResponse.json(
           {
-            error: "Failed to pay invoice",
-            details: paymentError instanceof Error ? paymentError.message : "Payment failed",
+            error: "Failed to retrieve payment information from invoice",
+            details: error instanceof Error ? error.message : "Unable to process payment. Please contact support.",
           },
           { status: 500 }
         );
       }
     }
 
-    // No default payment method - return PaymentIntent client secret for Payment Element
-    if (!paymentIntent.client_secret) {
+    // ✅ STRIPE BEST PRACTICE: If invoice is open but has no PaymentIntent,
+    // use stripe.invoices.pay() to create/attach the correct PaymentIntent
+    // This is the ONLY correct way to handle invoices without PaymentIntents
+    // DO NOT create standalone PaymentIntents - they won't be attached to the invoice
+    if (!paymentIntent && invoiceData.invoice.status === "open" && invoiceData.invoice.id) {
+      try {
+        console.log(
+          `⚠️ No PaymentIntent found for open invoice ${invoiceData.invoice.id} - using stripe.invoices.pay() to create correct PaymentIntent`
+        );
+
+        // ✅ CORRECT: Use stripe.invoices.pay() with off_session: false
+        // This will create (or reuse) the correct PaymentIntent and attach it to the invoice
+        // off_session: false means user is present and can provide payment method via Payment Element
+        // We don't pass payment_method here - user will provide it via Payment Element
+        // This prevents auto-payment and allows user to choose payment method
+        const paidInvoiceAttempt = await stripe.invoices.pay(invoiceData.invoice.id, {
+          off_session: false, // User is present, will provide payment method via Payment Element
+          expand: ["payment_intent"], // Expand to get PaymentIntent
+        });
+
+        // Check if invoice was paid (might happen if default payment method exists and succeeds)
+        if (paidInvoiceAttempt.status === "paid") {
+          return NextResponse.json({
+            success: true,
+            message: "Invoice has been paid successfully",
+            data: {
+              invoiceId: paidInvoiceAttempt.id,
+              status: "paid",
+            },
+          });
+        }
+
+        // Extract PaymentIntent from the paid invoice attempt
+        paymentIntent = extractPaymentIntentFromInvoice(paidInvoiceAttempt);
+
+        // If PaymentIntent is still not expanded, retrieve it by ID
+        if (!paymentIntent) {
+          const paidInvoiceWithPI = paidInvoiceAttempt as Stripe.Invoice & {
+            payment_intent?: string | Stripe.PaymentIntent;
+            latest_payment_intent?: string | Stripe.PaymentIntent;
+          };
+
+          const paymentIntentIdString =
+            typeof paidInvoiceWithPI.payment_intent === "string"
+              ? paidInvoiceWithPI.payment_intent
+              : typeof paidInvoiceWithPI.latest_payment_intent === "string"
+              ? paidInvoiceWithPI.latest_payment_intent
+              : null;
+
+          if (paymentIntentIdString) {
+            paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdString, {
+              expand: ["payment_method"],
+            });
+          }
+        }
+
+        if (paymentIntent) {
+          // ✅ Payment methods are restricted at Payment Element level (frontend)
+          // Do NOT modify invoice-linked PaymentIntents - they are owned by Stripe Billing
+          // Modifying them can break future retries and conflict with dashboard settings
+          console.log(
+            `✅ Retrieved PaymentIntent ${paymentIntent.id} from invoice ${invoiceData.invoice.id} via stripe.invoices.pay()`
+          );
+        }
+          } catch (payError: unknown) {
+            // Type guard to check if error has Stripe error properties
+            const isStripeError = (error: unknown): error is { code?: string; payment_intent?: string | { id: string }; message?: string } => {
+              return typeof error === "object" && error !== null;
+            };
+
+            console.error("Error using stripe.invoices.pay() to get PaymentIntent:", payError);
+
+            // If invoice was already paid, that's okay
+            if (isStripeError(payError) && payError.code === "invoice_already_paid") {
+              return NextResponse.json({
+                success: true,
+                message: "Invoice has already been paid",
+                data: {
+                  invoiceId: invoiceData.invoice.id,
+                  status: "paid",
+                },
+              });
+            }
+
+            // If payment failed but we got a PaymentIntent, extract it
+            if (isStripeError(payError) && payError.payment_intent) {
+              const paymentIntentId =
+                typeof payError.payment_intent === "string" ? payError.payment_intent : payError.payment_intent.id;
+              try {
+                paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+                  expand: ["payment_method"],
+                });
+              } catch (retrieveError) {
+                console.error("Error retrieving PaymentIntent from error:", retrieveError);
+              }
+            }
+
+            // If we still don't have a PaymentIntent, return error
+            if (!paymentIntent) {
+              const errorMessage = isStripeError(payError) ? payError.message : "Unable to process payment. Please contact support.";
+              return NextResponse.json(
+                {
+                  error: "Failed to initialize payment",
+                  details: errorMessage || "Unable to process payment. Please contact support.",
+                },
+                { status: 500 }
+              );
+            }
+          }
+    }
+
+    // If still no PaymentIntent after all attempts, we can't proceed
+    if (!paymentIntent) {
+      return NextResponse.json(
+        {
+          error: "No payment intent found for invoice",
+          details: "The invoice does not have a payment intent available and we could not create one. Please contact support for assistance.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Always return PaymentIntent client secret for Payment Element
+    // Never auto-pay - let user choose payment method (saved or new) to handle expired/insufficient funds cases
+    // This allows users to:
+    // 1. Select a different saved payment method if default failed
+    // 2. Enter a new payment method
+    // 3. See clear error messages if payment fails
+    if (!paymentIntent?.client_secret) {
       return NextResponse.json(
         { error: "PaymentIntent does not have a client secret" },
         { status: 500 }

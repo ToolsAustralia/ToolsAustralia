@@ -7,9 +7,9 @@
  * Allows users to pay their existing failed invoice using the existing PaymentIntent.
  *
  * Features:
- * - Shows failed renewal information
- * - Auto-confirms payment if default payment method exists
- * - Shows Payment Element if no default payment method
+ * - Shows saved payment methods for selection
+ * - Allows entering a new payment method
+ * - Displays clear error messages (both error and details)
  * - Automatically saves new payment methods and sets as default
  * - Handles success/error states
  * - Can be closed and reopened from settings
@@ -18,13 +18,15 @@
 import React, { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import type Stripe from "stripe";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "@/components/modals/ui";
 import { useToast } from "@/components/ui/Toast";
 import { AlertTriangle, CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { usePayFailedInvoice } from "@/hooks/queries/useSubscriptionQueries";
-import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
+import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
+import { useUserContext } from "@/contexts/UserContext";
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -36,21 +38,44 @@ interface RenewalFailedModalProps {
 
 /**
  * Payment Form Component (for Payment Element)
- * Handles payment confirmation when no default payment method exists
+ * Handles payment confirmation with Payment Element
  */
 const PaymentForm: React.FC<{
   clientSecret: string;
   amount: number;
   currency: string;
+  selectedPaymentMethod?: SavedPaymentMethod | null;
   onPaymentSuccess: (paymentMethodId?: string) => void;
-  onPaymentError: (error: string) => void;
+  onPaymentError: (error: string, details?: string) => void;
   onCancel: () => void;
-}> = ({ clientSecret, onPaymentSuccess, onPaymentError, onCancel }) => {
+}> = ({ clientSecret, selectedPaymentMethod, onPaymentSuccess, onPaymentError, onCancel }) => {
   const stripe = useStripe();
   const elements = useElements();
   const { showToast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const { savePaymentMethod } = useSavedPaymentMethods();
+  const { userData } = useUserContext();
+  
+  // Build billing details - MUST include name (Stripe requirement when billingDetails: "never")
+  // This matches the pattern used in PaymentMethodSelector
+  const buildBillingDetails = () => {
+    const firstName = userData?.firstName?.trim() || "";
+    const lastName = userData?.lastName?.trim() || "";
+    const fullName = [firstName, lastName].filter(Boolean).join(" ") || userData?.email || "Customer";
+    
+    return {
+      name: fullName,
+      email: userData?.email,
+      phone: userData?.mobile,
+      address: {
+        country: "AU",
+        state: "NSW",
+        city: "Sydney",
+        postal_code: "2000",
+        line1: "1 Martin Place",
+      },
+    };
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -62,6 +87,25 @@ const PaymentForm: React.FC<{
     setIsProcessing(true);
 
     try {
+      // If a saved payment method is selected, use it directly
+      if (selectedPaymentMethod) {
+        const confirmResult = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: selectedPaymentMethod.paymentMethodId,
+        });
+
+        if (confirmResult.error) {
+          throw new Error(confirmResult.error.message || "Payment failed");
+        }
+
+        if (confirmResult.paymentIntent && confirmResult.paymentIntent.status === "succeeded") {
+          onPaymentSuccess(selectedPaymentMethod.paymentMethodId);
+          return;
+        }
+
+        throw new Error("Payment was not successful");
+      }
+
+      // Otherwise, use Payment Element for new card entry
       // Submit form to validate
       const { error: submitError } = await elements.submit();
 
@@ -69,26 +113,22 @@ const PaymentForm: React.FC<{
         throw new Error(submitError.message || "Please complete all required fields.");
       }
 
-      // Confirm payment
-      const confirmResult = await stripe.confirmPayment({
-        elements,
-        clientSecret,
-        confirmParams: {
-          payment_method_data: {
-            billing_details: {
-              address: {
-                country: "AU",
-                state: "NSW",
-                city: "Sydney",
-                postal_code: "2000",
-                line1: "1 Martin Place",
+            // Confirm payment
+            // ✅ Provide billing_details in confirmParams since we set fields.billingDetails to "never"
+            // Stripe requires this when billing details are hidden in Payment Element
+            // MUST include name field (required by Stripe)
+            const billingDetailsData = buildBillingDetails();
+            const confirmResult = await stripe.confirmPayment({
+              elements,
+              clientSecret,
+              confirmParams: {
+                payment_method_data: {
+                  billing_details: billingDetailsData,
+                },
+                return_url: window.location.href,
               },
-            },
-          },
-          return_url: window.location.href,
-        },
-        redirect: "if_required",
-      });
+              redirect: "if_required",
+            });
 
       if (confirmResult.error) {
         throw new Error(confirmResult.error.message || "Payment failed");
@@ -112,6 +152,9 @@ const PaymentForm: React.FC<{
           }
         }
 
+        // ✅ PaymentIntent is already attached to the invoice (via stripe.invoices.pay())
+        // No need to manually pay the invoice - webhook will handle invoice.paid event
+        // When PaymentIntent succeeds, Stripe will automatically mark the invoice as paid
         onPaymentSuccess(paymentIntent.payment_method as string | undefined);
       } else {
         throw new Error("Payment was not successful");
@@ -131,60 +174,95 @@ const PaymentForm: React.FC<{
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="border border-gray-200 rounded-lg p-4">
-        {!stripe || !elements ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
-            <span className="ml-3 text-gray-600">Loading payment form...</span>
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+      {/* Show selected payment method if one is selected */}
+      {selectedPaymentMethod && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900 text-xs sm:text-sm">
+                  {selectedPaymentMethod.card?.brand?.toUpperCase() || "Card"} •••• {selectedPaymentMethod.card?.last4 || ""}
+                </p>
+                <p className="text-[10px] sm:text-xs text-gray-500">Using saved payment method</p>
+              </div>
+            </div>
           </div>
-        ) : (
-          <PaymentElement
-            options={{
-              layout: "tabs",
-              wallets: {
-                applePay: "auto",
-                googlePay: "auto",
-              },
-              paymentMethodOrder: ["card", "apple_pay", "google_pay"],
-              fields: {
-                billingDetails: "never",
-              },
-              terms: {
-                card: "never",
-                applePay: "never",
-                googlePay: "never",
-              },
-            }}
-            id="payment-element"
-          />
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="flex space-x-3 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isProcessing} className="flex-1">
+      {/* Payment Element - only show if no saved payment method selected */}
+      {!selectedPaymentMethod && (
+        <div className="border border-gray-200 rounded-lg p-3 sm:p-4">
+          {!stripe || !elements ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+              <span className="ml-3 text-gray-600">Loading payment form...</span>
+            </div>
+          ) : (
+            <PaymentElement
+              options={{
+                layout: "tabs",
+                wallets: {
+                  applePay: "auto",
+                  googlePay: "auto",
+                },
+                paymentMethodOrder: ["card", "apple_pay", "google_pay"],
+                // Don't hide billing details - Payment Element needs it when user enters new card
+                // But we'll provide it in confirmParams
+                fields: {
+                  billingDetails: {
+                    name: "never",
+                    email: "never",
+                    phone: "never",
+                    address: "never",
+                  },
+                },
+                terms: {
+                  card: "never",
+                  applePay: "never",
+                  googlePay: "never",
+                },
+              }}
+              id="payment-element"
+            />
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-2 sm:pt-4">
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={onCancel} 
+          disabled={isProcessing} 
+          className="flex-1 text-sm sm:text-base"
+          size="sm"
+        >
           Cancel
         </Button>
         <Button
           type="submit"
-          disabled={!stripe || !elements || isProcessing}
-          className="flex-1 bg-red-600 hover:bg-red-700"
+          disabled={!stripe || (!elements && !selectedPaymentMethod) || isProcessing}
+          className="flex-1 bg-red-600 hover:bg-red-700 text-sm sm:text-base"
+          size="sm"
         >
           {isProcessing ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2 animate-spin" />
               Processing...
             </>
           ) : (
             <>
-              <CreditCard className="w-4 h-4 mr-2" />
+              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
               Pay Now
             </>
           )}
         </Button>
       </div>
 
-      <div className="text-xs text-gray-500 text-center">
+      <div className="text-[10px] sm:text-xs text-gray-500 text-center">
         Your payment is secured by Stripe. Your card details are never stored on our servers.
       </div>
     </form>
@@ -198,6 +276,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const payFailedInvoiceMutation = usePayFailedInvoice();
+  const { paymentMethods, loading: paymentMethodsLoading } = useSavedPaymentMethods();
 
   // State management
   const [paymentState, setPaymentState] = useState<{
@@ -205,10 +284,14 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
     clientSecret?: string;
     amount?: number;
     currency?: string;
+    invoiceId?: string;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<SavedPaymentMethod | null>(null);
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -217,28 +300,27 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       setIsLoading(false);
       setIsSuccess(false);
       setError(null);
-      // Trigger payment attempt when modal opens
-      handlePayNow();
+      setErrorDetails(null);
+      setSelectedPaymentMethod(null);
+      setShowPaymentMethods(false);
+      // Don't auto-trigger - let user click "Resolve Payment Issue" button
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Handle "Pay Now" button click or auto-trigger
-  const handlePayNow = async () => {
+  // Handle "Resolve Payment Issue" button click
+  const handleResolvePayment = async () => {
     setIsLoading(true);
     setError(null);
+    setErrorDetails(null);
 
     try {
       const response = await payFailedInvoiceMutation.mutateAsync();
 
       if (response.success) {
-        // Payment was successful (default payment method was used)
+        // Invoice already paid
         setIsSuccess(true);
-        // Invalidate queries to refresh user data
         queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
         queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
-
-        // Close modal after a short delay
         setTimeout(() => {
           onClose();
         }, 2000);
@@ -249,26 +331,67 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           clientSecret: response.data.paymentIntent.clientSecret,
           amount: response.data.paymentIntent.amount,
           currency: response.data.paymentIntent.currency || "aud",
+          invoiceId: response.data.invoiceId,
         });
+        setShowPaymentMethods(true);
       } else {
-        throw new Error(response.message || "Failed to process payment");
+        // Extract error and details from response
+        const errorMsg = (response as { error?: string; message?: string }).error || 
+                        (response as { message?: string }).message || 
+                        "Failed to process payment";
+        const details = (response as { details?: string }).details;
+        throw new Error(errorMsg + (details ? `: ${details}` : ""));
       }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to process payment. Please try again.";
-      setError(errorMessage);
-      showToast({
-        type: "error",
-        title: "Payment Error",
-        message: errorMessage,
-        duration: 10000,
-      });
+      // Handle API error responses that may have both error and details
+      // ApiError from lib/queries has: message, status, data
+      if (err && typeof err === "object") {
+        // Check if it's an ApiError with data property
+        const apiError = err as { 
+          name?: string; 
+          message?: string; 
+          data?: { error?: string; details?: string } | string;
+        };
+        
+        // Try to extract error and details from ApiError.data
+        let errorMsg = apiError.message || "Failed to process payment";
+        let details: string | null = null;
+        
+        if (apiError.data) {
+          if (typeof apiError.data === "object" && apiError.data !== null) {
+            errorMsg = apiError.data.error || errorMsg;
+            details = apiError.data.details || null;
+          } else if (typeof apiError.data === "string") {
+            details = apiError.data;
+          }
+        }
+        
+        setError(errorMsg);
+        setErrorDetails(details);
+        showToast({
+          type: "error",
+          title: errorMsg,
+          message: details || errorMsg,
+          duration: 10000,
+        });
+      } else {
+        const errorMessage = err instanceof Error ? err.message : "Failed to process payment. Please try again.";
+        setError(errorMessage);
+        setErrorDetails(null);
+        showToast({
+          type: "error",
+          title: "Payment Error",
+          message: errorMessage,
+          duration: 10000,
+        });
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   // Handle payment success from Payment Element
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (paymentMethodId?: string) => {
     setIsSuccess(true);
     // Invalidate queries to refresh user data
     queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
@@ -288,8 +411,15 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   };
 
   // Handle payment error from Payment Element
-  const handlePaymentError = (errorMessage: string) => {
+  const handlePaymentError = (errorMessage: string, details?: string) => {
     setError(errorMessage);
+    setErrorDetails(details || null);
+  };
+
+  // Format card display
+  const formatCardDisplay = (paymentMethod: SavedPaymentMethod) => {
+    if (!paymentMethod.card) return "Payment Method";
+    return `${paymentMethod.card.brand.toUpperCase()} •••• ${paymentMethod.card.last4}`;
   };
 
   if (!isOpen) return null;
@@ -317,16 +447,15 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
     return (
       <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false}>
         <ModalHeader title="Complete Payment" onClose={onClose} />
-        <ModalContent className="p-6">
+        <ModalContent className="p-4 sm:p-6">
           {/* Alert Banner */}
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-semibold text-red-900 mb-1">Subscription Renewal Failed</h4>
-                <p className="text-sm text-red-700">
-                  Your subscription renewal payment failed. Please complete the payment below to reactivate your
-                  subscription.
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs sm:text-sm font-semibold text-red-900 mb-1">Payment Required</h4>
+                <p className="text-xs sm:text-sm text-red-700">
+                  Please complete the payment below to reactivate your subscription.
                 </p>
               </div>
             </div>
@@ -334,21 +463,93 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
           {/* Payment Amount */}
           {paymentState.amount && (
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Amount Due:</span>
-                <span className="text-lg font-bold text-gray-900">
+                <span className="text-xs sm:text-sm font-medium text-gray-700">Amount Due:</span>
+                <span className="text-base sm:text-lg font-bold text-gray-900">
                   ${((paymentState.amount || 0) / 100).toFixed(2)} {paymentState.currency?.toUpperCase() || "AUD"}
                 </span>
               </div>
             </div>
           )}
 
-          {/* Error Display */}
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <span className="text-red-700 text-sm">{error}</span>
+          {/* Error Display - Show both error and details */}
+          {(error || errorDetails) && (
+            <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  {error && <p className="text-red-900 font-semibold text-xs sm:text-sm mb-1">{error}</p>}
+                  {errorDetails && (
+                    <p className="text-red-700 text-xs sm:text-sm">{errorDetails}</p>
+                  )}
+                  {!errorDetails && error && (
+                    <p className="text-red-700 text-xs sm:text-sm">{error}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Saved Payment Methods Selection */}
+          {paymentMethods.length > 0 && (
+            <div className="mb-4 sm:mb-6">
+              <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">Choose a Payment Method</h4>
+              <div className="space-y-2">
+                {paymentMethods.map((pm) => (
+                  <button
+                    key={pm.paymentMethodId}
+                    type="button"
+                    onClick={() => setSelectedPaymentMethod(pm)}
+                    className={`w-full p-3 sm:p-4 border-2 rounded-lg text-left transition-colors ${
+                      selectedPaymentMethod?.paymentMethodId === pm.paymentMethodId
+                        ? "border-red-600 bg-red-50"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 text-xs sm:text-sm truncate">{formatCardDisplay(pm)}</p>
+                          {pm.isDefault && (
+                            <p className="text-[10px] sm:text-xs text-gray-500">Default payment method</p>
+                          )}
+                        </div>
+                      </div>
+                      {selectedPaymentMethod?.paymentMethodId === pm.paymentMethodId && (
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
+                          <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white"></div>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaymentMethod(null)}
+                  className={`w-full p-3 sm:p-4 border-2 rounded-lg text-left transition-colors ${
+                    !selectedPaymentMethod
+                      ? "border-red-600 bg-red-50"
+                      : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 text-xs sm:text-sm">Enter new payment method</p>
+                        <p className="text-[10px] sm:text-xs text-gray-500">Use a different card</p>
+                      </div>
+                    </div>
+                    {!selectedPaymentMethod && (
+                      <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
+                        <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white"></div>
+                      </div>
+                    )}
+                  </div>
+                </button>
+              </div>
             </div>
           )}
 
@@ -411,6 +612,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
               clientSecret={paymentState.clientSecret}
               amount={paymentState.amount || 0}
               currency={paymentState.currency || "aud"}
+              selectedPaymentMethod={selectedPaymentMethod}
               onPaymentSuccess={handlePaymentSuccess}
               onPaymentError={handlePaymentError}
               onCancel={onClose}
@@ -425,52 +627,68 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false}>
       <ModalHeader title="Subscription Renewal Failed" onClose={onClose} />
-      <ModalContent className="p-6">
+      <ModalContent className="p-4 sm:p-6">
         {/* Alert Banner */}
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-semibold text-red-900 mb-1">Payment Required</h4>
-              <p className="text-sm text-red-700">
-                Your subscription renewal payment failed. Please complete the payment to reactivate your subscription
-                and restore your benefits.
+            <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs sm:text-sm font-semibold text-red-900 mb-1">Payment Required</h4>
+              <p className="text-xs sm:text-sm text-red-700">
+                Your subscription renewal payment failed. Please resolve the payment issue to reactivate your subscription.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-            <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            <span className="text-red-700 text-sm">{error}</span>
+        {/* Error Display - Show both error and details */}
+        {(error || errorDetails) && (
+          <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                {error && <p className="text-red-900 font-semibold text-xs sm:text-sm mb-1">{error}</p>}
+                {errorDetails && (
+                  <p className="text-red-700 text-xs sm:text-sm">{errorDetails}</p>
+                )}
+                {!errorDetails && error && (
+                  <p className="text-red-700 text-xs sm:text-sm">{error}</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Loading or Pay Now Button */}
+        {/* Loading or Action Buttons */}
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-8">
-            <Loader2 className="w-8 h-8 text-red-600 animate-spin mb-4" />
-            <p className="text-gray-600">Processing payment...</p>
+          <div className="flex flex-col items-center justify-center py-6 sm:py-8">
+            <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-red-600 animate-spin mb-3 sm:mb-4" />
+            <p className="text-sm sm:text-base text-gray-600">Loading payment options...</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-3">
             <Button
-              onClick={handlePayNow}
+              onClick={handleResolvePayment}
               disabled={isLoading}
-              className="w-full bg-red-600 hover:bg-red-700"
+              className="w-full bg-red-600 hover:bg-red-700 text-sm sm:text-base"
+              size="sm"
             >
-              <CreditCard className="w-4 h-4 mr-2" />
-              Pay Now
+              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
+              Resolve Payment Issue
             </Button>
-            <Button onClick={onClose} variant="outline" disabled={isLoading} className="w-full">
+            <Button 
+              onClick={onClose} 
+              variant="outline" 
+              disabled={isLoading} 
+              className="w-full text-sm sm:text-base"
+              size="sm"
+            >
               Close
             </Button>
           </div>
         )}
 
-        <div className="mt-6 text-xs text-gray-500 text-center">
+        <div className="mt-4 sm:mt-6 text-[10px] sm:text-xs text-gray-500 text-center">
           You can close this modal and resolve the payment issue later from your account settings.
         </div>
       </ModalContent>
@@ -479,4 +697,3 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 };
 
 export default RenewalFailedModal;
-

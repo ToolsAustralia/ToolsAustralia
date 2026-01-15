@@ -5,12 +5,11 @@ import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useToast } from "@/components/ui/Toast";
 import SubscriptionManagementModal from "./SubscriptionManagementModal";
 import PaymentMethodsTab from "./PaymentMethodsTab";
-import RenewalFailedModal from "./RenewalFailedModal";
 import { queryKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 
 type SettingsSection = "profile" | "subscription" | "password" | "payment";
 type SubscriptionUser = React.ComponentProps<typeof SubscriptionManagementModal>["user"];
@@ -56,8 +55,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isRequestingReset, setIsRequestingReset] = useState(false);
-  const [isRenewalFailedModalOpen, setIsRenewalFailedModalOpen] = useState(false);
-
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   // Check for failed renewal
   // Note: user type in SettingsModal doesn't include subscription, but SubscriptionManagementModal receives it
   // We check subscription status via SubscriptionManagementModal's user prop
@@ -215,27 +214,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
 
   const profileView = useMemo(
     () => (
-      <div className="space-y-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="text-base font-semibold text-gray-900">Profile Details</h3>
+      <div className="space-y-3 sm:space-y-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900">Profile Details</h3>
 
-          <div className="mt-3 space-y-3">
+          <div className="mt-2 sm:mt-3 space-y-2 sm:space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-sm font-medium text-gray-700">Name</label>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 cursor-default">
+              <label className="text-xs sm:text-sm font-medium text-gray-700">Name</label>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 cursor-default">
                 {user.firstName} {user.lastName}
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-sm font-medium text-gray-700">Email</label>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 cursor-default">
+              <label className="text-xs sm:text-sm font-medium text-gray-700">Email</label>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 cursor-default">
                 {user.email}
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-sm font-medium text-gray-700">Email verification</label>
+              <label className="text-xs sm:text-sm font-medium text-gray-700">Email verification</label>
               <div
-                className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                className={`rounded-lg border px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold ${
                   user.isEmailVerified
                     ? "border-green-200 bg-green-50 text-green-700"
                     : "border-yellow-200 bg-yellow-50 text-yellow-700"
@@ -245,27 +244,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-sm font-medium text-gray-700">Phone number</label>
-              <div className="flex flex-col gap-2">
+              <label className="text-xs sm:text-sm font-medium text-gray-700">Phone number</label>
+              <div className="flex flex-col gap-1.5 sm:gap-2">
                 <input
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
                   value={mobile}
                   onChange={(e) => setMobile(e.target.value)}
                   placeholder="Enter phone number"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-1.5 sm:gap-2">
                   <button
                     type="button"
                     onClick={handleSaveMobile}
                     disabled={isSavingMobile}
-                    className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSavingMobile ? "Saving..." : "Save phone"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setMobile(user.mobile || "")}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50"
                   >
                     Reset
                   </button>
@@ -273,10 +272,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-sm font-medium text-gray-700">State</label>
-              <div className="flex flex-col gap-2">
+              <label className="text-xs sm:text-sm font-medium text-gray-700">State</label>
+              <div className="flex flex-col gap-1.5 sm:gap-2">
                 <select
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
                   value={state}
                   onChange={(e) => setState(e.target.value)}
                 >
@@ -290,10 +289,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-sm font-medium text-gray-700">Profession</label>
-              <div className="flex flex-col gap-2">
+              <label className="text-xs sm:text-sm font-medium text-gray-700">Profession</label>
+              <div className="flex flex-col gap-1.5 sm:gap-2">
                 <input
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
                   value={profession}
                   onChange={(e) => setProfession(e.target.value)}
                   placeholder="Enter profession"
@@ -301,12 +300,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
                 />
               </div>
             </div>
-            <div className="flex gap-2 sm:col-span-2 sm:justify-end">
+            <div className="flex gap-1.5 sm:gap-2 sm:col-span-2 sm:justify-end">
               <button
                 type="button"
                 onClick={handleSaveProfile}
                 disabled={isSavingProfile}
-                className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSavingProfile ? "Saving..." : "Save profile"}
               </button>
@@ -316,7 +315,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
                   setState(user.state || "");
                   setProfession(user.profession || "");
                 }}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50"
               >
                 Reset
               </button>
@@ -344,49 +343,77 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
   );
 
   const passwordView = (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900">Change Password</h3>
-        <p className="text-xs text-gray-500">Minimum of 6 characters</p>
-        <div className="mt-3 space-y-3">
+    <div className="space-y-3 sm:space-y-4">
+      <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm">
+        <h3 className="text-sm sm:text-base font-semibold text-gray-900">Change Password</h3>
+        <p className="text-[10px] sm:text-xs text-gray-500">Minimum of 6 characters</p>
+        <div className="mt-2 sm:mt-3 space-y-2 sm:space-y-3">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Current password</label>
+            <label className="text-xs sm:text-sm font-medium text-gray-700">Current password</label>
             <input
               type="password"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+              className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               placeholder="Enter current password"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">New password</label>
-            <input
-              type="password"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-              minLength={6}
-            />
+            <label className="text-xs sm:text-sm font-medium text-gray-700">New password</label>
+            <div className="relative">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 pr-10 text-xs sm:text-sm focus:border-red-500 focus:outline-none w-full"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                minLength={6}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                tabIndex={-1}
+              >
+                {showNewPassword ? (
+                  <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                ) : (
+                  <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+              </button>
+            </div>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Confirm new password</label>
-            <input
-              type="password"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-              value={confirmNewPassword}
-              onChange={(e) => setConfirmNewPassword(e.target.value)}
-              placeholder="Re-enter new password"
-              minLength={6}
-            />
+            <label className="text-xs sm:text-sm font-medium text-gray-700">Confirm new password</label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 pr-10 text-xs sm:text-sm focus:border-red-500 focus:outline-none w-full"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                minLength={6}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                ) : (
+                  <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={handleChangePassword}
               disabled={isUpdatingPassword}
-              className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isUpdatingPassword ? "Updating..." : "Update password"}
             </button>
@@ -395,8 +422,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
               onClick={() => {
                 setCurrentPassword("");
                 setNewPassword("");
+                setConfirmNewPassword("");
               }}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
               Clear
             </button>
@@ -420,38 +448,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
   );
 
   const subscriptionView = (
-    <div className="space-y-4">
-      {/* Failed Renewal Alert Banner */}
-      {hasFailed && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h4 className="text-sm font-semibold text-red-900 mb-1">Subscription Renewal Failed</h4>
-              <p className="text-sm text-red-700 mb-3">
-                Your subscription renewal payment failed. Please resolve this issue to reactivate your subscription and
-                restore your benefits.
-              </p>
-              <button
-                onClick={() => setIsRenewalFailedModalOpen(true)}
-                className="rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition"
-              >
-                Resolve Payment Issue
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3 shadow-sm">
-        <SubscriptionManagementModal
-          isOpen
-          onClose={onClose}
-          user={user as SubscriptionUser}
-          membershipModal={membershipModal}
-          renderAsPanel
-        />
-      </div>
+    <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3 shadow-sm">
+      <SubscriptionManagementModal
+        isOpen
+        onClose={onClose}
+        user={user as SubscriptionUser}
+        membershipModal={membershipModal}
+        renderAsPanel
+      />
     </div>
   );
 
@@ -492,15 +496,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
         {activeTab === "payment" && paymentView}
       </ModalContent>
 
-      {/* Renewal Failed Modal */}
-      <RenewalFailedModal
-        isOpen={isRenewalFailedModalOpen}
-        onClose={() => {
-          setIsRenewalFailedModalOpen(false);
-          // Refresh user data after payment
-          invalidateAccountData();
-        }}
-      />
     </ModalContainer>
   );
 };

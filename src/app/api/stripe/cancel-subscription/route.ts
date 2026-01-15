@@ -53,18 +53,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No active subscription found" }, { status: 400 });
     }
 
+    // ✅ IMPORTANT: For past_due subscriptions, cancel immediately
+    // past_due subscriptions have already passed their billing period end,
+    // so there's no "current period" to wait for - cancel immediately
+    const isPastDue = user.subscription?.status === "past_due";
+    const shouldCancelImmediately = isPastDue || !validatedData.cancelAtPeriodEnd;
+
     // Cancel the subscription in Stripe
     let canceledSubscription: Stripe.Subscription;
-    if (validatedData.cancelAtPeriodEnd) {
+    if (shouldCancelImmediately) {
+      // Cancel immediately
+      // For past_due: subscription period already ended, no access to preserve
+      // For user request: user explicitly chose immediate cancellation
+      canceledSubscription = (await stripe.subscriptions.cancel(user.stripeSubscriptionId)) as Stripe.Subscription;
+      console.log(
+        `✅ Subscription canceled immediately${isPastDue ? " (past_due subscription)" : ""}: ${user.stripeSubscriptionId}`
+      );
+    } else {
       // Cancel at the end of the current billing period (user keeps access until then)
       canceledSubscription = (await stripe.subscriptions.update(user.stripeSubscriptionId, {
         cancel_at_period_end: true,
       })) as Stripe.Subscription;
-      // console.log(`✅ Subscription set to cancel at period end: ${user.stripeSubscriptionId}`);
-    } else {
-      // Cancel immediately
-      canceledSubscription = (await stripe.subscriptions.cancel(user.stripeSubscriptionId)) as Stripe.Subscription;
-      // console.log(`✅ Subscription canceled immediately: ${user.stripeSubscriptionId}`);
+      console.log(`✅ Subscription set to cancel at period end: ${user.stripeSubscriptionId}`);
     }
 
     // Debug: Log subscription details
@@ -114,10 +124,13 @@ export async function POST(request: NextRequest) {
       user.subscription.autoRenew = false;
       // Track when the cancellation was actually triggered (now, not the future endDate)
       user.subscription.cancelledAt = new Date();
-      if (!validatedData.cancelAtPeriodEnd) {
+      if (shouldCancelImmediately) {
+        // Immediate cancellation - set isActive to false and endDate to now
         user.subscription.isActive = false;
         user.subscription.endDate = new Date();
+        user.subscription.status = "canceled";
       } else if (stripeEndDate) {
+        // Scheduled cancellation - keep isActive true until period end, set endDate to period end
         user.subscription.endDate = stripeEndDate;
       }
 
@@ -136,7 +149,7 @@ export async function POST(request: NextRequest) {
 
     // Update partner discount queue - subscription will end
     // This will mark the subscription period as expired and activate the next queued item
-    if (!validatedData.cancelAtPeriodEnd) {
+    if (shouldCancelImmediately) {
       // If canceled immediately, end subscription in queue now
       console.log(`🎁 [CANCEL SUBSCRIPTION] Ending subscription in partner discount queue immediately`);
       await handleSubscriptionQueueUpdate(user as unknown as import("@/models/User").IUser, "end");
@@ -183,15 +196,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: validatedData.cancelAtPeriodEnd
-        ? "Subscription will be canceled at the end of your current billing period"
-        : "Subscription canceled successfully",
+      message: shouldCancelImmediately
+        ? isPastDue
+          ? "Subscription canceled successfully. Your subscription had already failed payment."
+          : "Subscription canceled successfully"
+        : "Subscription will be canceled at the end of your current billing period",
       data: {
         subscriptionId: canceledSubscription.id,
         status: canceledSubscription.status,
         cancelAtPeriodEnd: canceledSubscription.cancel_at_period_end,
         currentPeriodEnd: responseEndDate ? responseEndDate.toISOString() : null,
         endDate: user.subscription?.endDate ? user.subscription.endDate.toISOString() : null,
+        cancelledImmediately: shouldCancelImmediately,
       },
     });
   } catch (error) {

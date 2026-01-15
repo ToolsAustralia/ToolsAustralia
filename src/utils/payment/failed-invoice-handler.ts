@@ -40,8 +40,10 @@ export async function getFailedInvoicePaymentData(
 ): Promise<FailedInvoicePaymentData> {
   try {
     // Retrieve subscription from Stripe with latest invoice expansion
+    // Note: Cannot expand nested properties like "latest_invoice.latest_payment_intent"
+    // Instead, expand latest_invoice, then expand payment intents from the invoice
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ["latest_invoice", "latest_invoice.payment_intent", "latest_invoice.latest_payment_intent"],
+      expand: ["latest_invoice"],
     });
 
     // Get latest invoice
@@ -59,30 +61,120 @@ export async function getFailedInvoicePaymentData(
     if (typeof latestInvoice === "string") {
       // Retrieve invoice if only ID is provided
       invoice = await stripe.invoices.retrieve(latestInvoice, {
-        expand: ["payment_intent", "latest_payment_intent"],
+        expand: ["payment_intent"],
       });
     } else {
-      invoice = latestInvoice;
-    }
+      // If invoice is expanded but payment intents might not be, try to expand them
+      const invoiceId = latestInvoice.id;
+      // Check if payment_intent or latest_payment_intent are already expanded
+      const invoiceWithPI = latestInvoice as Stripe.Invoice & {
+        payment_intent?: string | Stripe.PaymentIntent;
+        latest_payment_intent?: string | Stripe.PaymentIntent;
+      };
+      
+          // If payment intents are strings (not expanded), retrieve the invoice with expansion
+          if (
+            typeof invoiceWithPI.payment_intent === "string" ||
+            typeof invoiceWithPI.latest_payment_intent === "string"
+          ) {
+            if (!invoiceId) {
+              return {
+                success: false,
+                hasDefaultPaymentMethod: false,
+                error: "Invoice ID is required but not found",
+              };
+            }
+            invoice = await stripe.invoices.retrieve(invoiceId, {
+              expand: ["payment_intent"],
+            });
+          } else {
+            invoice = latestInvoice;
+          }
+        }
 
-    // Check invoice status - should be "open" for failed payments
-    if (invoice.status !== "open") {
+    // Check invoice status - should be "open" or "draft" for failed payments
+    // "open" = invoice created and awaiting payment
+    // "draft" = invoice created but not yet finalized (needs to be finalized first)
+    if (invoice.status !== "open" && invoice.status !== "draft") {
       return {
         success: false,
         hasDefaultPaymentMethod: false,
-        error: `Invoice is not open (status: ${invoice.status}). It may have already been paid or finalized.`,
+        error: `Invoice is not in a payable state (status: ${invoice.status}). It may have already been paid or finalized.`,
       };
     }
 
     // Extract PaymentIntent from invoice
-    const paymentIntent = extractPaymentIntentFromInvoice(invoice);
+    let paymentIntent = extractPaymentIntentFromInvoice(invoice);
+    
+    // If PaymentIntent is not found but we have an ID string, retrieve it
     if (!paymentIntent) {
-      return {
-        success: false,
-        invoice,
-        hasDefaultPaymentMethod: false,
-        error: "No PaymentIntent found for invoice",
+      const invoiceWithPI = invoice as Stripe.Invoice & {
+        payment_intent?: string | Stripe.PaymentIntent;
+        latest_payment_intent?: string | Stripe.PaymentIntent;
       };
+
+      const paymentIntentIdString =
+        typeof invoiceWithPI.payment_intent === "string"
+          ? invoiceWithPI.payment_intent
+          : typeof invoiceWithPI.latest_payment_intent === "string"
+          ? invoiceWithPI.latest_payment_intent
+          : null;
+
+      if (paymentIntentIdString) {
+        try {
+          paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdString, {
+            expand: ["payment_method"],
+          });
+        } catch (retrieveError) {
+          console.error("Failed to retrieve PaymentIntent:", retrieveError);
+          // Continue - we'll try to finalize the invoice or create a PaymentIntent later
+        }
+      }
+    }
+    
+    // If still no PaymentIntent, the invoice might need to be finalized first
+    // For subscription invoices with failed payments, draft invoices need to be finalized
+    // Finalizing a draft invoice will create a PaymentIntent
+    if (!paymentIntent && invoice.status === "draft" && invoice.id) {
+      try {
+        const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id, {
+          expand: ["payment_intent"],
+        });
+        paymentIntent = extractPaymentIntentFromInvoice(finalizedInvoice);
+        
+        // If still not expanded, retrieve by ID
+        if (!paymentIntent) {
+          const finalizedWithPI = finalizedInvoice as Stripe.Invoice & {
+            payment_intent?: string | Stripe.PaymentIntent;
+            latest_payment_intent?: string | Stripe.PaymentIntent;
+          };
+          
+          const paymentIntentIdString =
+            typeof finalizedWithPI.payment_intent === "string"
+              ? finalizedWithPI.payment_intent
+              : typeof finalizedWithPI.latest_payment_intent === "string"
+              ? finalizedWithPI.latest_payment_intent
+              : null;
+
+          if (paymentIntentIdString) {
+            paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdString, {
+              expand: ["payment_method"],
+            });
+          }
+        }
+      } catch (finalizeError) {
+        console.error("Failed to finalize invoice:", finalizeError);
+        // Continue - we'll return the invoice anyway and let the route handle it
+      }
+    }
+    
+    // If still no PaymentIntent, return the invoice anyway
+    // The pay-failed-invoice route can attempt to pay the invoice directly,
+    // which will create a PaymentIntent if needed
+    if (!paymentIntent) {
+      console.warn(
+        `No PaymentIntent found for invoice ${invoice.id}. Invoice will be paid directly, which will create a PaymentIntent if needed.`
+      );
     }
 
     // Check if customer has default payment method
@@ -91,7 +183,7 @@ export async function getFailedInvoicePaymentData(
       return {
         success: false,
         invoice,
-        paymentIntent,
+        paymentIntent: paymentIntent || undefined,
         hasDefaultPaymentMethod: false,
         error: "No customer ID found on invoice",
       };
@@ -99,12 +191,12 @@ export async function getFailedInvoicePaymentData(
 
     const hasDefaultPaymentMethod = await canPayWithDefaultMethod(customerId);
 
-    return {
-      success: true,
-      invoice,
-      paymentIntent,
-      hasDefaultPaymentMethod,
-    };
+        return {
+          success: true,
+          invoice,
+          paymentIntent: paymentIntent || undefined,
+          hasDefaultPaymentMethod,
+        };
   } catch (error) {
     console.error("Error retrieving failed invoice payment data:", error);
     return {
