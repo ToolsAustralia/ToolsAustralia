@@ -812,13 +812,40 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
   const packageId = paymentIntent.metadata.packageId;
   const packageName = paymentIntent.metadata.packageName || `One-Time Package ${packageId}`;
   const entriesCount = parseInt(paymentIntent.metadata.entriesCount || "0");
-  const price = parseInt(paymentIntent.metadata.price || "0");
+  
+  // ✅ FIX: Parse and validate price - ensure it's always a valid number
+  let priceInCents = parseInt(paymentIntent.metadata.price || "0");
+  
+  // ✅ FIX: If price is missing, invalid (NaN), or 0, get it from package static data
+  // This ensures price is always recorded correctly, even if metadata is missing
+  // This matches the pattern used by upsell purchases (which get price from static data)
+  if (!priceInCents || isNaN(priceInCents) || priceInCents === 0) {
+    if (packageId) {
+      try {
+        const packageData = getPackageById(packageId);
+        if (packageData?.price) {
+          // Convert package price (in dollars) to cents
+          priceInCents = Math.round(packageData.price * 100);
+          webhookLog("info", `✅ Retrieved price from package static data: ${priceInCents} cents (${packageData.price} dollars)`);
+        }
+      } catch (error) {
+        webhookLog("warn", `⚠️ Failed to get price from package data: ${error}`);
+      }
+    }
+  }
+  
+  // ✅ FIX: Final validation - ensure price is always a valid number
+  if (!priceInCents || isNaN(priceInCents)) {
+    priceInCents = 0;
+    webhookLog("warn", `⚠️ Price could not be determined for one-time package, defaulting to 0`);
+  }
 
   webhookLog("info", `📦 One-time package details:`, {
     packageId,
     packageName,
     entriesCount,
-    price,
+    price: priceInCents,
+    priceInDollars: priceInCents / 100,
     userId: user._id.toString(),
   });
 
@@ -845,8 +872,8 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     userId: user._id.toString(),
     packageId,
     entries: finalEntriesCount,
-    points: Math.floor(price / 100),
-    price: price / 100,
+    points: Math.floor(priceInCents / 100),
+    price: priceInCents / 100, // ✅ FIX: Use validated priceInCents
   });
 
   const result = await processPaymentBenefits(
@@ -857,8 +884,8 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       packageId: packageId,
       packageName: packageName,
       entries: finalEntriesCount, // Apply promo multiplier to entries
-      points: Math.floor(price / 100), // Convert from cents - points remain unchanged
-      price: price / 100, // Convert from cents
+      points: Math.floor(priceInCents / 100), // Convert from cents - points remain unchanged
+      price: priceInCents / 100, // ✅ FIX: Use validated priceInCents converted to dollars
     },
     "webhook",
     {
@@ -876,7 +903,8 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       paymentIntentId: paymentIntent.id,
       userId: user._id.toString(),
       entriesAdded: finalEntriesCount,
-      pointsAdded: Math.floor(price / 100),
+      pointsAdded: Math.floor(priceInCents / 100),
+      priceRecorded: priceInCents / 100, // ✅ FIX: Log the price that was recorded
     });
 
     // ✅ CRITICAL: Sync Klaviyo profile immediately after one-time package purchase
