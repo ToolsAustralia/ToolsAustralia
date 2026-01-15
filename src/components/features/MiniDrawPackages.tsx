@@ -17,7 +17,6 @@ import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import type { MiniDrawType } from "@/types/mini-draw";
-import { generateEventID } from "@/utils/tracking/facebook-helpers";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -347,50 +346,9 @@ export default function MiniDrawPackages({
       // Mark toast as shown to prevent duplicates
       setSuccessToastShown(true);
 
-      // Track Purchase event client-side for Meta Pixel Helper visibility
-      // IMPORTANT: Always track when payment is completed, even if status.data is incomplete
-      // Use IIFE to handle async import
-      (async () => {
-        try {
-          // Get paymentIntentId from status.data or fallback
-          const paymentIntentId = status.data?.paymentIntentId || `order-${Date.now()}`;
-
-          // Get package details - use purchasingPackageId from state as fallback
-          const pkg = miniDrawPackages.find((p) => p._id === purchasingPackageId);
-          const packageName = status.data?.packageName || processingPackageName || pkg?.name || "Mini Draw Package";
-          const value = pkg?.price || 0;
-          const currency = "AUD";
-
-          // Generate EventID matching server-side format for deduplication
-          // Use generateEventID helper to ensure consistency with server-side format
-          const eventID = generateEventID("purchase", paymentIntentId);
-
-          // Import trackFacebookEvent dynamically to avoid SSR issues
-          const { trackFacebookEvent } = await import("@/components/FacebookPixel");
-
-          // Track Purchase event with EventID - always use "mini-draw" as package_type
-          trackFacebookEvent("Purchase", {
-            eventID,
-            value,
-            currency,
-            order_id: paymentIntentId,
-            content_type: "mini_draw_package",
-            content_ids: purchasingPackageId ? [purchasingPackageId] : [],
-            num_items: 1,
-            content_name: packageName,
-            package_type: "mini-draw",
-            package_id: purchasingPackageId,
-            package_name: packageName,
-            payment_intent_id: paymentIntentId,
-            platform: "tools-australia",
-          });
-
-          // console.log(`📘 Facebook Pixel: Mini-draw Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
-        } catch (pixelError) {
-          console.error("❌ Error tracking Mini-draw Purchase client-side:", pixelError);
-          // Non-blocking - continue with success flow
-        }
-      })();
+      // ✅ REMOVED: Client-side Facebook Pixel tracking
+      // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
+      // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
 
       // Clear processing flags
       queryClient.setQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId), (old) => {

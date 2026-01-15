@@ -10,7 +10,9 @@ import { trackAffiliateSignup } from "@/lib/affiliate";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
+// ✅ REMOVED: processPaymentBenefits and isPaymentProcessed imports
+// Fallback processing removed to prevent duplicate Facebook tracking
+// Webhook is now the single source of truth for payment processing
 import Promo from "@/models/Promo";
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 // Klaviyo integration handled by webhook for best practices
@@ -450,108 +452,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ CRITICAL FIX: Race condition fallback - Check if webhook already processed this payment
-    // If webhook fired before metadata was updated, it would have failed to find the user
-    // We need to process it here as a fallback
-    if (paymentIntent.status === "succeeded" || (paymentIntent.status === "processing" && existingUser)) {
-      const alreadyProcessed = await isPaymentProcessed(paymentIntent.id);
-
-      if (!alreadyProcessed) {
-        console.log(
-          `🔄 Webhook hasn't processed payment yet (race condition), processing as fallback: ${paymentIntent.id}`
-        );
-
-        // Get resolved promo multiplier for one-time packages (payment context)
-        // Priority: Active Promo > Alternating Multiplier > null (use 1x)
-        let promoMultiplier = 1;
-        try {
-          const { PromoMultiplierResolverService } = await import("@/services/admin/PromoMultiplierResolverService");
-          const resolver = new PromoMultiplierResolverService();
-          const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
-          const resolved = await resolver.resolveMultiplierForPayment(packageTypeValue);
-          promoMultiplier = resolved ?? 1; // Use 1x if no promo
-        } catch (promoError) {
-          console.error("Failed to fetch resolved promo multiplier:", promoError);
-          // Default to 1 if promo fetch fails
-        }
-
-        const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
-
-        // ✅ CRITICAL: Re-fetch PaymentIntent to get fresh metadata after any updates
-        const freshPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-        const entriesCountFromMetadata = parseInt(freshPaymentIntent.metadata.entriesCount || "0");
-
-        // If metadata still doesn't have entriesCount, use package data directly
-        const baseEntries =
-          entriesCountFromMetadata > 0
-            ? entriesCountFromMetadata
-            : membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0;
-
-        const finalEntriesCount = baseEntries * promoMultiplier;
-
-        // Use price from fresh metadata or fallback to package price
-        const priceFromMetadata = parseInt(freshPaymentIntent.metadata.price || "0");
-        const finalPrice = priceFromMetadata > 0 ? priceFromMetadata / 100 : membershipPackage.price;
-
-        console.log(`📊 Fallback processing details:`, {
-          baseEntries,
-          promoMultiplier,
-          finalEntriesCount,
-          finalPrice,
-          entriesCountFromMetadata,
-          priceFromMetadata,
-        });
-
-        // Extract request context from fresh metadata
-        const requestContext = {
-          client_ip_address: freshPaymentIntent.metadata.capi_client_ip,
-          client_user_agent: freshPaymentIntent.metadata.capi_user_agent,
-          fbc: freshPaymentIntent.metadata.capi_fbc,
-          fbp: freshPaymentIntent.metadata.capi_fbp,
-        };
-
-        // Process benefits as fallback
-        if (!existingUser) {
-          console.error(`❌ User not found for fallback processing`);
-          return NextResponse.json({ error: "User not found" }, { status: 404 });
-        }
-        const processResult = await processPaymentBenefits(
-          paymentIntent.id,
-          existingUser._id.toString(),
-          {
-            packageType: packageTypeValue,
-            packageId: membershipPackage._id,
-            packageName: membershipPackage.name,
-            entries: finalEntriesCount,
-            points: Math.floor(finalPrice),
-            price: finalPrice,
-          },
-          "api", // Mark as processed by API (fallback)
-          {
-            created: Math.floor(paymentIntent.created * 1000), // Convert Stripe timestamp (seconds) to milliseconds
-            type: packageTypeValue,
-            packageType: packageTypeValue,
-            affiliateCode: freshPaymentIntent.metadata.affiliateCode,
-          },
-          Object.keys(requestContext).length > 0 ? requestContext : undefined
-        );
-
-        if (processResult.success) {
-          console.log(`✅ Fallback processing successful: ${finalEntriesCount} entries granted`);
-          // Refresh user data to get updated entries
-          if (existingUser) {
-            existingUser = await User.findById(existingUser._id) ?? existingUser;
-          }
-        } else if (processResult.alreadyProcessed) {
-          console.log(`ℹ️ Payment already processed by webhook (race condition resolved)`);
-        } else {
-          console.error(`❌ Fallback processing failed: ${processResult.error}`);
-          // Don't throw - webhook will retry on next event
-        }
-      } else {
-        console.log(`✅ Payment already processed by webhook: ${paymentIntent.id}`);
-      }
-    }
+    // ✅ REMOVED: Fallback processing to prevent duplicate Facebook tracking
+    // Webhook is the single source of truth for payment processing
+    // All benefits and Facebook tracking are handled by webhook handlers
+    // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
+    console.log(`✅ Payment ${paymentIntent.id} will be processed by webhook`);
 
     if (validatedData.referralCode && existingUser) {
       try {

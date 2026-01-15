@@ -1568,51 +1568,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     // console.log("🎉 Payment processing completed:", status);
     setShowPaymentProcessing(false);
 
-    // Track Purchase event client-side for Meta Pixel Helper visibility
-    // Use same EventID pattern as server-side for deduplication
-    // IMPORTANT: Always track when payment is completed, even if status.data is incomplete
-    if (status.status === "completed") {
-      try {
-        // Get paymentIntentId from status.data or fallback to processing state
-        const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
-
-        // Determine packageType from status or fallback to activePlan context
-        const packageType = status.data?.packageType || (activePlan.period === "one-time" ? "one-time" : "membership");
-
-        // Get package details
-        const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
-        const packageName = status.data?.packageName || processingPackageName || activePlan.name;
-        const value = activePlan.price || 0;
-        const currency = "AUD";
-
-        // Generate EventID matching server-side format for deduplication
-        const eventID = `purchase_${finalPaymentIntentId}_${Date.now()}`;
-
-        // Track Purchase event with EventID
-        trackFacebookEvent("Purchase", {
-          eventID,
-          value,
-          currency,
-          order_id: finalPaymentIntentId,
-          content_type: packageType === "membership" ? "subscription" : "membership_package",
-          content_ids: packageId ? [packageId] : [],
-          num_items: 1,
-          content_name: packageName,
-          package_type: packageType,
-          package_id: packageId,
-          package_name: packageName,
-          payment_intent_id: finalPaymentIntentId,
-          platform: "tools-australia",
-        });
-
-        // console.log(
-        //   `📘 Facebook Pixel: Purchase tracked - $${value} ${currency} (EventID: ${eventID}, packageType: ${packageType})`
-        // );
-      } catch (pixelError) {
-        console.error("❌ Error tracking Purchase client-side:", pixelError);
-        // Non-blocking - continue with success flow
-      }
-    }
+    // ✅ REMOVED: Client-side Facebook Pixel tracking
+    // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
+    // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
 
     // Build benefits array with entry information
     const benefits = [];

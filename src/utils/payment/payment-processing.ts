@@ -1133,6 +1133,17 @@ async function grantBenefits(
   
   if (!isRenewal) {
     // Only track new purchases to Facebook (not renewals)
+    // ✅ DEFENSIVE LOGGING: Track when Facebook tracking is called
+    const trackingId = paymentIntentId || "unknown";
+    console.log(`📊 [Facebook Tracking] Calling trackPixelPurchase:`, {
+      paymentIntentId: trackingId,
+      packageType: packageData.packageType,
+      packageName: packageData.packageName,
+      price: packageData.price,
+      isRenewal: isRenewal,
+      billingReason: billingReason || "N/A",
+    });
+
     try {
       // Log for debugging (can be enabled if needed)
       // console.log(`📊 Tracking Facebook Purchase event for ${packageData.packageType} purchase (billingReason: ${billingReason || "new purchase"})`);
@@ -1176,15 +1187,20 @@ async function grantBenefits(
           variantId: experimentAssignment.variantId,
         }),
       });
-      // console.log(`📊 Pixel tracking completed for ${packageData.packageType} purchase`);
+      console.log(`✅ [Facebook Tracking] Successfully tracked purchase: ${trackingId} (${packageData.packageType})`);
     } catch (_pixelError) {
-      console.error("❌ Pixel tracking failed (non-blocking):", _pixelError);
+      console.error(`❌ [Facebook Tracking] Failed to track purchase ${trackingId}:`, _pixelError);
       // Don't throw - pixel tracking should not break purchase flow
     }
   } else {
-    // Log that we're skipping Facebook tracking for renewal (for debugging)
-    // This ensures renewals are not counted as conversions in Facebook
-    // console.log(`📊 Skipping Facebook Purchase event for renewal (billingReason: ${billingReason}) - Renewals should not be sent to Facebook per best practices`);
+    // ✅ DEFENSIVE LOGGING: Log when skipping Facebook tracking for renewal
+    const trackingId = paymentIntentId || "unknown";
+    console.log(`⏭️ [Facebook Tracking] Skipping Purchase event for renewal:`, {
+      paymentIntentId: trackingId,
+      packageType: packageData.packageType,
+      billingReason: billingReason || "N/A",
+      reason: "Renewals should not be sent to Facebook per best practices",
+    });
   }
 
   // ✅ CRITICAL: Process affiliate commissions (non-blocking, only on successful payments)

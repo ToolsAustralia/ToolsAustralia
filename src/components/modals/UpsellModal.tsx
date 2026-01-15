@@ -15,7 +15,6 @@ import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
-import { generateEventID } from "@/utils/tracking/facebook-helpers";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
@@ -521,48 +520,9 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     // console.log("Upsell payment processed successfully:", status);
     setShowPaymentProcessing(false);
 
-    // Track Purchase event client-side for Meta Pixel Helper visibility
-    // IMPORTANT: Always track when payment is completed, even if status.data is incomplete
-    if (status.status === "completed") {
-      try {
-        // Get paymentIntentId from status.data or fallback to state
-        const finalPaymentIntentId = status.data?.paymentIntentId || paymentIntentId || `order-${Date.now()}`;
-
-        // Get package details - use offer data as source of truth
-        const packageName = status.data?.packageName || offer.title;
-        const value = offer.discountedPrice || offer.originalPrice || 0;
-        const currency = "AUD";
-
-        // Generate EventID matching server-side format for deduplication
-        // Use generateEventID helper to ensure consistency with server-side format
-        const eventID = generateEventID("purchase", finalPaymentIntentId);
-
-        // Import trackFacebookEvent dynamically to avoid SSR issues
-        const { trackFacebookEvent } = await import("@/components/FacebookPixel");
-
-        // Track Purchase event with EventID - always use "upsell" as package_type
-        trackFacebookEvent("Purchase", {
-          eventID,
-          value,
-          currency,
-          order_id: finalPaymentIntentId,
-          content_type: "upsell_package",
-          content_ids: offer.id ? [offer.id] : [],
-          num_items: 1,
-          content_name: packageName,
-          package_type: "upsell",
-          package_id: offer.id,
-          package_name: packageName,
-          payment_intent_id: finalPaymentIntentId,
-          platform: "tools-australia",
-        });
-
-        // console.log(`📘 Facebook Pixel: Upsell Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
-      } catch (pixelError) {
-        console.error("❌ Error tracking Upsell Purchase client-side:", pixelError);
-        // Non-blocking - continue with success flow
-      }
-    }
+    // ✅ REMOVED: Client-side Facebook Pixel tracking
+    // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
+    // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
 
     // Invalidate user caches to update UI immediately
     if (userData?._id) {
