@@ -385,6 +385,9 @@ export async function POST(request: NextRequest) {
         ...existingPaymentIntent.metadata,
         packageId: validatedData.packageId,
         userEmail: validatedData.userEmail,
+        // ✅ FIX: Add userId for registered users so webhook can find them
+        // This fixes the issue where userId remains "guest" even for registered users
+        ...(registeredUser && { userId: registeredUser._id.toString() }),
         type: packageTypeValue, // ✅ CRITICAL: Set 'type' for webhook compatibility
         packageType: packageTypeValue, // ✅ Also set 'packageType' for consistency
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
@@ -480,6 +483,9 @@ export async function POST(request: NextRequest) {
           ]),
           packageId: validatedData.packageId,
           userEmail: validatedData.userEmail,
+          // ✅ FIX: Add userId for registered users so webhook can find them
+          // This fixes the issue where userId remains "guest" even for registered users
+          ...(registeredUser && { userId: registeredUser._id.toString() }),
           type: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
           packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
           entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),

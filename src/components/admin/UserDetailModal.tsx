@@ -928,7 +928,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         startDate: startDateIso ?? entry.startDate,
         endDate: endDateIso ?? entry.endDate,
         isActive: entry.isActive,
-        entriesGranted: entry.entriesGranted,
+        // ✅ FIX: Ensure entriesGranted is always a number (safety check)
+        // Handles edge cases where value might still be a string despite onChange conversion
+        entriesGranted: typeof entry.entriesGranted === "string" 
+          ? Number(entry.entriesGranted) || 0 
+          : entry.entriesGranted || 0,
       };
     };
 
@@ -2228,7 +2232,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                           label="Entries Granted"
                                           type="number"
                                           value={field.value || 0}
-                                          onChange={field.onChange}
+                                          onChange={(e) => {
+                                            // ✅ FIX: Convert string to number for number input
+                                            // HTML number inputs return strings, but schema expects number
+                                            const numValue = e.target.value === "" ? 0 : Number(e.target.value);
+                                            field.onChange(isNaN(numValue) ? 0 : numValue);
+                                          }}
                                           min={0}
                                           error={fieldState.error?.message}
                                         />

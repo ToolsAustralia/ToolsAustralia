@@ -100,82 +100,157 @@ export async function POST(request: NextRequest) {
     if (!paymentIntent && subscription.status === "incomplete") {
       // console.log("🔧 No payment intent found for incomplete subscription, paying invoice directly...");
       try {
-        // Get the customer's default payment method
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
-        const defaultPaymentMethod = (customer as { invoice_settings?: { default_payment_method?: string } })
-          .invoice_settings?.default_payment_method;
-
-        if (!defaultPaymentMethod) {
-          console.error("❌ No default payment method found for customer");
-          return NextResponse.json(
-            {
-              success: false,
-              error: "No payment method found",
-              details: "Customer does not have a default payment method",
-            },
-            { status: 400 }
-          );
+        // ✅ FIX: First check if PaymentIntent exists but wasn't expanded properly
+        // The subscription was retrieved with expand: ["latest_invoice.payment_intent"]
+        // but payment_intent might be a string ID that needs retrieval
+        if (latestInvoice?.payment_intent) {
+          const pi = latestInvoice.payment_intent;
+          if (typeof pi === "string") {
+            // PaymentIntent is a string ID - retrieve it
+            try {
+              const retrievedPI = await stripe.paymentIntents.retrieve(pi);
+              if (retrievedPI) {
+                paymentIntent = retrievedPI;
+                console.log(`✅ Found PaymentIntent by retrieving ID: ${retrievedPI.id}`);
+                // Continue with PaymentIntent flow - skip default payment method fallback
+              }
+            } catch (retrieveError) {
+              console.warn(`⚠️ Failed to retrieve PaymentIntent ${pi}: ${retrieveError}`);
+            }
+          } else if (pi.id) {
+            // PaymentIntent is already an object - use it directly
+            paymentIntent = pi;
+            console.log(`✅ Found PaymentIntent in invoice: ${pi.id}`);
+          }
         }
 
-        // console.log(`💳 Using default payment method: ${defaultPaymentMethod}`);
-
-        // Pay the invoice directly - this will create a PaymentIntent and trigger webhook
-        const paidInvoice = await stripe.invoices.pay(latestInvoice?.id || "", {
-          payment_method: defaultPaymentMethod,
-        });
-
-        // console.log(`💳 Paid invoice: ${paidInvoice.id}, status: ${paidInvoice.status}`);
-
-        // Get the payment intent from the paid invoice
-        const invoice = paidInvoice as { payment_intent?: string | { id: string; status: string } };
-        if (invoice.payment_intent) {
-          paymentIntent =
-            typeof invoice.payment_intent === "string"
-              ? await stripe.paymentIntents.retrieve(invoice.payment_intent)
-              : invoice.payment_intent;
-          // console.log(`💳 Invoice payment intent: ${paymentIntent?.id}, status: ${paymentIntent?.status}`);
-        } else {
-          // console.log("⚠️ No payment intent found in paid invoice - webhook will process benefits");
-
-          // ✅ CRITICAL: Don't manually update subscription status here
-          // Let the webhook handle ALL subscription processing to prevent duplicates
-
-          // For new user registration, return user data for auto-login
-          const responseData: {
-            subscriptionId: string;
-            status: string;
-            paymentMethod: string;
-            invoiceId: string;
-            user?: UserData;
-            autoLogin?: boolean;
-          } = {
-            subscriptionId: subscription.id,
-            status: "active",
-            paymentMethod: "invoice_payment",
-            invoiceId: paidInvoice.id || "",
-          };
-
-          // If this is a new user registration (userId provided), include user data for auto-login
-          if (userId) {
-            responseData.user = {
-              id: user._id,
-              email: user.email,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              role: user.role,
-              subscription: user.subscription || undefined,
-              entryWallet: user.entryWallet,
-              rewardsPoints: user.rewardsPoints,
-            };
-            responseData.autoLogin = true;
+        // ✅ FIX: Only try default payment method if PaymentIntent still doesn't exist
+        if (!paymentIntent) {
+          // Try to get the customer's default payment method
+          const customer = await stripe.customers.retrieve(subscription.customer as string);
+          
+          // ✅ SAFETY: Check if customer is deleted
+          if ("deleted" in customer && customer.deleted) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: "Customer not found",
+                details: "Stripe customer has been deleted",
+              },
+              { status: 404 }
+            );
           }
 
-          // Return success - subscription should be active and webhook will process benefits
-          return NextResponse.json({
-            success: true,
-            message: "Invoice paid successfully - subscription activated",
-            data: responseData,
+          let defaultPaymentMethod = (customer as { invoice_settings?: { default_payment_method?: string } })
+            .invoice_settings?.default_payment_method;
+
+          // ✅ FIX: Fallback to user's saved payment methods if default doesn't exist
+          if (!defaultPaymentMethod && user?.savedPaymentMethods && user.savedPaymentMethods.length > 0) {
+            // Try to use user's saved payment methods
+            const savedMethod = user.savedPaymentMethods.find((pm: { isDefault?: boolean }) => pm.isDefault) 
+              || user.savedPaymentMethods[0];
+            
+            if (savedMethod?.paymentMethodId) {
+              // ✅ SAFETY: Verify payment method exists and attach to customer if needed
+              try {
+                const pm = await stripe.paymentMethods.retrieve(savedMethod.paymentMethodId);
+                
+                // ✅ SAFETY: Attach payment method to customer if not already attached
+                const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
+                if (!pmCustomerId || pmCustomerId !== customer.id) {
+                  await stripe.paymentMethods.attach(savedMethod.paymentMethodId, {
+                    customer: customer.id,
+                  });
+                  console.log(`✅ Attached saved payment method to customer: ${savedMethod.paymentMethodId}`);
+                }
+                
+                defaultPaymentMethod = savedMethod.paymentMethodId;
+                console.log(`💳 Using saved payment method as fallback: ${savedMethod.paymentMethodId}`);
+              } catch (pmError) {
+                console.warn(`⚠️ Failed to use saved payment method: ${pmError}`);
+                // Continue to check default payment method or throw error
+              }
+            }
+          }
+
+          if (!defaultPaymentMethod) {
+            console.error("❌ No default payment method found for customer", {
+              customerId: customer.id,
+              hasSavedPaymentMethods: !!(user?.savedPaymentMethods && user.savedPaymentMethods.length > 0),
+              subscriptionId: subscription.id,
+              subscriptionStatus: subscription.status,
+            });
+            return NextResponse.json(
+              {
+                success: false,
+                error: "No payment method found",
+                details: "Customer does not have a default payment method. Please add a payment method first.",
+                suggestion: "Add a payment method in your account settings or try again after adding a card.",
+              },
+              { status: 400 }
+            );
+          }
+
+          // console.log(`💳 Using default payment method: ${defaultPaymentMethod}`);
+
+          // Pay the invoice directly - this will create a PaymentIntent and trigger webhook
+          const paidInvoice = await stripe.invoices.pay(latestInvoice?.id || "", {
+            payment_method: defaultPaymentMethod,
           });
+
+          // console.log(`💳 Paid invoice: ${paidInvoice.id}, status: ${paidInvoice.status}`);
+
+          // Get the payment intent from the paid invoice
+          const invoice = paidInvoice as { payment_intent?: string | { id: string; status: string } };
+          if (invoice.payment_intent) {
+            paymentIntent =
+              typeof invoice.payment_intent === "string"
+                ? await stripe.paymentIntents.retrieve(invoice.payment_intent)
+                : invoice.payment_intent;
+            // console.log(`💳 Invoice payment intent: ${paymentIntent?.id}, status: ${paymentIntent?.status}`);
+          } else {
+            // console.log("⚠️ No payment intent found in paid invoice - webhook will process benefits");
+
+            // ✅ CRITICAL: Don't manually update subscription status here
+            // Let the webhook handle ALL subscription processing to prevent duplicates
+
+            // For new user registration, return user data for auto-login
+            const responseData: {
+              subscriptionId: string;
+              status: string;
+              paymentMethod: string;
+              invoiceId: string;
+              user?: UserData;
+              autoLogin?: boolean;
+            } = {
+              subscriptionId: subscription.id,
+              status: "active",
+              paymentMethod: "invoice_payment",
+              invoiceId: paidInvoice.id || "",
+            };
+
+            // If this is a new user registration (userId provided), include user data for auto-login
+            if (userId) {
+              responseData.user = {
+                id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                subscription: user.subscription || undefined,
+                entryWallet: user.entryWallet,
+                rewardsPoints: user.rewardsPoints,
+              };
+              responseData.autoLogin = true;
+            }
+
+            // Return success - subscription should be active and webhook will process benefits
+            return NextResponse.json({
+              success: true,
+              message: "Invoice paid successfully - subscription activated",
+              data: responseData,
+            });
+          }
         }
       } catch (error) {
         console.error("❌ Failed to create payment intent:", error);

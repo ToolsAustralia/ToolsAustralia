@@ -82,15 +82,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
 
         if (subscriptionPackageData) {
-          // console.log(`✅ Successfully retrieved subscription package data: ${subscriptionPackageData.name}`);
+          // Success - no logging needed
         } else {
-          // console.log(`⚠️ No package data returned for user subscription`);
+          // Package data not found in static data (might be deleted package)
+          console.warn(`⚠️ Package data not found for subscription packageId: ${userData.subscription.packageId}`);
         }
       } catch (error) {
         console.error(`⚠️ Could not resolve membership package for user:`, error);
       }
     } else {
-      console.error(`⚠️ No subscription packageId found for user`);
+      // ✅ FIX: Distinguish between legitimate cases and actual problems
+      if (!userData.subscription) {
+        // User has no subscription - this is legitimate (user might only have one-time packages)
+        // No logging needed - this is expected behavior
+      } else if (!userData.subscription.packageId && userData.subscription.isActive) {
+        // ✅ RACE CONDITION: Subscription is active but missing packageId - this is a problem
+        // This can happen if API is called before webhook sets packageId
+        console.warn(
+          `⚠️ Active subscription missing packageId for user ${userData._id} - may be race condition. Subscription status: ${userData.subscription.status}`
+        );
+      } else if (!userData.subscription.isActive) {
+        // Subscription exists but is inactive (cancelled) - this is legitimate
+        // No logging needed - inactive subscriptions don't need package data
+      } else {
+        // Fallback for any other case
+        console.warn(`⚠️ Subscription data incomplete for user ${userData._id}: packageId=${!!userData.subscription?.packageId}, isActive=${userData.subscription?.isActive}`);
+      }
     }
 
     // Get one-time package details from static data

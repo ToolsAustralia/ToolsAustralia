@@ -293,6 +293,44 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       }
     }
 
+    // ✅ FIX: If user still not found and customer exists, try to find user by customer email
+    // This handles race conditions where metadata has "guest" but customer was created with real email
+    if (!user && paymentIntent.customer && paymentIntent.metadata.userEmail === "guest") {
+      try {
+        const customerId =
+          typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer.id;
+        const customer = await stripe.customers.retrieve(customerId);
+        
+        if (customer && !("deleted" in customer && customer.deleted) && customer.email) {
+          const customerEmail = customer.email.toLowerCase();
+          webhookLog("info", `🔍 Metadata has 'guest' but customer exists, trying customer email: ${customerEmail}`);
+          
+          user = await User.findOne({ email: customerEmail });
+          if (user) {
+            webhookLog("info", `✅ Found user by customer email: ${user._id.toString()}`);
+            
+            // Update PaymentIntent metadata with correct userId and userEmail for future webhooks
+            try {
+              await stripe.paymentIntents.update(paymentIntent.id, {
+                metadata: {
+                  ...paymentIntent.metadata,
+                  userId: user._id.toString(),
+                  userEmail: user.email,
+                },
+              });
+              webhookLog("info", `✅ Updated PaymentIntent metadata with correct user info`);
+            } catch (updateError) {
+              webhookLog("warn", `Failed to update PaymentIntent metadata: ${updateError}`);
+            }
+          } else {
+            webhookLog("warn", `❌ User not found by customer email: ${customerEmail}`);
+          }
+        }
+      } catch (customerError) {
+        webhookLog("warn", `Failed to retrieve customer for email lookup: ${customerError}`);
+      }
+    }
+
     // ✅ FIX: If user doesn't exist, check if we need to create account from metadata
     // This handles new users who didn't register first
     if (!user) {
