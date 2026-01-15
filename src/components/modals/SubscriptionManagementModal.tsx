@@ -10,9 +10,12 @@ import ConfirmationModal from "./ConfirmationModal";
 import BenefitCountdown from "@/components/ui/BenefitCountdown";
 import StripePaymentModal from "./StripePaymentModal";
 import CancellationUpsellModal from "./CancellationUpsellModal";
+import RenewalFailedModal from "./RenewalFailedModal";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import type { IUser } from "@/models/User";
 
 interface User {
   _id: string;
@@ -209,6 +212,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
   // Toast notifications
   const { showToast } = useToast();
+
+  // Renewal failed modal state
+  const [isRenewalFailedModalOpen, setIsRenewalFailedModalOpen] = useState(false);
+
+  // Check for failed renewal
+  const hasFailed = hasFailedRenewal(user);
 
   // Fetch membership packages to get full package data
   const { loading: packagesLoading, subscriptionPackages } = useMemberships();
@@ -744,6 +753,30 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               </div>
             </div>
 
+            {/* Failed Renewal Alert */}
+            {hasFailed && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="text-base font-semibold text-red-900 mb-2">Subscription Renewal Failed</h4>
+                    <p className="text-sm text-red-700 mb-4">
+                      Your subscription renewal payment failed. Please resolve this issue to reactivate your
+                      subscription and restore your benefits. Upgrade and downgrade options are unavailable until this is
+                      resolved.
+                    </p>
+                    <Button
+                      onClick={() => setIsRenewalFailedModalOpen(true)}
+                      variant="primary"
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Pay Now
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Plan Features */}
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-semibold text-gray-900 mb-3">Plan Benefits</h3>
@@ -804,8 +837,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             <div className="space-y-4">
               <h3 className="font-semibold text-gray-900">Subscription Management</h3>
 
-              {/* Upgrade Options */}
-              {!subscriptionBenefits?.isCancelled &&
+              {/* Upgrade Options - Hidden if failed renewal */}
+              {!hasFailed &&
+                !subscriptionBenefits?.isCancelled &&
                 subscriptionBenefits?.availableUpgrades &&
                 subscriptionBenefits.availableUpgrades.length > 0 && (
                   <div className="space-y-3">
@@ -848,8 +882,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                   </div>
                 )}
 
-              {/* Downgrade Options */}
-              {!subscriptionBenefits?.isCancelled &&
+              {/* Downgrade Options - Hidden if failed renewal */}
+              {!hasFailed &&
+                !subscriptionBenefits?.isCancelled &&
                 subscriptionBenefits?.availableDowngrades &&
                 subscriptionBenefits.availableDowngrades.length > 0 && (
                   <div className="space-y-3">
@@ -1104,6 +1139,19 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           onClose={() => setShowCancellationUpsell(false)}
           onRedeem={handleUpsellRedeem}
           onDecline={handleUpsellDecline}
+        />
+
+        {/* Renewal Failed Modal */}
+        <RenewalFailedModal
+          isOpen={isRenewalFailedModalOpen}
+          onClose={() => {
+            setIsRenewalFailedModalOpen(false);
+            // Refresh subscription benefits after payment
+            fetchSubscriptionBenefits();
+            if (onSubscriptionUpdate) {
+              onSubscriptionUpdate();
+            }
+          }}
         />
       </ModalContent>
     </>

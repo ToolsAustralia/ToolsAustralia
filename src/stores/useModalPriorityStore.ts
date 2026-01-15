@@ -10,7 +10,7 @@ import { devtools } from "zustand/middleware";
  * This store manages modal conflicts and ensures proper priority handling
  */
 
-export type ModalType = "user-setup" | "upsell" | "special-packages" | "pixel-consent";
+export type ModalType = "user-setup" | "upsell" | "special-packages" | "pixel-consent" | "renewal-failed";
 
 interface ModalData {
   [key: string]: unknown;
@@ -48,8 +48,9 @@ interface ModalPriorityState {
 // Modal priority order (higher number = higher priority)
 // Note: Upsell gets highest priority to ensure post-purchase conversions
 const MODAL_PRIORITIES: Record<ModalType, number> = {
-  upsell: 3, // NEW: Highest priority (was 2)
-  "user-setup": 2, // NEW: Second priority (was 3)
+  upsell: 4, // Highest priority
+  "renewal-failed": 3, // High priority - payment issues need immediate attention
+  "user-setup": 2, // Second priority
   "special-packages": 1, // Lower priority
   "pixel-consent": 0, // Lowest priority
 };

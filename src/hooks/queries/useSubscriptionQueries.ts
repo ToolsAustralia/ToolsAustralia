@@ -164,6 +164,24 @@ export interface UpdateSubscriptionPaymentMethodResponse {
   };
 }
 
+export interface PayFailedInvoiceResponse {
+  success: boolean;
+  requiresPaymentConfirmation?: boolean;
+  message: string;
+  data?: {
+    invoiceId?: string;
+    status?: string;
+    paymentIntentId?: string;
+    paymentIntent?: {
+      id: string;
+      clientSecret: string;
+      amount: number;
+      currency: string;
+      status: string;
+    };
+  };
+}
+
 // ====================================
 // Hooks
 // ====================================
@@ -334,6 +352,28 @@ export const useUpdateSubscriptionPaymentMethod = () => {
     },
     onSuccess: () => {
       // Invalidate user and payment method queries to reflect changes
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all("current-user") });
+    },
+  });
+};
+
+/**
+ * ✅ Pay failed invoice (Pay Now flow for failed renewals)
+ * Allows users with failed subscription renewals to pay their existing Stripe invoice
+ * Reuses existing invoice and PaymentIntent (does not create new resources)
+ */
+export const usePayFailedInvoice = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await apiPost<PayFailedInvoiceResponse>("/api/stripe/pay-failed-invoice", {});
+      return response;
+    },
+    onSuccess: () => {
+      // Invalidate user queries to reflect subscription status changes
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
       queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all("current-user") });

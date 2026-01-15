@@ -5,10 +5,12 @@ import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useToast } from "@/components/ui/Toast";
 import SubscriptionManagementModal from "./SubscriptionManagementModal";
 import PaymentMethodsTab from "./PaymentMethodsTab";
+import RenewalFailedModal from "./RenewalFailedModal";
 import { queryKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { AlertTriangle } from "lucide-react";
 
 type SettingsSection = "profile" | "subscription" | "password" | "payment";
 type SubscriptionUser = React.ComponentProps<typeof SubscriptionManagementModal>["user"];
@@ -54,6 +56,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isRequestingReset, setIsRequestingReset] = useState(false);
+  const [isRenewalFailedModalOpen, setIsRenewalFailedModalOpen] = useState(false);
+
+  // Check for failed renewal
+  // Note: user type in SettingsModal doesn't include subscription, but SubscriptionManagementModal receives it
+  // We check subscription status via SubscriptionManagementModal's user prop
+  const subscriptionUser = user as SubscriptionUser;
+  const hasFailed = subscriptionUser.subscription?.status === "past_due" && !subscriptionUser.subscription?.isActive;
 
   const invalidateAccountData = useCallback(async () => {
     if (!session?.user?.id) return;
@@ -411,14 +420,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
   );
 
   const subscriptionView = (
-    <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3 shadow-sm">
-      <SubscriptionManagementModal
-        isOpen
-        onClose={onClose}
-        user={user as SubscriptionUser}
-        membershipModal={membershipModal}
-        renderAsPanel
-      />
+    <div className="space-y-4">
+      {/* Failed Renewal Alert Banner */}
+      {hasFailed && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-red-900 mb-1">Subscription Renewal Failed</h4>
+              <p className="text-sm text-red-700 mb-3">
+                Your subscription renewal payment failed. Please resolve this issue to reactivate your subscription and
+                restore your benefits.
+              </p>
+              <button
+                onClick={() => setIsRenewalFailedModalOpen(true)}
+                className="rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition"
+              >
+                Resolve Payment Issue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3 shadow-sm">
+        <SubscriptionManagementModal
+          isOpen
+          onClose={onClose}
+          user={user as SubscriptionUser}
+          membershipModal={membershipModal}
+          renderAsPanel
+        />
+      </div>
     </div>
   );
 
@@ -439,7 +472,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
             <span className="sm:hidden">Profile</span>
           </button>
           <button className={tabButtonClass(activeTab === "subscription")} onClick={() => setActiveTab("subscription")}>
-            Subscription
+            <span className="flex items-center gap-1">
+              Subscription
+              {hasFailed && <AlertTriangle className="w-4 h-4 text-red-600" />}
+            </span>
           </button>
           <button className={tabButtonClass(activeTab === "password")} onClick={() => setActiveTab("password")}>
             Password
@@ -455,6 +491,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
         {activeTab === "password" && passwordView}
         {activeTab === "payment" && paymentView}
       </ModalContent>
+
+      {/* Renewal Failed Modal */}
+      <RenewalFailedModal
+        isOpen={isRenewalFailedModalOpen}
+        onClose={() => {
+          setIsRenewalFailedModalOpen(false);
+          // Refresh user data after payment
+          invalidateAccountData();
+        }}
+      />
     </ModalContainer>
   );
 };

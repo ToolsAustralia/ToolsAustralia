@@ -22,6 +22,7 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import MembershipModal from "@/components/modals/MembershipModal";
 import SettingsModal from "@/components/modals/SettingsModal";
 import ReferFriendModal from "@/components/modals/ReferFriendModal";
+import RenewalFailedModal from "@/components/modals/RenewalFailedModal";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
@@ -123,7 +124,7 @@ export default function MyAccountPage() {
 
   // Add membership hooks
   const membershipModal = useMembershipModal();
-  const { requestModal } = useModalPriorityStore();
+  const { requestModal, activeModal, closeModal } = useModalPriorityStore();
 
   // Fetch 8 most recent active mini-draws
   const { data: miniDrawsData, isLoading: miniDrawsLoading } = useMiniDraws({
@@ -187,6 +188,7 @@ export default function MyAccountPage() {
   // Local state for subscription management modal
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
+  const [isRenewalFailedModalOpen, setIsRenewalFailedModalOpen] = useState(false);
 
   // State for accumulation tooltip
   const [showAccumulationTooltip, setShowAccumulationTooltip] = useState(false);
@@ -1339,6 +1341,14 @@ export default function MyAccountPage() {
         onCloseAction={() => setIsReferFriendModalOpen(false)}
         userId={user._id}
         userFirstName={user.firstName}
+      />
+
+      <RenewalFailedModal
+        isOpen={isRenewalFailedModalOpen && activeModal === "renewal-failed"}
+        onClose={() => {
+          setIsRenewalFailedModalOpen(false);
+          closeModal();
+        }}
       />
 
       {/* Click outside to close accumulation tooltip */}
