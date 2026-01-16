@@ -429,11 +429,12 @@ export async function POST(request: NextRequest) {
           metadata: updatedMetadata,
         });
         console.log(`✅ PaymentIntent ${existingPaymentIntent.id} updated with customer ${customer.id} and metadata`);
-      } catch (updateError: any) {
+      } catch (updateError: unknown) {
         // ✅ CRITICAL: If customer update fails (PaymentIntent already succeeded), at least update metadata
         // Metadata can be updated even on succeeded PaymentIntents
-        const errorCode = updateError?.code || "";
-        const errorMessage = updateError?.message || "";
+        const stripeError = updateError as { code?: string; message?: string };
+        const errorCode = stripeError?.code || "";
+        const errorMessage = stripeError?.message || "";
         
         if (
           errorCode === "resource_already_exists" ||
