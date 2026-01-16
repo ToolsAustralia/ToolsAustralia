@@ -93,45 +93,25 @@ export async function validateReferralCodeForUser({
     throw new Error("You cannot use your own referral code");
   }
 
-  type InviteeSnapshot = {
-    subscription?: {
-      status?: string;
-      isActive?: boolean;
-    };
-    oneTimePackages?: unknown[];
-    miniDrawPackages?: unknown[];
-  };
-
-  let inviteeUser: InviteeSnapshot | null = null;
   const inviteeFilters: mongoose.FilterQuery<IReferralEvent>[] = [];
+  let inviteeObjectId: mongoose.Types.ObjectId | null = null;
+
   if (inviteeUserId) {
-    const inviteeObjectId = new mongoose.Types.ObjectId(inviteeUserId);
+    inviteeObjectId = new mongoose.Types.ObjectId(inviteeUserId);
     inviteeFilters.push({ inviteeUserId: inviteeObjectId });
-    inviteeUser = (await User.findById(inviteeObjectId)
-      .select("subscription oneTimePackages miniDrawPackages")
-      .lean()) as InviteeSnapshot | null;
   }
   if (inviteeEmail) {
     inviteeFilters.push({ inviteeEmail: inviteeEmail.toLowerCase() });
-    if (!inviteeUser) {
-      inviteeUser = (await User.findOne({ email: inviteeEmail.toLowerCase() })
-        .select("subscription oneTimePackages miniDrawPackages")
-        .lean()) as InviteeSnapshot | null;
+    if (!inviteeObjectId) {
+      const inviteeUser = await User.findOne({ email: inviteeEmail.toLowerCase() }).select("_id").lean();
+      if (inviteeUser) {
+        inviteeObjectId = new mongoose.Types.ObjectId(inviteeUser._id.toString());
+      }
     }
   }
 
-  if (inviteeUser) {
-    const subscriptionStatus = inviteeUser.subscription?.status;
-    const hasActiveMembership = inviteeUser.subscription?.isActive;
-    const hasCompletedMembership = subscriptionStatus && subscriptionStatus !== "incomplete";
-    const hasOneTimePurchases = Array.isArray(inviteeUser.oneTimePackages) && inviteeUser.oneTimePackages.length > 0;
-    const hasMiniDrawPurchases = Array.isArray(inviteeUser.miniDrawPackages) && inviteeUser.miniDrawPackages.length > 0;
-
-    if (hasActiveMembership || hasCompletedMembership || hasOneTimePurchases || hasMiniDrawPurchases) {
-      throw new Error("Referral codes are only available to new members who haven't purchased yet.");
-    }
-  }
-
+  // Check for existing referral events FIRST
+  // If user already has a pending referral for the same code, allow it
   if (inviteeFilters.length > 0) {
     const existingReferral = await ReferralEvent.findOne({
       $or: inviteeFilters,
@@ -144,8 +124,41 @@ export async function validateReferralCodeForUser({
       throw new Error("Another referral is already in progress for this user");
     }
 
+    // If user has a converted referral for the SAME code, return success (idempotent)
+    // This allows frontend to validate without errors after purchase
+    if (existingReferral && existingReferral.referralCode === code && existingReferral.status === "converted") {
+      return {
+        referrerId: referrer._id.toString(),
+        referralCode: code,
+        referrerName: `${referrer.firstName} ${referrer.lastName}`.trim(),
+      };
+    }
+
+    // If user has a pending referral for the SAME code, allow validation
+    // (they may be re-validating after purchase but before conversion completes)
+    if (existingReferral && existingReferral.referralCode === code && existingReferral.status === "pending") {
+      return {
+        referrerId: referrer._id.toString(),
+        referralCode: code,
+        referrerName: `${referrer.firstName} ${referrer.lastName}`.trim(),
+      };
+    }
+
+    // If user has a converted referral for a DIFFERENT code, reject
     if (existingReferral && existingReferral.status === "converted") {
       throw new Error("Referral reward already granted for this user");
+    }
+  }
+
+  // Check if user is first-time (no purchases yet)
+  // Use processedPayments count - if length > 0, user has made purchases
+  if (inviteeObjectId) {
+    const inviteeUser = await User.findById(inviteeObjectId).select("processedPayments").lean();
+    if (inviteeUser) {
+      const processedPaymentsCount = inviteeUser.processedPayments?.length || 0;
+      if (processedPaymentsCount > 0) {
+        throw new Error("Referral codes are only available to first-time users who haven't made any purchases yet.");
+      }
     }
   }
 
@@ -234,25 +247,23 @@ export async function recordReferralPurchase({
 
   const eventId = event._id instanceof mongoose.Types.ObjectId ? event._id.toString() : String(event._id);
 
-  const invitee = await User.findById(inviteeObjectId).select("isEmailVerified");
-  if (invitee?.isEmailVerified) {
-    const completionResult = await completeReferralOnEmailVerification(inviteeObjectId.toString());
-    return {
-      status: completionResult.completed > 0 ? ("converted" as const) : ("pending" as const),
-      eventId,
-    };
+  // Always complete referral immediately (no email verification requirement)
+  const completionResult = await completeReferralConversion(inviteeObjectId.toString());
+  if (completionResult.completed > 0) {
+    console.log(`🎉 Referral rewards granted immediately: ${completionResult.completed} referral(s) converted for user ${inviteeObjectId.toString()}`);
   }
 
   return {
-    status: "pending" as const,
+    status: completionResult.completed > 0 ? ("converted" as const) : ("pending" as const),
     eventId,
   };
 }
 
-export async function completeReferralOnEmailVerification(inviteeUserId: string) {
+export async function completeReferralConversion(inviteeUserId: string) {
   const inviteeObjectId = new mongoose.Types.ObjectId(inviteeUserId);
   const invitee = await User.findById(inviteeObjectId);
   if (!invitee) {
+    console.warn(`⚠️ Referral completion: User ${inviteeUserId} not found`);
     return { completed: 0 };
   }
 
@@ -262,8 +273,11 @@ export async function completeReferralOnEmailVerification(inviteeUserId: string)
   });
 
   if (!pendingEvents.length) {
+    console.log(`ℹ️ Referral completion: No pending referral events for user ${inviteeUserId}`);
     return { completed: 0 };
   }
+
+  console.log(`🔄 Processing ${pendingEvents.length} pending referral event(s) for user ${inviteeUserId}`);
 
   const session = await mongoose.startSession();
   const completedEvents: Array<{ referrerId: string; inviteeId: string }> = [];
@@ -287,11 +301,11 @@ export async function completeReferralOnEmailVerification(inviteeUserId: string)
         event.referreeEntriesAwarded = REFERRAL_REWARD_ENTRIES;
         await event.save({ session });
 
+        // Update referral stats for referrer (no entries to user, entries go directly to major draw)
         await User.updateOne(
           { _id: referrer._id },
           {
             $inc: {
-              accumulatedEntries: REFERRAL_REWARD_ENTRIES,
               "referral.successfulConversions": 1,
               "referral.totalEntriesAwarded": REFERRAL_REWARD_ENTRIES,
             },
@@ -299,15 +313,11 @@ export async function completeReferralOnEmailVerification(inviteeUserId: string)
           { session }
         );
 
-        await User.updateOne(
-          { _id: inviteeObjectId },
-          {
-            $inc: {
-              accumulatedEntries: REFERRAL_REWARD_ENTRIES,
-            },
-          },
-          { session }
-        );
+        // Add entries directly to major draw (inside transaction for atomicity)
+        await addReferralEntriesToMajorDrawInTransaction(referrer._id.toString(), REFERRAL_REWARD_ENTRIES, session);
+        await addReferralEntriesToMajorDrawInTransaction(inviteeObjectId.toString(), REFERRAL_REWARD_ENTRIES, session);
+
+        console.log(`✅ Referral bonus entries awarded: ${REFERRAL_REWARD_ENTRIES} entries to referrer ${referrer._id.toString()} and invitee ${inviteeObjectId.toString()} (added directly to major draw)`);
 
         completedEvents.push({
           referrerId: referrer._id.toString(),
@@ -319,35 +329,48 @@ export async function completeReferralOnEmailVerification(inviteeUserId: string)
     await session.endSession();
   }
 
-  for (const event of completedEvents) {
-    await addReferralEntriesToMajorDraw(event.referrerId, REFERRAL_REWARD_ENTRIES);
-    await addReferralEntriesToMajorDraw(event.inviteeId, REFERRAL_REWARD_ENTRIES);
+  if (completedEvents.length > 0) {
+    console.log(`🎉 Successfully completed ${completedEvents.length} referral conversion(s) for user ${inviteeUserId}`);
   }
 
   return { completed: completedEvents.length };
 }
 
-async function addReferralEntriesToMajorDraw(userId: string, entriesToAdd: number) {
+/**
+ * Add referral entries directly to major draw (within transaction)
+ * Entries go directly to major draw, not to user's accumulatedEntries
+ */
+async function addReferralEntriesToMajorDrawInTransaction(
+  userId: string,
+  entriesToAdd: number,
+  session: mongoose.ClientSession
+) {
   if (entriesToAdd <= 0) {
     return;
   }
 
   try {
-    const activeMajorDraw = await MajorDraw.findOne({ isActive: true });
+    const activeMajorDraw = await MajorDraw.findOne({ isActive: true }).session(session);
     if (!activeMajorDraw) {
+      console.warn(`⚠️ No active major draw found for referral entries`);
       return;
     }
 
     const now = new Date();
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
+    // Find existing user entry
     const existingUserEntry = activeMajorDraw.entries.find(
       (entry: { userId: { toString(): string } }) => entry.userId.toString() === userId
     );
 
     if (existingUserEntry) {
+      // Update existing entry using updateOne with positional operator
       await MajorDraw.updateOne(
-        { _id: activeMajorDraw._id, "entries.userId": userObjectId },
+        {
+          _id: activeMajorDraw._id,
+          "entries.userId": userObjectId,
+        },
         {
           $inc: {
             "entries.$.totalEntries": entriesToAdd,
@@ -356,9 +379,13 @@ async function addReferralEntriesToMajorDraw(userId: string, entriesToAdd: numbe
           $set: {
             "entries.$.lastUpdatedDate": now,
           },
-        }
+        },
+        { session }
       );
+
+      console.log(`✅ Updated existing major draw entry for user ${userId}: +${entriesToAdd} referral entries`);
     } else {
+      // Create new entry using updateOne with $push
       await MajorDraw.updateOne(
         { _id: activeMajorDraw._id },
         {
@@ -377,20 +404,26 @@ async function addReferralEntriesToMajorDraw(userId: string, entriesToAdd: numbe
               lastUpdatedDate: now,
             },
           },
-        }
+        },
+        { session }
       );
+
+      console.log(`✅ Created new major draw entry for user ${userId}: ${entriesToAdd} referral entries`);
     }
 
-    const updatedMajorDraw = await MajorDraw.findById(activeMajorDraw._id);
-    const totalEntries =
-      updatedMajorDraw?.entries.reduce((sum: number, entry: { totalEntries: number }) => sum + entry.totalEntries, 0) ||
-      0;
+    // Update totalEntries - reload document to get fresh data
+    const updatedMajorDraw = await MajorDraw.findById(activeMajorDraw._id).session(session);
+    if (updatedMajorDraw) {
+      const totalEntries =
+        updatedMajorDraw.entries.reduce((sum: number, entry: { totalEntries: number }) => sum + entry.totalEntries, 0) || 0;
 
-    if (updatedMajorDraw && totalEntries !== updatedMajorDraw.totalEntries) {
-      await MajorDraw.updateOne({ _id: activeMajorDraw._id }, { $set: { totalEntries } });
+      if (totalEntries !== updatedMajorDraw.totalEntries) {
+        await MajorDraw.updateOne({ _id: activeMajorDraw._id }, { $set: { totalEntries } }, { session });
+      }
     }
   } catch (error) {
     console.error("Referral major draw update failed:", error);
+    throw error; // Re-throw to rollback transaction
   }
 }
 

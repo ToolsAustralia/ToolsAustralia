@@ -982,6 +982,35 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       priceRecorded: priceInCents / 100, // ✅ FIX: Log the price that was recorded
     });
 
+    // ✅ Process referral if this is first purchase (processedPayments.length === 1)
+    try {
+      const referralCode = paymentIntent.metadata.referralCode as string | undefined;
+      if (referralCode) {
+        // Check if user is first-time (processedPayments.length === 1 after this purchase)
+        const freshUser = await User.findById(user._id).select("processedPayments email firstName lastName").lean();
+        const processedPaymentsCount = freshUser?.processedPayments?.length || 0;
+
+        if (processedPaymentsCount === 1 && freshUser) {
+          // This is their first purchase - process referral
+          const { recordReferralPurchase } = await import("@/lib/referral");
+          await recordReferralPurchase({
+            referralCode,
+            inviteeUserId: user._id.toString(),
+            inviteeEmail: freshUser.email,
+            inviteeName: `${freshUser.firstName || ""} ${freshUser.lastName || ""}`.trim(),
+            qualifyingOrderId: paymentIntent.id,
+            qualifyingOrderType: "one-time",
+          });
+          webhookLog("info", `✅ Referral processed for first-time user: ${freshUser.email}`);
+        } else {
+          webhookLog("info", `⚠️ Referral code provided but user is not first-time (processedPayments: ${processedPaymentsCount})`);
+        }
+      }
+    } catch (referralError) {
+      webhookLog("error", `Referral processing error (non-blocking): ${referralError}`);
+      // Don't throw - referral processing should not break webhook
+    }
+
     // ✅ CRITICAL: Sync Klaviyo profile immediately after one-time package purchase
     // This ensures current_draw_one_time_packages is updated in real-time
     try {
@@ -3239,6 +3268,42 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (result.success) {
+      // ✅ Process referral if this is first purchase (processedPayments.length === 1)
+      // Only process for initial subscription creation, not renewals or upgrades
+      if (expandedInvoice.billing_reason === "subscription_create") {
+        try {
+          // Check invoice metadata first, then subscription metadata
+          const referralCode =
+            expandedInvoice.metadata?.referralCode ||
+            (subscription?.metadata?.referralCode as string | undefined);
+
+          if (referralCode) {
+            // Check if user is first-time (processedPayments.length === 1 after this purchase)
+            const freshUser = await User.findById(user._id).select("processedPayments").lean();
+            const processedPaymentsCount = freshUser?.processedPayments?.length || 0;
+
+            if (processedPaymentsCount === 1) {
+              // This is their first purchase - process referral
+              const { recordReferralPurchase } = await import("@/lib/referral");
+              await recordReferralPurchase({
+                referralCode,
+                inviteeUserId: user._id.toString(),
+                inviteeEmail: user.email,
+                inviteeName: `${user.firstName} ${user.lastName}`.trim(),
+                qualifyingOrderId: subscriptionId,
+                qualifyingOrderType: "membership",
+              });
+              webhookLog("info", `✅ Referral processed for first-time user: ${user.email}`);
+            } else {
+              webhookLog("info", `⚠️ Referral code provided but user is not first-time (processedPayments: ${processedPaymentsCount})`);
+            }
+          }
+        } catch (referralError) {
+          webhookLog("error", `Referral processing error (non-blocking): ${referralError}`);
+          // Don't throw - referral processing should not break webhook
+        }
+      }
+
       // ✅ CRITICAL: For resubscription, set accumulatedEntries to newLastMonthAccumulatedEntries
       // This ensures accumulated entries continue from where they left off, not double-counted
       // processPaymentBenefits increments accumulatedEntries, but for resubscription we need to SET it

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { completeReferralOnEmailVerification } from "@/lib/referral";
 
 const verifyEmailSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -130,19 +129,6 @@ export async function POST(request: NextRequest) {
       ensureUserProfileSynced(user);
     } catch (klaviyoError) {
       console.error("Klaviyo import/update error (non-critical):", klaviyoError);
-    }
-
-    try {
-      const referralResult = await completeReferralOnEmailVerification(user._id.toString());
-      if (referralResult.completed > 0) {
-        // console.log(
-        //   `🎉 Referral rewards granted for ${referralResult.completed} pending referral${
-        //     referralResult.completed > 1 ? "s" : ""
-        //   }`
-        // );
-      }
-    } catch (referralError) {
-      console.error("Referral completion error:", referralError);
     }
 
     // console.log(`Email verification successful for user: ${user.email}`);

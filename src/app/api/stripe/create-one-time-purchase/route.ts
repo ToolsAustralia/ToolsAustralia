@@ -4,7 +4,7 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
-import { recordReferralPurchase } from "@/lib/referral";
+// Referral processing moved to webhook - no longer needed here
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import Stripe from "stripe";
 import { z } from "zod";
@@ -826,22 +826,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ FIX: Only record referral for existing users
-    // New users will have referral recorded by webhook
-    if (validatedData.referralCode && user?._id) {
-      try {
-        await recordReferralPurchase({
-          referralCode: validatedData.referralCode,
-          inviteeUserId: user._id.toString(),
-          inviteeEmail: user.email,
-          inviteeName: `${user.firstName} ${user.lastName}`.trim(),
-          qualifyingOrderId: paymentIntent.id,
-          qualifyingOrderType: "one-time",
-        });
-      } catch (referralError) {
-        console.error("Referral purchase capture failed:", referralError);
-      }
-    }
+    // ✅ Referral processing moved to webhook (after payment succeeds)
+    // Referral code is stored in payment intent metadata and processed by webhook
 
     // ✅ FIX: Return response based on whether user exists
     // For new users, don't return user data - webhook will create account and handle login

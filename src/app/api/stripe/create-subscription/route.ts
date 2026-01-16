@@ -3,7 +3,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
-import { recordReferralPurchase } from "@/lib/referral";
+// Referral processing moved to webhook - no longer needed here
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import Stripe from "stripe";
 import { z } from "zod";
@@ -1036,20 +1036,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (validatedData.referralCode && user?._id) {
-      try {
-        await recordReferralPurchase({
-          referralCode: validatedData.referralCode,
-          inviteeUserId: user._id.toString(),
-          inviteeEmail: user.email,
-          inviteeName: `${user.firstName} ${user.lastName}`.trim(),
-          qualifyingOrderId: subscription.id,
-          qualifyingOrderType: "membership",
-        });
-      } catch (referralError) {
-        console.error("Referral purchase capture failed:", referralError);
-      }
-    }
+    // ✅ Referral processing moved to webhook (after payment succeeds)
+    // Referral code is stored in subscription metadata and processed by webhook
 
     return NextResponse.json({
       success: true,

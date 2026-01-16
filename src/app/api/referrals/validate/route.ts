@@ -10,9 +10,12 @@ const validateReferralSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Store request body for error logging
+  let requestBody: Record<string, unknown> = {};
+  
   try {
-    const body = await request.json();
-    const { referralCode, inviteeUserId, inviteeEmail } = validateReferralSchema.parse(body);
+    requestBody = await request.json();
+    const { referralCode, inviteeUserId, inviteeEmail } = validateReferralSchema.parse(requestBody);
 
     await connectDB();
 
@@ -27,7 +30,26 @@ export async function POST(request: NextRequest) {
       data: result,
     });
   } catch (error) {
-    console.error("Referral validation error:", error);
+    // Enhanced error logging with stack trace and context
+    const errorContext = {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : "UnknownError",
+      body: {
+        referralCode: requestBody?.referralCode || "unknown",
+        inviteeUserId: requestBody?.inviteeUserId || "unknown",
+        inviteeEmail: requestBody?.inviteeEmail || "unknown",
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    // Log full error details for Vercel (structured logging)
+    console.error("Referral validation error:", JSON.stringify(errorContext, null, 2));
+    
+    // Also log stack trace separately for better visibility in Vercel
+    if (error instanceof Error && error.stack) {
+      console.error("Error stack trace:", error.stack);
+    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -35,6 +57,8 @@ export async function POST(request: NextRequest) {
           success: false,
           error: "Invalid referral data",
           details: error.issues,
+          errorCode: "REFERRAL_VALIDATION_INVALID_DATA",
+          timestamp: errorContext.timestamp,
         },
         { status: 400 }
       );
@@ -44,6 +68,9 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: error instanceof Error ? error.message : "Failed to validate referral code",
+        // Include error code for easier tracking in Vercel logs
+        errorCode: "REFERRAL_VALIDATION_FAILED",
+        timestamp: errorContext.timestamp,
       },
       { status: 400 }
     );

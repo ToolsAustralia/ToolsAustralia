@@ -4032,8 +4032,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                           </div>
                           {referralInfo && (
                             <p className="mt-2 text-xs text-green-600">
-                              Code confirmed! {referralInfo.referrerName} will receive 100 bonus entries when you
-                              complete your purchase and verify your email.
+                              Code confirmed! You and {referralInfo.referrerName} will receive 100 bonus entries when you
+                              complete your purchase.
                             </p>
                           )}
                           {referralError && <p className="mt-2 text-xs text-red-600">{referralError}</p>}

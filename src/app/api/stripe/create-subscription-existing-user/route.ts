@@ -4,7 +4,7 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
-import { recordReferralPurchase } from "@/lib/referral";
+// Referral processing moved to webhook - no longer needed here
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -396,20 +396,8 @@ export async function POST(request: NextRequest) {
     // console.log(`⏳ Entries/points will be added via webhook upon first payment confirmation`);
     // console.log(`🔒 Subscription status: ${subscription.status} - benefits will activate on payment`);
 
-    if (validatedData.referralCode) {
-      try {
-        await recordReferralPurchase({
-          referralCode: validatedData.referralCode,
-          inviteeUserId: existingUser._id.toString(),
-          inviteeEmail: existingUser.email,
-          inviteeName: `${existingUser.firstName} ${existingUser.lastName}`.trim(),
-          qualifyingOrderId: subscription.id,
-          qualifyingOrderType: "membership",
-        });
-      } catch (referralError) {
-        console.error("Referral purchase capture failed:", referralError);
-      }
-    }
+    // ✅ Referral processing moved to webhook (after payment succeeds)
+    // Referral code is stored in subscription metadata and processed by webhook
 
     return NextResponse.json({
       success: true,

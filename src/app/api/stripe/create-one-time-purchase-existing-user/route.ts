@@ -5,7 +5,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
-import { recordReferralPurchase } from "@/lib/referral";
+// Referral processing moved to webhook - no longer needed here
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
@@ -458,20 +458,8 @@ export async function POST(request: NextRequest) {
     // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
     console.log(`✅ Payment ${paymentIntent.id} will be processed by webhook`);
 
-    if (validatedData.referralCode && existingUser) {
-      try {
-        await recordReferralPurchase({
-          referralCode: validatedData.referralCode,
-          inviteeUserId: existingUser._id.toString(),
-          inviteeEmail: existingUser.email,
-          inviteeName: `${existingUser.firstName} ${existingUser.lastName}`.trim(),
-          qualifyingOrderId: paymentIntent.id,
-          qualifyingOrderType: "one-time",
-        });
-      } catch (referralError) {
-        console.error("Referral purchase capture failed:", referralError);
-      }
-    }
+    // ✅ Referral processing moved to webhook (after payment succeeds)
+    // Referral code is stored in payment intent metadata and processed by webhook
 
     // ✅ CRITICAL: Final refresh to ensure we have latest user data including saved payment methods
     if (!existingUser) {
