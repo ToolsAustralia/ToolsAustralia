@@ -2683,7 +2683,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             const confirmResult = await confirmResponse.json();
 
             if (!confirmResponse.ok) {
-              throw new Error(confirmResult.error || "Failed to confirm payment");
+              throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
             }
 
             // console.log("✅ Subscription payment confirmed successfully");
@@ -3036,7 +3036,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               const confirmResult = await confirmResponse.json();
 
               if (!confirmResponse.ok) {
-                throw new Error(confirmResult.error || "Failed to confirm payment");
+                throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
               }
 
               // console.log("✅ New user subscription payment confirmed successfully");

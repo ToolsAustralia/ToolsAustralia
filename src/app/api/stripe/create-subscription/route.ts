@@ -1113,6 +1113,10 @@ export async function POST(request: NextRequest) {
       }
       
       // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log Stripe payment failures
+      // NOTE: We intentionally do NOT include paymentIntentId here because:
+      // 1. The upfront PaymentIntent is cancelled intentionally (expected behavior)
+      // 2. The invoice PaymentIntent (actual subscription payment) is handled by confirm-subscription-payment
+      // 3. Subscription payment failures are logged via invoice.payment_failed webhook event
       // Use stored request body and context for error logging
       const paymentContext = {
         packageId: typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,
@@ -1122,6 +1126,7 @@ export async function POST(request: NextRequest) {
         customerId: customer?.id,
         errorCode: stripeError.code,
         errorMessage: stripeError.message,
+        // ✅ CRITICAL: Do NOT include paymentIntentId - cancelled upfront PaymentIntent should not be logged as failure
       };
       
       // Auto-log payment error (fire and forget - don't block response)
@@ -1154,6 +1159,9 @@ export async function POST(request: NextRequest) {
     console.error("❌ Error message:", error instanceof Error ? error.message : "No message");
 
     // ✅ AUTO-LOG CRITICAL ERRORS: Automatically log server errors
+    // NOTE: We intentionally do NOT include paymentIntentId here because:
+    // 1. The upfront PaymentIntent is cancelled intentionally (expected behavior, not a failure)
+    // 2. Subscription payment failures are handled separately via confirm-subscription-payment and invoice.payment_failed webhook
     // Use stored request body and context for error logging
     const errorContext = {
       packageId: typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,
@@ -1162,6 +1170,7 @@ export async function POST(request: NextRequest) {
       userId: user?._id?.toString(),
       customerId: customer?.id,
       errorMessage: error instanceof Error ? error.message : "Unknown error",
+      // ✅ CRITICAL: Do NOT include paymentIntentId - cancelled upfront PaymentIntent should not be logged as failure
     };
     
     // Auto-log server error (fire and forget - don't block response)

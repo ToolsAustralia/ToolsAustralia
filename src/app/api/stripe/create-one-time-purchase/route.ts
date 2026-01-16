@@ -825,33 +825,77 @@ export async function POST(request: NextRequest) {
         console.log(`👤 Customer ID for webhook lookup: ${finalPaymentIntent.customer}`);
         console.log(`📧 User email for webhook lookup: ${finalPaymentIntent.metadata.userEmail}`);
       } else {
+        // ✅ FIX: Distinguish between cancelled and failed payment intents
+        // Cancelled payment intents should not be logged as "Payment failed"
+        if (finalPaymentIntent.status === "canceled") {
+          console.log(`ℹ️ Payment intent was cancelled: ${finalPaymentIntent.id}`);
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment was cancelled",
+              details: "This payment attempt was cancelled. Please try again.",
+            },
+            { status: 400 }
+          );
+        }
+        
         console.error(`❌ Payment failed after waiting: ${finalPaymentIntent.status}`);
         
         // ✅ CRITICAL FIX: Payment method is NOT saved to user database when payment fails
         // Payment methods are only saved after payment succeeds (lines 726-755, 668-697)
         // This ensures failed payment methods (e.g., insufficient funds) are not saved
         
+        // Extract error details from payment intent if available
+        const lastPaymentError = finalPaymentIntent.last_payment_error;
+        const errorMessage = lastPaymentError?.message || "Payment failed";
+        const errorCode = lastPaymentError?.code;
+        const declineCode = lastPaymentError?.decline_code;
+        
         return NextResponse.json(
           {
             success: false,
             error: "Payment failed",
-            details: `Payment status: ${finalPaymentIntent.status}`,
+            details: errorMessage,
+            ...(errorCode && { code: errorCode }),
+            ...(declineCode && { decline_code: declineCode }),
           },
           { status: 400 }
         );
       }
     } else {
+      // ✅ FIX: Distinguish between cancelled and failed payment intents
+      // Cancelled payment intents should not be logged as "Payment failed"
+      if (paymentIntent.status === "canceled") {
+        console.log(`ℹ️ Payment intent was cancelled: ${paymentIntent.id}`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Payment was cancelled",
+            details: "This payment attempt was cancelled. Please try again.",
+          },
+          { status: 400 }
+        );
+      }
+      
       console.error(`❌ Payment intent status: ${paymentIntent.status} for package: ${membershipPackage._id}`);
       
       // ✅ CRITICAL FIX: Payment method is NOT saved to user database when payment fails
       // Payment methods are only saved after payment succeeds (lines 726-755, 668-697)
       // This ensures failed payment methods (e.g., insufficient funds) are not saved
       
+      // Extract error details from payment intent if available
+      const lastPaymentError = paymentIntent.last_payment_error;
+      const errorMessage = lastPaymentError?.message || "Payment failed";
+      const errorCode = lastPaymentError?.code;
+      const declineCode = lastPaymentError?.decline_code;
+      
       return NextResponse.json(
         {
           success: false,
           error: "Payment failed",
-          details: `Payment status: ${paymentIntent.status}`,
+          details: errorMessage,
+          ...(errorCode && { code: errorCode }),
+          ...(declineCode && { decline_code: declineCode }),
         },
         { status: 400 }
       );

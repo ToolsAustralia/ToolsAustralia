@@ -1210,6 +1210,13 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
  */
 async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
   try {
+    // ✅ FIX: Skip cancelled payment intents - they should not be logged as failures
+    // Cancelled payment intents are handled by payment_intent.canceled event
+    if (paymentIntent.status === "canceled") {
+      webhookLog("info", `Skipping cancelled payment intent ${paymentIntent.id} - handled by payment_intent.canceled event`);
+      return;
+    }
+    
     webhookLog("error", `Payment failed: ${paymentIntent.id}`);
 
     // Find user by customer ID first to check subscription status
