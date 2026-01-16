@@ -373,12 +373,30 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   ]);
 
   // Sync isEmailVerified state when userData updates while modal is open at step 3
+  // Also check for purchase indicators (packages/entries) to handle race condition
   useEffect(() => {
-    if (isOpen && currentStep === 3 && userData?.isEmailVerified && !isEmailVerified && !hasAutoCompletedRef.current) {
-      console.log("🔄 Syncing email verification state from userData");
-      setIsEmailVerified(true);
+    if (isOpen && currentStep === 3 && !isEmailVerified && !hasAutoCompletedRef.current) {
+      const hasVerifiedEmail = userData?.isEmailVerified === true;
+      const hasPackages = 
+        (userData?.oneTimePackages && userData.oneTimePackages.length > 0) ||
+        (userData?.subscription && userData.subscription.isActive);
+      const hasEntries = (userData?.accumulatedEntries || 0) > 0 || (userData?.entryWallet || 0) > 0;
+      
+      if (hasVerifiedEmail || hasPackages || hasEntries) {
+        console.log("🔄 Syncing email verification state from userData (email verified or purchase completed)");
+        setIsEmailVerified(true);
+      }
     }
-  }, [isOpen, currentStep, userData?.isEmailVerified, isEmailVerified]);
+  }, [
+    isOpen, 
+    currentStep, 
+    userData?.isEmailVerified, 
+    userData?.oneTimePackages, 
+    userData?.subscription,
+    userData?.accumulatedEntries,
+    userData?.entryWallet,
+    isEmailVerified
+  ]);
 
   // Reset auto-completion ref when modal closes or step changes away from 3
   useEffect(() => {
@@ -695,27 +713,61 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   // Store handleComplete in ref for use in useEffect
   handleCompleteRef.current = handleComplete;
 
-  // Auto-complete step 3 if email is already verified (e.g., Gmail users)
+  // Auto-complete step 3 if email is already verified OR user has completed a purchase
+  // This handles race condition where webhook hasn't fired yet but user has paid
   useEffect(() => {
     if (
       isOpen &&
       currentStep === 3 &&
-      userData?.isEmailVerified &&
       !isEmailVerified &&
       !isLoading &&
       !hasAutoCompletedRef.current &&
       handleCompleteRef.current
     ) {
-      console.log("✅ Email already verified (e.g., Gmail login), auto-completing step 3...");
-      setIsEmailVerified(true);
-      hasAutoCompletedRef.current = true;
+      // ✅ Check multiple indicators that email should be verified:
+      // 1. userData.isEmailVerified is true (webhook already processed)
+      // 2. User has packages (oneTimePackages or subscription) - indicates successful payment
+      // 3. User has entries/points - indicates webhook processed benefits
+      const hasVerifiedEmail = userData?.isEmailVerified === true;
+      const hasPackages = 
+        (userData?.oneTimePackages && userData.oneTimePackages.length > 0) ||
+        (userData?.subscription && userData.subscription.isActive);
+      const hasEntries = (userData?.accumulatedEntries || 0) > 0 || (userData?.entryWallet || 0) > 0;
+      const hasPoints = (userData?.rewardsPoints || 0) > 0;
+      
+      // If user has made a purchase (has packages/entries/points), email is verified
+      // This handles race condition where webhook hasn't updated isEmailVerified yet
+      const shouldAutoVerify = hasVerifiedEmail || hasPackages || hasEntries || hasPoints;
+      
+      if (shouldAutoVerify) {
+        const reason = hasVerifiedEmail 
+          ? "Email already verified (e.g., Gmail login)" 
+          : hasPackages 
+            ? "User has completed purchase - email verified via payment"
+            : "User has entries/points - email verified via webhook processing";
+        
+        console.log(`✅ ${reason}, auto-completing step 3...`);
+        setIsEmailVerified(true);
+        hasAutoCompletedRef.current = true;
 
-      // Auto-complete after a brief delay to show verified state
-      setTimeout(() => {
-        handleCompleteRef.current?.(true); // bypassEmailCheck=true since email is already verified
-      }, 500);
+        // Auto-complete after a brief delay to show verified state
+        setTimeout(() => {
+          handleCompleteRef.current?.(true); // bypassEmailCheck=true since email is already verified
+        }, 500);
+      }
     }
-  }, [isOpen, currentStep, userData?.isEmailVerified, isEmailVerified, isLoading]);
+  }, [
+    isOpen, 
+    currentStep, 
+    userData?.isEmailVerified, 
+    userData?.oneTimePackages, 
+    userData?.subscription, 
+    userData?.accumulatedEntries,
+    userData?.entryWallet,
+    userData?.rewardsPoints,
+    isEmailVerified, 
+    isLoading
+  ]);
 
   // Email verification handlers
   const handleEmailVerificationSuccess = async () => {

@@ -302,6 +302,77 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       }
     }
 
+    // ✅ CRITICAL FIX: If user still not found and charge has no customer, check charge billing_details.email
+    // This handles cases where PaymentIntent was confirmed before customer was set (wallet payments)
+    // The charge will have the user's email in billing_details even if customer is null
+    if (!user && paymentIntent.latest_charge && paymentIntent.metadata.userEmail === "guest") {
+      try {
+        const chargeId =
+          typeof paymentIntent.latest_charge === "string"
+            ? paymentIntent.latest_charge
+            : paymentIntent.latest_charge.id;
+        const charge = await stripe.charges.retrieve(chargeId);
+        
+        // Check charge billing_details for email
+        if (charge.billing_details?.email) {
+          const chargeEmail = charge.billing_details.email.toLowerCase();
+          webhookLog("info", `🔍 Charge has no customer but has billing email: ${chargeEmail}`);
+          
+          // Try to find user by email
+          user = await User.findOne({ email: chargeEmail });
+          if (user) {
+            webhookLog("info", `✅ Found user by charge billing email: ${user._id.toString()}`);
+            
+            // Update PaymentIntent metadata with correct user info
+            try {
+              await stripe.paymentIntents.update(paymentIntent.id, {
+                metadata: {
+                  ...paymentIntent.metadata,
+                  userId: user._id.toString(),
+                  userEmail: user.email,
+                },
+              });
+              webhookLog("info", `✅ Updated PaymentIntent metadata with correct user info`);
+            } catch (updateError) {
+              webhookLog("warn", `Failed to update PaymentIntent metadata: ${updateError}`);
+            }
+          } else {
+            // ✅ CRITICAL: Check if metadata has isNewUser flag and user data
+            // If yes, create account using charge email instead of "guest"
+            if (paymentIntent.metadata.isNewUser === "true" && 
+                paymentIntent.metadata.firstName && 
+                paymentIntent.metadata.lastName) {
+              webhookLog("info", `🆕 Creating new user account from charge billing email: ${chargeEmail}`);
+              
+              // Create modified PaymentIntent metadata with charge email
+              const metadataWithEmail = {
+                ...paymentIntent.metadata,
+                userEmail: chargeEmail, // Use charge email instead of "guest"
+              };
+              
+              // Create a modified PaymentIntent object for account creation
+              const paymentIntentWithEmail = {
+                ...paymentIntent,
+                metadata: metadataWithEmail,
+                customer: null, // Will be created during account creation
+              };
+              
+              user = await createUserFromPaymentMetadata(paymentIntentWithEmail as Stripe.PaymentIntent);
+              if (user) {
+                webhookLog("info", `✅ Created new user account from charge billing email: ${user._id.toString()}`);
+              } else {
+                webhookLog("error", `❌ Failed to create user account from charge billing email`);
+              }
+            }
+          }
+        } else {
+          webhookLog("warn", `⚠️ Charge ${chargeId} has no billing_details.email`);
+        }
+      } catch (chargeBillingError) {
+        webhookLog("warn", `Failed to check charge billing_details: ${chargeBillingError}`);
+      }
+    }
+
     // ✅ FIX: If user still not found and customer exists, try to find user by customer email
     // This handles race conditions where metadata has "guest" but customer was created with real email
     if (!user && paymentIntent.customer && paymentIntent.metadata.userEmail === "guest") {

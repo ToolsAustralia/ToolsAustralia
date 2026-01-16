@@ -2277,6 +2277,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   // Increased delay to ensure Elements wrapper remounts completely
                   await new Promise(resolve => setTimeout(resolve, 800));
                   
+                  // ✅ CRITICAL: Check if form is still available before retrying
+                  // User might have closed the modal during recovery
+                  if (!cardFormRef.current) {
+                    throw new Error("Payment form was closed. Please try again.");
+                  }
+                  
                   // Retry the confirmation with the new PaymentIntent
                   console.log("🔄 Retrying payment confirmation with new PaymentIntent...");
                   const retryResult = await cardFormRef.current.confirmSetup();
@@ -2377,6 +2383,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                   // Wait for PaymentElement to remount with new client secret
                   // Increased delay to ensure Elements wrapper remounts completely
                   await new Promise(resolve => setTimeout(resolve, 800));
+                  
+                  // ✅ CRITICAL: Check if form is still available before retrying
+                  // User might have closed the modal during recovery
+                  if (!cardFormRef.current) {
+                    throw new Error("Payment form was closed. Please try again.");
+                  }
                   
                   // Retry the confirmation with the new PaymentIntent
                   console.log("🔄 Retrying payment confirmation with new PaymentIntent...");

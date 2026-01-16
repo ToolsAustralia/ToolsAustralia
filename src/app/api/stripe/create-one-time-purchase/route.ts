@@ -418,12 +418,44 @@ export async function POST(request: NextRequest) {
 
       console.log(`📋 Updated metadata:`, updatedMetadata);
 
-      await stripe.paymentIntents.update(existingPaymentIntent.id, {
-        customer: customer.id, // ✅ Update customer field so webhook can find user
-        // ✅ STRIPE BEST PRACTICE: Update description to package name for better tracking
-        description: membershipPackage.name,
-        metadata: updatedMetadata,
-      });
+      // ✅ CRITICAL FIX: Wrap PaymentIntent update in try-catch
+      // PaymentIntent update may fail if it's already "succeeded" (wallet payments confirm immediately)
+      // If customer update fails, at least update metadata (which can be updated on succeeded PaymentIntents)
+      try {
+        await stripe.paymentIntents.update(existingPaymentIntent.id, {
+          customer: customer.id, // ✅ Update customer field so webhook can find user
+          // ✅ STRIPE BEST PRACTICE: Update description to package name for better tracking
+          description: membershipPackage.name,
+          metadata: updatedMetadata,
+        });
+        console.log(`✅ PaymentIntent ${existingPaymentIntent.id} updated with customer ${customer.id} and metadata`);
+      } catch (updateError: any) {
+        // ✅ CRITICAL: If customer update fails (PaymentIntent already succeeded), at least update metadata
+        // Metadata can be updated even on succeeded PaymentIntents
+        const errorCode = updateError?.code || "";
+        const errorMessage = updateError?.message || "";
+        
+        if (
+          errorCode === "resource_already_exists" ||
+          errorMessage.includes("succeeded") ||
+          errorMessage.includes("cannot be modified")
+        ) {
+          console.warn(`⚠️ PaymentIntent ${existingPaymentIntent.id} already succeeded - updating metadata only (customer update skipped)`);
+          try {
+            await stripe.paymentIntents.update(existingPaymentIntent.id, {
+              metadata: updatedMetadata,
+            });
+            console.log(`✅ Updated PaymentIntent metadata (customer update skipped - webhook will use charge billing_details fallback)`);
+          } catch (metadataError) {
+            console.error(`❌ Failed to update PaymentIntent metadata: ${metadataError}`);
+            // Continue - webhook will handle via charge billing_details fallback
+          }
+        } else {
+          // Re-throw other errors (network issues, invalid data, etc.)
+          console.error(`❌ PaymentIntent update failed with unexpected error: ${updateError}`);
+          throw updateError;
+        }
+      }
 
       // ✅ SYNC: Ensure customer email matches form email (in case user changed email in form)
       // ✅ FIX: Ensure customer is not deleted before accessing email
@@ -441,8 +473,6 @@ export async function POST(request: NextRequest) {
         });
         console.log(`✅ Customer email synced: ${customer.id}`);
       }
-
-      console.log(`✅ PaymentIntent ${existingPaymentIntent.id} updated with customer ${customer.id} and metadata`);
 
       // ✅ CRITICAL: Re-fetch PaymentIntent to get fresh metadata after update
       // This ensures fallback processing uses the correct metadata with entriesCount
