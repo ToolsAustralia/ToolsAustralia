@@ -162,6 +162,15 @@ const partnerDiscounts = [
     gradient: "from-gray-900 via-gray-800 to-black",
     businessLink: "#", // Link to be provided later
   },
+  {
+    id: "bal",
+    name: "BAL Building Services",
+    logo: "/images/partnerBrandLogos/BAL.jpg",
+    discount: "FREE QUOTE",
+    discountMessage: "Free quote when you mention Tools Australia.",
+    gradient: "from-gray-900 via-gray-800 to-black",
+    businessLink: "https://www.facebook.com/BALbuilding/",
+  },
 ];
 
 interface UnlockDiscountsProps {
@@ -209,7 +218,8 @@ export default function UnlockDiscounts({
                     partner.id === "superbad" ||
                     partner.id === "artc" ||
                     partner.id === "sealmotors" ||
-                    partner.id === "toolmanlane"
+                    partner.id === "toolmanlane" ||
+                    partner.id === "bal"
                       ? ""
                       : `bg-gradient-to-br ${partner.gradient}`
                   }`}
@@ -218,7 +228,8 @@ export default function UnlockDiscounts({
                     partner.id === "superbad" ||
                     partner.id === "artc" ||
                     partner.id === "sealmotors" ||
-                    partner.id === "toolmanlane"
+                    partner.id === "toolmanlane" ||
+                    partner.id === "bal"
                       ? {
                           backgroundImage: "url('/images/partnerBrandLogos/partnerlogoBg.png')",
                           backgroundSize: "cover",
