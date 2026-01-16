@@ -59,14 +59,17 @@ This document explains the database optimization strategy for A/B testing events
 User Action (Page View, Click, Purchase)
   ↓
 Individual Event Created (ExperimentEvent)
+PaymentEvent Created (with experimentId/variantId)
   ↓
-[Real-time queries use individual events for last 30 days]
+[Real-time queries use individual events + PaymentEvents for last 30 days]
   ↓
 Daily Cron Job (3:00 AM UTC)
   ↓
 Aggregate Events → Daily Metrics (ExperimentDailyMetrics)
+Aggregate Revenue from PaymentEvents → Daily Metrics.revenue
   ↓
 Delete Old Events (>30 days)
+[Historical queries use ExperimentDailyMetrics including revenue]
 ```
 
 ### Models
@@ -105,24 +108,36 @@ Delete Old Events (>30 days)
 ### Query Strategy (Hybrid Approach)
 
 **Recent Data (Last 30 Days):**
-- Uses individual `ExperimentEvent` documents
-- Real-time accuracy
+- Uses individual `ExperimentEvent` documents for event counts
+- Queries `PaymentEvents` directly for revenue (real-time accuracy)
 - Fast queries (indexed, recent data)
 
 **Historical Data (Older than 30 Days):**
-- Uses aggregated `ExperimentDailyMetrics`
+- Uses aggregated `ExperimentDailyMetrics` for all metrics including revenue
 - Pre-aggregated (fast queries)
 - 99% storage reduction
+- Revenue comes from pre-aggregated daily metrics
+
+**Split Date Ranges (Spanning Both Recent and Historical):**
+- Combines both data sources
+- Historical metrics from `ExperimentDailyMetrics`
+- Recent metrics from individual events and `PaymentEvents`
+- Revenue summed from both sources
 
 **Implementation:**
 ```typescript
 // Automatically chooses best data source
 if (dateRange.endDate < thirtyDaysAgo) {
-  // Use aggregated metrics (fast)
+  // Use aggregated metrics (fast) - includes revenue
   return ExperimentDailyMetricsRepository.getAggregatedMetrics(...)
+} else if (dateRange.startDate < thirtyDaysAgo) {
+  // Split range: combine historical + recent
+  const historical = ExperimentDailyMetricsRepository.getAggregatedMetrics(...)
+  const recent = ExperimentEvent.aggregate([...]) + PaymentEvents query
+  return combine(historical, recent)
 } else {
-  // Use individual events (real-time)
-  return ExperimentEvent.aggregate([...])
+  // Use individual events (real-time) + PaymentEvents for revenue
+  return ExperimentEvent.aggregate([...]) + PaymentEvents query
 }
 ```
 

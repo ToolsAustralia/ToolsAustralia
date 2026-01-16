@@ -10,6 +10,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { deleteUserWithCascade } from "@/utils/admin/delete-user-cascade";
 import { getUserDeletionSummary } from "@/utils/admin/get-user-deletion-summary";
+import { removeUserFromIntegrations } from "@/utils/integrations/remove-user-from-integrations";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { stripe } from "@/lib/stripe";
@@ -56,6 +57,24 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       }
     }
 
+    // Remove user from third-party integrations (non-blocking)
+    let integrationCleanup = null;
+    try {
+      console.log(`🔄 Removing user ${user.email} from third-party integrations...`);
+      integrationCleanup = await removeUserFromIntegrations(user);
+      console.log(`✅ Integration cleanup completed for ${user.email}:`, {
+        klaviyo: integrationCleanup.klaviyo.success,
+        stripe: integrationCleanup.stripe.success,
+      });
+    } catch (integrationError) {
+      console.error(`⚠️ Error removing user from integrations (non-blocking):`, integrationError);
+      // Continue with deletion even if integration cleanup fails
+      integrationCleanup = {
+        klaviyo: { success: false, error: "Cleanup failed", operations: {} },
+        stripe: { success: false, error: "Cleanup failed" },
+      };
+    }
+
     // Get deletion summary for audit trail
     const deletionSummary = await getUserDeletionSummary(id);
 
@@ -87,6 +106,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       data: {
         deletionSummary: result.deletionSummary,
         cleanupReport: result.cleanupReport,
+        integrationCleanup: integrationCleanup,
       },
     });
   } catch (error) {

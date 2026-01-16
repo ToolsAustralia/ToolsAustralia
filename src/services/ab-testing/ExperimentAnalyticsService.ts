@@ -1,6 +1,5 @@
 import ExperimentEventRepository from "@/repositories/ab-testing/ExperimentEventRepository";
 import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssignmentRepository";
-import PaymentEvent from "@/models/PaymentEvent";
 import {
   calculateStatisticalSignificance,
   determineWinner,
@@ -42,49 +41,42 @@ export class ExperimentAnalyticsService {
     variantId: string,
     dateRange?: DateRange
   ): Promise<VariantMetrics> {
-    // Get event aggregations
+    // Get event aggregations (includes revenue from hybrid query strategy)
+    // Revenue comes from:
+    // - ExperimentDailyMetrics for historical data (>30 days)
+    // - PaymentEvents for recent data (<30 days)
+    // - Combined for split date ranges
     const events = await ExperimentEventRepository.aggregateEvents(experimentId, variantId, dateRange);
 
-    // Get revenue from PaymentEvents
-    const paymentQuery: Record<string, unknown> = {
-      experimentId,
-      variantId,
-      eventType: "BenefitsGranted",
-    };
-
-    if (dateRange) {
-      paymentQuery.timestamp = {
-        $gte: dateRange.startDate,
-        $lte: dateRange.endDate,
-      };
-    }
-
-    const paymentEvents = await PaymentEvent.find(paymentQuery).lean();
-    const revenue = paymentEvents.reduce((sum, event) => {
-      return sum + (event.data?.price || 0);
-    }, 0);
-
     // Calculate derived metrics
-    // Conversion rate = (Conversions + Purchases) / Page Views * 100
-    // Purchases are also conversions, so we include them in the conversion count
-    const totalConversions = events.conversions + events.purchases;
-    const conversionRate = events.pageViews > 0 ? (totalConversions / events.pageViews) * 100 : 0;
+    // ⚠️ IMPORTANT: Conversion counting logic
+    // - "purchase" events: Specific purchase events (tracked separately)
+    // - "conversion" events: Any conversion including purchases (tracked separately)
+    // - Both are tracked for each purchase to provide flexibility in reporting
+    // - For conversion rate, we use ONLY "conversion" events to avoid double-counting
+    //   (since purchases are already included in conversion events)
+    // - If you want to count purchases separately, use events.purchases
+    // - If you want total conversions (including purchases), use events.conversions
+    // 
+    // Conversion rate = Conversions / Page Views * 100
+    // (conversions already include purchases, so we don't add purchases again)
+    const conversionRate = events.pageViews > 0 ? (events.conversions / events.pageViews) * 100 : 0;
     
     // CTR (Click-Through Rate) = Clicks / Page Views * 100
     // This measures how many visitors clicked the CTA button
     const ctr = events.pageViews > 0 ? (events.clicks / events.pageViews) * 100 : 0;
     
     // Revenue per user = Total Revenue / Unique Visitors
-    const revenuePerUser = events.uniqueVisitors > 0 ? revenue / events.uniqueVisitors : 0;
+    const revenuePerUser = events.uniqueVisitors > 0 ? events.revenue / events.uniqueVisitors : 0;
 
     return {
       pageViews: events.pageViews,
       uniqueVisitors: events.uniqueVisitors,
       clicks: events.clicks,
-      conversions: totalConversions, // Include purchases in conversions
+      conversions: events.conversions, // Conversions (includes purchases, but we don't double-count)
       leads: events.leads,
-      purchases: events.purchases,
-      revenue,
+      purchases: events.purchases, // Purchases (also tracked as conversions, but shown separately)
+      revenue: events.revenue, // Now comes from aggregateEvents() hybrid query
       conversionRate,
       ctr,
       revenuePerUser,

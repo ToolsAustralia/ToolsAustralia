@@ -320,34 +320,42 @@ export async function POST(request: NextRequest) {
         const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
         const invoiceCurrency = (latestInvoice.currency as string) || "aud";
 
+        // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+        const invoicePaymentIntentIdempotencyKey = `pi_invoice_${latestInvoice.id || subscription.id}_${Date.now()}`;
+
         // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
         // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
-        const newPaymentIntent = await stripe.paymentIntents.create({
-          amount: invoiceAmount,
-          currency: invoiceCurrency,
-          customer: stripeCustomerId,
-          // ✅ REMOVED: payment_method - PaymentElement will collect it from user selection
-          setup_future_usage: "off_session",
-          confirm: false,
-          automatic_payment_methods: {
-            enabled: true,
-            allow_redirects: "never",
+        const newPaymentIntent = await stripe.paymentIntents.create(
+          {
+            amount: invoiceAmount,
+            currency: invoiceCurrency,
+            customer: stripeCustomerId,
+            // ✅ REMOVED: payment_method - PaymentElement will collect it from user selection
+            setup_future_usage: "off_session",
+            confirm: false,
+            automatic_payment_methods: {
+              enabled: true,
+              allow_redirects: "never",
+            },
+            // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+            description: membershipPackage.name,
+            metadata: {
+              invoice_id: latestInvoice.id || "",
+              subscription_id: subscription.id,
+              packageId: validatedData.packageId,
+              packageName: membershipPackage.name,
+              userEmail: existingUser.email,
+              type: "subscription",
+              packageType: "membership",
+              isUpfrontPayment: "true",
+              ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+              ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+            },
           },
-          // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
-          description: membershipPackage.name,
-          metadata: {
-            invoice_id: latestInvoice.id || "",
-            subscription_id: subscription.id,
-            packageId: validatedData.packageId,
-            packageName: membershipPackage.name,
-            userEmail: existingUser.email,
-            type: "subscription",
-            packageType: "membership",
-            isUpfrontPayment: "true",
-            ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-            ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-          },
-        });
+          {
+            idempotencyKey: invoicePaymentIntentIdempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+          }
+        );
 
         if (latestInvoice.id) {
           await stripe.invoices.update(latestInvoice.id, {

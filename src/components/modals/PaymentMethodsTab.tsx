@@ -456,6 +456,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
             </Button>
           </div>
           <Elements
+            key={setupIntentClientSecret || "no-secret"}
             stripe={stripePromise}
             options={{
               clientSecret: setupIntentClientSecret,

@@ -10,15 +10,15 @@ interface ExperimentResultsDashboardProps {
 }
 
 interface StatisticalResults {
-  significant: boolean;
-  pValue: number;
-  confidence: number;
-  lift: number;
-  controlRate: number;
-  variantRate: number;
-  controlInterval: { lower: number; upper: number };
-  variantInterval: { lower: number; upper: number };
-  chiSquare: number;
+  significant?: boolean;
+  pValue?: number | null;
+  confidence?: number | null;
+  lift?: number | null;
+  controlRate?: number;
+  variantRate?: number;
+  controlInterval?: { lower: number; upper: number } | null;
+  variantInterval?: { lower: number; upper: number } | null;
+  chiSquare?: number;
 }
 
 interface VariantMetrics {
@@ -133,15 +133,22 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
             <BarChart3 className="w-5 h-5 text-blue-600" />
             Statistical Significance
           </h3>
-          {significance.significant ? (
-            <span className="flex items-center gap-2 text-green-600">
-              <CheckCircle2 className="w-5 h-5" />
-              <span className="font-medium">Significant</span>
-            </span>
+          {significance.significant != null ? (
+            significance.significant ? (
+              <span className="flex items-center gap-2 text-green-600">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-medium">Significant</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-2 text-yellow-600">
+                <AlertCircle className="w-5 h-5" />
+                <span className="font-medium">Not Significant</span>
+              </span>
+            )
           ) : (
-            <span className="flex items-center gap-2 text-yellow-600">
+            <span className="flex items-center gap-2 text-gray-500">
               <AlertCircle className="w-5 h-5" />
-              <span className="font-medium">Not Significant</span>
+              <span className="font-medium">Calculating...</span>
             </span>
           )}
         </div>
@@ -149,50 +156,70 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-600 mb-1">P-Value</p>
-            <p className="text-2xl font-bold text-gray-900">{significance.pValue.toFixed(4)}</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {significance.pValue != null ? significance.pValue.toFixed(4) : "N/A"}
+            </p>
             <p className="text-xs text-gray-500 mt-1">
-              {significance.pValue < 0.05 ? "Statistically significant" : "Not significant"}
+              {significance.pValue != null
+                ? significance.pValue < 0.05
+                  ? "Statistically significant"
+                  : "Not significant"
+                : "Calculating..."}
             </p>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-600 mb-1">Confidence Level</p>
-            <p className="text-2xl font-bold text-gray-900">{significance.confidence.toFixed(2)}%</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {significance.confidence != null ? `${significance.confidence.toFixed(2)}%` : "N/A"}
+            </p>
             <p className="text-xs text-gray-500 mt-1">
-              {significance.confidence >= 95 ? "High confidence" : "Low confidence"}
+              {significance.confidence != null
+                ? significance.confidence >= 95
+                  ? "High confidence"
+                  : "Low confidence"
+                : "Calculating..."}
             </p>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-600 mb-1">Lift</p>
-            <p className={`text-2xl font-bold ${significance.lift > 0 ? "text-green-600" : "text-red-600"}`}>
-              {significance.lift > 0 ? "+" : ""}
-              {significance.lift.toFixed(2)}%
+            <p className={`text-2xl font-bold ${significance.lift != null && significance.lift > 0 ? "text-green-600" : "text-red-600"}`}>
+              {significance.lift != null
+                ? `${significance.lift > 0 ? "+" : ""}${significance.lift.toFixed(2)}%`
+                : "N/A"}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              {significance.lift > 0 ? "Improvement" : "Decline"} vs control
+              {significance.lift != null
+                ? significance.lift > 0
+                  ? "Improvement"
+                  : "Decline"
+                : "Calculating..."}{" "}
+              vs control
             </p>
           </div>
         </div>
 
         {/* Confidence Intervals */}
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <p className="text-sm font-medium text-gray-700 mb-2">Confidence Intervals (95%)</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-gray-600 mb-1">Control Variant</p>
-              <p className="text-sm text-gray-900">
-                {significance.controlInterval.lower.toFixed(2)}% - {significance.controlInterval.upper.toFixed(2)}%
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-600 mb-1">Test Variant</p>
-              <p className="text-sm text-gray-900">
-                {significance.variantInterval.lower.toFixed(2)}% - {significance.variantInterval.upper.toFixed(2)}%
-              </p>
+        {significance.controlInterval && significance.variantInterval && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <p className="text-sm font-medium text-gray-700 mb-2">Confidence Intervals (95%)</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Control Variant</p>
+                <p className="text-sm text-gray-900">
+                  {significance.controlInterval.lower.toFixed(2)}% - {significance.controlInterval.upper.toFixed(2)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Test Variant</p>
+                <p className="text-sm text-gray-900">
+                  {significance.variantInterval.lower.toFixed(2)}% - {significance.variantInterval.upper.toFixed(2)}%
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Winner Declaration */}

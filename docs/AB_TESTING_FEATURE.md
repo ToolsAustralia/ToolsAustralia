@@ -129,12 +129,17 @@ src/
 
 3. **Analytics Calculation**:
    - `ExperimentAnalyticsService` aggregates events (uses daily metrics for historical data)
+   - Revenue tracking uses hybrid approach:
+     - Historical data (>30 days): Pre-aggregated revenue from `ExperimentDailyMetrics`
+     - Recent data (<30 days): Real-time revenue from `PaymentEvents`
+     - Split ranges: Combined revenue from both sources
    - Statistical tests calculate significance
    - Results cached in `Experiment.statisticalResults`
 
 4. **Daily Aggregation**:
    - Cron job runs daily at 3:00 AM UTC
    - Aggregates yesterday's events into daily metrics
+   - Aggregates revenue from `PaymentEvents` into daily metrics
    - Deletes events older than 30 days (TTL index)
    - Reduces database size by 99% while maintaining accuracy
 
@@ -795,6 +800,7 @@ For issues or questions:
 
 ### Documentation Files
 
+- **[Best Practices Guide](./AB_TESTING_BEST_PRACTICES.md)**: **Recommended reading** - Best practices for visitor tracking, conversion counting, revenue attribution, and seamless integration
 - **[Metrics Calculation Guide](./AB_TESTING_METRICS_CALCULATION.md)**: How CTR and Conversion Rate are calculated
 - **[Database Optimization](./AB_TESTING_DATABASE_OPTIMIZATION.md)**: Daily aggregation strategy and storage optimization
 - **[Event Deduplication](./AB_TESTING_DEDUPLICATION.md)**: How duplicate events are prevented

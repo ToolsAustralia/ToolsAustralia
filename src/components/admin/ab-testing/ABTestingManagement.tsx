@@ -62,11 +62,17 @@ export default function ABTestingManagement() {
   };
 
   const handleActivate = async (experimentId: string) => {
-    if (confirm("Are you sure you want to activate this experiment?")) {
+    const experiment = experiments.find((exp) => exp._id === experimentId);
+    const isResume = experiment?.status === "paused";
+    const message = isResume 
+      ? "Are you sure you want to resume this experiment?" 
+      : "Are you sure you want to activate this experiment?";
+    
+    if (confirm(message)) {
       try {
         await activateMutation.mutateAsync(experimentId);
       } catch (error) {
-        alert(error instanceof Error ? error.message : "Failed to activate experiment");
+        alert(error instanceof Error ? error.message : `Failed to ${isResume ? "resume" : "activate"} experiment`);
       }
     }
   };
@@ -246,12 +252,12 @@ export default function ABTestingManagement() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        {experiment.status === "draft" && (
+                        {(experiment.status === "draft" || experiment.status === "paused") && (
                           <button
                             onClick={() => handleActivate(experiment._id)}
                             disabled={activateMutation.isPending}
                             className="rounded p-1.5 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50 transition-colors"
-                            title="Activate"
+                            title={experiment.status === "paused" ? "Resume" : "Activate"}
                           >
                             <Play className="h-4 w-4" />
                           </button>

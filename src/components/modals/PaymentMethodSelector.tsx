@@ -394,9 +394,10 @@ const StripeCardForm = React.forwardRef<
                       error: "Payment processing was interrupted. Please wait 30 seconds before trying again. Do not retry immediately, as this can create multiple authorization holds." 
                     };
                   } else {
-                    // For non-upfront PaymentIntents, this is unexpected
+                    // ✅ FIX: For non-upfront PaymentIntents, return special error code for automatic recovery
+                    // This allows MembershipModal to automatically create a new PaymentIntent and retry
                     return { 
-                      error: "This payment attempt was canceled. Please wait 30 seconds before trying again with a fresh payment method." 
+                      error: "PAYMENT_INTENT_CANCELED_RETRY: This payment attempt was canceled. Creating a new payment form..." 
                     };
                   }
                 }
@@ -542,7 +543,7 @@ const StripeCardForm = React.forwardRef<
         </h4>
         <div className="p-3 border border-gray-300 rounded-lg bg-white mt-0">
           <PaymentElement
-            key={`payment-element-${amount || 0}-${packageName || "default"}`}
+            key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
             onChange={(event) => {
               // Handle PaymentElement change events
@@ -714,7 +715,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             </div>
           ) : activeClientSecret && activeIntentType ? (
             <Elements
-              key={`elements-${activeIntentType}-${packageType}-${amount || 0}-${packageName || "default"}`}
+              key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
               stripe={stripePromise}
               options={{
                 clientSecret: activeClientSecret,
@@ -991,7 +992,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               ) : activeClientSecret && activeIntentType ? (
                 <Elements
-                  key={`elements-${activeIntentType}-${packageType}-${amount || 0}-${packageName || "default"}`}
+                  key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
                   stripe={stripePromise}
                   options={{
                     clientSecret: activeClientSecret,

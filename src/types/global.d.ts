@@ -46,6 +46,7 @@ declare module "next-auth/jwt" {
     role: string;
     firstName: string;
     lastName: string;
+    deleted?: boolean; // Flag to mark token as deleted when user is removed
   }
 }
 

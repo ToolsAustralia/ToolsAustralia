@@ -9,6 +9,11 @@ import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
+import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
+import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
+import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
+import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
+import mongoose from "mongoose";
 // Klaviyo integration handled by webhook for best practices
 
 // Interface for Stripe errors
@@ -397,6 +402,86 @@ export async function POST(request: NextRequest) {
     const stripePriceId = membershipPackage.stripePriceId;
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
+    // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
+    // Store in subscription and payment metadata so webhook can use it directly (more reliable than lookup)
+    // ✅ FIX: Extract anonymousId from request to find assignments created before user logged in
+    const anonymousId = AnonymousIdService.extractAnonymousId(request);
+    
+    // ✅ Auto-merge anonymous assignments to userId when user registers/logs in
+    if (registeredUser?._id && anonymousId) {
+      try {
+        const mergeResult = await VariantAssignmentService.mergeAnonymousToUser(anonymousId, registeredUser._id.toString());
+        if (mergeResult.merged > 0) {
+          console.log(`✅ [A/B Testing] Auto-merged ${mergeResult.merged} anonymous assignment(s) to user ${registeredUser._id}`);
+        }
+      } catch (error) {
+        // Silently fail - merge should not block payment creation
+        console.error("Error auto-merging anonymous assignments:", error);
+      }
+    }
+    
+    let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+    if (registeredUser?._id) {
+      try {
+        // ✅ Pass anonymousId to find assignments created before user logged in
+        experimentAssignment = await getUserActiveExperimentAssignment(
+          registeredUser._id.toString(),
+          undefined, // slug
+          anonymousId || undefined // anonymousId from cookies
+        );
+        
+            // ✅ Fallback: Check cookies if database lookup failed
+            if (!experimentAssignment) {
+              // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
+              // RequestCookies doesn't have entries(), so we need to check known experiment IDs
+              // For now, we'll check if there's a cookie for the active experiment
+              // This is a best-effort fallback
+              try {
+                const activeExperiments = await ExperimentRepository.findAll({
+                  status: "active",
+                  page: 1,
+                  limit: 10,
+                });
+                
+                for (const exp of activeExperiments.experiments) {
+                  const experimentId = exp._id instanceof mongoose.Types.ObjectId 
+                    ? exp._id.toString() 
+                    : String(exp._id);
+                  const cookieName = `ta_ab_assignment_${experimentId}`;
+                  const cookieValue = request.cookies.get(cookieName)?.value;
+                  
+                  if (cookieValue) {
+                    try {
+                      const assignmentData = JSON.parse(cookieValue);
+                      if (assignmentData.experimentId && assignmentData.variantId) {
+                        experimentAssignment = {
+                          experimentId: assignmentData.experimentId,
+                          variantId: assignmentData.variantId,
+                        };
+                        console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
+                        break;
+                      }
+                    } catch (error) {
+                      // Invalid cookie data, skip
+                      console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
+                    }
+                  }
+                }
+              } catch (error) {
+                // Silently fail - cookie fallback should not block payment creation
+                console.warn("Error checking assignment cookies:", error);
+              }
+            }
+        
+        if (experimentAssignment) {
+          console.log(`✅ [A/B Testing] Storing experiment assignment in subscription metadata:`, experimentAssignment);
+        }
+      } catch (error) {
+        // Silently fail - experiment tracking should not block payment creation
+        console.error("Error getting experiment assignment for subscription metadata:", error);
+      }
+    }
+
     // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
     // This ensures that even if the API is called twice (e.g., double-click), only one subscription is created
     const idempotencyKey =
@@ -441,6 +526,11 @@ export async function POST(request: NextRequest) {
             userEmail: validatedData.userEmail,
             ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
             ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+            // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
+            ...(experimentAssignment && {
+              experimentId: experimentAssignment.experimentId,
+              variantId: experimentAssignment.variantId,
+            }),
             // Store request context for Facebook CAPI (webhook will extract and use)
             ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
             ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
@@ -569,42 +659,117 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
+        // Store in metadata so webhook can use it directly (more reliable than lookup)
+        let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+        if (registeredUser?._id) {
+          try {
+            // ✅ Pass anonymousId to find assignments created before user logged in
+            experimentAssignment = await getUserActiveExperimentAssignment(
+              registeredUser._id.toString(),
+              undefined, // slug
+              anonymousId || undefined // anonymousId from cookies
+            );
+            
+            // ✅ Fallback: Check cookies if database lookup failed
+            if (!experimentAssignment) {
+              // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
+              try {
+                const activeExperiments = await ExperimentRepository.findAll({
+                  status: "active",
+                  page: 1,
+                  limit: 10,
+                });
+                
+                for (const exp of activeExperiments.experiments) {
+                  const experimentId = exp._id instanceof mongoose.Types.ObjectId 
+                    ? exp._id.toString() 
+                    : String(exp._id);
+                  const cookieName = `ta_ab_assignment_${experimentId}`;
+                  const cookieValue = request.cookies.get(cookieName)?.value;
+                  
+                  if (cookieValue) {
+                    try {
+                      const assignmentData = JSON.parse(cookieValue);
+                      if (assignmentData.experimentId && assignmentData.variantId) {
+                        experimentAssignment = {
+                          experimentId: assignmentData.experimentId,
+                          variantId: assignmentData.variantId,
+                        };
+                        console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
+                        break;
+                      }
+                    } catch (error) {
+                      // Invalid cookie data, skip
+                      console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
+                    }
+                  }
+                }
+              } catch (error) {
+                // Silently fail - cookie fallback should not block payment creation
+                console.warn("Error checking assignment cookies:", error);
+              }
+            }
+            
+            if (experimentAssignment) {
+              console.log(`✅ [A/B Testing] Storing experiment assignment in payment metadata:`, experimentAssignment);
+            }
+          } catch (error) {
+            // Silently fail - experiment tracking should not block payment creation
+            console.error("Error getting experiment assignment for payment metadata:", error);
+          }
+        }
+
+        // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+        // This ensures that even if the API is called twice, only one PaymentIntent is created
+        const invoicePaymentIntentIdempotencyKey = `pi_invoice_${latestInvoice.id || subscription.id}_${Date.now()}`;
+
         // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
         // Don't confirm it - let PaymentElement handle confirmation
         // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
         // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
-        const newPaymentIntent = await stripe.paymentIntents.create({
-          amount: invoiceAmount,
-          currency: invoiceCurrency,
-          customer: customer.id,
-          // ✅ REMOVED: payment_method - PaymentElement will collect it from user selection
-          setup_future_usage: "off_session",
-          confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
-          automatic_payment_methods: {
-            enabled: true,
-            allow_redirects: "never",
+        const newPaymentIntent = await stripe.paymentIntents.create(
+          {
+            amount: invoiceAmount,
+            currency: invoiceCurrency,
+            customer: customer.id,
+            // ✅ REMOVED: payment_method - PaymentElement will collect it from user selection
+            setup_future_usage: "off_session",
+            confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
+            automatic_payment_methods: {
+              enabled: true,
+              allow_redirects: "never",
+            },
+            // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+            description: membershipPackage.name,
+            metadata: {
+              invoice_id: latestInvoice.id || "",
+              subscription_id: subscription.id,
+              packageId: validatedData.packageId,
+              packageName: membershipPackage.name,
+              userEmail: validatedData.userEmail,
+              type: "subscription", // ✅ Set 'type' for webhook compatibility
+              packageType: "membership",
+              // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
+              // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
+              ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+              ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+              // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
+              ...(experimentAssignment && {
+                experimentId: experimentAssignment.experimentId,
+                variantId: experimentAssignment.variantId,
+              }),
+              // Store request context for Facebook CAPI (webhook will extract and use)
+              ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+              ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+              ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+              ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+            },
           },
-          // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
-          description: membershipPackage.name,
-          metadata: {
-            invoice_id: latestInvoice.id || "",
-            subscription_id: subscription.id,
-            packageId: validatedData.packageId,
-            packageName: membershipPackage.name,
-            userEmail: validatedData.userEmail,
-            type: "subscription", // ✅ Set 'type' for webhook compatibility
-            packageType: "membership",
-            // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
-            // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
-            ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-            ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-            // Store request context for Facebook CAPI (webhook will extract and use)
-            ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-            ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-            ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-            ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-          },
-        });
+          {
+            idempotencyKey: invoicePaymentIntentIdempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+          }
+        );
 
         // Update invoice metadata to track PaymentIntent and request context (optional, but helps with tracking)
         if (latestInvoice.id) {

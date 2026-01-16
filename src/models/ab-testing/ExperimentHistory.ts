@@ -3,7 +3,7 @@ import mongoose, { Document, Schema } from "mongoose";
 /**
  * Experiment History Action Types
  */
-export type ExperimentHistoryAction = "created" | "updated" | "activated" | "paused" | "ended" | "variant_added" | "variant_updated" | "variant_deleted" | "winner_declared";
+export type ExperimentHistoryAction = "created" | "updated" | "activated" | "resumed" | "paused" | "ended" | "variant_added" | "variant_updated" | "variant_deleted" | "winner_declared";
 
 /**
  * ExperimentHistory Model
@@ -30,7 +30,7 @@ const ExperimentHistorySchema = new Schema<IExperimentHistory>(
     },
     action: {
       type: String,
-      enum: ["created", "updated", "activated", "paused", "ended", "variant_added", "variant_updated", "variant_deleted", "winner_declared"],
+      enum: ["created", "updated", "activated", "resumed", "paused", "ended", "variant_added", "variant_updated", "variant_deleted", "winner_declared"],
       required: [true, "Action is required"],
     },
     changedBy: {

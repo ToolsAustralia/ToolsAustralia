@@ -2232,14 +2232,84 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           const result = await cardFormRef.current.confirmSetup();
 
           if (result.error) {
-            // ✅ FIX: If error is due to canceled PaymentIntent, try to extract payment method from error
-            if (result.error.includes("canceled") || result.error.includes("unexpected_state")) {
-              console.warn("⚠️ PaymentIntent was canceled - checking if payment method was already extracted");
-              // The payment method might have been extracted before cancellation
-              // Check if we can get it from the subscription creation response
-              // For now, throw error to let user retry
+            // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent
+            // When PaymentIntent is canceled, automatically create a new one and retry
+            if (result.error.includes("PAYMENT_INTENT_CANCELED_RETRY") || 
+                (result.error.includes("canceled") && result.error.includes("unexpected_state"))) {
+              console.warn("⚠️ PaymentIntent was canceled - automatically creating new PaymentIntent and retrying...");
+              
+              // ✅ CRITICAL FIX: Clear the canceled PaymentIntent and force form reset
+              setPaymentIntentClientSecret(null);
+              setPaymentIntentId(null);
+              setCardFormError(null); // Clear any previous card errors
+              setShowCardForm(false); // Force form to hide and remount
+              
+              // Automatically create a new PaymentIntent
+              try {
+                const isSubscription = activePlan?.period === "mo";
+                const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
+                // Use existing packageId from outer scope, or get it if not set yet
+                const recoveryPackageId = packageId || getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+                const packageName = promoEnhancedPlan?.name || activePlan?.name;
+                
+                const newPaymentIntentResult = await createPaymentIntent.mutateAsync({
+                  amount: amountInCents,
+                  currency: "aud",
+                  packageId: recoveryPackageId || undefined,
+                  packageName: packageName,
+                  userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
+                  packageType: isSubscription ? "membership" : "one-time",
+                });
+                
+                if (newPaymentIntentResult.success && newPaymentIntentResult.client_secret) {
+                  setPaymentIntentClientSecret(newPaymentIntentResult.client_secret);
+                  if (newPaymentIntentResult.payment_intent_id) {
+                    setPaymentIntentId(newPaymentIntentResult.payment_intent_id);
+                  }
+                  lastPaymentIntentAmountRef.current = amountInCents;
+                  
+                  // ✅ CRITICAL: Force form to show and remount with new PaymentIntent
+                  // PaymentElement key includes clientSecret, so it will remount automatically
+                  setShowCardForm(true);
+                  setCardFormError(null); // Clear any errors
+                  
+                  // Wait for PaymentElement to remount with new client secret
+                  // Increased delay to ensure Elements wrapper remounts completely
+                  await new Promise(resolve => setTimeout(resolve, 800));
+                  
+                  // Retry the confirmation with the new PaymentIntent
+                  console.log("🔄 Retrying payment confirmation with new PaymentIntent...");
+                  const retryResult = await cardFormRef.current.confirmSetup();
+                  
+                  if (retryResult.error) {
+                    throw new Error(retryResult.error);
+                  } else if (retryResult.paymentMethodId) {
+                    paymentMethodId = retryResult.paymentMethodId;
+                    if (retryResult.paymentIntentId) {
+                      confirmedPaymentIntentId = retryResult.paymentIntentId;
+                      setPaymentIntentId(retryResult.paymentIntentId);
+                    }
+                    console.log("✅ Payment confirmation succeeded after automatic recovery");
+                  } else {
+                    throw new Error("Failed to confirm card details after retry.");
+                  }
+                } else {
+                  throw new Error(newPaymentIntentResult.error || "Failed to create new PaymentIntent for retry");
+                }
+              } catch (recoveryError) {
+                console.error("❌ Automatic recovery failed:", recoveryError);
+                throw new Error("Payment was interrupted. Please try again - a new payment form has been created.");
+              }
+            } else {
+              // For other errors, check if it's a canceled PaymentIntent without the special code
+              if (result.error.includes("canceled") || result.error.includes("unexpected_state")) {
+                console.warn("⚠️ PaymentIntent was canceled - checking if payment method was already extracted");
+                // The payment method might have been extracted before cancellation
+                // Check if we can get it from the subscription creation response
+                // For now, throw error to let user retry
+              }
+              throw new Error(result.error);
             }
-            throw new Error(result.error);
           } else if (result.paymentMethodId) {
             paymentMethodId = result.paymentMethodId;
             // Store paymentIntentId if PaymentIntent was used
@@ -2263,11 +2333,81 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           const result = await cardFormRef.current.confirmSetup();
 
           if (result.error) {
-            // ✅ FIX: If error is due to canceled PaymentIntent, try to extract payment method from error
-            if (result.error.includes("canceled") || result.error.includes("unexpected_state")) {
-              console.warn("⚠️ PaymentIntent was canceled - checking if payment method was already extracted");
+            // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent (second occurrence)
+            // When PaymentIntent is canceled, automatically create a new one and retry
+            if (result.error.includes("PAYMENT_INTENT_CANCELED_RETRY") || 
+                (result.error.includes("canceled") && result.error.includes("unexpected_state"))) {
+              console.warn("⚠️ PaymentIntent was canceled - automatically creating new PaymentIntent and retrying...");
+              
+              // ✅ CRITICAL FIX: Clear the canceled PaymentIntent and force form reset
+              setPaymentIntentClientSecret(null);
+              setPaymentIntentId(null);
+              setCardFormError(null); // Clear any previous card errors
+              setShowCardForm(false); // Force form to hide and remount
+              
+              // Automatically create a new PaymentIntent
+              try {
+                const isSubscription = activePlan?.period === "mo";
+                const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
+                // Use existing packageId from outer scope, or get it if not set yet
+                const recoveryPackageId = packageId || getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+                const packageName = promoEnhancedPlan?.name || activePlan?.name;
+                
+                const newPaymentIntentResult = await createPaymentIntent.mutateAsync({
+                  amount: amountInCents,
+                  currency: "aud",
+                  packageId: recoveryPackageId || undefined,
+                  packageName: packageName,
+                  userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
+                  packageType: isSubscription ? "membership" : "one-time",
+                });
+                
+                if (newPaymentIntentResult.success && newPaymentIntentResult.client_secret) {
+                  setPaymentIntentClientSecret(newPaymentIntentResult.client_secret);
+                  if (newPaymentIntentResult.payment_intent_id) {
+                    setPaymentIntentId(newPaymentIntentResult.payment_intent_id);
+                  }
+                  lastPaymentIntentAmountRef.current = amountInCents;
+                  
+                  // ✅ CRITICAL: Force form to show and remount with new PaymentIntent
+                  // PaymentElement key includes clientSecret, so it will remount automatically
+                  setShowCardForm(true);
+                  setCardFormError(null); // Clear any errors
+                  
+                  // Wait for PaymentElement to remount with new client secret
+                  // Increased delay to ensure Elements wrapper remounts completely
+                  await new Promise(resolve => setTimeout(resolve, 800));
+                  
+                  // Retry the confirmation with the new PaymentIntent
+                  console.log("🔄 Retrying payment confirmation with new PaymentIntent...");
+                  const retryResult = await cardFormRef.current.confirmSetup();
+                  
+                  if (retryResult.error) {
+                    throw new Error(retryResult.error);
+                  } else if (retryResult.paymentMethodId) {
+                    paymentMethodId = retryResult.paymentMethodId;
+                    if (retryResult.paymentIntentId) {
+                      confirmedPaymentIntentId = retryResult.paymentIntentId;
+                      setPaymentIntentId(retryResult.paymentIntentId);
+                    }
+                    console.log("✅ Payment confirmation succeeded after automatic recovery");
+                  } else {
+                    throw new Error("Failed to confirm card details after retry.");
+                  }
+                } else {
+                  throw new Error(newPaymentIntentResult.error || "Failed to create new PaymentIntent for retry");
+                }
+              } catch (recoveryError) {
+                console.error("❌ Automatic recovery failed:", recoveryError);
+                throw new Error("Payment was interrupted. Please try again - a new payment form has been created.");
+              }
+            } else {
+              // For other errors, check if it's a canceled PaymentIntent without the special code
+              if (result.error.includes("canceled") || result.error.includes("unexpected_state")) {
+                console.warn("⚠️ PaymentIntent was canceled - checking if payment method was already extracted");
+              }
+              throw new Error(result.error);
             }
-            throw new Error(result.error);
           } else if (result.paymentMethodId) {
             paymentMethodId = result.paymentMethodId;
             if (result.paymentIntentId) {

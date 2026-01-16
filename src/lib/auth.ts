@@ -181,12 +181,11 @@ export const authOptions: NextAuthOptions = {
             token.lastName = dbUser.lastName;
             token.email = dbUser.email;
           } else {
-            // If the user record has been removed, invalidate the JWT
-            // so downstream middleware treats this as an unauthenticated request.
+            // If the user record has been removed, mark token as deleted
+            // The session callback will return null when this flag is set
             authDebugLog("🔒 JWT invalidated: Google user no longer exists in database");
-            // Cast to JWT to satisfy TypeScript while returning an empty token,
-            // which NextAuth interprets as an invalidated session.
-            return {} as JWT;
+            token.deleted = true;
+            return token;
           }
         } catch (error) {
           console.error("Error finding user in JWT callback:", error);
@@ -204,15 +203,13 @@ export const authOptions: NextAuthOptions = {
           await connectDB();
           const dbUser = await User.findById(token.sub);
           if (!dbUser || dbUser.isActive === false) {
-            // If the user has been deleted or deactivated, clear the token.
-            // Returning an empty object ensures:
-            // - withAuth middleware sees no valid subject
-            // - useSession() will eventually treat the user as signed out
+            // If the user has been deleted or deactivated, mark token as deleted
+            // The session callback will return null when this flag is set
             authDebugLog(
-              `🔒 JWT invalidated: user ${token.sub} is ${!dbUser ? "missing" : "inactive"} – clearing session token`
+              `🔒 JWT invalidated: user ${token.sub} is ${!dbUser ? "missing" : "inactive"} – marking token as deleted`
             );
-            // Return an empty token object, typed as JWT for TypeScript.
-            return {} as JWT;
+            token.deleted = true;
+            return token;
           }
 
           // Keep session data in sync with the latest database values.
@@ -229,14 +226,24 @@ export const authOptions: NextAuthOptions = {
       }
       return token;
     },
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.sub!;
-        session.user.role = token.role as string;
-        session.user.firstName = token.firstName as string;
-        session.user.lastName = token.lastName as string;
-        session.user.email = token.email as string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, token }): Promise<any> {
+      // If token is marked as deleted or has no subject, return null to invalidate session
+      // This happens when user is deleted or deactivated
+      // Note: Returning null is the correct way to invalidate sessions in NextAuth,
+      // even though TypeScript types don't explicitly allow it
+      if (token?.deleted || !token?.sub) {
+        authDebugLog("🔒 Session invalidated: user was deleted or token is invalid");
+        return null; // NextAuth accepts null to invalidate session
       }
+
+      // Populate session with token data
+      session.user.id = token.sub;
+      session.user.role = token.role as string;
+      session.user.firstName = token.firstName as string;
+      session.user.lastName = token.lastName as string;
+      session.user.email = token.email as string;
+      
       return session;
     },
     async signIn({ user, account }) {

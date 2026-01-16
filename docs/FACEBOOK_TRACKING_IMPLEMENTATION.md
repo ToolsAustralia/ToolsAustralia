@@ -75,7 +75,7 @@ export function generateEventID(eventType: string, identifier: string, timestamp
 
 **Example**: `purchase_pi_1234567890_1704067200000`
 
-This ensures Facebook can properly deduplicate events if both browser pixel and Conversions API send the same event (though we only use Conversions API now).
+**Note**: Since we use CAPI-only (no browser pixel), EventIDs are primarily for internal tracking and future-proofing. Facebook's deduplication will handle any edge cases.
 
 ### 3. Renewal Exclusion
 
@@ -175,6 +175,7 @@ Logs include:
 
 **Now**: Client-side tracking has been **completely removed** from:
 
+- `src/utils/tracking/pixel-purchase-tracking.ts` - Removed browser pixel call from `trackPixelPurchase()` (CAPI-only)
 - `src/components/modals/SpecialPackagesModal.tsx`
 - `src/components/modals/MembershipModal.tsx`
 - `src/components/modals/UpsellModal.tsx`
@@ -185,6 +186,7 @@ Logs include:
 - Prevents duplicate events
 - Better match quality
 - Aligns with Meta's best practices
+- Single source of truth (Conversions API only)
 
 ## Removed: API Fallback Processing
 
@@ -317,6 +319,23 @@ After implementation, verify:
 - [Event Deduplication Guide](https://developers.facebook.com/docs/marketing-api/conversions-api/deduplicate-pixel-and-server-events)
 
 ## Changelog
+
+### 2024-01-XX: CAPI-Only Implementation
+
+**Changes**:
+- Removed browser pixel tracking from `trackPixelPurchase()` function
+- Removed all client-side Facebook Pixel tracking from purchase flows
+- Removed API fallback processing
+- Added defensive logging
+- Ensured webhook is single source of truth
+- Updated to use Conversions API (CAPI) exclusively
+
+**Impact**:
+- Eliminated duplicate events
+- Improved revenue accuracy
+- Better match quality
+- Aligned with Meta best practices
+- Single source of truth (server-side only)
 
 ### 2024-01-XX: Duplicate Tracking Fix
 

@@ -38,6 +38,9 @@ type PaymentMetadata = {
   miniDrawId?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  // ✅ A/B Testing: Experiment assignment stored in payment metadata
+  experimentId?: string;
+  variantId?: string;
 };
 interface UserDocument {
   _id: { toString: () => string };
@@ -269,11 +272,16 @@ async function processPaymentBenefitsInternal(
         };
 
         // Get user's active experiment assignment (non-blocking - don't fail if this errors)
+        // ✅ FIX: Try without slug first (finds all-page experiments or any active experiment)
+        // This ensures PaymentEvents are linked to experiments even when slug is not available
         let experimentAssignment: { experimentId: string; variantId: string } | null = null;
         try {
-          // Try to get experiment assignment from payment metadata or lookup
-          const slug = paymentMetadata?.type; // Could store slug in metadata
-          experimentAssignment = await getUserActiveExperimentAssignment(user._id.toString(), slug);
+          // Try without slug first - this will find user's assignment for any active experiment
+          // This is important because paymentMetadata?.type is the package type (e.g., "membership"),
+          // not the promotion page slug (e.g., "ford-f150")
+          // The improved getUserActiveExperimentAssignment will find the user's assignment
+          // for any active experiment they're assigned to, regardless of slug
+          experimentAssignment = await getUserActiveExperimentAssignment(user._id.toString());
         } catch (error) {
           // Silently fail - experiment tracking should not block payment processing
           console.error("Error getting experiment assignment for payment:", error);
@@ -1148,13 +1156,32 @@ async function grantBenefits(
       // Log for debugging (can be enabled if needed)
       // console.log(`📊 Tracking Facebook Purchase event for ${packageData.packageType} purchase (billingReason: ${billingReason || "new purchase"})`);
       // Get experiment assignment for this purchase (if available)
+      // ✅ FIX: First check payment metadata (most reliable - stored at payment creation)
+      // Then fall back to lookup if not in metadata
       let experimentAssignment: { experimentId: string; variantId: string } | null = null;
-      try {
-        const slug = paymentMetadata?.type; // Could store slug in metadata
-        experimentAssignment = await getUserActiveExperimentAssignment(user._id.toString(), slug);
-      } catch (error) {
-        // Silently fail - experiment tracking should not block pixel tracking
-        console.error("Error getting experiment assignment for pixel tracking:", error);
+      
+      // ✅ CRITICAL: Check metadata first - this is stored when payment intent is created
+      // This is more reliable than lookup because it captures the assignment at the time of purchase
+      if (paymentMetadata?.experimentId && paymentMetadata?.variantId) {
+        experimentAssignment = {
+          experimentId: paymentMetadata.experimentId,
+          variantId: paymentMetadata.variantId,
+        };
+        console.log(`✅ [A/B Testing] Using experiment assignment from payment metadata:`, experimentAssignment);
+      } else {
+        // Fallback: Try to lookup assignment (for backward compatibility or if not stored in metadata)
+        try {
+          console.log(`🔍 [A/B Testing] No assignment in metadata, looking up assignment for user: ${user._id.toString()}`);
+          experimentAssignment = await getUserActiveExperimentAssignment(user._id.toString());
+          if (experimentAssignment) {
+            console.log(`✅ [A/B Testing] Found experiment assignment via lookup:`, experimentAssignment);
+          } else {
+            console.warn(`⚠️ [A/B Testing] No experiment assignment found for user: ${user._id.toString()}`);
+          }
+        } catch (error) {
+          // Silently fail - experiment tracking should not block pixel tracking
+          console.error("Error getting experiment assignment for pixel tracking:", error);
+        }
       }
 
       await trackPixelPurchase({
@@ -1187,6 +1214,23 @@ async function grantBenefits(
           variantId: experimentAssignment.variantId,
         }),
       });
+      
+      // ✅ ADD: Log if experiment assignment was passed to trackPixelPurchase
+      if (experimentAssignment) {
+        console.log(`✅ [A/B Testing] Passing experiment assignment to trackPixelPurchase:`, {
+          experimentId: experimentAssignment.experimentId,
+          variantId: experimentAssignment.variantId,
+          packageType: packageData.packageType,
+          orderId: paymentIntentId,
+        });
+      } else {
+        console.warn(`⚠️ [A/B Testing] No experiment assignment to pass to trackPixelPurchase:`, {
+          packageType: packageData.packageType,
+          orderId: paymentIntentId,
+          userId: user._id.toString(),
+        });
+      }
+      
       console.log(`✅ [Facebook Tracking] Successfully tracked purchase: ${trackingId} (${packageData.packageType})`);
     } catch (_pixelError) {
       console.error(`❌ [Facebook Tracking] Failed to track purchase ${trackingId}:`, _pixelError);

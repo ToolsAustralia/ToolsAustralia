@@ -21,13 +21,28 @@ export class ExperimentHistoryRepository {
     }
   ): Promise<IExperimentHistory> {
     await connectDB();
-    return ExperimentHistory.create({
-      experimentId,
-      action,
-      changedBy,
-      changes,
-      timestamp: new Date(),
-    });
+    
+    // ✅ Convert experimentId to ObjectId if it's a string
+    const experimentObjectId = typeof experimentId === "string" 
+      ? new mongoose.Types.ObjectId(experimentId)
+      : experimentId;
+    
+    try {
+      return await ExperimentHistory.create({
+        experimentId: experimentObjectId,
+        action,
+        changedBy,
+        changes,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      console.error("[ExperimentHistoryRepository] Error creating history entry:", {
+        experimentId,
+        action,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   /**

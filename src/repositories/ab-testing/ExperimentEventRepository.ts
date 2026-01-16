@@ -1,6 +1,7 @@
 import connectDB from "@/lib/mongodb";
 import ExperimentEvent, { IExperimentEvent, ExperimentEventType } from "@/models/ab-testing/ExperimentEvent";
 import ExperimentDailyMetricsRepository from "./ExperimentDailyMetricsRepository";
+import PaymentEvent from "@/models/PaymentEvent";
 import mongoose from "mongoose";
 
 interface DateRange {
@@ -164,6 +165,7 @@ export class ExperimentEventRepository {
    * - Fast queries for historical data (pre-aggregated)
    * - Accurate real-time data for recent events
    * - Reduced database size (99% reduction)
+   * - Revenue tracking from PaymentEvents (recent) or ExperimentDailyMetrics (historical)
    */
   async aggregateEvents(
     experimentId: string,
@@ -176,6 +178,7 @@ export class ExperimentEventRepository {
     leads: number;
     purchases: number;
     uniqueVisitors: number;
+    revenue: number;
   }> {
     await connectDB();
 
@@ -185,26 +188,162 @@ export class ExperimentEventRepository {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     thirtyDaysAgo.setUTCHours(0, 0, 0, 0);
 
-    // Use aggregated metrics if:
-    // 1. Date range is provided
-    // 2. Entire range is older than 30 days
-    const useAggregatedMetrics =
-      dateRange &&
-      dateRange.endDate < thirtyDaysAgo &&
-      dateRange.startDate < thirtyDaysAgo;
+    // Determine if we need to handle split date ranges (spanning both recent and historical)
+    const hasDateRange = !!dateRange;
+    const startIsHistorical = dateRange ? dateRange.startDate < thirtyDaysAgo : false;
+    const endIsHistorical = dateRange ? dateRange.endDate < thirtyDaysAgo : false;
+    const useAggregatedMetrics = hasDateRange && startIsHistorical && endIsHistorical;
+    const useSplitRange = hasDateRange && startIsHistorical && !endIsHistorical;
+
+    // Helper function to get revenue from PaymentEvents
+    // Handles edge cases: missing price data, null/undefined values
+    const getRevenueFromPaymentEvents = async (
+      expId: string,
+      varId: string,
+      range?: DateRange
+    ): Promise<number> => {
+      try {
+        const paymentQuery: Record<string, unknown> = {
+          experimentId: expId,
+          variantId: varId,
+          eventType: "BenefitsGranted",
+        };
+
+        if (range) {
+          paymentQuery.timestamp = {
+            $gte: range.startDate,
+            $lte: range.endDate,
+          };
+        }
+
+        const paymentEvents = await PaymentEvent.find(paymentQuery).lean();
+        return paymentEvents.reduce((sum, event) => {
+          // Handle edge cases: missing data, null price, invalid price
+          const price = event.data?.price;
+          if (typeof price === "number" && !isNaN(price) && price >= 0) {
+            return sum + price;
+          }
+          return sum;
+        }, 0);
+      } catch (error) {
+        // Log error but don't fail - return 0 revenue to prevent blocking analytics
+        console.error(`Error fetching revenue for experiment ${expId}, variant ${varId}:`, error);
+        return 0;
+      }
+    };
 
     if (useAggregatedMetrics) {
-      // Use pre-aggregated daily metrics (fast, efficient)
+      // Use pre-aggregated daily metrics (fast, efficient) - includes revenue
       const aggregated = await ExperimentDailyMetricsRepository.getAggregatedMetrics(
         experimentId,
         variantId,
         dateRange
       );
 
-      // For unique visitors, we need to recalculate from recent events if needed
-      // Since unique visitors can't be accurately aggregated, we'll use an approximation
-      // or calculate from recent events if the date range includes recent days
-      return aggregated;
+      return {
+        pageViews: aggregated.pageViews,
+        clicks: aggregated.clicks,
+        conversions: aggregated.conversions,
+        leads: aggregated.leads,
+        purchases: aggregated.purchases,
+        uniqueVisitors: aggregated.uniqueVisitors,
+        revenue: aggregated.revenue,
+      };
+    }
+
+    if (useSplitRange && dateRange) {
+      // Split range: combine historical (daily metrics) + recent (individual events + PaymentEvents)
+      const historicalRange: DateRange = {
+        startDate: dateRange.startDate,
+        endDate: thirtyDaysAgo,
+      };
+      const recentRange: DateRange = {
+        startDate: thirtyDaysAgo,
+        endDate: dateRange.endDate,
+      };
+
+      // Get historical metrics (includes revenue)
+      const historicalMetrics = await ExperimentDailyMetricsRepository.getAggregatedMetrics(
+        experimentId,
+        variantId,
+        historicalRange
+      );
+
+      // Get recent events
+      const matchQuery: Record<string, unknown> = {
+        experimentId: new mongoose.Types.ObjectId(experimentId),
+        variantId: new mongoose.Types.ObjectId(variantId),
+        timestamp: {
+          $gte: recentRange.startDate,
+          $lte: recentRange.endDate,
+        },
+      };
+
+      const recentAggregated = await ExperimentEvent.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: null,
+            pageViews: {
+              $sum: { $cond: [{ $eq: ["$eventType", "page_view"] }, 1, 0] },
+            },
+            clicks: {
+              $sum: { $cond: [{ $eq: ["$eventType", "click"] }, 1, 0] },
+            },
+            conversions: {
+              $sum: { $cond: [{ $eq: ["$eventType", "conversion"] }, 1, 0] },
+            },
+            leads: {
+              $sum: { $cond: [{ $eq: ["$eventType", "lead"] }, 1, 0] },
+            },
+            purchases: {
+              $sum: { $cond: [{ $eq: ["$eventType", "purchase"] }, 1, 0] },
+            },
+            uniqueVisitors: {
+              $addToSet: {
+                $cond: [
+                  { $ifNull: ["$userId", false] },
+                  "$userId",
+                  "$anonymousId",
+                ],
+              },
+            },
+          },
+        },
+        {
+          $project: {
+            pageViews: 1,
+            clicks: 1,
+            conversions: 1,
+            leads: 1,
+            purchases: 1,
+            uniqueVisitors: { $size: "$uniqueVisitors" },
+          },
+        },
+      ]).exec();
+
+      const recentEvents = recentAggregated[0] || {
+        pageViews: 0,
+        clicks: 0,
+        conversions: 0,
+        leads: 0,
+        purchases: 0,
+        uniqueVisitors: 0,
+      };
+
+      // Get recent revenue from PaymentEvents
+      const recentRevenue = await getRevenueFromPaymentEvents(experimentId, variantId, recentRange);
+
+      // Combine historical and recent metrics
+      return {
+        pageViews: historicalMetrics.pageViews + (recentEvents.pageViews || 0),
+        clicks: historicalMetrics.clicks + (recentEvents.clicks || 0),
+        conversions: historicalMetrics.conversions + (recentEvents.conversions || 0),
+        leads: historicalMetrics.leads + (recentEvents.leads || 0),
+        purchases: historicalMetrics.purchases + (recentEvents.purchases || 0),
+        uniqueVisitors: Math.max(historicalMetrics.uniqueVisitors, recentEvents.uniqueVisitors || 0), // Approximation
+        revenue: historicalMetrics.revenue + recentRevenue,
+      };
     }
 
     // For recent data (last 30 days) or no date range, use individual events
@@ -265,6 +404,9 @@ export class ExperimentEventRepository {
       },
     ]).exec();
 
+    // Get revenue from PaymentEvents for recent data
+    const revenue = await getRevenueFromPaymentEvents(experimentId, variantId, dateRange);
+
     if (aggregated.length === 0) {
       return {
         pageViews: 0,
@@ -273,6 +415,7 @@ export class ExperimentEventRepository {
         leads: 0,
         purchases: 0,
         uniqueVisitors: 0,
+        revenue,
       };
     }
 
@@ -283,6 +426,7 @@ export class ExperimentEventRepository {
       leads: aggregated[0].leads || 0,
       purchases: aggregated[0].purchases || 0,
       uniqueVisitors: aggregated[0].uniqueVisitors || 0,
+      revenue,
     };
   }
 }

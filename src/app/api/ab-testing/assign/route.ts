@@ -204,6 +204,22 @@ export async function POST(request: NextRequest) {
       path: cookieSettings.path,
     });
 
+    // ✅ Store assignment in cookie as backup for payment tracking
+    // This ensures we can find the assignment even if database lookup fails
+    const assignmentCookieName = `ta_ab_assignment_${validatedData.experimentId}`;
+    const assignmentData = JSON.stringify({
+      experimentId: validatedData.experimentId,
+      variantId: assignment.variantId,
+      assignedAt: new Date().toISOString(),
+    });
+    response.cookies.set(assignmentCookieName, assignmentData, {
+      httpOnly: false, // Need to read it client-side for payment creation
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    });
+
     return response;
   } catch (error) {
     console.error("Error assigning variant:", error);

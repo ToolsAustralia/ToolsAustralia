@@ -682,7 +682,12 @@ async function handlePaymentIntentCreation(
       });
     }
 
-    const paymentIntent = await stripe.paymentIntents.create(basePaymentIntentData);
+    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+    const idempotencyKey = `pi_minidraw_${miniDrawId}_${user._id.toString()}_${Date.now()}`;
+
+    const paymentIntent = await stripe.paymentIntents.create(basePaymentIntentData, {
+      idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+    });
 
     return NextResponse.json({
       success: true,

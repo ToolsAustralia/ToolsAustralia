@@ -772,6 +772,27 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
   // Extract request context from payment intent metadata for improved Facebook CAPI match quality
   const requestContext = extractRequestContextFromMetadata(paymentIntent.metadata);
 
+  // ✅ A/B Testing: Extract experiment assignment from payment intent metadata
+  const experimentId = paymentIntent.metadata.experimentId;
+  const variantId = paymentIntent.metadata.variantId;
+  if (experimentId && variantId) {
+    webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata for upsell:`, { 
+      experimentId, 
+      variantId,
+      paymentIntentId: paymentIntent.id,
+      userId: user._id.toString(),
+    });
+  } else {
+    // ✅ ADD: Enhanced logging when experiment assignment is missing
+    webhookLog("warn", `⚠️ No experiment assignment found in payment intent metadata for upsell:`, {
+      paymentIntentId: paymentIntent.id,
+      userId: user._id.toString(),
+      metadataKeys: Object.keys(paymentIntent.metadata),
+      hasExperimentId: !!paymentIntent.metadata.experimentId,
+      hasVariantId: !!paymentIntent.metadata.variantId,
+    });
+  }
+
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -794,9 +815,25 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
       ...(miniDrawId && { miniDrawId: miniDrawId }), // Include miniDrawId if present
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,
+      // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
+      ...(experimentId && variantId && {
+        experimentId,
+        variantId,
+      }),
     },
     requestContext // Pass request context for improved match quality
   );
+
+  // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
+  if (experimentId && variantId) {
+    webhookLog("info", `✅ Passed experiment assignment to processPaymentBenefits for upsell:`, {
+      experimentId,
+      variantId,
+      paymentIntentId: paymentIntent.id,
+    });
+  } else {
+    webhookLog("warn", `⚠️ No experiment assignment to pass to processPaymentBenefits for upsell`);
+  }
 
   if (!result.success) {
     webhookLog("error", `Failed to process upsell ${offerId}: ${result.error}`);
@@ -867,6 +904,27 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
   // Extract request context from payment intent metadata for improved Facebook CAPI match quality
   const requestContext = extractRequestContextFromMetadata(paymentIntent.metadata);
 
+  // ✅ A/B Testing: Extract experiment assignment from payment intent metadata
+  const experimentId = paymentIntent.metadata.experimentId;
+  const variantId = paymentIntent.metadata.variantId;
+  if (experimentId && variantId) {
+    webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata:`, { 
+      experimentId, 
+      variantId,
+      paymentIntentId: paymentIntent.id,
+      userId: user._id.toString(),
+    });
+  } else {
+    // ✅ ADD: Enhanced logging when experiment assignment is missing
+    webhookLog("warn", `⚠️ No experiment assignment found in payment intent metadata:`, {
+      paymentIntentId: paymentIntent.id,
+      userId: user._id.toString(),
+      metadataKeys: Object.keys(paymentIntent.metadata),
+      hasExperimentId: !!paymentIntent.metadata.experimentId,
+      hasVariantId: !!paymentIntent.metadata.variantId,
+    });
+  }
+
   // Process benefits using event-based system with payment metadata
   webhookLog("info", `🔄 Calling processPaymentBenefits for one-time package:`, {
     paymentIntentId: paymentIntent.id,
@@ -895,9 +953,25 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       packageType: "one-time",
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,
+      // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
+      ...(experimentId && variantId && {
+        experimentId,
+        variantId,
+      }),
     },
     requestContext // Pass request context for improved match quality
   );
+
+  // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
+  if (experimentId && variantId) {
+    webhookLog("info", `✅ Passed experiment assignment to processPaymentBenefits:`, {
+      experimentId,
+      variantId,
+      paymentIntentId: paymentIntent.id,
+    });
+  } else {
+    webhookLog("warn", `⚠️ No experiment assignment to pass to processPaymentBenefits for one-time purchase`);
+  }
 
   if (result.success) {
     webhookLog("info", `✅ Successfully processed one-time package ${packageId}:`, {
@@ -958,6 +1032,27 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
   // Extract request context from payment intent metadata for improved Facebook CAPI match quality
   const requestContext = extractRequestContextFromMetadata(paymentIntent.metadata);
 
+  // ✅ A/B Testing: Extract experiment assignment from payment intent metadata
+  const experimentId = paymentIntent.metadata.experimentId;
+  const variantId = paymentIntent.metadata.variantId;
+  if (experimentId && variantId) {
+    webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata:`, { 
+      experimentId, 
+      variantId,
+      paymentIntentId: paymentIntent.id,
+      userId: user._id.toString(),
+    });
+  } else {
+    // ✅ ADD: Enhanced logging when experiment assignment is missing
+    webhookLog("warn", `⚠️ No experiment assignment found in payment intent metadata for mini-draw:`, {
+      paymentIntentId: paymentIntent.id,
+      userId: user._id.toString(),
+      metadataKeys: Object.keys(paymentIntent.metadata),
+      hasExperimentId: !!paymentIntent.metadata.experimentId,
+      hasVariantId: !!paymentIntent.metadata.variantId,
+    });
+  }
+
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -978,9 +1073,25 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
       miniDrawId: miniDrawId, // Pass MiniDraw ID to payment processing
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,
+      // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
+      ...(experimentId && variantId && {
+        experimentId,
+        variantId,
+      }),
     },
     requestContext // Pass request context for improved match quality
   );
+
+  // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
+  if (experimentId && variantId) {
+    webhookLog("info", `✅ Passed experiment assignment to processPaymentBenefits for mini-draw:`, {
+      experimentId,
+      variantId,
+      paymentIntentId: paymentIntent.id,
+    });
+  } else {
+    webhookLog("warn", `⚠️ No experiment assignment to pass to processPaymentBenefits for mini-draw`);
+  }
 
   if (!result.success) {
     webhookLog("error", `Failed to process mini draw ${packageId}: ${result.error}`);
@@ -2973,11 +3084,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       ? extractRequestContextFromMetadata(expandedInvoice.metadata)
       : undefined;
 
-    // ✅ CRITICAL: Retrieve promoLinkCode and affiliateCode from metadata
+    // ✅ CRITICAL: Retrieve promoLinkCode, affiliateCode, and A/B testing assignment from metadata
     // For subscriptions, check subscription metadata FIRST (most reliable)
     // Then fall back to payment_intent metadata
     let promoLinkCode: string | undefined;
     let affiliateCode: string | undefined;
+    let experimentId: string | undefined;
+    let variantId: string | undefined;
     try {
       const invoiceTyped = expandedInvoice as Stripe.Invoice & {
         payment_intent?: string | Stripe.PaymentIntent;
@@ -2988,25 +3101,49 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       // ✅ METHOD 1: Check subscription metadata FIRST (for subscription payments) - MOST RELIABLE
       // For subscriptions, metadata is set on the subscription object when created
       // We already have the subscription object from line 1796, so use it directly
-      if (subscription?.metadata?.promoLinkCode) {
-        promoLinkCode = subscription.metadata.promoLinkCode;
-        affiliateCode = subscription.metadata.affiliateCode;
-        if (promoLinkCode) {
+      if (subscription?.metadata) {
+        if (subscription.metadata.promoLinkCode) {
+          promoLinkCode = subscription.metadata.promoLinkCode;
+          affiliateCode = subscription.metadata.affiliateCode;
           webhookLog("info", `✅ Retrieved promoLinkCode from subscription metadata: ${promoLinkCode}`);
+        }
+        // ✅ A/B Testing: Extract experiment assignment from subscription metadata
+        if (subscription.metadata.experimentId && subscription.metadata.variantId) {
+          experimentId = subscription.metadata.experimentId;
+          variantId = subscription.metadata.variantId;
+          webhookLog("info", `✅ Retrieved experiment assignment from subscription metadata:`, { 
+            experimentId, 
+            variantId,
+            invoiceId: expandedInvoice.id,
+            subscriptionId: subscription.id,
+          });
         }
       }
 
       // Method 2: Check invoice payment_intent field (fallback for subscriptions, primary for one-time)
-      if (!promoLinkCode && invoiceTyped.payment_intent) {
+      if ((!promoLinkCode || !experimentId) && invoiceTyped.payment_intent) {
         const paymentIntentId =
           typeof invoiceTyped.payment_intent === "string"
             ? invoiceTyped.payment_intent
             : invoiceTyped.payment_intent.id;
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-        promoLinkCode = paymentIntent.metadata.promoLinkCode;
-        affiliateCode = paymentIntent.metadata.affiliateCode;
-        if (promoLinkCode) {
-          webhookLog("info", `✅ Retrieved promoLinkCode from invoice payment_intent: ${promoLinkCode}`);
+        if (!promoLinkCode) {
+          promoLinkCode = paymentIntent.metadata.promoLinkCode;
+          affiliateCode = paymentIntent.metadata.affiliateCode;
+          if (promoLinkCode) {
+            webhookLog("info", `✅ Retrieved promoLinkCode from invoice payment_intent: ${promoLinkCode}`);
+          }
+        }
+        // ✅ A/B Testing: Extract experiment assignment from payment intent metadata (if not in subscription)
+        if (!experimentId && paymentIntent.metadata.experimentId && paymentIntent.metadata.variantId) {
+          experimentId = paymentIntent.metadata.experimentId;
+          variantId = paymentIntent.metadata.variantId;
+          webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata:`, { 
+            experimentId, 
+            variantId,
+            invoiceId: expandedInvoice.id,
+            paymentIntentId: paymentIntent.id,
+          });
         }
       }
 
@@ -3074,10 +3211,32 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         packageType: "membership",
         promoLinkCode: promoLinkCode || undefined, // Ensure undefined instead of empty string
         affiliateCode: affiliateCode || undefined,
+        // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
+        ...(experimentId && variantId && {
+          experimentId,
+          variantId,
+        }),
       },
       requestContext, // Pass request context if available (may be undefined for renewals)
       expandedInvoice.billing_reason || undefined // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
     );
+
+    // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
+    if (experimentId && variantId) {
+      webhookLog("info", `✅ Passed experiment assignment to processPaymentBenefits for subscription:`, {
+        experimentId,
+        variantId,
+        invoiceId: expandedInvoice.id,
+        billingReason: expandedInvoice.billing_reason,
+      });
+    } else {
+      webhookLog("warn", `⚠️ No experiment assignment to pass to processPaymentBenefits for subscription:`, {
+        invoiceId: expandedInvoice.id,
+        billingReason: expandedInvoice.billing_reason,
+        hasSubscriptionMetadata: !!subscription?.metadata,
+        hasInvoicePaymentIntent: !!(expandedInvoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent }).payment_intent,
+      });
+    }
 
     if (result.success) {
       // ✅ CRITICAL: For resubscription, set accumulatedEntries to newLastMonthAccumulatedEntries

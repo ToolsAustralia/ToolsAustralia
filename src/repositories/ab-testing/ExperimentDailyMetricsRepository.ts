@@ -127,9 +127,12 @@ export class ExperimentDailyMetricsRepository {
           leads: { $sum: "$leads" },
           purchases: { $sum: "$purchases" },
           revenue: { $sum: "$revenue" },
-          // For unique visitors, we use the maximum daily count as an approximation
-          // Note: This is an approximation - true unique visitors across days requires
-          // event-level deduplication, which we do for recent data (<30 days)
+          // ⚠️ LIMITATION: For unique visitors across multiple days, we use the maximum daily count
+          // This is an approximation because true unique visitors requires deduplicating user IDs across days
+          // For accurate unique visitor counts, use recent data (<30 days) which uses event-level deduplication
+          // For historical data (>30 days), this approximation is acceptable for reporting purposes
+          // Note: This means if a user visits on Day 1 and Day 2, they may be counted twice
+          // For precise analytics, always query recent data or implement a visitor tracking collection
           uniqueVisitors: { $max: "$uniqueVisitors" },
         },
       },

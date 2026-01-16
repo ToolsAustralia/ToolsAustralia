@@ -159,8 +159,15 @@ export async function GET() {
             },
           }).lean();
 
+          // ✅ Calculate revenue from PaymentEvents
+          // Only count events that have valid price data and are for this variant
           const revenue = paymentEvents.reduce((sum, event) => {
-            return sum + (event.data?.price || 0);
+            const price = event.data?.price;
+            // Validate price: must be a number, not NaN, and >= 0
+            if (typeof price === "number" && !isNaN(price) && price >= 0) {
+              return sum + price;
+            }
+            return sum;
           }, 0);
 
           // Upsert daily metrics

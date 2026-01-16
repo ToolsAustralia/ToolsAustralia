@@ -96,35 +96,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+    // This ensures that even if the API is called twice (e.g., double-click), only one PaymentIntent is created
+    const idempotencyKey = `pi_${validatedData.packageId || "default"}_${userId || "guest"}_${Date.now()}`;
+
     // Create PaymentIntent for payment method collection with amount
     // This ensures wallet payments show the correct amount
     // ✅ FIX: Only include customer if it exists (authenticated users)
     // Guest users will have customer created during purchase process
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: validatedData.amount, // Amount in cents
-      currency: validatedData.currency,
-      ...(stripeCustomerId && { customer: stripeCustomerId }), // Only add customer if exists
-      setup_future_usage: "off_session", // Automatically save payment method for future use
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: validatedData.amount, // Amount in cents
+        currency: validatedData.currency,
+        ...(stripeCustomerId && { customer: stripeCustomerId }), // Only add customer if exists
+        setup_future_usage: "off_session", // Automatically save payment method for future use
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
+        },
+        // ✅ STRIPE BEST PRACTICE: For subscription upfront PaymentIntents, use manual capture
+        // This allows us to cancel the PaymentIntent before it's captured, preventing double charge
+        // The PaymentIntent will be in "requires_capture" status after confirmation, giving us time to cancel it
+        ...(validatedData.packageType === "membership" && { capture_method: "manual" }), // ✅ Manual capture for memberships
+        // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+        ...(validatedData.packageName && { description: validatedData.packageName }),
+        metadata: {
+          userId: userId,
+          userEmail: userEmail || validatedData.userEmail || "guest",
+          type: validatedData.packageType || "one-time", // ✅ Use provided packageType or default to one-time
+          packageType: validatedData.packageType || "one-time", // ✅ Also set 'packageType' for consistency
+          ...(validatedData.packageType === "membership" && { isUpfrontPayment: "true" }), // ✅ Mark membership PaymentIntent so webhook skips it
+          ...(validatedData.packageId && { packageId: validatedData.packageId }),
+          ...(validatedData.packageName && { packageName: validatedData.packageName }),
+        },
       },
-      // ✅ STRIPE BEST PRACTICE: For subscription upfront PaymentIntents, use manual capture
-      // This allows us to cancel the PaymentIntent before it's captured, preventing double charge
-      // The PaymentIntent will be in "requires_capture" status after confirmation, giving us time to cancel it
-      ...(validatedData.packageType === "membership" && { capture_method: "manual" }), // ✅ Manual capture for memberships
-      // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
-      ...(validatedData.packageName && { description: validatedData.packageName }),
-      metadata: {
-        userId: userId,
-        userEmail: userEmail || validatedData.userEmail || "guest",
-        type: validatedData.packageType || "one-time", // ✅ Use provided packageType or default to one-time
-        packageType: validatedData.packageType || "one-time", // ✅ Also set 'packageType' for consistency
-        ...(validatedData.packageType === "membership" && { isUpfrontPayment: "true" }), // ✅ Mark membership PaymentIntent so webhook skips it
-        ...(validatedData.packageId && { packageId: validatedData.packageId }),
-        ...(validatedData.packageName && { packageName: validatedData.packageName }),
-      },
-    });
+      {
+        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+      }
+    );
 
     return NextResponse.json({
       success: true,

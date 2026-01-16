@@ -555,6 +555,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
           {/* Payment Element */}
           <Elements
+            key={paymentState.clientSecret || "no-secret"}
             stripe={stripePromise}
             options={{
               clientSecret: paymentState.clientSecret,

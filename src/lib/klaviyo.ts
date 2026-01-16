@@ -1123,6 +1123,430 @@ class KlaviyoClient {
     }
   }
 
+  /**
+   * Unsubscribe user from email marketing list
+   *
+   * Sets email marketing consent to unsubscribed using the profile-subscription-bulk-delete-jobs endpoint.
+   * This is the correct way to unsubscribe users per Klaviyo documentation.
+   *
+   * @param profileId - Klaviyo profile ID
+   * @param email - Email address (required)
+   * @returns Success status and any error message
+   */
+  async unsubscribeFromEmailList(profileId: string, email: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    // Validate profile ID
+    if (!profileId || profileId.trim() === "") {
+      console.error("❌ Invalid profile ID for email unsubscribe:", profileId);
+      return { success: false, error: "Profile ID is required" };
+    }
+
+    // Validate email
+    if (!email || email.trim() === "") {
+      console.error("❌ Invalid email for email unsubscribe:", email);
+      return { success: false, error: "Email is required" };
+    }
+
+    try {
+      const url = `${this.baseUrl}/profile-subscription-bulk-delete-jobs/`;
+
+      // Build subscriptions object to unsubscribe from email marketing
+      const payload = {
+        data: {
+          type: "profile-subscription-bulk-delete-job",
+          attributes: {
+            profiles: {
+              data: [
+                {
+                  type: "profile",
+                  id: profileId,
+                  attributes: {
+                    email: email,
+                    subscriptions: {
+                      email: {
+                        marketing: {},
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      };
+
+      const response = await this.retryRequest(
+        () =>
+          fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+              revision: "2024-10-15",
+            },
+            body: JSON.stringify(payload),
+          }),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Klaviyo email unsubscribe error: ${errorMessage}`);
+      }
+
+      if (this.mode === "development") {
+        console.log("✅ Email unsubscribe completed:", { profileId, email });
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Failed to unsubscribe from email list:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /**
+   * Unsubscribe user from SMS marketing list
+   *
+   * Sets SMS marketing consent to unsubscribed using the profile-subscription-bulk-delete-jobs endpoint.
+   * This is the correct way to unsubscribe users per Klaviyo documentation.
+   *
+   * @param profileId - Klaviyo profile ID
+   * @param phoneNumber - Phone number (required)
+   * @returns Success status and any error message
+   */
+  async unsubscribeFromSMSList(profileId: string, phoneNumber: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    // Validate profile ID
+    if (!profileId || profileId.trim() === "") {
+      console.error("❌ Invalid profile ID for SMS unsubscribe:", profileId);
+      return { success: false, error: "Profile ID is required" };
+    }
+
+    // Validate phone number
+    if (!phoneNumber || phoneNumber.trim() === "") {
+      console.error("❌ Invalid phone number for SMS unsubscribe:", phoneNumber);
+      return { success: false, error: "Phone number is required" };
+    }
+
+    try {
+      const url = `${this.baseUrl}/profile-subscription-bulk-delete-jobs/`;
+
+      // Build subscriptions object to unsubscribe from SMS marketing
+      const payload = {
+        data: {
+          type: "profile-subscription-bulk-delete-job",
+          attributes: {
+            profiles: {
+              data: [
+                {
+                  type: "profile",
+                  id: profileId,
+                  attributes: {
+                    phone_number: phoneNumber,
+                    subscriptions: {
+                      sms: {
+                        marketing: {},
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      };
+
+      const response = await this.retryRequest(
+        () =>
+          fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+              revision: "2024-10-15",
+            },
+            body: JSON.stringify(payload),
+          }),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Klaviyo SMS unsubscribe error: ${errorMessage}`);
+      }
+
+      if (this.mode === "development") {
+        console.log("✅ SMS unsubscribe completed:", { profileId, phoneNumber });
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Failed to unsubscribe from SMS list:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /**
+   * Remove profile from email and SMS lists
+   *
+   * Removes the profile from configured lists using the DELETE relationships endpoint.
+   * This does not change consent status, only removes list membership.
+   *
+   * @param profileId - Klaviyo profile ID
+   * @returns Success status and any error message
+   */
+  async removeFromLists(profileId: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    // Validate profile ID
+    if (!profileId || profileId.trim() === "") {
+      console.error("❌ Invalid profile ID for list removal:", profileId);
+      return { success: false, error: "Profile ID is required" };
+    }
+
+    const results: { email?: boolean; sms?: boolean } = {};
+    const errors: string[] = [];
+
+    // Remove from email list if configured
+    if (this.emailListId) {
+      try {
+        const emailListUrl = `${this.baseUrl}/lists/${this.emailListId}/relationships/profiles/`;
+        const emailListPayload = {
+          data: [
+            {
+              type: "profile",
+              id: profileId,
+            },
+          ],
+        };
+
+        const emailResponse = await this.retryRequest(
+          () =>
+            fetch(emailListUrl, {
+              method: "DELETE",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+                revision: "2024-10-15",
+              },
+              body: JSON.stringify(emailListPayload),
+            }),
+          this.MAX_RETRIES,
+          this.BASE_RETRY_DELAY_MS
+        );
+
+        if (emailResponse.ok) {
+          results.email = true;
+          if (this.mode === "development") {
+            console.log("✅ Profile removed from email list:", { profileId, listId: this.emailListId });
+          }
+        } else {
+          const errorData = await emailResponse.json().catch(() => ({}));
+          const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${emailResponse.status}: ${emailResponse.statusText}`;
+          errors.push(`Email list: ${errorMessage}`);
+          console.warn(`⚠️ Failed to remove profile from email list: ${errorMessage}`);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        errors.push(`Email list: ${errorMessage}`);
+        console.warn(`⚠️ Failed to remove profile from email list after retries: ${errorMessage}`);
+      }
+    }
+
+    // Remove from SMS list if configured
+    if (this.smsListId) {
+      try {
+        const smsListUrl = `${this.baseUrl}/lists/${this.smsListId}/relationships/profiles/`;
+        const smsListPayload = {
+          data: [
+            {
+              type: "profile",
+              id: profileId,
+            },
+          ],
+        };
+
+        const smsResponse = await this.retryRequest(
+          () =>
+            fetch(smsListUrl, {
+              method: "DELETE",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+                revision: "2024-10-15",
+              },
+              body: JSON.stringify(smsListPayload),
+            }),
+          this.MAX_RETRIES,
+          this.BASE_RETRY_DELAY_MS
+        );
+
+        if (smsResponse.ok) {
+          results.sms = true;
+          if (this.mode === "development") {
+            console.log("✅ Profile removed from SMS list:", { profileId, listId: this.smsListId });
+          }
+        } else {
+          const errorData = await smsResponse.json().catch(() => ({}));
+          const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${smsResponse.status}: ${smsResponse.statusText}`;
+          errors.push(`SMS list: ${errorMessage}`);
+          console.warn(`⚠️ Failed to remove profile from SMS list: ${errorMessage}`);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        errors.push(`SMS list: ${errorMessage}`);
+        console.warn(`⚠️ Failed to remove profile from SMS list after retries: ${errorMessage}`);
+      }
+    }
+
+    // Return success if at least one operation succeeded, or if no lists are configured
+    const hasResults = results.email || results.sms;
+    const hasLists = this.emailListId || this.smsListId;
+
+    if (!hasLists) {
+      // No lists configured - not an error
+      return { success: true };
+    }
+
+    return {
+      success: hasResults || errors.length === 0,
+      error: errors.length > 0 ? errors.join("; ") : undefined,
+    };
+  }
+
+  /**
+   * Delete profile from Klaviyo (GDPR-compliant)
+   *
+   * Uses the data-privacy-deletion-jobs endpoint to permanently delete a profile.
+   * This is an asynchronous operation - deletion is queued and processed by Klaviyo.
+   * The profile will appear on the Deleted Profiles page when complete.
+   *
+   * @param email - Email address (required identifier)
+   * @param phoneNumber - Phone number (optional identifier)
+   * @returns Success status, job ID, and any error message
+   */
+  async deleteProfile(
+    email: string,
+    phoneNumber?: string
+  ): Promise<{ success: boolean; jobId?: string; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    // Validate email
+    if (!email || email.trim() === "") {
+      console.error("❌ Invalid email for profile deletion:", email);
+      return { success: false, error: "Email is required" };
+    }
+
+    try {
+      const url = `${this.baseUrl}/data-privacy-deletion-jobs/`;
+
+      // ⚠️ CRITICAL: Klaviyo API only allows ONE identifier per request (email OR phone_number OR id)
+      // Providing multiple identifiers will result in a 400 error
+      // We use email as the primary identifier since it's required
+      const payload = {
+        data: {
+          type: "data-privacy-deletion-job",
+          attributes: {
+            profile: {
+              data: {
+                type: "profile",
+                attributes: {
+                  email: email,
+                  // Note: Do NOT include phone_number here - Klaviyo only accepts ONE identifier
+                  // If email doesn't work, you can try phone_number separately, but not both
+                },
+              },
+            },
+          },
+        },
+      };
+
+      // Log payload for debugging (only in development or if explicitly enabled)
+      if (this.mode === "development" || process.env.KLAVIYO_DEBUG_DELETION === "true") {
+        console.log("📤 Klaviyo deletion request payload:", JSON.stringify(payload, null, 2));
+      }
+
+      const response = await this.retryRequest(
+        () =>
+          fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Klaviyo-API-Key ${this.apiKey}`,
+              revision: "2024-10-15",
+            },
+            body: JSON.stringify(payload),
+          }),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
+        const fullError = errorData.errors || errorData;
+        
+        console.error("❌ Klaviyo profile deletion API error:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          fullError: JSON.stringify(fullError, null, 2),
+          payload: JSON.stringify(payload, null, 2),
+        });
+        
+        throw new Error(`Klaviyo profile deletion error: ${errorMessage}`);
+      }
+
+      const responseData = await response.json().catch(() => ({}));
+      const jobId = responseData.data?.id;
+
+      // Log the full response for debugging
+      console.log("✅ Klaviyo profile deletion job created:", {
+        email,
+        phoneNumber: phoneNumber || "none",
+        jobId: jobId || "unknown",
+        status: response.status,
+        responseData: JSON.stringify(responseData, null, 2),
+      });
+
+      if (!jobId) {
+        console.warn("⚠️ Klaviyo deletion job created but no job ID returned. Response:", responseData);
+      }
+
+      return {
+        success: true,
+        jobId: jobId || "job_created",
+      };
+    } catch (error) {
+      console.error("❌ Failed to delete Klaviyo profile:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
   async trackEvent(event: KlaviyoEvent, options: TrackEventOptions = {}): Promise<KlaviyoEventResponse> {
     const { skipIfDisabled = true, retryOnFailure = true, logToConsole = this.mode === "development" } = options;
 
@@ -1296,6 +1720,52 @@ class KlaviyoClient {
         },
       };
     }
+  }
+
+  /**
+   * Find Klaviyo profile ID by email
+   *
+   * @param email - Email address to search for
+   * @returns Profile ID if found, null otherwise
+   */
+  async findProfileByEmail(email: string): Promise<string | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    if (!email || email.trim() === "") {
+      return null;
+    }
+
+    try {
+      const searchResponse = await Promise.race([
+        this.retryRequest(
+          () => this.makeRequest(`/profiles/?filter=equals(email,"${email}")`, "GET"),
+          2, // Fewer retries for lookup (non-critical)
+          1000 // Shorter delay
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Profile lookup timeout")), 10000)
+        ),
+      ]);
+
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const existingProfile = searchData.data?.[0];
+        if (existingProfile?.id) {
+          return existingProfile.id;
+        }
+      }
+    } catch (error) {
+      // Non-critical - log but don't fail
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage.toLowerCase().includes("timeout");
+      if (!isTimeout && this.mode === "development") {
+        console.warn(`⚠️ Failed to find Klaviyo profile for ${email}:`, errorMessage);
+      }
+    }
+
+    return null;
   }
 
   /**

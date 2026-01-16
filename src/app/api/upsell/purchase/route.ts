@@ -681,20 +681,28 @@ async function handlePaymentIntentCreation(
       entriesCount: paymentMetadata.entriesCount,
     });
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(offer.discountedPrice * 100), // Convert to cents
-      currency: "aud",
-      customer: user.stripeCustomerId!,
-      payment_method: paymentMethodId,
-      confirm: paymentMethodId ? true : false,
-      return_url: `${getBaseUrl()}/upsell-success`,
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
+    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+    const idempotencyKey = `pi_upsell_${offer.id}_${user._id.toString()}_${Date.now()}`;
+
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: Math.round(offer.discountedPrice * 100), // Convert to cents
+        currency: "aud",
+        customer: user.stripeCustomerId!,
+        payment_method: paymentMethodId,
+        confirm: paymentMethodId ? true : false,
+        return_url: `${getBaseUrl()}/upsell-success`,
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
+        },
+        description: `${offer.name}`, // Add meaningful description
+        metadata: paymentMetadata,
       },
-      description: `${offer.name}`, // Add meaningful description
-      metadata: paymentMetadata,
-    });
+      {
+        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+      }
+    );
 
     return NextResponse.json({
       success: true,

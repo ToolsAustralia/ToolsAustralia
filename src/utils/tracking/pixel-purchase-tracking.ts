@@ -1,12 +1,11 @@
 /**
  * Pixel Purchase Tracking Utilities
  *
- * Provides server-side pixel tracking for all purchase events.
+ * Provides server-side pixel tracking for all purchase events via Conversions API only.
  * This ensures pixel events are fired for every purchase type.
- * Now includes Conversions API integration for accurate revenue tracking.
+ * Uses Conversions API (CAPI) for accurate revenue tracking - browser pixel removed.
  *
-
- * @version 2.0.0
+ * @version 2.1.0
  */
 
 import { trackFacebookEvent } from "@/components/FacebookPixel";
@@ -60,11 +59,13 @@ export interface PixelPurchaseParams {
   // A/B Testing fields (optional)
   experimentId?: string;
   variantId?: string;
+  anonymousId?: string; // Anonymous ID for A/B testing tracking (for users who visited before logging in)
 }
 
 /**
- * Track purchase event for Facebook and TikTok pixels
- * Now includes Conversions API integration with EventID deduplication
+ * Track purchase event via Conversions API (CAPI-only)
+ * Browser pixel removed - using server-side CAPI for accurate revenue tracking
+ * Includes EventID deduplication for reliable conversion tracking
  */
 export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<void> {
   try {
@@ -99,18 +100,22 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       clientUserAgent,
       experimentId,
       variantId,
+      anonymousId,
     } = params;
 
     // Generate unique event ID for deduplication
     const eventID = generateEventID("purchase", orderId);
     const eventTime = Math.floor(Date.now() / 1000); // Unix timestamp
 
-    // Prepare common parameters for browser pixel
+    // Track Conversions API (server-side) - CRITICAL for accurate revenue tracking
+    // Browser pixel removed - using CAPI-only approach per documentation
+    
+    // Prepare common parameters for TikTok/Klaviyo tracking (client-side only)
     const commonParams = {
-      eventID, // Include eventID for browser pixel deduplication
+      eventID, // Include eventID for TikTok tracking
       value,
       currency,
-      order_id: orderId, // Use order_id (not orderId) for Facebook
+      order_id: orderId, // Use order_id (not orderId) for TikTok
       content_type: content_type || getContentType(packageType),
       content_ids: content_ids || (packageId ? [packageId] : []),
       num_items: num_items || 1,
@@ -129,14 +134,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       ...(experimentId && { experiment_id: experimentId }),
       ...(variantId && { variant_id: variantId }),
     };
-
-    // 1. Track Browser Pixel (client-side) - only if in browser context
-    if (typeof window !== "undefined") {
-      trackFacebookEvent("Purchase", commonParams);
-      // console.log(`📘 Facebook Pixel (Browser): Purchase tracked - $${value} ${currency}`);
-    }
-
-    // 2. Track Conversions API (server-side) - CRITICAL for accurate revenue tracking
+    
     try {
       // Prepare user data with hashing
       const userData = prepareUserData({
@@ -290,6 +288,57 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
               });
             }
           });
+        } else {
+          // Server-side: Call repository directly (for webhook/server-side purchases)
+          const { default: ExperimentEventRepository } = await import("@/repositories/ab-testing/ExperimentEventRepository");
+          const { default: connectDB } = await import("@/lib/mongodb");
+          
+          await connectDB();
+          
+          console.log(`📊 [A/B Testing] Tracking server-side purchase/conversion:`, {
+            experimentId,
+            variantId,
+            orderId,
+            userId: userId || "anonymous",
+            anonymousId: anonymousId || "none",
+            value,
+            currency,
+          });
+          
+          // Track purchase event
+          await ExperimentEventRepository.createEvent({
+            experimentId,
+            variantId,
+            eventType: "purchase",
+            userId: userId || undefined,
+            anonymousId: anonymousId || undefined, // ✅ ADD: Pass anonymousId if available
+            metadata: {
+              orderId, // ✅ Critical for deduplication
+              value,
+              currency,
+              packageType,
+              packageId,
+              packageName,
+            },
+          });
+          
+          // Track conversion event
+          await ExperimentEventRepository.createEvent({
+            experimentId,
+            variantId,
+            eventType: "conversion",
+            userId: userId || undefined,
+            anonymousId: anonymousId || undefined, // ✅ ADD: Pass anonymousId if available
+            metadata: {
+              orderId, // ✅ Critical for deduplication
+              value,
+              currency,
+              packageType,
+              source: "purchase",
+            },
+          });
+          
+          console.log(`✅ [A/B Testing] Server-side purchase/conversion tracked successfully for experiment ${experimentId}, variant ${variantId}, order ${orderId}`);
         }
       } catch (error) {
         // Silently fail - experiment tracking should not block purchase flow

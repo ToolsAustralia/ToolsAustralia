@@ -60,6 +60,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Update experiment (blocks edits to active/ended experiments)
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  let experimentId: string | undefined;
+  
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
@@ -68,16 +70,47 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id } = await params;
+    experimentId = id; // ✅ Store id outside try block for error handling
     const body = await request.json();
     
     await connectDB();
 
+    // ✅ Check current status before attempting to change it
+    const currentExperiment = await ExperimentRepository.findById(id);
+    if (!currentExperiment) {
+      return NextResponse.json({ error: "Experiment not found" }, { status: 404 });
+    }
+
     // Handle status changes (activate, pause, end)
     if (body.status === "active") {
+      // ✅ If already active, return success (idempotent)
+      if (currentExperiment.status === "active") {
+        return NextResponse.json({
+          success: true,
+          data: currentExperiment,
+          message: "Experiment is already active",
+        });
+      }
       await ExperimentService.activateExperiment(id, new mongoose.Types.ObjectId(session.user.id));
     } else if (body.status === "paused") {
+      // ✅ If already paused, return success (idempotent)
+      if (currentExperiment.status === "paused") {
+        return NextResponse.json({
+          success: true,
+          data: currentExperiment,
+          message: "Experiment is already paused",
+        });
+      }
       await ExperimentService.pauseExperiment(id, new mongoose.Types.ObjectId(session.user.id));
     } else if (body.status === "ended") {
+      // ✅ If already ended, return success (idempotent)
+      if (currentExperiment.status === "ended") {
+        return NextResponse.json({
+          success: true,
+          data: currentExperiment,
+          message: "Experiment is already ended",
+        });
+      }
       await ExperimentService.endExperiment(id, new mongoose.Types.ObjectId(session.user.id));
     } else {
       // Regular update
@@ -131,7 +164,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json({ error: "Failed to update experiment" }, { status: 500 });
+    // ✅ Return actual error message for better debugging
+    const errorMessage = error instanceof Error ? error.message : "Failed to update experiment";
+    console.error("Experiment update error details:", {
+      experimentId: experimentId || "unknown",
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    return NextResponse.json({ 
+      error: errorMessage,
+      details: error instanceof Error ? error.stack : undefined 
+    }, { status: 500 });
   }
 }
 

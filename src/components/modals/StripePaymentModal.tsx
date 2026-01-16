@@ -639,6 +639,7 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
       <ModalContent className="max-w-md mx-auto">
         {showCardForm && clientSecret ? (
           <Elements
+            key={clientSecret || "no-secret"}
             stripe={stripePromise}
             options={{
               clientSecret,

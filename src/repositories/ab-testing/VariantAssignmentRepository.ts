@@ -9,6 +9,8 @@ import mongoose from "mongoose";
 export class VariantAssignmentRepository {
   /**
    * Find existing assignment for user or anonymous ID
+   * ✅ FIX: When userId is provided, also check for assignments by anonymousId
+   * This handles cases where user visited as anonymous, then logged in
    */
   async findAssignment(
     experimentId: string,
@@ -19,6 +21,19 @@ export class VariantAssignmentRepository {
 
     const query: Record<string, unknown> = { experimentId };
 
+    // If both userId and anonymousId are provided, check both
+    if (userId && anonymousId) {
+      const assignment = await VariantAssignment.findOne({
+        experimentId,
+        $or: [
+          { userId: new mongoose.Types.ObjectId(userId) },
+          { anonymousId: anonymousId },
+        ],
+      }).exec();
+      return assignment;
+    }
+
+    // Otherwise, check by userId or anonymousId
     if (userId) {
       query.userId = new mongoose.Types.ObjectId(userId);
     } else if (anonymousId) {
@@ -28,6 +43,44 @@ export class VariantAssignmentRepository {
     }
 
     return VariantAssignment.findOne(query).exec();
+  }
+
+  /**
+   * Find assignment by userId, also checking anonymousId if provided
+   * This is useful when we have userId but the assignment might have been created anonymously
+   * ✅ FIX: Removed dangerous fallback that returned ANY anonymous assignment
+   * Now only returns assignments that actually belong to this user (by userId or anonymousId)
+   */
+  async findAssignmentByUserOrAnonymous(
+    experimentId: string,
+    userId: string,
+    anonymousId?: string
+  ): Promise<IVariantAssignment | null> {
+    await connectDB();
+
+    // First, try the standard lookup (which now checks both userId and anonymousId if both provided)
+    const standardAssignment = await this.findAssignment(experimentId, userId, anonymousId);
+    if (standardAssignment) {
+      return standardAssignment;
+    }
+
+    // If not found and we have anonymousId, try by anonymousId only
+    // This handles cases where user visited as anonymous, got assigned, then logged in
+    if (anonymousId) {
+      const anonymousAssignment = await VariantAssignment.findOne({
+        experimentId,
+        anonymousId,
+      }).exec();
+      if (anonymousAssignment) {
+        return anonymousAssignment;
+      }
+    }
+
+    // ❌ REMOVED: Dangerous fallback that returned ANY recent anonymous assignment
+    // This was causing purchases to be attributed to the wrong variant (always Variant A)
+    // If assignment is not found, return null - it's better to not track than to track incorrectly
+    
+    return null;
   }
 
   /**

@@ -1,6 +1,7 @@
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentHistoryRepository from "@/repositories/ab-testing/ExperimentHistoryRepository";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
+import { ExperimentHistoryAction } from "@/models/ab-testing/ExperimentHistory";
 import mongoose from "mongoose";
 
 /**
@@ -54,31 +55,52 @@ export class ExperimentService {
    * Activate experiment
    */
   async activateExperiment(experimentId: string, changedBy: mongoose.Types.ObjectId): Promise<void> {
-    // Validate prerequisites
-    const experiment = await ExperimentRepository.findById(experimentId);
-    if (!experiment) {
-      throw new Error("Experiment not found");
+    try {
+      // Validate prerequisites
+      const experiment = await ExperimentRepository.findById(experimentId);
+      if (!experiment) {
+        throw new Error("Experiment not found");
+      }
+
+      console.log(`[ExperimentService] Activating experiment ${experimentId}, current status: ${experiment.status}`);
+
+      // ✅ Allow activating from "draft" or "paused" status
+      if (experiment.status !== "draft" && experiment.status !== "paused") {
+        throw new Error(`Only draft or paused experiments can be activated. Current status: ${experiment.status}`);
+      }
+
+      // Validate traffic split
+      const trafficSplit = await VariantRepository.validateTrafficSplit(experimentId);
+      if (!trafficSplit.valid) {
+        throw new Error(trafficSplit.message || "Traffic split validation failed");
+      }
+
+      // Validate dates
+      const dateValidation = this.validateExperimentDates(experiment.startDate, experiment.endDate);
+      if (!dateValidation.valid) {
+        throw new Error(dateValidation.message || "Date validation failed");
+      }
+
+      // Determine action type for history
+      const isResume = experiment.status === "paused";
+      const actionType: ExperimentHistoryAction = isResume ? "resumed" : "activated";
+
+      console.log(`[ExperimentService] Action type: ${actionType}, isResume: ${isResume}`);
+
+      // Update status
+      await ExperimentRepository.update(experimentId, { status: "active" });
+      console.log(`[ExperimentService] Status updated to active`);
+
+      // Create history entry with before status
+      await ExperimentHistoryRepository.createHistoryEntry(experimentId, actionType, changedBy, {
+        before: { status: experiment.status },
+        after: { status: "active" },
+      });
+      console.log(`[ExperimentService] History entry created: ${actionType}`);
+    } catch (error) {
+      console.error(`[ExperimentService] Error in activateExperiment for ${experimentId}:`, error);
+      throw error; // Re-throw to preserve original error
     }
-
-    // Validate traffic split
-    const trafficSplit = await VariantRepository.validateTrafficSplit(experimentId);
-    if (!trafficSplit.valid) {
-      throw new Error(trafficSplit.message || "Traffic split validation failed");
-    }
-
-    // Validate dates
-    const dateValidation = this.validateExperimentDates(experiment.startDate, experiment.endDate);
-    if (!dateValidation.valid) {
-      throw new Error(dateValidation.message || "Date validation failed");
-    }
-
-    // Update status
-    await ExperimentRepository.update(experimentId, { status: "active" });
-
-    // Create history entry
-    await ExperimentHistoryRepository.createHistoryEntry(experimentId, "activated", changedBy, {
-      after: { status: "active" },
-    });
   }
 
   /**

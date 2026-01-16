@@ -15,6 +15,10 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import Promo from "@/models/Promo";
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
+import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
+import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
+import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
+import mongoose from "mongoose";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 
@@ -457,6 +461,85 @@ export async function POST(request: NextRequest) {
         validatedData.idempotencyKey || 
         `pi_${validatedData.packageId}_${validatedData.userEmail}_${Date.now()}`;
 
+      // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
+      // Store in metadata so webhook can use it directly (more reliable than lookup)
+      // ✅ FIX: Extract anonymousId from request to find assignments created before user logged in
+      const anonymousId = AnonymousIdService.extractAnonymousId(request);
+      
+      // ✅ Auto-merge anonymous assignments to userId when user registers/logs in
+      if (registeredUser?._id && anonymousId) {
+        try {
+          const mergeResult = await VariantAssignmentService.mergeAnonymousToUser(anonymousId, registeredUser._id.toString());
+          if (mergeResult.merged > 0) {
+            console.log(`✅ [A/B Testing] Auto-merged ${mergeResult.merged} anonymous assignment(s) to user ${registeredUser._id}`);
+          }
+        } catch (error) {
+          // Silently fail - merge should not block payment creation
+          console.error("Error auto-merging anonymous assignments:", error);
+        }
+      }
+      
+      let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+      if (registeredUser?._id) {
+        try {
+          const { getUserActiveExperimentAssignment } = await import("@/utils/ab-testing/get-user-experiment-assignment");
+          // ✅ Pass anonymousId to find assignments created before user logged in
+          experimentAssignment = await getUserActiveExperimentAssignment(
+            registeredUser._id.toString(),
+            undefined, // slug
+            anonymousId || undefined // anonymousId from cookies
+          );
+          
+          // ✅ Fallback: Check cookies if database lookup failed
+          if (!experimentAssignment) {
+            // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
+            // RequestCookies doesn't have entries(), so we need to check known experiment IDs
+            try {
+              const activeExperiments = await ExperimentRepository.findAll({
+                status: "active",
+                page: 1,
+                limit: 10,
+              });
+              
+              for (const exp of activeExperiments.experiments) {
+                const experimentId = exp._id instanceof mongoose.Types.ObjectId 
+                  ? exp._id.toString() 
+                  : String(exp._id);
+                const cookieName = `ta_ab_assignment_${experimentId}`;
+                const cookieValue = request.cookies.get(cookieName)?.value;
+                
+                if (cookieValue) {
+                  try {
+                    const assignmentData = JSON.parse(cookieValue);
+                    if (assignmentData.experimentId && assignmentData.variantId) {
+                      experimentAssignment = {
+                        experimentId: assignmentData.experimentId,
+                        variantId: assignmentData.variantId,
+                      };
+                      console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
+                      break;
+                    }
+                  } catch (error) {
+                    // Invalid cookie data, skip
+                    console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
+                  }
+                }
+              }
+            } catch (error) {
+              // Silently fail - cookie fallback should not block payment creation
+              console.warn("Error checking assignment cookies:", error);
+            }
+          }
+          
+          if (experimentAssignment) {
+            console.log(`✅ [A/B Testing] Storing experiment assignment in payment metadata:`, experimentAssignment);
+          }
+        } catch (error) {
+          // Silently fail - experiment tracking should not block payment creation
+          console.error("Error getting experiment assignment for payment metadata:", error);
+        }
+      }
+
       // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
       paymentIntent = await stripe.paymentIntents.create(
         {
@@ -503,6 +586,11 @@ export async function POST(request: NextRequest) {
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
           ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
           ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+          // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
+          ...(experimentAssignment && {
+            experimentId: experimentAssignment.experimentId,
+            variantId: experimentAssignment.variantId,
+          }),
           // Store request context for Facebook CAPI (webhook will extract and use)
           ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
           ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
