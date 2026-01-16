@@ -288,15 +288,30 @@ export async function POST(request: NextRequest) {
             // #region agent log
             const errorMessage = verifyError instanceof Error ? verifyError.message : String(verifyError);
             const errorCode = verifyError && typeof verifyError === "object" && "code" in verifyError ? String(verifyError.code) : undefined;
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:267',message:'Payment method verification FAILED',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,errorMessage,errorCode,errorType:typeof verifyError},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+            const errorType = typeof verifyError;
+            const declineCode = verifyError && typeof verifyError === "object" && "decline_code" in verifyError ? String(verifyError.decline_code) : undefined;
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:287',message:'Payment method verification FAILED',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,errorMessage,errorCode,declineCode,errorType,errorStringified:JSON.stringify(verifyError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
             // #endregion
             
             console.error(`❌ Failed to verify/attach payment method ${defaultPaymentMethod}:`, verifyError);
+            console.error("❌ Payment method verification error details (VERCEL LOGS):", {
+              paymentMethodId: defaultPaymentMethod,
+              customerId: customer.id,
+              subscriptionId: subscription.id,
+              errorCode,
+              declineCode,
+              errorMessage,
+              fullError: JSON.stringify(verifyError),
+            });
+            
+            // ✅ CRITICAL FIX: Include actual Stripe error details in response
             return NextResponse.json(
               {
                 success: false,
                 error: "Payment method verification failed",
-                details: "The payment method could not be verified or attached to your account.",
+                details: errorMessage || "The payment method could not be verified or attached to your account.",
+                code: errorCode,
+                decline_code: declineCode,
                 suggestion: "Please try again with a different payment method or contact support if the issue persists.",
               },
               { status: 400 }
@@ -325,7 +340,8 @@ export async function POST(request: NextRequest) {
             const errorMessage = payError instanceof Error ? payError.message : String(payError);
             const errorCode = payError && typeof payError === "object" && "code" in payError ? String(payError.code) : undefined;
             const errorType = payError && typeof payError === "object" && "type" in payError ? String(payError.type) : undefined;
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:295',message:'Invoice payment FAILED',data:{invoiceId:latestInvoice?.id,paymentMethodId:defaultPaymentMethod,customerId:customer.id,subscriptionId:subscription.id,errorMessage,errorCode,errorType,errorStringified:JSON.stringify(payError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+            const declineCode = payError && typeof payError === "object" && "decline_code" in payError ? String(payError.decline_code) : undefined;
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:295',message:'Invoice payment FAILED',data:{invoiceId:latestInvoice?.id,paymentMethodId:defaultPaymentMethod,customerId:customer.id,subscriptionId:subscription.id,errorMessage,errorCode,errorType,declineCode,errorStringified:JSON.stringify(payError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
             // #endregion
             
             console.error("❌ Failed to pay invoice:", payError);
@@ -336,10 +352,24 @@ export async function POST(request: NextRequest) {
               subscriptionId: subscription.id,
               errorType,
               errorCode,
+              declineCode,
               errorMessage,
               fullError: JSON.stringify(payError),
             });
-            throw payError;
+            
+            // ✅ CRITICAL FIX: Return properly formatted error response instead of throwing
+            // This ensures frontend can extract the actual Stripe error
+            return NextResponse.json(
+              {
+                success: false,
+                error: "Payment failed",
+                details: errorMessage || "Unable to process payment",
+                code: errorCode,
+                decline_code: declineCode,
+                type: errorType,
+              },
+              { status: 400 }
+            );
           }
 
           // console.log(`💳 Paid invoice: ${paidInvoice.id}, status: ${paidInvoice.status}`);

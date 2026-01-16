@@ -3247,24 +3247,34 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         // #endregion
         
         if (apiError.response?.data) {
-          // Try error field first
-          if (apiError.response.data.error) {
+          // ✅ CRITICAL: Log full response data structure for debugging BEFORE extraction
+          console.error("🔍 API Error Response Structure:", JSON.stringify(apiError.response.data, null, 2));
+          
+          // ✅ ENHANCED: Try multiple extraction strategies in order of priority
+          // Priority 1: details field (most specific, often contains full error message)
+          if (apiError.response.data.details) {
+            errorMessage = apiError.response.data.details;
+            errorCode = apiError.response.data.code;
+            declineCode = apiError.response.data.decline_code;
+          }
+          // Priority 2: error field (standard API error format)
+          else if (apiError.response.data.error) {
             errorMessage = apiError.response.data.error;
             errorCode = apiError.response.data.code;
             declineCode = apiError.response.data.decline_code;
-            if (apiError.response.data.details) {
-              errorMessage += `: ${apiError.response.data.details}`;
-            }
-          } 
-          // Fallback to message field if error field doesn't exist
+          }
+          // Priority 3: message field (fallback)
           else if (apiError.response.data.message) {
             errorMessage = apiError.response.data.message;
             errorCode = apiError.response.data.code;
             declineCode = apiError.response.data.decline_code;
           }
           
-          // ✅ CRITICAL: Log full response data structure for debugging
-          console.error("🔍 API Error Response Structure:", JSON.stringify(apiError.response.data, null, 2));
+          // ✅ ENHANCED: If we have both details and error, combine them intelligently
+          if (apiError.response.data.error && apiError.response.data.details && apiError.response.data.details !== apiError.response.data.error) {
+            // Details is usually more specific, use it as primary with error as context
+            errorMessage = `${apiError.response.data.details} (${apiError.response.data.error})`;
+          }
         }
       } else if (error && typeof error === "object" && "message" in error) {
         const err = error as { message: string; code?: string; decline_code?: string; type?: string };

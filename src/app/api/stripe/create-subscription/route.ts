@@ -174,6 +174,8 @@ export async function POST(request: NextRequest) {
       } catch (attachError: unknown) {
         // Check if error is due to payment method being "consumed" (used without attachment)
         const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+        const errorCode = attachError && typeof attachError === "object" && "code" in attachError ? String(attachError.code) : undefined;
+        
         if (
           errorMessage.includes("previously used without being attached") ||
           errorMessage.includes("may not be used again")
@@ -181,8 +183,24 @@ export async function POST(request: NextRequest) {
           console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused, will collect fresh payment method");
           canUsePaymentMethod = false;
         } else {
+          // ✅ CRITICAL FIX: Return error instead of continuing if attachment fails
+          // Payment method attachment is critical - subscription should not be created without it
           console.error("❌ Failed to attach payment method to customer:", attachError);
-          // Continue - payment method might already be attached or error is non-critical
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:184',message:'Payment method attachment failed for existing customer - RETURNING ERROR',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,errorMessage,errorCode,errorStringified:JSON.stringify(attachError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment method setup failed",
+              details: errorMessage || "Unable to attach payment method to customer",
+              code: errorCode,
+              suggestion: "Please try again or use a different payment method.",
+            },
+            { status: 400 }
+          );
         }
       }
     } else {
@@ -437,7 +455,8 @@ export async function POST(request: NextRequest) {
 
       // #region agent log
       const latestInvoiceId = subscription.latest_invoice ? (typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice.id) : null;
-      const paymentIntentId = subscription.latest_invoice && typeof subscription.latest_invoice !== "string" && (subscription.latest_invoice as any).payment_intent ? (typeof (subscription.latest_invoice as any).payment_intent === "string" ? (subscription.latest_invoice as any).payment_intent : (subscription.latest_invoice as any).payment_intent.id) : null;
+      const latestInvoiceWithPaymentIntent = subscription.latest_invoice && typeof subscription.latest_invoice !== "string" ? (subscription.latest_invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent }) : null;
+      const paymentIntentId = latestInvoiceWithPaymentIntent?.payment_intent ? (typeof latestInvoiceWithPaymentIntent.payment_intent === "string" ? latestInvoiceWithPaymentIntent.payment_intent : latestInvoiceWithPaymentIntent.payment_intent.id) : null;
       fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:400',message:'Subscription created successfully',data:{subscriptionId:subscription.id,subscriptionStatus:subscription.status,latestInvoiceId,paymentIntentId,hasPaymentIntent:!!paymentIntentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
       // #endregion
 
@@ -924,6 +943,22 @@ export async function POST(request: NextRequest) {
         fullError: JSON.stringify(error),
       });
       
+      // ✅ CRITICAL FIX: Check for account-level errors that would affect all payments
+      const accountLevelErrors = ['account_invalid', 'api_key_expired', 'rate_limit', 'invalid_api_key'];
+      if (stripeError.code && accountLevelErrors.includes(stripeError.code)) {
+        console.error("❌ CRITICAL: Account-level Stripe error detected - this would affect ALL payments:", stripeError.code);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Payment system error",
+            details: "There is a system issue preventing payment processing. Please contact support.",
+            code: stripeError.code,
+            type: stripeError.type,
+          },
+          { status: 500 }
+        );
+      }
+      
       // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log Stripe payment failures
       // Use stored request body and context for error logging
       const paymentContext = {
@@ -941,12 +976,14 @@ export async function POST(request: NextRequest) {
         console.warn("Failed to auto-log payment error:", logError);
       });
       
+      // ✅ CRITICAL FIX: Ensure consistent error response format
       return NextResponse.json(
         {
           success: false,
           error: "Payment processing error",
           details: stripeError.message || "Stripe API error",
           code: stripeError.code,
+          type: stripeError.type,
         },
         { status: 400 }
       );
