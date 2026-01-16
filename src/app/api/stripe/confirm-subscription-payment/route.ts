@@ -211,6 +211,10 @@ export async function POST(request: NextRequest) {
 
           // ✅ ENHANCED: If still no payment method found, provide detailed error message
           if (!defaultPaymentMethod) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:213',message:'No payment method found after all fallback strategies',data:{customerId:customer.id,hasSavedPaymentMethods:!!(user?.savedPaymentMethods && user.savedPaymentMethods.length > 0),subscriptionId:subscription.id,subscriptionStatus:subscription.status,invoiceId:latestInvoice?.id,userId:user?._id?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+            // #endregion
+            
             console.error("❌ No payment method found for customer after all fallback strategies", {
               customerId: customer.id,
               hasSavedPaymentMethods: !!(user?.savedPaymentMethods && user.savedPaymentMethods.length > 0),
@@ -246,11 +250,23 @@ export async function POST(request: NextRequest) {
 
           // ✅ ENHANCED: Verify payment method is attached before using it
           try {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:248',message:'Verifying payment method attachment',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,paymentMethodSource,subscriptionId:subscription.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+            // #endregion
+            
             const pm = await stripe.paymentMethods.retrieve(defaultPaymentMethod);
             const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
             
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:252',message:'Payment method retrieved - attachment check',data:{paymentMethodId:defaultPaymentMethod,pmCustomerId,expectedCustomerId:customer.id,isAttached:pmCustomerId===customer.id,paymentMethodType:pm.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+            // #endregion
+            
             // ✅ ENHANCED: Automatic recovery - attach if not already attached
             if (!pmCustomerId || pmCustomerId !== customer.id) {
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:254',message:'Attaching payment method to customer',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,currentPmCustomerId:pmCustomerId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+              // #endregion
+              
               await stripe.paymentMethods.attach(defaultPaymentMethod, {
                 customer: customer.id,
               });
@@ -263,8 +279,18 @@ export async function POST(request: NextRequest) {
                 },
               });
               console.log(`✅ Set payment method ${defaultPaymentMethod} as default for customer ${customer.id}`);
+              
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:265',message:'Payment method attached and set as default',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+              // #endregion
             }
           } catch (verifyError) {
+            // #region agent log
+            const errorMessage = verifyError instanceof Error ? verifyError.message : String(verifyError);
+            const errorCode = verifyError && typeof verifyError === "object" && "code" in verifyError ? String(verifyError.code) : undefined;
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:267',message:'Payment method verification FAILED',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,errorMessage,errorCode,errorType:typeof verifyError},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+            // #endregion
+            
             console.error(`❌ Failed to verify/attach payment method ${defaultPaymentMethod}:`, verifyError);
             return NextResponse.json(
               {
@@ -279,10 +305,42 @@ export async function POST(request: NextRequest) {
 
           // console.log(`💳 Using default payment method: ${defaultPaymentMethod}`);
 
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:283',message:'BEFORE paying invoice',data:{invoiceId:latestInvoice?.id,paymentMethodId:defaultPaymentMethod,customerId:customer.id,subscriptionId:subscription.id,subscriptionStatus:subscription.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+          // #endregion
+          
           // Pay the invoice directly - this will create a PaymentIntent and trigger webhook
-          const paidInvoice = await stripe.invoices.pay(latestInvoice?.id || "", {
-            payment_method: defaultPaymentMethod,
-          });
+          let paidInvoice;
+          try {
+            paidInvoice = await stripe.invoices.pay(latestInvoice?.id || "", {
+              payment_method: defaultPaymentMethod,
+            });
+            
+            // #region agent log
+            const paidInvoiceWithPaymentIntent = paidInvoice as { payment_intent?: string | { id: string } };
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:290',message:'Invoice paid successfully',data:{invoiceId:paidInvoice.id,invoiceStatus:paidInvoice.status,hasPaymentIntent:!!paidInvoiceWithPaymentIntent.payment_intent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+          } catch (payError) {
+            // #region agent log
+            const errorMessage = payError instanceof Error ? payError.message : String(payError);
+            const errorCode = payError && typeof payError === "object" && "code" in payError ? String(payError.code) : undefined;
+            const errorType = payError && typeof payError === "object" && "type" in payError ? String(payError.type) : undefined;
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:295',message:'Invoice payment FAILED',data:{invoiceId:latestInvoice?.id,paymentMethodId:defaultPaymentMethod,customerId:customer.id,subscriptionId:subscription.id,errorMessage,errorCode,errorType,errorStringified:JSON.stringify(payError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+            
+            console.error("❌ Failed to pay invoice:", payError);
+            console.error("❌ Invoice payment error details (VERCEL LOGS):", {
+              invoiceId: latestInvoice?.id,
+              paymentMethodId: defaultPaymentMethod,
+              customerId: customer.id,
+              subscriptionId: subscription.id,
+              errorType,
+              errorCode,
+              errorMessage,
+              fullError: JSON.stringify(payError),
+            });
+            throw payError;
+          }
 
           // console.log(`💳 Paid invoice: ${paidInvoice.id}, status: ${paidInvoice.status}`);
 

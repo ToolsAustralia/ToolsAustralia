@@ -2471,6 +2471,10 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         ? `${failureCode}:${declineCode}` 
         : failureCode || declineCode || "";
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhook.ts:2475',message:'Invoice payment failed - error details extracted',data:{invoiceId:invoice.id,subscriptionId,paymentIntentId,isInitialPayment,isRenewal,failureReason,failureCode,declineCode,failureMessage,packageId,packageName,amount,userId:user._id.toString(),userEmail:user.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+      
       // Log extracted error details for debugging
       webhookLog("info", `Extracted error details - failureReason: ${failureReason}, failureCode: ${failureCode || 'none'}, declineCode: ${declineCode || 'none'}, failureMessage: ${failureMessage || 'none'}`);
 

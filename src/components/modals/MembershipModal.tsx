@@ -2557,6 +2557,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             await handlePaymentSuccess(confirmResult.data);
             return;
           } catch (confirmError) {
+            // #region agent log
+            const errorMessage = confirmError instanceof Error ? confirmError.message : String(confirmError);
+            const errorCode = confirmError && typeof confirmError === "object" && "code" in confirmError ? String(confirmError.code) : undefined;
+            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:2559',message:'Subscription payment confirmation FAILED',data:{subscriptionId,errorMessage,errorCode,packageId,packageName:activePlan.name,userId:userData?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
+            // #endregion
+            
             console.error("? Subscription payment confirmation failed:", confirmError);
             throw confirmError;
           }
@@ -3174,11 +3180,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       // Hide loading screen immediately
       hideLoading();
 
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3177',message:'Error caught in handleSubmit catch block',data:{errorType:typeof error,hasResponse:error && typeof error === "object" && "response" in error,packageId,packageName:activePlan.name,userId:userData?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+      // #endregion
+      
       // Extract detailed error message from API response
+      // ✅ CRITICAL: Default to generic message, but we'll extract actual error below
       let errorMessage = "An unexpected error occurred";
       const errorTitle = isAuthenticated ? "Purchase Failed" : "Account Creation Failed";
       let errorCode: string | undefined;
       let declineCode: string | undefined;
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3188',message:'STARTING error extraction',data:{errorType:typeof error,hasResponse:error && typeof error === "object" && "response" in error,errorKeys:error && typeof error === "object" ? Object.keys(error) : [],errorStringified:JSON.stringify(error).substring(0,500),packageId,packageName:activePlan.name,userId:userData?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+      // #endregion
+      
+      // ✅ CRITICAL FIX: Enhanced error extraction to catch ALL possible error formats
+      // This ensures we capture the actual Stripe error even if it's deeply nested
 
       // Helper function to extract Stripe error codes
       const extractStripeErrorCode = (err: unknown): string | undefined => {
@@ -3220,23 +3238,72 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         return undefined;
       };
 
+      // ✅ ENHANCED: Try multiple error extraction strategies in order of specificity
       if (error && typeof error === "object" && "response" in error) {
-        const apiError = error as { response?: { data?: { error?: string; details?: string; code?: string; decline_code?: string } } };
-        if (apiError.response?.data?.error) {
-          errorMessage = apiError.response.data.error;
-          errorCode = apiError.response.data.code;
-          declineCode = apiError.response.data.decline_code;
-          if (apiError.response.data.details) {
-            errorMessage += `: ${apiError.response.data.details}`;
+        const apiError = error as { response?: { data?: { error?: string; details?: string; code?: string; decline_code?: string; message?: string }; status?: number } };
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3225',message:'Extracting error from API response',data:{hasResponseData:!!apiError.response?.data,responseDataKeys:apiError.response?.data ? Object.keys(apiError.response.data) : [],responseStatus:apiError.response?.status,packageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+        // #endregion
+        
+        if (apiError.response?.data) {
+          // Try error field first
+          if (apiError.response.data.error) {
+            errorMessage = apiError.response.data.error;
+            errorCode = apiError.response.data.code;
+            declineCode = apiError.response.data.decline_code;
+            if (apiError.response.data.details) {
+              errorMessage += `: ${apiError.response.data.details}`;
+            }
+          } 
+          // Fallback to message field if error field doesn't exist
+          else if (apiError.response.data.message) {
+            errorMessage = apiError.response.data.message;
+            errorCode = apiError.response.data.code;
+            declineCode = apiError.response.data.decline_code;
           }
+          
+          // ✅ CRITICAL: Log full response data structure for debugging
+          console.error("🔍 API Error Response Structure:", JSON.stringify(apiError.response.data, null, 2));
         }
       } else if (error && typeof error === "object" && "message" in error) {
-        const err = error as { message: string; code?: string; decline_code?: string };
+        const err = error as { message: string; code?: string; decline_code?: string; type?: string };
         errorMessage = err.message;
         errorCode = err.code || extractStripeErrorCode(error); // Check for code directly on error object
         declineCode = err.decline_code || extractStripeDeclineCode(error);
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3243',message:'Extracted error from error.message',data:{errorMessage,errorCode,declineCode,errorType:err.type,packageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+        // #endregion
+        
+        // ✅ CRITICAL: Log full error object for debugging
+        console.error("🔍 Error Object Structure:", JSON.stringify(err, null, 2));
       } else if (typeof error === "string") {
         errorMessage = error;
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3250',message:'Error is a string',data:{errorMessage,packageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+        // #endregion
+      } else {
+        // ✅ CRITICAL: If we can't extract error, log the full error object
+        console.error("❌ ERROR EXTRACTION FAILED - Full error object:", error);
+        console.error("❌ Error type:", typeof error);
+        console.error("❌ Error stringified:", JSON.stringify(error, null, 2));
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3255',message:'ERROR EXTRACTION FAILED - could not parse error',data:{errorType:typeof error,errorStringified:JSON.stringify(error).substring(0,1000),packageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+        // #endregion
+        
+        // Try one more time to extract any message
+        try {
+          const errorStr = JSON.stringify(error);
+          if (errorStr && errorStr !== "{}") {
+            errorMessage = `Error details: ${errorStr.substring(0, 200)}`;
+          }
+        } catch (e) {
+          // Give up - use default message
+          errorMessage = "A processing error occurred. Please check Vercel logs for details.";
+        }
       }
 
       // Extract error codes if not already extracted
@@ -3245,6 +3312,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       }
       if (!declineCode) {
         declineCode = extractStripeDeclineCode(error);
+      }
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3317',message:'After error code extraction',data:{errorMessage,errorCode,declineCode,packageId,isGenericMessage:errorMessage.includes("unexpected") || errorMessage.includes("processing error")},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+      // #endregion
+      
+      // ✅ CRITICAL: If we still have a generic message, log warning for investigation
+      if (errorMessage === "An unexpected error occurred" || errorMessage.includes("processing error occurred")) {
+        console.error("⚠️ WARNING: Generic error message detected! Original error:", error);
+        console.error("⚠️ This suggests error extraction failed. Check logs above for actual error details.");
+      }
+      
+      // ✅ CRITICAL: If we still have a generic message, log warning for investigation
+      if (errorMessage === "An unexpected error occurred" || errorMessage.includes("processing error occurred")) {
+        console.error("⚠️ WARNING: Generic error message detected! Original error:", error);
+        console.error("⚠️ This suggests error extraction failed. Check logs above for actual error details.");
       }
 
       // Debug logging for error handling
@@ -3284,6 +3367,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           errorCode === "card_declined" ||
           errorCode === "insufficient_funds";
         
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3279',message:'Payment failure detected - processing error message',data:{errorMessage,errorCode,declineCode,isPaymentFailure,packageId,packageName:activePlan.name,userId:userData?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+        // #endregion
+        
         let finalErrorMessage = errorMessage;
         let finalErrorTitle = errorTitle;
         
@@ -3301,6 +3388,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           finalErrorTitle = "Payment Processing Error";
           finalErrorMessage = "The payment attempt was interrupted. Please wait 30 seconds before trying again to allow any pending transactions to clear. Do not click the payment button multiple times, as this can create multiple authorization holds.";
         }
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:3303',message:'Final error message determined',data:{finalErrorTitle,finalErrorMessage,originalErrorMessage:errorMessage,packageId,packageName:activePlan.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+        // #endregion
         
         // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log critical payment failures
         // This ensures all payment errors are tracked, even if user doesn't click "Report Problem"

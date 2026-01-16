@@ -268,19 +268,39 @@ export async function POST(request: NextRequest) {
     // This prevents saving payment methods when payments fail due to insufficient funds
     if (canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
       try {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:271',message:'Payment method attachment - BEFORE retrieve',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,canUsePaymentMethod},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        
         // ✅ ENHANCED: Verify payment method exists and is properly attached
         const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
         const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer?.id;
         
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:276',message:'Payment method retrieved - attachment check',data:{paymentMethodId:finalPaymentMethodId,pmCustomerId,expectedCustomerId:customer.id,isAttached:pmCustomerId===customer.id,paymentMethodType:paymentMethod.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        
         // ✅ ENHANCED: Ensure payment method is attached to customer (idempotent check)
         if (!pmCustomerId || pmCustomerId !== customer.id) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:280',message:'Attaching payment method to customer',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,currentPmCustomerId:pmCustomerId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          
           await stripe.paymentMethods.attach(finalPaymentMethodId, {
             customer: customer.id,
           });
           console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${customer.id} before subscription creation`);
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:285',message:'Payment method attached successfully',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
         }
         
         // ✅ ENHANCED: Set as default payment method and verify it was set
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:288',message:'Setting default payment method',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        
         await stripe.customers.update(customer.id, {
           invoice_settings: {
             default_payment_method: finalPaymentMethodId,
@@ -292,12 +312,22 @@ export async function POST(request: NextRequest) {
         const defaultPm = (updatedCustomer as { invoice_settings?: { default_payment_method?: string } })
           .invoice_settings?.default_payment_method;
         
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:297',message:'Default payment method verification',data:{paymentMethodId:finalPaymentMethodId,defaultPm,isCorrect:defaultPm===finalPaymentMethodId,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        
         if (defaultPm !== finalPaymentMethodId) {
           console.warn(`⚠️ Default payment method may not have been set correctly. Expected: ${finalPaymentMethodId}, Got: ${defaultPm}`);
         } else {
           console.log(`✅ Verified default payment method ${finalPaymentMethodId} is set for customer ${customer.id}`);
         }
       } catch (pmError) {
+        // #region agent log
+        const errorMessage = pmError instanceof Error ? pmError.message : String(pmError);
+        const errorCode = pmError && typeof pmError === "object" && "code" in pmError ? String(pmError.code) : undefined;
+        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:301',message:'Payment method attachment FAILED',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,errorMessage,errorCode,errorType:typeof pmError,errorStringified:JSON.stringify(pmError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        
         console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
         // ✅ ENHANCED: Return clear error before subscription creation if payment method can't be attached
         return NextResponse.json(
@@ -311,6 +341,10 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (!canUsePaymentMethod) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:313',message:'Payment method cannot be reused',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,canUsePaymentMethod},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      
       // ✅ ENHANCED: Return clear error if payment method cannot be used
       return NextResponse.json(
         {
@@ -355,6 +389,11 @@ export async function POST(request: NextRequest) {
     // We include default_payment_method so Stripe creates PaymentIntent immediately
     // The PaymentIntent will be confirmed via PaymentElement (not auto-paid)
     // console.log("📋 Creating Stripe subscription...");
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:358',message:'BEFORE subscription creation',data:{customerId:customer.id,stripePriceId,hasDefaultPaymentMethod:!!(canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"),defaultPaymentMethodId:canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method" ? finalPaymentMethodId : null,packageId:validatedData.packageId,userEmail:validatedData.userEmail},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
     let subscription;
     try {
       subscription = await stripe.subscriptions.create(
@@ -396,9 +435,22 @@ export async function POST(request: NextRequest) {
         }
       );
 
+      // #region agent log
+      const latestInvoiceId = subscription.latest_invoice ? (typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice.id) : null;
+      const paymentIntentId = subscription.latest_invoice && typeof subscription.latest_invoice !== "string" && (subscription.latest_invoice as any).payment_intent ? (typeof (subscription.latest_invoice as any).payment_intent === "string" ? (subscription.latest_invoice as any).payment_intent : (subscription.latest_invoice as any).payment_intent.id) : null;
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:400',message:'Subscription created successfully',data:{subscriptionId:subscription.id,subscriptionStatus:subscription.status,latestInvoiceId,paymentIntentId,hasPaymentIntent:!!paymentIntentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+
       // console.log(`📋 Created subscription: ${subscription.id}`);
       // console.log(`📊 Subscription status: ${subscription.status}`);
     } catch (stripeError) {
+      // #region agent log
+      const errorMessage = stripeError instanceof Error ? stripeError.message : String(stripeError);
+      const errorCode = stripeError && typeof stripeError === "object" && "code" in stripeError ? String(stripeError.code) : undefined;
+      const errorType = stripeError && typeof stripeError === "object" && "type" in stripeError ? String(stripeError.type) : undefined;
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:402',message:'Subscription creation FAILED',data:{customerId:customer.id,stripePriceId,errorMessage,errorCode,errorType,errorStringified:JSON.stringify(stripeError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
       console.error("❌ Stripe subscription creation failed:", stripeError);
       throw new Error(
         `Failed to create Stripe subscription: ${stripeError instanceof Error ? stripeError.message : "Unknown error"}`
@@ -855,8 +907,22 @@ export async function POST(request: NextRequest) {
 
     // Handle Stripe-specific errors
     if (error && typeof error === "object" && "type" in error) {
-      console.error("❌ Stripe error:", error);
+      // #region agent log
       const stripeError = error as StripeError;
+      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:857',message:'Stripe error caught in catch block',data:{errorType:stripeError.type,errorCode:stripeError.code,errorMessage:stripeError.message,packageId:typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,userEmail:typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,userId:user?._id?.toString(),customerId:customer?.id,errorStringified:JSON.stringify(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      
+      console.error("❌ Stripe error:", error);
+      console.error("❌ Stripe error details (VERCEL LOGS):", {
+        type: stripeError.type,
+        code: stripeError.code,
+        message: stripeError.message,
+        packageId: typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,
+        userEmail: typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,
+        customerId: customer?.id,
+        userId: user?._id?.toString(),
+        fullError: JSON.stringify(error),
+      });
       
       // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log Stripe payment failures
       // Use stored request body and context for error logging
@@ -886,6 +952,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // #region agent log
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? (error.stack || "No stack trace") : "No stack trace";
+    fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:889',message:'General error in catch block',data:{errorMessage,errorType:typeof error,packageId:typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,userEmail:typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,userId:user?._id?.toString(),customerId:customer?.id,errorStack:errorStack.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+    
     console.error("❌ Error creating subscription:", error);
     console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
     console.error("❌ Error type:", typeof error);
