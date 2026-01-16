@@ -117,7 +117,16 @@ export async function syncUserProfileToKlaviyo(user: IUser, brandInterestFromSig
  */
 export function syncUserProfileToKlaviyoBackground(user: IUser, brandInterestFromSignup?: string | null): void {
   syncUserProfileToKlaviyo(user, brandInterestFromSignup).catch((error) => {
-    console.error(`❌ Background Klaviyo profile sync failed for ${user.email}:`, error);
+    // ✅ ENHANCED: Log timeout errors with more context but don't block
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isTimeout = errorMessage.toLowerCase().includes("timeout");
+    
+    if (isTimeout) {
+      console.warn(`⚠️ Klaviyo profile sync timeout for ${user.email} (non-blocking):`, errorMessage);
+      // Don't log as error - timeouts are expected and non-critical for background syncs
+    } else {
+      console.error(`❌ Background Klaviyo profile sync failed for ${user.email}:`, errorMessage);
+    }
   });
 }
 

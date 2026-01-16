@@ -240,9 +240,11 @@ class KlaviyoClient {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // ✅ FIX: Use default retries (5) instead of 1 for better resilience
+        // Timeout errors should be retried, not failed immediately
         const response = await this.retryRequest(
           () => this.makeRequest(`/profiles/${profileId}/`, "PATCH", updatePayload),
-          1, // Don't retry 5xx errors here - we handle 409 specifically
+          this.MAX_RETRIES, // ✅ FIX: Use default retries instead of 1
           this.BASE_RETRY_DELAY_MS
         );
 
@@ -382,7 +384,18 @@ class KlaviyoClient {
 
         // If we've exhausted retries, throw the error
         if (attempt >= maxRetries) {
-          console.error(`❌ Klaviyo request failed after ${maxRetries} attempts:`, lastError.message);
+          // ✅ ENHANCED: Log detailed error information for debugging
+          const errorDetails = {
+            attempts: maxRetries,
+            errorMessage: lastError.message,
+            errorType: lastError.constructor.name,
+            isTimeout: lastError.message.toLowerCase().includes("timeout"),
+            isNetworkError: lastError.message.toLowerCase().includes("network"),
+            isGatewayError: errorMessage.includes("502") || errorMessage.includes("504"),
+            isRateLimit: errorMessage.includes("429") || errorMessage.includes("throttled"),
+            timestamp: new Date().toISOString(),
+          };
+          console.error(`❌ Klaviyo request failed after ${maxRetries} attempts:`, lastError.message, errorDetails);
           throw lastError;
         }
 
@@ -490,13 +503,20 @@ class KlaviyoClient {
     try {
       // ✅ ENHANCED: Idempotency check - query profile existence before creating to prevent unnecessary 409 errors
       // This reduces race conditions and unnecessary API calls
+      // ✅ FIX: Use timeout wrapper to prevent idempotency check from blocking
       let existingProfileId: string | null = null;
       try {
-        const searchResponse = await this.retryRequest(
-          () => this.makeRequest(`/profiles/?filter=equals(email,"${profile.email}")`, "GET"),
-          2, // Fewer retries for idempotency check (non-critical)
-          1000 // Shorter delay for idempotency check
-        );
+        // ✅ FIX: Add timeout wrapper for idempotency check to prevent it from hanging
+        const searchResponse = await Promise.race([
+          this.retryRequest(
+            () => this.makeRequest(`/profiles/?filter=equals(email,"${profile.email}")`, "GET"),
+            2, // Fewer retries for idempotency check (non-critical)
+            1000 // Shorter delay for idempotency check
+          ),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error("Idempotency check timeout")), 10000) // 10 second timeout for idempotency check
+          ),
+        ]);
         
         if (searchResponse.ok) {
           const searchData = await searchResponse.json();
@@ -509,10 +529,16 @@ class KlaviyoClient {
           }
         }
       } catch (searchError) {
-        // Non-critical - continue with create/update flow if search fails
-        if (this.mode === "development") {
+        // ✅ ENHANCED: Log timeout errors but continue (non-critical)
+        const errorMessage = searchError instanceof Error ? searchError.message : String(searchError);
+        const isTimeout = errorMessage.toLowerCase().includes("timeout");
+        
+        if (isTimeout) {
+          console.warn(`⚠️ Klaviyo idempotency check timeout (non-blocking) for ${profile.email}, continuing with create/update`);
+        } else if (this.mode === "development") {
           // console.log("⚠️ Idempotency check failed, continuing with create/update:", searchError);
         }
+        // Non-critical - continue with create/update flow if search fails
       }
 
       // Build attributes object with email consent
@@ -566,6 +592,7 @@ class KlaviyoClient {
       // ✅ ENHANCED: If profile exists (from idempotency check), skip POST and go directly to PATCH
       if (existingProfileId) {
         // Profile exists - update it directly using PATCH
+        // ✅ FIX: Use default retries for PATCH operations (timeout errors should be retried)
         const updateAttributes: Record<string, unknown> = {
           first_name: profile.first_name,
           last_name: profile.last_name,
@@ -1192,19 +1219,31 @@ class KlaviyoClient {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const eventName = event.event;
       const userEmail = event.customer_properties?.email || "unknown";
+      const isTimeout = errorMessage.toLowerCase().includes("timeout");
 
-      console.error(`📊 Klaviyo Background Event Failed:`, {
-        event: eventName,
-        user: userEmail,
-        error: errorMessage,
-        mode: this.mode,
-        timestamp: new Date().toISOString(),
-      });
+      // ✅ ENHANCED: Log timeout errors as warnings (non-critical), other errors as errors
+      if (isTimeout) {
+        console.warn(`⚠️ Klaviyo Background Event Timeout (non-blocking):`, {
+          event: eventName,
+          user: userEmail,
+          error: errorMessage,
+          mode: this.mode,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        console.error(`📊 Klaviyo Background Event Failed:`, {
+          event: eventName,
+          user: userEmail,
+          error: errorMessage,
+          mode: this.mode,
+          timestamp: new Date().toISOString(),
+        });
 
-      // In production, you might want to send this to a monitoring service
-      if (this.mode === "production") {
-        // TODO: Consider integrating with error monitoring service (Sentry, etc.)
-        console.error("🔴 Production Klaviyo Event Failure - Consider alerting");
+        // In production, you might want to send this to a monitoring service
+        if (this.mode === "production") {
+          // TODO: Consider integrating with error monitoring service (Sentry, etc.)
+          console.error("🔴 Production Klaviyo Event Failure - Consider alerting");
+        }
       }
     });
   }
