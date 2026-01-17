@@ -91,11 +91,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const { data: currentAlternatingMultipliers } = useCurrentAlternatingMultipliers();
 
   // Store alternating default text in state - only updates once per day (AEST)
+  // Always calculate correctly - getAlternatingDefaultText() works on both server and client
   const [alternatingDefault, setAlternatingDefault] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return getAlternatingDefaultText();
-    }
-    return "FIRST 500 PEOPLE"; // Default for SSR
+    return getAlternatingDefaultText();
   });
 
   // Store alternating multiplier in state - only updates once per day (AEST)
