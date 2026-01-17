@@ -10,6 +10,9 @@ import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQuer
 import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
 import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST, getNowInAEST } from "@/utils/common/timezone";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+
+// AEST/AEDT timezone identifier (matches timezone.ts)
+const AEST_TIMEZONE = "Australia/Sydney";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
 import { getAlternatingDefaultText } from "@/utils/promo-banner/default-text-manager";
@@ -128,9 +131,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   }, []);
 
   // Helper function to get current date string in AEST (YYYY-MM-DD format)
+  // Uses formatInTimeZone to ensure we get the correct AEST date, not local timezone
   const getCurrentDateStringAEST = (): string => {
-    const nowAEST = getNowInAEST();
-    return `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
+    const now = new Date();
+    return formatInTimeZone(now, AEST_TIMEZONE, "yyyy-MM-dd");
   };
 
 
@@ -149,10 +153,16 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       }
     };
 
-    // Check immediately on mount
+    // Check immediately on mount and update state
     checkDateChange();
+    
+    // Also force an immediate update on mount to ensure correct text is shown
+    // This handles cases where the page was loaded before date change
+    setAlternatingDefault(getAlternatingDefaultText());
 
-   
+    // Set up interval to check for date changes (every minute is sufficient)
+    // This ensures the text updates at midnight AEST
+    const interval = setInterval(checkDateChange, 60 * 1000); // Check every minute
 
     // Development helper: Expose testing function to window
     if (process.env.NODE_ENV === "development") {
@@ -176,7 +186,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
     // Cleanup on unmount
     return () => {
-    
+      clearInterval(interval);
+      
       // Remove test function in development mode
       if (process.env.NODE_ENV === "development") {
         type WindowWithTest = Window & {
@@ -435,8 +446,17 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // 3. Alternating default texts ("BIGGEST BONUS" / "FIRST 500 PEOPLE")
   const badgeText = useMemo(() => {
     // Priority 0: Variant config override (highest priority)
-    if (variantConfig?.banner?.badgeText) {
-      return variantConfig.banner.badgeText;
+    // Only override if badgeText exists and is not empty/whitespace
+    const variantBadgeText = variantConfig?.banner?.badgeText;
+    if (variantBadgeText && variantBadgeText.trim().length > 0) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("🎯 [PromoBanner] Using variant badgeText:", variantBadgeText);
+      }
+      return variantBadgeText.trim();
+    }
+    
+    if (process.env.NODE_ENV === "development" && variantConfig?.banner) {
+      console.log("⚠️ [PromoBanner] Variant has banner config but badgeText is empty/blank, using default");
     }
 
     // Priority 1: Draw status
