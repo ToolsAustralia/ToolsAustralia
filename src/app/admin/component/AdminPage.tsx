@@ -32,6 +32,9 @@ import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
+import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
+import UserDetailModal from "@/components/admin/UserDetailModal";
+import type { RevenueCategory } from "@/hooks/queries/useAdminQueries";
 import {
   Users,
   DollarSign,
@@ -74,6 +77,10 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(false);
   const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isRevenueDetailModalOpen, setIsRevenueDetailModalOpen] = useState(false);
+  const [selectedRevenueCategory, setSelectedRevenueCategory] = useState<RevenueCategory | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isUserDetailModalOpen, setIsUserDetailModalOpen] = useState(false);
 
   // State for date filter - synced with URL params
   const [dateRange, setDateRange] = useState<DateRange>("today");
@@ -209,6 +216,29 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     error: statsError,
     refetch: refetchStats,
   } = useAdminDashboardStats(dateRange, customStartDate ? customStartDate : undefined, customEndDate ? customEndDate : undefined);
+
+  // Helper function to extract revenue value and counts (handles both number and object formats)
+  const getRevenueData = (
+    breakdownValue: number | { revenue: number; purchaseCount: number; userCount: number } | undefined
+  ) => {
+    if (!breakdownValue) return { revenue: 0, purchaseCount: 0, userCount: 0 };
+    if (typeof breakdownValue === "number") {
+      return { revenue: breakdownValue, purchaseCount: 0, userCount: 0 };
+    }
+    return breakdownValue;
+  };
+
+  // Handler to open revenue detail modal
+  const handleRevenueCardClick = (category: RevenueCategory) => {
+    setSelectedRevenueCategory(category);
+    setIsRevenueDetailModalOpen(true);
+  };
+
+  // Handler to close revenue detail modal
+  const handleCloseRevenueModal = () => {
+    setIsRevenueDetailModalOpen(false);
+    setSelectedRevenueCategory(null);
+  };
 
   // Fetch real recent activities
   const {
@@ -809,10 +839,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           <span className="block">New</span>
                         </span>
                       }
-                      value={`$${dashboardStats.revenue.breakdown.membershipPurchase.toLocaleString()}`}
+                      value={`$${getRevenueData(dashboardStats.revenue.breakdown.membershipPurchase).revenue.toLocaleString()}`}
                       icon={Package}
-                      subtitle="New subscriptions"
                       color="orange"
+                      clickable={true}
+                      onClick={() => handleRevenueCardClick("membership-purchase")}
+                      count={getRevenueData(dashboardStats.revenue.breakdown.membershipPurchase).purchaseCount}
+                      countLabel="subscriptions"
                     />
                     <MetricCard
                       title={
@@ -821,10 +854,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           <span className="block">Renewal</span>
                         </span>
                       }
-                      value={`$${dashboardStats.revenue.breakdown.membershipRenewal.toLocaleString()}`}
+                      value={`$${getRevenueData(dashboardStats.revenue.breakdown.membershipRenewal).revenue.toLocaleString()}`}
                       icon={RefreshCw}
-                      subtitle="Recurring payments"
                       color="yellow"
+                      clickable={true}
+                      onClick={() => handleRevenueCardClick("membership-renewal")}
+                      count={getRevenueData(dashboardStats.revenue.breakdown.membershipRenewal).purchaseCount}
+                      countLabel="renewals"
                     />
                     <MetricCard
                       title={
@@ -833,10 +869,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           <span className="block">First</span>
                         </span>
                       }
-                      value={`$${dashboardStats.revenue.breakdown.oneTimePurchase.toLocaleString()}`}
+                      value={`$${getRevenueData(dashboardStats.revenue.breakdown.oneTimePurchase).revenue.toLocaleString()}`}
                       icon={ShoppingCart}
-                      subtitle="First-time"
                       color="blue"
+                      clickable={true}
+                      onClick={() => handleRevenueCardClick("one-time-purchase")}
+                      count={getRevenueData(dashboardStats.revenue.breakdown.oneTimePurchase).purchaseCount}
+                      countLabel="purchases"
                     />
                     <MetricCard
                       title={
@@ -845,10 +884,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           <span className="block">Additional</span>
                         </span>
                       }
-                      value={`$${dashboardStats.revenue.breakdown.additionalOneTimePurchase.toLocaleString()}`}
+                      value={`$${getRevenueData(dashboardStats.revenue.breakdown.additionalOneTimePurchase).revenue.toLocaleString()}`}
                       icon={ShoppingBag}
-                      subtitle="Repeat"
                       color="indigo"
+                      clickable={true}
+                      onClick={() => handleRevenueCardClick("additional-one-time")}
+                      count={getRevenueData(dashboardStats.revenue.breakdown.additionalOneTimePurchase).purchaseCount}
+                      countLabel="purchases"
                     />
                     <MetricCard
                       title={
@@ -857,17 +899,23 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           <span className="block">Draws</span>
                         </span>
                       }
-                      value={`$${dashboardStats.revenue.breakdown.miniDraw.toLocaleString()}`}
+                      value={`$${getRevenueData(dashboardStats.revenue.breakdown.miniDraw).revenue.toLocaleString()}`}
                       icon={Trophy}
-                      subtitle="Mini draw entries"
                       color="purple"
+                      clickable={true}
+                      onClick={() => handleRevenueCardClick("mini-draw")}
+                      count={getRevenueData(dashboardStats.revenue.breakdown.miniDraw).purchaseCount}
+                      countLabel="purchases"
                     />
                     <MetricCard
                       title="Upsells"
-                      value={`$${dashboardStats.revenue.breakdown.upsell.toLocaleString()}`}
+                      value={`$${getRevenueData(dashboardStats.revenue.breakdown.upsell).revenue.toLocaleString()}`}
                       icon={TrendingUp}
-                      subtitle="Upsell packages"
                       color="pink"
+                      clickable={true}
+                      onClick={() => handleRevenueCardClick("upsell")}
+                      count={getRevenueData(dashboardStats.revenue.breakdown.upsell).purchaseCount}
+                      countLabel="purchases"
                     />
                   </div>
                 </div>
@@ -1084,6 +1132,31 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           </div>
         </div>
       )}
+
+      {/* Revenue Detail Modal */}
+      <RevenueDetailModal
+        isOpen={isRevenueDetailModalOpen}
+        onClose={handleCloseRevenueModal}
+        category={selectedRevenueCategory}
+        dateRange={dateRange}
+        startDate={customStartDate || undefined}
+        endDate={customEndDate || undefined}
+        onUserClick={(userId) => {
+          setSelectedUserId(userId);
+          setIsUserDetailModalOpen(true);
+          handleCloseRevenueModal();
+        }}
+      />
+
+      {/* User Detail Modal */}
+      <UserDetailModal
+        userId={selectedUserId}
+        isOpen={isUserDetailModalOpen}
+        onCloseAction={() => {
+          setIsUserDetailModalOpen(false);
+          setSelectedUserId(null);
+        }}
+      />
     </div>
   );
 }
