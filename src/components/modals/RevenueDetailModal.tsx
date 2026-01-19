@@ -201,13 +201,11 @@ export default function RevenueDetailModal({
     return filtered;
   }, [revenueData?.users, debouncedSearchQuery, packageIdFilter, sortBy, sortOrder]);
 
-  // Calculate pagination for filtered results
+  // Calculate filtered count (for display purposes)
   const filteredCount = filteredAndSortedUsers.length;
-  const itemsPerPage = 50;
-  const totalFilteredPages = Math.ceil(filteredCount / itemsPerPage);
-  const startIndex = (page - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, filteredCount);
-  const paginatedUsers = filteredAndSortedUsers.slice(startIndex, endIndex);
+  
+  // Use all filtered users (no client-side pagination since API handles pagination)
+  const paginatedUsers = filteredAndSortedUsers;
 
   // Check if any filters are active
   const hasActiveFilters = useMemo(() => {
@@ -506,14 +504,14 @@ export default function RevenueDetailModal({
                 </div>
                 <div className="col-span-3">Email</div>
                 <div
-                  className="col-span-1 cursor-pointer hover:text-gray-900 flex items-center gap-1 text-right"
+                  className="col-span-1 cursor-pointer hover:text-gray-900 flex items-center justify-end gap-1"
                   onClick={() => handleSort("count")}
                 >
                   Purchases
                   {sortBy === "count" && (sortOrder === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
                 </div>
                 <div
-                  className="col-span-2 cursor-pointer hover:text-gray-900 flex items-center gap-1 text-right"
+                  className="col-span-2 cursor-pointer hover:text-gray-900 flex items-center justify-end gap-1"
                   onClick={() => handleSort("amount")}
                 >
                   Total
@@ -659,13 +657,23 @@ export default function RevenueDetailModal({
                 })}
               </div>
 
-              {/* Pagination */}
-              {totalFilteredPages > 1 && (
+              {/* Pagination - Show when API returns more than 50 users */}
+              {revenueData && revenueData.pagination.totalCount > 50 && (
                 <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
                   <div className="text-sm text-gray-600">
                     {filteredCount > 0 ? (
                       <>
-                        Showing {startIndex + 1} to {endIndex} of {filteredCount} user{filteredCount !== 1 ? "s" : ""}
+                        Showing {filteredCount} user{filteredCount !== 1 ? "s" : ""} on this page
+                        {hasActiveFilters && revenueData.pagination.totalCount > filteredCount && (
+                          <span className="text-gray-500 ml-1">
+                            (filtered from {revenueData.pagination.totalCount.toLocaleString()} total)
+                          </span>
+                        )}
+                        {!hasActiveFilters && (
+                          <span className="text-gray-500 ml-1">
+                            (of {revenueData.pagination.totalCount.toLocaleString()} total)
+                          </span>
+                        )}
                       </>
                     ) : (
                       "No users found"
@@ -682,11 +690,11 @@ export default function RevenueDetailModal({
                       Previous
                     </Button>
                     <span className="text-sm text-gray-600">
-                      Page {page} of {totalFilteredPages}
+                      Page {revenueData.pagination.currentPage} of {revenueData.pagination.totalPages}
                     </span>
                     <Button
-                      onClick={() => setPage((p) => Math.min(totalFilteredPages, p + 1))}
-                      disabled={page === totalFilteredPages || isLoading}
+                      onClick={() => setPage((p) => Math.min(revenueData.pagination.totalPages, p + 1))}
+                      disabled={page >= revenueData.pagination.totalPages || isLoading}
                       size="sm"
                       variant="outline"
                     >
@@ -696,11 +704,16 @@ export default function RevenueDetailModal({
                   </div>
                 </div>
               )}
-              {/* Show pagination info even when only one page if there are filtered results */}
-              {totalFilteredPages <= 1 && filteredCount > 0 && (
+              {/* Show pagination info when there are filtered results but no API pagination needed */}
+              {revenueData && revenueData.pagination.totalCount <= 50 && filteredCount > 0 && (
                 <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
                   <div className="text-sm text-gray-600">
                     Showing {filteredCount} user{filteredCount !== 1 ? "s" : ""}
+                    {hasActiveFilters && revenueData.pagination.totalCount > filteredCount && (
+                      <span className="text-gray-500 ml-1">
+                        (filtered from {revenueData.pagination.totalCount.toLocaleString()} total)
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
