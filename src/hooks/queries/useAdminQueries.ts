@@ -64,13 +64,13 @@ export interface AdminDashboardStats {
     breakdown: {
       subscriptions: number; // Backward compatibility: membershipPurchase + membershipRenewal
       oneTimePackages: number; // Backward compatibility: oneTimePurchase + additionalOneTimePurchase + miniDraw + upsell
-      // Detailed breakdown
-      membershipPurchase: number;
-      membershipRenewal: number;
-      oneTimePurchase: number;
-      additionalOneTimePurchase: number;
-      miniDraw: number;
-      upsell: number;
+      // Detailed breakdown - supports both number (legacy) and object (new) formats
+      membershipPurchase: number | { revenue: number; purchaseCount: number; userCount: number };
+      membershipRenewal: number | { revenue: number; purchaseCount: number; userCount: number };
+      oneTimePurchase: number | { revenue: number; purchaseCount: number; userCount: number };
+      additionalOneTimePurchase: number | { revenue: number; purchaseCount: number; userCount: number };
+      miniDraw: number | { revenue: number; purchaseCount: number; userCount: number };
+      upsell: number | { revenue: number; purchaseCount: number; userCount: number };
     };
   };
   majorDraw: {
@@ -116,6 +116,56 @@ export interface ProjectedIncomeData {
   activeSubscriptions: number;
   nextMonthStart: string;
   nextMonthEnd: string;
+}
+
+// Types for revenue details
+export type RevenueCategory =
+  | "membership-purchase"
+  | "membership-renewal"
+  | "one-time-purchase"
+  | "additional-one-time"
+  | "mini-draw"
+  | "upsell";
+
+export interface RevenueDetailPurchase {
+  paymentEventId: string;
+  timestamp: string;
+  amount: number;
+  packageId?: string;
+  packageName?: string;
+  billingReason?: string;
+}
+
+export interface RevenueDetailUser {
+  userId: string;
+  userInfo: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    mobile?: string;
+  };
+  purchases: RevenueDetailPurchase[];
+  totalContributed: number;
+  purchaseCount: number;
+}
+
+export interface RevenueDetailResponse {
+  success: boolean;
+  data: {
+    category: RevenueCategory;
+    totalRevenue: number;
+    totalPurchases: number;
+    totalUsers: number;
+    users: RevenueDetailUser[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalCount: number;
+      limit: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  };
 }
 
 export interface AdminDashboardResponse {
@@ -350,6 +400,63 @@ export function useProjectedIncome() {
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch detailed revenue data for a specific category
+ * @param category - Revenue category to fetch details for
+ * @param dateRange - Date range filter
+ * @param startDate - Start date for custom range (ISO string)
+ * @param endDate - End date for custom range (ISO string)
+ * @param page - Page number (default: 1)
+ * @param limit - Items per page (default: 50)
+ */
+export function useRevenueDetails(
+  category: RevenueCategory | null,
+  dateRange: "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw" = "today",
+  startDate?: string,
+  endDate?: string,
+  page: number = 1,
+  limit: number = 50
+) {
+  return useQuery<RevenueDetailResponse["data"]>({
+    queryKey: ["admin", "dashboard", "revenue-details", category, dateRange, startDate, endDate, page, limit],
+    queryFn: async (): Promise<RevenueDetailResponse["data"]> => {
+      if (!category) {
+        throw new Error("Category is required");
+      }
+
+      const params = new URLSearchParams({
+        category,
+        dateRange,
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+
+      if ((dateRange === "custom" || dateRange === "current-draw" || dateRange === "last-draw") && startDate && endDate) {
+        params.append("startDate", startDate);
+        params.append("endDate", endDate);
+      }
+
+      const response = await fetch(`/api/admin/dashboard/revenue-details?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch revenue details: ${response.statusText}`);
+      }
+
+      const result: RevenueDetailResponse = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch revenue details");
+      }
+
+      return result.data;
+    },
+    enabled: !!category, // Only run query if category is provided
+    staleTime: 2 * 60 * 1000, // 2 minutes - revenue details can be slightly stale
+    gcTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
   });
 }

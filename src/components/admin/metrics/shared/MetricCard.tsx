@@ -17,6 +17,10 @@ export interface MetricCardProps {
   loading?: boolean;
   "aria-label"?: string;
   className?: string;
+  onClick?: () => void;
+  count?: number;
+  countLabel?: string;
+  clickable?: boolean;
 }
 
 export const MetricCard = memo<MetricCardProps>(function MetricCard({
@@ -29,6 +33,10 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
   loading = false,
   "aria-label": ariaLabel,
   className = "",
+  onClick,
+  count,
+  countLabel,
+  clickable = false,
 }) {
   if (loading) {
     return (
@@ -78,11 +86,23 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
 
   const titleString = typeof title === "string" ? title : "";
   const displayValue = typeof value === "number" ? value.toLocaleString() : value;
+  const isClickable = clickable || !!onClick;
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-lg border-2 ${colorClasses[normalizedColor]} p-3 sm:p-4 lg:p-6 ${className}`}
+      className={`bg-white rounded-xl shadow-lg border-2 ${colorClasses[normalizedColor]} p-3 sm:p-4 lg:p-6 ${
+        isClickable ? "cursor-pointer transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" : ""
+      } ${className}`}
       aria-label={ariaLabel || `${titleString}: ${displayValue}`}
+      onClick={onClick}
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (isClickable && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
     >
       <div className="flex items-center justify-between mb-2">
         {typeof title === "string" ? (
@@ -110,10 +130,18 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
           </div>
         )}
       </div>
+      {count !== undefined && count !== null && (
+        <div className="text-xs font-medium text-gray-600 mt-1">
+          {count.toLocaleString()} {countLabel || "items"}
+        </div>
+      )}
       {subtitle && (
         <div className="text-xs text-gray-500 mt-1" aria-label={`${titleString} subtitle`}>
           {subtitle}
         </div>
+      )}
+      {isClickable && (
+        <div className="text-xs text-gray-400 mt-2 italic">Click to view details</div>
       )}
     </div>
   );

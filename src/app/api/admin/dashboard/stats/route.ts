@@ -187,14 +187,16 @@ export async function GET(request: NextRequest) {
       .lean()
       .limit(10000); // Safety limit to prevent memory issues
 
-    // Initialize detailed revenue breakdown
+    // Initialize detailed revenue breakdown with counts
     let totalRevenue = 0;
-    let membershipPurchase = 0;
-    let membershipRenewal = 0;
-    let oneTimePurchase = 0;
-    let additionalOneTimePurchase = 0;
-    let miniDraw = 0;
-    let upsell = 0;
+    
+    // Revenue and count tracking for each category
+    const membershipPurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
+    const membershipRenewalData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
+    const oneTimePurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
+    const additionalOneTimePurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
+    const miniDrawData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
+    const upsellData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
 
     // Categorize revenue by package type and context
     // Sort events by timestamp to process them chronologically
@@ -205,19 +207,28 @@ export async function GET(request: NextRequest) {
     for (const event of sortedEvents) {
       const price = event.data?.price || 0;
       totalRevenue += price;
+      const userId = event.userId?.toString() || "";
 
       if (event.packageType === "membership") {
         const billingReason = event.data?.billingReason as string | undefined;
         if (billingReason === "subscription_cycle") {
-          membershipRenewal += price;
+          membershipRenewalData.revenue += price;
+          membershipRenewalData.purchaseCount += 1;
+          if (userId) membershipRenewalData.userIds.add(userId);
         } else {
           // subscription_create or undefined (treat as new purchase)
-          membershipPurchase += price;
+          membershipPurchaseData.revenue += price;
+          membershipPurchaseData.purchaseCount += 1;
+          if (userId) membershipPurchaseData.userIds.add(userId);
         }
       } else if (event.packageType === "mini-draw") {
-        miniDraw += price;
+        miniDrawData.revenue += price;
+        miniDrawData.purchaseCount += 1;
+        if (userId) miniDrawData.userIds.add(userId);
       } else if (event.packageType === "upsell") {
-        upsell += price;
+        upsellData.revenue += price;
+        upsellData.purchaseCount += 1;
+        if (userId) upsellData.userIds.add(userId);
       } else if (event.packageType === "one-time") {
         // Categorize based on packageId:
         // - "One-Time Additional" = packages that start with "additional-" (e.g., "additional-apprentice-pack")
@@ -226,14 +237,20 @@ export async function GET(request: NextRequest) {
         
         if (packageId.startsWith("additional-")) {
           // This is an additional package (member-only packages)
-          additionalOneTimePurchase += price;
+          additionalOneTimePurchaseData.revenue += price;
+          additionalOneTimePurchaseData.purchaseCount += 1;
+          if (userId) additionalOneTimePurchaseData.userIds.add(userId);
         } else if (packageId.endsWith("-pack")) {
           // This is a first-time package (regular one-time packages)
-          oneTimePurchase += price;
+          oneTimePurchaseData.revenue += price;
+          oneTimePurchaseData.purchaseCount += 1;
+          if (userId) oneTimePurchaseData.userIds.add(userId);
         } else {
           // Fallback: If packageId doesn't match expected pattern, treat as first-time
           // This handles edge cases where packageId might be missing or in unexpected format
-          oneTimePurchase += price;
+          oneTimePurchaseData.revenue += price;
+          oneTimePurchaseData.purchaseCount += 1;
+          if (userId) oneTimePurchaseData.userIds.add(userId);
         }
       }
     }
@@ -445,15 +462,39 @@ export async function GET(request: NextRequest) {
       revenue: {
         total: totalRevenue,
         breakdown: {
-          subscriptions: membershipPurchase + membershipRenewal, // Backward compatibility
-          oneTimePackages: oneTimePurchase + additionalOneTimePurchase + miniDraw + upsell, // Backward compatibility
-          // Detailed breakdown
-          membershipPurchase,
-          membershipRenewal,
-          oneTimePurchase,
-          additionalOneTimePurchase,
-          miniDraw,
-          upsell,
+          subscriptions: membershipPurchaseData.revenue + membershipRenewalData.revenue, // Backward compatibility
+          oneTimePackages: oneTimePurchaseData.revenue + additionalOneTimePurchaseData.revenue + miniDrawData.revenue + upsellData.revenue, // Backward compatibility
+          // Detailed breakdown with counts
+          membershipPurchase: {
+            revenue: membershipPurchaseData.revenue,
+            purchaseCount: membershipPurchaseData.purchaseCount,
+            userCount: membershipPurchaseData.userIds.size,
+          },
+          membershipRenewal: {
+            revenue: membershipRenewalData.revenue,
+            purchaseCount: membershipRenewalData.purchaseCount,
+            userCount: membershipRenewalData.userIds.size,
+          },
+          oneTimePurchase: {
+            revenue: oneTimePurchaseData.revenue,
+            purchaseCount: oneTimePurchaseData.purchaseCount,
+            userCount: oneTimePurchaseData.userIds.size,
+          },
+          additionalOneTimePurchase: {
+            revenue: additionalOneTimePurchaseData.revenue,
+            purchaseCount: additionalOneTimePurchaseData.purchaseCount,
+            userCount: additionalOneTimePurchaseData.userIds.size,
+          },
+          miniDraw: {
+            revenue: miniDrawData.revenue,
+            purchaseCount: miniDrawData.purchaseCount,
+            userCount: miniDrawData.userIds.size,
+          },
+          upsell: {
+            revenue: upsellData.revenue,
+            purchaseCount: upsellData.purchaseCount,
+            userCount: upsellData.userIds.size,
+          },
         },
       },
       majorDraw: {
