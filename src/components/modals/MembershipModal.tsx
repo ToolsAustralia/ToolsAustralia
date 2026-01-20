@@ -2320,7 +2320,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             paymentMethodId = result.paymentMethodId;
             // Store paymentIntentId if PaymentIntent was used
             if (result.paymentIntentId) {
-              confirmedPaymentIntentId = result.paymentIntentId; // Capture for passing to backend
+              // ✅ CRITICAL: For subscriptions, the upfront PaymentIntent should NOT be confirmed
+              // It's only for wallet display - the invoice PaymentIntent will be used for actual payment
+              const isSubscription = activePlan?.period === "mo";
+              if (isSubscription) {
+                console.log(`ℹ️ Upfront PaymentIntent ${result.paymentIntentId} confirmed for wallet display only - will be cancelled by backend`);
+                // Still store it so backend can cancel it, but don't use it for payment confirmation
+              }
+              confirmedPaymentIntentId = result.paymentIntentId; // Capture for passing to backend (for cancellation)
               setPaymentIntentId(result.paymentIntentId);
             }
             // console.log("✅ Card confirmed successfully:", paymentMethodId);
@@ -2665,6 +2672,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
             throw new Error("Failed to get subscription ID. Please try again.");
           }
 
+          // ✅ CRITICAL: Ensure we're using the invoice PaymentIntent, NOT the upfront PaymentIntent
+          // The upfront PaymentIntent (confirmedPaymentIntentId) should already be cancelled by backend
+          // Only the invoice PaymentIntent should be confirmed for subscriptions
+          const finalClientSecret = clientSecret === "pending" ? null : clientSecret;
+          if (finalClientSecret && confirmedPaymentIntentId) {
+            const upfrontPIId = confirmedPaymentIntentId;
+            const invoicePIId = finalClientSecret.split("_secret_")[0];
+            
+            if (upfrontPIId === invoicePIId) {
+              console.error(`❌ CRITICAL: Frontend attempted to use upfront PaymentIntent ${upfrontPIId} for subscription payment - this should never happen`);
+              throw new Error("Invalid PaymentIntent - upfront PaymentIntent cannot be used for subscription payment. Please try again.");
+            }
+            
+            console.log(`✅ Using invoice PaymentIntent ${invoicePIId} for subscription payment (upfront ${upfrontPIId} should be cancelled)`);
+          }
+
           // Confirm subscription payment directly
           try {
             const confirmResponse = await fetch("/api/stripe/confirm-subscription-payment", {
@@ -2675,7 +2698,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               credentials: "include",
               body: JSON.stringify({
                 subscriptionId,
-                clientSecret: clientSecret === "pending" ? null : clientSecret,
+                clientSecret: finalClientSecret, // ✅ Invoice PaymentIntent clientSecret (not upfront)
                 userId: undefined, // Existing user - no userId needed
               }),
             });
@@ -3016,6 +3039,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               throw new Error("Failed to get payment intent. Please try again.");
             }
 
+            // ✅ CRITICAL: Ensure we're using the invoice PaymentIntent, NOT the upfront PaymentIntent
+            // The upfront PaymentIntent (confirmedPaymentIntentId) should already be cancelled by backend
+            // Only the invoice PaymentIntent should be confirmed for subscriptions
+            if (clientSecret && confirmedPaymentIntentId) {
+              const upfrontPIId = confirmedPaymentIntentId;
+              const invoicePIId = clientSecret.split("_secret_")[0];
+              
+              if (upfrontPIId === invoicePIId) {
+                console.error(`❌ CRITICAL: Frontend attempted to use upfront PaymentIntent ${upfrontPIId} for subscription payment - this should never happen`);
+                throw new Error("Invalid PaymentIntent - upfront PaymentIntent cannot be used for subscription payment. Please try again.");
+              }
+              
+              console.log(`✅ Using invoice PaymentIntent ${invoicePIId} for subscription payment (upfront ${upfrontPIId} should be cancelled)`);
+            }
+
             // ✅ STRIPE BEST PRACTICE: Use PaymentIntent client_secret from subscription's invoice
             // This PaymentIntent was created by Stripe automatically with the correct amount
             // Confirm subscription payment directly
@@ -3028,7 +3066,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 credentials: "include",
                 body: JSON.stringify({
                   subscriptionId,
-                  clientSecret: clientSecret, // ✅ PaymentIntent client_secret from Stripe
+                  clientSecret: clientSecret, // ✅ PaymentIntent client_secret from Stripe (invoice PaymentIntent)
                   userId: userId, // New user - include userId
                 }),
               });

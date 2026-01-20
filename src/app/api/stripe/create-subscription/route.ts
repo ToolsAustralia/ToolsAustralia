@@ -69,23 +69,49 @@ export async function POST(request: NextRequest) {
     const validatedData = createSubscriptionSchema.parse(body);
     // console.log("✅ Data validation successful");
 
-    // ✅ CRITICAL FIX: Cancel upfront PaymentIntent FIRST, before any other operations
-    // This prevents it from being confirmed while we're processing
+    // ✅ CRITICAL FIX: Cancel upfront PaymentIntent IMMEDIATELY, before any other operations
+    // This prevents it from being confirmed/authorized while we're processing
+    // The upfront PaymentIntent is ONLY for wallet display - it should NEVER be authorized
     if (validatedData.paymentIntentId) {
       try {
         const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
         
-        // Cancel if it's in ANY cancellable state
-        if (
-          upfrontPaymentIntent.status === "requires_payment_method" ||
-          upfrontPaymentIntent.status === "requires_confirmation" ||
-          upfrontPaymentIntent.status === "requires_action" ||
-          upfrontPaymentIntent.status === "requires_capture" // Manual capture - can still cancel
-        ) {
-          await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
-          console.log(`✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} at start of subscription creation (status: ${upfrontPaymentIntent.status})`);
-          // ✅ ADD: Log that frontend should use invoice PaymentIntent's clientSecret
-          console.log(`ℹ️ Frontend should use invoice PaymentIntent's clientSecret, not upfront PaymentIntent ${upfrontPaymentIntent.id}`);
+        // ✅ ENHANCED: Cancel if it's in ANY cancellable state (including processing and requires_capture)
+        // Try to cancel regardless of status - Stripe will handle invalid states gracefully
+        // CRITICAL: "requires_capture" means it was authorized - we MUST cancel it to prevent card holds
+        const cancellableStates = [
+          "requires_payment_method",
+          "requires_confirmation", 
+          "requires_action",
+          "requires_capture", // ✅ CRITICAL: Manual capture - MUST cancel to prevent card hold
+          "processing", // If somehow processing, try to cancel
+        ];
+        
+        if (cancellableStates.includes(upfrontPaymentIntent.status)) {
+          try {
+            await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
+            console.log(`✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} immediately (status: ${upfrontPaymentIntent.status})`);
+            console.log(`ℹ️ Frontend should use invoice PaymentIntent's clientSecret, not upfront PaymentIntent ${upfrontPaymentIntent.id}`);
+          } catch (cancelError) {
+            // If cancellation fails, log but continue - we'll handle duplicates later
+            console.warn(`⚠️ Could not cancel upfront PaymentIntent ${upfrontPaymentIntent.id}: ${cancelError}`);
+          }
+        } else if (upfrontPaymentIntent.status === "requires_capture") {
+          // ✅ CRITICAL: If PaymentIntent is already authorized (requires_capture), cancel it immediately
+          // This prevents card holds from the upfront PaymentIntent
+          try {
+            await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
+            console.log(`✅ Cancelled authorized upfront PaymentIntent ${upfrontPaymentIntent.id} (status: requires_capture) - preventing card hold`);
+            console.log(`ℹ️ Frontend should use invoice PaymentIntent's clientSecret, not upfront PaymentIntent ${upfrontPaymentIntent.id}`);
+          } catch (cancelError) {
+            console.error(`❌ CRITICAL: Failed to cancel authorized upfront PaymentIntent ${upfrontPaymentIntent.id} - card hold may occur`, {
+              paymentIntentId: upfrontPaymentIntent.id,
+              status: upfrontPaymentIntent.status,
+              amount: upfrontPaymentIntent.amount,
+              error: cancelError,
+            });
+            // Continue - we'll handle duplicates later, but log critical error
+          }
         } else if (upfrontPaymentIntent.status === "succeeded") {
           console.error(`❌ CRITICAL: Upfront PaymentIntent ${upfrontPaymentIntent.id} already succeeded - system attempted double charge`, {
             paymentIntentId: upfrontPaymentIntent.id,
@@ -99,10 +125,17 @@ export async function POST(request: NextRequest) {
         } else if (upfrontPaymentIntent.status === "canceled") {
           console.log(`ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} already cancelled`);
         } else {
-          console.log(`ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, no action needed`);
+          console.log(`ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, attempting cancellation anyway`);
+          // Try to cancel even if status is unexpected
+          try {
+            await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
+            console.log(`✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} (unexpected status: ${upfrontPaymentIntent.status})`);
+          } catch (cancelError) {
+            console.warn(`⚠️ Could not cancel upfront PaymentIntent ${upfrontPaymentIntent.id} with status ${upfrontPaymentIntent.status}: ${cancelError}`);
+          }
         }
       } catch (cancelError) {
-        console.error(`❌ Failed to cancel upfront PaymentIntent ${validatedData.paymentIntentId}: ${cancelError}`);
+        console.error(`❌ Failed to retrieve/cancel upfront PaymentIntent ${validatedData.paymentIntentId}: ${cancelError}`);
         // Continue - invoice PaymentIntent will be used anyway
       }
     }
@@ -482,10 +515,54 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ✅ DEDUPLICATION: Cancel any existing PaymentIntents for this customer/package before creating subscription
+    // This prevents duplicate PaymentIntents from being authorized
+    try {
+      const existingPaymentIntents = await stripe.paymentIntents.list({
+        customer: customer.id,
+        limit: 100, // Get recent PaymentIntents
+      });
+
+      // Filter for PaymentIntents that match this package and are cancellable
+      const duplicatePaymentIntents = existingPaymentIntents.data.filter((pi) => {
+        const isSamePackage = pi.metadata?.packageId === validatedData.packageId;
+        const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
+        const isCancellable = [
+          "requires_payment_method",
+          "requires_confirmation",
+          "requires_action",
+          "requires_capture",
+          "processing",
+        ].includes(pi.status);
+        const isNotSucceeded = pi.status !== "succeeded";
+        const isNotCanceled = pi.status !== "canceled";
+        
+        // Cancel if it's for the same package, is upfront payment, and is cancellable
+        return isSamePackage && (isUpfrontPayment || isCancellable) && isNotSucceeded && isNotCanceled;
+      });
+
+      // Cancel all duplicate PaymentIntents
+      for (const duplicatePI of duplicatePaymentIntents) {
+        try {
+          await stripe.paymentIntents.cancel(duplicatePI.id);
+          console.log(`✅ Cancelled duplicate PaymentIntent ${duplicatePI.id} (status: ${duplicatePI.status}, isUpfront: ${duplicatePI.metadata?.isUpfrontPayment})`);
+        } catch (cancelError) {
+          console.warn(`⚠️ Could not cancel duplicate PaymentIntent ${duplicatePI.id}: ${cancelError}`);
+        }
+      }
+
+      if (duplicatePaymentIntents.length > 0) {
+        console.log(`✅ Deduplication: Cancelled ${duplicatePaymentIntents.length} duplicate PaymentIntent(s) for customer ${customer.id}`);
+      }
+    } catch (dedupError) {
+      console.warn(`⚠️ Deduplication check failed (non-critical): ${dedupError}`);
+      // Continue - deduplication failure shouldn't block subscription creation
+    }
+
     // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-    // This ensures that even if the API is called twice (e.g., double-click), only one subscription is created
+    // Use customer ID + package ID for stable idempotency (not Date.now())
     const idempotencyKey =
-      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${validatedData.userEmail}_${Date.now()}`;
+      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${customer.id}_${validatedData.userEmail}`;
 
     // ✅ STRIPE BEST PRACTICE: Create subscription first, let Stripe create PaymentIntent automatically
     // Stripe will create Invoice + PaymentIntent with correct amount for wallet payments
@@ -750,6 +827,8 @@ export async function POST(request: NextRequest) {
               userEmail: validatedData.userEmail,
               type: "subscription", // ✅ Set 'type' for webhook compatibility
               packageType: "membership",
+              isUpfrontPayment: "false", // ✅ CRITICAL: Mark as invoice PaymentIntent (the one that should be authorized)
+              isInvoicePaymentIntent: "true", // ✅ Additional marker for clarity
               // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
               // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
               ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
