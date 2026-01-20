@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 
-export default function AffiliateLoginPage() {
+// Mark page as dynamic to prevent static generation issues
+export const dynamic = "force-dynamic";
+
+function AffiliateLoginContent() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -205,5 +208,19 @@ export default function AffiliateLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AffiliateLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="h-screen-dvh bg-white flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <AffiliateLoginContent />
+    </Suspense>
   );
 }

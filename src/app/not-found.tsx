@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import MetallicButton from "@/components/ui/MetallicButton";
 
+export const dynamic = "force-dynamic";
+
 export default function NotFound() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden">

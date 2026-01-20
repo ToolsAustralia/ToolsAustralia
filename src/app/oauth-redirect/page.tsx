@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
+import { Suspense } from "react";
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -8,7 +11,7 @@ import { useSearchParams } from "next/navigation";
  * This page auto-submits a form to trigger NextAuth OAuth redirect
  * Used for popup-based OAuth flows
  */
-export default function OAuthRedirectPage() {
+function OAuthRedirectContent() {
   const searchParams = useSearchParams();
   const provider = searchParams.get("provider");
   const callbackUrl = searchParams.get("callbackUrl");
@@ -47,5 +50,20 @@ export default function OAuthRedirectPage() {
         <p className="text-gray-600">Redirecting to Google...</p>
       </div>
     </div>
+  );
+}
+
+export default function OAuthRedirectPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <OAuthRedirectContent />
+    </Suspense>
   );
 }

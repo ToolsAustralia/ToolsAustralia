@@ -17,6 +17,10 @@ import { z } from "zod";
  * - Handles 3D Secure authentication automatically
  * - Includes proper error handling and validation
  * - Follows PCI compliance guidelines
+ *
+ * IMPORTANT: For subscriptions, this endpoint should NOT be called.
+ * Subscriptions use invoice PaymentIntent created by Stripe automatically.
+ * The invoice PaymentIntent has the correct amount and should be used directly.
  */
 
 const createPaymentIntentSchema = z.object({
@@ -24,8 +28,8 @@ const createPaymentIntentSchema = z.object({
   currency: z.string().default("aud"),
   packageId: z.string().optional(),
   packageName: z.string().optional(),
-  userEmail: z.string().email().optional(), // ✅ NEW: Accept userEmail to find registered user's customer
-  packageType: z.enum(["one-time", "membership"]).optional(), // ✅ NEW: Specify package type for proper metadata
+  userEmail: z.string().email().optional(),
+  packageType: z.enum(["one-time", "membership"]).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -35,6 +39,22 @@ export async function POST(request: NextRequest) {
     // Parse and validate request body
     const body = await request.json();
     const validatedData = createPaymentIntentSchema.parse(body);
+
+    // ✅ CRITICAL: Reject PaymentIntent creation for subscriptions
+    // Subscriptions should use invoice PaymentIntent created by Stripe automatically
+    // This prevents multiple PaymentIntents and ensures correct wallet amounts
+    if (validatedData.packageType === "membership") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "PaymentIntent creation not allowed for subscriptions",
+          details:
+            "Subscriptions use invoice PaymentIntent created automatically by Stripe. Use the client_secret from subscription creation response instead.",
+          code: "SUBSCRIPTION_PAYMENT_INTENT_NOT_ALLOWED",
+        },
+        { status: 400 }
+      );
+    }
 
     // Get authenticated user session (optional for guest users)
     const session = await getServerSession(authOptions);
@@ -100,7 +120,7 @@ export async function POST(request: NextRequest) {
     // This ensures that even if the API is called twice (e.g., double-click), only one PaymentIntent is created
     const idempotencyKey = `pi_${validatedData.packageId || "default"}_${userId || "guest"}_${Date.now()}`;
 
-    // Create PaymentIntent for payment method collection with amount
+    // Create PaymentIntent for one-time purchases only
     // This ensures wallet payments show the correct amount
     // ✅ FIX: Only include customer if it exists (authenticated users)
     // Guest users will have customer created during purchase process
@@ -114,21 +134,13 @@ export async function POST(request: NextRequest) {
           enabled: true,
           allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
         },
-        // ✅ STRIPE BEST PRACTICE: For subscription upfront PaymentIntents, use manual capture
-        // This allows us to cancel the PaymentIntent before it's captured, preventing double charge
-        // The PaymentIntent will be in "requires_capture" status after confirmation, giving us time to cancel it
-        ...(validatedData.packageType === "membership" && { capture_method: "manual" }), // ✅ Manual capture for memberships
         // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
         ...(validatedData.packageName && { description: validatedData.packageName }),
         metadata: {
           userId: userId,
           userEmail: userEmail || validatedData.userEmail || "guest",
-          type: validatedData.packageType || "one-time", // ✅ Use provided packageType or default to one-time
-          packageType: validatedData.packageType || "one-time", // ✅ Also set 'packageType' for consistency
-          ...(validatedData.packageType === "membership" && { 
-            isUpfrontPayment: "true", // ✅ CRITICAL: Mark as upfront PaymentIntent (should be cancelled, NOT authorized)
-            isInvoicePaymentIntent: "false", // ✅ Additional marker for clarity
-          }),
+          type: "one-time", // Only one-time purchases use this endpoint
+          packageType: "one-time", // Only one-time purchases use this endpoint
           ...(validatedData.packageId && { packageId: validatedData.packageId }),
           ...(validatedData.packageName && { packageName: validatedData.packageName }),
         },

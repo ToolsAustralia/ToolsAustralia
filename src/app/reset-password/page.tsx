@@ -1,16 +1,15 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useToast } from "@/components/ui/Toast";
 
-interface ResetPasswordPageProps {
-  searchParams?: { token?: string };
-}
-
-export default function ResetPasswordPage({ searchParams }: ResetPasswordPageProps) {
+function ResetPasswordContent() {
   const router = useRouter();
   const urlParams = useSearchParams();
   const { showToast } = useToast();
@@ -23,7 +22,7 @@ export default function ResetPasswordPage({ searchParams }: ResetPasswordPagePro
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isResetting, setIsResetting] = useState(false);
 
-  const token = searchParams?.token || urlParams.get("token") || "";
+  const token = urlParams.get("token") || "";
   const hasToken = Boolean(token);
 
   useEffect(() => {
@@ -255,5 +254,17 @@ export default function ResetPasswordPage({ searchParams }: ResetPasswordPagePro
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

@@ -97,36 +97,6 @@ export async function POST(request: NextRequest) {
         const paymentIntentId = clientSecret.split("_secret_")[0];
         const providedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
         
-        // ✅ CRITICAL: Reject upfront PaymentIntents - they should NEVER be authorized
-        if (providedPaymentIntent.metadata?.isUpfrontPayment === "true") {
-          console.error(`❌ CRITICAL: Attempted to confirm upfront PaymentIntent ${paymentIntentId} - REJECTING`, {
-            paymentIntentId,
-            subscriptionId,
-            userId: user?._id?.toString(),
-            metadata: providedPaymentIntent.metadata,
-          });
-          
-          // Cancel it immediately if it's not already cancelled
-          if (providedPaymentIntent.status !== "canceled") {
-            try {
-              await stripe.paymentIntents.cancel(paymentIntentId);
-              console.log(`✅ Cancelled upfront PaymentIntent ${paymentIntentId} that was attempted to be confirmed`);
-            } catch (cancelError) {
-              console.warn(`⚠️ Could not cancel upfront PaymentIntent ${paymentIntentId}: ${cancelError}`);
-            }
-          }
-          
-          return NextResponse.json(
-            {
-              success: false,
-              error: "Invalid PaymentIntent",
-              details: "Cannot confirm upfront PaymentIntent. Please use the invoice PaymentIntent from the subscription.",
-              code: "INVALID_PAYMENT_INTENT_TYPE",
-            },
-            { status: 400 }
-          );
-        }
-        
         // ✅ VALIDATION: Ensure PaymentIntent belongs to this subscription's invoice
         const expectedInvoiceId = subscription.latest_invoice 
           ? (typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice.id)
@@ -547,7 +517,8 @@ export async function POST(request: NextRequest) {
           const isNotCanceled = pi.status !== "canceled";
           
           // Cancel if it's for the same subscription, is not the invoice PaymentIntent, and is cancellable
-          return isSameSubscription && isNotInvoicePaymentIntent && (isUpfrontPayment || isCancellable) && isNotSucceeded && isNotCanceled;
+          // Note: isUpfrontPayment check is for backward compatibility only (old upfront PaymentIntents)
+          return isSameSubscription && isNotInvoicePaymentIntent && isCancellable && isNotSucceeded && isNotCanceled;
         });
 
         // Cancel all duplicate PaymentIntents

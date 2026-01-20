@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -13,7 +13,10 @@ import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resol
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import MembershipModal from "@/components/modals/MembershipModal";
 
-export default function PartnerBenefitsPage() {
+// Mark page as dynamic to prevent static generation issues
+export const dynamic = "force-dynamic";
+
+function PartnerBenefitsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { data: accountData, isLoading, error } = useMyAccountData(session?.user?.id);
@@ -123,13 +126,30 @@ export default function PartnerBenefitsPage() {
         </div>
       </section>
 
-      {/* Membership Modal */}
-      <MembershipModal
-        isOpen={membershipModal.isModalOpen}
-        onClose={membershipModal.closeModal}
-        selectedPlan={membershipModal.selectedPlan}
-        onPlanChange={membershipModal.selectPlan}
-      />
+      {/* Membership Modal - Wrapped in Suspense because it uses useSearchParams via hooks */}
+      <Suspense fallback={null}>
+        <MembershipModal
+          isOpen={membershipModal.isModalOpen}
+          onClose={membershipModal.closeModal}
+          selectedPlan={membershipModal.selectedPlan}
+          onPlanChange={membershipModal.selectPlan}
+        />
+      </Suspense>
     </div>
+  );
+}
+
+export default function PartnerBenefitsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
+          <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-600 font-medium">Loading your benefits...</p>
+        </div>
+      }
+    >
+      <PartnerBenefitsContent />
+    </Suspense>
   );
 }

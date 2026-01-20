@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -46,7 +47,7 @@ interface ActivityLogResponse {
   };
 }
 
-export default function ActivityLogPage() {
+function ActivityLogContent() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [currentPage, setCurrentPage] = useState(1);
@@ -304,3 +305,14 @@ export default function ActivityLogPage() {
   );
 }
 
+export default function ActivityLogPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen-svh flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+      </div>
+    }>
+      <ActivityLogContent />
+    </Suspense>
+  );
+}
