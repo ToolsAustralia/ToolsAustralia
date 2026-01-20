@@ -1,4 +1,7 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard - Tools Australia",
@@ -9,5 +12,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Note: Authentication is handled by middleware
   // Admin access control is managed at the route level
 
-  return <div className="h-screen-dvh overflow-hidden">{children}</div>;
+  return (
+    <div className="h-screen-dvh overflow-hidden">
+      <Suspense fallback={
+        <div className="min-h-screen-svh flex items-center justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+        </div>
+      }>
+        {children}
+      </Suspense>
+    </div>
+  );
 }

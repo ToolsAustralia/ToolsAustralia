@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   },
 };
 
+export const dynamic = "force-dynamic";
+
 export default function EmailPreviewPage() {
   // Only allow access in development mode
   if (process.env.NODE_ENV !== "development") {

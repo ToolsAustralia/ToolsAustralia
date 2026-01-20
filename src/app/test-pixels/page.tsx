@@ -1,10 +1,13 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
+import { Suspense } from "react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useState, useEffect } from "react";
 import { hasPixelConsent, revokePixelConsent } from "@/components/PixelTracker";
 
-export default function TestPixelsPage() {
+function TestPixelsContent() {
   const {
     trackEvent,
     trackPurchase,
@@ -470,5 +473,17 @@ export default function TestPixelsPage() {
         {/* Pixel Consent Modal - REMOVED: Auto-accept mode enabled */}
       </div>
     </div>
+  );
+}
+
+export default function TestPixelsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    }>
+      <TestPixelsContent />
+    </Suspense>
   );
 }
