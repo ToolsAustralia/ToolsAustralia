@@ -125,7 +125,10 @@ export async function POST(request: NextRequest) {
           userEmail: userEmail || validatedData.userEmail || "guest",
           type: validatedData.packageType || "one-time", // ✅ Use provided packageType or default to one-time
           packageType: validatedData.packageType || "one-time", // ✅ Also set 'packageType' for consistency
-          ...(validatedData.packageType === "membership" && { isUpfrontPayment: "true" }), // ✅ Mark membership PaymentIntent so webhook skips it
+          ...(validatedData.packageType === "membership" && { 
+            isUpfrontPayment: "true", // ✅ CRITICAL: Mark as upfront PaymentIntent (should be cancelled, NOT authorized)
+            isInvoicePaymentIntent: "false", // ✅ Additional marker for clarity
+          }),
           ...(validatedData.packageId && { packageId: validatedData.packageId }),
           ...(validatedData.packageName && { packageName: validatedData.packageName }),
         },
