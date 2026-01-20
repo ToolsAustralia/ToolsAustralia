@@ -90,6 +90,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Subscription not found in Stripe" }, { status: 404 });
     }
 
+    // ✅ AUTHORIZATION GUARD: If clientSecret is provided, validate it's the invoice PaymentIntent, not upfront
+    if (clientSecret) {
+      try {
+        // Extract PaymentIntent ID from clientSecret
+        const paymentIntentId = clientSecret.split("_secret_")[0];
+        const providedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        // ✅ VALIDATION: Ensure PaymentIntent belongs to this subscription's invoice
+        const expectedInvoiceId = subscription.latest_invoice 
+          ? (typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice.id)
+          : null;
+        
+        if (expectedInvoiceId && providedPaymentIntent.metadata?.invoice_id !== expectedInvoiceId) {
+          console.error(`❌ CRITICAL: PaymentIntent ${paymentIntentId} does not belong to subscription ${subscriptionId} invoice ${expectedInvoiceId}`, {
+            paymentIntentId,
+            subscriptionId,
+            expectedInvoiceId,
+            actualInvoiceId: providedPaymentIntent.metadata?.invoice_id,
+            userId: user?._id?.toString(),
+          });
+          
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invalid PaymentIntent",
+              details: "PaymentIntent does not belong to this subscription's invoice.",
+              code: "PAYMENT_INTENT_MISMATCH",
+            },
+            { status: 400 }
+          );
+        }
+        
+        // ✅ VALIDATION: Ensure PaymentIntent is marked as invoice PaymentIntent
+        if (providedPaymentIntent.metadata?.isInvoicePaymentIntent !== "true") {
+          console.warn(`⚠️ PaymentIntent ${paymentIntentId} is not marked as invoice PaymentIntent`, {
+            paymentIntentId,
+            subscriptionId,
+            metadata: providedPaymentIntent.metadata,
+          });
+          // Don't reject, but log warning - might be legacy PaymentIntent
+        }
+        
+        console.log(`✅ PaymentIntent validation passed: ${paymentIntentId} is valid for subscription ${subscriptionId}`);
+      } catch (validationError) {
+        console.error(`❌ Failed to validate PaymentIntent: ${validationError}`);
+        // Continue - validation failure shouldn't block if PaymentIntent is valid
+      }
+    }
+
     // Check if there's a payment intent that needs confirmation
     const latestInvoice = subscription.latest_invoice as {
       payment_intent?: { status: string; id: string };
@@ -440,6 +489,56 @@ export async function POST(request: NextRequest) {
     }
 
     if (paymentIntent && (paymentIntent.status === "requires_payment_method" || paymentIntent.status === "succeeded")) {
+      // ✅ DEDUPLICATION: Cancel any other PaymentIntents for this subscription before confirming
+      // This ensures only the invoice PaymentIntent is authorized
+      try {
+        const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+        const existingPaymentIntents = await stripe.paymentIntents.list({
+          customer: customerId,
+          limit: 100,
+        });
+
+        // Get the invoice PaymentIntent ID (the one we're about to confirm)
+        const invoicePaymentIntentId = typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
+        
+        // Filter for duplicate PaymentIntents (same subscription, different PaymentIntent, cancellable)
+        const duplicatePaymentIntents = existingPaymentIntents.data.filter((pi) => {
+          const isSameSubscription = pi.metadata?.subscription_id === subscriptionId;
+          const isNotInvoicePaymentIntent = pi.id !== invoicePaymentIntentId;
+          const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
+          const isCancellable = [
+            "requires_payment_method",
+            "requires_confirmation",
+            "requires_action",
+            "requires_capture",
+            "processing",
+          ].includes(pi.status);
+          const isNotSucceeded = pi.status !== "succeeded";
+          const isNotCanceled = pi.status !== "canceled";
+          
+          // Cancel if it's for the same subscription, is not the invoice PaymentIntent, and is cancellable
+          // Note: isUpfrontPayment check is for backward compatibility only (old upfront PaymentIntents)
+          return isSameSubscription && isNotInvoicePaymentIntent && isCancellable && isNotSucceeded && isNotCanceled;
+        });
+
+        // Cancel all duplicate PaymentIntents
+        for (const duplicatePI of duplicatePaymentIntents) {
+          try {
+            await stripe.paymentIntents.cancel(duplicatePI.id);
+            console.log(`✅ Cancelled duplicate PaymentIntent ${duplicatePI.id} before confirming invoice PaymentIntent (status: ${duplicatePI.status}, isUpfront: ${duplicatePI.metadata?.isUpfrontPayment})`);
+          } catch (cancelError) {
+            console.warn(`⚠️ Could not cancel duplicate PaymentIntent ${duplicatePI.id}: ${cancelError}`);
+          }
+        }
+
+        if (duplicatePaymentIntents.length > 0) {
+          console.log(`✅ Deduplication on confirm: Cancelled ${duplicatePaymentIntents.length} duplicate PaymentIntent(s) for subscription ${subscriptionId}`);
+        }
+      } catch (dedupError) {
+        console.warn(`⚠️ Deduplication check on confirm failed (non-critical): ${dedupError}`);
+        // Continue - deduplication failure shouldn't block payment confirmation
+      }
+
       // Check if payment is already succeeded (when we created and confirmed it in one step)
       if (paymentIntent.status === "succeeded") {
         // console.log("✅ Payment already succeeded - activating subscription");
@@ -656,9 +755,62 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    } else if (subscription.status === "incomplete") {
+      } else if (subscription.status === "incomplete") {
       // Subscription is incomplete - this is expected for new subscriptions
       // console.log("⏳ Subscription is incomplete - this is normal for new subscriptions");
+
+      // ✅ DEDUPLICATION: Cancel any other PaymentIntents for this subscription before confirming
+      // This ensures only the invoice PaymentIntent is authorized
+      try {
+        const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+        const existingPaymentIntents = await stripe.paymentIntents.list({
+          customer: customerId,
+          limit: 100,
+        });
+
+        // Get the invoice PaymentIntent ID (the one we're about to confirm)
+        const invoicePaymentIntentId = paymentIntent 
+          ? (typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id)
+          : null;
+        
+        if (invoicePaymentIntentId) {
+          // Filter for duplicate PaymentIntents (same subscription, different PaymentIntent, cancellable)
+          const duplicatePaymentIntents = existingPaymentIntents.data.filter((pi) => {
+            const isSameSubscription = pi.metadata?.subscription_id === subscriptionId;
+            const isNotInvoicePaymentIntent = pi.id !== invoicePaymentIntentId;
+            const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
+            const isCancellable = [
+              "requires_payment_method",
+              "requires_confirmation",
+              "requires_action",
+              "requires_capture",
+              "processing",
+            ].includes(pi.status);
+            const isNotSucceeded = pi.status !== "succeeded";
+            const isNotCanceled = pi.status !== "canceled";
+            
+            // Cancel if it's for the same subscription, is not the invoice PaymentIntent, and is cancellable
+            return isSameSubscription && isNotInvoicePaymentIntent && (isUpfrontPayment || isCancellable) && isNotSucceeded && isNotCanceled;
+          });
+
+          // Cancel all duplicate PaymentIntents
+          for (const duplicatePI of duplicatePaymentIntents) {
+            try {
+              await stripe.paymentIntents.cancel(duplicatePI.id);
+              console.log(`✅ Cancelled duplicate PaymentIntent ${duplicatePI.id} before confirming invoice PaymentIntent (status: ${duplicatePI.status}, isUpfront: ${duplicatePI.metadata?.isUpfrontPayment})`);
+            } catch (cancelError) {
+              console.warn(`⚠️ Could not cancel duplicate PaymentIntent ${duplicatePI.id}: ${cancelError}`);
+            }
+          }
+
+          if (duplicatePaymentIntents.length > 0) {
+            console.log(`✅ Deduplication on confirm: Cancelled ${duplicatePaymentIntents.length} duplicate PaymentIntent(s) for subscription ${subscriptionId}`);
+          }
+        }
+      } catch (dedupError) {
+        console.warn(`⚠️ Deduplication check on confirm failed (non-critical): ${dedupError}`);
+        // Continue - deduplication failure shouldn't block payment confirmation
+      }
 
       // For incomplete subscriptions, we need to confirm the payment intent
       if (paymentIntent && paymentIntent.status === "requires_payment_method") {

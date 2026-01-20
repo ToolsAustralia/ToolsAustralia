@@ -1144,7 +1144,6 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         onUserClick={(userId) => {
           setSelectedUserId(userId);
           setIsUserDetailModalOpen(true);
-          handleCloseRevenueModal();
         }}
       />
 

@@ -29,6 +29,15 @@ export async function getNonce(): Promise<string | undefined> {
     throw new Error("getNonce() can only be called from server components");
   }
 
-  const headersList = await headers();
-  return headersList.get("x-nonce") || undefined;
+  try {
+    const headersList = await headers();
+    return headersList.get("x-nonce") || undefined;
+  } catch (error) {
+    // During build time or static generation, headers() may not be available
+    // Return undefined gracefully - nonce is only needed at runtime
+    if (process.env.NODE_ENV === "production" && error instanceof Error && error.message.includes("headers")) {
+      return undefined;
+    }
+    throw error;
+  }
 }

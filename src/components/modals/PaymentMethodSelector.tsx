@@ -47,8 +47,6 @@ interface PaymentMethodSelectorProps {
   // Amount and package name for wallet payment display (Apple Pay/Google Pay)
   amount?: number; // Amount in cents
   packageName?: string; // Package name for payment request label
-  // ✅ NEW: Flag to indicate if this is an upfront PaymentIntent for subscriptions (should be cancelled after payment method extraction)
-  isUpfrontPaymentIntent?: boolean;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
@@ -72,7 +70,6 @@ const StripeCardForm = React.forwardRef<
     };
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
-    isUpfrontPaymentIntent?: boolean; // ✅ NEW: Flag to indicate if this is an upfront PaymentIntent for subscriptions
   }
 >(
   (
@@ -84,7 +81,6 @@ const StripeCardForm = React.forwardRef<
       billingDetails,
       amount,
       packageName,
-      isUpfrontPaymentIntent,
     },
     ref
   ) => {
@@ -339,17 +335,9 @@ const StripeCardForm = React.forwardRef<
               console.log("⚠️ Wallet payment error during submit (expected for wallet payments), proceeding with confirmPayment:", submitResult.error);
             }
 
-            // ✅ FIX: Check PaymentIntent status before confirming (for upfront PaymentIntents)
-            // Note: We can't easily check status in frontend without API route, so we rely on error handling
-            // The error handling below will catch canceled PaymentIntent errors
-            if (isUpfrontPaymentIntent && clientSecret) {
-              // Log that we're about to confirm an upfront PaymentIntent
-              console.log("⚠️ Confirming upfront PaymentIntent - will be canceled by backend");
-            }
-
-            // ✅ ADD: Detailed logging to track PaymentIntent status
+            // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
+            // No upfront PaymentIntent exists - this is the only PaymentIntent for the subscription payment
             console.log("🔍 Confirming PaymentIntent:", {
-              isUpfrontPaymentIntent,
               clientSecretPrefix: clientSecret?.split("_secret_")[0],
               intentType,
             });
@@ -377,29 +365,11 @@ const StripeCardForm = React.forwardRef<
                 
                 // Check if PaymentIntent was canceled
                 if (errorMessage.includes("canceled") || errorMessage.includes("canceled")) {
-                  // If this is an upfront PaymentIntent, this is expected behavior
-                  // The payment method should already be extracted, so we can continue
-                  if (isUpfrontPaymentIntent) {
-                    console.log("⚠️ Upfront PaymentIntent was canceled (expected) - payment method should already be extracted");
-                    // Try to extract payment method from the error's payment_intent object if available
-                    const paymentIntentFromError = (error as { payment_intent?: { payment_method?: string; id?: string } })?.payment_intent;
-                    if (paymentIntentFromError?.payment_method) {
-                      return {
-                        paymentMethodId: paymentIntentFromError.payment_method as string,
-                        paymentIntentId: paymentIntentFromError.id,
-                      };
-                    }
-                    // If we can't extract it, return error to retry with invoice PaymentIntent
-                    return { 
-                      error: "Payment processing was interrupted. Please wait 30 seconds before trying again. Do not retry immediately, as this can create multiple authorization holds." 
-                    };
-                  } else {
-                    // ✅ FIX: For non-upfront PaymentIntents, return special error code for automatic recovery
-                    // This allows MembershipModal to automatically create a new PaymentIntent and retry
-                    return { 
-                      error: "PAYMENT_INTENT_CANCELED_RETRY: This payment attempt was canceled. Creating a new payment form..." 
-                    };
-                  }
+                  // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
+                  // If canceled, return error for automatic recovery
+                  return { 
+                    error: "PAYMENT_INTENT_CANCELED_RETRY: This payment attempt was canceled. Creating a new payment form..." 
+                  };
                 }
               }
               
@@ -432,24 +402,8 @@ const StripeCardForm = React.forwardRef<
               
               return { error: error.message || "Payment confirmation failed." };
             } else if (paymentIntent?.payment_method) {
-              // ✅ CRITICAL FIX: For upfront PaymentIntents, cancel immediately without blocking
-              // Fire and forget - don't wait for response
-              // This prevents double charging - the upfront PaymentIntent is ONLY for wallet display
-              // The invoice PaymentIntent (from Stripe Price catalog) is the one that should be charged
-              if (isUpfrontPaymentIntent && paymentIntent.id) {
-                // Cancel immediately without blocking - fire and forget
-                fetch("/api/stripe/cancel-payment-intent", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
-                }).catch((err) => {
-                  console.error(`❌ Error cancelling upfront PaymentIntent: ${err}`);
-                });
-                
-                console.log(`🔄 Cancellation request sent for upfront PaymentIntent ${paymentIntent.id}`);
-                // Don't wait - continue immediately
-              }
-
+              // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
+              // No upfront PaymentIntent exists - this PaymentIntent is the one that should be charged
               console.log("✅ PaymentIntent succeeded:", paymentIntent);
               return {
                 paymentMethodId: paymentIntent.payment_method as string,

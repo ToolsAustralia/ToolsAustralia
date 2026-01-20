@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 
 import { signIn, useSession } from "next-auth/react";
@@ -157,7 +160,7 @@ function AnimatedOffers() {
   );
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [formData, setFormData] = useState({
     email: "",
 
@@ -694,5 +697,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen-svh flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   );
 }

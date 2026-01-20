@@ -9,6 +9,14 @@ if (!stripePublishableKey) {
 
 const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
 
+/**
+ * Subscription creation data for new users
+ * 
+ * @remarks
+ * Subscriptions use invoice PaymentIntent created automatically by Stripe.
+ * No upfront PaymentIntent is needed - the invoice PaymentIntent will be returned
+ * in the subscription creation response.
+ */
 export interface SubscriptionData {
   userEmail: string;
   firstName: string;
@@ -16,8 +24,7 @@ export interface SubscriptionData {
   mobile?: string;
   packageId: string;
   password?: string; // Made optional for passwordless users
-  paymentMethodId: string;
-  paymentIntentId?: string; // Optional PaymentIntent ID if already confirmed upfront
+  paymentMethodId: string; // Payment method from SetupIntent
   idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;
@@ -38,10 +45,17 @@ export interface OneTimePurchaseData {
   promoLinkCode?: string;
 }
 
+/**
+ * Subscription creation data for existing users
+ * 
+ * @remarks
+ * Subscriptions use invoice PaymentIntent created automatically by Stripe.
+ * No upfront PaymentIntent is needed - the invoice PaymentIntent will be returned
+ * in the subscription creation response with the correct amount for wallet display.
+ */
 export interface ExistingUserSubscriptionData {
   packageId: string;
-  paymentMethodId: string;
-  paymentIntentId?: string; // ✅ Optional upfront PaymentIntent ID for wallet display
+  paymentMethodId: string; // Payment method from SetupIntent
   idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;

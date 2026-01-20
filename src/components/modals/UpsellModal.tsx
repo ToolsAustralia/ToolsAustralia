@@ -630,17 +630,26 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const getUpsellImagePathValue = (): string => {
     // Get full upsell package data to access category
     const upsellPackage = getUpsellPackageById(offer.id);
+    const category = upsellPackage?.category;
 
-    // Determine package type from originalPurchaseContext or offer category
+    // Determine package type from originalPurchaseContext, upsell category, or offer category
+    // Priority: originalPurchaseContext > upsell category > offer category > default
     let packageType: "membership" | "one-time" | "mini-draw" | undefined;
     if (originalPurchaseContext?.packageType) {
+      // Use original purchase context if available (most reliable)
       packageType = originalPurchaseContext.packageType;
+    } else if (category === "subscription-plus") {
+      // Subscription-plus upsells are triggered by membership purchases
+      packageType = "membership";
+    } else if (category === "one-time-plus" || category === "additional-upgrade") {
+      // One-time-plus and additional-upgrade upsells are triggered by one-time purchases
+      packageType = "one-time";
     } else if (offer.category === "membership") {
       packageType = "membership";
     } else if (offer.category === "mini-draw") {
       packageType = "mini-draw";
     } else {
-      // Default to one-time for one-time-plus and additional-upgrade
+      // Default to one-time for unknown cases
       packageType = "one-time";
     }
 
@@ -654,16 +663,37 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       promoMultiplier = resolvedMiniMultiplier;
     }
 
-    // Get upsell category from package data (more reliable than inferring from offer)
-    const category = upsellPackage?.category;
+    // 🔍 DEBUG: Log image path calculation parameters
+    console.log("🖼️ Upsell Image Debug:", {
+      offerId: offer.id,
+      packageType,
+      promoMultiplier,
+      category,
+      resolvedMembershipMultiplier,
+      resolvedOneTimeMultiplier,
+      resolvedMiniMultiplier,
+      originalPurchaseContextPackageType: originalPurchaseContext?.packageType,
+      upsellPackageCategory: upsellPackage?.category,
+      offerCategory: offer.category,
+      determinedFrom: originalPurchaseContext?.packageType 
+        ? "originalPurchaseContext" 
+        : category === "subscription-plus" 
+        ? "upsellCategory" 
+        : "fallback",
+    });
 
     // Use the utility function to get the correct image path
-    return getUpsellImagePath({
+    const imagePath = getUpsellImagePath({
       offerId: offer.id,
       packageType,
       promoMultiplier: promoMultiplier ?? undefined, // Pass undefined if null (no promo)
       category,
     });
+
+    // 🔍 DEBUG: Log final image path
+    console.log("🖼️ Final Image Path:", imagePath);
+
+    return imagePath;
   };
 
   if (!isOpen) return null;

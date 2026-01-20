@@ -8,12 +8,12 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getInvoicePaymentIntentFromSubscription } from "@/utils/payment/stripe/invoice-payment-intent";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   paymentMethodId: z.string().min(1, "Payment method is required"),
-  paymentIntentId: z.string().optional(), // ✅ NEW: Optional upfront PaymentIntent ID for wallet display
   idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
@@ -35,42 +35,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validatedData = createSubscriptionExistingUserSchema.parse(body);
-
-    // ✅ CRITICAL FIX: Cancel upfront PaymentIntent FIRST, before any other operations
-    // This prevents it from being confirmed while we're processing
-    if (validatedData.paymentIntentId) {
-      try {
-        const upfrontPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
-        
-        // Cancel if it's in ANY cancellable state
-        if (
-          upfrontPaymentIntent.status === "requires_payment_method" ||
-          upfrontPaymentIntent.status === "requires_confirmation" ||
-          upfrontPaymentIntent.status === "requires_action" ||
-          upfrontPaymentIntent.status === "requires_capture" // Manual capture - can still cancel
-        ) {
-          await stripe.paymentIntents.cancel(upfrontPaymentIntent.id);
-          console.log(`✅ Cancelled upfront PaymentIntent ${upfrontPaymentIntent.id} at start of subscription creation (status: ${upfrontPaymentIntent.status})`);
-        } else if (upfrontPaymentIntent.status === "succeeded") {
-          console.error(`❌ CRITICAL: Upfront PaymentIntent ${upfrontPaymentIntent.id} already succeeded - system attempted double charge`, {
-            paymentIntentId: upfrontPaymentIntent.id,
-            amount: upfrontPaymentIntent.amount,
-            currency: upfrontPaymentIntent.currency,
-            customer: upfrontPaymentIntent.customer,
-            metadata: upfrontPaymentIntent.metadata,
-            timestamp: new Date().toISOString(),
-          });
-          // Continue - invoice PaymentIntent will be used, but log error for investigation
-        } else if (upfrontPaymentIntent.status === "canceled") {
-          console.log(`ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} already cancelled`);
-        } else {
-          console.log(`ℹ️ Upfront PaymentIntent ${upfrontPaymentIntent.id} is ${upfrontPaymentIntent.status}, no action needed`);
-        }
-      } catch (cancelError) {
-        console.error(`❌ Failed to cancel upfront PaymentIntent ${validatedData.paymentIntentId}: ${cancelError}`);
-        // Continue - invoice PaymentIntent will be used anyway
-      }
-    }
 
     // console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
 
@@ -195,10 +159,54 @@ export async function POST(request: NextRequest) {
     const stripePriceId = membershipPackage.stripePriceId;
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
+    // ✅ DEDUPLICATION: Cancel any old upfront PaymentIntents for backward compatibility
+    // This handles any leftover upfront PaymentIntents from previous implementation
+    // Note: New implementation doesn't create upfront PaymentIntents, so this is mainly for cleanup
+    try {
+      const existingPaymentIntents = await stripe.paymentIntents.list({
+        customer: stripeCustomerId,
+        limit: 100, // Get recent PaymentIntents
+      });
+
+      // Filter for old upfront PaymentIntents that are cancellable
+      const oldUpfrontPaymentIntents = existingPaymentIntents.data.filter((pi) => {
+        const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
+        const isCancellable = [
+          "requires_payment_method",
+          "requires_confirmation",
+          "requires_action",
+          "requires_capture",
+          "processing",
+        ].includes(pi.status);
+        const isNotSucceeded = pi.status !== "succeeded";
+        const isNotCanceled = pi.status !== "canceled";
+        
+        // Only cancel old upfront PaymentIntents (for backward compatibility)
+        return isUpfrontPayment && isCancellable && isNotSucceeded && isNotCanceled;
+      });
+
+      // Cancel old upfront PaymentIntents
+      for (const oldPI of oldUpfrontPaymentIntents) {
+        try {
+          await stripe.paymentIntents.cancel(oldPI.id);
+          console.log(`✅ Cancelled old upfront PaymentIntent ${oldPI.id} (backward compatibility cleanup)`);
+        } catch (cancelError) {
+          console.warn(`⚠️ Could not cancel old upfront PaymentIntent ${oldPI.id}: ${cancelError}`);
+        }
+      }
+
+      if (oldUpfrontPaymentIntents.length > 0) {
+        console.log(`✅ Deduplication: Cancelled ${oldUpfrontPaymentIntents.length} old upfront PaymentIntent(s) for customer ${stripeCustomerId}`);
+      }
+    } catch (dedupError) {
+      console.warn(`⚠️ Deduplication check failed (non-critical): ${dedupError}`);
+      // Continue - deduplication failure shouldn't block subscription creation
+    }
+
     // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-    // This ensures that even if the API is called twice (e.g., double-click), only one subscription is created
+    // Use customer ID + package ID for stable idempotency (not Date.now())
     const idempotencyKey =
-      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${existingUser.email}_${Date.now()}`;
+      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${stripeCustomerId}_${existingUser.email}`;
 
     // Create the subscription with metadata for webhook processing
     // Use payment_behavior to match new user flow and ensure proper webhook processing
@@ -269,52 +277,31 @@ export async function POST(request: NextRequest) {
     await existingUser.save();
     // console.log(`✅ User subscription saved to database: packageId=${existingUser.subscription.packageId}`);
 
-    // ✅ STRIPE BEST PRACTICE: Get PaymentIntent from subscription's invoice for wallet display
-    // Similar logic to create-subscription route
-    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = null;
-    let latestInvoice: Stripe.Invoice | null = null;
+    // ✅ Get PaymentIntent from subscription's invoice using utility function
+    // This handles retry logic and proper detection of Stripe-created PaymentIntent
+    // ✅ NON-BLOCKING: PaymentIntent retrieval failure should not block subscription creation
+    const paymentIntentResult = await getInvoicePaymentIntentFromSubscription(subscription, subscription.id);
 
-    // Check if PaymentIntent is already in the expanded subscription
-    if (subscription.latest_invoice) {
-      latestInvoice =
-        typeof subscription.latest_invoice === "string"
-          ? null // Will retrieve below
-          : (subscription.latest_invoice as Stripe.Invoice);
-
-      // If invoice is expanded, check for PaymentIntent
-      if (latestInvoice) {
-        paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
-          ?.payment_intent;
-      }
-    }
-
-    // If we don't have the invoice yet, retrieve it
-    const invoiceId =
-      typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice?.id;
-
-    if (invoiceId && !latestInvoice) {
-      latestInvoice = await stripe.invoices.retrieve(invoiceId as string, {
-        expand: ["payment_intent"],
+    // ✅ IMPROVED ERROR HANDLING: Log detailed error but continue with subscription creation
+    if (!paymentIntentResult.success && paymentIntentResult.error) {
+      const invoiceId = paymentIntentResult.invoice?.id || "unknown";
+      console.error(`❌ Failed to get invoice PaymentIntent for subscription ${subscription.id}:`, {
+        subscriptionId: subscription.id,
+        invoiceId: invoiceId,
+        error: paymentIntentResult.error,
+        invoiceStatus: paymentIntentResult.invoice?.status,
+        hasInvoice: !!paymentIntentResult.invoice,
+        userEmail: existingUser.email,
       });
-      paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
-        ?.payment_intent;
+      // Continue - subscription creation succeeded, PaymentIntent retrieval can be retried later
     }
 
-    // ✅ CRITICAL: If invoice is draft, finalize it first
-    if (latestInvoice && latestInvoice.status === "draft") {
-      try {
-        latestInvoice = await stripe.invoices.finalizeInvoice(invoiceId as string, {
-          expand: ["payment_intent"],
-        });
-        paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string })
-          ?.payment_intent;
-        console.log(`✅ Invoice finalized: ${latestInvoice.id}, status: ${latestInvoice.status}`);
-      } catch (finalizeError) {
-        console.error("❌ Failed to finalize invoice:", finalizeError);
-      }
-    }
+    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = paymentIntentResult.paymentIntent;
+    const latestInvoice = paymentIntentResult.invoice;
 
-    // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually
+    // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually as last resort
+    // This should rarely happen - Stripe usually creates PaymentIntent automatically
+    // Only create if absolutely necessary (after retries failed)
     if (!paymentIntent && latestInvoice && latestInvoice.status === "open") {
       try {
         const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
@@ -347,7 +334,8 @@ export async function POST(request: NextRequest) {
               userEmail: existingUser.email,
               type: "subscription",
               packageType: "membership",
-              isUpfrontPayment: "true",
+              isUpfrontPayment: "false", // ✅ CRITICAL: Mark as invoice PaymentIntent (the one that should be authorized)
+              isInvoicePaymentIntent: "true", // ✅ Additional marker for clarity
               ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
               ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
             },
@@ -399,6 +387,11 @@ export async function POST(request: NextRequest) {
     // ✅ Referral processing moved to webhook (after payment succeeds)
     // Referral code is stored in subscription metadata and processed by webhook
 
+    // ✅ GRACEFUL DEGRADATION: Include warning if PaymentIntent retrieval failed
+    const warning = !clientSecret && !paymentIntentResult.success
+      ? "PaymentIntent retrieval delayed. Payment confirmation may require retry. Subscription created successfully."
+      : undefined;
+
     return NextResponse.json({
       success: true,
       subscription: {
@@ -409,6 +402,7 @@ export async function POST(request: NextRequest) {
       data: {
         subscriptionId: subscription.id,
         clientSecret: clientSecret || undefined, // ✅ Also return in data for consistency
+        ...(warning && { warning }), // Include warning if PaymentIntent retrieval failed
       },
       user: {
         id: existingUser._id,
