@@ -730,28 +730,46 @@ async function handlePaymentIntentCreation(
   } catch (error) {
     console.error("Payment intent creation error:", error);
     
-    // ✅ NEW: Auto-log error for monitoring (only if request is provided)
+    // ✅ OPTIMIZED: Auto-log error for monitoring (fire-and-forget, non-blocking)
+    // Don't await - let it run in background without blocking error response
     if (request) {
-      const session = await getServerSession(authOptions).catch(() => null);
-      const requestBody = await request.json().catch(() => ({}));
-      
-      ErrorLoggingService.logError(error, {
-        userId: session?.user?.id,
-        userEmail: session?.user?.email || undefined, // Convert null to undefined
-        guestEmail: (requestBody as { userEmail?: string })?.userEmail, // Guest email from request
-        endpoint: request.url,
-        requestMethod: "POST",
-        requestBody,
-        component: "upsell-purchase",
-        flow: "upsell-purchase",
-        offerId: (requestBody as { offerId?: string })?.offerId,
-      }, {
-        isServerSide: true,
-        request,
-        skipRateLimit: true, // Critical payment errors should bypass rate limiting
-      }).catch((logError) => {
-        console.warn("Failed to auto-log error:", logError);
-      });
+      getServerSession(authOptions)
+        .then((session) => {
+          return request.json().catch(() => ({})).then((requestBody) => {
+            ErrorLoggingService.logError(error, {
+              userId: session?.user?.id,
+              userEmail: session?.user?.email || undefined, // Convert null to undefined
+              guestEmail: (requestBody as { userEmail?: string })?.userEmail, // Guest email from request
+              endpoint: request.url,
+              requestMethod: "POST",
+              requestBody,
+              component: "upsell-purchase",
+              flow: "upsell-purchase",
+              offerId: (requestBody as { offerId?: string })?.offerId,
+            }, {
+              isServerSide: true,
+              request,
+              skipRateLimit: true, // Critical payment errors should bypass rate limiting
+            }).catch((logError) => {
+              console.warn("Failed to auto-log error:", logError);
+            });
+          });
+        })
+        .catch(() => {
+          // Silently fail if session/request body extraction fails
+          ErrorLoggingService.logError(error, {
+            endpoint: request.url,
+            requestMethod: "POST",
+            component: "upsell-purchase",
+            flow: "upsell-purchase",
+          }, {
+            isServerSide: true,
+            request,
+            skipRateLimit: true,
+          }).catch(() => {
+            // Silently fail
+          });
+        });
     }
     
     throw error; // Re-throw to be handled by caller
