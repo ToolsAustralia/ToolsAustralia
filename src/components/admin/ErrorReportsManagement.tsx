@@ -18,6 +18,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
   AlertCircle,
   CheckCircle,
@@ -31,13 +33,20 @@ import {
   Globe,
   FileText,
   MessageSquare,
+  Trash2,
+  CheckSquare,
+  Square,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { ErrorReportStatus, IErrorReport } from "@/types/error-reporting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPatch } from "@/lib/queries";
+import { apiGet, apiPatch, apiDelete } from "@/lib/queries";
 import { useToast } from "@/components/ui/Toast";
 import { format } from "date-fns";
 import ErrorReportsAnalytics from "./ErrorReportsAnalytics";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import Dropdown from "@/components/modals/ui/Dropdown";
 
 interface ErrorReportsResponse {
   reports: IErrorReport[];
@@ -307,6 +316,9 @@ export default function ErrorReportsManagement() {
   const [groupBy, setGroupBy] = useState<"none" | "error" | "endpoint" | "user">("none");
   const [selectedReport, setSelectedReport] = useState<IErrorReport | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set()); // ✅ NEW: Bulk selection
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false); // ✅ NEW: Bulk delete state
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false); // ✅ NEW: Mobile filter collapse state
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -360,6 +372,115 @@ export default function ErrorReportsManagement() {
   const handleUpdate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-error-reports"] });
     refetch();
+  };
+
+  // ✅ NEW: Handle bulk selection
+  const handleToggleSelect = (reportId: string) => {
+    setSelectedReports((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(reportId)) {
+        newSet.delete(reportId);
+      } else {
+        newSet.add(reportId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (!data?.reports) return;
+    if (selectedReports.size === data.reports.length) {
+      setSelectedReports(new Set());
+    } else {
+      setSelectedReports(new Set(data.reports.map((r) => r._id)));
+    }
+  };
+
+  // ✅ NEW: Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (reportIds: string[]) => {
+      // Use apiRequest directly since apiDelete doesn't support body
+      const response = await fetch("/api/admin/error-reports/bulk-delete", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reportIds }),
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete error reports");
+      }
+      return response.json() as Promise<{ success: boolean; deletedCount: number; message: string }>;
+    },
+    onSuccess: (data) => {
+      showToast({
+        type: "success",
+        title: "Deleted",
+        message: data.message || `Successfully deleted ${data.deletedCount || 0} error report(s)`,
+      });
+      setSelectedReports(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin-error-reports"] });
+      refetch();
+    },
+    onError: (error: Error) => {
+      showToast({
+        type: "error",
+        title: "Error",
+        message: error.message || "Failed to delete error reports",
+      });
+    },
+    onSettled: () => {
+      setIsBulkDeleting(false);
+    },
+  });
+
+  const handleBulkDelete = async () => {
+    if (selectedReports.size === 0) {
+      showToast({
+        type: "error",
+        title: "No Selection",
+        message: "Please select at least one error report to delete",
+      });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedReports.size} error report(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    bulkDeleteMutation.mutate(Array.from(selectedReports));
+  };
+
+  // ✅ NEW: Check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return !!(
+      search ||
+      statusFilter !== "all" ||
+      categoryFilter !== "all" ||
+      severityFilter !== "all" ||
+      userEmailFilter ||
+      autoLoggedFilter !== "all" ||
+      apiEndpointFilter ||
+      startDate ||
+      endDate
+    );
+  }, [search, statusFilter, categoryFilter, severityFilter, userEmailFilter, autoLoggedFilter, apiEndpointFilter, startDate, endDate]);
+
+  // ✅ NEW: Clear all filters
+  const clearAllFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setCategoryFilter("all");
+    setSeverityFilter("all");
+    setUserEmailFilter("");
+    setAutoLoggedFilter("all");
+    setApiEndpointFilter("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
   };
 
   // ✅ NEW: Group reports based on groupBy selection
@@ -510,46 +631,63 @@ export default function ErrorReportsManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Error Reports</h2>
-          <p className="text-gray-600 mt-1">View and manage error reports from users</p>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Matching AdminPage pattern */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+            Error Reports
+          </h2>
+          <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
+            View and manage error reports from users
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* ✅ NEW: Bulk delete button */}
+          {selectedReports.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="px-2 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
+            >
+              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{isBulkDeleting ? "Deleting..." : `Delete ${selectedReports.size} Selected`}</span>
+              <span className="sm:hidden">{selectedReports.size}</span>
+            </button>
+          )}
           <button
             onClick={() => setShowAnalytics(!showAnalytics)}
-            className={`px-4 py-2 rounded-lg transition-colors ${
+            className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm ${
               showAnalytics
                 ? "bg-red-600 text-white"
                 : "bg-white border border-gray-300 hover:bg-gray-50"
             }`}
           >
-            {showAnalytics ? "Hide Analytics" : "Show Analytics"}
+            <span className="hidden sm:inline">{showAnalytics ? "Hide Analytics" : "Show Analytics"}</span>
+            <span className="sm:hidden">Analytics</span>
           </button>
           <button
             onClick={handleExportCSV}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
             title="Export to CSV"
           >
-            <FileText className="w-4 h-4" />
-            Export CSV
+            <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Export CSV</span>
           </button>
           <button
             onClick={handleExportJSON}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
             title="Export to JSON"
           >
-            <FileText className="w-4 h-4" />
-            Export JSON
+            <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Export JSON</span>
           </button>
           <button
             onClick={() => refetch()}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
           >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
+            <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
       </div>
@@ -561,43 +699,44 @@ export default function ErrorReportsManagement() {
 
       {/* Statistics */}
       {data?.statistics && !showAnalytics && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Total Reports</div>
-            <div className="text-2xl font-bold text-gray-900 mt-1">{data.statistics.total}</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">New</div>
-            <div className="text-2xl font-bold text-blue-600 mt-1">
-              {data.statistics.byStatus.new}
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Investigating</div>
-            <div className="text-2xl font-bold text-yellow-600 mt-1">
-              {data.statistics.byStatus.investigating}
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Resolved</div>
-            <div className="text-2xl font-bold text-green-600 mt-1">
-              {data.statistics.byStatus.resolved}
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Last 24h</div>
-            <div className="text-2xl font-bold text-gray-900 mt-1">
-              {data.statistics.recentCount}
-            </div>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <MetricCard
+            title="Total Reports"
+            value={data.statistics.total}
+            icon={Bug}
+            color="red"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="New"
+            value={data.statistics.byStatus.new}
+            icon={AlertCircle}
+            color="blue"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="Investigating"
+            value={data.statistics.byStatus.investigating}
+            icon={Clock}
+            color="yellow"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="Resolved"
+            value={data.statistics.byStatus.resolved}
+            icon={CheckCircle}
+            color="emerald"
+            loading={isLoading}
+          />
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+      {/* Search and Filters - Elevated Design (Matching UsersManagement) */}
+      <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:gap-4">
+          {/* Search Bar - Enhanced */}
+          <div className="relative flex-1 group flex items-center gap-2">
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5" />
             <input
               type="text"
               placeholder="Search error messages, emails, endpoints..."
@@ -606,164 +745,177 @@ export default function ErrorReportsManagement() {
                 setSearch(e.target.value);
                 setPage(1); // Reset to first page on search
               }}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400"
             />
+            {/* Mobile Filter Toggle Button */}
+            <button
+              onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+              className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 rounded-lg bg-white hover:border-red-500 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
+              aria-label="Toggle filters"
+            >
+              <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600"}`} />
+              {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
+              {isFiltersOpen ? (
+                <ChevronUp className="w-4 h-4 text-gray-600" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-gray-600" />
+              )}
+            </button>
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as ErrorReportStatus | "all");
-              setPage(1); // Reset to first page on filter change
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-          >
-            <option value="all">All Status</option>
-            <option value="new">New</option>
-            <option value="investigating">Investigating</option>
-            <option value="resolved">Resolved</option>
-            <option value="dismissed">Dismissed</option>
-          </select>
-          <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-          >
-            <Filter className="w-4 h-4" />
-            {showAdvancedFilters ? "Hide" : "Show"} Filters
-          </button>
         </div>
 
-        {/* ✅ NEW: Advanced Filters */}
-        {showAdvancedFilters && (
-          <div className="pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Category Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-              <select
-                value={categoryFilter}
-                onChange={(e) => {
-                  setCategoryFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              >
-                <option value="all">All Categories</option>
-                <option value="payment">Payment</option>
-                <option value="network">Network</option>
-                <option value="api">API</option>
-                <option value="system">System</option>
-                <option value="recovery">Recovery</option>
-              </select>
-            </div>
+        {/* ✅ NEW: Advanced Filters - Collapsible on Mobile */}
+        {(isFiltersOpen || !isFiltersOpen) && (
+          <div className={`pt-4 border-t border-gray-200 ${isFiltersOpen ? "block" : "hidden sm:block"}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {/* Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All Status" },
+                    { value: "new", label: "New" },
+                    { value: "investigating", label: "Investigating" },
+                    { value: "resolved", label: "Resolved" },
+                    { value: "dismissed", label: "Dismissed" },
+                  ]}
+                  value={statusFilter}
+                  onChange={(value) => {
+                    setStatusFilter(value as ErrorReportStatus | "all");
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
 
-            {/* Severity Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
-              <select
-                value={severityFilter}
-                onChange={(e) => {
-                  setSeverityFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              >
-                <option value="all">All Severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-              </select>
-            </div>
+              {/* Category Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All Categories" },
+                    { value: "payment", label: "Payment" },
+                    { value: "network", label: "Network" },
+                    { value: "api", label: "API" },
+                    { value: "system", label: "System" },
+                    { value: "recovery", label: "Recovery" },
+                    { value: "unknown", label: "Unknown" },
+                  ]}
+                  value={categoryFilter}
+                  onChange={(value) => {
+                    setCategoryFilter(value);
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
 
-            {/* User Email Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">User Email</label>
-              <input
-                type="text"
-                placeholder="Filter by email..."
-                value={userEmailFilter}
-                onChange={(e) => {
-                  setUserEmailFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
+              {/* Severity Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All Severities" },
+                    { value: "critical", label: "Critical" },
+                    { value: "high", label: "High" },
+                    { value: "medium", label: "Medium" },
+                    { value: "low", label: "Low" },
+                  ]}
+                  value={severityFilter}
+                  onChange={(value) => {
+                    setSeverityFilter(value);
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
 
-            {/* Auto-Logged Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Auto-Logged</label>
-              <select
-                value={autoLoggedFilter}
-                onChange={(e) => {
-                  setAutoLoggedFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              >
-                <option value="all">All</option>
-                <option value="true">Auto-Logged Only</option>
-                <option value="false">User-Reported Only</option>
-              </select>
-            </div>
+              {/* User Email Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">User Email</label>
+                <input
+                  type="text"
+                  placeholder="Filter by email..."
+                  value={userEmailFilter}
+                  onChange={(e) => {
+                    setUserEmailFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
 
-            {/* API Endpoint Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint</label>
-              <input
-                type="text"
-                placeholder="Filter by endpoint..."
-                value={apiEndpointFilter}
-                onChange={(e) => {
-                  setApiEndpointFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
+              {/* Auto-Logged Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Auto-Logged</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All" },
+                    { value: "true", label: "Auto-Logged Only" },
+                    { value: "false", label: "User-Reported Only" },
+                  ]}
+                  value={autoLoggedFilter}
+                  onChange={(value) => {
+                    setAutoLoggedFilter(value as "all" | "true" | "false");
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
 
-            {/* Date Range */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
+              {/* API Endpoint Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint</label>
+                <input
+                  type="text"
+                  placeholder="Filter by endpoint..."
+                  value={apiEndpointFilter}
+                  onChange={(e) => {
+                    setApiEndpointFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
+              {/* Date Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
 
-            {/* Clear Filters Button */}
-            <div className="flex items-end">
-              <button
-                onClick={() => {
-                  setCategoryFilter("all");
-                  setSeverityFilter("all");
-                  setUserEmailFilter("");
-                  setAutoLoggedFilter("all");
-                  setApiEndpointFilter("");
-                  setStartDate("");
-                  setEndDate("");
-                  setPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Clear Filters
-              </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
+
+              {/* Clear Filters Button */}
+              {hasActiveFilters && (
+                <div className="flex items-end">
+                  <button
+                    onClick={clearAllFilters}
+                    className="w-full px-4 py-2 border-2 border-red-300 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400 transition-colors font-medium"
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -772,19 +924,20 @@ export default function ErrorReportsManagement() {
         {!showAnalytics && (
           <div className="pt-4 border-t border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-2">Group By</label>
-            <select
+            <Dropdown
+              options={[
+                { value: "none", label: "No Grouping" },
+                { value: "error", label: "Error Message" },
+                { value: "endpoint", label: "API Endpoint" },
+                { value: "user", label: "User" },
+              ]}
               value={groupBy}
-              onChange={(e) => {
-                setGroupBy(e.target.value as "none" | "error" | "endpoint" | "user");
+              onChange={(value) => {
+                setGroupBy(value as "none" | "error" | "endpoint" | "user");
                 setPage(1);
               }}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-            >
-              <option value="none">No Grouping</option>
-              <option value="error">Error Message</option>
-              <option value="endpoint">API Endpoint</option>
-              <option value="user">User</option>
-            </select>
+              className="w-full sm:w-auto"
+            />
           </div>
         )}
       </div>
@@ -807,6 +960,20 @@ export default function ErrorReportsManagement() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    {/* ✅ NEW: Bulk select checkbox */}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                      <button
+                        onClick={handleSelectAll}
+                        className="flex items-center justify-center"
+                        title="Select all"
+                      >
+                        {selectedReports.size === data.reports.length && data.reports.length > 0 ? (
+                          <CheckSquare className="w-5 h-5 text-red-600" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Error
                     </th>
@@ -839,7 +1006,7 @@ export default function ErrorReportsManagement() {
                     groupedReports.map((group) => (
                       <React.Fragment key={group.key}>
                         <tr className="bg-gray-100">
-                          <td colSpan={8} className="px-4 py-2">
+                          <td colSpan={9} className="px-4 py-2">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">{group.key}</span>
@@ -852,8 +1019,22 @@ export default function ErrorReportsManagement() {
                         </tr>
                         {group.reports.map((report) => {
                           const StatusIcon = statusIcons[report.status];
+                          const isSelected = selectedReports.has(report._id);
                           return (
-                            <tr key={report._id} className="hover:bg-gray-50">
+                            <tr key={report._id} className={`hover:bg-gray-50 ${isSelected ? "bg-red-50" : ""}`}>
+                              {/* ✅ NEW: Checkbox column */}
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => handleToggleSelect(report._id)}
+                                  className="flex items-center justify-center"
+                                >
+                                  {isSelected ? (
+                                    <CheckSquare className="w-5 h-5 text-red-600" />
+                                  ) : (
+                                    <Square className="w-5 h-5 text-gray-400" />
+                                  )}
+                                </button>
+                              </td>
                               <td className="px-4 py-3 pl-8">
                                 <div className="text-sm font-medium text-gray-900 max-w-md truncate">
                                   {report.errorMessage}
@@ -942,8 +1123,22 @@ export default function ErrorReportsManagement() {
                     // Regular view (no grouping)
                     data.reports.map((report) => {
                       const StatusIcon = statusIcons[report.status];
+                      const isSelected = selectedReports.has(report._id);
                       return (
-                        <tr key={report._id} className="hover:bg-gray-50">
+                        <tr key={report._id} className={`hover:bg-gray-50 ${isSelected ? "bg-red-50" : ""}`}>
+                          {/* ✅ NEW: Checkbox column */}
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleToggleSelect(report._id)}
+                              className="flex items-center justify-center"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-5 h-5 text-red-600" />
+                              ) : (
+                                <Square className="w-5 h-5 text-gray-400" />
+                              )}
+                            </button>
+                          </td>
                           <td className="px-4 py-3">
                             <div className="text-sm font-medium text-gray-900 max-w-md truncate">
                               {report.errorMessage}
@@ -1031,29 +1226,53 @@ export default function ErrorReportsManagement() {
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* Pagination - Matching UsersManagement pattern */}
             {data.pagination.totalPages > 1 && (
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  Showing {(data.pagination.page - 1) * data.pagination.limit + 1} to{" "}
-                  {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)}{" "}
-                  of {data.pagination.total} reports
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={data.pagination.page === 1}
-                    className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
-                    disabled={data.pagination.page === data.pagination.totalPages}
-                    className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+              <div className="px-3 sm:px-4 py-3 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      onClick={() => setPage(1)}
+                      disabled={data.pagination.page === 1}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="First page"
+                    >
+                      <ChevronsLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={data.pagination.page === 1}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                      Page {data.pagination.page} of {data.pagination.totalPages}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
+                      disabled={data.pagination.page === data.pagination.totalPages}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage(data.pagination.totalPages)}
+                      disabled={data.pagination.page === data.pagination.totalPages}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Last page"
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

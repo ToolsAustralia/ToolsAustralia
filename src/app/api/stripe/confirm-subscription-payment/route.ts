@@ -849,10 +849,15 @@ export async function POST(request: NextRequest) {
             userId = (requestBody as { userId?: string }).userId;
           }
           
+          // ✅ FIXED: Properly capture guestEmail from request body
+          const requestBodyEmail = (requestBody as { userEmail?: string; guestEmail?: string });
+          const finalUserEmail = userEmail || (userId ? requestBodyEmail.userEmail : undefined);
+          const finalGuestEmail = !userId ? (requestBodyEmail.guestEmail || requestBodyEmail.userEmail) : undefined;
+          
           ErrorLoggingService.logError(error, {
             userId,
-            userEmail: userEmail || (requestBody as { userEmail?: string })?.userEmail,
-            guestEmail: !userId ? (requestBody as { userEmail?: string })?.userEmail : undefined,
+            userEmail: finalUserEmail,
+            guestEmail: finalGuestEmail,
             endpoint: request.url,
             requestMethod: "POST",
             requestBody,
