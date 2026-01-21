@@ -12,6 +12,12 @@ export interface SetupIntentStatusResult {
   paymentMethodId: string | null;
   setupIntent: Stripe.SetupIntent | null;
   error?: string;
+  hasLastSetupError?: boolean; // NEW: Flag indicating if SetupIntent has last_setup_error
+  lastSetupError?: {            // NEW: Last error details for recovery decision
+    code?: string;
+    message?: string;
+    decline_code?: string;
+  };
 }
 
 /**
@@ -69,6 +75,14 @@ export async function checkSetupIntentStatus(
 
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
 
+    // ✅ NEW: Detect last_setup_error for recovery decision
+    const hasLastSetupError = !!setupIntent.last_setup_error;
+    const lastSetupError = setupIntent.last_setup_error ? {
+      code: setupIntent.last_setup_error.code,
+      message: setupIntent.last_setup_error.message,
+      decline_code: (setupIntent.last_setup_error as { decline_code?: string }).decline_code,
+    } : undefined;
+
     // Extract payment method ID with proper type narrowing
     let paymentMethodId: string | null = null;
     if (setupIntent.payment_method) {
@@ -84,6 +98,8 @@ export async function checkSetupIntentStatus(
       status: setupIntent.status,
       paymentMethodId,
       setupIntent,
+      hasLastSetupError,  // ✅ NEW
+      lastSetupError,     // ✅ NEW
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

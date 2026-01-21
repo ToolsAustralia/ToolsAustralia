@@ -46,6 +46,16 @@ export function formatPaymentError(error: unknown): {
   // Handle specific error types with user-friendly messages
   switch (errorType) {
     case "setup_intent_unexpected_state":
+      // ✅ NEW: Handle SetupIntent with last_setup_error (from status check)
+      if (lowerMessage.includes("setup_intent_has_error_retry") || 
+          lowerMessage.includes("has a previous error") ||
+          lowerMessage.includes("creating a new one")) {
+        return {
+          title: "Payment Setup Error",
+          message: "The payment form has a previous error. We're creating a new form for you. Please try again with your correct card details.",
+          shouldIncludeTryAgain: true,
+        };
+      }
       if (lowerMessage.includes("already succeeded") || lowerMessage.includes("succeeded")) {
         return {
           title: "Payment Setup Already Completed",

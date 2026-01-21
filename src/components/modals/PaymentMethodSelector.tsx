@@ -35,6 +35,12 @@ interface PaymentMethodSelectorProps {
       paymentIntentId?: string; 
       error?: string;
       setupIntentAlreadySucceeded?: boolean;
+      needsRecovery?: boolean; // NEW: Flag for automatic recovery
+      lastSetupError?: {        // NEW: Last error details
+        code?: string;
+        message?: string;
+        decline_code?: string;
+      };
       errorCategory?: "recoverable" | "retryable" | "non-recoverable";
       errorType?: string;
       isRecoverable?: boolean;
@@ -439,6 +445,17 @@ const StripeCardForm = React.forwardRef<
                 const result = await response.json();
                 if (result.success && result.data) {
                   const statusResult = result.data;
+
+                  // ✅ NEW: Detect SetupIntent with last_setup_error - needs recovery
+                  if (statusResult.hasLastSetupError && statusResult.status === "requires_payment_method") {
+                    console.log("⚠️ SetupIntent has last_setup_error, needs recovery:", statusResult.lastSetupError);
+                    // Return special flag to trigger automatic recovery
+                    return {
+                      error: "SETUP_INTENT_HAS_ERROR_RETRY: SetupIntent has a previous error. Creating a new one. Please try again.",
+                      needsRecovery: true,
+                      lastSetupError: statusResult.lastSetupError,
+                    };
+                  }
 
                   // If SetupIntent already succeeded, extract payment method and return it
                   if (statusResult.status === "succeeded" && statusResult.paymentMethodId) {

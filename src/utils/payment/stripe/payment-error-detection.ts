@@ -101,6 +101,18 @@ export function isRecoverableError(error: unknown): boolean {
   const errorMessage = extractErrorMessage(error).toLowerCase();
   const errorCode = extractErrorCode(error)?.toLowerCase() || "";
   
+  // ✅ NEW: Check for recovery flags from status checks
+  if (typeof error === "object" && error !== null) {
+    const err = error as Record<string, unknown>;
+    if (err.needsRecovery === true || 
+        (typeof err.error === "string" && (
+          err.error.includes("SETUP_INTENT_HAS_ERROR_RETRY") ||
+          err.error.includes("PAYMENT_INTENT_HAS_ERROR_RETRY")
+        ))) {
+      return true;
+    }
+  }
+  
   // Recoverable errors: SetupIntent/PaymentIntent already succeeded
   if (
     errorCode === "setup_intent_unexpected_state" ||
@@ -136,6 +148,26 @@ export function categorizeError(error: unknown): {
 } {
   const errorMessage = extractErrorMessage(error).toLowerCase();
   const errorCode = extractErrorCode(error)?.toLowerCase() || "";
+  
+  // ✅ NEW: Check for recovery flags from status checks (SetupIntent with last_setup_error)
+  if (typeof error === "object" && error !== null) {
+    const err = error as Record<string, unknown>;
+    if (err.needsRecovery === true || 
+        (typeof err.error === "string" && err.error.includes("SETUP_INTENT_HAS_ERROR_RETRY"))) {
+      return {
+        category: "recoverable",
+        errorType: "setup_intent_unexpected_state",
+        shouldPreserveState: true,
+      };
+    }
+    if (typeof err.error === "string" && err.error.includes("PAYMENT_INTENT_HAS_ERROR_RETRY")) {
+      return {
+        category: "recoverable",
+        errorType: "payment_intent_unexpected_state",
+        shouldPreserveState: true,
+      };
+    }
+  }
   
   // SetupIntent/PaymentIntent unexpected state (already succeeded)
   if (

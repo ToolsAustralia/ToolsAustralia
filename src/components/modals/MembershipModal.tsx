@@ -178,6 +178,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       paymentIntentId?: string; 
       error?: string;
       setupIntentAlreadySucceeded?: boolean;
+      needsRecovery?: boolean; // NEW: Flag for automatic recovery
+      lastSetupError?: {        // NEW: Last error details
+        code?: string;
+        message?: string;
+        decline_code?: string;
+      };
     }>;
   } | null>(null);
   const [guestUserData, setGuestUserData] = useState<{
@@ -2428,6 +2434,51 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
               paymentMethodId = result.paymentMethodId;
               console.log("⚠️ Using existing payment method after recovery failure:", paymentMethodId);
             }
+          } else if (result.error?.includes("SETUP_INTENT_HAS_ERROR_RETRY") || result.needsRecovery) {
+            // ✅ NEW: Handle SetupIntent with last_setup_error - automatic recovery
+            console.log("⚠️ SetupIntent has last_setup_error, triggering automatic recovery...", result.lastSetupError);
+            
+            // ✅ EXPERT ERROR HANDLING: Use recovery function for seamless retry
+            // Note: handlePaymentRecovery already updates setupIntentClientSecret internally
+            const recoveryResult = await handlePaymentRecovery("setup_intent_recovery", result.error);
+            
+            if (recoveryResult.success) {
+              // Recovery succeeded - SetupIntent client secret already updated by handlePaymentRecovery
+              console.log("✅ SetupIntent recovery succeeded, retrying with new SetupIntent...");
+              
+              // Wait for PaymentElement to remount with new SetupIntent (already done in handlePaymentRecovery, but wait a bit more)
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              
+              // Retry confirmation with new SetupIntent
+              if (cardFormRef.current) {
+                const retryResult = await cardFormRef.current.confirmSetup();
+                if (retryResult.error) {
+                  // Recovery succeeded but retry failed - show error with state preserved
+                  await handlePaymentError(retryResult.error, {
+                    preserveState: true,
+                    packageId,
+                    packageName: activePlan.name,
+                  });
+                  throw new Error(retryResult.error);
+                }
+                if (retryResult.paymentMethodId) {
+                  paymentMethodId = retryResult.paymentMethodId;
+                  console.log("✅ Payment method confirmed after SetupIntent recovery:", paymentMethodId);
+                } else {
+                  throw new Error("Failed to confirm payment method after SetupIntent recovery.");
+                }
+              } else {
+                throw new Error("Payment form was closed during recovery. Please try again.");
+              }
+            } else {
+              // Recovery failed - show error but allow retry
+              await handlePaymentError(result.error || "Failed to recover SetupIntent", {
+                preserveState: true,
+                packageId,
+                packageName: activePlan.name,
+              });
+              throw new Error(result.error || "SetupIntent recovery failed");
+            }
           } else if (result.error) {
             // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent
             // When PaymentIntent is canceled, automatically create a new one and retry
@@ -2552,7 +2603,52 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           console.log("💳 Attempting to confirm with client secret even though showCardForm is false");
           const result = await cardFormRef.current.confirmSetup();
 
-          if (result.error) {
+          // ✅ NEW: Handle SetupIntent with last_setup_error - automatic recovery (second occurrence)
+          if (result.error?.includes("SETUP_INTENT_HAS_ERROR_RETRY") || result.needsRecovery) {
+            console.log("⚠️ SetupIntent has last_setup_error, triggering automatic recovery...", result.lastSetupError);
+            
+            // ✅ EXPERT ERROR HANDLING: Use recovery function for seamless retry
+            // Note: handlePaymentRecovery already updates setupIntentClientSecret internally
+            const recoveryResult = await handlePaymentRecovery("setup_intent_recovery", result.error);
+            
+            if (recoveryResult.success) {
+              // Recovery succeeded - SetupIntent client secret already updated by handlePaymentRecovery
+              console.log("✅ SetupIntent recovery succeeded, retrying with new SetupIntent...");
+              
+              // Wait for PaymentElement to remount with new SetupIntent (already done in handlePaymentRecovery, but wait a bit more)
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              
+              // Retry confirmation with new SetupIntent
+              if (cardFormRef.current) {
+                const retryResult = await cardFormRef.current.confirmSetup();
+                if (retryResult.error) {
+                  // Recovery succeeded but retry failed - show error with state preserved
+                  await handlePaymentError(retryResult.error, {
+                    preserveState: true,
+                    packageId,
+                    packageName: activePlan.name,
+                  });
+                  throw new Error(retryResult.error);
+                }
+                if (retryResult.paymentMethodId) {
+                  paymentMethodId = retryResult.paymentMethodId;
+                  console.log("✅ Payment method confirmed after SetupIntent recovery:", paymentMethodId);
+                } else {
+                  throw new Error("Failed to confirm payment method after SetupIntent recovery.");
+                }
+              } else {
+                throw new Error("Payment form was closed during recovery. Please try again.");
+              }
+            } else {
+              // Recovery failed - show error but allow retry
+              await handlePaymentError(result.error || "Failed to recover SetupIntent", {
+                preserveState: true,
+                packageId,
+                packageName: activePlan.name,
+              });
+              throw new Error(result.error || "SetupIntent recovery failed");
+            }
+          } else if (result.error) {
             // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent (second occurrence)
             // When PaymentIntent is canceled, automatically create a new one and retry
             if (result.error.includes("PAYMENT_INTENT_CANCELED_RETRY") || 
