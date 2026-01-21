@@ -11,7 +11,12 @@ import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
 import { useLoading } from "@/contexts/LoadingContext";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
+import { loadStripe } from "@stripe/stripe-js";
 import { useMemberships } from "@/hooks/useMemberships";
+
+// ✅ CRITICAL FIX: Initialize Stripe at module level (outside component) to prevent endless API calls
+// This ensures Stripe is only loaded once, not on every render
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
@@ -152,10 +157,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const lastPaymentIntentAmountRef = useRef<number | null>(null);
   // ✅ FIX: Track if PaymentIntent creation is in progress to prevent double creation
   const isCreatingPaymentIntentRef = useRef<boolean>(false);
+  // ✅ FIX: Track if SetupIntent creation is in progress to prevent concurrent creation
+  const isCreatingSetupIntentRef = useRef<boolean>(false);
   // ✅ STRIPE BEST PRACTICE: Track if subscription was already created to prevent duplicate creation
   const subscriptionCreatedRef = useRef<string | null>(null); // Store subscriptionId once created
   const cardFormRef = useRef<{
-    confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }>;
+    confirmSetup: () => Promise<{ 
+      paymentMethodId?: string; 
+      paymentIntentId?: string; 
+      error?: string;
+      setupIntentAlreadySucceeded?: boolean;
+    }>;
   } | null>(null);
   const [guestUserData, setGuestUserData] = useState<{
     userId: string;
@@ -212,6 +224,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
+
+  // ✅ FIX: stripePromise is now initialized at module level (line ~18) to prevent endless API calls
 
   // Get active promos for different package types (for checking if promo is active)
   const { data: oneTimePromo } = usePromoByType("one-time-packages");
@@ -681,6 +695,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // ✅ FIX: Only create PaymentIntent during actual payment flows
   // This prevents unnecessary PaymentIntent creation on modal open/page load
   useEffect(() => {
+    // ✅ CRITICAL FIX: Don't run any Stripe logic when modal is closed
+    // This prevents endless Stripe API calls when modal is mounted but not visible
+    if (!isOpen) {
+      return;
+    }
+
     const isSubscription = activePlan?.period === "mo";
     const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
 
@@ -693,6 +713,33 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     const isActualPlan = activePlan && activePlan.id !== "placeholder";
     const shouldCreatePaymentIntent =
       isInPaymentFlow && hasCompletedRegistration && isActualPlan && (showCardForm || isSubscription); // Only for subscriptions or when card form is shown
+
+    // ✅ FIX: Ensure SetupIntent/PaymentIntent is created when user reaches Step 2
+    // This ensures PaymentElement appears automatically for new users
+    if (currentStep === 2 && hasCompletedRegistration && isActualPlan && !setupIntentClientSecret && !paymentIntentClientSecret) {
+      const isSubscription = activePlan?.period === "mo";
+      
+      if (isSubscription) {
+        // For subscriptions: Create SetupIntent proactively when Step 2 is reached
+        if (!isCreatingSetupIntentRef.current) {
+          isCreatingSetupIntentRef.current = true;
+          createSetupIntent.mutate(undefined, {
+            onSuccess: (result) => {
+              if (result.success && result.client_secret) {
+                setSetupIntentClientSecret(result.client_secret);
+                setPaymentIntentClientSecret(null);
+                setCardFormError(null);
+              }
+              isCreatingSetupIntentRef.current = false;
+            },
+            onError: (error) => {
+              console.error("Failed to create SetupIntent on Step 2:", error);
+              isCreatingSetupIntentRef.current = false;
+            },
+          });
+        }
+      }
+    }
 
     // For subscriptions: Create PaymentIntent only when in payment flow
     // ✅ CRITICAL: Also recreate if amount changed (switching between membership packages)
@@ -725,6 +772,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         // For subscriptions: Use SetupIntent for payment method collection
         // The invoice PaymentIntent with correct amount will be provided after subscription creation
         if (!setupIntentClientSecret && !paymentIntentClientSecret) {
+          // ✅ FIX: Prevent concurrent SetupIntent creation
+          if (isCreatingSetupIntentRef.current) {
+            return; // Already creating, prevent duplicate
+          }
+
+          // Mark as creating
+          isCreatingSetupIntentRef.current = true;
+
           // Create SetupIntent for payment method collection
           createSetupIntent.mutate(undefined, {
             onSuccess: (result) => {
@@ -732,12 +787,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 setSetupIntentClientSecret(result.client_secret);
                 setPaymentIntentClientSecret(null); // Clear any PaymentIntent
                 setCardFormError(null);
-                setShowCardForm(true);
+                // ✅ FIX: Removed redundant setShowCardForm(true) - showCardForm is already true when this effect runs
               }
+              // ✅ FIX: Reset flag after successful creation
+              isCreatingSetupIntentRef.current = false;
             },
             onError: (error) => {
               console.error("Failed to create SetupIntent:", error);
               setCardFormError("Failed to set up payment form. Please try again.");
+              // ✅ FIX: Reset flag on error so user can retry
+              isCreatingSetupIntentRef.current = false;
             },
           });
         }
@@ -810,13 +869,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     promoEnhancedPlan?.name,
     paymentIntentClientSecret,
     setupIntentClientSecret,
-    showCardForm,
+    showCardForm, // ✅ Keep to know when card form is shown (removed redundant setShowCardForm to prevent loops)
     currentStep, // ✅ Added to track payment flow step
     isAuthenticated, // ✅ Added to track registration completion
     guestUserData, // ✅ Added to track guest registration completion
-    isAuthenticated,
     userData?.email,
     guestUserData?.email,
+    isOpen, // ✅ Added to prevent Stripe calls when modal is closed
   ]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1367,6 +1426,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         return;
       }
 
+      // ✅ FIX: Clear existing SetupIntent to allow creating a new one (for different payment method)
+      // This handles the case where SetupIntent already succeeded and user wants to use a different card
+      if (setupIntentClientSecret) {
+        console.log("🔄 Clearing existing SetupIntent to allow new payment method selection...");
+        setSetupIntentClientSecret(null);
+        // Force form to remount by briefly hiding it
+        setShowCardForm(false);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       // ✅ STRIPE BEST PRACTICE: For subscriptions, invoice PaymentIntent is provided by subscription creation
       // For one-time purchases, use PaymentIntent (shows amount in wallets)
       // SetupIntent should NEVER be used for subscriptions as it shows $0.00 in Google Pay/Apple Pay
@@ -1376,11 +1445,34 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
       if (isSubscription) {
+        // ✅ FIX: Ensure SetupIntent is created when user explicitly adds payment method on Step 2
+        // Now always create a new SetupIntent when user clicks "Add New Payment Method"
+        if (currentStep === 2) {
+          // Prevent concurrent creation
+          if (!isCreatingSetupIntentRef.current) {
+            isCreatingSetupIntentRef.current = true;
+            createSetupIntent.mutate(undefined, {
+              onSuccess: (result) => {
+                if (result.success && result.client_secret) {
+                  setSetupIntentClientSecret(result.client_secret);
+                  setPaymentIntentClientSecret(null);
+                  setCardFormError(null);
+                }
+                isCreatingSetupIntentRef.current = false;
+              },
+              onError: (error) => {
+                console.error("Failed to create SetupIntent:", error);
+                setCardFormError("Failed to set up payment form. Please try again.");
+                isCreatingSetupIntentRef.current = false;
+              },
+            });
+          }
+        }
+
         // ✅ REMOVED: Upfront PaymentIntent creation for subscriptions
         // Subscriptions now use invoice PaymentIntent from subscription creation response
         // The invoice PaymentIntent has the correct amount and will be provided when subscription is created
         // For now, just show the card form - PaymentIntent will come from subscription creation
-        setSetupIntentClientSecret(null); // ✅ CRITICAL: Clear SetupIntent - should never exist for subscriptions
         setUseSavedPaymentMethod(false);
         setSelectedPaymentMethod(null);
         setShowCardForm(true);
@@ -2128,7 +2220,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           });
           const result = await cardFormRef.current.confirmSetup();
 
-          if (result.error) {
+          // ✅ FIX: Handle SetupIntent that already succeeded - allow user to use different payment method
+          if (result.setupIntentAlreadySucceeded && result.paymentMethodId) {
+            console.log("⚠️ SetupIntent already succeeded. User can use existing payment method or create new SetupIntent for different payment method.");
+            
+            // Option 1: Use the existing payment method (seamless retry)
+            // This is handled by returning the paymentMethodId, so we can proceed
+            
+            // Option 2: If user wants different payment method, they can click "Add New Payment Method" again
+            // which will clear setupIntentClientSecret and create a new one
+            
+            // For now, we'll use the existing payment method and proceed
+            // User can manually reset by clicking "Add New Payment Method" if they want a different card
+            paymentMethodId = result.paymentMethodId;
+            console.log("✅ Using existing payment method from succeeded SetupIntent:", paymentMethodId);
+          } else if (result.error) {
             // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent
             // When PaymentIntent is canceled, automatically create a new one and retry
             if (result.error.includes("PAYMENT_INTENT_CANCELED_RETRY") || 
@@ -2608,7 +2714,48 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
             const confirmResult = await confirmResponse.json();
 
+            // ✅ CRITICAL: Handle 3DS authentication requirement
+            if (confirmResult.requiresPaymentConfirmation && confirmResult.data?.paymentIntent?.clientSecret) {
+              console.log("⏳ Payment requires 3DS authentication - handling redirect");
+              
+              // Use the PaymentIntent client_secret for 3DS handling
+              const threeDSClientSecret = confirmResult.data.paymentIntent.clientSecret;
+              
+              // Import Stripe confirmation utility
+              const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
+              
+              // Load Stripe instance for 3DS confirmation (doesn't require Elements context)
+              const stripe = await stripePromise;
+              if (!stripe) {
+                throw new Error("Stripe not loaded. Please refresh and try again.");
+              }
+
+              // Confirm payment with 3DS redirect
+              const { error: confirmError } = await stripe.confirmPayment({
+                clientSecret: threeDSClientSecret,
+                confirmParams: {
+                  return_url: getReturnUrlForPaymentTypeClient("subscription"),
+                },
+              });
+
+              if (confirmError) {
+                throw new Error(confirmError.message || "3D Secure authentication failed");
+              }
+
+              // 3DS redirect will happen - user will be redirected to success page
+              // Don't throw error - let the redirect happen
+              return;
+            }
+
             if (!confirmResponse.ok) {
+              // ✅ RETRY FIX: Don't clear SetupIntent or payment method on API errors
+              // This allows seamless retry without recreating SetupIntent
+              console.warn("⚠️ Subscription confirmation failed, preserving SetupIntent for retry:", {
+                error: confirmResult.error,
+                details: confirmResult.details,
+                code: confirmResult.code,
+              });
+              
               throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
             }
 
@@ -2987,7 +3134,48 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
               const confirmResult = await confirmResponse.json();
 
+              // ✅ CRITICAL: Handle 3DS authentication requirement
+              if (confirmResult.requiresPaymentConfirmation && confirmResult.data?.paymentIntent?.clientSecret) {
+                console.log("⏳ Payment requires 3DS authentication - handling redirect");
+                
+                // Use the PaymentIntent client_secret for 3DS handling
+                const threeDSClientSecret = confirmResult.data.paymentIntent.clientSecret;
+                
+                // Import Stripe confirmation utility
+                const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
+                
+                // Load Stripe instance for 3DS confirmation (doesn't require Elements context)
+                const stripe = await stripePromise;
+                if (!stripe) {
+                  throw new Error("Stripe not loaded. Please refresh and try again.");
+                }
+
+                // Confirm payment with 3DS redirect
+                const { error: confirmError } = await stripe.confirmPayment({
+                  clientSecret: threeDSClientSecret,
+                  confirmParams: {
+                    return_url: getReturnUrlForPaymentTypeClient("subscription"),
+                  },
+                });
+
+                if (confirmError) {
+                  throw new Error(confirmError.message || "3D Secure authentication failed");
+                }
+
+                // 3DS redirect will happen - user will be redirected to success page
+                // Don't throw error - let the redirect happen
+                return;
+              }
+
               if (!confirmResponse.ok) {
+                // ✅ RETRY FIX: Don't clear SetupIntent or payment method on API errors
+                // This allows seamless retry without recreating SetupIntent
+                console.warn("⚠️ Subscription confirmation failed, preserving SetupIntent for retry:", {
+                  error: confirmResult.error,
+                  details: confirmResult.details,
+                  code: confirmResult.code,
+                });
+                
                 throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
               }
 

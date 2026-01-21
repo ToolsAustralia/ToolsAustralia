@@ -148,11 +148,14 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
           throw new Error("No payment intent received from server");
         }
 
+        // Import client-side return URL utility
+        const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
+        
         const confirmResult = await stripeInstance.confirmPayment({
           clientSecret: finalClientSecret,
           confirmParams: {
             payment_method: selectedPaymentMethod.paymentMethodId,
-            return_url: window.location.href,
+            return_url: getReturnUrlForPaymentTypeClient("subscription"),
           },
         });
 
@@ -372,6 +375,9 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
       // Update the Elements with the new client secret
       // ✅ CRITICAL: When billingDetails: "never" is set, we must provide complete billing details here
       // Stripe requires all address fields (country, state, city, postal_code, line1) when fields.billingDetails is "never"
+      // Import client-side return URL utility
+      const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
+      
       const confirmResult = await stripe.confirmPayment({
         clientSecret,
         confirmParams: {
@@ -386,7 +392,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
               },
             },
           },
-          return_url: window.location.href,
+          return_url: getReturnUrlForPaymentTypeClient("subscription"),
         },
         redirect: "if_required",
       });

@@ -21,6 +21,8 @@ import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository
 import mongoose from "mongoose";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
+import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { getBaseUrl } from "@/utils/url/get-base-url";
 
 const createOneTimePurchaseSchema = z.object({
   userEmail: z.string().email("Invalid email address"),
@@ -68,24 +70,7 @@ async function handleOneTimePaymentSuccess(
 }
 
 // ✅ REMOVED: addEntriesToMajorDrawImmediately function - now handled by processPaymentBenefits utility
-
-/**
- * Get the base URL for API requests
- * Prioritizes NEXT_PUBLIC_APP_URL environment variable
- * Validates production environment requires the URL to be set
- */
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL;
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("NEXT_PUBLIC_APP_URL must be set in production environment");
-  }
-
-  // console.warn(`⚠️ NEXT_PUBLIC_APP_URL not set, falling back to localhost:3000`);
-  return "http://localhost:3000";
-}
+// ✅ REMOVED: getBaseUrl() function - now using centralized utility from @/utils/url/get-base-url
 
 /**
  * POST /api/stripe/create-one-time-purchase
@@ -205,7 +190,10 @@ export async function POST(request: NextRequest) {
           },
         });
         registeredUser.stripeCustomerId = customer.id;
-        await registeredUser.save();
+        // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+        registeredUser.save().catch((error) => {
+          console.warn("Non-critical user save failed (webhook will handle):", error);
+        });
         console.log(`✅ Created new customer ${customer.id} to replace deleted one`);
       } else {
         customer = retrievedCustomer as Stripe.Customer;
@@ -300,7 +288,10 @@ export async function POST(request: NextRequest) {
           // If registered user exists, update them with the customer ID
           if (registeredUser) {
             registeredUser.stripeCustomerId = customer.id;
-            await registeredUser.save();
+            // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+            registeredUser.save().catch((error) => {
+              console.warn("Non-critical user save failed (webhook will handle):", error);
+            });
             console.log(`✅ Linked customer ${customer.id} to registered user ${registeredUser._id}`);
           }
         }
@@ -571,21 +562,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-      paymentIntent = await stripe.paymentIntents.create(
-        {
-          amount: Math.round(membershipPackage.price * 100), // Convert to cents
+      // ✅ Use centralized PaymentIntent configuration with 3DS support
+      const paymentIntentConfig = createPaymentIntentConfig({
+        amount: Math.round(membershipPackage.price * 100), // Convert to cents
         currency: "aud",
         customer: customer.id,
-        payment_method: finalPaymentMethodId, // Use the final payment method ID
-        confirm: true, // Auto-confirm for testing
-        return_url: `${getBaseUrl()}/purchase-success`,
-        setup_future_usage: "off_session", // ✅ Save payment method for future use (required for production/staging)
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
-        },
-        description: `${membershipPackage.name}`, // Add meaningful description
+        paymentMethod: finalPaymentMethodId, // Use the final payment method ID
+        confirm: true, // Auto-confirm
+        paymentType: isMiniDrawPackage ? "mini-draw" : "one-time",
+        description: membershipPackage.name,
+        setupFutureUsage: "off_session", // ✅ Save payment method for future use (required for production/staging)
         metadata: {
           items: JSON.stringify([
             {
@@ -628,10 +614,13 @@ export async function POST(request: NextRequest) {
           ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
         },
-      },
-      {
-        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-      }
+      });
+
+      paymentIntent = await stripe.paymentIntents.create(
+        paymentIntentConfig,
+        {
+          idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+        }
       );
     }
 

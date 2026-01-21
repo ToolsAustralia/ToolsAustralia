@@ -17,6 +17,8 @@ import Promo from "@/models/Promo";
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
+import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { getBaseUrl } from "@/utils/url/get-base-url";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -58,24 +60,7 @@ async function handleOneTimePaymentSuccess(
 }
 
 // ✅ REMOVED: addEntriesToMajorDrawImmediately function - now handled by processPaymentBenefits utility
-
-/**
- * Get the base URL for API requests
- * Prioritizes NEXT_PUBLIC_APP_URL environment variable
- * Validates production environment requires the URL to be set
- */
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL;
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("NEXT_PUBLIC_APP_URL must be set in production environment");
-  }
-
-  console.warn(`⚠️ NEXT_PUBLIC_APP_URL not set, falling back to localhost:3000`);
-  return "http://localhost:3000";
-}
+// ✅ REMOVED: getBaseUrl() function - now using centralized utility from @/utils/url/get-base-url
 
 /**
  * POST /api/stripe/create-one-time-purchase-existing-user
@@ -164,7 +149,10 @@ export async function POST(request: NextRequest) {
 
       // Update user with Stripe customer ID
       existingUser.stripeCustomerId = stripeCustomerId;
-      await existingUser.save();
+      // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+      existingUser.save().catch((error) => {
+        console.warn("Non-critical user save failed (webhook will handle):", error);
+      });
     } else {
       // ✅ SYNC: Retrieve customer and ensure email is in sync
       const retrievedCustomer = await stripe.customers.retrieve(stripeCustomerId);
@@ -179,7 +167,10 @@ export async function POST(request: NextRequest) {
         });
         stripeCustomerId = customer.id;
         existingUser.stripeCustomerId = stripeCustomerId;
-        await existingUser.save();
+        // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+        existingUser.save().catch((error) => {
+          console.warn("Non-critical user save failed (webhook will handle):", error);
+        });
       } else {
         customer = retrievedCustomer as Stripe.Customer;
         const customerEmail = customer.email || "";
@@ -266,21 +257,16 @@ export async function POST(request: NextRequest) {
       validatedData.idempotencyKey || 
       `pi_${validatedData.packageId}_${existingUser._id.toString()}_${Date.now()}`;
 
-    // Create payment intent for one-time purchase
-    // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-    const paymentIntent = await stripe.paymentIntents.create({
+    // ✅ Use centralized PaymentIntent configuration with 3DS support
+    const paymentIntentConfig = createPaymentIntentConfig({
       amount: Math.round(membershipPackage.price * 100), // Convert to cents
       currency: "aud",
       customer: customer.id,
-      payment_method: paymentMethodId,
+      paymentMethod: paymentMethodId,
       confirm: true,
-      return_url: `${getBaseUrl()}/purchase-success`,
-      setup_future_usage: "off_session", // ✅ Save payment method for future use (required for production/staging)
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
-      },
-      description: `${membershipPackage.name}`, // Add meaningful description
+      paymentType: isMiniDrawPackage ? "mini-draw" : "one-time",
+      description: membershipPackage.name,
+      setupFutureUsage: "off_session", // ✅ Save payment method for future use (required for production/staging)
       metadata: {
         items: JSON.stringify([
           {
@@ -308,10 +294,13 @@ export async function POST(request: NextRequest) {
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
       },
-    },
-    {
-      idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-    }
+    });
+
+    const paymentIntent = await stripe.paymentIntents.create(
+      paymentIntentConfig,
+      {
+        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+      }
     );
 
     // console.log(`✅ Payment intent created: ${paymentIntent.id} with status: ${paymentIntent.status}`);

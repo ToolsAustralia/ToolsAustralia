@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import type Stripe from "stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
+import { cancelDuplicatePaymentIntents } from "@/utils/payment/stripe/subscription-utils";
+import {
+  findAvailablePaymentMethod,
+  verifyPaymentMethodAttachment,
+  attachPaymentMethodToCustomer,
+  setDefaultPaymentMethod,
+} from "@/utils/payment/stripe/payment-method-utils";
+import { getCustomerWithDefaultPaymentMethod } from "@/utils/payment/stripe/customer-utils";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are now granted via webhook processing only
 
@@ -176,11 +185,10 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // ✅ ENHANCED: Only try default payment method if PaymentIntent still doesn't exist
-        // Use multiple fallback strategies to find payment method
+        // ✅ OPTIMIZED: Use utility function for payment method discovery (parallelizes fallback strategies)
         if (!paymentIntent) {
-          // Try to get the customer's default payment method
-          const customer = await stripe.customers.retrieve(subscription.customer as string);
+          // Get customer (with safety check)
+          const customer = await getCustomerWithDefaultPaymentMethod(subscription.customer as string);
           
           // ✅ SAFETY: Check if customer is deleted
           if ("deleted" in customer && customer.deleted) {
@@ -195,75 +203,10 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          let defaultPaymentMethod: string | null = null;
-          let paymentMethodSource = "none";
+          // ✅ OPTIMIZED: Use utility function to find available payment method (parallelizes strategies)
+          const defaultPaymentMethod = await findAvailablePaymentMethod(customer, user);
 
-          // ✅ ENHANCED FALLBACK STRATEGY 1: Customer's default payment method
-          const customerDefaultPm = (customer as { invoice_settings?: { default_payment_method?: string } })
-            .invoice_settings?.default_payment_method;
-          
-          if (customerDefaultPm) {
-            defaultPaymentMethod = customerDefaultPm;
-            paymentMethodSource = "customerDefault";
-            console.log(`💳 Found payment method from customer default: ${defaultPaymentMethod}`);
-          }
-
-          // ✅ ENHANCED FALLBACK STRATEGY 2: List customer's payment methods (most recent first)
           if (!defaultPaymentMethod) {
-            try {
-              const customerPaymentMethods = await stripe.paymentMethods.list({
-                customer: customer.id,
-                type: "card",
-                limit: 10,
-              });
-              
-              if (customerPaymentMethods.data.length > 0) {
-                // Use the most recently created payment method
-                const sortedMethods = customerPaymentMethods.data.sort((a, b) => b.created - a.created);
-                defaultPaymentMethod = sortedMethods[0].id;
-                paymentMethodSource = "customerList";
-                console.log(`💳 Found payment method from customer payment methods list: ${defaultPaymentMethod} (${customerPaymentMethods.data.length} total)`);
-              }
-            } catch (listError) {
-              console.warn(`⚠️ Failed to list customer payment methods: ${listError}`);
-            }
-          }
-
-          // ✅ ENHANCED FALLBACK STRATEGY 3: User's saved payment methods
-          if (!defaultPaymentMethod && user?.savedPaymentMethods && user.savedPaymentMethods.length > 0) {
-            // Try to use user's saved payment methods
-            const savedMethod = user.savedPaymentMethods.find((pm: { isDefault?: boolean }) => pm.isDefault) 
-              || user.savedPaymentMethods[0];
-            
-            if (savedMethod?.paymentMethodId) {
-              try {
-                const pm = await stripe.paymentMethods.retrieve(savedMethod.paymentMethodId);
-                
-                // ✅ ENHANCED: Automatic recovery - attach payment method if found but not attached
-                const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
-                if (!pmCustomerId || pmCustomerId !== customer.id) {
-                  await stripe.paymentMethods.attach(savedMethod.paymentMethodId, {
-                    customer: customer.id,
-                  });
-                  console.log(`✅ Attached saved payment method to customer: ${savedMethod.paymentMethodId}`);
-                }
-                
-                defaultPaymentMethod = savedMethod.paymentMethodId;
-                paymentMethodSource = "userSaved";
-                console.log(`💳 Using saved payment method as fallback: ${savedMethod.paymentMethodId}`);
-              } catch (pmError) {
-                console.warn(`⚠️ Failed to use saved payment method: ${pmError}`);
-                // Continue to next fallback strategy
-              }
-            }
-          }
-
-          // ✅ ENHANCED: If still no payment method found, provide detailed error message
-          if (!defaultPaymentMethod) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:213',message:'No payment method found after all fallback strategies',data:{customerId:customer.id,hasSavedPaymentMethods:!!(user?.savedPaymentMethods && user.savedPaymentMethods.length > 0),subscriptionId:subscription.id,subscriptionStatus:subscription.status,invoiceId:latestInvoice?.id,userId:user?._id?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-            // #endregion
-            
             console.error("❌ No payment method found for customer after all fallback strategies", {
               customerId: customer.id,
               hasSavedPaymentMethods: !!(user?.savedPaymentMethods && user.savedPaymentMethods.length > 0),
@@ -271,103 +214,56 @@ export async function POST(request: NextRequest) {
               subscriptionStatus: subscription.status,
               invoiceId: latestInvoice?.id,
             });
-            
+
             // ✅ ENHANCED: Provide actionable error message based on context
-            const errorMessage = subscription.status === "incomplete"
-              ? "Your subscription was created but no payment method was found to complete the payment. This usually happens when the payment method wasn't properly saved during checkout."
-              : "No payment method found to complete this subscription payment.";
-            
-            const suggestion = user?.savedPaymentMethods && user.savedPaymentMethods.length > 0
-              ? "Please try again, or go to your account settings to add a new payment method."
-              : "Please go to your account settings to add a payment method, then try completing your subscription again.";
-            
+            const errorMessage =
+              subscription.status === "incomplete"
+                ? "Your subscription was created but no payment method was found to complete the payment. This usually happens when the payment method wasn't properly saved during checkout."
+                : "No payment method found to complete this subscription payment.";
+
+            const suggestion =
+              user?.savedPaymentMethods && user.savedPaymentMethods.length > 0
+                ? "Please try again, or go to your account settings to add a new payment method."
+                : "Please go to your account settings to add a payment method, then try completing your subscription again.";
+
             return NextResponse.json(
               {
                 success: false,
                 error: "No payment method found",
                 details: errorMessage,
                 suggestion: suggestion,
-                recoverySteps: [
-                  "Go to your account settings",
-                  "Add or verify your payment method",
-                  "Return here to complete your subscription",
-                ],
+                recoverySteps: ["Go to your account settings", "Add or verify your payment method", "Return here to complete your subscription"],
               },
               { status: 400 }
             );
           }
 
-          // ✅ ENHANCED: Verify payment method is attached before using it
-          try {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:248',message:'Verifying payment method attachment',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,paymentMethodSource,subscriptionId:subscription.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-            // #endregion
-            
-            const pm = await stripe.paymentMethods.retrieve(defaultPaymentMethod);
-            const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:252',message:'Payment method retrieved - attachment check',data:{paymentMethodId:defaultPaymentMethod,pmCustomerId,expectedCustomerId:customer.id,isAttached:pmCustomerId===customer.id,paymentMethodType:pm.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-            // #endregion
-            
-            // ✅ ENHANCED: Automatic recovery - attach if not already attached
-            if (!pmCustomerId || pmCustomerId !== customer.id) {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:254',message:'Attaching payment method to customer',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,currentPmCustomerId:pmCustomerId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-              // #endregion
-              
-              await stripe.paymentMethods.attach(defaultPaymentMethod, {
-                customer: customer.id,
-              });
-              console.log(`✅ Attached payment method ${defaultPaymentMethod} to customer ${customer.id} (source: ${paymentMethodSource})`);
-              
-              // Set as default for future use
-              await stripe.customers.update(customer.id, {
-                invoice_settings: {
-                  default_payment_method: defaultPaymentMethod,
+          // ✅ OPTIMIZED: Verify and attach payment method using utility (if needed)
+          const isAttached = await verifyPaymentMethodAttachment(defaultPaymentMethod, customer.id);
+          if (!isAttached) {
+            try {
+              await attachPaymentMethodToCustomer(defaultPaymentMethod, customer.id);
+              await setDefaultPaymentMethod(customer.id, defaultPaymentMethod);
+            } catch (attachError) {
+              const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+              const errorCode = attachError && typeof attachError === "object" && "code" in attachError ? String(attachError.code) : undefined;
+              const declineCode = attachError && typeof attachError === "object" && "decline_code" in attachError ? String(attachError.decline_code) : undefined;
+
+              console.error(`❌ Failed to verify/attach payment method ${defaultPaymentMethod}:`, attachError);
+
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: "Payment method verification failed",
+                  details: errorMessage || "The payment method could not be verified or attached to your account.",
+                  code: errorCode,
+                  decline_code: declineCode,
+                  suggestion: "Please try again with a different payment method or contact support if the issue persists.",
                 },
-              });
-              console.log(`✅ Set payment method ${defaultPaymentMethod} as default for customer ${customer.id}`);
-              
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:265',message:'Payment method attached and set as default',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-              // #endregion
+                { status: 400 }
+              );
             }
-          } catch (verifyError) {
-            // #region agent log
-            const errorMessage = verifyError instanceof Error ? verifyError.message : String(verifyError);
-            const errorCode = verifyError && typeof verifyError === "object" && "code" in verifyError ? String(verifyError.code) : undefined;
-            const errorType = typeof verifyError;
-            const declineCode = verifyError && typeof verifyError === "object" && "decline_code" in verifyError ? String(verifyError.decline_code) : undefined;
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:287',message:'Payment method verification FAILED',data:{paymentMethodId:defaultPaymentMethod,customerId:customer.id,errorMessage,errorCode,declineCode,errorType,errorStringified:JSON.stringify(verifyError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-            // #endregion
-            
-            console.error(`❌ Failed to verify/attach payment method ${defaultPaymentMethod}:`, verifyError);
-            console.error("❌ Payment method verification error details (VERCEL LOGS):", {
-              paymentMethodId: defaultPaymentMethod,
-              customerId: customer.id,
-              subscriptionId: subscription.id,
-              errorCode,
-              declineCode,
-              errorMessage,
-              fullError: JSON.stringify(verifyError),
-            });
-            
-            // ✅ CRITICAL FIX: Include actual Stripe error details in response
-            return NextResponse.json(
-              {
-                success: false,
-                error: "Payment method verification failed",
-                details: errorMessage || "The payment method could not be verified or attached to your account.",
-                code: errorCode,
-                decline_code: declineCode,
-                suggestion: "Please try again with a different payment method or contact support if the issue persists.",
-              },
-              { status: 400 }
-            );
           }
-
-          // console.log(`💳 Using default payment method: ${defaultPaymentMethod}`);
 
           // #region agent log
           fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:283',message:'BEFORE paying invoice',data:{invoiceId:latestInvoice?.id,paymentMethodId:defaultPaymentMethod,customerId:customer.id,subscriptionId:subscription.id,subscriptionStatus:subscription.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
@@ -405,6 +301,52 @@ export async function POST(request: NextRequest) {
               errorMessage,
               fullError: JSON.stringify(payError),
             });
+            
+            // ✅ CRITICAL: Handle 3DS authentication requirement
+            // When PaymentIntent requires 3DS, return client_secret for frontend handling
+            if (errorCode === "invoice_payment_intent_requires_action") {
+              console.log("⏳ Payment requires 3DS authentication - retrieving PaymentIntent for frontend handling");
+              
+              try {
+                // Retrieve the invoice with expanded PaymentIntent
+                const invoiceWithPaymentIntent = await stripe.invoices.retrieve(latestInvoice?.id || "", {
+                  expand: ["payment_intent"],
+                });
+
+                const paymentIntent = (invoiceWithPaymentIntent as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent }).payment_intent;
+                
+                if (paymentIntent && typeof paymentIntent === "object" && "client_secret" in paymentIntent) {
+                  const paymentIntentObj = paymentIntent as Stripe.PaymentIntent;
+                  
+                  if (paymentIntentObj.client_secret) {
+                    console.log("✅ Returning PaymentIntent client_secret for 3DS handling");
+                    
+                    return NextResponse.json({
+                      success: false,
+                      requiresPaymentConfirmation: true,
+                      message: "3D Secure authentication required. Please complete the authentication.",
+                      data: {
+                        paymentIntent: {
+                          id: paymentIntentObj.id,
+                          clientSecret: paymentIntentObj.client_secret,
+                          amount: paymentIntentObj.amount,
+                          currency: paymentIntentObj.currency,
+                          status: paymentIntentObj.status,
+                        },
+                        subscription: {
+                          id: subscription.id,
+                          status: subscription.status,
+                        },
+                        invoiceId: latestInvoice?.id,
+                      },
+                    });
+                  }
+                }
+              } catch (retrieveError) {
+                console.error("❌ Failed to retrieve PaymentIntent for 3DS handling:", retrieveError);
+                // Fall through to return generic error
+              }
+            }
             
             // ✅ CRITICAL FIX: Return properly formatted error response instead of throwing
             // This ensures frontend can extract the actual Stripe error
@@ -489,92 +431,29 @@ export async function POST(request: NextRequest) {
     }
 
     if (paymentIntent && (paymentIntent.status === "requires_payment_method" || paymentIntent.status === "succeeded")) {
-      // ✅ DEDUPLICATION: Cancel any other PaymentIntents for this subscription before confirming
-      // This ensures only the invoice PaymentIntent is authorized
-      try {
-        const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
-        const existingPaymentIntents = await stripe.paymentIntents.list({
-          customer: customerId,
-          limit: 100,
-        });
-
-        // Get the invoice PaymentIntent ID (the one we're about to confirm)
-        const invoicePaymentIntentId = typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
-        
-        // Filter for duplicate PaymentIntents (same subscription, different PaymentIntent, cancellable)
-        const duplicatePaymentIntents = existingPaymentIntents.data.filter((pi) => {
-          const isSameSubscription = pi.metadata?.subscription_id === subscriptionId;
-          const isNotInvoicePaymentIntent = pi.id !== invoicePaymentIntentId;
-          const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
-          const isCancellable = [
-            "requires_payment_method",
-            "requires_confirmation",
-            "requires_action",
-            "requires_capture",
-            "processing",
-          ].includes(pi.status);
-          const isNotSucceeded = pi.status !== "succeeded";
-          const isNotCanceled = pi.status !== "canceled";
-          
-          // Cancel if it's for the same subscription, is not the invoice PaymentIntent, and is cancellable
-          // Note: isUpfrontPayment check is for backward compatibility only (old upfront PaymentIntents)
-          return isSameSubscription && isNotInvoicePaymentIntent && isCancellable && isNotSucceeded && isNotCanceled;
-        });
-
-        // Cancel all duplicate PaymentIntents
-        for (const duplicatePI of duplicatePaymentIntents) {
-          try {
-            await stripe.paymentIntents.cancel(duplicatePI.id);
-            console.log(`✅ Cancelled duplicate PaymentIntent ${duplicatePI.id} before confirming invoice PaymentIntent (status: ${duplicatePI.status}, isUpfront: ${duplicatePI.metadata?.isUpfrontPayment})`);
-          } catch (cancelError) {
-            console.warn(`⚠️ Could not cancel duplicate PaymentIntent ${duplicatePI.id}: ${cancelError}`);
-          }
-        }
-
-        if (duplicatePaymentIntents.length > 0) {
-          console.log(`✅ Deduplication on confirm: Cancelled ${duplicatePaymentIntents.length} duplicate PaymentIntent(s) for subscription ${subscriptionId}`);
-        }
-      } catch (dedupError) {
-        console.warn(`⚠️ Deduplication check on confirm failed (non-critical): ${dedupError}`);
-        // Continue - deduplication failure shouldn't block payment confirmation
-      }
+      // ✅ OPTIMIZED: Use utility function for deduplication (non-blocking, fire-and-forget)
+      const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+      const invoicePaymentIntentId = typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
+      cancelDuplicatePaymentIntents(subscriptionId, customerId, invoicePaymentIntentId);
 
       // Check if payment is already succeeded (when we created and confirmed it in one step)
       if (paymentIntent.status === "succeeded") {
         // console.log("✅ Payment already succeeded - activating subscription");
 
-        // Update user subscription status
+        // Update user subscription status (webhook handles final updates)
         if (user.subscription) {
           user.subscription.isActive = true;
           user.subscription.status = "active";
         }
 
-        // Verify payment is fully settled before proceeding
-        // console.log(`🔍 Payment succeeded, verifying payment settlement...`);
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
+        // ✅ OPTIMIZED: Webhook handles payment verification and user updates
+        // PaymentIntent status is already known after retrieval
+        // No need to verify again - webhook will handle verification and updates
 
-        // Re-fetch payment intent to ensure it's fully settled
-        const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-
-        if (verifiedPaymentIntent.status === "succeeded") {
-          // console.log(`✅ Payment fully verified and settled`);
-
-          // Get the membership package for logging
-          const packageId = user.subscription?.packageId?.toString() || subscription.metadata?.packageId;
-          const membershipPackage = getPackageById(packageId);
-
-          if (membershipPackage) {
-            // Payment successful - benefits will be granted via webhook
-            // console.log(`✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${paymentIntent.id} confirmed successfully`);
-            // console.log(`📋 Benefits will be granted via webhook processing shortly`);
-          } else {
-            console.error(`❌ Membership package not found for packageId: ${packageId}`);
-          }
-        } else {
-          console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
-        }
-
-        await user.save();
+        // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+        user.save().catch((error) => {
+          console.warn("Non-critical user save failed (webhook will handle):", error);
+        });
 
         // For new user registration, return user data for auto-login
         const responseData: {
@@ -658,37 +537,14 @@ export async function POST(request: NextRequest) {
               // console.log(`📦 Set subscription packageId from metadata: ${subscription.metadata.packageId}`);
             }
 
-            // Verify payment is fully settled before proceeding
-            // console.log(`🔍 Payment confirmed, verifying payment settlement...`);
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
+            // ✅ OPTIMIZED: Webhook handles payment verification and user updates
+            // PaymentIntent status is already known after confirmation
+            // No need to verify again - webhook will handle verification and updates
 
-            // Re-fetch payment intent to ensure it's fully settled
-            const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(confirmedPaymentIntent.id);
-
-            if (verifiedPaymentIntent.status === "succeeded") {
-              // console.log(`✅ Payment fully verified and settled`);
-
-              // Get the membership package for logging
-              const membershipPackage = getPackageById(
-                user.subscription?.packageId || subscription.metadata?.packageId
-              );
-
-              if (membershipPackage) {
-                // Payment successful - benefits will be granted via webhook
-                // console.log(
-                //   `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
-                // );
-                // console.log(`📋 Benefits will be granted via webhook processing shortly`);
-                // ✅ Klaviyo integration handled by webhook for reliability and best practices
-                // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
-              } else {
-                console.error(`❌ Membership package not found for immediate processing`);
-              }
-            } else {
-              console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
-            }
-
-            await user.save();
+            // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+            user.save().catch((error) => {
+              console.warn("Non-critical user save failed (webhook will handle):", error);
+            });
 
             // For new user registration, return user data for auto-login
             const responseData: {
@@ -759,57 +615,11 @@ export async function POST(request: NextRequest) {
       // Subscription is incomplete - this is expected for new subscriptions
       // console.log("⏳ Subscription is incomplete - this is normal for new subscriptions");
 
-      // ✅ DEDUPLICATION: Cancel any other PaymentIntents for this subscription before confirming
-      // This ensures only the invoice PaymentIntent is authorized
-      try {
+      // ✅ OPTIMIZED: Use utility function for deduplication (non-blocking, fire-and-forget)
+      if (paymentIntent) {
         const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
-        const existingPaymentIntents = await stripe.paymentIntents.list({
-          customer: customerId,
-          limit: 100,
-        });
-
-        // Get the invoice PaymentIntent ID (the one we're about to confirm)
-        const invoicePaymentIntentId = paymentIntent 
-          ? (typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id)
-          : null;
-        
-        if (invoicePaymentIntentId) {
-          // Filter for duplicate PaymentIntents (same subscription, different PaymentIntent, cancellable)
-          const duplicatePaymentIntents = existingPaymentIntents.data.filter((pi) => {
-            const isSameSubscription = pi.metadata?.subscription_id === subscriptionId;
-            const isNotInvoicePaymentIntent = pi.id !== invoicePaymentIntentId;
-            const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
-            const isCancellable = [
-              "requires_payment_method",
-              "requires_confirmation",
-              "requires_action",
-              "requires_capture",
-              "processing",
-            ].includes(pi.status);
-            const isNotSucceeded = pi.status !== "succeeded";
-            const isNotCanceled = pi.status !== "canceled";
-            
-            // Cancel if it's for the same subscription, is not the invoice PaymentIntent, and is cancellable
-            return isSameSubscription && isNotInvoicePaymentIntent && (isUpfrontPayment || isCancellable) && isNotSucceeded && isNotCanceled;
-          });
-
-          // Cancel all duplicate PaymentIntents
-          for (const duplicatePI of duplicatePaymentIntents) {
-            try {
-              await stripe.paymentIntents.cancel(duplicatePI.id);
-              console.log(`✅ Cancelled duplicate PaymentIntent ${duplicatePI.id} before confirming invoice PaymentIntent (status: ${duplicatePI.status}, isUpfront: ${duplicatePI.metadata?.isUpfrontPayment})`);
-            } catch (cancelError) {
-              console.warn(`⚠️ Could not cancel duplicate PaymentIntent ${duplicatePI.id}: ${cancelError}`);
-            }
-          }
-
-          if (duplicatePaymentIntents.length > 0) {
-            console.log(`✅ Deduplication on confirm: Cancelled ${duplicatePaymentIntents.length} duplicate PaymentIntent(s) for subscription ${subscriptionId}`);
-          }
-        }
-      } catch (dedupError) {
-        console.warn(`⚠️ Deduplication check on confirm failed (non-critical): ${dedupError}`);
-        // Continue - deduplication failure shouldn't block payment confirmation
+        const invoicePaymentIntentId = typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
+        cancelDuplicatePaymentIntents(subscriptionId, customerId, invoicePaymentIntentId);
       }
 
       // For incomplete subscriptions, we need to confirm the payment intent
@@ -826,41 +636,20 @@ export async function POST(request: NextRequest) {
               // when invoice.payment_succeeded event is processed
               // console.log(`✅ Payment confirmed - subscription will be activated via webhook`);
 
-              // Update user subscription status
+              // Update user subscription status (webhook handles final updates)
               if (user.subscription) {
                 user.subscription.isActive = true;
                 user.subscription.status = "active";
               }
 
-              // Verify payment is fully settled before proceeding
-              // console.log(`🔍 Payment confirmed, verifying payment settlement...`);
-              await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
+              // ✅ OPTIMIZED: Webhook handles payment verification and user updates
+              // PaymentIntent status is already known after confirmation
+              // No need to verify again - webhook will handle verification and updates
 
-              // Re-fetch payment intent to ensure it's fully settled
-              const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(confirmedPaymentIntent.id);
-
-              if (verifiedPaymentIntent.status === "succeeded") {
-                // console.log(`✅ Payment fully verified and settled`);
-
-                // Get the membership package for logging
-                const membershipPackage = getPackageById(
-                  user.subscription?.packageId || subscription.metadata?.packageId
-                );
-
-                if (membershipPackage) {
-                  // Payment successful - benefits will be granted via webhook
-                  // console.log(
-                  //   `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
-                  // );
-                  // console.log(`📋 Benefits will be granted via webhook processing shortly`);
-                } else {
-                  console.error(`❌ Membership package not found for immediate processing`);
-                }
-              } else {
-                console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
-              }
-
-              await user.save();
+              // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+              user.save().catch((error) => {
+                console.warn("Non-critical user save failed (webhook will handle):", error);
+              });
 
               return NextResponse.json({
                 success: true,
@@ -905,41 +694,20 @@ export async function POST(request: NextRequest) {
               // when invoice.payment_succeeded event is processed
               // console.log(`✅ Payment confirmed - subscription will be activated via webhook`);
 
-              // Update user subscription status
+              // Update user subscription status (webhook handles final updates)
               if (user.subscription) {
                 user.subscription.isActive = true;
                 user.subscription.status = "active";
               }
 
-              // Verify payment is fully settled before proceeding
-              // console.log(`🔍 Payment confirmed, verifying payment settlement...`);
-              await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
+              // ✅ OPTIMIZED: Webhook handles payment verification and user updates
+              // PaymentIntent status is already known after confirmation
+              // No need to verify again - webhook will handle verification and updates
 
-              // Re-fetch payment intent to ensure it's fully settled
-              const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(confirmedPaymentIntent.id);
-
-              if (verifiedPaymentIntent.status === "succeeded") {
-                // console.log(`✅ Payment fully verified and settled`);
-
-                // Get the membership package for logging
-                const membershipPackage = getPackageById(
-                  user.subscription?.packageId || subscription.metadata?.packageId
-                );
-
-                if (membershipPackage) {
-                  // Payment successful - benefits will be granted via webhook
-                  // console.log(
-                  //   `✅ SUBSCRIPTION PAYMENT SUCCESS: Payment ${confirmedPaymentIntent.id} confirmed successfully`
-                  // );
-                  // console.log(`📋 Benefits will be granted via webhook processing shortly`);
-                } else {
-                  console.error(`❌ Membership package not found for immediate processing`);
-                }
-              } else {
-                console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
-              }
-
-              await user.save();
+              // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+              user.save().catch((error) => {
+                console.warn("Non-critical user save failed (webhook will handle):", error);
+              });
 
               // For new user registration, return user data for auto-login
               const responseData: {
