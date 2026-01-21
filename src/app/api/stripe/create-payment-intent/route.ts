@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
+import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 
 /**
  * POST /api/stripe/create-payment-intent
@@ -124,27 +125,26 @@ export async function POST(request: NextRequest) {
     // This ensures wallet payments show the correct amount
     // ✅ FIX: Only include customer if it exists (authenticated users)
     // Guest users will have customer created during purchase process
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: validatedData.amount, // Amount in cents
-        currency: validatedData.currency,
-        ...(stripeCustomerId && { customer: stripeCustomerId }), // Only add customer if exists
-        setup_future_usage: "off_session", // Automatically save payment method for future use
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
-        },
-        // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
-        ...(validatedData.packageName && { description: validatedData.packageName }),
-        metadata: {
-          userId: userId,
-          userEmail: userEmail || validatedData.userEmail || "guest",
-          type: "one-time", // Only one-time purchases use this endpoint
-          packageType: "one-time", // Only one-time purchases use this endpoint
-          ...(validatedData.packageId && { packageId: validatedData.packageId }),
-          ...(validatedData.packageName && { packageName: validatedData.packageName }),
-        },
+    // ✅ Use centralized PaymentIntent configuration with 3DS support
+    const paymentIntentConfig = createPaymentIntentConfig({
+      amount: validatedData.amount, // Amount in cents
+      currency: validatedData.currency,
+      customer: stripeCustomerId, // Only included if exists
+      paymentType: "one-time",
+      description: validatedData.packageName,
+      setupFutureUsage: "off_session", // Automatically save payment method for future use
+      metadata: {
+        userId: userId || "guest",
+        userEmail: userEmail || validatedData.userEmail || "guest",
+        type: "one-time", // Only one-time purchases use this endpoint
+        packageType: "one-time", // Only one-time purchases use this endpoint
+        ...(validatedData.packageId && { packageId: validatedData.packageId }),
+        ...(validatedData.packageName && { packageName: validatedData.packageName }),
       },
+    });
+
+    const paymentIntent = await stripe.paymentIntents.create(
+      paymentIntentConfig,
       {
         idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
       }

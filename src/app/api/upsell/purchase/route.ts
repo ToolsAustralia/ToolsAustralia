@@ -13,6 +13,8 @@ import {
   getPackageBaseEntries,
 } from "@/utils/payment/upsell-entries-calculator";
 import Promo from "@/models/Promo";
+import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { getBaseUrl } from "@/utils/url/get-base-url";
 
 /**
  * Get resolved promo multiplier for a package type (payment context)
@@ -84,23 +86,7 @@ async function handleUpsellPaymentSuccess(
 
 // ✅ REMOVED: addEntriesToMajorDrawImmediately function - now handled by processPaymentBenefits utility
 
-/**
- * Get the base URL for API requests
- * Prioritizes NEXT_PUBLIC_APP_URL environment variable
- * Validates production environment requires the URL to be set
- */
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL;
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("NEXT_PUBLIC_APP_URL must be set in production environment");
-  }
-
-  // console.warn(`⚠️ NEXT_PUBLIC_APP_URL not set, falling back to localhost:3000`);
-  return "http://localhost:3000";
-}
+// ✅ REMOVED: getBaseUrl() function - now using centralized utility from @/utils/url/get-base-url
 
 /**
  * Get miniDrawId for upsell purchase
@@ -230,54 +216,104 @@ export async function POST(request: NextRequest) {
       console.log(`⚠️ No originalPurchaseContext provided for upsell purchase`);
     }
     
+    // Determine package type and get base entries
+    let inferredPackageType: "membership" | "one-time" | "mini-draw" | undefined;
+    let triggeringPackageId: string | undefined;
+    
     if (validatedData.originalPurchaseContext?.packageId && validatedData.originalPurchaseContext?.packageType) {
+      // Use originalPurchaseContext if available (most reliable)
+      inferredPackageType = validatedData.originalPurchaseContext.packageType;
+      triggeringPackageId = validatedData.originalPurchaseContext.packageId;
+    } else {
+      // ✅ FIX: Infer package type from upsell category when context is missing
+      // This matches the logic used for image selection
+      if (offer.category === "subscription-plus") {
+        // Subscription-plus upsells are triggered by membership purchases
+        inferredPackageType = "membership";
+        // Try to get triggering package ID from offer configuration
+        triggeringPackageId = offer.triggersOnPackageIds?.[0];
+        console.log(
+          `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
+        );
+      } else if (offer.category === "one-time-plus" || offer.category === "additional-upgrade") {
+        // One-time-plus and additional-upgrade upsells are triggered by one-time purchases
+        inferredPackageType = "one-time";
+        triggeringPackageId = offer.triggersOnPackageIds?.[0];
+        console.log(
+          `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
+        );
+      } else {
+        console.log(
+          `⚠️ Could not infer package type from upsell category, using static entriesCount: ${offer.entriesCount}`
+        );
+      }
+    }
+    
+    // Calculate entries if we have package type
+    if (inferredPackageType) {
       try {
         // Get base entries from context or look up from package
-        const baseEntries =
-          validatedData.originalPurchaseContext.baseEntries ??
-          getPackageBaseEntries({
-            packageId: validatedData.originalPurchaseContext.packageId,
-            packageType: validatedData.originalPurchaseContext.packageType,
+        let baseEntries: number;
+        if (validatedData.originalPurchaseContext?.baseEntries) {
+          baseEntries = validatedData.originalPurchaseContext.baseEntries;
+        } else if (triggeringPackageId) {
+          baseEntries = getPackageBaseEntries({
+            packageId: triggeringPackageId,
+            packageType: inferredPackageType,
           });
+        } else {
+          console.warn(
+            `⚠️ Could not determine base entries: no packageId available, using static value: ${offer.entriesCount}`
+          );
+          baseEntries = 0;
+        }
 
         if (baseEntries > 0) {
           // ✅ FIX: Use stored multiplier from original purchase if available, otherwise query current active promo
           // This ensures the multiplier used matches the original purchase, even if promo expired/changed
           let promoMultiplier: number;
-          if (validatedData.originalPurchaseContext.promoMultiplier && validatedData.originalPurchaseContext.promoMultiplier > 1) {
+          if (validatedData.originalPurchaseContext?.promoMultiplier && validatedData.originalPurchaseContext.promoMultiplier > 1) {
             promoMultiplier = validatedData.originalPurchaseContext.promoMultiplier;
             console.log(
               `✅ Using stored promo multiplier from original purchase: ${promoMultiplier}x`
             );
           } else {
-            // Fall back to querying current active promo (for backward compatibility)
-            promoMultiplier = await getActivePromoMultiplier(
-              validatedData.originalPurchaseContext.packageType
-            );
+            // Fall back to querying current active promo (for backward compatibility or when context is missing)
+            promoMultiplier = await getActivePromoMultiplier(inferredPackageType);
             console.log(
-              `ℹ️ No stored multiplier found, using current active promo multiplier: ${promoMultiplier}x`
+              `ℹ️ No stored multiplier found, using current active promo multiplier for ${inferredPackageType}: ${promoMultiplier}x`
             );
           }
 
           // Calculate: 2 × (baseEntries × promoMultiplier)
-          calculatedEntriesCount = calculateUpsellEntriesFromContext(
-            {
-              packageId: validatedData.originalPurchaseContext.packageId,
-              packageType: validatedData.originalPurchaseContext.packageType,
+          if (triggeringPackageId) {
+            calculatedEntriesCount = calculateUpsellEntriesFromContext(
+              {
+                packageId: triggeringPackageId,
+                packageType: inferredPackageType,
+                baseEntries,
+              },
+              promoMultiplier
+            );
+          } else {
+            // Fallback calculation without packageId
+            const { calculateUpsellEntries } = await import("@/utils/payment/upsell-entries-calculator");
+            calculatedEntriesCount = calculateUpsellEntries({
               baseEntries,
-            },
-            promoMultiplier
-          );
+              packageType: inferredPackageType,
+              promoMultiplier,
+            });
+          }
 
           console.log(
             `🎯 Calculated upsell entries: ${baseEntries} base × ${promoMultiplier} promo × 2 = ${calculatedEntriesCount} (fallback: ${offer.entriesCount})`
           );
           console.log(
-            `📊 Calculation breakdown: baseEntries=${baseEntries}, promoMultiplier=${promoMultiplier}, formula=2 × (${baseEntries} × ${promoMultiplier}) = ${calculatedEntriesCount}`
+            `📊 Calculation breakdown: baseEntries=${baseEntries}, promoMultiplier=${promoMultiplier}, packageType=${inferredPackageType}, formula=2 × (${baseEntries} × ${promoMultiplier}) = ${calculatedEntriesCount}`
           );
         } else {
           console.warn(
-            `⚠️ Could not determine base entries for package ${validatedData.originalPurchaseContext.packageId}, using static value: ${offer.entriesCount}`
+            `⚠️ Could not determine base entries for package ${triggeringPackageId || "unknown"}, using static value: ${offer.entriesCount}`
           );
         }
       } catch (error) {
@@ -287,7 +323,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       console.log(
-        `ℹ️ No originalPurchaseContext provided, using static entriesCount: ${offer.entriesCount}`
+        `ℹ️ Could not determine package type, using static entriesCount: ${offer.entriesCount}`
       );
     }
 
@@ -511,18 +547,20 @@ async function handleOneClickPurchase(
         staticEntriesCount: paymentMetadata.staticEntriesCount,
       });
 
-      paymentIntent = await stripe.paymentIntents.create({
+      // ✅ Use centralized PaymentIntent configuration with 3DS support
+      const paymentIntentConfig = createPaymentIntentConfig({
         amount: Math.round(offer.discountedPrice * 100), // Convert to cents
         currency: "aud",
         customer: user.stripeCustomerId!,
-        payment_method: finalPaymentMethodId, // Use the SAFE validated payment method
+        paymentMethod: finalPaymentMethodId, // Use the SAFE validated payment method
         confirm: true,
-        return_url: `${getBaseUrl()}/upsell-success`,
-        confirmation_method: "automatic", // Use this OR automatic_payment_methods, not both
-        setup_future_usage: "off_session", // Store payment method for future use
-        description: `${offer.name}`, // Add meaningful description
+        paymentType: "upsell",
+        description: offer.name,
+        setupFutureUsage: "off_session", // Store payment method for future use
         metadata: paymentMetadata,
       });
+
+      paymentIntent = await stripe.paymentIntents.create(paymentIntentConfig);
     } catch (stripeError) {
       console.error("Stripe payment intent creation failed:", stripeError);
       return NextResponse.json(
@@ -582,19 +620,27 @@ async function handleOneClickPurchase(
           { status: 400 }
         );
       }
-    } else if (paymentIntent.status === "requires_action" || paymentIntent.status === "processing") {
-      // console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
-
-      // Wait longer for payment to complete
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
+    } else if (paymentIntent.status === "requires_action") {
+      // ✅ 3DS authentication required - return client_secret for frontend to complete redirect
+      // With allow_redirects: "always", the frontend will handle the 3DS redirect flow
+      console.log(`⏳ Payment requires 3DS authentication - returning client_secret for frontend redirect`);
+      
+      return NextResponse.json({
+        success: false,
+        requiresAction: true,
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        message: "3D Secure authentication required. Please complete the authentication.",
+      });
+    } else if (paymentIntent.status === "processing") {
+      // Payment is processing - wait briefly and check status
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
 
       // Re-fetch payment intent to check final status
       const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      // console.log(`🔍 Final payment status: ${finalPaymentIntent.status}`);
 
       if (finalPaymentIntent.status === "succeeded") {
-        // console.log(`✅ Payment completed successfully after waiting - benefits will be granted via webhook`);
-
+        // Payment succeeded after processing
         return NextResponse.json({
           success: true,
           message: "Upsell purchase successful",
@@ -606,8 +652,17 @@ async function handleOneClickPurchase(
             processingStatus: "pending", // Benefits will be processed via webhook
           },
         });
+      } else if (finalPaymentIntent.status === "requires_action") {
+        // Still requires action - return client_secret for 3DS
+        return NextResponse.json({
+          success: false,
+          requiresAction: true,
+          clientSecret: finalPaymentIntent.client_secret,
+          paymentIntentId: finalPaymentIntent.id,
+          message: "3D Secure authentication required. Please complete the authentication.",
+        });
       } else {
-        console.error(`❌ Payment failed after waiting: ${finalPaymentIntent.status}`);
+        console.error(`❌ Payment failed after processing: ${finalPaymentIntent.status}`);
         return NextResponse.json(
           {
             success: false,
@@ -684,21 +739,20 @@ async function handlePaymentIntentCreation(
     // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
     const idempotencyKey = `pi_upsell_${offer.id}_${user._id.toString()}_${Date.now()}`;
 
+    // ✅ Use centralized PaymentIntent configuration with 3DS support
+    const paymentIntentConfig = createPaymentIntentConfig({
+      amount: Math.round(offer.discountedPrice * 100), // Convert to cents
+      currency: "aud",
+      customer: user.stripeCustomerId!,
+      paymentMethod: paymentMethodId,
+      confirm: paymentMethodId ? true : false,
+      paymentType: "upsell",
+      description: offer.name,
+      metadata: paymentMetadata,
+    });
+
     const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: Math.round(offer.discountedPrice * 100), // Convert to cents
-        currency: "aud",
-        customer: user.stripeCustomerId!,
-        payment_method: paymentMethodId,
-        confirm: paymentMethodId ? true : false,
-        return_url: `${getBaseUrl()}/upsell-success`,
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
-        },
-        description: `${offer.name}`, // Add meaningful description
-        metadata: paymentMetadata,
-      },
+      paymentIntentConfig,
       {
         idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
       }

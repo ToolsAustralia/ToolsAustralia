@@ -15,6 +15,7 @@ import {
   MapPin,
   CreditCard,
 } from "lucide-react";
+import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandler";
 
 interface CheckoutSuccessClientProps {
   orderId: string;
@@ -77,19 +78,24 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Success Header */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-12 h-12 text-green-600" />
+        {/* Payment Status Handler - Handles 3DS redirects */}
+        <PaymentSuccessHandler paymentType="subscription" successMessage="Your subscription has been activated successfully!">
+          {/* Success Header */}
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-12 h-12 text-green-600" />
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Order Confirmed!</h1>
+            <p className="text-gray-600 text-lg">Thank you for your purchase. We&apos;re getting your order ready.</p>
+            <div className="mt-4 inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
+              Order ID: {orderId}
+            </div>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Order Confirmed!</h1>
-          <p className="text-gray-600 text-lg">Thank you for your purchase. We&apos;re getting your order ready.</p>
-          <div className="mt-4 inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-            Order ID: {orderId}
-          </div>
-        </div>
+        </PaymentSuccessHandler>
 
-        {/* Main Content */}
+        {/* Main Content - Only show when payment is successful */}
+        <PaymentSuccessHandler paymentType="subscription">
+          {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Order Details */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
@@ -277,6 +283,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             </a>
           </div>
         </div>
+        </PaymentSuccessHandler>
       </div>
     </div>
   );
