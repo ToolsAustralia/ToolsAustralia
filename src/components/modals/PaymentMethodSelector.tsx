@@ -9,6 +9,9 @@ import { loadStripe } from "@stripe/stripe-js";
 import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { useToast } from "@/components/ui/Toast";
+import { categorizeError, isRecoverableError, getRecoveryStrategy } from "@/utils/payment/stripe/payment-error-detection";
+import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
+import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -26,8 +29,18 @@ interface PaymentMethodSelectorProps {
   setupIntentClientSecret?: string | null; // Backward compatibility - kept for fallback
   paymentIntentClientSecret?: string | null; // NEW: PaymentIntent for wallet payments with amount
   intentType?: "setup" | "payment"; // NEW: Type of intent being used
-  cardFormRef: React.Ref<{
-    confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }>;
+  cardFormRef: React.Ref<{ 
+    confirmSetup: () => Promise<{ 
+      paymentMethodId?: string; 
+      paymentIntentId?: string; 
+      error?: string;
+      setupIntentAlreadySucceeded?: boolean;
+      errorCategory?: "recoverable" | "retryable" | "non-recoverable";
+      errorType?: string;
+      isRecoverable?: boolean;
+      recoveryStrategy?: string;
+      shouldPreserveState?: boolean;
+    }>;
   } | null>;
   onCardElementChange: (event: { error?: { message?: string } }) => void;
   cardFormError: string | null;
@@ -414,6 +427,44 @@ const StripeCardForm = React.forwardRef<
             }
           } else {
             // Handle SetupIntent (backward compatibility - card-only, always validate)
+            // ✅ RETRY FIX: Check SetupIntent status before confirmation to handle already-succeeded cases
+            if (intentType === "setup" && clientSecret) {
+              try {
+                const response = await fetch("/api/stripe/check-setup-intent-status", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ clientSecret }),
+                });
+
+                const result = await response.json();
+                if (result.success && result.data) {
+                  const statusResult = result.data;
+
+                  // If SetupIntent already succeeded, extract payment method and return it
+                  if (statusResult.status === "succeeded" && statusResult.paymentMethodId) {
+                    console.log("✅ SetupIntent already succeeded, extracting payment method:", statusResult.paymentMethodId);
+                    return { paymentMethodId: statusResult.paymentMethodId };
+                  }
+
+                  // If SetupIntent is in an unexpected state but has a payment method, try to extract it
+                  if (statusResult.setupIntent?.payment_method) {
+                    const paymentMethodId =
+                      typeof statusResult.setupIntent.payment_method === "string"
+                        ? statusResult.setupIntent.payment_method
+                        : statusResult.setupIntent.payment_method.id;
+
+                    if (paymentMethodId) {
+                      console.log("✅ SetupIntent has payment method, extracting:", paymentMethodId);
+                      return { paymentMethodId };
+                    }
+                  }
+                }
+              } catch (checkError) {
+                console.error("Failed to check SetupIntent status:", checkError);
+                // Continue with normal flow if check fails
+              }
+            }
+
             const { error: submitError } = await elements.submit();
 
             if (submitError) {
@@ -434,7 +485,57 @@ const StripeCardForm = React.forwardRef<
 
             if (error) {
               console.error("Stripe SetupIntent error:", error);
-              return { error: error.message || "Payment method setup failed." };
+
+              // ✅ EXPERT ERROR HANDLING: Categorize error and handle gracefully
+              const errorCategorization = categorizeError(error);
+              const isRecoverable = isRecoverableError(error);
+              const recoveryStrategy = getRecoveryStrategy(error);
+              const statePreservation = getStatePreservationInstructions(error);
+              
+              // ✅ RETRY FIX: Handle setup_intent_unexpected_state error gracefully
+              if (error.code === "setup_intent_unexpected_state") {
+                const errorMessage = error.message || "";
+                
+                // If SetupIntent already succeeded, try to extract payment method
+                if (errorMessage.includes("already succeeded") || errorMessage.includes("succeeded")) {
+                  console.log("⚠️ SetupIntent already succeeded, attempting to extract payment method...");
+                  
+                  try {
+                    const response = await fetch("/api/stripe/check-setup-intent-status", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ clientSecret }),
+                    });
+
+                    const result = await response.json();
+                    if (result.success && result.data?.paymentMethodId) {
+                      console.log("✅ Extracted payment method from succeeded SetupIntent:", result.data.paymentMethodId);
+                      // ✅ Use formatted error message with "Try again" guidance
+                      const formattedError = formatPaymentError(error);
+                      // Return special flag to indicate SetupIntent was already succeeded
+                      // This allows parent component to decide: use existing PM or create new SetupIntent
+                      return { 
+                        paymentMethodId: result.data.paymentMethodId,
+                        setupIntentAlreadySucceeded: true,
+                        error: formattedError.message
+                      };
+                    }
+                  } catch (retrieveError) {
+                    console.error("Failed to retrieve SetupIntent:", retrieveError);
+                  }
+                }
+              }
+
+              // ✅ Use formatted error message for all errors
+              const formattedError = formatPaymentError(error);
+              return { 
+                error: formattedError.message,
+                errorCategory: errorCategorization.category,
+                errorType: errorCategorization.errorType,
+                isRecoverable,
+                recoveryStrategy,
+                shouldPreserveState: statePreservation.shouldPreservePaymentMethod,
+              };
             } else if (setupIntent?.payment_method) {
               console.log("✅ SetupIntent succeeded:", setupIntent);
               return { paymentMethodId: setupIntent.payment_method as string };

@@ -21,6 +21,9 @@ import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository
 import mongoose from "mongoose";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
+import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { getBaseUrl } from "@/utils/url/get-base-url";
+import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
 const createOneTimePurchaseSchema = z.object({
   userEmail: z.string().email("Invalid email address"),
@@ -68,24 +71,7 @@ async function handleOneTimePaymentSuccess(
 }
 
 // ✅ REMOVED: addEntriesToMajorDrawImmediately function - now handled by processPaymentBenefits utility
-
-/**
- * Get the base URL for API requests
- * Prioritizes NEXT_PUBLIC_APP_URL environment variable
- * Validates production environment requires the URL to be set
- */
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL;
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("NEXT_PUBLIC_APP_URL must be set in production environment");
-  }
-
-  // console.warn(`⚠️ NEXT_PUBLIC_APP_URL not set, falling back to localhost:3000`);
-  return "http://localhost:3000";
-}
+// ✅ REMOVED: getBaseUrl() function - now using centralized utility from @/utils/url/get-base-url
 
 /**
  * POST /api/stripe/create-one-time-purchase
@@ -205,7 +191,10 @@ export async function POST(request: NextRequest) {
           },
         });
         registeredUser.stripeCustomerId = customer.id;
-        await registeredUser.save();
+        // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+        registeredUser.save().catch((error) => {
+          console.warn("Non-critical user save failed (webhook will handle):", error);
+        });
         console.log(`✅ Created new customer ${customer.id} to replace deleted one`);
       } else {
         customer = retrievedCustomer as Stripe.Customer;
@@ -300,7 +289,10 @@ export async function POST(request: NextRequest) {
           // If registered user exists, update them with the customer ID
           if (registeredUser) {
             registeredUser.stripeCustomerId = customer.id;
-            await registeredUser.save();
+            // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+            registeredUser.save().catch((error) => {
+              console.warn("Non-critical user save failed (webhook will handle):", error);
+            });
             console.log(`✅ Linked customer ${customer.id} to registered user ${registeredUser._id}`);
           }
         }
@@ -571,21 +563,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-      paymentIntent = await stripe.paymentIntents.create(
-        {
-          amount: Math.round(membershipPackage.price * 100), // Convert to cents
+      // ✅ Use centralized PaymentIntent configuration with 3DS support
+      const paymentIntentConfig = createPaymentIntentConfig({
+        amount: Math.round(membershipPackage.price * 100), // Convert to cents
         currency: "aud",
         customer: customer.id,
-        payment_method: finalPaymentMethodId, // Use the final payment method ID
-        confirm: true, // Auto-confirm for testing
-        return_url: `${getBaseUrl()}/purchase-success`,
-        setup_future_usage: "off_session", // ✅ Save payment method for future use (required for production/staging)
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never", // PCI-COMPLIANT: Disable redirects for security
-        },
-        description: `${membershipPackage.name}`, // Add meaningful description
+        paymentMethod: finalPaymentMethodId, // Use the final payment method ID
+        confirm: true, // Auto-confirm
+        paymentType: isMiniDrawPackage ? "mini-draw" : "one-time",
+        description: membershipPackage.name,
+        setupFutureUsage: "off_session", // ✅ Save payment method for future use (required for production/staging)
         metadata: {
           items: JSON.stringify([
             {
@@ -628,10 +615,13 @@ export async function POST(request: NextRequest) {
           ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
         },
-      },
-      {
-        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-      }
+      });
+
+      paymentIntent = await stripe.paymentIntents.create(
+        paymentIntentConfig,
+        {
+          idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+        }
       );
     }
 
@@ -710,158 +700,56 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Payment ${paymentIntent.id} will be processed by webhook`);
     }
 
-    // ✅ CRITICAL: Handle different payment statuses and wait for settlement
+    // ✅ OPTIMIZED: Trust Stripe's status - webhook handles verification
+    // Payment status is accurate when returned - no delay or re-retrieve needed
     if (paymentIntent.status === "succeeded") {
-      console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
-
-      // Wait for payment to be fully settled (not just authorized)
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
-
-      // Re-fetch payment intent to ensure it's fully settled
-      const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      console.log(
-        `🔍 Verified PaymentIntent status: ${verifiedPaymentIntent.status}, metadata:`,
-        verifiedPaymentIntent.metadata
-      );
-
-      if (verifiedPaymentIntent.status === "succeeded") {
-        // ✅ CRITICAL: Save payment method IMMEDIATELY after payment succeeds (PRIMARY METHOD)
-        // This prevents "No Payment Method" error when upsell modal opens
-        // For existing users, save synchronously. For new users, webhook will save during account creation.
-        if (user && finalPaymentMethodId) {
+      // ✅ OPTIMIZED: Save payment method as fire-and-forget (webhook handles as backup)
+      // This prevents "No Payment Method" error when upsell modal opens
+      // For existing users, save in background. For new users, webhook will save during account creation.
+      if (user && finalPaymentMethodId) {
+        executeBackgroundJob("Save payment method after purchase", async () => {
           try {
             const freshUser = await User.findById(user._id);
             if (freshUser) {
-              console.log(`💳 [SYNC] Saving payment method immediately after payment success: ${finalPaymentMethodId}`);
+              console.log(`💳 [BACKGROUND] Saving payment method after payment success: ${finalPaymentMethodId}`);
               
               const saveResult = await savePaymentMethodToUser(freshUser, finalPaymentMethodId, {
                 setAsDefault: !freshUser.savedPaymentMethods || freshUser.savedPaymentMethods.length === 0,
               });
               
               if (saveResult.success) {
-                console.log(`✅ [SYNC] Payment method saved successfully: ${finalPaymentMethodId}`);
-                // Refresh user from database to get updated payment methods
-                const refreshedUser = await User.findById(user._id);
-                if (refreshedUser) {
-                  user = refreshedUser;
-                }
+                console.log(`✅ [BACKGROUND] Payment method saved successfully: ${finalPaymentMethodId}`);
               } else {
-                console.error(`❌ [SYNC] Failed to save payment method: ${saveResult.error}`);
-                // Continue - webhook will try as backup
+                console.error(`❌ [BACKGROUND] Failed to save payment method: ${saveResult.error}`);
+                // Webhook will try as backup
               }
             }
           } catch (pmError) {
-            console.error(`❌ [SYNC] Error saving payment method: ${pmError}`);
-            // Continue - webhook will try as backup
+            console.error(`❌ [BACKGROUND] Error saving payment method: ${pmError}`);
+            // Webhook will try as backup
           }
-        }
-        
-        console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
-        // Benefits will be processed by webhook - just log success
-        console.log(
-          `🎯 Payment verified - benefits will be processed by webhook: ${
-            membershipPackage.totalEntries || 0
-          } entries, ${Math.floor(membershipPackage.price)} points`
-        );
-        console.log(`📋 PaymentIntent ID for webhook: ${verifiedPaymentIntent.id}`);
-        console.log(`👤 Customer ID for webhook lookup: ${verifiedPaymentIntent.customer}`);
-        console.log(`📧 User email for webhook lookup: ${verifiedPaymentIntent.metadata.userEmail}`);
-        // ✅ Klaviyo integration handled by webhook for reliability and best practices
-        console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
-      } else {
-        console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
-        // Still return success but log the verification failure
+        });
       }
+      
+      console.log(`✅ Payment succeeded - benefits will be processed by webhook`);
+      console.log(`📋 PaymentIntent ID for webhook: ${paymentIntent.id}`);
+      console.log(`👤 Customer ID for webhook lookup: ${paymentIntent.customer}`);
+      console.log(`📧 User email for webhook lookup: ${paymentIntent.metadata.userEmail}`);
     } else if (paymentIntent.status === "requires_action" || paymentIntent.status === "processing") {
-      console.log(`⏳ Payment requires action or is processing, waiting for completion...`);
-
-      // Wait longer for payment to complete
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
-
-      // Re-fetch payment intent to check final status
-      const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      console.log(`🔍 Final payment status: ${finalPaymentIntent.status}, metadata:`, finalPaymentIntent.metadata);
-
-      if (finalPaymentIntent.status === "succeeded") {
-        // ✅ CRITICAL: Save payment method IMMEDIATELY after payment succeeds (PRIMARY METHOD)
-        // This prevents "No Payment Method" error when upsell modal opens
-        // For existing users, save synchronously. For new users, webhook will save during account creation.
-        if (user && finalPaymentMethodId) {
-          try {
-            const freshUser = await User.findById(user._id);
-            if (freshUser) {
-              console.log(`💳 [SYNC] Saving payment method immediately after payment success: ${finalPaymentMethodId}`);
-              
-              const saveResult = await savePaymentMethodToUser(freshUser, finalPaymentMethodId, {
-                setAsDefault: !freshUser.savedPaymentMethods || freshUser.savedPaymentMethods.length === 0,
-              });
-              
-              if (saveResult.success) {
-                console.log(`✅ [SYNC] Payment method saved successfully: ${finalPaymentMethodId}`);
-                // Refresh user from database to get updated payment methods
-                const refreshedUser = await User.findById(user._id);
-                if (refreshedUser) {
-                  user = refreshedUser;
-                }
-              } else {
-                console.error(`❌ [SYNC] Failed to save payment method: ${saveResult.error}`);
-                // Continue - webhook will try as backup
-              }
-            }
-          } catch (pmError) {
-            console.error(`❌ [SYNC] Error saving payment method: ${pmError}`);
-            // Continue - webhook will try as backup
-          }
-        }
-        
-        console.log(`✅ Payment completed successfully after waiting - benefits will be processed by webhook`);
-        // Benefits will be processed by webhook - just log success
-        console.log(
-          `🎯 Payment verified - benefits will be processed by webhook: ${
-            membershipPackage.totalEntries || 0
-          } entries, ${Math.floor(membershipPackage.price)} points`
-        );
-        console.log(`📋 PaymentIntent ID for webhook: ${finalPaymentIntent.id}`);
-        console.log(`👤 Customer ID for webhook lookup: ${finalPaymentIntent.customer}`);
-        console.log(`📧 User email for webhook lookup: ${finalPaymentIntent.metadata.userEmail}`);
-      } else {
-        // ✅ FIX: Distinguish between cancelled and failed payment intents
-        // Cancelled payment intents should not be logged as "Payment failed"
-        if (finalPaymentIntent.status === "canceled") {
-          console.log(`ℹ️ Payment intent was cancelled: ${finalPaymentIntent.id}`);
-          return NextResponse.json(
-            {
-              success: false,
-              error: "Payment was cancelled",
-              details: "This payment attempt was cancelled. Please try again.",
-            },
-            { status: 400 }
-          );
-        }
-        
-        console.error(`❌ Payment failed after waiting: ${finalPaymentIntent.status}`);
-        
-        // ✅ CRITICAL FIX: Payment method is NOT saved to user database when payment fails
-        // Payment methods are only saved after payment succeeds (lines 726-755, 668-697)
-        // This ensures failed payment methods (e.g., insufficient funds) are not saved
-        
-        // Extract error details from payment intent if available
-        const lastPaymentError = finalPaymentIntent.last_payment_error;
-        const errorMessage = lastPaymentError?.message || "Payment failed";
-        const errorCode = lastPaymentError?.code;
-        const declineCode = lastPaymentError?.decline_code;
-        
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Payment failed",
-            details: errorMessage,
-            ...(errorCode && { code: errorCode }),
-            ...(declineCode && { decline_code: declineCode }),
-          },
-          { status: 400 }
-        );
+      console.log(`⏳ Payment requires action or is processing - webhook will handle when complete`);
+      
+      // Trust Stripe's status - webhook will handle when payment completes
+      // For processing status, return success - webhook will handle completion
+      // For requires_action, frontend will handle 3DS redirect
+      
+      if (paymentIntent.status === "processing") {
+        // Processing status - return success, webhook will handle when complete
+        console.log(`✅ Payment is processing - benefits will be processed by webhook when complete`);
+        console.log(`📋 PaymentIntent ID for webhook: ${paymentIntent.id}`);
+        console.log(`👤 Customer ID for webhook lookup: ${paymentIntent.customer}`);
+        console.log(`📧 User email for webhook lookup: ${paymentIntent.metadata.userEmail}`);
       }
+      // requires_action - frontend will handle 3DS redirect via client_secret
     } else {
       // ✅ FIX: Distinguish between cancelled and failed payment intents
       // Cancelled payment intents should not be logged as "Payment failed"

@@ -9,6 +9,9 @@ import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Benefits are now granted via webhook processing only
+import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { getBaseUrl } from "@/utils/url/get-base-url";
+import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
 const miniDrawPurchaseSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -103,7 +106,10 @@ export async function POST(request: NextRequest) {
 
         // Update user with Stripe customer ID
         user.stripeCustomerId = stripeCustomerId;
-        await user.save();
+        // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+        user.save().catch((error) => {
+          console.warn("Non-critical user save failed (webhook will handle):", error);
+        });
         // console.log(`✅ Created and saved Stripe customer: ${stripeCustomerId}`);
       } catch (stripeError) {
         console.error("❌ Stripe customer creation failed:", stripeError);
@@ -402,21 +408,15 @@ async function handleOneClickPurchase(
       //   payment_method: finalPaymentMethodId,
       // });
 
-      // ✅ FIXED: Match working flow pattern from create-one-time-purchase-existing-user
-      // PCI-COMPLIANT: Use automatic payment methods with redirects disabled for security
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-      paymentIntent = await stripe.paymentIntents.create({
+      // ✅ Use centralized PaymentIntent configuration with 3DS support
+      const paymentIntentConfig = createPaymentIntentConfig({
         amount: Math.round(miniDrawPackage.price * 100), // Convert to cents
         currency: "aud",
         customer: user.stripeCustomerId!,
-        payment_method: finalPaymentMethodId,
+        paymentMethod: finalPaymentMethodId,
         confirm: true,
-        return_url: `${baseUrl}/mini-draw-success`,
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never" as const, // PCI-COMPLIANT: Disable redirects for security
-        },
-        description: `${miniDrawPackage.name}`, // Add meaningful description
+        paymentType: "mini-draw",
+        description: miniDrawPackage.name,
         metadata: {
           type: "mini-draw",
           packageId: miniDrawPackage._id,
@@ -432,6 +432,8 @@ async function handleOneClickPurchase(
           ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
         },
       });
+
+      paymentIntent = await stripe.paymentIntents.create(paymentIntentConfig);
 
       // console.log("✅ Payment intent created successfully:", {
       //   id: paymentIntent.id,
@@ -449,143 +451,67 @@ async function handleOneClickPurchase(
       );
     }
 
-    // ✅ CRITICAL: Handle different payment statuses and wait for settlement
+    // ✅ OPTIMIZED: Trust Stripe's status - webhook handles verification
+    // Payment status is accurate when returned - no delay or re-retrieve needed
     if (paymentIntent.status === "succeeded") {
-      // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
+      // ✅ CRITICAL: Don't call handleMiniDrawPaymentSuccess - webhook handles all benefit processing
+      // This ensures single source of truth and prevents duplicate processing
 
-      // Wait for payment to be fully settled (not just authorized)
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
-
-      // Re-fetch payment intent to ensure it's fully settled
-      const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-
-      if (verifiedPaymentIntent.status === "succeeded") {
-        // console.log(`✅ Payment fully verified and settled - benefits will be processed by webhook`);
-
-        // ✅ CRITICAL: Don't call handleMiniDrawPaymentSuccess - webhook handles all benefit processing
-        // This ensures single source of truth and prevents duplicate processing
-        // console.log(`📋 Benefits will be processed via webhook shortly`);
-
-        // Return success with payment intent info - frontend will wait for webhook confirmation
-        return NextResponse.json({
-          success: true,
-          message: "Mini draw purchase successful",
-          data: {
-            entriesAdded: miniDrawPackage.entries,
-            packageName: miniDrawPackage.name,
-            source: "mini-draw",
-            paymentIntentId: paymentIntent.id,
-            processingStatus: "pending", // Benefits will be processed via webhook
-          },
-          paymentIntent: {
-            id: paymentIntent.id,
-            status: paymentIntent.status,
-            clientSecret: paymentIntent.client_secret,
-          },
-        });
-      } else {
-        console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Payment verification failed",
-            details: `Payment status changed to: ${verifiedPaymentIntent.status}. Payment was not fully settled.`,
-          },
-          { status: 400 }
-        );
-      }
+      // Return success with payment intent info - frontend will wait for webhook confirmation
+      return NextResponse.json({
+        success: true,
+        message: "Mini draw purchase successful",
+        data: {
+          entriesAdded: miniDrawPackage.entries,
+          packageName: miniDrawPackage.name,
+          source: "mini-draw",
+          paymentIntentId: paymentIntent.id,
+          processingStatus: "pending", // Benefits will be processed via webhook
+        },
+        paymentIntent: {
+          id: paymentIntent.id,
+          status: paymentIntent.status,
+          clientSecret: paymentIntent.client_secret,
+        },
+      });
     } else if (paymentIntent.status === "requires_action") {
-      // Payment requires 3D Secure or other authentication
-      // console.log(`⏳ Payment requires action (3D Secure), waiting for completion...`);
-
-      // Wait for payment to complete after authentication
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
-
-      // Re-fetch payment intent to check final status
-      const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      // console.log(`🔍 Final payment status after requires_action: ${finalPaymentIntent.status}`);
-
-      if (finalPaymentIntent.status === "succeeded") {
-        // console.log(`✅ Payment completed successfully after authentication - benefits will be processed by webhook`);
-
-        // ✅ CRITICAL: Don't call handleMiniDrawPaymentSuccess - webhook handles all benefit processing
-        // console.log(`📋 Benefits will be processed via webhook shortly`);
-
-        // Return success with payment intent info - frontend will wait for webhook confirmation
-        return NextResponse.json({
-          success: true,
-          message: "Mini draw purchase successful",
-          data: {
-            entriesAdded: miniDrawPackage.entries,
-            packageName: miniDrawPackage.name,
-            source: "mini-draw",
-            paymentIntentId: paymentIntent.id,
-            processingStatus: "pending", // Benefits will be processed via webhook
-          },
-          paymentIntent: {
-            id: paymentIntent.id,
-            status: paymentIntent.status,
-            clientSecret: paymentIntent.client_secret,
-          },
-        });
-      } else {
-        console.error(`❌ Payment failed after requires_action: ${finalPaymentIntent.status}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Payment authentication failed",
-            details: `Payment status: ${finalPaymentIntent.status}. Please try again or use a different payment method.`,
-            requiresAction: true,
-            clientSecret: paymentIntent.client_secret,
-          },
-          { status: 400 }
-        );
-      }
+      // ✅ 3DS authentication required - return client_secret for frontend to complete redirect
+      // With allow_redirects: "always", the frontend will handle the 3DS redirect flow
+      console.log(`⏳ Payment requires 3DS authentication - returning client_secret for frontend redirect`);
+      
+      return NextResponse.json({
+        success: false,
+        requiresAction: true,
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        message: "3D Secure authentication required. Please complete the authentication.",
+        data: {
+          packageId: miniDrawPackage._id,
+          amount: miniDrawPackage.price,
+          entriesCount: miniDrawPackage.entries,
+          paymentIntentId: paymentIntent.id,
+          processingStatus: "pending",
+        },
+      });
     } else if (paymentIntent.status === "processing") {
       // Payment is processing (async payment methods like bank transfers)
-      // console.log(`⏳ Payment is processing, waiting for completion...`);
-
-      // Wait longer for async payment to complete
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // 5 second buffer
-
-      // Re-fetch payment intent to check final status
-      const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-      // console.log(`🔍 Final payment status after processing: ${finalPaymentIntent.status}`);
-
-      if (finalPaymentIntent.status === "succeeded") {
-        // console.log(`✅ Payment completed successfully after processing - benefits will be processed by webhook`);
-
-        // ✅ CRITICAL: Don't call handleMiniDrawPaymentSuccess - webhook handles all benefit processing
-        // console.log(`📋 Benefits will be processed via webhook shortly`);
-
-        // Return success with payment intent info - frontend will wait for webhook confirmation
-        return NextResponse.json({
-          success: true,
-          message: "Mini draw purchase successful",
-          data: {
-            entriesAdded: miniDrawPackage.entries,
-            packageName: miniDrawPackage.name,
-            source: "mini-draw",
-            paymentIntentId: paymentIntent.id,
-            processingStatus: "pending", // Benefits will be processed via webhook
-          },
-          paymentIntent: {
-            id: paymentIntent.id,
-            status: paymentIntent.status,
-            clientSecret: paymentIntent.client_secret,
-          },
-        });
-      } else {
-        console.error(`❌ Payment failed after processing: ${finalPaymentIntent.status}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Payment processing failed",
-            details: `Payment status: ${finalPaymentIntent.status}`,
-          },
-          { status: 400 }
-        );
-      }
+      // Trust Stripe's status - webhook will handle when payment completes
+      return NextResponse.json({
+        success: true,
+        message: "Mini draw purchase processing",
+        data: {
+          entriesAdded: miniDrawPackage.entries,
+          packageName: miniDrawPackage.name,
+          source: "mini-draw",
+          paymentIntentId: paymentIntent.id,
+          processingStatus: "processing", // Payment is still processing - webhook will handle when complete
+        },
+        paymentIntent: {
+          id: paymentIntent.id,
+          status: paymentIntent.status,
+          clientSecret: paymentIntent.client_secret,
+        },
+      });
     } else if (paymentIntent.status === "requires_payment_method") {
       // Payment method was invalid or not properly attached
       // console.error(`❌ Payment requires payment method - payment method may not be valid or attached`);
@@ -639,13 +565,15 @@ async function handlePaymentIntentCreation(
   try {
     const shouldConfirm = !!paymentMethodId;
 
-    // Build payment intent data conditionally
-    const basePaymentIntentData = {
+    // ✅ Use centralized PaymentIntent configuration with 3DS support
+    const paymentIntentConfig = createPaymentIntentConfig({
       amount: Math.round(miniDrawPackage.price * 100), // Convert to cents
       currency: "aud",
       customer: user.stripeCustomerId!,
+      paymentMethod: paymentMethodId,
       confirm: shouldConfirm,
-      description: `${miniDrawPackage.name}`, // Add meaningful description
+      paymentType: "mini-draw",
+      description: miniDrawPackage.name,
       metadata: {
         type: "mini-draw",
         packageId: miniDrawPackage._id,
@@ -660,34 +588,17 @@ async function handlePaymentIntentCreation(
         ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
       },
-    };
-
-    // Include payment_method if provided
-    if (paymentMethodId) {
-      Object.assign(basePaymentIntentData, { payment_method: paymentMethodId });
-    }
-
-    // Include return_url only when confirming (required by Stripe when confirm=true)
-    if (shouldConfirm) {
-      Object.assign(basePaymentIntentData, {
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/mini-draw-success`,
-      });
-    } else {
-      // When not confirming, use automatic payment methods
-      Object.assign(basePaymentIntentData, {
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never" as const,
-        },
-      });
-    }
+    });
 
     // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
     const idempotencyKey = `pi_minidraw_${miniDrawId}_${user._id.toString()}_${Date.now()}`;
 
-    const paymentIntent = await stripe.paymentIntents.create(basePaymentIntentData, {
-      idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-    });
+    const paymentIntent = await stripe.paymentIntents.create(
+      paymentIntentConfig,
+      {
+        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+      }
+    );
 
     return NextResponse.json({
       success: true,

@@ -298,11 +298,14 @@ export function useStripeSubscription() {
         throw new Error("Stripe not loaded");
       }
 
+      // Import client-side return URL utility
+      const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
+      
       const result = await stripe.confirmPayment({
         clientSecret,
         confirmParams: {
           payment_method: paymentMethod,
-          return_url: `${window.location.origin}/checkout/success`,
+          return_url: getReturnUrlForPaymentTypeClient("subscription"),
         },
       });
 

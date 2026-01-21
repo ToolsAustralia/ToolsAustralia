@@ -31,6 +31,7 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { trackPixelPaymentFailed, trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
+import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -139,7 +140,7 @@ async function saveUserWithVerification(
 
     if (!matches && retryCount < 1) {
       console.warn(`⚠️ [SAVE VERIFICATION] Retry ${retryCount + 1} for user ${user.email}`);
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
+      await new Promise((resolve) => setTimeout(resolve, 300)); // 300ms delay (reduced from 1000ms for faster response)
       return saveUserWithVerification(user, expectedState, retryCount + 1);
     }
 
@@ -734,11 +735,9 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
 
     webhookLog("info", `Payment ${paymentIntent.id} processing completed`);
 
-    // ✅ Update Klaviyo profile with latest user data after purchase
-    try {
-      // Wait a bit to ensure MongoDB has committed all changes (especially for atomic operations like upsells)
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second buffer
-
+    // ✅ NON-CRITICAL: Update Klaviyo profile with latest user data after purchase (fire-and-forget)
+    // MongoDB transactions handle consistency automatically - no delay needed
+    executeBackgroundJob("Klaviyo profile sync after payment success", async () => {
       const fullUser = await User.findById(user._id.toString());
       if (fullUser && paymentIntent.metadata) {
         const packageType = paymentIntent.metadata.type || paymentIntent.metadata.packageType;
@@ -755,12 +754,10 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
 
         // Only sync profile if we have package information and payment was processed
         if (packageId && packageName && packageType) {
-          ensureUserProfileSynced(fullUser);
+          await ensureUserProfileSynced(fullUser);
         }
       }
-    } catch (klaviyoError) {
-      webhookLog("error", `Klaviyo profile sync error: ${klaviyoError}`);
-    }
+    });
   } catch (error) {
     webhookLog("error", `Error handling payment success: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
@@ -1082,18 +1079,16 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       // Don't throw - referral processing should not break webhook
     }
 
-    // ✅ CRITICAL: Sync Klaviyo profile immediately after one-time package purchase
+    // ✅ NON-CRITICAL: Sync Klaviyo profile after one-time package purchase (fire-and-forget)
     // This ensures current_draw_one_time_packages is updated in real-time
-    try {
+    executeBackgroundJob("Klaviyo profile sync after one-time package", async () => {
       // Fetch fresh user data to ensure we have the latest oneTimePackages array
       const freshUser = await User.findById(user._id);
       if (freshUser) {
-        ensureUserProfileSynced(freshUser);
+        await ensureUserProfileSynced(freshUser);
         webhookLog("info", `✅ Klaviyo profile synced after one-time package purchase for: ${freshUser.email}`);
       }
-    } catch (klaviyoError) {
-      webhookLog("error", `Klaviyo profile sync error after one-time package: ${klaviyoError}`);
-    }
+    });
   } else {
     webhookLog("error", `❌ Failed to process one-time package ${packageId}: ${result.error}`);
   }
@@ -1358,11 +1353,13 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
       );
     }
 
-    // Update Klaviyo profile to reflect failed payment status
-    ensureUserProfileSynced(user);
+    // ✅ NON-CRITICAL: Update Klaviyo profile to reflect failed payment status (fire-and-forget)
+    executeBackgroundJob("Klaviyo profile sync after payment failure", async () => {
+      await ensureUserProfileSynced(user);
+    });
 
-    // Track payment failure to Facebook Pixel (server-side)
-    try {
+    // ✅ NON-CRITICAL: Track payment failure to Facebook Pixel (server-side) (fire-and-forget)
+    executeBackgroundJob("Facebook pixel payment failure tracking", async () => {
       await trackPixelPaymentFailed({
         value: amount,
         currency: paymentIntent.currency.toUpperCase() || "AUD",
@@ -1381,10 +1378,7 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
         failureReason: failureMessage || failureReason,
       });
       webhookLog("info", `✅ Payment failure tracked to Facebook Pixel for: ${user.email}`);
-    } catch (pixelError) {
-      webhookLog("error", `Error tracking payment failure to Facebook Pixel: ${pixelError}`);
-      // Don't throw - pixel tracking should not break webhook processing
-    }
+    });
 
     webhookLog("info", `✅ Payment failure tracked to Klaviyo for: ${user.email}`);
   } catch (error) {
@@ -1411,7 +1405,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       }
       
       if (!user && retries > 1) {
-        await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms delay
+        await new Promise((resolve) => setTimeout(resolve, 200)); // 200ms delay (reduced from 500ms for faster response)
         retries--;
       } else {
         break;
@@ -1495,15 +1489,13 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
     await user.save();
 
-    // Update Klaviyo profile after subscription activation
-    try {
+    // ✅ NON-CRITICAL: Update Klaviyo profile after subscription activation (fire-and-forget)
+    executeBackgroundJob("Klaviyo profile sync after subscription activation", async () => {
       const freshUser = await User.findById(user._id);
       if (freshUser) {
-        ensureUserProfileSynced(freshUser);
+        await ensureUserProfileSynced(freshUser);
       }
-    } catch (klaviyoError) {
-      webhookLog("error", `Klaviyo profile sync error: ${klaviyoError}`);
-    }
+    });
   } catch (error) {
     webhookLog("error", `Error handling subscription created: ${error}`);
   }
@@ -2819,12 +2811,14 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       }
     }
 
-    // Update Klaviyo profile to reflect failed payment status
-    ensureUserProfileSynced(user);
+    // ✅ NON-CRITICAL: Update Klaviyo profile to reflect failed payment status (fire-and-forget)
+    executeBackgroundJob("Klaviyo profile sync after invoice payment failed", async () => {
+      await ensureUserProfileSynced(user);
+    });
 
-    // Track payment failure to Facebook Pixel (server-side)
+    // ✅ NON-CRITICAL: Track payment failure to Facebook Pixel (server-side) (fire-and-forget)
     // ✅ BEST PRACTICE: Use improved error extraction (same as Klaviyo event)
-    try {
+    executeBackgroundJob("Facebook pixel invoice payment failure tracking", async () => {
       // Get payment intent ID (simplified version for pixel tracking)
       const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
       let pixelPaymentIntentId: string = "unknown";
@@ -2882,10 +2876,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         failureReason: pixelFailureMessage || pixelFailureReason, // Use failureMessage (code:decline_code) or fallback to failureReason
       });
       webhookLog("info", `✅ Invoice payment failure tracked to Facebook Pixel with improved error details`);
-    } catch (pixelError) {
-      webhookLog("error", `Error tracking invoice payment failure to Facebook Pixel: ${pixelError}`);
-      // Don't throw - pixel tracking should not break webhook processing
-    }
+    });
 
     webhookLog("info", `✅ Invoice payment failure tracked to Klaviyo`);
   } catch (error) {
@@ -3597,11 +3588,11 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         webhookLog("info", `✅ Subscription Started event tracked to Klaviyo for: ${user.email}`);
       }
 
-      // Track subscription renewal to TikTok/Klaviyo (if this is a renewal)
+      // ✅ NON-CRITICAL: Track subscription renewal to TikTok/Klaviyo (if this is a renewal) (fire-and-forget)
       // NOTE: Renewals are NOT sent to Facebook as Purchase events per best practices
       // Facebook should only receive new purchase events, not renewals
       if (invoice.billing_reason === "subscription_cycle") {
-        try {
+        executeBackgroundJob("TikTok/Klaviyo subscription renewal tracking", async () => {
           await trackPixelSubscriptionRenewal({
             value: membershipPackage.price,
             currency: invoice.currency.toUpperCase() || "AUD",
@@ -3617,33 +3608,29 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
             entriesPerMonth: entriesToGrant,
           });
           webhookLog("info", `✅ Subscription renewal tracked to TikTok/Klaviyo (not Facebook) for: ${user.email}`);
-        } catch (pixelError) {
-          webhookLog("error", `Error tracking subscription renewal: ${pixelError}`);
-          // Don't throw - pixel tracking should not break webhook processing
-        }
+        });
       }
 
-      // ✅ CRITICAL: Fetch fresh user data from database before syncing to Klaviyo
+      // ✅ NON-CRITICAL: Fetch fresh user data and sync to Klaviyo (fire-and-forget)
       // This ensures we have the latest subscription startDate and other updated fields
-      // processPaymentBenefits modifies the user internally, so we need to refresh it
-      // Wait a bit to ensure MongoDB has committed all changes (especially subscription startDate)
-      await new Promise((resolve) => setTimeout(resolve, 500)); // 500ms buffer for database consistency
-      
-      const freshUserForKlaviyo = await User.findById(user._id);
-      if (freshUserForKlaviyo) {
-        // Update Klaviyo profile with fresh user data (includes updated subscription startDate)
-        ensureUserProfileSynced(freshUserForKlaviyo);
-        webhookLog("info", `✅ Klaviyo profile synced with fresh user data for: ${freshUserForKlaviyo.email}`);
-      } else {
-        // Fallback to original user if fresh fetch fails
-        ensureUserProfileSynced(user);
-        webhookLog("warn", `⚠️ Could not fetch fresh user data, synced with original user object`);
-      }
+      // MongoDB transactions handle consistency automatically - no delay needed
+      executeBackgroundJob("Klaviyo profile sync after invoice payment succeeded", async () => {
+        const freshUserForKlaviyo = await User.findById(user._id);
+        if (freshUserForKlaviyo) {
+          // Update Klaviyo profile with fresh user data (includes updated subscription startDate)
+          await ensureUserProfileSynced(freshUserForKlaviyo);
+          webhookLog("info", `✅ Klaviyo profile synced with fresh user data for: ${freshUserForKlaviyo.email}`);
+        } else {
+          // Fallback to original user if fresh fetch fails
+          await ensureUserProfileSynced(user);
+          webhookLog("warn", `⚠️ Could not fetch fresh user data, synced with original user object`);
+        }
+      });
 
-      // ✅ CRITICAL: Process recurring membership commission (non-blocking)
+      // ✅ NON-CRITICAL: Process recurring membership commission (fire-and-forget)
       // Only process for subscription_cycle (recurring payments), not initial subscription_create
       if (invoice.billing_reason === "subscription_cycle") {
-        try {
+        executeBackgroundJob("Recurring membership commission processing", async () => {
           const { processMembershipRecurringCommission } = await import("@/utils/affiliate/commission-processing");
           const invoiceAmount = invoice.amount_paid; // Already in cents
           const safeInvoiceId = invoice.id ?? invoice.number ?? `invoice_${invoice.created}`;
@@ -3655,9 +3642,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
             purchaseAmount: invoiceAmount,
           });
           webhookLog("info", `✅ Recurring membership commission processed for affiliate`);
-        } catch (commissionError) {
-          webhookLog("error", `Affiliate recurring commission error (non-blocking): ${commissionError}`);
-        }
+        });
       }
 
       // ✅ NEW: Add invoice event for upgrades
@@ -4041,6 +4026,7 @@ async function handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) 
  * Simplified webhook handler with event-based idempotency
  */
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
     await connectDB();
 
@@ -4300,9 +4286,18 @@ export async function POST(request: NextRequest) {
       await markEventProcessed(paymentIntentId);
     }
 
+    // ✅ PERFORMANCE MONITORING: Track webhook processing time
+    const processingTime = Date.now() - startTime;
+    if (processingTime > 3000) {
+      webhookLog("warn", `⚠️ Webhook processing exceeded 3 seconds: ${processingTime}ms for event ${event.type}`);
+    } else {
+      webhookLog("info", `✅ Webhook processed in ${processingTime}ms for event ${event.type}`);
+    }
+
     return NextResponse.json({ received: true });
   } catch (error) {
-    webhookLog("error", `Error processing webhook: ${error}`);
+    const processingTime = Date.now() - startTime;
+    webhookLog("error", `Error processing webhook: ${error} (processed in ${processingTime}ms)`);
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }

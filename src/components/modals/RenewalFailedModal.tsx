@@ -118,6 +118,9 @@ const PaymentForm: React.FC<{
             // Stripe requires this when billing details are hidden in Payment Element
             // MUST include name field (required by Stripe)
             const billingDetailsData = buildBillingDetails();
+            // Import client-side return URL utility
+            const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
+            
             const confirmResult = await stripe.confirmPayment({
               elements,
               clientSecret,
@@ -125,7 +128,7 @@ const PaymentForm: React.FC<{
                 payment_method_data: {
                   billing_details: billingDetailsData,
                 },
-                return_url: window.location.href,
+                return_url: getReturnUrlForPaymentTypeClient("subscription"),
               },
               redirect: "if_required",
             });

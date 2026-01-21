@@ -15,7 +15,17 @@ import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentSer
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import mongoose from "mongoose";
 import { getInvoicePaymentIntentFromSubscription } from "@/utils/payment/stripe/invoice-payment-intent";
+import { getSubscriptionPaymentIntent, cancelDuplicatePaymentIntents } from "@/utils/payment/stripe/subscription-utils";
+import {
+  attachPaymentMethodToCustomer,
+  setDefaultPaymentMethod,
+  verifyPaymentMethodAttachment,
+} from "@/utils/payment/stripe/payment-method-utils";
+import { ensureCustomerExists, updateCustomerPaymentMethod } from "@/utils/payment/stripe/customer-utils";
+import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subscription-assignment";
+import { createOrUpdateSubscriptionUser } from "@/utils/payment/user-subscription-utils";
 // Klaviyo integration handled by webhook for best practices
+import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 
 // Interface for Stripe errors
 interface StripeError {
@@ -119,202 +129,164 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine which customer to use
-    let customer;
+    // ✅ OPTIMIZED: Use utility functions for customer operations
+    let customer: Stripe.Customer;
     let canUsePaymentMethod = true;
 
-    // First, check if we have a registered user with an existing Stripe customer
-    if (registeredUser && registeredUser.stripeCustomerId) {
-      // console.log(`👤 Using existing Stripe customer: ${registeredUser.stripeCustomerId}`);
-      customer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
+    // Extract anonymousId for A/B testing (before customer operations for parallel execution)
+    const anonymousId = AnonymousIdService.extractAnonymousId(request);
 
-      // ✅ FIX: Attach payment method to customer if not already attached
-      // This handles cases where PaymentIntent was created without a customer
-      try {
-        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-        if (!paymentMethod.customer || paymentMethod.customer !== customer.id) {
-          await stripe.paymentMethods.attach(finalPaymentMethodId, {
-            customer: customer.id,
-          });
-          // console.log(`✅ Attached payment method to existing customer: ${customer.id}`);
-        }
-      } catch (attachError: unknown) {
-        // Check if error is due to payment method being "consumed" (used without attachment)
-        const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
-        const errorCode = attachError && typeof attachError === "object" && "code" in attachError ? String(attachError.code) : undefined;
-        
-        if (
-          errorMessage.includes("previously used without being attached") ||
-          errorMessage.includes("may not be used again")
-        ) {
-          console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused, will collect fresh payment method");
-          canUsePaymentMethod = false;
-        } else {
-          // ✅ CRITICAL FIX: Return error instead of continuing if attachment fails
-          // Payment method attachment is critical - subscription should not be created without it
-          console.error("❌ Failed to attach payment method to customer:", attachError);
-          
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:184',message:'Payment method attachment failed for existing customer - RETURNING ERROR',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,errorMessage,errorCode,errorStringified:JSON.stringify(attachError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-          
-          return NextResponse.json(
-            {
-              success: false,
-              error: "Payment method setup failed",
-              details: errorMessage || "Unable to attach payment method to customer",
-              code: errorCode,
-              suggestion: "Please try again or use a different payment method.",
-            },
-            { status: 400 }
-          );
-        }
-      }
-    } else {
-      // For guest users or new users, get the customer ID from the payment method
-      // console.log("🔍 Retrieving payment method to get customer ID...");
-      try {
-        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-        if (paymentMethod.customer) {
-          // Payment method has a customer - use it
-          // console.log(`👤 Payment method attached to customer: ${paymentMethod.customer}`);
-          customer = await stripe.customers.retrieve(paymentMethod.customer as string);
-          // console.log(`✅ Using customer from payment method: ${customer.id}`);
-
-          // Update the customer with proper details if it's a temporary guest customer
-          const customerWithMetadata = customer as Stripe.Customer;
-          if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
-            // console.log("🔄 Updating temporary customer with proper details...");
-            customer = await stripe.customers.update(customer.id, {
-              email: validatedData.userEmail,
-              name: `${validatedData.firstName} ${validatedData.lastName}`,
-              phone: validatedData.mobile,
-              metadata: {
-                packageId: validatedData.packageId,
-                packageName: membershipPackage.name,
-                userId: registeredUser?._id?.toString() || "guest",
-              },
-            });
-            // console.log(`✅ Updated customer details: ${customer.id}`);
-          }
-        } else {
-          // ✅ FIX: Payment method has no customer - create one and attach it
-          // This happens when PaymentIntent was created without a customer
-          // console.log("🆕 Payment method has no customer - creating new customer...");
-
-          customer = await stripe.customers.create({
-            email: validatedData.userEmail,
-            name: `${validatedData.firstName} ${validatedData.lastName}`,
-            phone: validatedData.mobile,
-            metadata: {
-              packageId: validatedData.packageId,
-              packageName: membershipPackage.name,
-              userId: registeredUser?._id?.toString() || "guest",
-            },
-          });
-
-          // Attach payment method to the newly created customer
+    // ✅ OPTIMIZED: Parallelize customer operations and A/B testing lookup
+    const [customerResult, experimentAssignmentResult] = await Promise.allSettled([
+      // Customer operations
+      (async () => {
+        // First, check if we have a registered user with an existing Stripe customer
+        if (registeredUser && registeredUser.stripeCustomerId) {
           try {
-            await stripe.paymentMethods.attach(finalPaymentMethodId, {
-              customer: customer.id,
-            });
-            // console.log(`✅ Created customer ${customer.id} and attached payment method`);
-          } catch (attachError: unknown) {
-            // Check if error is due to payment method being "consumed" (used without attachment)
-            const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
-            if (
-              errorMessage.includes("previously used without being attached") ||
-              errorMessage.includes("may not be used again")
-            ) {
-              console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused, will collect fresh payment method");
-              canUsePaymentMethod = false;
-            } else {
-              console.error("❌ Failed to attach payment method to customer:", attachError);
-              throw attachError; // Re-throw unexpected errors
+            const existingCustomer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
+            
+            // Check if customer is deleted
+            if ("deleted" in existingCustomer && existingCustomer.deleted) {
+              throw new Error("Customer has been deleted");
+            }
+
+            // ✅ OPTIMIZED: Use utility to attach payment method
+            try {
+              await attachPaymentMethodToCustomer(finalPaymentMethodId, existingCustomer.id);
+              return existingCustomer as Stripe.Customer;
+            } catch (attachError: unknown) {
+              // Check if error is due to payment method being "consumed"
+              const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+              
+              if (
+                errorMessage.includes("previously used without being attached") ||
+                errorMessage.includes("may not be used again") ||
+                errorMessage.includes("cannot be reused")
+              ) {
+                console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
+                canUsePaymentMethod = false;
+                return existingCustomer as Stripe.Customer; // Continue with customer even if payment method can't be reused
+              } else {
+                // Re-throw critical errors
+                throw attachError;
+              }
+            }
+          } catch (error) {
+            console.warn(`⚠️ Failed to retrieve existing customer, will create new one:`, error);
+            // Fall through to create new customer
+          }
+        }
+
+        // For guest users or new users, ensure customer exists
+        const customerMetadata = {
+          packageId: validatedData.packageId,
+          packageName: membershipPackage.name,
+          userId: registeredUser?._id?.toString() || "guest",
+        };
+
+        // ✅ OPTIMIZED: Use utility function to ensure customer exists
+        const newOrExistingCustomer = await ensureCustomerExists(validatedData.userEmail, customerMetadata);
+
+        // If payment method has a customer, check if it matches
+        try {
+          const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+          if (paymentMethod.customer) {
+            const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer.id;
+            if (pmCustomerId === newOrExistingCustomer.id) {
+              // Customer matches, update details if needed
+              const customerWithMetadata = newOrExistingCustomer as Stripe.Customer;
+              if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
+                await stripe.customers.update(newOrExistingCustomer.id, {
+                  email: validatedData.userEmail,
+                  name: `${validatedData.firstName} ${validatedData.lastName}`,
+                  phone: validatedData.mobile,
+                  metadata: customerMetadata,
+                });
+              }
+              return newOrExistingCustomer;
             }
           }
+        } catch (pmError) {
+          console.warn(`⚠️ Failed to check payment method customer:`, pmError);
+        }
 
-          // If registered user exists, update them with the customer ID
-          if (registeredUser) {
-            registeredUser.stripeCustomerId = customer.id;
-            await registeredUser.save();
-            // console.log(`✅ Linked customer ${customer.id} to registered user ${registeredUser._id}`);
+        // ✅ OPTIMIZED: Attach payment method using utility
+        try {
+          await attachPaymentMethodToCustomer(finalPaymentMethodId, newOrExistingCustomer.id);
+        } catch (attachError: unknown) {
+          const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+          if (
+            errorMessage.includes("previously used without being attached") ||
+            errorMessage.includes("may not be used again") ||
+            errorMessage.includes("cannot be reused")
+          ) {
+            console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
+            canUsePaymentMethod = false;
+          } else {
+            throw attachError;
           }
         }
-      } catch (error) {
-        console.error("❌ Failed to retrieve payment method:", error);
-        throw new Error("Failed to retrieve payment method details");
+
+        // If registered user exists, update them with the customer ID
+        if (registeredUser && !registeredUser.stripeCustomerId) {
+          registeredUser.stripeCustomerId = newOrExistingCustomer.id;
+          await registeredUser.save();
+        }
+
+        return newOrExistingCustomer;
+      })(),
+
+      // ✅ OPTIMIZED: A/B testing lookup in parallel (non-blocking)
+      getExperimentAssignmentForSubscription(registeredUser?._id?.toString() || null, anonymousId || null),
+    ]);
+
+    // Extract customer from result
+    if (customerResult.status === "fulfilled") {
+      customer = customerResult.value;
+    } else {
+      const errorMessage = customerResult.reason instanceof Error ? customerResult.reason.message : String(customerResult.reason);
+      console.error("❌ Failed to get/create customer:", customerResult.reason);
+      
+      // Check if it's a payment method attachment error that should return error response
+      if (errorMessage.includes("Failed to attach payment method")) {
+        const errorCode = customerResult.reason && typeof customerResult.reason === "object" && "code" in customerResult.reason ? String(customerResult.reason.code) : undefined;
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Payment method setup failed",
+            details: errorMessage || "Unable to attach payment method to customer",
+            code: errorCode,
+            suggestion: "Please try again or use a different payment method.",
+          },
+          { status: 400 }
+        );
+      }
+      
+      throw new Error(`Failed to get/create customer: ${errorMessage}`);
+    }
+
+    // Extract experiment assignment from result (optional, non-blocking)
+    let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+    if (experimentAssignmentResult.status === "fulfilled") {
+      experimentAssignment = experimentAssignmentResult.value;
+      if (experimentAssignment) {
+        console.log(`✅ [A/B Testing] Storing experiment assignment in subscription metadata:`, experimentAssignment);
       }
     }
 
-    // ✅ CRITICAL FIX: Ensure payment method is attached and set as default BEFORE creating subscription
+    // ✅ OPTIMIZED: Ensure payment method is attached and set as default using utility (parallelizes operations)
     // This prevents "No payment method found" errors when confirming subscription payment
     // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
-    // This prevents saving payment methods when payments fail due to insufficient funds
     if (canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
       try {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:271',message:'Payment method attachment - BEFORE retrieve',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,canUsePaymentMethod},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        
-        // ✅ ENHANCED: Verify payment method exists and is properly attached
-        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-        const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer?.id;
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:276',message:'Payment method retrieved - attachment check',data:{paymentMethodId:finalPaymentMethodId,pmCustomerId,expectedCustomerId:customer.id,isAttached:pmCustomerId===customer.id,paymentMethodType:paymentMethod.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        
-        // ✅ ENHANCED: Ensure payment method is attached to customer (idempotent check)
-        if (!pmCustomerId || pmCustomerId !== customer.id) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:280',message:'Attaching payment method to customer',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,currentPmCustomerId:pmCustomerId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-          
-          await stripe.paymentMethods.attach(finalPaymentMethodId, {
-            customer: customer.id,
-          });
-          console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${customer.id} before subscription creation`);
-          
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:285',message:'Payment method attached successfully',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-        }
-        
-        // ✅ ENHANCED: Set as default payment method and verify it was set
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:288',message:'Setting default payment method',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
-        
-        await stripe.customers.update(customer.id, {
-          invoice_settings: {
-            default_payment_method: finalPaymentMethodId,
-          },
-        });
-        
-        // ✅ ENHANCED: Verify default payment method was set correctly
-        const updatedCustomer = await stripe.customers.retrieve(customer.id);
-        const defaultPm = (updatedCustomer as { invoice_settings?: { default_payment_method?: string } })
-          .invoice_settings?.default_payment_method;
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:297',message:'Default payment method verification',data:{paymentMethodId:finalPaymentMethodId,defaultPm,isCorrect:defaultPm===finalPaymentMethodId,customerId:customer.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
-        
-        if (defaultPm !== finalPaymentMethodId) {
-          console.warn(`⚠️ Default payment method may not have been set correctly. Expected: ${finalPaymentMethodId}, Got: ${defaultPm}`);
-        } else {
-          console.log(`✅ Verified default payment method ${finalPaymentMethodId} is set for customer ${customer.id}`);
-        }
+        // ✅ OPTIMIZED: Use utility function that parallelizes attach + update
+        await updateCustomerPaymentMethod(customer.id, finalPaymentMethodId);
       } catch (pmError) {
-        // #region agent log
         const errorMessage = pmError instanceof Error ? pmError.message : String(pmError);
         const errorCode = pmError && typeof pmError === "object" && "code" in pmError ? String(pmError.code) : undefined;
-        fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:301',message:'Payment method attachment FAILED',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,errorMessage,errorCode,errorType:typeof pmError,errorStringified:JSON.stringify(pmError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         
         console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
-        // ✅ ENHANCED: Return clear error before subscription creation if payment method can't be attached
+        
         return NextResponse.json(
           {
             success: false,
@@ -364,129 +336,10 @@ export async function POST(request: NextRequest) {
     const stripePriceId = membershipPackage.stripePriceId;
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
-    // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
-    // Store in subscription and payment metadata so webhook can use it directly (more reliable than lookup)
-    // ✅ FIX: Extract anonymousId from request to find assignments created before user logged in
-    const anonymousId = AnonymousIdService.extractAnonymousId(request);
-    
-    // ✅ Auto-merge anonymous assignments to userId when user registers/logs in
-    if (registeredUser?._id && anonymousId) {
-      try {
-        const mergeResult = await VariantAssignmentService.mergeAnonymousToUser(anonymousId, registeredUser._id.toString());
-        if (mergeResult.merged > 0) {
-          console.log(`✅ [A/B Testing] Auto-merged ${mergeResult.merged} anonymous assignment(s) to user ${registeredUser._id}`);
-        }
-      } catch (error) {
-        // Silently fail - merge should not block payment creation
-        console.error("Error auto-merging anonymous assignments:", error);
-      }
-    }
-    
-    let experimentAssignment: { experimentId: string; variantId: string } | null = null;
-    if (registeredUser?._id) {
-      try {
-        // ✅ Pass anonymousId to find assignments created before user logged in
-        experimentAssignment = await getUserActiveExperimentAssignment(
-          registeredUser._id.toString(),
-          undefined, // slug
-          anonymousId || undefined // anonymousId from cookies
-        );
-        
-            // ✅ Fallback: Check cookies if database lookup failed
-            if (!experimentAssignment) {
-              // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
-              // RequestCookies doesn't have entries(), so we need to check known experiment IDs
-              // For now, we'll check if there's a cookie for the active experiment
-              // This is a best-effort fallback
-              try {
-                const activeExperiments = await ExperimentRepository.findAll({
-                  status: "active",
-                  page: 1,
-                  limit: 10,
-                });
-                
-                for (const exp of activeExperiments.experiments) {
-                  const experimentId = exp._id instanceof mongoose.Types.ObjectId 
-                    ? exp._id.toString() 
-                    : String(exp._id);
-                  const cookieName = `ta_ab_assignment_${experimentId}`;
-                  const cookieValue = request.cookies.get(cookieName)?.value;
-                  
-                  if (cookieValue) {
-                    try {
-                      const assignmentData = JSON.parse(cookieValue);
-                      if (assignmentData.experimentId && assignmentData.variantId) {
-                        experimentAssignment = {
-                          experimentId: assignmentData.experimentId,
-                          variantId: assignmentData.variantId,
-                        };
-                        console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
-                        break;
-                      }
-                    } catch (error) {
-                      // Invalid cookie data, skip
-                      console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
-                    }
-                  }
-                }
-              } catch (error) {
-                // Silently fail - cookie fallback should not block payment creation
-                console.warn("Error checking assignment cookies:", error);
-              }
-            }
-        
-        if (experimentAssignment) {
-          console.log(`✅ [A/B Testing] Storing experiment assignment in subscription metadata:`, experimentAssignment);
-        }
-      } catch (error) {
-        // Silently fail - experiment tracking should not block payment creation
-        console.error("Error getting experiment assignment for subscription metadata:", error);
-      }
-    }
+    // ✅ OPTIMIZED: Experiment assignment already retrieved in parallel above (non-blocking)
+    // The assignment is stored in experimentAssignment variable from Promise.allSettled
 
-    // ✅ DEDUPLICATION: Cancel any old upfront PaymentIntents for backward compatibility
-    // This handles any leftover upfront PaymentIntents from previous implementation
-    // Note: New implementation doesn't create upfront PaymentIntents, so this is mainly for cleanup
-    try {
-      const existingPaymentIntents = await stripe.paymentIntents.list({
-        customer: customer.id,
-        limit: 100, // Get recent PaymentIntents
-      });
-
-      // Filter for old upfront PaymentIntents that are cancellable
-      const oldUpfrontPaymentIntents = existingPaymentIntents.data.filter((pi) => {
-        const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
-        const isCancellable = [
-          "requires_payment_method",
-          "requires_confirmation",
-          "requires_action",
-          "requires_capture",
-          "processing",
-        ].includes(pi.status);
-        const isNotSucceeded = pi.status !== "succeeded";
-        const isNotCanceled = pi.status !== "canceled";
-        
-        // Only cancel old upfront PaymentIntents (for backward compatibility)
-        return isUpfrontPayment && isCancellable && isNotSucceeded && isNotCanceled;
-      });
-
-      // Cancel old upfront PaymentIntents
-      for (const oldPI of oldUpfrontPaymentIntents) {
-        try {
-          await stripe.paymentIntents.cancel(oldPI.id);
-          console.log(`✅ Cancelled old upfront PaymentIntent ${oldPI.id} (backward compatibility cleanup)`);
-        } catch (cancelError) {
-          console.warn(`⚠️ Could not cancel old upfront PaymentIntent ${oldPI.id}: ${cancelError}`);
-        }
-      }
-
-      if (oldUpfrontPaymentIntents.length > 0) {
-        console.log(`✅ Deduplication: Cancelled ${oldUpfrontPaymentIntents.length} old upfront PaymentIntent(s) for customer ${customer.id}`);
-      }
-    } catch (dedupError) {
-      console.warn(`⚠️ Deduplication check failed (non-critical): ${dedupError}`);
-      // Continue - deduplication failure shouldn't block subscription creation
-    }
+    // ✅ OPTIMIZED: Deduplication will be handled after subscription creation (non-blocking)
 
     // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
     // Use customer ID + package ID for stable idempotency (not Date.now())
@@ -591,168 +444,192 @@ export async function POST(request: NextRequest) {
     }
 
     let paymentIntent: Stripe.PaymentIntent | string | null | undefined = paymentIntentResult.paymentIntent;
-    const latestInvoice = paymentIntentResult.invoice;
+    let latestInvoice = paymentIntentResult.invoice;
 
     // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually as last resort
     // This should rarely happen - Stripe usually creates PaymentIntent automatically
     // Only create if absolutely necessary (after retries failed)
     if (!paymentIntent && latestInvoice.status === "open") {
       try {
-        // ✅ FIX: Use invoice amount_due, but fallback to subscription price if amount_due is 0
-        // This handles edge cases where invoice might have 0 amount due to prorations or trials
-        const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
-        const invoiceCurrency = (latestInvoice.currency as string) || "aud";
-
-        console.log(
-          `⚠️ Invoice is open but has no PaymentIntent. Creating PaymentIntent for amount: ${invoiceAmount} (invoice amount_due: ${
-            latestInvoice.amount_due
-          }, package price: ${Math.round(membershipPackage.price * 100)})`
-        );
-
-        // ✅ DEBUG: Verify amount is correct for wallet display
-        if (invoiceAmount === 0) {
-          console.warn(
-            `⚠️ WARNING: PaymentIntent amount is 0! This will show $0.00 in Google Pay/Apple Pay. Using package price fallback: ${Math.round(
-              membershipPackage.price * 100
-            )}`
-          );
+        // ✅ SAFETY: Final check - retrieve invoice one more time before manual creation
+        // This prevents creating duplicate PaymentIntents if Stripe created one asynchronously
+        if (!latestInvoice.id) {
+          throw new Error("Invoice ID is missing - cannot perform final check");
         }
+        const finalCheckInvoice = await stripe.invoices.retrieve(latestInvoice.id, {
+          expand: ["subscription", "payment_intent", "charge"],
+        });
 
-        // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
-        // Store in metadata so webhook can use it directly (more reliable than lookup)
-        let experimentAssignment: { experimentId: string; variantId: string } | null = null;
-        if (registeredUser?._id) {
-          try {
-            // ✅ Pass anonymousId to find assignments created before user logged in
-            experimentAssignment = await getUserActiveExperimentAssignment(
-              registeredUser._id.toString(),
-              undefined, // slug
-              anonymousId || undefined // anonymousId from cookies
+        const finalCheckWithPaymentIntent = finalCheckInvoice as Stripe.Invoice & {
+          payment_intent?: Stripe.PaymentIntent | string;
+        };
+
+        // If PaymentIntent found in final check, use it instead of creating manual
+        if (finalCheckWithPaymentIntent.payment_intent) {
+          paymentIntent = finalCheckWithPaymentIntent.payment_intent;
+          const paymentIntentId =
+            typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
+          console.log(
+            `✅ Found PaymentIntent in final check: ${paymentIntentId} for subscription ${subscription.id}`
+          );
+          // Update latestInvoice to use the fresh invoice data
+          latestInvoice = finalCheckInvoice;
+        } else {
+          // Only now create manual PaymentIntent as true last resort
+          // ✅ FIX: Use invoice amount_due, but fallback to subscription price if amount_due is 0
+          // This handles edge cases where invoice might have 0 amount due to prorations or trials
+          const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
+          const invoiceCurrency = (latestInvoice.currency as string) || "aud";
+
+          console.log(
+            `⚠️ Invoice is open but has no PaymentIntent after final check. Creating PaymentIntent for amount: ${invoiceAmount} (invoice amount_due: ${
+              latestInvoice.amount_due
+            }, package price: ${Math.round(membershipPackage.price * 100)})`
+          );
+
+          // ✅ DEBUG: Verify amount is correct for wallet display
+          if (invoiceAmount === 0) {
+            console.warn(
+              `⚠️ WARNING: PaymentIntent amount is 0! This will show $0.00 in Google Pay/Apple Pay. Using package price fallback: ${Math.round(
+                membershipPackage.price * 100
+              )}`
             );
-            
-            // ✅ Fallback: Check cookies if database lookup failed
-            if (!experimentAssignment) {
-              // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
-              try {
-                const activeExperiments = await ExperimentRepository.findAll({
-                  status: "active",
-                  page: 1,
-                  limit: 10,
-                });
-                
-                for (const exp of activeExperiments.experiments) {
-                  const experimentId = exp._id instanceof mongoose.Types.ObjectId 
-                    ? exp._id.toString() 
-                    : String(exp._id);
-                  const cookieName = `ta_ab_assignment_${experimentId}`;
-                  const cookieValue = request.cookies.get(cookieName)?.value;
+          }
+
+          // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
+          // Store in metadata so webhook can use it directly (more reliable than lookup)
+          let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+          if (registeredUser?._id) {
+            try {
+              // ✅ Pass anonymousId to find assignments created before user logged in
+              experimentAssignment = await getUserActiveExperimentAssignment(
+                registeredUser._id.toString(),
+                undefined, // slug
+                anonymousId || undefined // anonymousId from cookies
+              );
+              
+              // ✅ Fallback: Check cookies if database lookup failed
+              if (!experimentAssignment) {
+                // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
+                try {
+                  const activeExperiments = await ExperimentRepository.findAll({
+                    status: "active",
+                    page: 1,
+                    limit: 10,
+                  });
                   
-                  if (cookieValue) {
-                    try {
-                      const assignmentData = JSON.parse(cookieValue);
-                      if (assignmentData.experimentId && assignmentData.variantId) {
-                        experimentAssignment = {
-                          experimentId: assignmentData.experimentId,
-                          variantId: assignmentData.variantId,
-                        };
-                        console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
-                        break;
+                  for (const exp of activeExperiments.experiments) {
+                    const experimentId = exp._id instanceof mongoose.Types.ObjectId 
+                      ? exp._id.toString() 
+                      : String(exp._id);
+                    const cookieName = `ta_ab_assignment_${experimentId}`;
+                    const cookieValue = request.cookies.get(cookieName)?.value;
+                    
+                    if (cookieValue) {
+                      try {
+                        const assignmentData = JSON.parse(cookieValue);
+                        if (assignmentData.experimentId && assignmentData.variantId) {
+                          experimentAssignment = {
+                            experimentId: assignmentData.experimentId,
+                            variantId: assignmentData.variantId,
+                          };
+                          console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
+                          break;
+                        }
+                      } catch (error) {
+                        // Invalid cookie data, skip
+                        console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
                       }
-                    } catch (error) {
-                      // Invalid cookie data, skip
-                      console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
                     }
                   }
+                } catch (error) {
+                  // Silently fail - cookie fallback should not block payment creation
+                  console.warn("Error checking assignment cookies:", error);
                 }
-              } catch (error) {
-                // Silently fail - cookie fallback should not block payment creation
-                console.warn("Error checking assignment cookies:", error);
               }
+              
+              if (experimentAssignment) {
+                console.log(`✅ [A/B Testing] Storing experiment assignment in payment metadata:`, experimentAssignment);
+              }
+            } catch (error) {
+              // Silently fail - experiment tracking should not block payment creation
+              console.error("Error getting experiment assignment for payment metadata:", error);
             }
-            
-            if (experimentAssignment) {
-              console.log(`✅ [A/B Testing] Storing experiment assignment in payment metadata:`, experimentAssignment);
-            }
-          } catch (error) {
-            // Silently fail - experiment tracking should not block payment creation
-            console.error("Error getting experiment assignment for payment metadata:", error);
           }
-        }
 
-        // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
-        // This ensures that even if the API is called twice, only one PaymentIntent is created
-        const invoicePaymentIntentIdempotencyKey = `pi_invoice_${latestInvoice.id || subscription.id}_${Date.now()}`;
+          // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
+          // This ensures that even if the API is called twice, only one PaymentIntent is created
+          const invoicePaymentIntentIdempotencyKey = `pi_invoice_${latestInvoice.id || subscription.id}_${Date.now()}`;
 
-        // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
-        // Don't confirm it - let PaymentElement handle confirmation
-        // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
-        // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
-        const newPaymentIntent = await stripe.paymentIntents.create(
-          {
+          // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
+          // Don't confirm it - let PaymentElement handle confirmation
+          // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
+          // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
+          // ✅ Use centralized PaymentIntent configuration with 3DS support
+          const paymentIntentConfig = createPaymentIntentConfig({
             amount: invoiceAmount,
             currency: invoiceCurrency,
             customer: customer.id,
-            // ✅ REMOVED: payment_method - PaymentElement will collect it from user selection
-            setup_future_usage: "off_session",
             confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
-            automatic_payment_methods: {
-              enabled: true,
-              allow_redirects: "never",
-            },
-            // ✅ STRIPE BEST PRACTICE: Set description to package name for better tracking in Stripe dashboard
+            paymentType: "subscription",
             description: membershipPackage.name,
+            setupFutureUsage: "off_session",
             metadata: {
-              invoice_id: latestInvoice.id || "",
-              subscription_id: subscription.id,
-              packageId: validatedData.packageId,
-              packageName: membershipPackage.name,
-              userEmail: validatedData.userEmail,
-              type: "subscription", // ✅ Set 'type' for webhook compatibility
-              packageType: "membership",
-              isUpfrontPayment: "false", // ✅ CRITICAL: Mark as invoice PaymentIntent (the one that should be authorized)
-              isInvoicePaymentIntent: "true", // ✅ Additional marker for clarity
-              // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
-              // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
-              ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-              ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-              // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
-              ...(experimentAssignment && {
-                experimentId: experimentAssignment.experimentId,
-                variantId: experimentAssignment.variantId,
-              }),
-              // Store request context for Facebook CAPI (webhook will extract and use)
-              ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-              ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-              ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-              ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-            },
-          },
-          {
-            idempotencyKey: invoicePaymentIntentIdempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-          }
-        );
-
-        // Update invoice metadata to track PaymentIntent and request context (optional, but helps with tracking)
-        if (latestInvoice.id) {
-          await stripe.invoices.update(latestInvoice.id, {
-            metadata: {
-              ...(latestInvoice.metadata || {}),
-              payment_intent_id: newPaymentIntent.id,
-              // Store request context for Facebook CAPI (webhook will extract and use)
-              ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-              ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-              ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-              ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+                invoice_id: latestInvoice.id || "",
+                subscription_id: subscription.id,
+                packageId: validatedData.packageId,
+                packageName: membershipPackage.name,
+                userEmail: validatedData.userEmail,
+                type: "subscription", // ✅ Set 'type' for webhook compatibility
+                packageType: "membership",
+                isUpfrontPayment: "false", // ✅ CRITICAL: Mark as invoice PaymentIntent (the one that should be authorized)
+                isInvoicePaymentIntent: "true", // ✅ Additional marker for clarity
+                // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
+                // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
+                ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+                ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+                // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
+                ...(experimentAssignment && {
+                  experimentId: experimentAssignment.experimentId,
+                  variantId: experimentAssignment.variantId,
+                }),
+                // Store request context for Facebook CAPI (webhook will extract and use)
+                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+                ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+                ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+                ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
             },
           });
-        }
 
-        paymentIntent = newPaymentIntent;
-        console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`, {
-          hasClientSecret: !!newPaymentIntent.client_secret,
-          status: newPaymentIntent.status,
-          amount: newPaymentIntent.amount,
-        });
+          const newPaymentIntent = await stripe.paymentIntents.create(
+            paymentIntentConfig,
+            {
+              idempotencyKey: invoicePaymentIntentIdempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+            }
+          );
+
+          // Update invoice metadata to track PaymentIntent and request context (optional, but helps with tracking)
+          if (latestInvoice.id) {
+            await stripe.invoices.update(latestInvoice.id, {
+              metadata: {
+                ...(latestInvoice.metadata || {}),
+                payment_intent_id: newPaymentIntent.id,
+                // Store request context for Facebook CAPI (webhook will extract and use)
+                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+                ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+                ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+                ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+              },
+            });
+          }
+
+          paymentIntent = newPaymentIntent;
+          console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`, {
+            hasClientSecret: !!newPaymentIntent.client_secret,
+            status: newPaymentIntent.status,
+            amount: newPaymentIntent.amount,
+          });
+        }
       } catch (createError) {
         console.error("❌ Failed to create PaymentIntent for invoice:", createError);
         return NextResponse.json(
@@ -979,18 +856,18 @@ export async function POST(request: NextRequest) {
         // Payment method will be saved by webhook after payment succeeds
       });
 
-      try {
-        await user.save();
-        // console.log(`✅ Created user account: ${user._id}`);
-        // console.log(`⏳ Entries/points will be added via webhook upon payment confirmation`);
-        // console.log(`📦 Membership will activate: ${membershipPackage.name}`);
+      // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+      // MongoDB generates _id immediately when creating User() instance, so it's available for response
+      // Subscription status updates are handled by webhook after payment succeeds
+      user.save().catch((error) => {
+        console.warn("Non-critical user save failed (webhook will handle):", error);
+      });
+      // console.log(`✅ Created user account: ${user._id}`);
+      // console.log(`⏳ Entries/points will be added via webhook upon payment confirmation`);
+      // console.log(`📦 Membership will activate: ${membershipPackage.name}`);
 
-        // ✅ Klaviyo integration handled by webhook for reliability and best practices
-        // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
-      } catch (dbError) {
-        console.error("❌ Database save failed:", dbError);
-        throw new Error(`Failed to save user account: ${dbError instanceof Error ? dbError.message : "Unknown error"}`);
-      }
+      // ✅ Klaviyo integration handled by webhook for reliability and best practices
+      // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
     }
 
     // ✅ Referral processing moved to webhook (after payment succeeds)
