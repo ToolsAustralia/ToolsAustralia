@@ -15,6 +15,7 @@ import {
   setDefaultPaymentMethod,
 } from "@/utils/payment/stripe/payment-method-utils";
 import { getCustomerWithDefaultPaymentMethod } from "@/utils/payment/stripe/customer-utils";
+import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are now granted via webhook processing only
 
@@ -99,12 +100,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Subscription not found in Stripe" }, { status: 404 });
     }
 
+    // ✅ OPTIMIZED: Use already-expanded PaymentIntent from subscription if available
+    // Check if PaymentIntent is already expanded from subscription retrieval
+    let alreadyExpandedPaymentIntent: Stripe.PaymentIntent | null = null;
+    if (subscription.latest_invoice) {
+      const invoice = subscription.latest_invoice;
+      if (typeof invoice === "object" && "payment_intent" in invoice) {
+        const paymentIntent = (invoice as { payment_intent?: Stripe.PaymentIntent | string }).payment_intent;
+        if (paymentIntent && typeof paymentIntent === "object" && "id" in paymentIntent) {
+          alreadyExpandedPaymentIntent = paymentIntent as Stripe.PaymentIntent;
+        }
+      }
+    }
+
     // ✅ AUTHORIZATION GUARD: If clientSecret is provided, validate it's the invoice PaymentIntent, not upfront
     if (clientSecret) {
       try {
         // Extract PaymentIntent ID from clientSecret
         const paymentIntentId = clientSecret.split("_secret_")[0];
-        const providedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        // ✅ OPTIMIZED: Use already-expanded PaymentIntent if it matches, otherwise retrieve
+        let providedPaymentIntent: Stripe.PaymentIntent;
+        if (alreadyExpandedPaymentIntent && alreadyExpandedPaymentIntent.id === paymentIntentId) {
+          providedPaymentIntent = alreadyExpandedPaymentIntent;
+        } else {
+          providedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        }
         
         // ✅ VALIDATION: Ensure PaymentIntent belongs to this subscription's invoice
         const expectedInvoiceId = subscription.latest_invoice 
@@ -161,10 +182,11 @@ export async function POST(request: NextRequest) {
     if (!paymentIntent && subscription.status === "incomplete") {
       // console.log("🔧 No payment intent found for incomplete subscription, paying invoice directly...");
       try {
-        // ✅ FIX: First check if PaymentIntent exists but wasn't expanded properly
-        // The subscription was retrieved with expand: ["latest_invoice.payment_intent"]
-        // but payment_intent might be a string ID that needs retrieval
-        if (latestInvoice?.payment_intent) {
+        // ✅ OPTIMIZED: Use already-expanded PaymentIntent if available, otherwise retrieve
+        if (alreadyExpandedPaymentIntent) {
+          paymentIntent = alreadyExpandedPaymentIntent;
+          console.log(`✅ Using already-expanded PaymentIntent: ${paymentIntent.id}`);
+        } else if (latestInvoice?.payment_intent) {
           const pi = latestInvoice.payment_intent;
           if (typeof pi === "string") {
             // PaymentIntent is a string ID - retrieve it
@@ -173,14 +195,13 @@ export async function POST(request: NextRequest) {
               if (retrievedPI) {
                 paymentIntent = retrievedPI;
                 console.log(`✅ Found PaymentIntent by retrieving ID: ${retrievedPI.id}`);
-                // Continue with PaymentIntent flow - skip default payment method fallback
               }
             } catch (retrieveError) {
               console.warn(`⚠️ Failed to retrieve PaymentIntent ${pi}: ${retrieveError}`);
             }
-          } else if (pi.id) {
+          } else if (pi && typeof pi === "object" && "id" in pi) {
             // PaymentIntent is already an object - use it directly
-            paymentIntent = pi;
+            paymentIntent = pi as Stripe.PaymentIntent;
             console.log(`✅ Found PaymentIntent in invoice: ${pi.id}`);
           }
         }
@@ -365,13 +386,16 @@ export async function POST(request: NextRequest) {
 
           // console.log(`💳 Paid invoice: ${paidInvoice.id}, status: ${paidInvoice.status}`);
 
-          // Get the payment intent from the paid invoice
-          const invoice = paidInvoice as { payment_intent?: string | { id: string; status: string } };
+          // ✅ OPTIMIZED: Get payment intent from paid invoice (already available from invoice.payment_intent)
+          const invoice = paidInvoice as { payment_intent?: string | Stripe.PaymentIntent };
           if (invoice.payment_intent) {
-            paymentIntent =
-              typeof invoice.payment_intent === "string"
-                ? await stripe.paymentIntents.retrieve(invoice.payment_intent)
-                : invoice.payment_intent;
+            if (typeof invoice.payment_intent === "string") {
+              // Only retrieve if it's a string ID
+              paymentIntent = await stripe.paymentIntents.retrieve(invoice.payment_intent);
+            } else {
+              // Already an object - use directly
+              paymentIntent = invoice.payment_intent;
+            }
             // console.log(`💳 Invoice payment intent: ${paymentIntent?.id}, status: ${paymentIntent?.status}`);
           } else {
             // console.log("⚠️ No payment intent found in paid invoice - webhook will process benefits");
@@ -498,19 +522,21 @@ export async function POST(request: NextRequest) {
           if (confirmedPaymentIntent.status === "succeeded") {
             // console.log("✅ Payment confirmed successfully");
 
-            // Update Stripe subscription status to active
-            try {
-              const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
-                metadata: {
-                  ...subscription.metadata,
-                  payment_confirmed: "true",
-                },
-              });
-              // console.log(`✅ Stripe subscription updated to status: ${updatedSubscription.status}`);
-            } catch (stripeUpdateError) {
-              console.error("❌ Failed to update Stripe subscription:", stripeUpdateError);
-              // Continue with local update even if Stripe update fails
-            }
+            // ✅ OPTIMIZED: Update Stripe subscription metadata as fire-and-forget (non-critical)
+            executeBackgroundJob("Update subscription metadata", async () => {
+              try {
+                await stripe.subscriptions.update(subscriptionId, {
+                  metadata: {
+                    ...subscription.metadata,
+                    payment_confirmed: "true",
+                  },
+                });
+                // console.log(`✅ Stripe subscription updated to status: active`);
+              } catch (stripeUpdateError) {
+                console.error("❌ Failed to update Stripe subscription:", stripeUpdateError);
+                // Continue - metadata update is non-critical
+              }
+            });
 
             // Update user subscription status
             if (user.subscription) {
