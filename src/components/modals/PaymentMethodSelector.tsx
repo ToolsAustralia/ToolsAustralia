@@ -8,6 +8,7 @@ import { PaymentElement, useStripe, useElements, Elements } from "@stripe/react-
 import { loadStripe } from "@stripe/stripe-js";
 import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { useToast } from "@/components/ui/Toast";
 import { categorizeError, isRecoverableError, getRecoveryStrategy } from "@/utils/payment/stripe/payment-error-detection";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
@@ -378,6 +379,17 @@ const StripeCardForm = React.forwardRef<
             if (error) {
               console.error("Stripe PaymentIntent error:", error);
               
+              // ✅ NEW: Auto-log error for monitoring
+              ErrorLoggingService.logPaymentError(error, {
+                endpoint: "/api/stripe/confirm-payment",
+                component: "PaymentMethodSelector",
+                flow: "payment-confirmation",
+                paymentIntentId: clientSecret?.split("_secret_")[0],
+                intentType: "payment",
+              }).catch((logError) => {
+                console.warn("Failed to auto-log error:", logError);
+              });
+              
               // ✅ CRITICAL FIX: Handle canceled PaymentIntent error
               if (error.code === "payment_intent_unexpected_state") {
                 const errorMessage = error.message || "";
@@ -502,6 +514,17 @@ const StripeCardForm = React.forwardRef<
 
             if (error) {
               console.error("Stripe SetupIntent error:", error);
+
+              // ✅ NEW: Auto-log error for monitoring
+              ErrorLoggingService.logPaymentError(error, {
+                endpoint: "/api/stripe/confirm-setup",
+                component: "PaymentMethodSelector",
+                flow: "setup-intent-confirmation",
+                setupIntentId: clientSecret?.split("_secret_")[0],
+                intentType: "setup",
+              }).catch((logError) => {
+                console.warn("Failed to auto-log error:", logError);
+              });
 
               // ✅ EXPERT ERROR HANDLING: Categorize error and handle gracefully
               const errorCategorization = categorizeError(error);

@@ -28,6 +28,7 @@ export interface ErrorContext {
   // User and session information
   userId?: string;
   userEmail?: string;
+  guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
   isAuthenticated: boolean;
   
   // Browser/environment information
@@ -66,12 +67,16 @@ export interface IErrorReport {
   // User information
   userId?: string;
   userEmail?: string;
+  guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
   isAuthenticated: boolean;
   
   // Error details
   errorMessage: string;
   errorStack?: string;
   errorName?: string;
+  category?: "payment" | "network" | "api" | "system" | "recovery"; // NEW: Error category
+  severity?: "critical" | "high" | "medium"; // NEW: Error severity
+  autoLogged?: boolean; // NEW: Whether error was auto-logged
   
   // Request/Response information
   apiEndpoint?: string;
@@ -151,7 +156,12 @@ export interface ErrorReportsQueryParams {
   startDate?: string;
   endDate?: string;
   search?: string;
-  sortBy?: "createdAt" | "status" | "errorMessage";
+  category?: "payment" | "network" | "api" | "system" | "recovery"; // ✅ NEW: Filter by category
+  severity?: "critical" | "high" | "medium"; // ✅ NEW: Filter by severity
+  userEmail?: string; // ✅ NEW: Filter by user email (authenticated or guest)
+  autoLogged?: boolean; // ✅ NEW: Filter by auto-logged flag
+  apiEndpoint?: string; // ✅ NEW: Filter by API endpoint
+  sortBy?: "createdAt" | "status" | "errorMessage" | "category" | "severity"; // ✅ ENHANCED: Added category and severity
   sortOrder?: "asc" | "desc";
 }
 

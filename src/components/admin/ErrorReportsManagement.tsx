@@ -37,6 +37,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPatch } from "@/lib/queries";
 import { useToast } from "@/components/ui/Toast";
 import { format } from "date-fns";
+import ErrorReportsAnalytics from "./ErrorReportsAnalytics";
 
 interface ErrorReportsResponse {
   reports: IErrorReport[];
@@ -172,7 +173,13 @@ function ErrorReportDetailModal({
                       : report.userEmail || "Unknown"}
                   </span>
                 ) : (
-                  <span className="text-sm text-gray-500">Anonymous</span>
+                  <span className="text-sm text-gray-500">
+                    {report.userEmail || report.guestEmail ? (
+                      <span>Guest: {report.userEmail || report.guestEmail}</span>
+                    ) : (
+                      <span>Anonymous</span>
+                    )}
+                  </span>
                 )}
               </div>
             </div>
@@ -287,6 +294,17 @@ export default function ErrorReportsManagement() {
   const [limit] = useState(20);
   const [statusFilter, setStatusFilter] = useState<ErrorReportStatus | "all">("all");
   const [search, setSearch] = useState("");
+  // ✅ NEW: Advanced filter states
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [severityFilter, setSeverityFilter] = useState<string>("all");
+  const [userEmailFilter, setUserEmailFilter] = useState("");
+  const [autoLoggedFilter, setAutoLoggedFilter] = useState<string>("all");
+  const [apiEndpointFilter, setApiEndpointFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [groupBy, setGroupBy] = useState<"none" | "error" | "endpoint" | "user">("none");
   const [selectedReport, setSelectedReport] = useState<IErrorReport | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const { showToast } = useToast();
@@ -303,8 +321,30 @@ export default function ErrorReportsManagement() {
     if (search) {
       params.set("search", search);
     }
+    // ✅ NEW: Add advanced filter params
+    if (categoryFilter !== "all") {
+      params.set("category", categoryFilter);
+    }
+    if (severityFilter !== "all") {
+      params.set("severity", severityFilter);
+    }
+    if (userEmailFilter) {
+      params.set("userEmail", userEmailFilter);
+    }
+    if (autoLoggedFilter !== "all") {
+      params.set("autoLogged", autoLoggedFilter);
+    }
+    if (apiEndpointFilter) {
+      params.set("apiEndpoint", apiEndpointFilter);
+    }
+    if (startDate) {
+      params.set("startDate", startDate);
+    }
+    if (endDate) {
+      params.set("endDate", endDate);
+    }
     return params.toString();
-  }, [page, limit, statusFilter, search]);
+  }, [page, limit, statusFilter, search, categoryFilter, severityFilter, userEmailFilter, autoLoggedFilter, apiEndpointFilter, startDate, endDate]);
 
   // Fetch error reports
   const { data, isLoading, error, refetch } = useQuery<ErrorReportsResponse>({
@@ -320,6 +360,131 @@ export default function ErrorReportsManagement() {
   const handleUpdate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-error-reports"] });
     refetch();
+  };
+
+  // ✅ NEW: Group reports based on groupBy selection
+  const groupedReports = useMemo(() => {
+    if (!data?.reports || groupBy === "none") {
+      return null;
+    }
+
+    const groups: Record<string, IErrorReport[]> = {};
+
+    data.reports.forEach((report) => {
+      let key: string;
+
+      switch (groupBy) {
+        case "error":
+          key = report.errorMessage.substring(0, 100); // Truncate for grouping
+          break;
+        case "endpoint":
+          key = report.apiEndpoint || "Unknown Endpoint";
+          break;
+        case "user":
+          key = report.isAuthenticated
+            ? report.userEmail || report.userId || "Unknown User"
+            : report.guestEmail || report.userEmail || "Anonymous";
+          break;
+        default:
+          key = "Unknown";
+      }
+
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(report);
+    });
+
+    return Object.entries(groups)
+      .map(([key, reports]) => ({
+        key,
+        reports,
+        count: reports.length,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [data?.reports, groupBy]);
+
+  // ✅ NEW: Export functionality
+  const handleExportCSV = () => {
+    if (!data?.reports) return;
+
+    const headers = [
+      "ID",
+      "Error Message",
+      "Category",
+      "Severity",
+      "Status",
+      "User Email",
+      "Guest Email",
+      "Is Authenticated",
+      "API Endpoint",
+      "HTTP Method",
+      "HTTP Status",
+      "Auto-Logged",
+      "Created At",
+      "User Notes",
+      "Admin Notes",
+    ];
+
+    const rows = data.reports.map((report) => [
+      report._id,
+      report.errorMessage,
+      report.category || "",
+      report.severity || "",
+      report.status,
+      report.userEmail || "",
+      report.guestEmail || "",
+      report.isAuthenticated ? "Yes" : "No",
+      report.apiEndpoint || "",
+      report.httpMethod || "",
+      report.httpStatus || "",
+      report.autoLogged ? "Yes" : "No",
+      format(new Date(report.createdAt), "yyyy-MM-dd HH:mm:ss"),
+      report.userNotes || "",
+      report.adminNotes || "",
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `error-reports-${format(new Date(), "yyyy-MM-dd")}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast({
+      type: "success",
+      title: "Export Successful",
+      message: "Error reports exported to CSV",
+    });
+  };
+
+  const handleExportJSON = () => {
+    if (!data?.reports) return;
+
+    const jsonContent = JSON.stringify(data.reports, null, 2);
+    const blob = new Blob([jsonContent], { type: "application/json;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `error-reports-${format(new Date(), "yyyy-MM-dd")}.json`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast({
+      type: "success",
+      title: "Export Successful",
+      message: "Error reports exported to JSON",
+    });
   };
 
   const statusColors = {
@@ -352,17 +517,50 @@ export default function ErrorReportsManagement() {
           <h2 className="text-2xl font-bold text-gray-900">Error Reports</h2>
           <p className="text-gray-600 mt-1">View and manage error reports from users</p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAnalytics(!showAnalytics)}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              showAnalytics
+                ? "bg-red-600 text-white"
+                : "bg-white border border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            {showAnalytics ? "Hide Analytics" : "Show Analytics"}
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            title="Export to CSV"
+          >
+            <FileText className="w-4 h-4" />
+            Export CSV
+          </button>
+          <button
+            onClick={handleExportJSON}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            title="Export to JSON"
+          >
+            <FileText className="w-4 h-4" />
+            Export JSON
+          </button>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
+      {/* Analytics Dashboard */}
+      {showAnalytics && data?.reports && (
+        <ErrorReportsAnalytics reports={data.reports} />
+      )}
+
       {/* Statistics */}
-      {data?.statistics && (
+      {data?.statistics && !showAnalytics && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white p-4 rounded-lg border border-gray-200">
             <div className="text-sm text-gray-600">Total Reports</div>
@@ -396,34 +594,199 @@ export default function ErrorReportsManagement() {
       )}
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200 flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search error messages..."
-            value={search}
+      <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search error messages, emails, endpoints..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1); // Reset to first page on search
+              }}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            />
+          </div>
+          <select
+            value={statusFilter}
             onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1); // Reset to first page on search
+              setStatusFilter(e.target.value as ErrorReportStatus | "all");
+              setPage(1); // Reset to first page on filter change
             }}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-          />
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+          >
+            <option value="all">All Status</option>
+            <option value="new">New</option>
+            <option value="investigating">Investigating</option>
+            <option value="resolved">Resolved</option>
+            <option value="dismissed">Dismissed</option>
+          </select>
+          <button
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+          >
+            <Filter className="w-4 h-4" />
+            {showAdvancedFilters ? "Hide" : "Show"} Filters
+          </button>
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as ErrorReportStatus | "all");
-            setPage(1); // Reset to first page on filter change
-          }}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-        >
-          <option value="all">All Status</option>
-          <option value="new">New</option>
-          <option value="investigating">Investigating</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
-        </select>
+
+        {/* ✅ NEW: Advanced Filters */}
+        {showAdvancedFilters && (
+          <div className="pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Category Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              >
+                <option value="all">All Categories</option>
+                <option value="payment">Payment</option>
+                <option value="network">Network</option>
+                <option value="api">API</option>
+                <option value="system">System</option>
+                <option value="recovery">Recovery</option>
+              </select>
+            </div>
+
+            {/* Severity Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+              <select
+                value={severityFilter}
+                onChange={(e) => {
+                  setSeverityFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              >
+                <option value="all">All Severities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+              </select>
+            </div>
+
+            {/* User Email Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">User Email</label>
+              <input
+                type="text"
+                placeholder="Filter by email..."
+                value={userEmailFilter}
+                onChange={(e) => {
+                  setUserEmailFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+
+            {/* Auto-Logged Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Auto-Logged</label>
+              <select
+                value={autoLoggedFilter}
+                onChange={(e) => {
+                  setAutoLoggedFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              >
+                <option value="all">All</option>
+                <option value="true">Auto-Logged Only</option>
+                <option value="false">User-Reported Only</option>
+              </select>
+            </div>
+
+            {/* API Endpoint Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint</label>
+              <input
+                type="text"
+                placeholder="Filter by endpoint..."
+                value={apiEndpointFilter}
+                onChange={(e) => {
+                  setApiEndpointFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+
+            {/* Date Range */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              />
+            </div>
+
+            {/* Clear Filters Button */}
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  setCategoryFilter("all");
+                  setSeverityFilter("all");
+                  setUserEmailFilter("");
+                  setAutoLoggedFilter("all");
+                  setApiEndpointFilter("");
+                  setStartDate("");
+                  setEndDate("");
+                  setPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ NEW: Grouping Controls */}
+        {!showAnalytics && (
+          <div className="pt-4 border-t border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Group By</label>
+            <select
+              value={groupBy}
+              onChange={(e) => {
+                setGroupBy(e.target.value as "none" | "error" | "endpoint" | "user");
+                setPage(1);
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            >
+              <option value="none">No Grouping</option>
+              <option value="error">Error Message</option>
+              <option value="endpoint">API Endpoint</option>
+              <option value="user">User</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -448,6 +811,12 @@ export default function ErrorReportsManagement() {
                       Error
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Severity
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -465,57 +834,199 @@ export default function ErrorReportsManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {data.reports.map((report) => {
-                    const StatusIcon = statusIcons[report.status];
-                    return (
-                      <tr key={report._id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <div className="text-sm font-medium text-gray-900 max-w-md truncate">
-                            {report.errorMessage}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusColors[report.status]}`}
-                          >
-                            <StatusIcon className="w-3 h-3" />
-                            {report.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {report.isAuthenticated ? (
-                            <span>
-                              {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                                ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
-                                : report.userEmail || "Unknown"}
+                  {groupBy !== "none" && groupedReports ? (
+                    // ✅ NEW: Grouped view
+                    groupedReports.map((group) => (
+                      <React.Fragment key={group.key}>
+                        <tr className="bg-gray-100">
+                          <td colSpan={8} className="px-4 py-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{group.key}</span>
+                                <span className="text-xs text-gray-600 bg-gray-200 px-2 py-1 rounded">
+                                  {group.count} {group.count === 1 ? "error" : "errors"}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                        {group.reports.map((report) => {
+                          const StatusIcon = statusIcons[report.status];
+                          return (
+                            <tr key={report._id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 pl-8">
+                                <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                                  {report.errorMessage}
+                                </div>
+                                {report.autoLogged && (
+                                  <span className="text-xs text-gray-500 mt-1 block">Auto-logged</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {report.category ? (
+                                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    {report.category}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {report.severity ? (
+                                  <span
+                                    className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                      report.severity === "critical"
+                                        ? "bg-red-100 text-red-800"
+                                        : report.severity === "high"
+                                        ? "bg-orange-100 text-orange-800"
+                                        : "bg-yellow-100 text-yellow-800"
+                                    }`}
+                                  >
+                                    {report.severity}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusColors[report.status]}`}
+                                >
+                                  <StatusIcon className="w-3 h-3" />
+                                  {report.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {report.isAuthenticated ? (
+                                  <span>
+                                    {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
+                                      ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                      : report.userEmail || "Unknown"}
+                                  </span>
+                                ) : (
+                                  <span>
+                                    {report.userEmail || report.guestEmail ? (
+                                      <span className="text-gray-600">Guest: {report.userEmail || report.guestEmail}</span>
+                                    ) : (
+                                      <span className="text-gray-400">Anonymous</span>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                                {report.apiEndpoint ? (
+                                  <span className="truncate max-w-xs block">
+                                    {report.httpMethod} {report.apiEndpoint}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
+                              </td>
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => handleViewReport(report)}
+                                  className="text-red-600 hover:text-red-800 transition-colors"
+                                >
+                                  <Eye className="w-5 h-5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    // Regular view (no grouping)
+                    data.reports.map((report) => {
+                      const StatusIcon = statusIcons[report.status];
+                      return (
+                        <tr key={report._id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                              {report.errorMessage}
+                            </div>
+                            {report.autoLogged && (
+                              <span className="text-xs text-gray-500 mt-1 block">Auto-logged</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {report.category ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                {report.category}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {report.severity ? (
+                              <span
+                                className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                  report.severity === "critical"
+                                    ? "bg-red-100 text-red-800"
+                                    : report.severity === "high"
+                                    ? "bg-orange-100 text-orange-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                                }`}
+                              >
+                                {report.severity}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusColors[report.status]}`}
+                            >
+                              <StatusIcon className="w-3 h-3" />
+                              {report.status}
                             </span>
-                          ) : (
-                            <span className="text-gray-400">Anonymous</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 font-mono">
-                          {report.apiEndpoint ? (
-                            <span className="truncate max-w-xs block">
-                              {report.httpMethod} {report.apiEndpoint}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleViewReport(report)}
-                            className="text-red-600 hover:text-red-800 transition-colors"
-                          >
-                            <Eye className="w-5 h-5" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {report.isAuthenticated ? (
+                              <span>
+                                {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
+                                  ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                  : report.userEmail || "Unknown"}
+                              </span>
+                            ) : (
+                              <span>
+                                {report.userEmail || report.guestEmail ? (
+                                  <span className="text-gray-600">Guest: {report.userEmail || report.guestEmail}</span>
+                                ) : (
+                                  <span className="text-gray-400">Anonymous</span>
+                                )}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                            {report.apiEndpoint ? (
+                              <span className="truncate max-w-xs block">
+                                {report.httpMethod} {report.apiEndpoint}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleViewReport(report)}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

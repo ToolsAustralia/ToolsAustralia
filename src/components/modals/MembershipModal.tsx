@@ -51,6 +51,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { rewardsEnabled } from "@/config/featureFlags";
 import { autoLogPaymentError, autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { ErrorContext } from "@/types/error-reporting";
 import { extractSubscriptionData, validateSubscriptionResponse, isPaymentIntentReady } from "@/utils/payment/subscription-response-handler";
 import { createSubscriptionStateUpdate, isStateUpdateReadyForPayment } from "@/utils/payment/subscription-state-manager";
@@ -1662,10 +1663,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       // Do NOT reset form data
     }
 
-    // Auto-log payment errors
-    if (errorDetection.isRecoverable || errorDetection.category === "retryable") {
-      const amountInCents = activePlan?.price ? Math.round(activePlan.price * 100) : undefined;
-      
+    // ✅ ENHANCED: Auto-log ALL payment errors (not just recoverable ones)
+    const amountInCents = activePlan?.price ? Math.round(activePlan.price * 100) : undefined;
+    
+    ErrorLoggingService.logError(error, {
+      component: "MembershipModal",
+      flow: context.packageId ? "subscription-purchase" : "one-time-purchase",
+      paymentIntentId: paymentIntentId || undefined,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      customerId: (userData as any)?.stripeCustomerId || undefined,
+      amount: amountInCents,
+      packageId: context.packageId || undefined,
+      packageName: context.packageName || activePlan?.name,
+      userEmail: userData?.email,
+      guestEmail: guestUserData?.email,
+    }).catch((logError) => {
+      console.warn("Failed to auto-log error:", logError);
+      // Fallback to old method if ErrorLoggingService fails
       autoLogPaymentError(error, {
         paymentIntentId: paymentIntentId || undefined,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1674,10 +1688,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         packageId: context.packageId || undefined,
         packageName: context.packageName || activePlan?.name,
         errorMessage: formattedError.message,
-      }).catch((logError) => {
-        console.warn("Failed to auto-log payment error:", logError);
+      }).catch(() => {
+        // Silently fail if both methods fail
       });
-    }
+    });
 
     // Handle recoverable errors with automatic recovery
     if (context.autoRetry !== false && errorDetection.isRecoverable) {

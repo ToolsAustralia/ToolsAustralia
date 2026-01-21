@@ -12,7 +12,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { checkErrorReportRateLimit } from "@/lib/rate-limiting/error-reports";
-import { generateDeduplicationHashServer } from "@/utils/error-reporting/deduplication";
+import { generateDeduplicationHashServer, generateCategoryAwareDeduplicationHash } from "@/utils/error-reporting/deduplication";
 import { ErrorContext } from "@/types/error-reporting";
 import crypto from "crypto";
 
@@ -30,6 +30,7 @@ const createErrorReportSchema = z.object({
     requestUrl: z.string().max(2000).optional(),
     userId: z.string().optional(),
     userEmail: z.string().email().optional(),
+    guestEmail: z.string().email().optional(), // NEW: Guest user email
     isAuthenticated: z.boolean(),
     userAgent: z.string().max(500).optional(),
     browserInfo: z
@@ -59,7 +60,7 @@ const createErrorReportSchema = z.object({
   userNotes: z.string().max(2000).optional(),
   // Auto-logging options
   autoLogged: z.boolean().optional(),
-  category: z.enum(["payment", "stripe", "system", "api"]).optional(),
+  category: z.enum(["payment", "network", "api", "system", "recovery"]).optional(),
   severity: z.enum(["critical", "high", "medium"]).optional(),
   skipRateLimit: z.boolean().optional(),
   skipDeduplication: z.boolean().optional(),
@@ -122,18 +123,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update error context with actual session data
+    // ✅ ENHANCED: Update error context with actual session data and guest email
+    const isAuthenticated = !!userId;
+    // Prioritize authenticated user email over guest email
+    const finalUserEmail = userEmail || (isAuthenticated ? validatedData.errorContext.userEmail : undefined);
+    const finalGuestEmail = !isAuthenticated ? (validatedData.errorContext.guestEmail || validatedData.errorContext.userEmail) : undefined;
+
     const errorContext: ErrorContext = {
       ...validatedData.errorContext,
       userId: userId || validatedData.errorContext.userId,
-      userEmail: userEmail || validatedData.errorContext.userEmail,
-      isAuthenticated: !!userId,
+      userEmail: finalUserEmail,
+      guestEmail: finalGuestEmail, // ✅ NEW: Include guest email
+      isAuthenticated,
     };
 
-    // Check rate limiting (skip for auto-logged critical errors)
+    // ✅ ENHANCED: Check rate limiting with severity support (skip for auto-logged critical errors)
     const shouldSkipRateLimit = validatedData.autoLogged && validatedData.skipRateLimit;
     if (!shouldSkipRateLimit) {
-      const rateLimitCheck = checkErrorReportRateLimit(userId, request);
+      const rateLimitCheck = checkErrorReportRateLimit(
+        userId,
+        request,
+        validatedData.severity as "critical" | "high" | "medium" | undefined
+      );
       if (!rateLimitCheck.allowed) {
         return NextResponse.json(
           {
@@ -148,16 +159,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate deduplication hash
-    const deduplicationHash = generateDeduplicationHashServer(errorContext);
+    // ✅ ENHANCED: Generate category-aware deduplication hash
+    const category = validatedData.category;
+    const severity = validatedData.severity;
+    
+    // Use category-specific time windows for deduplication
+    // Payment errors: 30 minutes (more frequent, need faster detection)
+    // Network errors: 2 hours (less frequent, can wait longer)
+    // Other errors: 1 hour (default)
+    const timeWindowHours = category === "payment" ? 0.5 : category === "network" ? 2 : 1;
+    
+    const deduplicationHash = generateCategoryAwareDeduplicationHash(
+      errorContext,
+      category,
+      severity,
+      timeWindowHours
+    );
 
-    // Check if a duplicate report already exists (skip for auto-logged errors if requested)
+    // ✅ ENHANCED: Check if a duplicate report exists with category-aware time window
     const shouldSkipDeduplication = validatedData.autoLogged && validatedData.skipDeduplication;
     if (!shouldSkipDeduplication) {
+      const timeWindowMs = timeWindowHours * 60 * 60 * 1000;
       const existingReport = await ErrorReport.findOne({
         deduplicationHash,
         createdAt: {
-          $gte: new Date(Date.now() - 60 * 60 * 1000), // Within last hour
+          $gte: new Date(Date.now() - timeWindowMs), // Category-specific time window
         },
       }).lean();
 
@@ -190,10 +216,14 @@ export async function POST(request: NextRequest) {
     const errorReport = new ErrorReport({
       userId: userId ? userId : undefined,
       userEmail: errorContext.userEmail,
+      guestEmail: errorContext.guestEmail, // ✅ NEW: Store guest email
       isAuthenticated: errorContext.isAuthenticated,
       errorMessage: errorContext.errorMessage,
       errorStack: errorContext.errorStack,
       errorName: errorContext.errorName,
+      category: validatedData.category, // ✅ NEW: Store error category
+      severity: validatedData.severity, // ✅ NEW: Store error severity
+      autoLogged: validatedData.autoLogged || false, // ✅ NEW: Store auto-logged flag
       apiEndpoint: errorContext.apiEndpoint,
       httpMethod: errorContext.httpMethod,
       httpStatus: errorContext.httpStatus,
