@@ -52,6 +52,14 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
       lowercase: true,
       maxlength: [255, "Email cannot be more than 255 characters"],
     },
+    guestEmail: {
+      // ✅ NEW: Guest user email (for non-authenticated users)
+      type: String,
+      trim: true,
+      lowercase: true,
+      maxlength: [255, "Email cannot be more than 255 characters"],
+      index: true, // Indexed for filtering and searching
+    },
     isAuthenticated: {
       type: Boolean,
       required: true,
@@ -74,6 +82,22 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
       type: String,
       trim: true,
       maxlength: [200, "Error name cannot be more than 200 characters"],
+    },
+    // ✅ NEW: Error category and severity for better filtering and analytics
+    category: {
+      type: String,
+      enum: ["payment", "network", "api", "system", "recovery"],
+      index: true, // Indexed for filtering
+    },
+    severity: {
+      type: String,
+      enum: ["critical", "high", "medium"],
+      index: true, // Indexed for filtering
+    },
+    autoLogged: {
+      type: Boolean,
+      default: false,
+      index: true, // Indexed for filtering
     },
 
     // Request/Response information
@@ -185,8 +209,17 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
 // Compound index for user history queries
 ErrorReportSchema.index({ userId: 1, createdAt: -1 });
 
+// ✅ NEW: Compound index for guest email queries
+ErrorReportSchema.index({ guestEmail: 1, createdAt: -1 });
+
 // Compound index for admin filtering by status and date
 ErrorReportSchema.index({ status: 1, createdAt: -1 });
+
+// ✅ NEW: Compound indexes for advanced filtering
+ErrorReportSchema.index({ category: 1, createdAt: -1 });
+ErrorReportSchema.index({ severity: 1, createdAt: -1 });
+ErrorReportSchema.index({ autoLogged: 1, createdAt: -1 });
+ErrorReportSchema.index({ category: 1, severity: 1, createdAt: -1 });
 
 // Index for API endpoint queries (useful for debugging specific endpoints)
 ErrorReportSchema.index({ apiEndpoint: 1, createdAt: -1 });

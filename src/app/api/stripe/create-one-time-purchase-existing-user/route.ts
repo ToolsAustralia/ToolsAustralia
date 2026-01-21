@@ -20,6 +20,7 @@ import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager"
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { getBaseUrl } from "@/utils/url/get-base-url";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -434,6 +435,27 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("❌ One-time purchase creation failed:", error);
+
+    // ✅ NEW: Auto-log error for monitoring
+    const session = await getServerSession(authOptions).catch(() => null);
+    const requestBody = await request.json().catch(() => ({}));
+    
+    ErrorLoggingService.logError(error, {
+      userId: session?.user?.id,
+      userEmail: session?.user?.email || undefined, // Convert null to undefined
+      endpoint: request.url,
+      requestMethod: "POST",
+      requestBody,
+      component: "create-one-time-purchase-existing-user",
+      flow: "one-time-purchase",
+      packageId: (requestBody as { packageId?: string })?.packageId,
+    }, {
+      isServerSide: true,
+      request,
+      skipRateLimit: true, // Critical payment errors should bypass rate limiting
+    }).catch((logError) => {
+      console.warn("Failed to auto-log error:", logError);
+    });
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation failed", details: error.issues }, { status: 400 });

@@ -178,7 +178,7 @@ function extractApiEndpoint(error: unknown, requestInfo?: { url?: string; method
  * Collect comprehensive error context
  * 
  * @param error - The error object that occurred
- * @param requestInfo - Optional request information (URL, method, status)
+ * @param requestInfo - Optional request information (URL, method, status, guestEmail)
  * @returns ErrorContext object with all collected information
  */
 export async function collectErrorContext(
@@ -187,6 +187,7 @@ export async function collectErrorContext(
     url?: string;
     method?: string;
     status?: number;
+    guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
   }
 ): Promise<ErrorContext> {
   const timestamp = Date.now();
@@ -209,6 +210,7 @@ export async function collectErrorContext(
   // Get session information
   let userId: string | undefined;
   let userEmail: string | undefined;
+  let guestEmail: string | undefined;
   let isAuthenticated = false;
 
   try {
@@ -217,10 +219,19 @@ export async function collectErrorContext(
       isAuthenticated = true;
       userId = session.user.id;
       userEmail = session.user.email || undefined;
+    } else {
+      // ✅ NEW: Extract guest email from requestInfo if available
+      // Guest email can come from:
+      // 1. Request body (passed via requestInfo)
+      // 2. PaymentIntent metadata (extracted elsewhere)
+      // 3. Stripe customer billing details (extracted elsewhere)
+      guestEmail = requestInfo?.guestEmail;
     }
   } catch (sessionError) {
     // Silently fail if session retrieval fails
     console.warn("Failed to get session for error context:", sessionError);
+    // Still try to capture guest email if available
+    guestEmail = requestInfo?.guestEmail;
   }
 
   // Get browser and environment information
@@ -255,6 +266,7 @@ export async function collectErrorContext(
     requestUrl: requestInfo?.url,
     userId,
     userEmail,
+    guestEmail, // ✅ NEW: Include guest email in context
     isAuthenticated,
     userAgent,
     browserInfo,

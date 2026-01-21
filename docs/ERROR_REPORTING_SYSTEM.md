@@ -1,5 +1,24 @@
 # Error Reporting System Documentation
 
+> **⚠️ This documentation is for the legacy error reporting system.**
+> 
+> **For the complete, up-to-date documentation including all new features (analytics, categorization, severity classification, guest user support, etc.), please see:**
+> 
+> **[ERROR_REPORTING_AND_LOGGING.md](./ERROR_REPORTING_AND_LOGGING.md)**
+> 
+> The new documentation includes:
+> - Automatic error categorization and severity classification
+> - Analytics dashboard with charts and metrics
+> - Error grouping functionality
+> - Guest user email support
+> - Severity-based rate limiting
+> - Category-aware deduplication
+> - Export functionality
+> - Advanced filtering
+> - And much more...
+
+---
+
 ## Overview
 
 The Error Reporting System allows users to report problems directly from error toast notifications. The system automatically captures comprehensive error context, user information, API endpoints, and debugging logs, while preventing database flooding through rate limiting and deduplication.

@@ -100,17 +100,28 @@ function normalizeErrorMessage(message: string): string {
  * Generate deduplication hash on server-side
  * This is the actual implementation that should be used in API routes
  * 
+ * ✅ ENHANCED: Now includes category and severity for smarter deduplication
+ * 
  * @param errorContext - The error context to generate hash for
+ * @param category - Optional error category for category-aware deduplication
+ * @param severity - Optional error severity for severity-aware deduplication
  * @returns A SHA-256 hash string (hex encoded)
  */
-export function generateDeduplicationHashServer(errorContext: ErrorContext): string {
+export function generateDeduplicationHashServer(
+  errorContext: ErrorContext,
+  category?: string,
+  severity?: string
+): string {
   const normalizedMessage = normalizeErrorMessage(errorContext.errorMessage);
 
+  // ✅ ENHANCED: Include category and severity in hash for category-aware deduplication
   const hashComponents = [
     normalizedMessage,
     errorContext.errorName || "",
     errorContext.userId || "anonymous",
     errorContext.apiEndpoint || "",
+    category || "", // ✅ NEW: Include category
+    severity || "", // ✅ NEW: Include severity
     Math.floor(errorContext.timestamp / (60 * 60 * 1000)).toString(),
   ];
 
@@ -118,3 +129,39 @@ export function generateDeduplicationHashServer(errorContext: ErrorContext): str
   return createHash("sha256").update(hashString).digest("hex");
 }
 
+/**
+ * ✅ NEW: Generate category-specific deduplication hash
+ * 
+ * This allows different deduplication windows for different categories.
+ * For example, payment errors might have a shorter window than network errors.
+ * 
+ * @param errorContext - The error context to generate hash for
+ * @param category - Error category
+ * @param severity - Error severity
+ * @param timeWindowHours - Deduplication time window in hours (category-specific)
+ * @returns A SHA-256 hash string (hex encoded)
+ */
+export function generateCategoryAwareDeduplicationHash(
+  errorContext: ErrorContext,
+  category?: string,
+  severity?: string,
+  timeWindowHours: number = 1
+): string {
+  const normalizedMessage = normalizeErrorMessage(errorContext.errorMessage);
+
+  // Use category-specific time window
+  const timeWindow = Math.floor(errorContext.timestamp / (timeWindowHours * 60 * 60 * 1000));
+
+  const hashComponents = [
+    normalizedMessage,
+    errorContext.errorName || "",
+    errorContext.userId || "anonymous",
+    errorContext.apiEndpoint || "",
+    category || "",
+    severity || "",
+    timeWindow.toString(),
+  ];
+
+  const hashString = hashComponents.join("|");
+  return createHash("sha256").update(hashString).digest("hex");
+}
