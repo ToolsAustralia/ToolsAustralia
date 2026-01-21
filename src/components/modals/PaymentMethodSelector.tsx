@@ -9,6 +9,9 @@ import { loadStripe } from "@stripe/stripe-js";
 import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { useToast } from "@/components/ui/Toast";
+import { categorizeError, isRecoverableError, getRecoveryStrategy } from "@/utils/payment/stripe/payment-error-detection";
+import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
+import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -26,12 +29,17 @@ interface PaymentMethodSelectorProps {
   setupIntentClientSecret?: string | null; // Backward compatibility - kept for fallback
   paymentIntentClientSecret?: string | null; // NEW: PaymentIntent for wallet payments with amount
   intentType?: "setup" | "payment"; // NEW: Type of intent being used
-  cardFormRef: React.Ref<{
+  cardFormRef: React.Ref<{ 
     confirmSetup: () => Promise<{ 
       paymentMethodId?: string; 
       paymentIntentId?: string; 
       error?: string;
       setupIntentAlreadySucceeded?: boolean;
+      errorCategory?: "recoverable" | "retryable" | "non-recoverable";
+      errorType?: string;
+      isRecoverable?: boolean;
+      recoveryStrategy?: string;
+      shouldPreserveState?: boolean;
     }>;
   } | null>;
   onCardElementChange: (event: { error?: { message?: string } }) => void;
@@ -478,6 +486,12 @@ const StripeCardForm = React.forwardRef<
             if (error) {
               console.error("Stripe SetupIntent error:", error);
 
+              // ✅ EXPERT ERROR HANDLING: Categorize error and handle gracefully
+              const errorCategorization = categorizeError(error);
+              const isRecoverable = isRecoverableError(error);
+              const recoveryStrategy = getRecoveryStrategy(error);
+              const statePreservation = getStatePreservationInstructions(error);
+              
               // ✅ RETRY FIX: Handle setup_intent_unexpected_state error gracefully
               if (error.code === "setup_intent_unexpected_state") {
                 const errorMessage = error.message || "";
@@ -496,12 +510,14 @@ const StripeCardForm = React.forwardRef<
                     const result = await response.json();
                     if (result.success && result.data?.paymentMethodId) {
                       console.log("✅ Extracted payment method from succeeded SetupIntent:", result.data.paymentMethodId);
+                      // ✅ Use formatted error message with "Try again" guidance
+                      const formattedError = formatPaymentError(error);
                       // Return special flag to indicate SetupIntent was already succeeded
                       // This allows parent component to decide: use existing PM or create new SetupIntent
                       return { 
                         paymentMethodId: result.data.paymentMethodId,
                         setupIntentAlreadySucceeded: true,
-                        error: "SetupIntent already succeeded. Using existing payment method. To use a different payment method, please add a new one."
+                        error: formattedError.message
                       };
                     }
                   } catch (retrieveError) {
@@ -510,7 +526,16 @@ const StripeCardForm = React.forwardRef<
                 }
               }
 
-              return { error: error.message || "Payment method setup failed." };
+              // ✅ Use formatted error message for all errors
+              const formattedError = formatPaymentError(error);
+              return { 
+                error: formattedError.message,
+                errorCategory: errorCategorization.category,
+                errorType: errorCategorization.errorType,
+                isRecoverable,
+                recoveryStrategy,
+                shouldPreserveState: statePreservation.shouldPreservePaymentMethod,
+              };
             } else if (setupIntent?.payment_method) {
               console.log("✅ SetupIntent succeeded:", setupIntent);
               return { paymentMethodId: setupIntent.payment_method as string };

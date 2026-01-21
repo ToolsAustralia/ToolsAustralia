@@ -15,6 +15,7 @@ import {
 import Promo from "@/models/Promo";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { getBaseUrl } from "@/utils/url/get-base-url";
+import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
 /**
  * Get resolved promo multiplier for a package type (payment context)
@@ -573,53 +574,32 @@ async function handleOneClickPurchase(
       );
     }
 
-    // ✅ CRITICAL: Handle different payment statuses and wait for settlement
+    // ✅ OPTIMIZED: Trust Stripe's status - webhook handles verification
+    // Payment status is accurate when returned - no delay or re-retrieve needed
     if (paymentIntent.status === "succeeded") {
-      // console.log(`🔍 Payment succeeded immediately, verifying payment settlement...`);
+      // Payment successful - benefits will be granted via webhook
+      await handleUpsellPaymentSuccess(
+        user,
+        {
+          id: offer.id,
+          name: offer.name,
+          price: offer.discountedPrice,
+          entriesCount: calculatedEntriesCount,
+        },
+        paymentIntent.id
+      );
 
-      // Wait for payment to be fully settled (not just authorized)
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
-
-      // Re-fetch payment intent to ensure it's fully settled
-      const verifiedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-
-      if (verifiedPaymentIntent.status === "succeeded") {
-        // console.log(`✅ Payment fully verified and settled - benefits will be granted via webhook`);
-
-        // Payment successful - benefits will be granted via webhook
-        await handleUpsellPaymentSuccess(
-          user,
-          {
-            id: offer.id,
-            name: offer.name,
-            price: offer.discountedPrice,
-            entriesCount: calculatedEntriesCount,
-          },
-          paymentIntent.id
-        );
-
-        return NextResponse.json({
-          success: true,
-          message: "Upsell purchase successful",
-          data: {
-            entriesAdded: offer.entriesCount,
-            packageName: offer.name,
-            source: "upsell",
-            paymentIntentId: paymentIntent.id,
-            processingStatus: "pending", // Benefits will be processed via webhook
-          },
-        });
-      } else {
-        console.error(`❌ Payment verification failed: ${verifiedPaymentIntent.status}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Payment verification failed",
-            details: "Payment was not fully settled",
-          },
-          { status: 400 }
-        );
-      }
+      return NextResponse.json({
+        success: true,
+        message: "Upsell purchase successful",
+        data: {
+          entriesAdded: offer.entriesCount,
+          packageName: offer.name,
+          source: "upsell",
+          paymentIntentId: paymentIntent.id,
+          processingStatus: "pending", // Benefits will be processed via webhook
+        },
+      });
     } else if (paymentIntent.status === "requires_action") {
       // ✅ 3DS authentication required - return client_secret for frontend to complete redirect
       // With allow_redirects: "always", the frontend will handle the 3DS redirect flow
@@ -633,45 +613,19 @@ async function handleOneClickPurchase(
         message: "3D Secure authentication required. Please complete the authentication.",
       });
     } else if (paymentIntent.status === "processing") {
-      // Payment is processing - wait briefly and check status
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second buffer
-
-      // Re-fetch payment intent to check final status
-      const finalPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id);
-
-      if (finalPaymentIntent.status === "succeeded") {
-        // Payment succeeded after processing
-        return NextResponse.json({
-          success: true,
-          message: "Upsell purchase successful",
-          data: {
-            entriesAdded: offer.entriesCount,
-            packageName: offer.name,
-            source: "upsell",
-            paymentIntentId: paymentIntent.id,
-            processingStatus: "pending", // Benefits will be processed via webhook
-          },
-        });
-      } else if (finalPaymentIntent.status === "requires_action") {
-        // Still requires action - return client_secret for 3DS
-        return NextResponse.json({
-          success: false,
-          requiresAction: true,
-          clientSecret: finalPaymentIntent.client_secret,
-          paymentIntentId: finalPaymentIntent.id,
-          message: "3D Secure authentication required. Please complete the authentication.",
-        });
-      } else {
-        console.error(`❌ Payment failed after processing: ${finalPaymentIntent.status}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Payment failed",
-            details: `Payment status: ${finalPaymentIntent.status}`,
-          },
-          { status: 400 }
-        );
-      }
+      // Payment is processing (async payment methods like bank transfers)
+      // Trust Stripe's status - webhook will handle when payment completes
+      return NextResponse.json({
+        success: true,
+        message: "Upsell purchase processing",
+        data: {
+          entriesAdded: offer.entriesCount,
+          packageName: offer.name,
+          source: "upsell",
+          paymentIntentId: paymentIntent.id,
+          processingStatus: "processing", // Payment is still processing - webhook will handle when complete
+        },
+      });
     } else {
       console.error(`❌ Payment intent status: ${paymentIntent.status} for upsell offer: ${offer.id}`);
       return NextResponse.json(
