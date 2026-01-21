@@ -12,6 +12,7 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { getBaseUrl } from "@/utils/url/get-base-url";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 const miniDrawPurchaseSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -229,7 +230,8 @@ export async function POST(request: NextRequest) {
         miniDrawPackage,
         validatedData.miniDrawId,
         validatedData.paymentMethodId,
-        requestContext
+        requestContext,
+        request // ✅ Pass request for error logging
       );
     }
   } catch (error) {
@@ -560,7 +562,8 @@ async function handlePaymentIntentCreation(
   miniDrawPackage: { _id: string; name: string; price: number; entries: number },
   miniDrawId: string,
   paymentMethodId: string | undefined,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  request?: NextRequest // ✅ NEW: Add request parameter for error logging
 ) {
   try {
     const shouldConfirm = !!paymentMethodId;
@@ -614,12 +617,50 @@ async function handlePaymentIntentCreation(
     });
   } catch (error) {
     console.error("Payment intent creation error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to create payment intent",
-      },
-      { status: 500 }
-    );
+    
+    // ✅ OPTIMIZED: Auto-log error for monitoring (fire-and-forget, non-blocking)
+    // Don't await - let it run in background without blocking error response
+    if (request) {
+      getServerSession(authOptions)
+        .then((session) => {
+          return request.json().catch(() => ({})).then((requestBody) => {
+            ErrorLoggingService.logError(error, {
+              userId: session?.user?.id,
+              userEmail: session?.user?.email || undefined, // Convert null to undefined
+              guestEmail: (requestBody as { userEmail?: string })?.userEmail, // Guest email from request
+              endpoint: request.url,
+              requestMethod: "POST",
+              requestBody,
+              component: "mini-draw-purchase",
+              flow: "mini-draw-purchase",
+              packageId: (requestBody as { packageId?: string })?.packageId,
+              miniDrawId: (requestBody as { miniDrawId?: string })?.miniDrawId,
+            }, {
+              isServerSide: true,
+              request,
+              skipRateLimit: true, // Critical payment errors should bypass rate limiting
+            }).catch((logError) => {
+              console.warn("Failed to auto-log error:", logError);
+            });
+          });
+        })
+        .catch(() => {
+          // Silently fail if session/request body extraction fails
+          ErrorLoggingService.logError(error, {
+            endpoint: request.url,
+            requestMethod: "POST",
+            component: "mini-draw-purchase",
+            flow: "mini-draw-purchase",
+          }, {
+            isServerSide: true,
+            request,
+            skipRateLimit: true,
+          }).catch(() => {
+            // Silently fail
+          });
+        });
+    }
+    
+    throw error; // Re-throw to be handled by caller
   }
 }

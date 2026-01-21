@@ -53,6 +53,11 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate") || undefined;
     const endDate = searchParams.get("endDate") || undefined;
     const search = searchParams.get("search") || undefined;
+    const category = searchParams.get("category") || undefined; // ✅ NEW: Filter by category
+    const severity = searchParams.get("severity") || undefined; // ✅ NEW: Filter by severity
+    const userEmail = searchParams.get("userEmail") || undefined; // ✅ NEW: Filter by user email (authenticated or guest)
+    const autoLogged = searchParams.get("autoLogged"); // ✅ NEW: Filter by auto-logged flag
+    const apiEndpoint = searchParams.get("apiEndpoint") || undefined; // ✅ NEW: Filter by API endpoint
     const sortBy = searchParams.get("sortBy") || "createdAt";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
@@ -78,17 +83,48 @@ export async function GET(request: NextRequest) {
       query.createdAt = dateQuery;
     }
 
+    // ✅ NEW: Filter by category
+    if (category) {
+      query.category = category;
+    }
+
+    // ✅ NEW: Filter by severity
+    if (severity) {
+      query.severity = severity;
+    }
+
+    // ✅ NEW: Filter by user email (authenticated or guest)
+    if (userEmail) {
+      query.$or = [
+        { userEmail: { $regex: userEmail, $options: "i" } },
+        { guestEmail: { $regex: userEmail, $options: "i" } },
+      ];
+    }
+
+    // ✅ NEW: Filter by auto-logged flag
+    if (autoLogged !== null && autoLogged !== undefined) {
+      query.autoLogged = autoLogged === "true";
+    }
+
+    // ✅ NEW: Filter by API endpoint
+    if (apiEndpoint) {
+      query.apiEndpoint = { $regex: apiEndpoint, $options: "i" };
+    }
+
     if (search) {
+      // ✅ ENHANCED: Include guestEmail in search
       query.$or = [
         { errorMessage: { $regex: search, $options: "i" } },
         { userNotes: { $regex: search, $options: "i" } },
         { apiEndpoint: { $regex: search, $options: "i" } },
+        { userEmail: { $regex: search, $options: "i" } },
+        { guestEmail: { $regex: search, $options: "i" } },
       ];
     }
 
     // Build sort object
     const sort: Record<string, 1 | -1> = {};
-    const validSortFields = ["createdAt", "status", "errorMessage"];
+    const validSortFields = ["createdAt", "status", "errorMessage", "category", "severity"]; // ✅ ENHANCED: Added category and severity
     const sortField = validSortFields.includes(sortBy) ? sortBy : "createdAt";
     sort[sortField] = sortOrder === "desc" ? -1 : 1;
 

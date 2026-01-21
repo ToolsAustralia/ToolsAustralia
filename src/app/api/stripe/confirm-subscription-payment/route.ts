@@ -16,6 +16,7 @@ import {
 } from "@/utils/payment/stripe/payment-method-utils";
 import { getCustomerWithDefaultPaymentMethod } from "@/utils/payment/stripe/customer-utils";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are now granted via webhook processing only
 
@@ -832,6 +833,61 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("❌ Error confirming subscription payment:", error);
+
+    // ✅ OPTIMIZED: Auto-log error for monitoring (fire-and-forget, non-blocking)
+    // Don't await - let it run in background without blocking error response
+    getServerSession(authOptions)
+      .then((session) => {
+        return request.json().catch(() => ({})).then((requestBody) => {
+          // Try to get user from session or request body
+          let userId: string | undefined;
+          let userEmail: string | undefined;
+          if (session?.user?.id) {
+            userId = session.user.id;
+            userEmail = session.user.email || undefined;
+          } else if ((requestBody as { userId?: string })?.userId) {
+            userId = (requestBody as { userId?: string }).userId;
+          }
+          
+          // ✅ FIXED: Properly capture guestEmail from request body
+          const requestBodyEmail = (requestBody as { userEmail?: string; guestEmail?: string });
+          const finalUserEmail = userEmail || (userId ? requestBodyEmail.userEmail : undefined);
+          const finalGuestEmail = !userId ? (requestBodyEmail.guestEmail || requestBodyEmail.userEmail) : undefined;
+          
+          ErrorLoggingService.logError(error, {
+            userId,
+            userEmail: finalUserEmail,
+            guestEmail: finalGuestEmail,
+            endpoint: request.url,
+            requestMethod: "POST",
+            requestBody,
+            component: "confirm-subscription-payment",
+            flow: "subscription-payment-confirmation",
+          }, {
+            isServerSide: true,
+            request,
+            skipRateLimit: true, // Critical payment errors should bypass rate limiting
+          }).catch((logError) => {
+            console.warn("Failed to auto-log error:", logError);
+          });
+        });
+      })
+      .catch(() => {
+        // Silently fail if session/request body extraction fails
+        // Still try to log with minimal context
+        ErrorLoggingService.logError(error, {
+          endpoint: request.url,
+          requestMethod: "POST",
+          component: "confirm-subscription-payment",
+          flow: "subscription-payment-confirmation",
+        }, {
+          isServerSide: true,
+          request,
+          skipRateLimit: true,
+        }).catch(() => {
+          // Silently fail
+        });
+      });
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

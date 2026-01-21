@@ -27,13 +27,15 @@ import { collectErrorContext } from "./collect-error-context";
 export async function autoLogError(
   error: unknown,
   additionalContext?: {
-    category?: "payment" | "stripe" | "system" | "api";
+    category?: "payment" | "stripe" | "system" | "api" | "network" | "recovery";
     severity?: "critical" | "high" | "medium";
     paymentIntentId?: string;
     customerId?: string;
     amount?: number;
     packageId?: string;
     packageName?: string;
+    userEmail?: string; // NEW: User email (authenticated or guest)
+    guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
     [key: string]: unknown;
   },
   options?: {
@@ -43,15 +45,26 @@ export async function autoLogError(
 ): Promise<void> {
   try {
     // Collect error context
+    // ✅ ENHANCED: Pass guest email to context collection
     const errorContext = await collectErrorContext(error, {
       url: additionalContext?.apiEndpoint as string | undefined,
       method: additionalContext?.httpMethod as string | undefined,
       status: additionalContext?.httpStatus as number | undefined,
+      guestEmail: additionalContext?.guestEmail, // ✅ NEW: Pass guest email
     });
+
+    // ✅ ENHANCED: Handle user email prioritization
+    // If userEmail is provided in additionalContext, use it (overrides context collection)
+    // Otherwise, use guestEmail from context if available
+    const finalUserEmail = additionalContext?.userEmail || errorContext.userEmail || errorContext.guestEmail;
+    const finalGuestEmail = !errorContext.isAuthenticated ? (additionalContext?.guestEmail || errorContext.guestEmail) : undefined;
 
     // Enhance error context with additional information
     const enhancedContext: ErrorContext = {
       ...errorContext,
+      // ✅ ENHANCED: Update user email fields
+      userEmail: finalUserEmail,
+      guestEmail: finalGuestEmail,
       // Add payment-specific context if available
       ...(additionalContext?.paymentIntentId && {
         errorMessage: `${errorContext.errorMessage} [PaymentIntent: ${additionalContext.paymentIntentId}]`,
@@ -132,6 +145,8 @@ export async function autoLogPaymentError(
     amount?: number;
     packageId?: string;
     packageName?: string;
+    userEmail?: string; // NEW: User email (authenticated or guest)
+    guestEmail?: string; // NEW: Guest user email
     errorCode?: string;
     declineCode?: string;
     errorMessage?: string;
@@ -186,6 +201,8 @@ export async function autoLogPaymentError(
     amount: paymentDetails.amount,
     packageId: paymentDetails.packageId,
     packageName: paymentDetails.packageName,
+    userEmail: paymentDetails.userEmail, // ✅ NEW: Pass user email
+    guestEmail: paymentDetails.guestEmail, // ✅ NEW: Pass guest email
     errorCode: paymentDetails.errorCode,
     declineCode: paymentDetails.declineCode,
   });

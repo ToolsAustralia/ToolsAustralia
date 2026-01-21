@@ -18,6 +18,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
   AlertCircle,
   CheckCircle,
@@ -31,12 +33,20 @@ import {
   Globe,
   FileText,
   MessageSquare,
+  Trash2,
+  CheckSquare,
+  Square,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { ErrorReportStatus, IErrorReport } from "@/types/error-reporting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPatch } from "@/lib/queries";
+import { apiGet, apiPatch, apiDelete } from "@/lib/queries";
 import { useToast } from "@/components/ui/Toast";
 import { format } from "date-fns";
+import ErrorReportsAnalytics from "./ErrorReportsAnalytics";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import Dropdown from "@/components/modals/ui/Dropdown";
 
 interface ErrorReportsResponse {
   reports: IErrorReport[];
@@ -172,7 +182,13 @@ function ErrorReportDetailModal({
                       : report.userEmail || "Unknown"}
                   </span>
                 ) : (
-                  <span className="text-sm text-gray-500">Anonymous</span>
+                  <span className="text-sm text-gray-500">
+                    {report.userEmail || report.guestEmail ? (
+                      <span>Guest: {report.userEmail || report.guestEmail}</span>
+                    ) : (
+                      <span>Anonymous</span>
+                    )}
+                  </span>
                 )}
               </div>
             </div>
@@ -287,8 +303,22 @@ export default function ErrorReportsManagement() {
   const [limit] = useState(20);
   const [statusFilter, setStatusFilter] = useState<ErrorReportStatus | "all">("all");
   const [search, setSearch] = useState("");
+  // ✅ NEW: Advanced filter states
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [severityFilter, setSeverityFilter] = useState<string>("all");
+  const [userEmailFilter, setUserEmailFilter] = useState("");
+  const [autoLoggedFilter, setAutoLoggedFilter] = useState<string>("all");
+  const [apiEndpointFilter, setApiEndpointFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [groupBy, setGroupBy] = useState<"none" | "error" | "endpoint" | "user">("none");
   const [selectedReport, setSelectedReport] = useState<IErrorReport | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set()); // ✅ NEW: Bulk selection
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false); // ✅ NEW: Bulk delete state
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false); // ✅ NEW: Mobile filter collapse state
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -303,8 +333,30 @@ export default function ErrorReportsManagement() {
     if (search) {
       params.set("search", search);
     }
+    // ✅ NEW: Add advanced filter params
+    if (categoryFilter !== "all") {
+      params.set("category", categoryFilter);
+    }
+    if (severityFilter !== "all") {
+      params.set("severity", severityFilter);
+    }
+    if (userEmailFilter) {
+      params.set("userEmail", userEmailFilter);
+    }
+    if (autoLoggedFilter !== "all") {
+      params.set("autoLogged", autoLoggedFilter);
+    }
+    if (apiEndpointFilter) {
+      params.set("apiEndpoint", apiEndpointFilter);
+    }
+    if (startDate) {
+      params.set("startDate", startDate);
+    }
+    if (endDate) {
+      params.set("endDate", endDate);
+    }
     return params.toString();
-  }, [page, limit, statusFilter, search]);
+  }, [page, limit, statusFilter, search, categoryFilter, severityFilter, userEmailFilter, autoLoggedFilter, apiEndpointFilter, startDate, endDate]);
 
   // Fetch error reports
   const { data, isLoading, error, refetch } = useQuery<ErrorReportsResponse>({
@@ -320,6 +372,240 @@ export default function ErrorReportsManagement() {
   const handleUpdate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-error-reports"] });
     refetch();
+  };
+
+  // ✅ NEW: Handle bulk selection
+  const handleToggleSelect = (reportId: string) => {
+    setSelectedReports((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(reportId)) {
+        newSet.delete(reportId);
+      } else {
+        newSet.add(reportId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (!data?.reports) return;
+    if (selectedReports.size === data.reports.length) {
+      setSelectedReports(new Set());
+    } else {
+      setSelectedReports(new Set(data.reports.map((r) => r._id)));
+    }
+  };
+
+  // ✅ NEW: Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (reportIds: string[]) => {
+      // Use apiRequest directly since apiDelete doesn't support body
+      const response = await fetch("/api/admin/error-reports/bulk-delete", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reportIds }),
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete error reports");
+      }
+      return response.json() as Promise<{ success: boolean; deletedCount: number; message: string }>;
+    },
+    onSuccess: (data) => {
+      showToast({
+        type: "success",
+        title: "Deleted",
+        message: data.message || `Successfully deleted ${data.deletedCount || 0} error report(s)`,
+      });
+      setSelectedReports(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin-error-reports"] });
+      refetch();
+    },
+    onError: (error: Error) => {
+      showToast({
+        type: "error",
+        title: "Error",
+        message: error.message || "Failed to delete error reports",
+      });
+    },
+    onSettled: () => {
+      setIsBulkDeleting(false);
+    },
+  });
+
+  const handleBulkDelete = async () => {
+    if (selectedReports.size === 0) {
+      showToast({
+        type: "error",
+        title: "No Selection",
+        message: "Please select at least one error report to delete",
+      });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedReports.size} error report(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    bulkDeleteMutation.mutate(Array.from(selectedReports));
+  };
+
+  // ✅ NEW: Check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return !!(
+      search ||
+      statusFilter !== "all" ||
+      categoryFilter !== "all" ||
+      severityFilter !== "all" ||
+      userEmailFilter ||
+      autoLoggedFilter !== "all" ||
+      apiEndpointFilter ||
+      startDate ||
+      endDate
+    );
+  }, [search, statusFilter, categoryFilter, severityFilter, userEmailFilter, autoLoggedFilter, apiEndpointFilter, startDate, endDate]);
+
+  // ✅ NEW: Clear all filters
+  const clearAllFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setCategoryFilter("all");
+    setSeverityFilter("all");
+    setUserEmailFilter("");
+    setAutoLoggedFilter("all");
+    setApiEndpointFilter("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+  };
+
+  // ✅ NEW: Group reports based on groupBy selection
+  const groupedReports = useMemo(() => {
+    if (!data?.reports || groupBy === "none") {
+      return null;
+    }
+
+    const groups: Record<string, IErrorReport[]> = {};
+
+    data.reports.forEach((report) => {
+      let key: string;
+
+      switch (groupBy) {
+        case "error":
+          key = report.errorMessage.substring(0, 100); // Truncate for grouping
+          break;
+        case "endpoint":
+          key = report.apiEndpoint || "Unknown Endpoint";
+          break;
+        case "user":
+          key = report.isAuthenticated
+            ? report.userEmail || report.userId || "Unknown User"
+            : report.guestEmail || report.userEmail || "Anonymous";
+          break;
+        default:
+          key = "Unknown";
+      }
+
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(report);
+    });
+
+    return Object.entries(groups)
+      .map(([key, reports]) => ({
+        key,
+        reports,
+        count: reports.length,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [data?.reports, groupBy]);
+
+  // ✅ NEW: Export functionality
+  const handleExportCSV = () => {
+    if (!data?.reports) return;
+
+    const headers = [
+      "ID",
+      "Error Message",
+      "Category",
+      "Severity",
+      "Status",
+      "User Email",
+      "Guest Email",
+      "Is Authenticated",
+      "API Endpoint",
+      "HTTP Method",
+      "HTTP Status",
+      "Auto-Logged",
+      "Created At",
+      "User Notes",
+      "Admin Notes",
+    ];
+
+    const rows = data.reports.map((report) => [
+      report._id,
+      report.errorMessage,
+      report.category || "",
+      report.severity || "",
+      report.status,
+      report.userEmail || "",
+      report.guestEmail || "",
+      report.isAuthenticated ? "Yes" : "No",
+      report.apiEndpoint || "",
+      report.httpMethod || "",
+      report.httpStatus || "",
+      report.autoLogged ? "Yes" : "No",
+      format(new Date(report.createdAt), "yyyy-MM-dd HH:mm:ss"),
+      report.userNotes || "",
+      report.adminNotes || "",
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `error-reports-${format(new Date(), "yyyy-MM-dd")}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast({
+      type: "success",
+      title: "Export Successful",
+      message: "Error reports exported to CSV",
+    });
+  };
+
+  const handleExportJSON = () => {
+    if (!data?.reports) return;
+
+    const jsonContent = JSON.stringify(data.reports, null, 2);
+    const blob = new Blob([jsonContent], { type: "application/json;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `error-reports-${format(new Date(), "yyyy-MM-dd")}.json`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast({
+      type: "success",
+      title: "Export Successful",
+      message: "Error reports exported to JSON",
+    });
   };
 
   const statusColors = {
@@ -345,85 +631,315 @@ export default function ErrorReportsManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Error Reports</h2>
-          <p className="text-gray-600 mt-1">View and manage error reports from users</p>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Matching AdminPage pattern */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+            Error Reports
+          </h2>
+          <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
+            View and manage error reports from users
+          </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* ✅ NEW: Bulk delete button */}
+          {selectedReports.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="px-2 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
+            >
+              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{isBulkDeleting ? "Deleting..." : `Delete ${selectedReports.size} Selected`}</span>
+              <span className="sm:hidden">{selectedReports.size}</span>
+            </button>
+          )}
+          <button
+            onClick={() => setShowAnalytics(!showAnalytics)}
+            className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm ${
+              showAnalytics
+                ? "bg-red-600 text-white"
+                : "bg-white border border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            <span className="hidden sm:inline">{showAnalytics ? "Hide Analytics" : "Show Analytics"}</span>
+            <span className="sm:hidden">Analytics</span>
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            title="Export to CSV"
+          >
+            <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
+          <button
+            onClick={handleExportJSON}
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            title="Export to JSON"
+          >
+            <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Export JSON</span>
+          </button>
+          <button
+            onClick={() => refetch()}
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
       </div>
 
+      {/* Analytics Dashboard */}
+      {showAnalytics && data?.reports && (
+        <ErrorReportsAnalytics reports={data.reports} />
+      )}
+
       {/* Statistics */}
-      {data?.statistics && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Total Reports</div>
-            <div className="text-2xl font-bold text-gray-900 mt-1">{data.statistics.total}</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">New</div>
-            <div className="text-2xl font-bold text-blue-600 mt-1">
-              {data.statistics.byStatus.new}
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Investigating</div>
-            <div className="text-2xl font-bold text-yellow-600 mt-1">
-              {data.statistics.byStatus.investigating}
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Resolved</div>
-            <div className="text-2xl font-bold text-green-600 mt-1">
-              {data.statistics.byStatus.resolved}
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">Last 24h</div>
-            <div className="text-2xl font-bold text-gray-900 mt-1">
-              {data.statistics.recentCount}
-            </div>
-          </div>
+      {data?.statistics && !showAnalytics && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <MetricCard
+            title="Total Reports"
+            value={data.statistics.total}
+            icon={Bug}
+            color="red"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="New"
+            value={data.statistics.byStatus.new}
+            icon={AlertCircle}
+            color="blue"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="Investigating"
+            value={data.statistics.byStatus.investigating}
+            icon={Clock}
+            color="yellow"
+            loading={isLoading}
+          />
+          <MetricCard
+            title="Resolved"
+            value={data.statistics.byStatus.resolved}
+            icon={CheckCircle}
+            color="emerald"
+            loading={isLoading}
+          />
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200 flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search error messages..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1); // Reset to first page on search
-            }}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-          />
+      {/* Search and Filters - Elevated Design (Matching UsersManagement) */}
+      <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:gap-4">
+          {/* Search Bar - Enhanced */}
+          <div className="relative flex-1 group flex items-center gap-2">
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5" />
+            <input
+              type="text"
+              placeholder="Search error messages, emails, endpoints..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1); // Reset to first page on search
+              }}
+              className="w-full pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400"
+            />
+            {/* Mobile Filter Toggle Button */}
+            <button
+              onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+              className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 rounded-lg bg-white hover:border-red-500 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
+              aria-label="Toggle filters"
+            >
+              <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600"}`} />
+              {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
+              {isFiltersOpen ? (
+                <ChevronUp className="w-4 h-4 text-gray-600" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-gray-600" />
+              )}
+            </button>
+          </div>
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as ErrorReportStatus | "all");
-            setPage(1); // Reset to first page on filter change
-          }}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-        >
-          <option value="all">All Status</option>
-          <option value="new">New</option>
-          <option value="investigating">Investigating</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
-        </select>
+
+        {/* ✅ NEW: Advanced Filters - Collapsible on Mobile */}
+        {(isFiltersOpen || !isFiltersOpen) && (
+          <div className={`pt-4 border-t border-gray-200 ${isFiltersOpen ? "block" : "hidden sm:block"}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {/* Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All Status" },
+                    { value: "new", label: "New" },
+                    { value: "investigating", label: "Investigating" },
+                    { value: "resolved", label: "Resolved" },
+                    { value: "dismissed", label: "Dismissed" },
+                  ]}
+                  value={statusFilter}
+                  onChange={(value) => {
+                    setStatusFilter(value as ErrorReportStatus | "all");
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Category Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All Categories" },
+                    { value: "payment", label: "Payment" },
+                    { value: "network", label: "Network" },
+                    { value: "api", label: "API" },
+                    { value: "system", label: "System" },
+                    { value: "recovery", label: "Recovery" },
+                    { value: "unknown", label: "Unknown" },
+                  ]}
+                  value={categoryFilter}
+                  onChange={(value) => {
+                    setCategoryFilter(value);
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Severity Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All Severities" },
+                    { value: "critical", label: "Critical" },
+                    { value: "high", label: "High" },
+                    { value: "medium", label: "Medium" },
+                    { value: "low", label: "Low" },
+                  ]}
+                  value={severityFilter}
+                  onChange={(value) => {
+                    setSeverityFilter(value);
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
+
+              {/* User Email Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">User Email</label>
+                <input
+                  type="text"
+                  placeholder="Filter by email..."
+                  value={userEmailFilter}
+                  onChange={(e) => {
+                    setUserEmailFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
+
+              {/* Auto-Logged Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Auto-Logged</label>
+                <Dropdown
+                  options={[
+                    { value: "all", label: "All" },
+                    { value: "true", label: "Auto-Logged Only" },
+                    { value: "false", label: "User-Reported Only" },
+                  ]}
+                  value={autoLoggedFilter}
+                  onChange={(value) => {
+                    setAutoLoggedFilter(value as "all" | "true" | "false");
+                    setPage(1);
+                  }}
+                  className="w-full"
+                />
+              </div>
+
+              {/* API Endpoint Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint</label>
+                <input
+                  type="text"
+                  placeholder="Filter by endpoint..."
+                  value={apiEndpointFilter}
+                  onChange={(e) => {
+                    setApiEndpointFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
+
+              {/* Date Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                />
+              </div>
+
+              {/* Clear Filters Button */}
+              {hasActiveFilters && (
+                <div className="flex items-end">
+                  <button
+                    onClick={clearAllFilters}
+                    className="w-full px-4 py-2 border-2 border-red-300 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400 transition-colors font-medium"
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ✅ NEW: Grouping Controls */}
+        {!showAnalytics && (
+          <div className="pt-4 border-t border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Group By</label>
+            <Dropdown
+              options={[
+                { value: "none", label: "No Grouping" },
+                { value: "error", label: "Error Message" },
+                { value: "endpoint", label: "API Endpoint" },
+                { value: "user", label: "User" },
+              ]}
+              value={groupBy}
+              onChange={(value) => {
+                setGroupBy(value as "none" | "error" | "endpoint" | "user");
+                setPage(1);
+              }}
+              className="w-full sm:w-auto"
+            />
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -444,8 +960,28 @@ export default function ErrorReportsManagement() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    {/* ✅ NEW: Bulk select checkbox */}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                      <button
+                        onClick={handleSelectAll}
+                        className="flex items-center justify-center"
+                        title="Select all"
+                      >
+                        {selectedReports.size === data.reports.length && data.reports.length > 0 ? (
+                          <CheckSquare className="w-5 h-5 text-red-600" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Error
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Severity
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -465,84 +1001,278 @@ export default function ErrorReportsManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {data.reports.map((report) => {
-                    const StatusIcon = statusIcons[report.status];
-                    return (
-                      <tr key={report._id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <div className="text-sm font-medium text-gray-900 max-w-md truncate">
-                            {report.errorMessage}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusColors[report.status]}`}
-                          >
-                            <StatusIcon className="w-3 h-3" />
-                            {report.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {report.isAuthenticated ? (
-                            <span>
-                              {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                                ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
-                                : report.userEmail || "Unknown"}
+                  {groupBy !== "none" && groupedReports ? (
+                    // ✅ NEW: Grouped view
+                    groupedReports.map((group) => (
+                      <React.Fragment key={group.key}>
+                        <tr className="bg-gray-100">
+                          <td colSpan={9} className="px-4 py-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">{group.key}</span>
+                                <span className="text-xs text-gray-600 bg-gray-200 px-2 py-1 rounded">
+                                  {group.count} {group.count === 1 ? "error" : "errors"}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                        {group.reports.map((report) => {
+                          const StatusIcon = statusIcons[report.status];
+                          const isSelected = selectedReports.has(report._id);
+                          return (
+                            <tr key={report._id} className={`hover:bg-gray-50 ${isSelected ? "bg-red-50" : ""}`}>
+                              {/* ✅ NEW: Checkbox column */}
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => handleToggleSelect(report._id)}
+                                  className="flex items-center justify-center"
+                                >
+                                  {isSelected ? (
+                                    <CheckSquare className="w-5 h-5 text-red-600" />
+                                  ) : (
+                                    <Square className="w-5 h-5 text-gray-400" />
+                                  )}
+                                </button>
+                              </td>
+                              <td className="px-4 py-3 pl-8">
+                                <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                                  {report.errorMessage}
+                                </div>
+                                {report.autoLogged && (
+                                  <span className="text-xs text-gray-500 mt-1 block">Auto-logged</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {report.category ? (
+                                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                    {report.category}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {report.severity ? (
+                                  <span
+                                    className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                      report.severity === "critical"
+                                        ? "bg-red-100 text-red-800"
+                                        : report.severity === "high"
+                                        ? "bg-orange-100 text-orange-800"
+                                        : "bg-yellow-100 text-yellow-800"
+                                    }`}
+                                  >
+                                    {report.severity}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusColors[report.status]}`}
+                                >
+                                  <StatusIcon className="w-3 h-3" />
+                                  {report.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {report.isAuthenticated ? (
+                                  <span>
+                                    {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
+                                      ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                      : report.userEmail || "Unknown"}
+                                  </span>
+                                ) : (
+                                  <span>
+                                    {report.userEmail || report.guestEmail ? (
+                                      <span className="text-gray-600">Guest: {report.userEmail || report.guestEmail}</span>
+                                    ) : (
+                                      <span className="text-gray-400">Anonymous</span>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                                {report.apiEndpoint ? (
+                                  <span className="truncate max-w-xs block">
+                                    {report.httpMethod} {report.apiEndpoint}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
+                              </td>
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => handleViewReport(report)}
+                                  className="text-red-600 hover:text-red-800 transition-colors"
+                                >
+                                  <Eye className="w-5 h-5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    // Regular view (no grouping)
+                    data.reports.map((report) => {
+                      const StatusIcon = statusIcons[report.status];
+                      const isSelected = selectedReports.has(report._id);
+                      return (
+                        <tr key={report._id} className={`hover:bg-gray-50 ${isSelected ? "bg-red-50" : ""}`}>
+                          {/* ✅ NEW: Checkbox column */}
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleToggleSelect(report._id)}
+                              className="flex items-center justify-center"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-5 h-5 text-red-600" />
+                              ) : (
+                                <Square className="w-5 h-5 text-gray-400" />
+                              )}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                              {report.errorMessage}
+                            </div>
+                            {report.autoLogged && (
+                              <span className="text-xs text-gray-500 mt-1 block">Auto-logged</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {report.category ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                {report.category}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {report.severity ? (
+                              <span
+                                className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                  report.severity === "critical"
+                                    ? "bg-red-100 text-red-800"
+                                    : report.severity === "high"
+                                    ? "bg-orange-100 text-orange-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                                }`}
+                              >
+                                {report.severity}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusColors[report.status]}`}
+                            >
+                              <StatusIcon className="w-3 h-3" />
+                              {report.status}
                             </span>
-                          ) : (
-                            <span className="text-gray-400">Anonymous</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 font-mono">
-                          {report.apiEndpoint ? (
-                            <span className="truncate max-w-xs block">
-                              {report.httpMethod} {report.apiEndpoint}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleViewReport(report)}
-                            className="text-red-600 hover:text-red-800 transition-colors"
-                          >
-                            <Eye className="w-5 h-5" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {report.isAuthenticated ? (
+                              <span>
+                                {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
+                                  ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                  : report.userEmail || "Unknown"}
+                              </span>
+                            ) : (
+                              <span>
+                                {report.userEmail || report.guestEmail ? (
+                                  <span className="text-gray-600">Guest: {report.userEmail || report.guestEmail}</span>
+                                ) : (
+                                  <span className="text-gray-400">Anonymous</span>
+                                )}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                            {report.apiEndpoint ? (
+                              <span className="truncate max-w-xs block">
+                                {report.httpMethod} {report.apiEndpoint}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleViewReport(report)}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* Pagination - Matching UsersManagement pattern */}
             {data.pagination.totalPages > 1 && (
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  Showing {(data.pagination.page - 1) * data.pagination.limit + 1} to{" "}
-                  {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)}{" "}
-                  of {data.pagination.total} reports
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={data.pagination.page === 1}
-                    className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
-                    disabled={data.pagination.page === data.pagination.totalPages}
-                    className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+              <div className="px-3 sm:px-4 py-3 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      onClick={() => setPage(1)}
+                      disabled={data.pagination.page === 1}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="First page"
+                    >
+                      <ChevronsLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={data.pagination.page === 1}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                      Page {data.pagination.page} of {data.pagination.totalPages}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
+                      disabled={data.pagination.page === data.pagination.totalPages}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage(data.pagination.totalPages)}
+                      disabled={data.pagination.page === data.pagination.totalPages}
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Last page"
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

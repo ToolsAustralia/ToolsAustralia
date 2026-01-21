@@ -16,6 +16,7 @@ import Promo from "@/models/Promo";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { getBaseUrl } from "@/utils/url/get-base-url";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 /**
  * Get resolved promo multiplier for a package type (payment context)
@@ -394,7 +395,8 @@ export async function POST(request: NextRequest) {
         miniDrawInfo,
         requestContext,
         calculatedEntriesCount,
-        validatedData.originalPurchaseContext
+        validatedData.originalPurchaseContext,
+        request // ✅ Pass request for error logging
       );
     }
   } catch (error) {
@@ -659,7 +661,8 @@ async function handlePaymentIntentCreation(
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
   calculatedEntriesCount: number,
-  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw" }
+  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw" },
+  request?: NextRequest // ✅ NEW: Add request parameter for error logging
 ) {
   try {
     // Prepare metadata with original package type
@@ -726,7 +729,50 @@ async function handlePaymentIntentCreation(
     });
   } catch (error) {
     console.error("Payment intent creation error:", error);
-    return NextResponse.json({ error: "Failed to create payment intent" }, { status: 500 });
+    
+    // ✅ OPTIMIZED: Auto-log error for monitoring (fire-and-forget, non-blocking)
+    // Don't await - let it run in background without blocking error response
+    if (request) {
+      getServerSession(authOptions)
+        .then((session) => {
+          return request.json().catch(() => ({})).then((requestBody) => {
+            ErrorLoggingService.logError(error, {
+              userId: session?.user?.id,
+              userEmail: session?.user?.email || undefined, // Convert null to undefined
+              guestEmail: (requestBody as { userEmail?: string })?.userEmail, // Guest email from request
+              endpoint: request.url,
+              requestMethod: "POST",
+              requestBody,
+              component: "upsell-purchase",
+              flow: "upsell-purchase",
+              offerId: (requestBody as { offerId?: string })?.offerId,
+            }, {
+              isServerSide: true,
+              request,
+              skipRateLimit: true, // Critical payment errors should bypass rate limiting
+            }).catch((logError) => {
+              console.warn("Failed to auto-log error:", logError);
+            });
+          });
+        })
+        .catch(() => {
+          // Silently fail if session/request body extraction fails
+          ErrorLoggingService.logError(error, {
+            endpoint: request.url,
+            requestMethod: "POST",
+            component: "upsell-purchase",
+            flow: "upsell-purchase",
+          }, {
+            isServerSide: true,
+            request,
+            skipRateLimit: true,
+          }).catch(() => {
+            // Silently fail
+          });
+        });
+    }
+    
+    throw error; // Re-throw to be handled by caller
   }
 }
 

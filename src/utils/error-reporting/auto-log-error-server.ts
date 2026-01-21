@@ -21,7 +21,7 @@ function hashIPAddress(ip: string): string {
 }
 
 import ErrorReport from "@/models/ErrorReport";
-import { generateDeduplicationHashServer } from "./deduplication";
+import { generateDeduplicationHashServer, generateCategoryAwareDeduplicationHash } from "./deduplication";
 import { ErrorContext } from "@/types/error-reporting";
 import crypto from "crypto";
 
@@ -38,7 +38,7 @@ export async function autoLogErrorServer(
   error: unknown,
   request: { headers: Headers; url?: string },
   additionalContext?: {
-    category?: "payment" | "stripe" | "system" | "api";
+    category?: "payment" | "stripe" | "system" | "api" | "network" | "recovery";
     severity?: "critical" | "high" | "medium";
     paymentIntentId?: string;
     customerId?: string;
@@ -47,6 +47,7 @@ export async function autoLogErrorServer(
     packageName?: string;
     userId?: string;
     userEmail?: string;
+    guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
     [key: string]: unknown;
   },
   options?: {
@@ -96,6 +97,12 @@ export async function autoLogErrorServer(
       }
     }
 
+    // ✅ ENHANCED: Extract user information with guest email support
+    const isAuthenticated = !!additionalContext?.userId;
+    // Prioritize authenticated user email over guest email
+    const userEmail = additionalContext?.userEmail || (isAuthenticated ? undefined : additionalContext?.guestEmail);
+    const guestEmail = !isAuthenticated ? additionalContext?.guestEmail : undefined;
+
     // Build error context
     const errorContext: ErrorContext = {
       errorMessage: additionalContext?.paymentIntentId
@@ -109,14 +116,29 @@ export async function autoLogErrorServer(
       httpMethod,
       requestUrl: request.url,
       userId: additionalContext?.userId,
-      userEmail: additionalContext?.userEmail,
-      isAuthenticated: !!additionalContext?.userId,
+      userEmail, // ✅ ENHANCED: Includes guest email if not authenticated
+      guestEmail, // ✅ NEW: Separate field for guest email
+      isAuthenticated,
       userAgent: request.headers.get("user-agent") || undefined,
       timestamp: Date.now(), // Use number (Date.now()) not Date object
     };
 
-    // Generate deduplication hash
-    const deduplicationHash = generateDeduplicationHashServer(errorContext);
+    // ✅ ENHANCED: Generate category-aware deduplication hash
+    const category = additionalContext?.category;
+    const severity = additionalContext?.severity;
+    
+    // Use category-specific time windows for deduplication
+    // Payment errors: 30 minutes (more frequent, need faster detection)
+    // Network errors: 2 hours (less frequent, can wait longer)
+    // Other errors: 1 hour (default)
+    const timeWindowHours = category === "payment" ? 0.5 : category === "network" ? 2 : 1;
+    
+    const deduplicationHash = generateCategoryAwareDeduplicationHash(
+      errorContext,
+      category,
+      severity,
+      timeWindowHours
+    );
 
     // Build user notes with payment context if available
     let userNotes: string | undefined;
@@ -142,12 +164,13 @@ export async function autoLogErrorServer(
       }
     }
 
-    // Check for existing report if deduplication is enabled
+    // ✅ ENHANCED: Check for existing report with category-aware time window
     if (!options?.skipDeduplication) {
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const timeWindowMs = timeWindowHours * 60 * 60 * 1000;
+      const timeWindowAgo = new Date(Date.now() - timeWindowMs);
       const existingReport = await ErrorReport.findOne({
         deduplicationHash,
-        createdAt: { $gte: oneHourAgo },
+        createdAt: { $gte: timeWindowAgo },
       }).lean();
 
       if (existingReport) {
@@ -160,8 +183,11 @@ export async function autoLogErrorServer(
     const newReport = new ErrorReport({
       ...errorContext,
       userId: additionalContext?.userId ? (additionalContext.userId as string) : undefined,
-      userEmail: additionalContext?.userEmail || undefined,
-      isAuthenticated: !!additionalContext?.userId,
+      userEmail, // ✅ ENHANCED: Includes guest email if not authenticated
+      guestEmail, // ✅ NEW: Store guest email separately
+      isAuthenticated,
+      category: additionalContext?.category, // ✅ NEW: Store error category
+      severity: additionalContext?.severity, // ✅ NEW: Store error severity
       userNotes,
       ipAddressHash,
       deduplicationHash,
@@ -192,6 +218,7 @@ export async function autoLogPaymentErrorServer(
     packageName?: string;
     userId?: string;
     userEmail?: string;
+    guestEmail?: string; // NEW: Guest user email
     errorCode?: string;
     declineCode?: string;
     errorMessage?: string;
@@ -239,8 +266,8 @@ export async function autoLogPaymentErrorServer(
   }
 
   await autoLogErrorServer(enhancedError, request, {
-    category: "payment",
-    severity: "critical",
+    category: "payment", // ✅ NEW: Explicitly set category
+    severity: "critical", // ✅ NEW: Explicitly set severity
     paymentIntentId: paymentDetails.paymentIntentId,
     customerId: paymentDetails.customerId,
     amount: paymentDetails.amount,
@@ -248,6 +275,7 @@ export async function autoLogPaymentErrorServer(
     packageName: paymentDetails.packageName,
     userId: paymentDetails.userId,
     userEmail: paymentDetails.userEmail,
+    guestEmail: paymentDetails.guestEmail, // ✅ NEW: Pass guest email
     errorCode: paymentDetails.errorCode,
     declineCode: paymentDetails.declineCode,
   });

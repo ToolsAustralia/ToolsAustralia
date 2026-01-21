@@ -51,6 +51,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { rewardsEnabled } from "@/config/featureFlags";
 import { autoLogPaymentError, autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { ErrorContext } from "@/types/error-reporting";
 import { extractSubscriptionData, validateSubscriptionResponse, isPaymentIntentReady } from "@/utils/payment/subscription-response-handler";
 import { createSubscriptionStateUpdate, isStateUpdateReadyForPayment } from "@/utils/payment/subscription-state-manager";
@@ -172,6 +173,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   const isCreatingSetupIntentRef = useRef<boolean>(false);
   // ✅ STRIPE BEST PRACTICE: Track if subscription was already created to prevent duplicate creation
   const subscriptionCreatedRef = useRef<string | null>(null); // Store subscriptionId once created
+  // ✅ NEW: Track recovery attempts to prevent duplicate recoveries
+  const recoveryAttemptedRef = useRef<{ errorMessage: string; attempted: boolean } | null>(null);
   const cardFormRef = useRef<{
     confirmSetup: () => Promise<{ 
       paymentMethodId?: string; 
@@ -1572,17 +1575,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
   // ✅ EXPERT ERROR HANDLING: Universal payment recovery function
   const handlePaymentRecovery = useCallback(async (
     recoveryStrategy: RecoveryStrategy,
-    originalError: unknown
+    originalError: unknown,
+    options?: { skipToasts?: boolean } // ✅ NEW: Option to skip recovery toasts
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       switch (recoveryStrategy) {
         case "setup_intent_recovery": {
-          showToast({
-            type: "info",
-            title: "Recovering payment",
-            message: "Detected a recoverable error. Setting up again. Please try again.",
-            duration: 3000,
-          });
+          // ✅ FIXED: Only show recovery toasts if not explicitly skipped
+          if (!options?.skipToasts) {
+            showToast({
+              type: "info",
+              title: "Recovering payment",
+              message: "Detected a recoverable error. Setting up again. Please try again.",
+              duration: 3000,
+            });
+          }
 
           const recoveryResult = await recoverSetupIntent();
           
@@ -1599,12 +1606,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
           // Wait a moment for PaymentElement to remount
           await new Promise((resolve) => setTimeout(resolve, 500));
 
-          showToast({
-            type: "success",
-            title: "Ready",
-            message: "Payment setup ready. Retrying automatically...",
-            duration: 2000,
-          });
+          // ✅ FIXED: Only show ready toast if not explicitly skipped
+          if (!options?.skipToasts) {
+            showToast({
+              type: "success",
+              title: "Ready",
+              message: "Payment setup ready. Retrying automatically...",
+              duration: 2000,
+            });
+          }
 
           return { success: true };
         }
@@ -1648,12 +1658,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       autoRetry?: boolean;
       packageId?: string;
       packageName?: string;
+      isManualRetry?: boolean; // ✅ NEW: Flag to indicate manual retry
     } = {}
   ): Promise<void> => {
     // Detect error type and category
     const errorDetection = detectPaymentError(error);
     const formattedError = formatPaymentError(error);
     const statePreservation = getStatePreservationInstructions(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // ✅ NEW: Reset recovery flag if error message changed (new error)
+    if (recoveryAttemptedRef.current && recoveryAttemptedRef.current.errorMessage !== errorMessage) {
+      recoveryAttemptedRef.current = null;
+    }
 
     // ✅ CRITICAL: Preserve state for ALL errors unless explicitly overridden
     if (context.preserveState !== false && statePreservation.shouldPreserveSetupIntent) {
@@ -1662,10 +1679,30 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
       // Do NOT reset form data
     }
 
-    // Auto-log payment errors
-    if (errorDetection.isRecoverable || errorDetection.category === "retryable") {
-      const amountInCents = activePlan?.price ? Math.round(activePlan.price * 100) : undefined;
-      
+    // ✅ ENHANCED: Auto-log ALL payment errors (not just recoverable ones)
+    const amountInCents = activePlan?.price ? Math.round(activePlan.price * 100) : undefined;
+    
+    // ✅ FIXED: Capture user email from form data if not authenticated
+    // This ensures we log the user's email even if they haven't completed registration yet
+    const capturedUserEmail = isAuthenticated 
+      ? userData?.email 
+      : (guestUserData?.email || formData.email || undefined);
+    
+    ErrorLoggingService.logError(error, {
+      component: "MembershipModal",
+      flow: context.packageId ? "subscription-purchase" : "one-time-purchase",
+      paymentIntentId: paymentIntentId || undefined,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      customerId: (userData as any)?.stripeCustomerId || undefined,
+      amount: amountInCents,
+      packageId: context.packageId || undefined,
+      packageName: context.packageName || activePlan?.name,
+      userEmail: isAuthenticated ? capturedUserEmail : undefined,
+      guestEmail: !isAuthenticated ? capturedUserEmail : undefined,
+    }).catch((logError) => {
+      console.warn("Failed to auto-log error:", logError);
+      // Fallback to old method if ErrorLoggingService fails
+      // ✅ FIXED: Use same email capture logic for fallback
       autoLogPaymentError(error, {
         paymentIntentId: paymentIntentId || undefined,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1674,36 +1711,54 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
         packageId: context.packageId || undefined,
         packageName: context.packageName || activePlan?.name,
         errorMessage: formattedError.message,
-      }).catch((logError) => {
-        console.warn("Failed to auto-log payment error:", logError);
+        userEmail: isAuthenticated ? capturedUserEmail : undefined,
+        guestEmail: !isAuthenticated ? capturedUserEmail : undefined,
+      }).catch(() => {
+        // Silently fail if both methods fail
       });
-    }
+    });
 
-    // Handle recoverable errors with automatic recovery
-    if (context.autoRetry !== false && errorDetection.isRecoverable) {
+    // ✅ FIXED: Only attempt automatic recovery if:
+    // 1. Not a manual retry (user changed card manually)
+    // 2. Error is recoverable
+    // 3. autoRetry is not explicitly disabled
+    // 4. Recovery hasn't been attempted for this error yet
+    const shouldAttemptRecovery = 
+      context.autoRetry !== false && 
+      errorDetection.isRecoverable && 
+      !context.isManualRetry && // ✅ NEW: Skip recovery on manual retry
+      (!recoveryAttemptedRef.current || recoveryAttemptedRef.current.errorMessage !== errorMessage); // ✅ NEW: Only recover once per error
+
+    if (shouldAttemptRecovery) {
+      // ✅ NEW: Mark recovery as attempted
+      recoveryAttemptedRef.current = { errorMessage, attempted: true };
+      
       const recoveryResult = await handlePaymentRecovery(
         errorDetection.recoveryStrategy,
-        error
+        error,
+        { skipToasts: false } // Show recovery toasts only on first automatic recovery
       );
 
       if (recoveryResult.success) {
         // Recovery succeeded - will retry automatically in calling code
+        // ✅ FIXED: Don't show error toast if recovery succeeded
         return;
       }
 
-      // Recovery failed - show error with "Try again"
+      // Recovery failed - reset flag and show error
+      recoveryAttemptedRef.current = null;
       if (context.showToast !== false) {
         showToast({
           type: "error",
-          title: "Recovery Failed",
-          message: formattedError.message,
+          title: formattedError.title,
+          message: `${formattedError.message} Please try again.`,
           duration: 5000,
         });
       }
       return;
     }
 
-    // Handle non-recoverable errors with formatted message
+    // ✅ FIXED: For manual retries or non-recoverable errors, show single error toast
     if (context.showToast !== false) {
       showToast({
         type: "error",
@@ -2410,10 +2465,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 const retryResult = await cardFormRef.current.confirmSetup();
                 if (retryResult.error) {
                   // Recovery succeeded but retry failed - show error with state preserved
+                  // ✅ FIXED: Mark as manual retry to prevent duplicate recovery
                   await handlePaymentError(retryResult.error, {
                     preserveState: true,
                     packageId,
                     packageName: activePlan.name,
+                    isManualRetry: true, // ✅ NEW: Prevent automatic recovery on manual retry
                   });
                   throw new Error(retryResult.error);
                 }
@@ -2989,6 +3046,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
 
           // Confirm subscription payment directly
           try {
+            // ✅ FIXED: Capture user email for error logging
+            const capturedUserEmail = isAuthenticated 
+              ? userData?.email 
+              : (guestUserData?.email || formData.email || undefined);
+            
             const confirmResponse = await fetch("/api/stripe/confirm-subscription-payment", {
               method: "POST",
               headers: {
@@ -2999,6 +3061,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
                 subscriptionId,
                 clientSecret: finalClientSecret, // ✅ Invoice PaymentIntent clientSecret (not upfront)
                 userId: undefined, // Existing user - no userId needed
+                userEmail: isAuthenticated ? capturedUserEmail : undefined, // ✅ NEW: Send user email
+                guestEmail: !isAuthenticated ? capturedUserEmail : undefined, // ✅ NEW: Send guest email
               }),
             });
 
