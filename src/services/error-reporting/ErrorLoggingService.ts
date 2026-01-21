@@ -23,7 +23,8 @@ import { detectCategoryAndSeverity } from "@/utils/error-reporting/error-severit
 import { enrichErrorContext } from "@/utils/error-reporting/error-context-enricher";
 import { ErrorContext } from "@/types/error-reporting";
 import { autoLogError } from "@/utils/error-reporting/auto-log-error";
-import { autoLogErrorServer } from "@/utils/error-reporting/auto-log-error-server";
+// ✅ FIXED: Dynamic import for server-side utility to prevent client-side bundling
+// autoLogErrorServer is only imported when needed (server-side)
 
 export interface LoggingContext {
   // User information
@@ -106,6 +107,8 @@ export class ErrorLoggingService {
     const userInfo = extractUserInfo(context);
 
     if (options?.isServerSide && options.request) {
+      // ✅ FIXED: Dynamic import to prevent client-side bundling of server-only code
+      const { autoLogErrorServer } = await import("@/utils/error-reporting/auto-log-error-server");
       await autoLogErrorServer(
         error,
         options.request,
@@ -172,6 +175,8 @@ export class ErrorLoggingService {
     const userInfo = extractUserInfo(context);
 
     if (options?.isServerSide && options.request) {
+      // ✅ FIXED: Dynamic import to prevent client-side bundling
+      const { autoLogErrorServer } = await import("@/utils/error-reporting/auto-log-error-server");
       await autoLogErrorServer(
         error,
         options.request,
@@ -220,6 +225,8 @@ export class ErrorLoggingService {
     const userInfo = extractUserInfo(context);
 
     if (options?.isServerSide && options.request) {
+      // ✅ FIXED: Dynamic import to prevent client-side bundling
+      const { autoLogErrorServer } = await import("@/utils/error-reporting/auto-log-error-server");
       await autoLogErrorServer(
         error,
         options.request,
@@ -268,6 +275,8 @@ export class ErrorLoggingService {
     const userInfo = extractUserInfo(context);
 
     if (options?.isServerSide && options.request) {
+      // ✅ FIXED: Dynamic import to prevent client-side bundling
+      const { autoLogErrorServer } = await import("@/utils/error-reporting/auto-log-error-server");
       await autoLogErrorServer(
         error,
         options.request,
@@ -316,6 +325,8 @@ export class ErrorLoggingService {
     const userInfo = extractUserInfo(context);
 
     if (options?.isServerSide && options.request) {
+      // ✅ FIXED: Dynamic import to prevent client-side bundling
+      const { autoLogErrorServer } = await import("@/utils/error-reporting/auto-log-error-server");
       await autoLogErrorServer(
         error,
         options.request,

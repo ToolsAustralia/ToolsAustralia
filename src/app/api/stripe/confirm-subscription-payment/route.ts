@@ -834,36 +834,55 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("❌ Error confirming subscription payment:", error);
 
-    // ✅ NEW: Auto-log error for monitoring
-    const session = await getServerSession(authOptions).catch(() => null);
-    const requestBody = await request.json().catch(() => ({}));
-    
-    // Try to get user from session or request body
-    let userId: string | undefined;
-    let userEmail: string | undefined;
-    if (session?.user?.id) {
-      userId = session.user.id;
-      userEmail = session.user.email || undefined;
-    } else if ((requestBody as { userId?: string })?.userId) {
-      userId = (requestBody as { userId?: string }).userId;
-    }
-    
-    ErrorLoggingService.logError(error, {
-      userId,
-      userEmail: userEmail || (requestBody as { userEmail?: string })?.userEmail,
-      guestEmail: !userId ? (requestBody as { userEmail?: string })?.userEmail : undefined, // Guest email from request
-      endpoint: request.url,
-      requestMethod: "POST",
-      requestBody,
-      component: "confirm-subscription-payment",
-      flow: "subscription-payment-confirmation",
-    }, {
-      isServerSide: true,
-      request,
-      skipRateLimit: true, // Critical payment errors should bypass rate limiting
-    }).catch((logError) => {
-      console.warn("Failed to auto-log error:", logError);
-    });
+    // ✅ OPTIMIZED: Auto-log error for monitoring (fire-and-forget, non-blocking)
+    // Don't await - let it run in background without blocking error response
+    getServerSession(authOptions)
+      .then((session) => {
+        return request.json().catch(() => ({})).then((requestBody) => {
+          // Try to get user from session or request body
+          let userId: string | undefined;
+          let userEmail: string | undefined;
+          if (session?.user?.id) {
+            userId = session.user.id;
+            userEmail = session.user.email || undefined;
+          } else if ((requestBody as { userId?: string })?.userId) {
+            userId = (requestBody as { userId?: string }).userId;
+          }
+          
+          ErrorLoggingService.logError(error, {
+            userId,
+            userEmail: userEmail || (requestBody as { userEmail?: string })?.userEmail,
+            guestEmail: !userId ? (requestBody as { userEmail?: string })?.userEmail : undefined,
+            endpoint: request.url,
+            requestMethod: "POST",
+            requestBody,
+            component: "confirm-subscription-payment",
+            flow: "subscription-payment-confirmation",
+          }, {
+            isServerSide: true,
+            request,
+            skipRateLimit: true, // Critical payment errors should bypass rate limiting
+          }).catch((logError) => {
+            console.warn("Failed to auto-log error:", logError);
+          });
+        });
+      })
+      .catch(() => {
+        // Silently fail if session/request body extraction fails
+        // Still try to log with minimal context
+        ErrorLoggingService.logError(error, {
+          endpoint: request.url,
+          requestMethod: "POST",
+          component: "confirm-subscription-payment",
+          flow: "subscription-payment-confirmation",
+        }, {
+          isServerSide: true,
+          request,
+          skipRateLimit: true,
+        }).catch(() => {
+          // Silently fail
+        });
+      });
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
