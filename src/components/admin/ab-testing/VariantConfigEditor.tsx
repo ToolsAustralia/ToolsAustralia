@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Save, X, Image, Type, Package } from "lucide-react";
+import { Save, X, Image, Type, Package, ShoppingCart } from "lucide-react";
 import {
   Input,
   Textarea,
@@ -36,6 +36,7 @@ export default function VariantConfigEditor({
       hero: {},
       banner: {},
       packages: {},
+      membershipModal: {},
     },
   });
 
@@ -287,6 +288,31 @@ export default function VariantConfigEditor({
           <p className="text-xs text-gray-500">
             Note: Package display order and other advanced configurations can be added in future updates.
           </p>
+        </div>
+      </FormSection>
+
+      {/* Membership Modal Config */}
+      <FormSection title="Membership Modal Configuration" icon={ShoppingCart}>
+        <div className="space-y-4">
+          <Checkbox
+            id="showPackageSelectionFirst"
+            name="showPackageSelectionFirst"
+            checked={formData.config.membershipModal?.showPackageSelectionFirst ?? false}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                config: {
+                  ...formData.config,
+                  membershipModal: {
+                    ...formData.config.membershipModal,
+                    showPackageSelectionFirst: e.target.checked,
+                  },
+                },
+              })
+            }
+            label="Show Package Selection First"
+            description="When enabled, automatically opens package selection modal on step 2 for users coming from promotion/landing pages. This allows users to see all package options before proceeding with payment."
+          />
         </div>
       </FormSection>
 

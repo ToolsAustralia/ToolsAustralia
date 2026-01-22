@@ -21,6 +21,10 @@ import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent
 import { getBaseUrl } from "@/utils/url/get-base-url";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
+import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
+import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
+import mongoose from "mongoose";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -259,6 +263,92 @@ export async function POST(request: NextRequest) {
       validatedData.idempotencyKey || 
       `pi_${validatedData.packageId}_${existingUser._id.toString()}_${Date.now()}`;
 
+    // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
+    // Store in metadata so webhook can use it directly (more reliable than lookup)
+    const anonymousId = AnonymousIdService.extractAnonymousId(request);
+    
+    // ✅ Auto-merge anonymous assignments to userId when user logs in
+    if (anonymousId) {
+      try {
+        const mergeResult = await VariantAssignmentService.mergeAnonymousToUser(anonymousId, existingUser._id.toString());
+        if (mergeResult.merged > 0) {
+          console.log(`✅ [A/B Testing] Auto-merged ${mergeResult.merged} anonymous assignment(s) to user ${existingUser._id}`);
+        }
+      } catch (error) {
+        // Silently fail - merge should not block payment creation
+        console.error("Error auto-merging anonymous assignments:", error);
+      }
+    }
+    
+    // Get experiment assignment for existing user
+    let experimentAssignment: { experimentId: string; variantId: string } | null = null;
+    
+    try {
+      const { getUserActiveExperimentAssignment } = await import("@/utils/ab-testing/get-user-experiment-assignment");
+      // ✅ Pass anonymousId to find assignments created before user logged in
+      experimentAssignment = await getUserActiveExperimentAssignment(
+        existingUser._id.toString(),
+        undefined, // slug
+        anonymousId || undefined // anonymousId from cookies
+      );
+      
+      if (experimentAssignment) {
+        console.log(`✅ [A/B Testing] Found assignment from database for existing user:`, experimentAssignment);
+      }
+    } catch (error) {
+      // Silently fail - experiment tracking should not block payment creation
+      console.error("Error getting experiment assignment from database:", error);
+    }
+    
+    // ✅ Fallback: Check cookies if database lookup failed
+    if (!experimentAssignment) {
+      try {
+        // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
+        const activeExperiments = await ExperimentRepository.findAll({
+          status: "active",
+          page: 1,
+          limit: 10,
+        });
+        
+        for (const exp of activeExperiments.experiments) {
+          const experimentId = exp._id instanceof mongoose.Types.ObjectId 
+            ? exp._id.toString() 
+            : String(exp._id);
+          const cookieName = `ta_ab_assignment_${experimentId}`;
+          const cookieValue = request.cookies.get(cookieName)?.value;
+          
+          if (cookieValue) {
+            try {
+              const assignmentData = JSON.parse(cookieValue);
+              if (assignmentData.experimentId && assignmentData.variantId) {
+                experimentAssignment = {
+                  experimentId: assignmentData.experimentId,
+                  variantId: assignmentData.variantId,
+                };
+                console.log(`✅ [A/B Testing] Found assignment from cookie (fallback):`, experimentAssignment);
+                break;
+              }
+            } catch (error) {
+              // Invalid cookie data, skip
+              console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail - cookie fallback should not block payment creation
+        console.warn("Error checking assignment cookies:", error);
+      }
+    }
+    
+    if (experimentAssignment) {
+      console.log(`✅ [A/B Testing] Storing experiment assignment in payment metadata:`, experimentAssignment);
+    } else {
+      console.warn(`⚠️ [A/B Testing] No experiment assignment found for existing user one-time purchase:`, {
+        userId: existingUser._id.toString(),
+        hasAnonymousId: !!anonymousId,
+      });
+    }
+
     // ✅ Use centralized PaymentIntent configuration with 3DS support
     const paymentIntentConfig = createPaymentIntentConfig({
       amount: Math.round(membershipPackage.price * 100), // Convert to cents
@@ -295,6 +385,11 @@ export async function POST(request: NextRequest) {
           : {}),
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+        // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
+        ...(experimentAssignment && {
+          experimentId: experimentAssignment.experimentId,
+          variantId: experimentAssignment.variantId,
+        }),
       },
     });
 

@@ -18,6 +18,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
 interface MembershipSectionProps {
   title?: string;
@@ -131,6 +132,9 @@ export default function MembershipSection({
 }: MembershipSectionProps) {
   const router = useRouter();
   const pathname = usePathname();
+  
+  // Get variant config from context for A/B testing (membershipModal config)
+  const { variantConfig: contextVariantConfig } = useVariantContext();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   const [isMounted, setIsMounted] = useState(false);
   const [isInclusionsExpanded, setIsInclusionsExpanded] = useState(false);
@@ -1513,6 +1517,7 @@ export default function MembershipSection({
         onClose={membershipModal.closeModal}
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
+        membershipModalConfig={contextVariantConfig?.membershipModal}
       />
     </section>
   );

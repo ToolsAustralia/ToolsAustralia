@@ -24,6 +24,9 @@ export interface VariantConfig {
     highlightPackage?: string; // Package ID to highlight/emphasize
     hidePackages?: string[]; // Package IDs to hide
   };
+  membershipModal?: {
+    showPackageSelectionFirst?: boolean; // Toggle package selection modal on step 2 (for landing/promotion pages)
+  };
 }
 
 /**

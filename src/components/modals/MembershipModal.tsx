@@ -49,6 +49,7 @@ import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { autoLogPaymentError, autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -100,12 +101,31 @@ interface MembershipModalProps {
   onClose: () => void;
   selectedPlan: LocalMembershipPlan | null;
   onPlanChange?: (newPlan: LocalMembershipPlan) => void;
+  /**
+   * A/B Testing configuration for membership modal behavior
+   * If not provided, will attempt to get from VariantContext
+   * @property showPackageSelectionFirst - When true, automatically opens package selection modal on step 2
+   */
+  membershipModalConfig?: {
+    showPackageSelectionFirst?: boolean;
+  };
 }
 
-const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, selectedPlan, onPlanChange }) => {
+const MembershipModal: React.FC<MembershipModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  selectedPlan, 
+  onPlanChange,
+  membershipModalConfig,
+}) => {
   const router = useRouter();
   const pathname = usePathname();
   const { showToast } = useToast();
+  
+  // Get variant config from context (for A/B testing)
+  // Use prop if provided, otherwise try to get from context
+  const { variantConfig: contextVariantConfig } = useVariantContext();
+  const finalMembershipModalConfig = membershipModalConfig || contextVariantConfig?.membershipModal;
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -563,23 +583,35 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     }
   }, [isAuthenticated, userData, isOpen]);
 
-  // Auto-open package selection modal in step 2 when coming from promotion pages
-  // This gives users more package options when they click "Enter Now" from promotion pages
+  /**
+   * Auto-open package selection modal in step 2 based on variant config or promotion page
+   * This gives users more package options when they click "Enter Now" from promotion pages
+   * 
+   * ✅ A/B Testing: Now controlled by variant config (membershipModal.showPackageSelectionFirst)
+   * - If config.showPackageSelectionFirst === true: Auto-open package selection
+   * - If config.showPackageSelectionFirst === false: Don't auto-open
+   * - If config is undefined: Falls back to pathname check for backward compatibility
+   * 
+   * @see VariantConfig.membershipModal.showPackageSelectionFirst
+   */
   useEffect(() => {
-    // Check if we're on a promotion page by checking the pathname
-    // Uses the same regex pattern as handleRegistration (line 941)
-    const isPromotionPage = pathname?.match(/^\/promotions\/([^/?#]+)/);
+    // Determine if we should auto-open package selection
+    // ✅ FIX: Only fall back to pathname check if membershipModal config doesn't exist at all
+    // If config exists (even if empty {}), respect it and only auto-open if explicitly true
+    const shouldAutoOpen = finalMembershipModalConfig !== null && finalMembershipModalConfig !== undefined
+      ? (finalMembershipModalConfig.showPackageSelectionFirst === true) // Only if explicitly true
+      : pathname?.match(/^\/promotions\/([^/?#]+)/) !== null; // Fallback only if config doesn't exist
 
     // Only auto-open if all conditions are met:
     // 1. Modal is open
     // 2. We're in step 2 (payment step)
-    // 3. We're on a promotion page
+    // 3. Config says to auto-open (or pathname indicates promotion page for backward compatibility)
     // 4. Package selection modal hasn't been auto-opened yet (prevents duplicate opens)
     // 5. Package selection modal is not already open
     if (
       isOpen &&
       currentStep === 2 &&
-      isPromotionPage &&
+      shouldAutoOpen &&
       !packageSelectionAutoOpenedRef.current &&
       !isPackageSelectionOpen
     ) {
@@ -597,7 +629,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({ isOpen, onClose, sele
     if (!isOpen) {
       packageSelectionAutoOpenedRef.current = false;
     }
-  }, [isOpen, currentStep, pathname, isPackageSelectionOpen]);
+  }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig]);
 
   // Handle escape key to close modal
   useEffect(() => {

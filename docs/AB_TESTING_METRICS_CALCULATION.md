@@ -35,7 +35,7 @@ CTR = (Clicks / Page Views) × 100
 
 **Formula:**
 ```
-Conversion Rate = ((Conversions + Purchases) / Page Views) × 100
+Conversion Rate = (Conversions / Page Views) × 100
 ```
 
 **What it measures:**
@@ -52,13 +52,15 @@ Conversion Rate = ((Conversions + Purchases) / Page Views) × 100
 - When a purchase happens, the system tracks:
   1. A `"purchase"` event (for purchase-specific metrics)
   2. A `"conversion"` event (for conversion rate calculation)
-- This ensures purchases are included in conversion rate calculations
+- **Conversion events already include purchases**, so we use only `conversions` for conversion rate calculation to avoid double-counting
+- If you want purchase-specific metrics, use the `purchases` count separately
 
 **Example:**
 - 1000 page views
-- 5 conversions (non-purchase)
-- 10 purchases
-- Conversion Rate = ((5 + 10) / 1000) × 100 = **1.5%**
+- 15 conversions (includes 10 purchases + 5 other conversions)
+- 10 purchases (also tracked separately for purchase-specific metrics)
+- Conversion Rate = (15 / 1000) × 100 = **1.5%**
+- Note: We don't add purchases to conversions (15) because purchases are already included in the conversion count
 
 ---
 
@@ -135,10 +137,12 @@ const ctr = events.pageViews > 0
   ? (events.clicks / events.pageViews) * 100 
   : 0;
 
-// Calculate Conversion Rate (includes purchases)
-const totalConversions = events.conversions + events.purchases;
+// Calculate Conversion Rate (conversions already include purchases)
+// ⚠️ IMPORTANT: Do NOT add purchases to conversions (would double-count)
+// Purchases are tracked as both "purchase" and "conversion" events,
+// so conversions already include all purchases
 const conversionRate = events.pageViews > 0 
-  ? (totalConversions / events.pageViews) * 100 
+  ? (events.conversions / events.pageViews) * 100 
   : 0;
 ```
 
@@ -285,8 +289,11 @@ To verify calculations are correct:
 ## Summary
 
 - **CTR** = (Clicks / Page Views) × 100
-- **Conversion Rate** = ((Conversions + Purchases) / Page Views) × 100
-- **Purchases** are automatically counted as conversions
+- **Conversion Rate** = (Conversions / Page Views) × 100
+  - ⚠️ **Important**: Conversions already include purchases, so we don't add them together
+  - Purchases are tracked as both "purchase" and "conversion" events
+  - Use `conversions` for conversion rate (includes purchases)
+  - Use `purchases` separately if you need purchase-specific metrics
 - **Clicks** are tracked when users click the hero CTA button
 - **All events** are stored in `ExperimentEvent` collection
 - **Metrics** are calculated in real-time from event aggregations

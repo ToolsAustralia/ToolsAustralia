@@ -23,6 +23,7 @@ interface StatisticalResults {
 
 interface VariantMetrics {
   variantId: string;
+  variantName?: string; // ✅ Variant name for display
   metrics: {
     pageViews: number;
     uniqueVisitors: number;
@@ -105,20 +106,21 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
   const winner = winnerFromAnalytics || winnerData?.data;
 
   // Prepare chart data
+  // ✅ FIX: Use variant names instead of "Variant 1", "Variant 2"
   const conversionRateData = comparison.variants.map((v, index) => ({
-    name: `Variant ${index + 1}`,
+    name: v.variantName || `Variant ${index + 1}`,
     "Conversion Rate": v.metrics.conversionRate,
     "CTR": v.metrics.ctr,
   }));
 
   const revenueData = comparison.variants.map((v, index) => ({
-    name: `Variant ${index + 1}`,
+    name: v.variantName || `Variant ${index + 1}`,
     Revenue: v.metrics.revenue,
     "Revenue per User": v.metrics.revenuePerUser,
   }));
 
   const trafficDistribution = comparison.variants.map((v, index) => ({
-    name: `Variant ${index + 1}`,
+    name: v.variantName || `Variant ${index + 1}`,
     value: v.metrics.uniqueVisitors,
   }));
 
@@ -250,7 +252,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {comparison.variants.map((variant, index) => (
             <div key={variant.variantId} className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">Variant {index + 1}</p>
+              <p className="text-sm font-medium text-gray-700 mb-3">{variant.variantName || `Variant ${index + 1}`}</p>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Visitors:</span>
