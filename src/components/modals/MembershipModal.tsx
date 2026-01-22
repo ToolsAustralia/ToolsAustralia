@@ -4888,11 +4888,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         "Processing..."
                       ) : createPaymentIntent.isPending || createSetupIntent.isPending ? (
                         "Setting up payment..."
-                      ) : isWalletPaymentSelected ? (
-                        <>
-                          <span className="sm:hidden">CLICK WALLET BUTTON</span>
-                          <span className="hidden sm:inline">Click the wallet payment button above (Google Pay, Apple Pay, etc.)</span>
-                        </>
                       ) : isAuthenticated ? (
                         <>
                           <span className="sm:hidden">PURCHASE & ENTER</span>

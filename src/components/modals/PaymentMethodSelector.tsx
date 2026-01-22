@@ -243,18 +243,48 @@ const StripeCardForm = React.forwardRef<
         }
       : undefined;
 
+    // ✅ DEBUG: Log wallet configuration for troubleshooting
+    useEffect(() => {
+      if (shouldEnableWallets) {
+        console.log("✅ Wallet payment configuration:", {
+          shouldEnableWallets,
+          intentType,
+          amount,
+          amountInDollars: amount ? `$${(amount / 100).toFixed(2)}` : "N/A",
+          packageName,
+          hasClientSecret: !!clientSecret,
+          paymentRequestConfigured: !!paymentRequestConfig,
+          paymentRequestDetails: paymentRequestConfig,
+        });
+      } else {
+        console.log("ℹ️ Wallets disabled:", {
+          shouldEnableWallets,
+          intentType,
+          amount,
+          reason: intentType !== "payment" ? "Not a PaymentIntent" : !amount || amount <= 0 ? "Invalid amount" : "Unknown",
+        });
+      }
+    }, [shouldEnableWallets, intentType, amount, packageName, clientSecret, paymentRequestConfig]);
+
     // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
+    // ✅ STRIPE BEST PRACTICE: PaymentElement wallet configuration
+    // - Wallets are set to "auto" which allows PaymentElement to automatically handle wallet button clicks
+    // - When wallet button is clicked, PaymentElement internally calls confirmPayment() - we don't need to do anything
+    // - paymentRequest is included to provide amount/currency info for wallet UIs
+    // - This configuration allows wallet buttons to work automatically without manual intervention
     const paymentElementOptions = {
       layout: "tabs" as const,
       // ✅ CRITICAL: Only enable wallets when PaymentIntent is ready with correct amount
       // This prevents $0.00 display in Google Pay/Apple Pay wallet sheets
       wallets: shouldEnableWallets
         ? {
-            applePay: "auto" as const,
-            googlePay: "auto" as const,
+            applePay: "auto" as const, // ✅ PaymentElement automatically handles Apple Pay button clicks
+            googlePay: "auto" as const, // ✅ PaymentElement automatically handles Google Pay button clicks
           }
         : undefined, // Disable wallets until PaymentIntent is ready
       paymentMethodOrder: shouldEnableWallets ? ["card", "apple_pay", "google_pay"] : ["card"],
+      // ✅ CRITICAL: paymentRequest provides amount/currency for wallet UIs
+      // PaymentElement uses this to display correct amount in wallet sheets
       // Only include paymentRequest when amount is valid to prevent $0.00 display
       ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
       fields: {
@@ -611,6 +641,18 @@ const StripeCardForm = React.forwardRef<
             onReady={() => {
               // PaymentElement is ready - Elements session API call has completed
               setElementsReady(true);
+              
+              // ✅ DEBUG: Log wallet button availability for troubleshooting
+              if (shouldEnableWallets && elements) {
+                console.log("✅ PaymentElement ready with wallet support:", {
+                  hasClientSecret: !!clientSecret,
+                  intentType,
+                  amount,
+                  packageName,
+                  walletsEnabled: shouldEnableWallets,
+                  paymentRequestConfigured: !!paymentRequestConfig,
+                });
+              }
             }}
             onLoadError={(error) => {
               // ✅ ERROR HANDLING: Elements session API call failed
@@ -638,6 +680,16 @@ const StripeCardForm = React.forwardRef<
               // ✅ STRIPE BEST PRACTICE: Detect payment method type to prevent form submit for wallet payments
               const paymentMethodType = event.value?.type;
               
+              // ✅ DEBUG: Log payment method type changes for wallet troubleshooting
+              if (shouldEnableWallets && paymentMethodType) {
+                console.log("🔍 PaymentElement onChange - payment method type:", {
+                  type: paymentMethodType,
+                  complete: event.complete,
+                  isEmpty: event.empty,
+                  hasClientSecret: !!clientSecret,
+                });
+              }
+              
               // ✅ Detect ALL wallet payments (Google Pay, Apple Pay, Link, and any other wallet methods)
               // Wallet payment types include: google_pay, apple_pay, link, and potentially others
               const isWalletPayment = 
@@ -649,6 +701,7 @@ const StripeCardForm = React.forwardRef<
               if (isWalletPayment) {
                 setSelectedPaymentMethodType("wallet");
                 onPaymentMethodTypeChange?.("wallet");
+                console.log("✅ Wallet payment method selected - form submit button disabled");
               } else if (paymentMethodType === "card") {
                 setSelectedPaymentMethodType("card");
                 onPaymentMethodTypeChange?.("card");

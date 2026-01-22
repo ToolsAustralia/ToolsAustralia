@@ -890,7 +890,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       size="md"
       height="auto"
       closeOnBackdrop={environmentFlags.userSetupModalClosable()}
-      className="flex flex-col max-h-[95dvh] sm:max-h-[90dvh]"
+      className="flex flex-col max-h-[95dvh] sm:max-h-[90dvh] max-w-[95vw] sm:max-w-md"
     >
       <ModalHeader
         title={headerTitle}
@@ -1110,7 +1110,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
         {/* Action Buttons Section */}
         {!success && (
-          <div className="border-t border-gray-200 p-6">
+          <div className="border-t border-gray-200 p-4">
             <div className="flex gap-3">
               {currentStep > 1 && environmentFlags.userSetupModalClosable() && (
                 <Button onClick={handleBack} variant="secondary" size="md" className="flex-1">
