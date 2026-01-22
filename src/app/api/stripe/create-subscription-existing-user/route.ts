@@ -8,6 +8,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import crypto from "node:crypto";
 import { getInvoicePaymentIntentFromSubscription } from "@/utils/payment/stripe/invoice-payment-intent";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -213,10 +214,13 @@ export async function POST(request: NextRequest) {
       // Continue - deduplication failure shouldn't block subscription creation
     }
 
-    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-    // Use customer ID + package ID for stable idempotency (not Date.now())
-    const idempotencyKey =
-      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${stripeCustomerId}_${existingUser.email}`;
+    // ✅ STRIPE BEST PRACTICE: Generate unique idempotency key per subscription attempt
+    // Use crypto.randomUUID() to ensure each subscription attempt gets a unique key
+    // This prevents "Keys for idempotent requests can only be used with the same parameters" errors
+    // when user retries with different payment methods (wallet vs card) or new checkout attempts
+    // Note: Client-provided idempotencyKey is kept in schema for future use but not used here
+    // to ensure every subscription attempt gets a fresh key
+    const idempotencyKey = `sub_${crypto.randomUUID()}`;
 
     // Create the subscription with metadata for webhook processing
     // Use payment_behavior to match new user flow and ensure proper webhook processing

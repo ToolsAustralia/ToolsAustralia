@@ -119,6 +119,22 @@ const StripeCardForm = React.forwardRef<
     const { showToast } = useToast();
     // ✅ STRIPE BEST PRACTICE: Track selected payment method type to prevent form submit for wallet payments
     const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState<"card" | "wallet" | null>(null);
+    // ✅ STRIPE BEST PRACTICE: Form ref for form-based submission (maintains user activation chain)
+    const formRef = React.useRef<HTMLFormElement>(null);
+    // Store confirmation result for ref access
+    const confirmationResultRef = React.useRef<{
+      paymentMethodId?: string;
+      paymentIntentId?: string;
+      error?: string;
+      setupIntentAlreadySucceeded?: boolean;
+      needsRecovery?: boolean;
+      lastSetupError?: { code?: string; message?: string; decline_code?: string };
+      errorCategory?: "recoverable" | "retryable" | "non-recoverable";
+      errorType?: string;
+      isRecoverable?: boolean;
+      recoveryStrategy?: string;
+      shouldPreserveState?: boolean;
+    } | null>(null);
 
     // ✅ CRITICAL FIX: Handle Stripe loading state and wait for Elements session to be ready
     // The Elements session API call (elements/sessions) is made automatically by Stripe.js
@@ -325,9 +341,8 @@ const StripeCardForm = React.forwardRef<
           };
     };
 
-    // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
-    React.useImperativeHandle(ref, () => ({
-      confirmSetup: async () => {
+    // ✅ STRIPE BEST PRACTICE: Core confirmation logic (extracted for reuse in form onSubmit and ref)
+    const performConfirmation = async () => {
         if (!stripe || !elements) {
           return { error: "Stripe not loaded" };
         }
@@ -599,10 +614,72 @@ const StripeCardForm = React.forwardRef<
             }
           }
         } catch (err: unknown) {
-          console.error("Error in confirmSetup:", err);
+          console.error("Error in performConfirmation:", err);
           const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
           return { error: errorMessage };
         }
+    };
+
+    // ✅ STRIPE BEST PRACTICE: Form onSubmit handler - maintains user activation chain for card payments
+    const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+
+      // ✅ CRITICAL: Wallet payments must be initiated ONLY by clicking the wallet button directly
+      // Do NOT process wallet payments through form submit - Stripe handles this internally
+      // When user clicks wallet button (Google Pay/Apple Pay), Stripe's Payment Element:
+      // 1. Creates PaymentMethod
+      // 2. Attaches to customer
+      // 3. Confirms PaymentIntent internally
+      // 4. Backend webhook (invoice.paid or payment_intent.succeeded) handles subscription activation
+      // 5. May redirect to return_url if configured (Stripe handles this internally)
+      // Our code never calls confirmPayment() for wallet - it's entirely Stripe-driven
+      if (selectedPaymentMethodType === "wallet") {
+        console.log("⚠️ Wallet payment selected - form submit ignored. User must click wallet button directly.");
+        confirmationResultRef.current = {
+          error: "Please click the wallet payment button (Google Pay, Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main submit button."
+        };
+        return;
+      }
+
+      // ✅ STRIPE BEST PRACTICE: Only process card payments through form submit
+      // This maintains the user activation chain required by Stripe
+      if (!stripe || !elements) {
+        const error = "Stripe not loaded. Please refresh and try again.";
+        onCardElementChange({ error: { message: error } });
+        confirmationResultRef.current = { error };
+        return;
+      }
+
+      // Perform confirmation for card payments
+      const result = await performConfirmation();
+      confirmationResultRef.current = result;
+      
+      if (result.error) {
+        onCardElementChange({ error: { message: result.error } });
+      } else {
+        console.log("✅ Payment confirmed via form submit:", result);
+      }
+    };
+
+    // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
+    // ✅ STRIPE BEST PRACTICE: For backward compatibility, but prefer form submit for card payments
+    React.useImperativeHandle(ref, () => ({
+      confirmSetup: async () => {
+        // ✅ STRIPE BEST PRACTICE: Check if wallet payment is selected
+        // ALL wallet payments (Google Pay, Apple Pay, Link, etc.) must be initiated by clicking the wallet button directly
+        // Calling confirmPayment() from a form submit button breaks the user activation chain
+        if (selectedPaymentMethodType === "wallet") {
+          return {
+            error: "Please click the wallet payment button (Google Pay, Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main submit button."
+          };
+        }
+
+        // ✅ STRIPE BEST PRACTICE: If form exists and we want to maintain user activation chain,
+        // we could trigger form.requestSubmit(), but that would require waiting for async result.
+        // For backward compatibility with existing code that expects immediate result, call performConfirmation directly.
+        // The parent should ideally use form submit (wrapping PaymentElement in form with type="submit" button),
+        // but this ref method maintains compatibility.
+        return await performConfirmation();
       },
     }));
 
@@ -634,8 +711,15 @@ const StripeCardForm = React.forwardRef<
           <CreditCard className="w-4 h-4 text-red-600" />
           Payment Details
         </h4>
-        <div className="p-3 border border-gray-300 rounded-lg bg-white mt-0">
-          <PaymentElement
+        {/* ✅ STRIPE BEST PRACTICE: Wrap Payment Element in form with onSubmit for proper user activation chain */}
+        <form
+          ref={formRef}
+          id="payment-form"
+          onSubmit={handleFormSubmit}
+          className="mt-0"
+        >
+          <div className="p-3 border border-gray-300 rounded-lg bg-white">
+            <PaymentElement
             key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
             onReady={() => {
@@ -719,7 +803,8 @@ const StripeCardForm = React.forwardRef<
               }
             }}
           />
-        </div>
+          </div>
+        </form>
         {cardError && <p className="text-red-500 text-sm mt-2">{cardError}</p>}
       </div>
     );

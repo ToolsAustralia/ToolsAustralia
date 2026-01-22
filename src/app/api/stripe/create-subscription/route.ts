@@ -8,6 +8,7 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
 import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
@@ -334,10 +335,13 @@ export async function POST(request: NextRequest) {
 
     // ✅ OPTIMIZED: Deduplication will be handled after subscription creation (non-blocking)
 
-    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-    // Use customer ID + package ID for stable idempotency (not Date.now())
-    const idempotencyKey =
-      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${customer.id}_${validatedData.userEmail}`;
+    // ✅ STRIPE BEST PRACTICE: Generate unique idempotency key per subscription attempt
+    // Use crypto.randomUUID() to ensure each subscription attempt gets a unique key
+    // This prevents "Keys for idempotent requests can only be used with the same parameters" errors
+    // when user retries with different payment methods (wallet vs card) or new checkout attempts
+    // Note: Client-provided idempotencyKey is kept in schema for future use but not used here
+    // to ensure every subscription attempt gets a fresh key
+    const idempotencyKey = `sub_${crypto.randomUUID()}`;
 
     // ✅ STRIPE BEST PRACTICE: Create subscription first, let Stripe create PaymentIntent automatically
     // Stripe will create Invoice + PaymentIntent with correct amount for wallet payments

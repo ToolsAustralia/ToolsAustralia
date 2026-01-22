@@ -2598,7 +2598,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   // handlePaymentError removed - errors now handled directly in handleSubmit
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    // ✅ STRIPE BEST PRACTICE: Prevent default form submission
+    if (e) {
+      e.preventDefault();
+    }
+
     // ✅ CRITICAL FIX: Check isSubmitting BEFORE setting it to prevent race conditions
     if (isSubmitting) {
       console.warn("⚠️ Payment already in progress, ignoring duplicate submission");
@@ -3349,9 +3354,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               },
             };
           } else {
-            // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-            const userEmail = userData?.email || "unknown";
-            const idempotencyKey = `sub_${packageId}_${userEmail}_${Date.now()}`;
+            // ✅ STRIPE BEST PRACTICE: Generate unique idempotency key per subscription attempt
+            // Use crypto.randomUUID() for better uniqueness than Date.now()
+            // This ensures each subscription attempt gets a unique key, preventing idempotency errors
+            // when user retries with different payment methods (wallet vs card) or new checkout attempts
+            const generateIdempotencyKey = () => {
+              if (typeof crypto !== "undefined" && crypto.randomUUID) {
+                return `sub_${crypto.randomUUID()}`;
+              }
+              // Fallback for older browsers
+              return `sub_${packageId}_${userData?.email || "unknown"}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+            };
+            const idempotencyKey = generateIdempotencyKey();
 
             const promoLinkCodeToSend = promoLinkCode || undefined;
             result = await createSubscriptionExistingUser({
@@ -3765,8 +3779,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             promoLinkCode: promoLinkCode || undefined,
           };
 
-          // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-          const idempotencyKey = `sub_${packageId}_${guestUserData.email}_${Date.now()}`;
+          // ✅ STRIPE BEST PRACTICE: Generate unique idempotency key per subscription attempt
+          // Use crypto.randomUUID() for better uniqueness than Date.now()
+          // This ensures each subscription attempt gets a unique key, preventing idempotency errors
+          // when user retries with different payment methods (wallet vs card) or new checkout attempts
+          const generateIdempotencyKey = () => {
+            if (typeof crypto !== "undefined" && crypto.randomUUID) {
+              return `sub_${crypto.randomUUID()}`;
+            }
+            // Fallback for older browsers
+            return `sub_${packageId}_${guestUserData.email}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+          };
+          const idempotencyKey = generateIdempotencyKey();
 
           result = await createSubscription({
             ...subscriptionData,
@@ -4741,8 +4765,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             )}
 
             {/* Step 2: Payment Details */}
+            {/* ✅ STRIPE BEST PRACTICE: Wrap Step 2 in form with onSubmit for proper user activation chain */}
             {currentStep === 2 && (
-              <div className="space-y-2 sm:space-y-3">
+              <form onSubmit={handleSubmit} className="space-y-2 sm:space-y-3">
                 {/* Payment Method Selector - Always show for authenticated users */}
                 {isAuthenticated && (
                   <PaymentMethodSelector
@@ -4817,7 +4842,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                           </div>
                         </div>
                       ) : (
-                        /* Regular coupon code input when no promo link is active */
+                        // Regular coupon code input when no promo link is active
                         <>
                           <div className="flex gap-2">
                             <input
@@ -4875,8 +4900,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
                   ) : (
                     <Button
-                      type="button"
-                      onClick={handleSubmit}
+                      type="submit"
                       disabled={!isFormValid() || isSubmitting || isWalletPaymentSelected}
                       variant="metallic"
                       fullWidth
@@ -5058,7 +5082,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     )}
                   </div>
                 </div>
-              </div>
+              </form>
             )}
 
             {/* Security Section - Only visible in payment step */}
