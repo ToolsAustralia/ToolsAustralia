@@ -201,6 +201,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const recoveryAttemptedRef = useRef<{ errorMessage: string; attempted: boolean } | null>(null);
   // ✅ FIX: Remount counter to force Elements remount when clientSecret changes
   const [elementsRemountKey, setElementsRemountKey] = useState(0);
+  // ✅ STRIPE BEST PRACTICE: Track if wallet payment is selected to disable form submit button
+  const [isWalletPaymentSelected, setIsWalletPaymentSelected] = useState(false);
   const cardFormRef = useRef<{
     confirmSetup: () => Promise<{ 
       paymentMethodId?: string; 
@@ -4762,6 +4764,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     elementsRemountKey={elementsRemountKey}
                     amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                     packageName={promoEnhancedPlan?.name || activePlan?.name}
+                    onPaymentMethodTypeChange={(type) => {
+                      setIsWalletPaymentSelected(type === "wallet");
+                    }}
                   />
                 )}
 
@@ -4791,6 +4796,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       elementsRemountKey={elementsRemountKey}
                       amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                       packageName={promoEnhancedPlan?.name || activePlan?.name}
+                      onPaymentMethodTypeChange={(type) => {
+                        setIsWalletPaymentSelected(type === "wallet");
+                      }}
                     />
                   )}
 
@@ -4869,7 +4877,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     <Button
                       type="button"
                       onClick={handleSubmit}
-                      disabled={!isFormValid() || isSubmitting}
+                      disabled={!isFormValid() || isSubmitting || isWalletPaymentSelected}
                       variant="metallic"
                       fullWidth
                       size="lg"
@@ -4880,6 +4888,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         "Processing..."
                       ) : createPaymentIntent.isPending || createSetupIntent.isPending ? (
                         "Setting up payment..."
+                      ) : isWalletPaymentSelected ? (
+                        <>
+                          <span className="sm:hidden">CLICK WALLET BUTTON</span>
+                          <span className="hidden sm:inline">Click the wallet payment button above (Google Pay, Apple Pay, etc.)</span>
+                        </>
                       ) : isAuthenticated ? (
                         <>
                           <span className="sm:hidden">PURCHASE & ENTER</span>

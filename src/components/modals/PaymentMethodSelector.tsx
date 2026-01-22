@@ -71,6 +71,8 @@ interface PaymentMethodSelectorProps {
   packageName?: string; // Package name for payment request label
   // ✅ FIX: Remount key to force Elements remount when clientSecret changes
   elementsRemountKey?: number;
+  // ✅ STRIPE BEST PRACTICE: Callback to notify parent when payment method type changes
+  onPaymentMethodTypeChange?: (type: "card" | "wallet" | null) => void;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
@@ -94,6 +96,7 @@ const StripeCardForm = React.forwardRef<
     };
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
+    onPaymentMethodTypeChange?: (type: "card" | "wallet" | null) => void; // ✅ STRIPE BEST PRACTICE: Callback for payment method type changes
   }
 >(
   (
@@ -105,6 +108,7 @@ const StripeCardForm = React.forwardRef<
       billingDetails,
       amount,
       packageName,
+      onPaymentMethodTypeChange,
     },
     ref
   ) => {
@@ -113,6 +117,8 @@ const StripeCardForm = React.forwardRef<
     const [isStripeLoading, setIsStripeLoading] = useState(true);
     const [elementsReady, setElementsReady] = useState(false);
     const { showToast } = useToast();
+    // ✅ STRIPE BEST PRACTICE: Track selected payment method type to prevent form submit for wallet payments
+    const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState<"card" | "wallet" | null>(null);
 
     // ✅ CRITICAL FIX: Handle Stripe loading state and wait for Elements session to be ready
     // The Elements session API call (elements/sessions) is made automatically by Stripe.js
@@ -294,6 +300,15 @@ const StripeCardForm = React.forwardRef<
       confirmSetup: async () => {
         if (!stripe || !elements) {
           return { error: "Stripe not loaded" };
+        }
+
+        // ✅ STRIPE BEST PRACTICE: Check if wallet payment is selected
+        // ALL wallet payments (Google Pay, Apple Pay, Link, etc.) must be initiated by clicking the wallet button directly
+        // Calling confirmPayment() from a form submit button breaks the user activation chain
+        if (selectedPaymentMethodType === "wallet") {
+          return {
+            error: "Please click the wallet payment button (Google Pay, Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main submit button."
+          };
         }
 
         try {
@@ -619,6 +634,29 @@ const StripeCardForm = React.forwardRef<
               // Handle PaymentElement change events
               // PaymentElement onChange provides completion status
               // Errors are handled separately via onReady callback or element state
+              
+              // ✅ STRIPE BEST PRACTICE: Detect payment method type to prevent form submit for wallet payments
+              const paymentMethodType = event.value?.type;
+              
+              // ✅ Detect ALL wallet payments (Google Pay, Apple Pay, Link, and any other wallet methods)
+              // Wallet payment types include: google_pay, apple_pay, link, and potentially others
+              const isWalletPayment = 
+                paymentMethodType === "google_pay" || 
+                paymentMethodType === "apple_pay" || 
+                paymentMethodType === "link" ||
+                (paymentMethodType && typeof paymentMethodType === "string" && paymentMethodType.includes("pay")); // Catch-all for other wallet methods
+              
+              if (isWalletPayment) {
+                setSelectedPaymentMethodType("wallet");
+                onPaymentMethodTypeChange?.("wallet");
+              } else if (paymentMethodType === "card") {
+                setSelectedPaymentMethodType("card");
+                onPaymentMethodTypeChange?.("card");
+              } else {
+                setSelectedPaymentMethodType(null);
+                onPaymentMethodTypeChange?.(null);
+              }
+              
               if (!event.complete) {
                 // Payment method is incomplete - clear any previous errors
                 onCardElementChange({});
@@ -657,6 +695,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   amount,
   packageName,
   elementsRemountKey = 0,
+  onPaymentMethodTypeChange,
 }) => {
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
@@ -868,6 +907,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 billingDetails={billingDetails}
                 amount={amount}
                 packageName={packageName}
+                onPaymentMethodTypeChange={onPaymentMethodTypeChange}
               />
             </Elements>
           ) : cardFormError ? (
@@ -1144,6 +1184,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     billingDetails={billingDetails}
                     amount={amount}
                     packageName={packageName}
+                    onPaymentMethodTypeChange={onPaymentMethodTypeChange}
                   />
                 </Elements>
               ) : (
