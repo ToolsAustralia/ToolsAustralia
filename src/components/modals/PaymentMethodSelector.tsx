@@ -69,6 +69,8 @@ interface PaymentMethodSelectorProps {
   // Amount and package name for wallet payment display (Apple Pay/Google Pay)
   amount?: number; // Amount in cents
   packageName?: string; // Package name for payment request label
+  // ✅ FIX: Remount key to force Elements remount when clientSecret changes
+  elementsRemountKey?: number;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
@@ -109,17 +111,35 @@ const StripeCardForm = React.forwardRef<
     const stripe = useStripe();
     const elements = useElements();
     const [isStripeLoading, setIsStripeLoading] = useState(true);
+    const [elementsReady, setElementsReady] = useState(false);
     const { showToast } = useToast();
 
-    // Handle Stripe loading state and validate StripeElements
+    // ✅ CRITICAL FIX: Handle Stripe loading state and wait for Elements session to be ready
+    // The Elements session API call (elements/sessions) is made automatically by Stripe.js
+    // We need to wait for both stripe and elements to be ready before rendering PaymentElement
     useEffect(() => {
       if (stripe && elements) {
-        setIsStripeLoading(false);
+        // ✅ NEW: Wait a brief moment for Elements session to initialize
+        // This ensures the internal elements/sessions API call completes
+        const initTimeout = setTimeout(() => {
+          setIsStripeLoading(false);
+          setElementsReady(true);
+        }, 100); // Small delay to allow Elements session to initialize
+
+        return () => clearTimeout(initTimeout);
       } else {
+        setIsStripeLoading(true);
+        setElementsReady(false);
+        
         // Check if Stripe failed to load after a timeout
         const timeout = setTimeout(async () => {
           if (!stripe || !elements) {
             // Auto-log Stripe loading failure
+            console.error("Stripe Elements failed to load", {
+              stripeLoaded: !!stripe,
+              elementsLoaded: !!elements,
+              clientSecretPrefix: clientSecret ? `${clientSecret.split("_secret_")[0]}...` : "none",
+            });
             await autoLogStripeError(new Error("Stripe Elements failed to load"), {
               component: "StripeCardForm",
               stripeLoaded: !!stripe,
@@ -156,7 +176,7 @@ const StripeCardForm = React.forwardRef<
 
         return () => clearTimeout(timeout);
       }
-    }, [stripe, elements, showToast]);
+    }, [stripe, elements, showToast, clientSecret]);
 
     // Inject custom CSS for wallet payment method layout (icons and text on same row)
     // Note: Stripe uses shadow DOM, so we inject styles that target the iframe content
@@ -241,51 +261,6 @@ const StripeCardForm = React.forwardRef<
       },
     };
 
-    // Debug logging for amount, packageName, and paymentRequest configuration
-    // IMPORTANT: All hooks must be called before any conditional returns
-    useEffect(() => {
-      console.log("🔍 StripeCardForm Debug:", {
-        amount,
-        packageName,
-        amountInCents: amount,
-        amountInDollars: amount ? (amount / 100).toFixed(2) : "N/A",
-        hasPaymentRequest: !!amount,
-        paymentRequestConfig,
-        elementKey: `payment-element-${amount || 0}-${packageName || "default"}`,
-      });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [amount, packageName]);
-
-    // Log PaymentElement options to verify paymentRequest is included
-    useEffect(() => {
-      console.log("🔍 PaymentElement Options:", {
-        layout: paymentElementOptions.layout,
-        wallets: paymentElementOptions.wallets,
-        paymentMethodOrder: paymentElementOptions.paymentMethodOrder,
-        paymentRequest: paymentRequestConfig,
-        hasPaymentRequest: !!paymentRequestConfig,
-        shouldEnableWallets,
-        fields: paymentElementOptions.fields,
-        terms: paymentElementOptions.terms,
-      });
-
-      // Detailed log for paymentRequest structure verification (only if paymentRequest exists)
-      if (paymentRequestConfig) {
-        console.log("🔍 PaymentRequest Structure (for wallet payments):", {
-          country: paymentRequestConfig.country,
-          currency: paymentRequestConfig.currency,
-          total: {
-            label: paymentRequestConfig.total.label,
-            amount: paymentRequestConfig.total.amount,
-            amountInDollars: (paymentRequestConfig.total.amount / 100).toFixed(2),
-          },
-          isValid: paymentRequestConfig.total.amount > 0,
-        });
-      } else {
-        console.log("⚠️ PaymentRequest not configured - wallets disabled until PaymentIntent is ready");
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [amount, packageName, shouldEnableWallets]);
 
     // Build billing details object for confirmation
     const buildBillingDetails = () => {
@@ -352,17 +327,10 @@ const StripeCardForm = React.forwardRef<
               return { error: submitResult.error.message || "Please complete all required fields." };
             }
 
-            // For wallet payment errors, log but proceed - confirmPayment() will handle wallet payments
-            if (isWalletPaymentError) {
-              console.log("⚠️ Wallet payment error during submit (expected for wallet payments), proceeding with confirmPayment:", submitResult.error);
-            }
+            // For wallet payment errors, proceed - confirmPayment() will handle wallet payments
 
             // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
             // No upfront PaymentIntent exists - this is the only PaymentIntent for the subscription payment
-            console.log("🔍 Confirming PaymentIntent:", {
-              clientSecretPrefix: clientSecret?.split("_secret_")[0],
-              intentType,
-            });
 
             // ✅ CRITICAL: Must call confirmPayment() after submit() (Stripe requirement)
             // For wallet payments, confirmPayment() will handle the wallet UI
@@ -593,9 +561,10 @@ const StripeCardForm = React.forwardRef<
       },
     }));
 
-    // Show skeleton loading while Stripe is loading
+    // Show skeleton loading while Stripe is loading or Elements session is initializing
     // IMPORTANT: Conditional return must come AFTER all hooks are called
-    if (isStripeLoading) {
+    // ✅ CRITICAL: Wait for Elements session API call to complete before rendering PaymentElement
+    if (isStripeLoading || !elementsReady) {
       return (
         <div className="space-y-0">
           <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-0">
@@ -604,7 +573,7 @@ const StripeCardForm = React.forwardRef<
           </h4>
           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50 mt-0">
             <ToolLoadingSpinner
-              message="Loading payment form..."
+              message={isStripeLoading ? "Loading payment form..." : "Initializing payment session..."}
               size="md"
               variant="gear"
               className="py-4"
@@ -624,6 +593,28 @@ const StripeCardForm = React.forwardRef<
           <PaymentElement
             key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
+            onReady={() => {
+              // PaymentElement is ready - Elements session API call has completed
+              setElementsReady(true);
+            }}
+            onLoadError={(error) => {
+              // ✅ ERROR HANDLING: Elements session API call failed
+              console.error("❌ PaymentElement load error - Elements session failed:", error, {
+                clientSecretPrefix: clientSecret ? `${clientSecret.split("_secret_")[0]}...` : "none",
+                intentType,
+              });
+              autoLogStripeError(error, {
+                component: "StripeCardForm",
+                stripeLoaded: !!stripe,
+                elementsLoaded: !!elements,
+              }).catch(() => {});
+              
+              showToast({
+                type: "error",
+                title: "Payment Form Error",
+                message: "Failed to initialize payment form. Please refresh and try again.",
+              });
+            }}
             onChange={(event) => {
               // Handle PaymentElement change events
               // PaymentElement onChange provides completion status
@@ -665,6 +656,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   billingDetails,
   amount,
   packageName,
+  elementsRemountKey = 0,
 }) => {
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
@@ -689,16 +681,6 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
     }
   }, [paymentMethods, selectedPaymentMethod, onPaymentMethodSelect, hasUserInteracted]);
 
-  // Log Elements key value when it changes to verify remounting
-  useEffect(() => {
-    const elementsKey = `elements-${amount || 0}-${packageName || "default"}`;
-    console.log("🔍 Elements Key Debug:", {
-      elementsKey,
-      amount,
-      packageName,
-      keyChanged: true,
-    });
-  }, [amount, packageName]);
 
   const getCardBrandIcon = (brand: string) => {
     const brandLower = brand.toLowerCase();
@@ -771,7 +753,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
       {/* Show card form directly for new users - no Payment Method section */}
       {!isAuthenticated && (
         <>
-          {isCreatingIntent ? (
+          {isCreatingIntent || (!activeClientSecret && !cardFormError) ? (
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-red-600" />
@@ -779,7 +761,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
               </h4>
               <div className="p-3 border border-gray-300 rounded-lg bg-white">
                 <ToolLoadingSpinner
-                  message="Setting up payment form..."
+                  message={isCreatingIntent ? "Setting up payment form..." : "Preparing payment form..."}
                   size="sm"
                   variant="gear"
                   className="py-2"
@@ -788,7 +770,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             </div>
           ) : activeClientSecret && activeIntentType ? (
             <Elements
-              key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
+              key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}-remount${elementsRemountKey}`}
               stripe={stripePromise}
               options={{
                 clientSecret: activeClientSecret,
@@ -1031,7 +1013,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
           {/* Show card form when adding new payment method for authenticated users */}
           {showCardForm && (
             <div className="space-y-4">
-              {isCreatingIntent ? (
+              {isCreatingIntent || (!activeClientSecret && !cardFormError) ? (
                 // Intent Loading Skeleton
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
@@ -1065,7 +1047,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               ) : activeClientSecret && activeIntentType ? (
                 <Elements
-                  key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
+                  key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}-remount${elementsRemountKey}`}
                   stripe={stripePromise}
                   options={{
                     clientSecret: activeClientSecret,

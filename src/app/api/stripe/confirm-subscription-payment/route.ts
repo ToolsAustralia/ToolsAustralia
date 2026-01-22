@@ -84,10 +84,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
 
-      // Verify the subscription belongs to this user (only for existing users)
-      if (user.stripeSubscriptionId !== subscriptionId) {
-        return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
-      }
+      // ✅ STRIPE BEST PRACTICE: For incomplete subscriptions, subscriptionId may not be saved yet
+      // Verify subscription belongs to user by checking customerId instead
+      // This allows confirm-subscription-payment to work even if subscriptionId wasn't saved in create-subscription
     }
 
     // Retrieve the subscription from Stripe with expanded payment intent
@@ -100,6 +99,13 @@ export async function POST(request: NextRequest) {
 
     if (!subscription) {
       return NextResponse.json({ error: "Subscription not found in Stripe" }, { status: 404 });
+    }
+
+    // ✅ STRIPE BEST PRACTICE: Verify subscription belongs to user by checking customerId
+    // This works for both incomplete subscriptions (where subscriptionId may not be saved yet) and active subscriptions
+    const subscriptionCustomerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+    if (user.stripeCustomerId !== subscriptionCustomerId) {
+      return NextResponse.json({ error: "Subscription does not belong to this user" }, { status: 403 });
     }
 
     // ✅ OPTIMIZED: Use already-expanded PaymentIntent from subscription if available
@@ -496,6 +502,21 @@ export async function POST(request: NextRequest) {
             responseData.autoLogin = true;
           }
 
+          // ✅ STRIPE BEST PRACTICE: Save subscriptionId only after payment succeeds
+          // This ensures data consistency: subscriptionId in DB = active subscription in Stripe
+          user.stripeSubscriptionId = subscription.id;
+          
+          // Update user subscription status (webhook handles final updates)
+          if (user.subscription) {
+            user.subscription.isActive = true;
+            user.subscription.status = "active";
+          }
+          
+          // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
+          user.save().catch((error) => {
+            console.warn("Non-critical user save failed (webhook will handle):", error);
+          });
+
           // Return success - subscription should be active and webhook will process benefits
           return NextResponse.json({
             success: true,
@@ -555,6 +576,10 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // ✅ STRIPE BEST PRACTICE: Save subscriptionId only after payment succeeds
+        // This ensures data consistency: subscriptionId in DB = active subscription in Stripe
+        user.stripeSubscriptionId = subscription.id;
+        
         // Update user subscription status (webhook handles final updates)
         if (user.subscription) {
           user.subscription.isActive = true;

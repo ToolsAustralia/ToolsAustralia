@@ -18,18 +18,8 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized",
-        },
-        { status: 401 }
-      );
-    }
-
     const body = await request.json();
-    const { subscriptionId } = body;
+    const { subscriptionId, userId } = body;
 
     if (!subscriptionId || typeof subscriptionId !== "string") {
       return NextResponse.json(
@@ -41,15 +31,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user
-    const user = await User.findById(session.user.id);
-    if (!user) {
+    // ✅ Support both authenticated and guest user flows
+    // Guest users who just registered might not have a session yet
+    let user = null;
+    if (session?.user?.id) {
+      // Authenticated user flow
+      user = await User.findById(session.user.id);
+      if (!user) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "User not found",
+          },
+          { status: 404 }
+        );
+      }
+    } else if (userId) {
+      // Guest user flow - user just registered but no session yet
+      user = await User.findById(userId);
+      if (!user) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "User not found",
+          },
+          { status: 404 }
+        );
+      }
+    } else {
       return NextResponse.json(
         {
           success: false,
-          error: "User not found",
+          error: "Unauthorized",
         },
-        { status: 404 }
+        { status: 401 }
       );
     }
 
@@ -82,6 +97,15 @@ export async function POST(request: NextRequest) {
 
     // Cancel the subscription
     await stripe.subscriptions.cancel(subscriptionId);
+
+    // ✅ CRITICAL: Clear user's stripeSubscriptionId to prevent issues when creating new subscription
+    // This ensures that when a new subscription is created, it doesn't try to reuse the cancelled one
+    if (user.stripeSubscriptionId === subscriptionId) {
+      user.stripeSubscriptionId = undefined;
+      user.subscription = undefined;
+      await user.save();
+      console.log(`✅ Cleared user's subscription reference after cancellation: ${subscriptionId}`);
+    }
 
     console.log(`[Subscription] Cancelled incomplete subscription: ${subscriptionId}`);
 
