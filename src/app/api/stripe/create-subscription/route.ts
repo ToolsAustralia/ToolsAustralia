@@ -41,7 +41,7 @@ const createSubscriptionSchema = z.object({
   mobile: z.string().optional(),
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
-  paymentMethodId: z.string().min(1, "Payment method is required"), // Payment method from SetupIntent (for saving)
+  paymentMethodId: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Optional - subscription can be created without payment method upfront
   idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
@@ -114,11 +114,13 @@ export async function POST(request: NextRequest) {
     // console.log("👤 Checking if user already exists...");
     const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
 
-    // Handle payment method creation following Stripe best practices
+    // ✅ STRIPE BEST PRACTICE: Payment method is optional for subscription creation
+    // When not provided, subscription will be created without default_payment_method
+    // Invoice PaymentIntent will still be created and can be used for PaymentElement
+    // Payment method will be attached when user confirms payment via PaymentElement
     const finalPaymentMethodId = validatedData.paymentMethodId;
 
-    // Payment method should already be created via SetupIntent
-    // If we receive "new_payment_method", it means the frontend didn't complete the setup
+    // If paymentMethodId is provided but is "new_payment_method", it means the frontend didn't complete the setup
     if (validatedData.paymentMethodId === "new_payment_method") {
       return NextResponse.json(
         {
@@ -150,27 +152,30 @@ export async function POST(request: NextRequest) {
               throw new Error("Customer has been deleted");
             }
 
-            // ✅ OPTIMIZED: Use utility to attach payment method
-            try {
-              await attachPaymentMethodToCustomer(finalPaymentMethodId, existingCustomer.id);
-              return existingCustomer as Stripe.Customer;
-            } catch (attachError: unknown) {
-              // Check if error is due to payment method being "consumed"
-              const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
-              
-              if (
-                errorMessage.includes("previously used without being attached") ||
-                errorMessage.includes("may not be used again") ||
-                errorMessage.includes("cannot be reused")
-              ) {
-                console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
-                canUsePaymentMethod = false;
-                return existingCustomer as Stripe.Customer; // Continue with customer even if payment method can't be reused
-              } else {
-                // Re-throw critical errors
-                throw attachError;
+            // ✅ STRIPE BEST PRACTICE: Only attach payment method if provided
+            if (finalPaymentMethodId) {
+              // ✅ OPTIMIZED: Use utility to attach payment method
+              try {
+                await attachPaymentMethodToCustomer(finalPaymentMethodId, existingCustomer.id);
+              } catch (attachError: unknown) {
+                // Check if error is due to payment method being "consumed"
+                const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+                
+                if (
+                  errorMessage.includes("previously used without being attached") ||
+                  errorMessage.includes("may not be used again") ||
+                  errorMessage.includes("cannot be reused")
+                ) {
+                  console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
+                  canUsePaymentMethod = false;
+                  // Continue with customer even if payment method can't be reused
+                } else {
+                  // Re-throw critical errors
+                  throw attachError;
+                }
               }
             }
+            return existingCustomer as Stripe.Customer;
           } catch (error) {
             console.warn(`⚠️ Failed to retrieve existing customer, will create new one:`, error);
             // Fall through to create new customer
@@ -187,43 +192,46 @@ export async function POST(request: NextRequest) {
         // ✅ OPTIMIZED: Use utility function to ensure customer exists
         const newOrExistingCustomer = await ensureCustomerExists(validatedData.userEmail, customerMetadata);
 
-        // If payment method has a customer, check if it matches
-        try {
-          const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-          if (paymentMethod.customer) {
-            const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer.id;
-            if (pmCustomerId === newOrExistingCustomer.id) {
-              // Customer matches, update details if needed
-              const customerWithMetadata = newOrExistingCustomer as Stripe.Customer;
-              if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
-                await stripe.customers.update(newOrExistingCustomer.id, {
-                  email: validatedData.userEmail,
-                  name: `${validatedData.firstName} ${validatedData.lastName}`,
-                  phone: validatedData.mobile,
-                  metadata: customerMetadata,
-                });
+        // ✅ STRIPE BEST PRACTICE: Only process payment method if provided
+        if (finalPaymentMethodId) {
+          // If payment method has a customer, check if it matches
+          try {
+            const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+            if (paymentMethod.customer) {
+              const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer.id;
+              if (pmCustomerId === newOrExistingCustomer.id) {
+                // Customer matches, update details if needed
+                const customerWithMetadata = newOrExistingCustomer as Stripe.Customer;
+                if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
+                  await stripe.customers.update(newOrExistingCustomer.id, {
+                    email: validatedData.userEmail,
+                    name: `${validatedData.firstName} ${validatedData.lastName}`,
+                    phone: validatedData.mobile,
+                    metadata: customerMetadata,
+                  });
+                }
+                return newOrExistingCustomer;
               }
-              return newOrExistingCustomer;
             }
+          } catch (pmError) {
+            console.warn(`⚠️ Failed to check payment method customer:`, pmError);
           }
-        } catch (pmError) {
-          console.warn(`⚠️ Failed to check payment method customer:`, pmError);
-        }
 
-        // ✅ OPTIMIZED: Attach payment method using utility
-        try {
-          await attachPaymentMethodToCustomer(finalPaymentMethodId, newOrExistingCustomer.id);
-        } catch (attachError: unknown) {
-          const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
-          if (
-            errorMessage.includes("previously used without being attached") ||
-            errorMessage.includes("may not be used again") ||
-            errorMessage.includes("cannot be reused")
-          ) {
-            console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
-            canUsePaymentMethod = false;
-          } else {
-            throw attachError;
+          // ✅ OPTIMIZED: Attach payment method using utility
+          try {
+            await attachPaymentMethodToCustomer(finalPaymentMethodId, newOrExistingCustomer.id);
+          } catch (attachError: unknown) {
+            const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+            if (
+              errorMessage.includes("previously used without being attached") ||
+              errorMessage.includes("may not be used again") ||
+              errorMessage.includes("cannot be reused")
+            ) {
+              console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
+              canUsePaymentMethod = false;
+            } else {
+              throw attachError;
+            }
           }
         }
 
@@ -274,10 +282,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ✅ OPTIMIZED: Ensure payment method is attached and set as default using utility (parallelizes operations)
-    // This prevents "No payment method found" errors when confirming subscription payment
+    // ✅ STRIPE BEST PRACTICE: Only set default payment method if provided and can be used
+    // When paymentMethodId is not provided, subscription will be created without default_payment_method
+    // Invoice PaymentIntent will still be created and payment method will be attached during confirmation
     // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
-    if (canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method") {
+    if (finalPaymentMethodId && canUsePaymentMethod && finalPaymentMethodId !== "new_payment_method") {
       try {
         // ✅ OPTIMIZED: Use utility function that parallelizes attach + update
         await updateCustomerPaymentMethod(customer.id, finalPaymentMethodId);
@@ -297,7 +306,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    } else if (!canUsePaymentMethod) {
+    } else if (finalPaymentMethodId && !canUsePaymentMethod) {
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:313',message:'Payment method cannot be reused',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,canUsePaymentMethod},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
       // #endregion
@@ -313,6 +322,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    // ✅ If no paymentMethodId provided, continue - subscription will be created without default_payment_method
 
     // ✅ STRIPE BEST PRACTICE: Let Stripe create PaymentIntent automatically
     // We don't create upfront PaymentIntent - Stripe will create it when we create the subscription
@@ -377,7 +387,7 @@ export async function POST(request: NextRequest) {
           // Payment method will only be saved AFTER payment succeeds (handled by webhook)
           // This prevents saving payment methods when payments fail due to insufficient funds
           // payment_settings: { save_default_payment_method: "on_subscription" }, // REMOVED
-          expand: ["latest_invoice.payment_intent"], // ✅ Get PaymentIntent from invoice
+          expand: ["latest_invoice.payment_intent", "latest_invoice.confirmation_secret"], // ✅ Get PaymentIntent and confirmation_secret from invoice
           description: `${membershipPackage.name}`,
           metadata: {
             packageId: validatedData.packageId,
@@ -425,228 +435,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ Get PaymentIntent from subscription's invoice using utility function
-    // This handles retry logic and proper detection of Stripe-created PaymentIntent
-    // ✅ NON-BLOCKING: PaymentIntent retrieval failure should not block subscription creation
-    const paymentIntentResult = await getInvoicePaymentIntentFromSubscription(subscription, subscription.id);
-
-    // ✅ IMPROVED ERROR HANDLING: Log detailed error but continue with subscription creation
-    if (!paymentIntentResult.success && paymentIntentResult.error) {
-      const invoiceId = paymentIntentResult.invoice?.id || "unknown";
-      console.error(`❌ Failed to get invoice PaymentIntent for subscription ${subscription.id}:`, {
-        subscriptionId: subscription.id,
-        invoiceId: invoiceId,
-        error: paymentIntentResult.error,
-        invoiceStatus: paymentIntentResult.invoice?.status,
-        hasInvoice: !!paymentIntentResult.invoice,
-      });
-      // Continue - subscription creation succeeded, PaymentIntent retrieval can be retried later
-    }
-
-    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = paymentIntentResult.paymentIntent;
-    let latestInvoice = paymentIntentResult.invoice;
-
-    // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually as last resort
-    // This should rarely happen - Stripe usually creates PaymentIntent automatically
-    // Only create if absolutely necessary (after retries failed)
-    if (!paymentIntent && latestInvoice.status === "open") {
-      try {
-        // ✅ SAFETY: Final check - retrieve invoice one more time before manual creation
-        // This prevents creating duplicate PaymentIntents if Stripe created one asynchronously
-        if (!latestInvoice.id) {
-          throw new Error("Invoice ID is missing - cannot perform final check");
+    // ✅ NEW APPROACH: Try to get client_secret directly from confirmation_secret first
+    // This is the simplest and most direct way according to Stripe docs
+    // confirmation_secret contains the PaymentIntent client_secret after invoice finalization
+    // Reference: https://docs.stripe.com/api/invoices - confirmation_secret field
+    let clientSecret: string | null = null;
+    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = null;
+    let latestInvoice: Stripe.Invoice | null = null;
+    
+    // ✅ PREFERRED METHOD: Get client_secret from confirmation_secret (most direct)
+    if (subscription.latest_invoice && typeof subscription.latest_invoice !== "string") {
+      const latestInvoiceExpanded = subscription.latest_invoice as Stripe.Invoice & {
+        confirmation_secret?: {
+          client_secret?: string;
+        } | null;
+        payment_intent?: string | Stripe.PaymentIntent;
+      };
+      
+      latestInvoice = latestInvoiceExpanded;
+      
+      if (latestInvoiceExpanded.confirmation_secret?.client_secret) {
+        clientSecret = latestInvoiceExpanded.confirmation_secret.client_secret;
+        console.log(`✅ Found PaymentIntent client_secret via confirmation_secret for subscription ${subscription.id}`);
+        
+        // Extract PaymentIntent ID from client_secret for reference
+        if (clientSecret) {
+          const paymentIntentId = clientSecret.split("_secret_")[0];
+          paymentIntent = paymentIntentId;
         }
-        const finalCheckInvoice = await stripe.invoices.retrieve(latestInvoice.id, {
-          expand: ["subscription", "payment_intent", "charge"],
-        });
-
-        const finalCheckWithPaymentIntent = finalCheckInvoice as Stripe.Invoice & {
-          payment_intent?: Stripe.PaymentIntent | string;
-        };
-
-        // If PaymentIntent found in final check, use it instead of creating manual
-        if (finalCheckWithPaymentIntent.payment_intent) {
-          paymentIntent = finalCheckWithPaymentIntent.payment_intent;
-          const paymentIntentId =
-            typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
-          console.log(
-            `✅ Found PaymentIntent in final check: ${paymentIntentId} for subscription ${subscription.id}`
-          );
-          // Update latestInvoice to use the fresh invoice data
-          latestInvoice = finalCheckInvoice;
-        } else {
-          // Only now create manual PaymentIntent as true last resort
-          // ✅ FIX: Use invoice amount_due, but fallback to subscription price if amount_due is 0
-          // This handles edge cases where invoice might have 0 amount due to prorations or trials
-          const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
-          const invoiceCurrency = (latestInvoice.currency as string) || "aud";
-
-          console.log(
-            `⚠️ Invoice is open but has no PaymentIntent after final check. Creating PaymentIntent for amount: ${invoiceAmount} (invoice amount_due: ${
-              latestInvoice.amount_due
-            }, package price: ${Math.round(membershipPackage.price * 100)})`
-          );
-
-          // ✅ DEBUG: Verify amount is correct for wallet display
-          if (invoiceAmount === 0) {
-            console.warn(
-              `⚠️ WARNING: PaymentIntent amount is 0! This will show $0.00 in Google Pay/Apple Pay. Using package price fallback: ${Math.round(
-                membershipPackage.price * 100
-              )}`
-            );
-          }
-
-          // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
-          // Store in metadata so webhook can use it directly (more reliable than lookup)
-          let experimentAssignment: { experimentId: string; variantId: string } | null = null;
-          if (registeredUser?._id) {
-            try {
-              // ✅ Pass anonymousId to find assignments created before user logged in
-              experimentAssignment = await getUserActiveExperimentAssignment(
-                registeredUser._id.toString(),
-                undefined, // slug
-                anonymousId || undefined // anonymousId from cookies
-              );
-              
-              // ✅ Fallback: Check cookies if database lookup failed
-              if (!experimentAssignment) {
-                // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
-                try {
-                  const activeExperiments = await ExperimentRepository.findAll({
-                    status: "active",
-                    page: 1,
-                    limit: 10,
-                  });
-                  
-                  for (const exp of activeExperiments.experiments) {
-                    const experimentId = exp._id instanceof mongoose.Types.ObjectId 
-                      ? exp._id.toString() 
-                      : String(exp._id);
-                    const cookieName = `ta_ab_assignment_${experimentId}`;
-                    const cookieValue = request.cookies.get(cookieName)?.value;
-                    
-                    if (cookieValue) {
-                      try {
-                        const assignmentData = JSON.parse(cookieValue);
-                        if (assignmentData.experimentId && assignmentData.variantId) {
-                          experimentAssignment = {
-                            experimentId: assignmentData.experimentId,
-                            variantId: assignmentData.variantId,
-                          };
-                          console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
-                          break;
-                        }
-                      } catch (error) {
-                        // Invalid cookie data, skip
-                        console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
-                      }
-                    }
-                  }
-                } catch (error) {
-                  // Silently fail - cookie fallback should not block payment creation
-                  console.warn("Error checking assignment cookies:", error);
-                }
-              }
-              
-              if (experimentAssignment) {
-                console.log(`✅ [A/B Testing] Storing experiment assignment in payment metadata:`, experimentAssignment);
-              }
-            } catch (error) {
-              // Silently fail - experiment tracking should not block payment creation
-              console.error("Error getting experiment assignment for payment metadata:", error);
-            }
-          }
-
-          // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
-          // This ensures that even if the API is called twice, only one PaymentIntent is created
-          const invoicePaymentIntentIdempotencyKey = `pi_invoice_${latestInvoice.id || subscription.id}_${Date.now()}`;
-
-          // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
-          // Don't confirm it - let PaymentElement handle confirmation
-          // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
-          // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
-          // ✅ Use centralized PaymentIntent configuration with 3DS support
-          const paymentIntentConfig = createPaymentIntentConfig({
-            amount: invoiceAmount,
-            currency: invoiceCurrency,
-            customer: customer.id,
-            confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
-            paymentType: "subscription",
-            description: membershipPackage.name,
-            setupFutureUsage: "off_session",
-            metadata: {
-                invoice_id: latestInvoice.id || "",
-                subscription_id: subscription.id,
-                packageId: validatedData.packageId,
-                packageName: membershipPackage.name,
-                userEmail: validatedData.userEmail,
-                type: "subscription", // ✅ Set 'type' for webhook compatibility
-                packageType: "membership",
-                isUpfrontPayment: "false", // ✅ CRITICAL: Mark as invoice PaymentIntent (the one that should be authorized)
-                isInvoicePaymentIntent: "true", // ✅ Additional marker for clarity
-                // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
-                // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
-                ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-                ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-                // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
-                ...(experimentAssignment && {
-                  experimentId: experimentAssignment.experimentId,
-                  variantId: experimentAssignment.variantId,
-                }),
-                // Store request context for Facebook CAPI (webhook will extract and use)
-                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-                ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-                ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-                ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-            },
-          });
-
-          const newPaymentIntent = await stripe.paymentIntents.create(
-            paymentIntentConfig,
-            {
-              idempotencyKey: invoicePaymentIntentIdempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-            }
-          );
-
-          // Update invoice metadata to track PaymentIntent and request context (optional, but helps with tracking)
-          if (latestInvoice.id) {
-            await stripe.invoices.update(latestInvoice.id, {
-              metadata: {
-                ...(latestInvoice.metadata || {}),
-                payment_intent_id: newPaymentIntent.id,
-                // Store request context for Facebook CAPI (webhook will extract and use)
-                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-                ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-                ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-                ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-              },
-            });
-          }
-
-          paymentIntent = newPaymentIntent;
-          console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`, {
-            hasClientSecret: !!newPaymentIntent.client_secret,
-            status: newPaymentIntent.status,
-            amount: newPaymentIntent.amount,
-          });
-        }
-      } catch (createError) {
-        console.error("❌ Failed to create PaymentIntent for invoice:", createError);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to create payment intent. Please try again.",
-          },
-          { status: 500 }
-        );
+      } else if (latestInvoiceExpanded.payment_intent) {
+        // Fallback: Use payment_intent if confirmation_secret is not available
+        paymentIntent = latestInvoiceExpanded.payment_intent;
+        console.log(`⚠️ confirmation_secret not available, using payment_intent for subscription ${subscription.id}`);
       }
     }
 
-    // ✅ Extract client_secret from PaymentIntent (for frontend PaymentElement)
-    // PaymentElement will automatically show correct amount in wallets (Google Pay/Apple Pay)
-    let clientSecret: string | null = null;
+    // ✅ FALLBACK: Get PaymentIntent from subscription's invoice using utility function
+    // This handles retry logic and proper detection of Stripe-created PaymentIntent
+    // ✅ NON-BLOCKING: PaymentIntent retrieval failure should not block subscription creation
+    // Only use this if confirmation_secret didn't work
+    if (!clientSecret && !paymentIntent) {
+      console.log(`⏳ confirmation_secret not available immediately, using utility function with retry logic for subscription ${subscription.id}`);
+      
+      const paymentIntentResult = await getInvoicePaymentIntentFromSubscription(subscription, subscription.id);
 
-    if (paymentIntent) {
+      // ✅ IMPROVED ERROR HANDLING: Log detailed error but continue with subscription creation
+      if (!paymentIntentResult.success && paymentIntentResult.error) {
+        const invoiceId = paymentIntentResult.invoice?.id || "unknown";
+        console.error(`❌ Failed to get invoice PaymentIntent for subscription ${subscription.id}:`, {
+          subscriptionId: subscription.id,
+          invoiceId: invoiceId,
+          error: paymentIntentResult.error,
+          invoiceStatus: paymentIntentResult.invoice?.status,
+          hasInvoice: !!paymentIntentResult.invoice,
+        });
+        // Continue - subscription creation succeeded, PaymentIntent retrieval can be retried later
+      }
+
+      paymentIntent = paymentIntentResult.paymentIntent;
+      latestInvoice = paymentIntentResult.invoice;
+    }
+
+    // ✅ REMOVED: Manual PaymentIntent creation is no longer needed
+    // Stripe automatically creates PaymentIntent when subscription is created with payment_behavior: "default_incomplete"
+    // We now use confirmation_secret to get the client_secret directly, which is the Stripe-recommended approach
+    // If PaymentIntent is not available via confirmation_secret, it means Stripe hasn't created it yet
+    // In that case, we should wait for Stripe to create it (via webhook) rather than creating manually
+
+    // ✅ Extract client_secret from PaymentIntent if not already obtained from confirmation_secret
+    // PaymentElement will automatically show correct amount in wallets (Google Pay/Apple Pay)
+    if (!clientSecret && paymentIntent) {
       if (typeof paymentIntent === "string") {
         // If it's a string ID, retrieve the PaymentIntent to get client_secret
         try {
@@ -684,31 +542,54 @@ export async function POST(request: NextRequest) {
     }
 
     // ✅ Fallback: If PaymentIntent still not found, try retrieving invoice again with expansion
-    if (!clientSecret && latestInvoice.id) {
+    // Also try to get confirmation_secret if not already obtained
+    if (!clientSecret && latestInvoice?.id) {
       try {
         const expandedInvoice = await stripe.invoices.retrieve(latestInvoice.id, {
-          expand: ["payment_intent"],
+          expand: ["payment_intent", "confirmation_secret"],
         });
-        const expandedPaymentIntent = (
-          expandedInvoice as Stripe.Invoice & {
-            payment_intent?: Stripe.PaymentIntent | string;
+        
+        // ✅ Try confirmation_secret first
+        const invoiceWithConfirmationSecret = expandedInvoice as Stripe.Invoice & {
+          confirmation_secret?: {
+            client_secret?: string;
+          } | null;
+        };
+        
+        if (invoiceWithConfirmationSecret.confirmation_secret?.client_secret) {
+          clientSecret = invoiceWithConfirmationSecret.confirmation_secret.client_secret;
+          console.log(
+            `✅ Found client_secret from confirmation_secret in retrieved invoice for subscription ${subscription.id}`
+          );
+          
+          // Extract PaymentIntent ID from client_secret for reference
+          if (clientSecret) {
+            const paymentIntentId = clientSecret.split("_secret_")[0];
+            paymentIntent = paymentIntentId;
           }
-        )?.payment_intent;
+        } else {
+          // Fallback: Try payment_intent if confirmation_secret not available
+          const expandedPaymentIntent = (
+            expandedInvoice as Stripe.Invoice & {
+              payment_intent?: Stripe.PaymentIntent | string;
+            }
+          )?.payment_intent;
 
-        if (expandedPaymentIntent) {
-          if (typeof expandedPaymentIntent === "string") {
-            const retrievedPI = await stripe.paymentIntents.retrieve(expandedPaymentIntent);
-            clientSecret = retrievedPI.client_secret || null;
-            console.log(
-              `✅ Fallback: Retrieved PaymentIntent: ${retrievedPI.id}, has client_secret: ${!!clientSecret}`
-            );
-          } else {
-            clientSecret = expandedPaymentIntent.client_secret || null;
-            console.log(
-              `✅ Fallback: Using expanded PaymentIntent: ${
-                expandedPaymentIntent.id
-              }, has client_secret: ${!!clientSecret}`
-            );
+          if (expandedPaymentIntent) {
+            if (typeof expandedPaymentIntent === "string") {
+              const retrievedPI = await stripe.paymentIntents.retrieve(expandedPaymentIntent);
+              clientSecret = retrievedPI.client_secret || null;
+              console.log(
+                `✅ Fallback: Retrieved PaymentIntent: ${retrievedPI.id}, has client_secret: ${!!clientSecret}`
+              );
+            } else {
+              clientSecret = expandedPaymentIntent.client_secret || null;
+              console.log(
+                `✅ Fallback: Using expanded PaymentIntent: ${
+                  expandedPaymentIntent.id
+                }, has client_secret: ${!!clientSecret}`
+              );
+            }
           }
         }
       } catch (retrieveError) {
@@ -716,25 +597,54 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ✅ Validate PaymentIntent belongs to invoice (safety check)
-    if (clientSecret) {
+    // ✅ STRIPE BEST PRACTICE: Validate PaymentIntent before returning clientSecret
+    // This ensures PaymentIntent is valid, has correct amount, and belongs to invoice
+    if (clientSecret && latestInvoice) {
       try {
-        // Extract PaymentIntent ID from clientSecret to verify it belongs to invoice
+        // Extract PaymentIntent ID from clientSecret
         const paymentIntentId = clientSecret.split("_secret_")[0];
         const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntentId);
         
+        // Expected amount in cents
+        const expectedAmount = Math.round(membershipPackage.price * 100);
+        
+        // ✅ VALIDATION: Check if PaymentIntent belongs to invoice by checking invoice's payment_intent field
+        // This is more reliable than checking metadata (which may not exist for PaymentIntents from confirmation_secret)
+        const invoiceWithPaymentIntent = latestInvoice as Stripe.Invoice & {
+          payment_intent?: string | Stripe.PaymentIntent;
+        };
+        const invoicePaymentIntentId = invoiceWithPaymentIntent.payment_intent
+          ? (typeof invoiceWithPaymentIntent.payment_intent === "string" ? invoiceWithPaymentIntent.payment_intent : invoiceWithPaymentIntent.payment_intent.id)
+          : null;
+        
+        const belongsToInvoice = invoicePaymentIntentId === paymentIntentId;
+        
         console.log(`🔍 Validating invoice PaymentIntent ${paymentIntentId}:`, {
           status: retrievedPI.status,
-          hasInvoiceId: !!retrievedPI.metadata?.invoice_id,
-          hasSubscriptionId: !!retrievedPI.metadata?.subscription_id,
-          isInvoicePaymentIntent: retrievedPI.metadata?.isInvoicePaymentIntent,
+          amount: retrievedPI.amount,
+          expectedAmount: expectedAmount,
+          invoicePaymentIntentId: invoicePaymentIntentId,
+          belongsToInvoice: belongsToInvoice,
+          hasInvoiceIdMetadata: !!retrievedPI.metadata?.invoice_id,
+          hasSubscriptionIdMetadata: !!retrievedPI.metadata?.subscription_id,
         });
         
+        // ✅ CRITICAL: Validate PaymentIntent status
         if (retrievedPI.status === "canceled") {
           console.error(`❌ CRITICAL: Attempted to return canceled PaymentIntent ${paymentIntentId} as clientSecret`);
-          clientSecret = null; // Force fallback
-        } else if (!retrievedPI.metadata?.invoice_id) {
-          console.warn(`⚠️ PaymentIntent ${paymentIntentId} does not have invoice_id metadata - may not be invoice PaymentIntent`);
+          clientSecret = null; // Force fallback - PaymentIntent is invalid
+        }
+        // ✅ CRITICAL: Validate PaymentIntent belongs to invoice
+        else if (!belongsToInvoice) {
+          console.warn(`⚠️ PaymentIntent ${paymentIntentId} may not belong to invoice ${latestInvoice.id} (invoice payment_intent: ${invoicePaymentIntentId})`);
+          // Continue - PaymentIntent might still be valid (Stripe may not have updated invoice yet)
+          // The validation in confirm-subscription-payment will catch this if it's truly wrong
+        }
+        // ✅ CRITICAL: Validate PaymentIntent amount matches subscription price
+        else if (retrievedPI.amount !== expectedAmount) {
+          console.warn(`⚠️ PaymentIntent amount mismatch - expected ${expectedAmount}, got ${retrievedPI.amount}`);
+          console.warn(`⚠️ This may cause incorrect amount display in Google Pay/Apple Pay wallets`);
+          // Don't set clientSecret to null - log warning but continue (amount might be correct due to prorations/trials)
         } else {
           console.log(`✅ Invoice PaymentIntent ${paymentIntentId} validation passed - returning clientSecret`);
         }
@@ -749,8 +659,8 @@ export async function POST(request: NextRequest) {
       console.error("Debug details:", {
         subscriptionId: subscription.id,
         subscriptionStatus: subscription.status,
-        invoiceId: latestInvoice.id,
-        invoiceStatus: latestInvoice.status,
+        invoiceId: latestInvoice?.id || "unknown",
+        invoiceStatus: latestInvoice?.status || "unknown",
         hasPaymentIntent: !!paymentIntent,
         paymentIntentType: paymentIntent ? (typeof paymentIntent === "string" ? "string" : "object") : "null",
         paymentIntentId: paymentIntent
@@ -874,7 +784,8 @@ export async function POST(request: NextRequest) {
     // Referral code is stored in subscription metadata and processed by webhook
 
     // ✅ GRACEFUL DEGRADATION: Include warning if PaymentIntent retrieval failed
-    const warning = !clientSecret && !paymentIntentResult.success
+    // Note: We check !paymentIntent instead of paymentIntentResult.success since we're using confirmation_secret approach
+    const warning = !clientSecret && !paymentIntent
       ? "PaymentIntent retrieval delayed. Payment confirmation may require retry. Subscription created successfully."
       : undefined;
 

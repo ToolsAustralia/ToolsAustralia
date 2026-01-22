@@ -10,6 +10,7 @@ import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { useToast } from "@/components/ui/Toast";
+import { ToolLoadingSpinner } from "@/components/ui/ToolLoadingSpinner";
 import { categorizeError, isRecoverableError, getRecoveryStrategy } from "@/utils/payment/stripe/payment-error-detection";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
@@ -53,6 +54,7 @@ interface PaymentMethodSelectorProps {
   cardFormError: string | null;
   isCreatingSetupIntent?: boolean;
   isCreatingPaymentIntent?: boolean; // NEW: Loading state for PaymentIntent creation
+  isCreatingSubscription?: boolean; // NEW: Loading state for subscription creation API call
   // Billing details for when billingDetails: "never" is set
   billingDetails?: {
     name?: string;
@@ -601,30 +603,12 @@ const StripeCardForm = React.forwardRef<
             Payment Details
           </h4>
           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50 mt-0">
-            {/* Payment method tabs skeleton */}
-            <div className="flex gap-2 mb-4">
-              <div className="h-10 bg-gray-200 rounded animate-pulse flex-1"></div>
-              {shouldEnableWallets && (
-                <>
-                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
-                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
-                </>
-              )}
-            </div>
-            {/* Card Element Skeleton */}
-            <div className="space-y-3">
-              <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
-              <div className="flex gap-3">
-                <div className="flex-1 h-12 bg-gray-200 rounded animate-pulse"></div>
-                <div className="w-20 h-12 bg-gray-200 rounded animate-pulse"></div>
-              </div>
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-              <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
-              <span>Loading payment form...</span>
-            </div>
+            <ToolLoadingSpinner
+              message="Loading payment form..."
+              size="md"
+              variant="gear"
+              className="py-4"
+            />
           </div>
         </div>
       );
@@ -677,6 +661,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   cardFormError,
   isCreatingSetupIntent = false,
   isCreatingPaymentIntent = false,
+  isCreatingSubscription = false,
   billingDetails,
   amount,
   packageName,
@@ -689,7 +674,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   // ✅ FIX: Derive package type from intentType and amount for proper Elements remounting
   // PaymentIntent with amount = one-time, SetupIntent = subscription
   const packageType = paymentIntentClientSecret && amount && amount > 0 ? "one-time" : "membership";
-  const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent;
+  const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent || isCreatingSubscription;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
@@ -793,19 +778,12 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 Card Details
               </h4>
               <div className="p-3 border border-gray-300 rounded-lg bg-white">
-                {/* Card number skeleton */}
-                <div className="animate-pulse bg-gray-200 h-6 rounded mb-3"></div>
-                {/* Card details row skeleton */}
-                <div className="flex gap-3">
-                  <div className="flex-1 animate-pulse bg-gray-200 h-6 rounded"></div>
-                  <div className="w-20 animate-pulse bg-gray-200 h-6 rounded"></div>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
-                  <span>Setting up secure payment form...</span>
-                </div>
+                <ToolLoadingSpinner
+                  message="Setting up payment form..."
+                  size="sm"
+                  variant="gear"
+                  className="py-2"
+                />
               </div>
             </div>
           ) : activeClientSecret && activeIntentType ? (
