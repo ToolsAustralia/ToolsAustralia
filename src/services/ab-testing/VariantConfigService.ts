@@ -19,6 +19,9 @@ export class VariantConfigService {
       packages: {
         // Defaults: use existing component logic
       },
+      membershipModal: {
+        // Defaults: use existing component logic (no auto-open by default)
+      },
     };
   }
 
@@ -43,6 +46,10 @@ export class VariantConfigService {
       packages: {
         ...baseConfig.packages,
         ...variantConfig.packages,
+      },
+      membershipModal: {
+        ...baseConfig.membershipModal,
+        ...variantConfig.membershipModal,
       },
     };
   }
@@ -109,6 +116,18 @@ export class VariantConfigService {
         }
         if (packages.hidePackages && !Array.isArray(packages.hidePackages)) {
           errors.push("Packages hidePackages must be an array");
+        }
+      }
+    }
+
+    // Validate membershipModal config
+    if (cfg.membershipModal) {
+      if (typeof cfg.membershipModal !== "object") {
+        errors.push("MembershipModal config must be an object");
+      } else {
+        const membershipModal = cfg.membershipModal as Record<string, unknown>;
+        if (membershipModal.showPackageSelectionFirst !== undefined && typeof membershipModal.showPackageSelectionFirst !== "boolean") {
+          errors.push("MembershipModal showPackageSelectionFirst must be a boolean");
         }
       }
     }

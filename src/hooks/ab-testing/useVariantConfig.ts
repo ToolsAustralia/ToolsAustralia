@@ -7,6 +7,7 @@ interface VariantConfigResult {
   heroConfig: VariantConfig["hero"] | null;
   bannerConfig: VariantConfig["banner"] | null;
   packagesConfig: VariantConfig["packages"] | null;
+  membershipModalConfig: VariantConfig["membershipModal"] | null;
 }
 
 /**
@@ -20,6 +21,7 @@ export function useVariantConfig(variantConfig: VariantConfig | null): VariantCo
         heroConfig: null,
         bannerConfig: null,
         packagesConfig: null,
+        membershipModalConfig: null,
       };
     }
 
@@ -27,6 +29,7 @@ export function useVariantConfig(variantConfig: VariantConfig | null): VariantCo
       heroConfig: variantConfig.hero || null,
       bannerConfig: variantConfig.banner || null,
       packagesConfig: variantConfig.packages || null,
+      membershipModalConfig: variantConfig.membershipModal || null,
     };
   }, [variantConfig]);
 }

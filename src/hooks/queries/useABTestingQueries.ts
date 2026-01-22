@@ -67,6 +67,9 @@ export interface Variant {
       highlightPackage?: string;
       hidePackages?: string[];
     };
+    membershipModal?: {
+      showPackageSelectionFirst?: boolean;
+    };
   };
   isControl: boolean;
   createdAt: string;

@@ -237,6 +237,12 @@ Each variant can configure:
    - `highlightPackage`: Package to highlight
    - `hidePackages`: Packages to hide
 
+4. **Membership Modal**:
+   - `showPackageSelectionFirst`: Boolean to toggle package selection modal on step 2
+     - When `true`: Automatically opens package selection modal when user reaches step 2 (payment step)
+     - When `false` or undefined: Uses default behavior (no auto-open)
+     - Useful for A/B testing different user flows on promotion/landing pages
+
 ### Traffic Allocation
 
 - Traffic percentages must sum to 100% across all variants
@@ -530,6 +536,9 @@ Body:
       displayOrder?: string[];
       highlightPackage?: string;
       hidePackages?: string[];
+    };
+    membershipModal?: {
+      showPackageSelectionFirst?: boolean; // Toggle package selection modal on step 2
     };
   };
 }

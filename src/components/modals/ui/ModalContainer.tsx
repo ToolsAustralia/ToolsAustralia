@@ -436,11 +436,25 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   /**
    * Prevent body scrolling when modal is open
    * Saves and restores scroll position to prevent visual jump
+   * ✅ FIX: Detects nested modals and preserves parent modal's scroll lock
    */
   useEffect(() => {
     if (!isOpen) return;
 
-    // Save current scroll position before locking
+    // ✅ FIX: Check if body is already locked (nested modal scenario)
+    // If body is already fixed, we're likely inside another modal
+    // In this case, preserve the existing scroll lock and don't modify it
+    const isBodyAlreadyLocked = document.body.style.position === "fixed";
+    
+    if (isBodyAlreadyLocked) {
+      // Nested modal: Don't modify scroll lock, parent modal handles it
+      // Just track that we detected nesting (for cleanup)
+      return () => {
+        // No cleanup needed for nested modals - parent handles scroll restoration
+      };
+    }
+
+    // Save current scroll position before locking (only for top-level modals)
     savedScrollPosition.current = window.scrollY;
 
     // Lock body scroll and maintain visual position
@@ -451,14 +465,18 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
     // Cleanup: Restore body scroll and position when modal closes
     return () => {
-      // Restore body styles
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
+      // Only restore if we're the top-level modal (body is still fixed by us)
+      // If body position changed, another modal took over (nested scenario)
+      if (document.body.style.position === "fixed") {
+        // Restore body styles
+        document.body.style.overflow = "";
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.width = "";
 
-      // Restore scroll position
-      window.scrollTo(0, savedScrollPosition.current);
+        // Restore scroll position
+        window.scrollTo(0, savedScrollPosition.current);
+      }
     };
   }, [isOpen]);
 

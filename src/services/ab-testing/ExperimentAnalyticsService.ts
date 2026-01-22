@@ -1,5 +1,6 @@
 import ExperimentEventRepository from "@/repositories/ab-testing/ExperimentEventRepository";
 import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssignmentRepository";
+import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import {
   calculateStatisticalSignificance,
   determineWinner,
@@ -94,6 +95,17 @@ export class ExperimentAnalyticsService {
     // Get unique variant IDs
     const variantIds = [...new Set(assignments.map((a) => a.variantId.toString()))];
 
+    // ✅ FIX: Fetch variant documents to get names for display
+    const variants = await VariantRepository.findByExperimentId(experimentId);
+    const variantMap = new Map<string, string>(
+      variants.map((v) => {
+        const variantId = v._id instanceof mongoose.Types.ObjectId 
+          ? v._id.toString() 
+          : String(v._id);
+        return [variantId, v.name];
+      })
+    );
+
     // Get metrics for each variant
     const variantMetrics = await Promise.all(
       variantIds.map((variantId) => this.getVariantMetrics(experimentId, variantId, dateRange))
@@ -102,6 +114,7 @@ export class ExperimentAnalyticsService {
     return {
       variants: variantIds.map((variantId, index) => ({
         variantId,
+        variantName: variantMap.get(variantId) || `Variant ${index + 1}`, // ✅ Include variant name with fallback
         metrics: variantMetrics[index],
       })),
       totalPageViews: variantMetrics.reduce((sum, m) => sum + m.pageViews, 0),
