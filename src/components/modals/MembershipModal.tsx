@@ -2808,32 +2808,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         return;
       }
 
-      // ✅ NEW: Handle wallet payments - Stripe handles payment internally when wallet button is clicked
-      // When wallet payment is selected, Stripe's PaymentElement automatically confirms the payment
-      // We need to skip manual confirmation and let the webhook handle the activation
-      if (isWalletPaymentSelected && paymentIntentClientSecret) {
-        console.log("✅ Wallet payment detected - Stripe handles payment internally, proceeding with purchase flow");
-        
-        // For wallet payments, Stripe handles the payment confirmation internally
-        // We'll show a processing message and let the webhook handle the activation
-        // The paymentIntentId will be extracted from the webhook event
-        showLoading("Processing Wallet Payment", "", [
-          "Completing payment",
-          "Processing transaction",
-          isAuthenticated ? "Activating your membership" : "Creating your account",
-        ]);
-        
-        // Extract payment intent ID from client secret for tracking
-        const paymentIntentId = paymentIntentClientSecret.split("_secret_")[0];
-        setPaymentIntentId(paymentIntentId);
-        setProcessingPackageName(activePlan?.name || "");
-        setShowPaymentProcessing(true);
-        
-        // Don't proceed with manual confirmation - webhook will handle activation
-        // The PaymentProcessingScreen will poll for payment status
-        return;
-      }
-
+      // ✅ STRIPE BEST PRACTICE: With wallets: "auto", Stripe handles wallet payment confirmation internally
+      // When user clicks wallet button (Google Pay/Apple Pay), Stripe automatically:
+      // 1. Opens the wallet UI
+      // 2. Collects payment method
+      // 3. Confirms the PaymentIntent
+      // 4. Webhook handles subscription activation
+      // We should NOT programmatically trigger handleSubmit for wallet payments as it breaks user activation chain
+      // The wallet button click itself IS the purchase action - no separate purchase button needed
+      
       // Determine payment method to use
       let paymentMethodId: string;
       let isNewPaymentMethod = false;
@@ -4818,11 +4801,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     onPaymentMethodTypeChange={(type) => {
                       setIsWalletPaymentSelected(type === "wallet");
                     }}
-                    onWalletPaymentClick={() => {
-                      // ✅ NEW: Automatically trigger purchase flow when wallet payment is clicked
-                      // This allows wallet payments to work without requiring a separate purchase button click
-                      handleSubmit();
-                    }}
                   />
                 )}
 
@@ -4854,11 +4832,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       packageName={promoEnhancedPlan?.name || activePlan?.name}
                       onPaymentMethodTypeChange={(type) => {
                         setIsWalletPaymentSelected(type === "wallet");
-                      }}
-                      onWalletPaymentClick={() => {
-                        // ✅ NEW: Automatically trigger purchase flow when wallet payment is clicked
-                        // This allows wallet payments to work without requiring a separate purchase button click
-                        handleSubmit();
                       }}
                     />
                   )}
@@ -4931,9 +4904,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   )}
 
                   {/* Purchase Button - Moved above Selected Package for better UX */}
+                  {/* ✅ STRIPE BEST PRACTICE: Hide purchase button for wallet payments
+                      With wallets: "auto", the wallet button (Google Pay/Apple Pay) IS the purchase button
+                      Users don't need a separate purchase button - clicking the wallet button completes the purchase */}
                   {!activePlan || activePlan.id === "placeholder" ? (
                     // Payment Button Skeleton
                     <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                  ) : isWalletPaymentSelected ? (
+                    // Wallet payment selected - wallet button handles purchase, no separate button needed
+                    <div className="text-xs sm:text-sm text-gray-600 text-center py-2">
+                      Click the wallet payment button above to complete your purchase
+                    </div>
                   ) : (
                     <Button
                       type="submit"

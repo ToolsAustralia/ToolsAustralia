@@ -789,15 +789,11 @@ const StripeCardForm = React.forwardRef<
               if (isWalletPayment) {
                 setSelectedPaymentMethodType("wallet");
                 onPaymentMethodTypeChange?.("wallet");
-                console.log("✅ Wallet payment method selected - triggering purchase flow");
-                // ✅ NEW: Automatically trigger purchase flow when wallet payment is clicked
-                // This allows wallet payments to work without requiring a separate purchase button click
-                if (onWalletPaymentClick) {
-                  // Use setTimeout to ensure this runs after the current event cycle
-                  setTimeout(() => {
-                    onWalletPaymentClick();
-                  }, 0);
-                }
+                console.log("✅ Wallet payment method selected - Stripe will handle payment automatically");
+                // ✅ STRIPE BEST PRACTICE: With wallets: "auto", Stripe handles payment confirmation internally
+                // We should NOT programmatically trigger handleSubmit() as it breaks the user activation chain
+                // The wallet button click itself initiates the payment flow, and Stripe handles everything
+                // The webhook will handle subscription activation after payment succeeds
               } else if (paymentMethodType === "card") {
                 setSelectedPaymentMethodType("card");
                 onPaymentMethodTypeChange?.("card");
