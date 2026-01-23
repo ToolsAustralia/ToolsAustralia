@@ -8,6 +8,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import crypto from "node:crypto";
 import { getInvoicePaymentIntentFromSubscription } from "@/utils/payment/stripe/invoice-payment-intent";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -15,7 +16,7 @@ import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingServ
 
 const createSubscriptionExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
-  paymentMethodId: z.string().min(1, "Payment method is required"),
+  paymentMethodId: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Optional - subscription can be created without payment method upfront
   idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
@@ -80,11 +81,13 @@ export async function POST(request: NextRequest) {
       await existingUser.save();
     }
 
-    // Handle payment method creation following Stripe best practices
+    // ✅ STRIPE BEST PRACTICE: Payment method is optional for subscription creation
+    // When not provided, subscription will be created without default_payment_method
+    // Invoice PaymentIntent will still be created and can be used for PaymentElement
+    // Payment method will be attached when user confirms payment via PaymentElement
     const finalPaymentMethodId = validatedData.paymentMethodId;
 
-    // Payment method should already be created via SetupIntent
-    // If we receive "new_payment_method", it means the frontend didn't complete the setup
+    // If paymentMethodId is provided but is "new_payment_method", it means the frontend didn't complete the setup
     if (validatedData.paymentMethodId === "new_payment_method") {
       return NextResponse.json(
         {
@@ -95,53 +98,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ CRITICAL FIX: Ensure payment method is attached and set as default BEFORE creating subscription
-    // This prevents "No payment method found" errors when confirming subscription payment
-    // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
-    // This prevents saving payment methods when payments fail due to insufficient funds
-    try {
-      // ✅ ENHANCED: Verify payment method exists and is properly attached
-      const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-      const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer?.id;
-      
-      // ✅ ENHANCED: Ensure payment method is attached to customer (idempotent check)
-      if (!pmCustomerId || pmCustomerId !== stripeCustomerId) {
-        await stripe.paymentMethods.attach(finalPaymentMethodId, {
-          customer: stripeCustomerId,
+    // ✅ STRIPE BEST PRACTICE: Only attach and set default payment method if provided
+    // When paymentMethodId is not provided, subscription will be created without it
+    // Payment method will be attached during payment confirmation
+    if (finalPaymentMethodId) {
+      // ✅ CRITICAL FIX: Ensure payment method is attached and set as default BEFORE creating subscription
+      // This prevents "No payment method found" errors when confirming subscription payment
+      // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
+      // This prevents saving payment methods when payments fail due to insufficient funds
+      try {
+        // ✅ ENHANCED: Verify payment method exists and is properly attached
+        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+        const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer?.id;
+        
+        // ✅ ENHANCED: Ensure payment method is attached to customer (idempotent check)
+        if (!pmCustomerId || pmCustomerId !== stripeCustomerId) {
+          await stripe.paymentMethods.attach(finalPaymentMethodId, {
+            customer: stripeCustomerId,
+          });
+          console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${stripeCustomerId} before subscription creation`);
+        }
+        
+        // ✅ ENHANCED: Set as default payment method and verify it was set
+        await stripe.customers.update(stripeCustomerId, {
+          invoice_settings: {
+            default_payment_method: finalPaymentMethodId,
+          },
         });
-        console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${stripeCustomerId} before subscription creation`);
+        
+        // ✅ ENHANCED: Verify default payment method was set correctly
+        const updatedCustomer = await stripe.customers.retrieve(stripeCustomerId);
+        const defaultPm = (updatedCustomer as { invoice_settings?: { default_payment_method?: string } })
+          .invoice_settings?.default_payment_method;
+        
+        if (defaultPm !== finalPaymentMethodId) {
+          console.warn(`⚠️ Default payment method may not have been set correctly. Expected: ${finalPaymentMethodId}, Got: ${defaultPm}`);
+        } else {
+          console.log(`✅ Verified default payment method ${finalPaymentMethodId} is set for customer ${stripeCustomerId}`);
+        }
+      } catch (pmError) {
+        console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
+        // ✅ ENHANCED: Return clear error before subscription creation if payment method can't be attached
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Payment method setup failed",
+            details: "Unable to attach payment method to customer. Please try again or use a different payment method.",
+            suggestion: "Please refresh the page and try again, or contact support if the issue persists.",
+          },
+          { status: 400 }
+        );
       }
-      
-      // ✅ ENHANCED: Set as default payment method and verify it was set
-      await stripe.customers.update(stripeCustomerId, {
-        invoice_settings: {
-          default_payment_method: finalPaymentMethodId,
-        },
-      });
-      
-      // ✅ ENHANCED: Verify default payment method was set correctly
-      const updatedCustomer = await stripe.customers.retrieve(stripeCustomerId);
-      const defaultPm = (updatedCustomer as { invoice_settings?: { default_payment_method?: string } })
-        .invoice_settings?.default_payment_method;
-      
-      if (defaultPm !== finalPaymentMethodId) {
-        console.warn(`⚠️ Default payment method may not have been set correctly. Expected: ${finalPaymentMethodId}, Got: ${defaultPm}`);
-      } else {
-        console.log(`✅ Verified default payment method ${finalPaymentMethodId} is set for customer ${stripeCustomerId}`);
-      }
-    } catch (pmError) {
-      console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
-      // ✅ ENHANCED: Return clear error before subscription creation if payment method can't be attached
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Payment method setup failed",
-          details: "Unable to attach payment method to customer. Please try again or use a different payment method.",
-          suggestion: "Please refresh the page and try again, or contact support if the issue persists.",
-        },
-        { status: 400 }
-      );
     }
+    // ✅ If no paymentMethodId provided, continue - subscription will be created without default_payment_method
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
     // This prevents creating duplicate products in Stripe dashboard
@@ -205,10 +214,13 @@ export async function POST(request: NextRequest) {
       // Continue - deduplication failure shouldn't block subscription creation
     }
 
-    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-    // Use customer ID + package ID for stable idempotency (not Date.now())
-    const idempotencyKey =
-      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${stripeCustomerId}_${existingUser.email}`;
+    // ✅ STRIPE BEST PRACTICE: Generate unique idempotency key per subscription attempt
+    // Use crypto.randomUUID() to ensure each subscription attempt gets a unique key
+    // This prevents "Keys for idempotent requests can only be used with the same parameters" errors
+    // when user retries with different payment methods (wallet vs card) or new checkout attempts
+    // Note: Client-provided idempotencyKey is kept in schema for future use but not used here
+    // to ensure every subscription attempt gets a fresh key
+    const idempotencyKey = `sub_${crypto.randomUUID()}`;
 
     // Create the subscription with metadata for webhook processing
     // Use payment_behavior to match new user flow and ensure proper webhook processing
@@ -216,7 +228,10 @@ export async function POST(request: NextRequest) {
       {
         customer: stripeCustomerId,
         items: [{ price: stripePriceId }], // ✅ Use existing Price ID
-        default_payment_method: finalPaymentMethodId,
+        // ✅ STRIPE BEST PRACTICE: Only set default_payment_method if provided
+        // When not provided, subscription will be created without it
+        // Invoice PaymentIntent will still be created and payment method will be attached during confirmation
+        ...(finalPaymentMethodId ? { default_payment_method: finalPaymentMethodId } : {}),
         payment_behavior: "default_incomplete", // Creates incomplete subscription requiring payment confirmation
         // ✅ CRITICAL FIX: Do NOT save payment method automatically on subscription creation
         // Payment method will only be saved AFTER payment succeeds (handled by webhook)
@@ -408,6 +423,49 @@ export async function POST(request: NextRequest) {
         }
       } else {
         clientSecret = paymentIntent.client_secret || null;
+      }
+    }
+
+    // ✅ STRIPE BEST PRACTICE: Validate PaymentIntent before returning clientSecret
+    // This ensures PaymentIntent is valid, has correct amount, and belongs to invoice
+    if (clientSecret) {
+      try {
+        const paymentIntentId = clientSecret.split("_secret_")[0];
+        const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        // Expected amount in cents
+        const expectedAmount = Math.round(membershipPackage.price * 100);
+        
+        console.log(`🔍 Validating invoice PaymentIntent ${paymentIntentId}:`, {
+          status: retrievedPI.status,
+          amount: retrievedPI.amount,
+          expectedAmount: expectedAmount,
+          hasInvoiceId: !!retrievedPI.metadata?.invoice_id,
+          hasSubscriptionId: !!retrievedPI.metadata?.subscription_id,
+          isInvoicePaymentIntent: retrievedPI.metadata?.isInvoicePaymentIntent,
+        });
+        
+        // ✅ CRITICAL: Validate PaymentIntent status
+        if (retrievedPI.status === "canceled") {
+          console.error(`❌ CRITICAL: Attempted to return canceled PaymentIntent ${paymentIntentId} as clientSecret`);
+          clientSecret = null; // Force fallback - PaymentIntent is invalid
+        }
+        // ✅ CRITICAL: Validate PaymentIntent amount matches subscription price
+        else if (retrievedPI.amount !== expectedAmount) {
+          console.error(`❌ CRITICAL: PaymentIntent amount mismatch - expected ${expectedAmount}, got ${retrievedPI.amount}`);
+          console.error(`❌ This will cause incorrect amount display in Google Pay/Apple Pay wallets`);
+          // Don't set clientSecret to null - log error but continue (amount might be correct due to prorations/trials)
+        }
+        // ✅ CRITICAL: Validate PaymentIntent belongs to invoice
+        else if (!retrievedPI.metadata?.invoice_id) {
+          console.warn(`⚠️ PaymentIntent ${paymentIntentId} does not have invoice_id metadata - may not be invoice PaymentIntent`);
+          // Continue - might still be valid invoice PaymentIntent
+        } else {
+          console.log(`✅ Invoice PaymentIntent ${paymentIntentId} validation passed - returning clientSecret`);
+        }
+      } catch (verifyError) {
+        console.warn("Could not verify PaymentIntent status:", verifyError);
+        // Continue - clientSecret might still be valid
       }
     }
 

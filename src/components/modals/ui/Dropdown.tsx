@@ -56,6 +56,7 @@ const Dropdown: React.FC<DropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -91,6 +92,103 @@ const Dropdown: React.FC<DropdownProps> = ({
   useEffect(() => {
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
+
+  // Calculate available space and constrain dropdown height
+  useEffect(() => {
+    if (!isOpen || !dropdownRef.current || !optionsRef.current) return;
+
+    const calculateMaxHeight = () => {
+      const dropdownElement = dropdownRef.current;
+      if (!dropdownElement) return;
+
+      const rect = dropdownElement.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // Find the modal container and footer to calculate available space
+      let modalContentBottom = viewportHeight;
+      
+      // Find the modal container (look for flex container with modal structure)
+      let parent = dropdownElement.parentElement;
+      let modalContainer: HTMLElement | null = null;
+      
+      while (parent && parent !== document.body) {
+        const styles = window.getComputedStyle(parent);
+        // Check if this is a flex container (modal structure)
+        if (styles.display === "flex" && styles.flexDirection === "column") {
+          modalContainer = parent;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      
+      // If we found the modal container, look for the footer within it
+      if (modalContainer) {
+        // Find footer - look for element with border-t (footer border) in the same container
+        const footer = Array.from(modalContainer.children).find((child) => {
+          const childStyles = window.getComputedStyle(child);
+          return childStyles.borderTopWidth !== "0px" || 
+                 child.classList.toString().includes("border-t") ||
+                 child.querySelector('button, [role="button"]'); // Has buttons (action buttons)
+        }) as HTMLElement | undefined;
+        
+        if (footer) {
+          const footerRect = footer.getBoundingClientRect();
+          // Use footer top as the bottom boundary (with some padding)
+          modalContentBottom = footerRect.top - 10; // 10px padding above footer
+        } else {
+          // Fallback: use modal container bottom
+          const containerRect = modalContainer.getBoundingClientRect();
+          modalContentBottom = containerRect.bottom;
+        }
+      }
+      
+      const spaceBelow = modalContentBottom - rect.bottom;
+      const spaceAbove = rect.top;
+      
+      // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
+      // Use same max-height as Select (400px) for longer dropdown
+      const maxHeight = Math.min(
+        spaceBelow - 20, // 20px padding from bottom/footer
+        spaceAbove - 20, // 20px padding from top (if we need to open upward)
+        400
+      );
+
+      if (optionsRef.current) {
+        optionsRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px
+      }
+    };
+
+    // Calculate on open
+    calculateMaxHeight();
+
+    // Use a more efficient scroll handler with throttling
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = () => {
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(calculateMaxHeight, 50);
+    };
+    
+    // Listen to scroll on document and modal containers
+    document.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", calculateMaxHeight);
+
+    // Ensure wheel events work for desktop scrolling
+    const handleWheel = (e: WheelEvent) => {
+      if (optionsRef.current && optionsRef.current.contains(e.target as Node)) {
+        // Allow scrolling within dropdown, prevent modal scroll
+        e.stopPropagation();
+      }
+    };
+    
+    document.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+
+    return () => {
+      window.removeEventListener("resize", calculateMaxHeight);
+      document.removeEventListener("scroll", handleScroll, true);
+      document.removeEventListener("wheel", handleWheel, { capture: true });
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
+  }, [isOpen]);
 
   const selectedOption = options.find((option) => option.value === value);
 
@@ -129,8 +227,8 @@ const Dropdown: React.FC<DropdownProps> = ({
           focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
           ${
             compact
-              ? "px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm lg:px-4 lg:py-2.5 lg:text-base"
-              : "px-3 py-2 text-sm sm:px-4 sm:py-2.5 sm:text-base"
+              ? "px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm"
+              : "px-3 py-2 sm:px-4 sm:py-2.5 text-sm"
           }
           ${
             error
@@ -174,7 +272,17 @@ const Dropdown: React.FC<DropdownProps> = ({
       {isOpen && (
         <div
           id="dropdown-options"
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto"
+          ref={optionsRef}
+          data-dropdown-list
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+          style={{
+            touchAction: "pan-y",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "contain",
+            WebkitTransform: "translateZ(0)",
+            transform: "translateZ(0)",
+          }}
+          onWheel={(e) => e.stopPropagation()}
         >
           {options.length === 0 ? (
             <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
@@ -187,6 +295,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                   type="button"
                   onClick={() => handleOptionClick(option.value)}
                   disabled={option.disabled}
+                  style={{ touchAction: "pan-y" }}
                   className={`
                     w-full px-4 py-3 text-left text-sm transition-colors duration-150
                     flex items-center justify-between gap-2

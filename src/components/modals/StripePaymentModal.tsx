@@ -284,6 +284,8 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [elementsError, setElementsError] = useState<string | null>(null);
   const [currentUpgradeInfo, setCurrentUpgradeInfo] = useState(upgradeInfo); // ✅ State for upgrade info
+  // ✅ STRIPE BEST PRACTICE: Track selected payment method type to prevent form submit for wallet payments
+  const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState<"card" | "wallet" | null>(null);
 
   // Debug logging and timeout
   React.useEffect(() => {
@@ -312,6 +314,18 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
     event.preventDefault();
 
     if (!stripe || !elements) {
+      return;
+    }
+
+    // ✅ STRIPE BEST PRACTICE: Wallet payments must be initiated ONLY by clicking the wallet button directly
+    // Do NOT process wallet payments through form submit - Stripe handles this internally
+    if (selectedPaymentMethodType === "wallet") {
+      console.log("⚠️ Wallet payment selected - form submit ignored. User must click wallet button directly.");
+      showToast({
+        type: "error",
+        title: "Wallet Payment",
+        message: "Please click the wallet payment button (Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main Pay button.",
+      });
       return;
     }
 
@@ -538,6 +552,24 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
                 console.error("PaymentElement load error:", error);
                 setElementsError("Failed to load payment form");
               }}
+              onChange={(event) => {
+                // ✅ STRIPE BEST PRACTICE: Detect payment method type to prevent form submit for wallet payments
+                const paymentMethodType = event.value?.type;
+                const isWalletPayment = 
+                  paymentMethodType === "apple_pay" || 
+                  paymentMethodType === "google_pay" || 
+                  paymentMethodType === "link" ||
+                  (paymentMethodType && typeof paymentMethodType === "string" && paymentMethodType.includes("pay"));
+                
+                if (isWalletPayment) {
+                  setSelectedPaymentMethodType("wallet");
+                  console.log("✅ Wallet payment method selected - Pay button will be disabled");
+                } else if (paymentMethodType === "card") {
+                  setSelectedPaymentMethodType("card");
+                } else {
+                  setSelectedPaymentMethodType(null);
+                }
+              }}
             />
           )}
         </div>
@@ -549,7 +581,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
         </Button>
         <Button
           type="submit"
-          disabled={!stripe || !elements || isProcessing}
+          disabled={!stripe || !elements || isProcessing || selectedPaymentMethodType === "wallet"}
           className="flex-1 bg-green-600 hover:bg-green-700"
         >
           {isProcessing ? (

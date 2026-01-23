@@ -24,7 +24,7 @@ export interface SubscriptionData {
   mobile?: string;
   packageId: string;
   password?: string; // Made optional for passwordless users
-  paymentMethodId: string; // Payment method from SetupIntent
+  paymentMethodId?: string; // ✅ STRIPE BEST PRACTICE: Optional - subscription can be created without payment method upfront
   idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;
@@ -55,7 +55,7 @@ export interface OneTimePurchaseData {
  */
 export interface ExistingUserSubscriptionData {
   packageId: string;
-  paymentMethodId: string; // Payment method from SetupIntent
+  paymentMethodId?: string; // ✅ STRIPE BEST PRACTICE: Optional - subscription can be created without payment method upfront
   idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
   referralCode?: string;
   affiliateCode?: string;

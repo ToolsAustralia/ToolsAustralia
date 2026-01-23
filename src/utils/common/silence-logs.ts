@@ -127,10 +127,14 @@ function silenceConsole(): void {
   }
 
   // Check if we're in production or if SILENCE_LOGS is explicitly set
+  // ✅ FIX: Only silence logs in production, not in staging
+  // This allows console logs to work in staging environment for debugging
+  // ✅ TEMPORARY: Allow ENABLE_CONSOLE_LOGS to override production log silencing for debugging
   const isProduction = typeof process !== "undefined" && process.env && process.env.NODE_ENV === "production";
+  const enableLogs = typeof process !== "undefined" && process.env && process.env.ENABLE_CONSOLE_LOGS === "true";
 
   const shouldSilence =
-    isProduction || (typeof process !== "undefined" && process.env && process.env.SILENCE_LOGS === "true");
+    (isProduction && !enableLogs) || (typeof process !== "undefined" && process.env && process.env.SILENCE_LOGS === "true");
 
   if (!shouldSilence) {
     return;

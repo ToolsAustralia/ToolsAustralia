@@ -55,6 +55,8 @@ const PaymentForm: React.FC<{
   const [isProcessing, setIsProcessing] = useState(false);
   const { savePaymentMethod } = useSavedPaymentMethods();
   const { userData } = useUserContext();
+  // ✅ STRIPE BEST PRACTICE: Track selected payment method type to prevent form submit for wallet payments
+  const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState<"card" | "wallet" | null>(null);
   
   // Build billing details - MUST include name (Stripe requirement when billingDetails: "never")
   // This matches the pattern used in PaymentMethodSelector
@@ -81,6 +83,18 @@ const PaymentForm: React.FC<{
     event.preventDefault();
 
     if (!stripe || !elements) {
+      return;
+    }
+
+    // ✅ STRIPE BEST PRACTICE: Wallet payments must be initiated ONLY by clicking the wallet button directly
+    // Do NOT process wallet payments through form submit - Stripe handles this internally
+    if (selectedPaymentMethodType === "wallet") {
+      console.log("⚠️ Wallet payment selected - form submit ignored. User must click wallet button directly.");
+      showToast({
+        type: "error",
+        title: "Wallet Payment",
+        message: "Please click the wallet payment button (Google Pay, Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main Pay button.",
+      });
       return;
     }
 
@@ -229,6 +243,24 @@ const PaymentForm: React.FC<{
                 },
               }}
               id="payment-element"
+              onChange={(event) => {
+                // ✅ STRIPE BEST PRACTICE: Detect payment method type to prevent form submit for wallet payments
+                const paymentMethodType = event.value?.type;
+                const isWalletPayment = 
+                  paymentMethodType === "apple_pay" || 
+                  paymentMethodType === "google_pay" || 
+                  paymentMethodType === "link" ||
+                  (paymentMethodType && typeof paymentMethodType === "string" && paymentMethodType.includes("pay"));
+                
+                if (isWalletPayment) {
+                  setSelectedPaymentMethodType("wallet");
+                  console.log("✅ Wallet payment method selected - Pay button will be disabled");
+                } else if (paymentMethodType === "card") {
+                  setSelectedPaymentMethodType("card");
+                } else {
+                  setSelectedPaymentMethodType(null);
+                }
+              }}
             />
           )}
         </div>
@@ -247,7 +279,7 @@ const PaymentForm: React.FC<{
         </Button>
         <Button
           type="submit"
-          disabled={!stripe || (!elements && !selectedPaymentMethod) || isProcessing}
+          disabled={!stripe || (!elements && !selectedPaymentMethod) || isProcessing || selectedPaymentMethodType === "wallet"}
           className="flex-1 bg-red-600 hover:bg-red-700 text-sm sm:text-base"
           size="sm"
         >
@@ -575,38 +607,9 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
                   fontSizeBase: "14px",
                 },
                 rules: {
-                  ".Tab": {
-                    display: "flex",
-                    alignItems: "center",
-                    flexDirection: "row",
-                    gap: "8px",
-                  },
-                  ".Tab--selected": {
-                    display: "flex",
-                    alignItems: "center",
-                    flexDirection: "row",
-                    gap: "8px",
-                  },
-                  "button[role='tab']": {
-                    display: "flex",
-                    alignItems: "center",
-                    flexDirection: "row",
-                    gap: "8px",
-                  },
-                  ".TabIcon, svg, img": {
-                    display: "inline-flex",
-                    alignItems: "center",
-                    flexShrink: "0",
-                    marginRight: "0",
-                  },
-                  ".TabLabel, span": {
-                    display: "inline-flex",
-                    alignItems: "center",
-                  },
                   ".Input": {
                     fontSize: "14px",
                     padding: "10px",
-                    minHeight: "auto",
                   },
                 },
               },

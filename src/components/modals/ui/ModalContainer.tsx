@@ -143,15 +143,22 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     if (!scrollableElement) return;
 
     /**
+     * Check if target is inside a dropdown options list (nested scrollable).
+     * We must NOT prevent default for these so mobile touch/swipe scroll works.
+     */
+    const isInsideDropdownList = (el: EventTarget | null) =>
+      el && (el as Element).closest?.("[data-dropdown-list]");
+
+    /**
      * Prevent scroll propagation when modal is at boundaries
      * This stops the body from scrolling when user tries to scroll past modal limits
      */
     const handleWheel = (e: WheelEvent) => {
+      if (isInsideDropdownList(e.target)) return;
       const { scrollTop, scrollHeight, clientHeight } = scrollableElement;
       const isAtTop = scrollTop === 0;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
 
-      // If at top and scrolling up, or at bottom and scrolling down, prevent default
       if ((isAtTop && e.deltaY < 0) || (isAtBottom && e.deltaY > 0)) {
         e.preventDefault();
         e.stopPropagation();
@@ -159,17 +166,19 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     };
 
     /**
-     * Prevent touch scroll propagation when modal is at boundaries
-     * This is crucial for mobile devices
+     * Prevent touch scroll propagation when modal is at boundaries.
+     * Skip entirely when touching a dropdown list so mobile swipe-to-scroll works.
      */
     let touchStartY = 0;
 
     const handleTouchStart = (e: TouchEvent) => {
+      if (isInsideDropdownList(e.target)) return;
       touchStartY = e.touches[0].clientY;
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!scrollableElement) return;
+      if (isInsideDropdownList(e.target)) return;
 
       const touchY = e.touches[0].clientY;
       const deltaY = touchStartY - touchY;
@@ -178,11 +187,9 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       const isAtTop = scrollTop === 0;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
 
-      // If at top and trying to scroll up, or at bottom and trying to scroll down, prevent
       if ((isAtTop && deltaY < 0) || (isAtBottom && deltaY > 0)) {
         e.preventDefault();
         e.stopPropagation();
-        return false;
       }
     };
 

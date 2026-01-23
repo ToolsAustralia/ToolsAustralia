@@ -22,6 +22,7 @@ export interface SubscriptionResponseData {
   status: string;
   customerId?: string;
   userId?: string;
+  warning?: string; // Optional warning message when PaymentIntent is not immediately available
 }
 
 /**
@@ -141,12 +142,22 @@ export function extractSubscriptionData(response: unknown): SubscriptionResponse
   // Status is optional but should have a default
   const finalStatus = status || "unknown";
 
+  // Extract warning if present
+  let warning: string | undefined;
+  if (responseObj.data && typeof responseObj.data === "object") {
+    const data = responseObj.data as Record<string, unknown>;
+    if (typeof data.warning === "string") {
+      warning = data.warning;
+    }
+  }
+
   return {
     subscriptionId,
     clientSecret,
     status: finalStatus,
     customerId,
     userId,
+    warning,
   };
 }
 

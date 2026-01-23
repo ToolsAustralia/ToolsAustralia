@@ -67,9 +67,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={onIconClick}
-                className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 active:text-gray-900 p-2 sm:p-1.5 z-10"
+                style={{ touchAction: "manipulation" }}
+                aria-label="Toggle password visibility"
               >
-                <Icon className="w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+                <Icon className="w-5 h-5 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
               </button>
             ) : (
               <Icon className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-400" />
@@ -92,7 +94,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             autoComplete={autoComplete}
             className={`w-full px-3 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3 text-sm border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
               Icon && !onIconClick ? "pl-9 sm:pl-10" : ""
-            } ${Icon && onIconClick ? "pr-9 sm:pr-10" : ""} ${error ? "border-red-500 bg-red-50" : "border-gray-300"} ${
+            } ${Icon && onIconClick ? "pr-14 sm:pr-10" : ""} ${error ? "border-red-500 bg-red-50" : "border-gray-300"} ${
               disabled ? "bg-gray-100 cursor-not-allowed" : "hover:border-red-400 hover:shadow-sm"
             } ${className}`}
           />

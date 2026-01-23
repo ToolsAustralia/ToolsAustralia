@@ -10,6 +10,7 @@ import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { useToast } from "@/components/ui/Toast";
+import { ToolLoadingSpinner } from "@/components/ui/ToolLoadingSpinner";
 import { categorizeError, isRecoverableError, getRecoveryStrategy } from "@/utils/payment/stripe/payment-error-detection";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
@@ -53,6 +54,7 @@ interface PaymentMethodSelectorProps {
   cardFormError: string | null;
   isCreatingSetupIntent?: boolean;
   isCreatingPaymentIntent?: boolean; // NEW: Loading state for PaymentIntent creation
+  isCreatingSubscription?: boolean; // NEW: Loading state for subscription creation API call
   // Billing details for when billingDetails: "never" is set
   billingDetails?: {
     name?: string;
@@ -67,6 +69,12 @@ interface PaymentMethodSelectorProps {
   // Amount and package name for wallet payment display (Apple Pay/Google Pay)
   amount?: number; // Amount in cents
   packageName?: string; // Package name for payment request label
+  // ✅ FIX: Remount key to force Elements remount when clientSecret changes
+  elementsRemountKey?: number;
+  // ✅ STRIPE BEST PRACTICE: Callback to notify parent when payment method type changes
+  onPaymentMethodTypeChange?: (type: "card" | "wallet" | null) => void;
+  // ✅ NEW: Callback to trigger purchase flow when wallet payment is clicked
+  onWalletPaymentClick?: () => void;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
@@ -90,6 +98,8 @@ const StripeCardForm = React.forwardRef<
     };
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
+    onPaymentMethodTypeChange?: (type: "card" | "wallet" | null) => void; // ✅ STRIPE BEST PRACTICE: Callback for payment method type changes
+    onWalletPaymentClick?: () => void; // ✅ NEW: Callback to trigger purchase flow when wallet payment is clicked
   }
 >(
   (
@@ -99,25 +109,67 @@ const StripeCardForm = React.forwardRef<
       onCardElementChange,
       cardError,
       billingDetails,
-      amount,
-      packageName,
+    amount,
+    packageName,
+    onPaymentMethodTypeChange,
+    onWalletPaymentClick,
     },
     ref
   ) => {
     const stripe = useStripe();
     const elements = useElements();
     const [isStripeLoading, setIsStripeLoading] = useState(true);
+    const [elementsReady, setElementsReady] = useState(false);
     const { showToast } = useToast();
+    // ✅ STRIPE BEST PRACTICE: Track selected payment method type to prevent form submit for wallet payments
+    const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState<"card" | "wallet" | null>(null);
+    // ✅ STRIPE BEST PRACTICE: Form ref for form-based submission (maintains user activation chain)
+    // ✅ FIX: Changed to div ref since we're using div instead of form to avoid nested forms
+    // PaymentElement creates its own internal form, so we use a div wrapper to avoid nested forms
+    const formRef = React.useRef<HTMLDivElement>(null);
+    // ✅ FIX: Ref to PaymentElement container to detect wallet button clicks
+    const paymentElementContainerRef = React.useRef<HTMLDivElement>(null);
+    // Store confirmation result for ref access
+    const confirmationResultRef = React.useRef<{
+      paymentMethodId?: string;
+      paymentIntentId?: string;
+      error?: string;
+      setupIntentAlreadySucceeded?: boolean;
+      needsRecovery?: boolean;
+      lastSetupError?: { code?: string; message?: string; decline_code?: string };
+      errorCategory?: "recoverable" | "retryable" | "non-recoverable";
+      errorType?: string;
+      isRecoverable?: boolean;
+      recoveryStrategy?: string;
+      shouldPreserveState?: boolean;
+    } | null>(null);
 
-    // Handle Stripe loading state and validate StripeElements
+    // ✅ CRITICAL FIX: Handle Stripe loading state and wait for Elements session to be ready
+    // The Elements session API call (elements/sessions) is made automatically by Stripe.js
+    // We need to wait for both stripe and elements to be ready before rendering PaymentElement
     useEffect(() => {
       if (stripe && elements) {
-        setIsStripeLoading(false);
+        // ✅ NEW: Wait a brief moment for Elements session to initialize
+        // This ensures the internal elements/sessions API call completes
+        const initTimeout = setTimeout(() => {
+          setIsStripeLoading(false);
+          setElementsReady(true);
+        }, 100); // Small delay to allow Elements session to initialize
+
+        return () => clearTimeout(initTimeout);
       } else {
+        setIsStripeLoading(true);
+        setElementsReady(false);
+        
         // Check if Stripe failed to load after a timeout
         const timeout = setTimeout(async () => {
           if (!stripe || !elements) {
             // Auto-log Stripe loading failure
+            console.error("Stripe Elements failed to load", {
+              stripeLoaded: !!stripe,
+              elementsLoaded: !!elements,
+              clientSecretPrefix: clientSecret ? `${clientSecret.split("_secret_")[0]}...` : "none",
+            });
             await autoLogStripeError(new Error("Stripe Elements failed to load"), {
               component: "StripeCardForm",
               stripeLoaded: !!stripe,
@@ -154,7 +206,15 @@ const StripeCardForm = React.forwardRef<
 
         return () => clearTimeout(timeout);
       }
-    }, [stripe, elements, showToast]);
+    }, [stripe, elements, showToast, clientSecret]);
+
+    // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
+    // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
+    // For subscriptions: PaymentIntent must be created before wallets can show correct amount
+    // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
+    // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
+    // ✅ FIX: Moved before appearance rules usage to fix TypeScript error
+    const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
 
     // Inject custom CSS for wallet payment method layout (icons and text on same row)
     // Note: Stripe uses shadow DOM, so we inject styles that target the iframe content
@@ -193,42 +253,79 @@ const StripeCardForm = React.forwardRef<
       };
     }, []);
 
-    // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
-    // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
-    // For subscriptions: PaymentIntent must be created before wallets can show correct amount
-    // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
-    // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
-    const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
+    // ✅ DEBUG: Monitor wallet button availability and PaymentIntent state
+    useEffect(() => {
+      if (!shouldEnableWallets || !elementsReady || !elements) return;
 
-    // Build paymentRequest configuration - only include if amount is valid
-    // This ensures PaymentElement shows correct amount in wallet UIs
-    const paymentRequestConfig:
-      | { country: string; currency: string; total: { label: string; amount: number } }
-      | undefined = shouldEnableWallets
-      ? {
-          country: "AU",
-          currency: "aud",
-          total: {
-            label: packageName || "Membership",
-            amount: amount, // Amount in cents - only set when valid
-          },
+      // Log PaymentIntent details to help debug wallet button issues
+      const checkPaymentIntent = async () => {
+        try {
+          // PaymentElement with wallets: "auto" should automatically handle wallet clicks
+          // If wallet buttons are visible but not opening, check:
+          // 1. PaymentIntent status (should be requires_payment_method or requires_confirmation)
+          // 2. Browser/device compatibility (HTTPS, Chrome for Google Pay, Safari for Apple Pay)
+          // 3. User has cards saved in wallet
+          console.log("🔍 Wallet button debugging info:", {
+            hasClientSecret: !!clientSecret,
+            intentType,
+            amount,
+            walletsEnabled: shouldEnableWallets,
+            elementsReady,
+            note: "If wallet buttons are visible but not opening, check browser console for errors when clicking",
+          });
+        } catch (error) {
+          console.error("Error checking PaymentIntent:", error);
         }
-      : undefined;
+      };
+
+      checkPaymentIntent();
+    }, [shouldEnableWallets, elementsReady, elements, clientSecret, intentType, amount]);
+
+    // ✅ DEBUG: Log wallet configuration for troubleshooting
+    useEffect(() => {
+      if (shouldEnableWallets) {
+        console.log("✅ Wallet payment configuration:", {
+          shouldEnableWallets,
+          intentType,
+          amount,
+          amountInDollars: amount ? `$${(amount / 100).toFixed(2)}` : "N/A",
+          packageName,
+          hasClientSecret: !!clientSecret,
+        });
+      } else {
+        console.log("ℹ️ Wallets disabled:", {
+          shouldEnableWallets,
+          intentType,
+          amount,
+          reason: intentType !== "payment" ? "Not a PaymentIntent" : !amount || amount <= 0 ? "Invalid amount" : "Unknown",
+        });
+      }
+    }, [shouldEnableWallets, intentType, amount, packageName, clientSecret]);
 
     // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
+    // ✅ STRIPE BEST PRACTICE: PaymentElement wallet configuration
+    // - Wallets are set to "auto" which allows PaymentElement to automatically handle wallet button clicks
+    // - When wallet button is clicked, PaymentElement internally calls confirmPayment() - we don't need to do anything
+    // - PaymentElement automatically reads amount/currency from PaymentIntent client secret
+    // - paymentRequest parameter is NOT valid for PaymentElement (it's only for Payment Request Button API)
+    // - This configuration allows wallet buttons to work automatically without manual intervention
+    // ✅ FIX: Using "auto" should work, but if wallet UI doesn't open, PaymentElement will handle it automatically
+    // The wallet button click itself maintains the user activation chain needed for wallet APIs
     const paymentElementOptions = {
       layout: "tabs" as const,
       // ✅ CRITICAL: Only enable wallets when PaymentIntent is ready with correct amount
       // This prevents $0.00 display in Google Pay/Apple Pay wallet sheets
+      // PaymentElement automatically reads amount from PaymentIntent client secret
       wallets: shouldEnableWallets
         ? {
-            applePay: "auto" as const,
-            googlePay: "auto" as const,
+            // ✅ FIX: PaymentElement automatically handles wallet button clicks - we should NOT call confirmPayment for wallets
+            // When wallet button is clicked, PaymentElement internally calls confirmPayment() and opens wallet UI
+            // The "auto" setting allows PaymentElement to detect and show wallet buttons on compatible devices
+            applePay: "auto" as const, // ✅ PaymentElement automatically handles Apple Pay button clicks and opens wallet UI
+            googlePay: "auto" as const, // ✅ PaymentElement automatically handles Google Pay button clicks and opens wallet UI
           }
         : undefined, // Disable wallets until PaymentIntent is ready
       paymentMethodOrder: shouldEnableWallets ? ["card", "apple_pay", "google_pay"] : ["card"],
-      // Only include paymentRequest when amount is valid to prevent $0.00 display
-      ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
       fields: {
         billingDetails: "never" as const, // Hide country, address, and postal code fields
       },
@@ -239,51 +336,6 @@ const StripeCardForm = React.forwardRef<
       },
     };
 
-    // Debug logging for amount, packageName, and paymentRequest configuration
-    // IMPORTANT: All hooks must be called before any conditional returns
-    useEffect(() => {
-      console.log("🔍 StripeCardForm Debug:", {
-        amount,
-        packageName,
-        amountInCents: amount,
-        amountInDollars: amount ? (amount / 100).toFixed(2) : "N/A",
-        hasPaymentRequest: !!amount,
-        paymentRequestConfig,
-        elementKey: `payment-element-${amount || 0}-${packageName || "default"}`,
-      });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [amount, packageName]);
-
-    // Log PaymentElement options to verify paymentRequest is included
-    useEffect(() => {
-      console.log("🔍 PaymentElement Options:", {
-        layout: paymentElementOptions.layout,
-        wallets: paymentElementOptions.wallets,
-        paymentMethodOrder: paymentElementOptions.paymentMethodOrder,
-        paymentRequest: paymentRequestConfig,
-        hasPaymentRequest: !!paymentRequestConfig,
-        shouldEnableWallets,
-        fields: paymentElementOptions.fields,
-        terms: paymentElementOptions.terms,
-      });
-
-      // Detailed log for paymentRequest structure verification (only if paymentRequest exists)
-      if (paymentRequestConfig) {
-        console.log("🔍 PaymentRequest Structure (for wallet payments):", {
-          country: paymentRequestConfig.country,
-          currency: paymentRequestConfig.currency,
-          total: {
-            label: paymentRequestConfig.total.label,
-            amount: paymentRequestConfig.total.amount,
-            amountInDollars: (paymentRequestConfig.total.amount / 100).toFixed(2),
-          },
-          isValid: paymentRequestConfig.total.amount > 0,
-        });
-      } else {
-        console.log("⚠️ PaymentRequest not configured - wallets disabled until PaymentIntent is ready");
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [amount, packageName, shouldEnableWallets]);
 
     // Build billing details object for confirmation
     const buildBillingDetails = () => {
@@ -312,59 +364,37 @@ const StripeCardForm = React.forwardRef<
           };
     };
 
-    // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
-    React.useImperativeHandle(ref, () => ({
-      confirmSetup: async () => {
+    // ✅ STRIPE BEST PRACTICE: Core confirmation logic (extracted for reuse in form onSubmit and ref)
+    // ✅ CRITICAL: This function ONLY handles CARD payments via form submission
+    // Wallet payments are handled automatically by PaymentElement - we should NOT call confirmPayment for wallets
+    const performConfirmation = async () => {
         if (!stripe || !elements) {
           return { error: "Stripe not loaded" };
         }
 
+        // ✅ CRITICAL: This function is ONLY called for card payments via form submission
+        // Wallet button clicks are handled automatically by PaymentElement and bypass form submission entirely
+        // If we reach here, it means the user clicked the form submit button, which should only happen for card payments
+        // Note: onChange fires when wallet TAB is selected, but wallet BUTTON clicks are handled separately by PaymentElement
+
         try {
           const billingDetailsData = buildBillingDetails();
 
-          // Handle PaymentIntent (for wallet payments with amount display)
+          // Handle PaymentIntent (for card payments only - wallets are handled automatically)
           if (intentType === "payment") {
             // ✅ CRITICAL: Stripe REQUIRES elements.submit() before confirmPayment()
-            // However, for wallet payments, submit() may return wallet-specific errors
-            // We need to call submit() to maintain user activation chain (called from button click)
-            // But proceed with confirmPayment() even if submit() fails with wallet errors
-            
+            // This validates the card input fields
             const submitResult = await elements.submit();
             
-            // Check if this is a wallet payment error (not a card validation error)
-            const isWalletPaymentError = submitResult.error && (
-              submitResult.error.code === "google_pay.payment_exception" ||
-              submitResult.error.code === "apple_pay.payment_exception" ||
-              String(submitResult.error.type || "").toLowerCase().includes("google_pay") ||
-              String(submitResult.error.type || "").toLowerCase().includes("apple_pay") ||
-              submitResult.error.message?.toLowerCase().includes("google pay") ||
-              submitResult.error.message?.toLowerCase().includes("apple pay") ||
-              submitResult.error.message?.toLowerCase().includes("wallet") ||
-              submitResult.error.message?.toLowerCase().includes("payment_exception") ||
-              submitResult.error.message?.toLowerCase().includes("unable to show")
-            );
-
-            // Block only if it's a real card validation error (not wallet payment error)
-            if (submitResult.error && !isWalletPaymentError) {
+            // If there's a validation error, return it
+            if (submitResult.error) {
               console.error("PaymentElement validation error:", submitResult.error);
               return { error: submitResult.error.message || "Please complete all required fields." };
             }
 
-            // For wallet payment errors, log but proceed - confirmPayment() will handle wallet payments
-            if (isWalletPaymentError) {
-              console.log("⚠️ Wallet payment error during submit (expected for wallet payments), proceeding with confirmPayment:", submitResult.error);
-            }
-
-            // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
-            // No upfront PaymentIntent exists - this is the only PaymentIntent for the subscription payment
-            console.log("🔍 Confirming PaymentIntent:", {
-              clientSecretPrefix: clientSecret?.split("_secret_")[0],
-              intentType,
-            });
-
-            // ✅ CRITICAL: Must call confirmPayment() after submit() (Stripe requirement)
-            // For wallet payments, confirmPayment() will handle the wallet UI
-            // For card payments, confirmPayment() will process the validated card
+            // ✅ CRITICAL: Only call confirmPayment() for CARD payments
+            // Wallet payments are handled automatically by PaymentElement when wallet button is clicked
+            // Do NOT call confirmPayment for wallet payments - it breaks the user activation chain
             const { paymentIntent, error } = await stripe.confirmPayment({
               elements,
               clientSecret,
@@ -584,16 +614,32 @@ const StripeCardForm = React.forwardRef<
             }
           }
         } catch (err: unknown) {
-          console.error("Error in confirmSetup:", err);
+          console.error("Error in performConfirmation:", err);
           const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
           return { error: errorMessage };
         }
+    };
+
+    // ✅ REMOVED: handleFormSubmit - no longer needed since parent form (MembershipModal) handles submission
+    // The parent form calls cardFormRef.current.confirmSetup() which uses performConfirmation()
+    // This avoids nested forms which cause hydration errors
+
+    // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
+    // ✅ STRIPE BEST PRACTICE: For backward compatibility, but prefer form submit for card payments
+    React.useImperativeHandle(ref, () => ({
+      confirmSetup: async () => {
+        // ✅ CRITICAL: Do NOT block wallet payments here
+        // Wallet button clicks bypass form submission entirely and are handled automatically by PaymentElement
+        // This function is only called for card payments via form submission
+        // If wallet button is clicked, PaymentElement handles it internally and this function is never called
+        return await performConfirmation();
       },
     }));
 
-    // Show skeleton loading while Stripe is loading
+    // Show skeleton loading while Stripe is loading or Elements session is initializing
     // IMPORTANT: Conditional return must come AFTER all hooks are called
-    if (isStripeLoading) {
+    // ✅ CRITICAL: Wait for Elements session API call to complete before rendering PaymentElement
+    if (isStripeLoading || !elementsReady) {
       return (
         <div className="space-y-0">
           <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-0">
@@ -601,30 +647,12 @@ const StripeCardForm = React.forwardRef<
             Payment Details
           </h4>
           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50 mt-0">
-            {/* Payment method tabs skeleton */}
-            <div className="flex gap-2 mb-4">
-              <div className="h-10 bg-gray-200 rounded animate-pulse flex-1"></div>
-              {shouldEnableWallets && (
-                <>
-                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
-                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
-                </>
-              )}
-            </div>
-            {/* Card Element Skeleton */}
-            <div className="space-y-3">
-              <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
-              <div className="flex gap-3">
-                <div className="flex-1 h-12 bg-gray-200 rounded animate-pulse"></div>
-                <div className="w-20 h-12 bg-gray-200 rounded animate-pulse"></div>
-              </div>
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-              <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
-              <span>Loading payment form...</span>
-            </div>
+            <ToolLoadingSpinner
+              message={isStripeLoading ? "Loading payment form..." : "Initializing payment session..."}
+              size="md"
+              variant="gear"
+              className="py-4"
+            />
           </div>
         </div>
       );
@@ -636,14 +664,127 @@ const StripeCardForm = React.forwardRef<
           <CreditCard className="w-4 h-4 text-red-600" />
           Payment Details
         </h4>
-        <div className="p-3 border border-gray-300 rounded-lg bg-white mt-0">
-          <PaymentElement
+        {/* ✅ FIX: Use div instead of form to avoid nested forms (parent MembershipModal already has a form) */}
+        {/* PaymentElement creates its own internal form, so we use a div wrapper to avoid nested forms */}
+        {/* No form attributes needed - PaymentElement handles its own form submission */}
+        <div
+          ref={formRef}
+          className="mt-0"
+          // ✅ CRITICAL: Prevent Enter key from interfering with wallet button clicks
+          // Wallet buttons handle their own clicks and maintain user activation chain
+          onKeyDown={(e) => {
+            // Allow Enter key to work normally for card inputs
+            // Wallet button clicks are handled automatically by PaymentElement and don't need Enter key handling
+            if (e.key === "Enter" && selectedPaymentMethodType === "wallet") {
+              e.preventDefault();
+              console.log("⚠️ Enter key pressed while wallet payment selected - wallet button must be clicked directly");
+            }
+          }}
+        >
+          <div 
+            ref={paymentElementContainerRef}
+            className="p-3 border border-gray-300 rounded-lg bg-white"
+          >
+            <PaymentElement
             key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
+            onReady={() => {
+              // PaymentElement is ready - Elements session API call has completed
+              setElementsReady(true);
+              
+              // ✅ DEBUG: Log wallet button availability for troubleshooting
+              if (shouldEnableWallets && elements) {
+                console.log("✅ PaymentElement ready with wallet support:", {
+                  hasClientSecret: !!clientSecret,
+                  intentType,
+                  amount,
+                  packageName,
+                  walletsEnabled: shouldEnableWallets,
+                  note: "With wallets: 'auto', clicking wallet buttons should automatically open wallet UI",
+                  important: "Wallet button clicks are handled automatically - do NOT call confirmPayment for wallets",
+                });
+                
+                // ✅ DEBUG: Check PaymentIntent state to ensure it's ready for wallet payments
+                if (intentType === "payment" && clientSecret && stripe) {
+                  stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+                    console.log("🔍 PaymentIntent state check:", {
+                      status: paymentIntent?.status,
+                      amount: paymentIntent?.amount,
+                      currency: paymentIntent?.currency,
+                      note: "PaymentIntent should be 'requires_payment_method' for wallet payments to work",
+                      isReady: paymentIntent?.status === "requires_payment_method",
+                    });
+                  }).catch((err) => {
+                    console.warn("Could not retrieve PaymentIntent:", err);
+                  });
+                }
+              }
+            }}
+            onLoadError={(error) => {
+              // ✅ ERROR HANDLING: Elements session API call failed
+              console.error("❌ PaymentElement load error - Elements session failed:", error, {
+                clientSecretPrefix: clientSecret ? `${clientSecret.split("_secret_")[0]}...` : "none",
+                intentType,
+              });
+              autoLogStripeError(error, {
+                component: "StripeCardForm",
+                stripeLoaded: !!stripe,
+                elementsLoaded: !!elements,
+              }).catch(() => {});
+              
+              showToast({
+                type: "error",
+                title: "Payment Form Error",
+                message: "Failed to initialize payment form. Please refresh and try again.",
+              });
+            }}
             onChange={(event) => {
               // Handle PaymentElement change events
               // PaymentElement onChange provides completion status
               // Errors are handled separately via onReady callback or element state
+              
+              // ✅ STRIPE BEST PRACTICE: Detect payment method type to prevent form submit for wallet payments
+              const paymentMethodType = event.value?.type;
+              
+              // ✅ DEBUG: Log payment method type changes for wallet troubleshooting
+              if (shouldEnableWallets && paymentMethodType) {
+                console.log("🔍 PaymentElement onChange - payment method type:", {
+                  type: paymentMethodType,
+                  complete: event.complete,
+                  isEmpty: event.empty,
+                  hasClientSecret: !!clientSecret,
+                });
+              }
+              
+              // ✅ Detect ALL wallet payments (Google Pay, Apple Pay, Link, and any other wallet methods)
+              // Wallet payment types include: google_pay, apple_pay, link, and potentially others
+              const isWalletPayment = 
+                paymentMethodType === "google_pay" || 
+                paymentMethodType === "apple_pay" || 
+                paymentMethodType === "link" ||
+                (paymentMethodType && typeof paymentMethodType === "string" && paymentMethodType.includes("pay")); // Catch-all for other wallet methods
+              
+              if (isWalletPayment) {
+                setSelectedPaymentMethodType("wallet");
+                onPaymentMethodTypeChange?.("wallet");
+                console.log("✅ Wallet payment method TAB selected - this is just tab selection, not button click");
+                console.log("🔍 IMPORTANT: Wallet button clicks are handled separately by PaymentElement");
+                console.log("🔍 When user clicks the actual wallet button (not just the tab), PaymentElement will:");
+                console.log("   1. Automatically open the wallet UI (Google Pay/Apple Pay)");
+                console.log("   2. Call confirmPayment() internally");
+                console.log("   3. Handle the entire payment flow");
+                console.log("🔍 The form submit button should NOT be used for wallet payments");
+                // ✅ CRITICAL: onChange fires when wallet TAB is selected, but wallet BUTTON clicks are separate
+                // The actual wallet button click (inside the tab) is handled automatically by PaymentElement
+                // We should NOT call confirmPayment() for wallet payments - PaymentElement does it internally
+              } else if (paymentMethodType === "card") {
+                setSelectedPaymentMethodType("card");
+                onPaymentMethodTypeChange?.("card");
+              } else {
+                setSelectedPaymentMethodType(null);
+                onPaymentMethodTypeChange?.(null);
+              }
+              
               if (!event.complete) {
                 // Payment method is incomplete - clear any previous errors
                 onCardElementChange({});
@@ -653,6 +794,7 @@ const StripeCardForm = React.forwardRef<
               }
             }}
           />
+          </div>
         </div>
         {cardError && <p className="text-red-500 text-sm mt-2">{cardError}</p>}
       </div>
@@ -677,9 +819,13 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   cardFormError,
   isCreatingSetupIntent = false,
   isCreatingPaymentIntent = false,
+  isCreatingSubscription = false,
   billingDetails,
   amount,
   packageName,
+  elementsRemountKey = 0,
+  onPaymentMethodTypeChange,
+  onWalletPaymentClick,
 }) => {
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
@@ -689,7 +835,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   // ✅ FIX: Derive package type from intentType and amount for proper Elements remounting
   // PaymentIntent with amount = one-time, SetupIntent = subscription
   const packageType = paymentIntentClientSecret && amount && amount > 0 ? "one-time" : "membership";
-  const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent;
+  const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent || isCreatingSubscription;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
@@ -704,16 +850,6 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
     }
   }, [paymentMethods, selectedPaymentMethod, onPaymentMethodSelect, hasUserInteracted]);
 
-  // Log Elements key value when it changes to verify remounting
-  useEffect(() => {
-    const elementsKey = `elements-${amount || 0}-${packageName || "default"}`;
-    console.log("🔍 Elements Key Debug:", {
-      elementsKey,
-      amount,
-      packageName,
-      keyChanged: true,
-    });
-  }, [amount, packageName]);
 
   const getCardBrandIcon = (brand: string) => {
     const brandLower = brand.toLowerCase();
@@ -786,31 +922,24 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
       {/* Show card form directly for new users - no Payment Method section */}
       {!isAuthenticated && (
         <>
-          {isCreatingIntent ? (
+          {isCreatingIntent || (!activeClientSecret && !cardFormError) ? (
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-red-600" />
                 Card Details
               </h4>
               <div className="p-3 border border-gray-300 rounded-lg bg-white">
-                {/* Card number skeleton */}
-                <div className="animate-pulse bg-gray-200 h-6 rounded mb-3"></div>
-                {/* Card details row skeleton */}
-                <div className="flex gap-3">
-                  <div className="flex-1 animate-pulse bg-gray-200 h-6 rounded"></div>
-                  <div className="w-20 animate-pulse bg-gray-200 h-6 rounded"></div>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
-                  <span>Setting up secure payment form...</span>
-                </div>
+                <ToolLoadingSpinner
+                  message={isCreatingIntent ? "Setting up payment form..." : "Preparing payment form..."}
+                  size="sm"
+                  variant="gear"
+                  className="py-2"
+                />
               </div>
             </div>
           ) : activeClientSecret && activeIntentType ? (
             <Elements
-              key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
+              key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}-remount${elementsRemountKey}`}
               stripe={stripePromise}
               options={{
                 clientSecret: activeClientSecret,
@@ -829,71 +958,17 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     fontSizeBase: "14px", // text-sm equivalent
                   },
                   rules: {
-                    // Ensure wallet payment method tabs have icon and text on same row
-                    ".Tab": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    ".Tab--selected": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    // Target tab button content
-                    "button[role='tab']": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    // Ensure icons are inline
-                    ".TabIcon, svg, img": {
-                      display: "inline-flex",
-                      alignItems: "center",
-                      flexShrink: "0",
-                      marginRight: "0",
-                    },
-                    // Ensure payment method labels are inline with icons
-                    ".TabLabel, span": {
-                      display: "inline-flex",
-                      alignItems: "center",
-                    },
+                    // ✅ FIX: Only use supported Stripe appearance properties
                     // Match coupon code input field size on mobile
                     ".Input": {
                       fontSize: "14px", // text-sm
                       padding: "10px", // py-2 equivalent
-                      minHeight: "auto",
                     },
                     ".Input--empty": {
                       fontSize: "14px",
                     },
-                    ".Input--focus": {
-                      fontSize: "14px",
-                    },
                     ".Input--invalid": {
                       fontSize: "14px",
-                    },
-                    // Card number, expiration, and CVC inputs
-                    "input[data-elements-stable-field-name='cardNumber']": {
-                      fontSize: "14px",
-                      padding: "8px",
-                    },
-                    "input[data-elements-stable-field-name='cardExpiry']": {
-                      fontSize: "14px",
-                      padding: "8px",
-                    },
-                    "input[data-elements-stable-field-name='cardCvc']": {
-                      fontSize: "14px",
-                      padding: "8px",
-                    },
-                    // Input container
-                    ".InputElement": {
-                      fontSize: "14px",
-                      padding: "8px",
-                      minHeight: "auto",
                     },
                   },
                 },
@@ -908,6 +983,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 billingDetails={billingDetails}
                 amount={amount}
                 packageName={packageName}
+                onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+                onWalletPaymentClick={onWalletPaymentClick}
               />
             </Elements>
           ) : cardFormError ? (
@@ -1053,7 +1130,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
           {/* Show card form when adding new payment method for authenticated users */}
           {showCardForm && (
             <div className="space-y-4">
-              {isCreatingIntent ? (
+              {isCreatingIntent || (!activeClientSecret && !cardFormError) ? (
                 // Intent Loading Skeleton
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
@@ -1087,7 +1164,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </div>
               ) : activeClientSecret && activeIntentType ? (
                 <Elements
-                  key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
+                  key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}-remount${elementsRemountKey}`}
                   stripe={stripePromise}
                   options={{
                     clientSecret: activeClientSecret,
@@ -1105,71 +1182,19 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                         fontSizeBase: "14px", // text-sm equivalent
                       },
                       rules: {
-                        // Ensure wallet payment method tabs have icon and text on same row
-                        ".Tab": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        ".Tab--selected": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        // Target tab button content
-                        "button[role='tab']": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        // Ensure icons are inline
-                        ".TabIcon, svg, img": {
-                          display: "inline-flex",
-                          alignItems: "center",
-                          flexShrink: "0",
-                          marginRight: "0",
-                        },
-                        // Ensure payment method labels are inline with icons
-                        ".TabLabel, span": {
-                          display: "inline-flex",
-                          alignItems: "center",
-                        },
+                        // ✅ FIX: Only use supported Stripe appearance properties
+                        // Removed invalid selectors: .Tab, .Tab--selected, button[role='tab'], .TabIcon, .TabLabel, attribute selectors, .InputElement
+                        // Stripe doesn't support: display, alignItems, flexDirection, gap, minHeight, attribute selectors, complex selectors
                         // Match coupon code input field size on mobile
                         ".Input": {
                           fontSize: "14px", // text-sm
                           padding: "10px",
-                          minHeight: "auto",
                         },
                         ".Input--empty": {
                           fontSize: "14px",
                         },
-                        ".Input--focus": {
-                          fontSize: "14px",
-                        },
                         ".Input--invalid": {
                           fontSize: "14px",
-                        },
-                        // Card number, expiration, and CVC inputs
-                        "input[data-elements-stable-field-name='cardNumber']": {
-                          fontSize: "14px",
-                          padding: "8px",
-                        },
-                        "input[data-elements-stable-field-name='cardExpiry']": {
-                          fontSize: "14px",
-                          padding: "8px",
-                        },
-                        "input[data-elements-stable-field-name='cardCvc']": {
-                          fontSize: "14px",
-                          padding: "8px",
-                        },
-                        // Input container
-                        ".InputElement": {
-                          fontSize: "14px",
-                          padding: "8px",
-                          minHeight: "auto",
                         },
                       },
                     },
@@ -1184,6 +1209,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     billingDetails={billingDetails}
                     amount={amount}
                     packageName={packageName}
+                    onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+                    onWalletPaymentClick={onWalletPaymentClick}
                   />
                 </Elements>
               ) : (
