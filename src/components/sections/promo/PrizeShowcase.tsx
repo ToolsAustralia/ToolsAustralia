@@ -17,6 +17,7 @@ import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
 import { useSearchParams } from "next/navigation";
+import type { PrizeCatalogEntry } from "@/config/prizes";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -214,7 +215,7 @@ const getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash
 };
 
 // Helper function to filter prizes by toolbox type
-const filterPrizesByToolboxType = (prizes: any[], toolboxType: "sidchrome" | "milwaukee" | "cash") => {
+const filterPrizesByToolboxType = (prizes: PrizeCatalogEntry[], toolboxType: "sidchrome" | "milwaukee" | "cash") => {
   if (toolboxType === "cash") {
     return prizes.filter((p) => p.slug === "cash-prize");
   }
