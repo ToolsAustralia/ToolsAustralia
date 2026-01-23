@@ -140,6 +140,15 @@
   }
 }
 
+/* Dropdown lists: ensure native touch/swipe scroll on mobile */
+@layer utilities {
+  [data-dropdown-list] {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+}
+
 /* Metallic 404 Page Animations */
 @keyframes pulse-slow {
   0%,
