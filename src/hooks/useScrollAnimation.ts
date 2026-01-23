@@ -41,6 +41,8 @@ export function useScrollAnimation() {
     }
 
     // Create IntersectionObserver with configuration
+    // On mobile, use larger rootMargin to prevent scroll snapping
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -51,7 +53,7 @@ export function useScrollAnimation() {
       },
       {
         threshold: 0.1,
-        rootMargin: "0px 0px -50px 0px",
+        rootMargin: isMobile ? "0px 0px -200px 0px" : "0px 0px -50px 0px",
       }
     );
 

@@ -164,7 +164,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         initialVariantConfig={serverAssignment?.variantConfig}
         initialAnonymousId={serverAssignment?.anonymousId}
       >
-        <div className="min-h-screen bg-white w-full overflow-hidden scroll-smooth">
+        <div className="min-h-screen bg-white w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
           <main className="w-full overflow-hidden ">

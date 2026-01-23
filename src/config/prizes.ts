@@ -44,7 +44,7 @@ export interface PrizeCatalogEntry {
   cardBackgroundImage?: string; // Optional background image for toggle cards
 }
 
-export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "cash-prize";
+export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "milwaukee-milwaukee" | "dewalt-milwaukee" | "makita-milwaukee" | "cash-prize";
 
 export const SIDCHROME_SCMT11402_TOOL_KIT: PrizeSpecItem = {
   name: "Sidchrome SCMT11402 356 Piece Tool Kit & Storage",
@@ -327,6 +327,30 @@ export const MILWAUKEE_POWER_SYSTEM: PrizeSpecItem[] = [
 
 // Single source Sidchrome storage so both prize packs stay in sync.
 export const MILWAUKEE_WORKSHOP_STORAGE: PrizeSpecItem[] = [SIDCHROME_SCMT11402_TOOL_KIT];
+
+// Milwaukee Toolbox specs
+export const MILWAUKEE_TOOLBOX: PrizeSpecItem = {
+  name: "MILWAUKEE 56\" High Capacity Combination Tool Storage",
+  model: "48228559",
+  description:
+    "The next generation of MILWAUKEE high capacity steel tool storage featuring welded steel construction with 18 gauge steel construction and 6 gauge angle iron base. The 56\" High Capacity Combination has a 4-outlet/2USB power strip mounted inside the chest and one on the side of the trolley. Cord hooks are included to wrap the power cords for storage.",
+  specifications: [
+    "Heavy Duty 18 Gauge Construction built for ultimate durability",
+    "68KG Soft Close Drawer Slides",
+    "Electronic Lock for easy locking and unlocking without a key",
+    "Reinforced angle iron Frame And 6\" Industrial Casters",
+    "4-outlet/2USB power strip mounted inside chest till; cord hooks included to wrap the power cords for storage",
+    "22\" Depth For additional storage capacity",
+    "Includes pre-cut, premium PVC solid drawer liners and a thick top mat to keep your tools in place",
+    "Power tool organiser",
+    "Paper towel holder and 2 large J-hooks can be mounted on either side of the chest, high or low, to suit your preference",
+    "The cabinet has 2 full-width drawers in cabinet for storage of longer items",
+    "Privacy Drawer with separate lock in chest for personal items",
+  ],
+};
+
+// Storage for Milwaukee toolbox prizes
+export const MILWAUKEE_TOOLBOX_STORAGE: PrizeSpecItem[] = [MILWAUKEE_TOOLBOX];
 
 export const DEWALT_SIDCHROME_POWER_TOOLS: PrizeSpecItem[] = [
   {
@@ -913,27 +937,27 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     detailedDescription:
       "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$35,000+ Value",
-    cardBackgroundImage: "/images/majordraws/prize1/sidchrome-milwaukee-toggle.png",
+    cardBackgroundImage: "/images/majordraws/milwaukee-set/sidchrome-milwaukee-toggle.png",
     gallery: [
-      { src: "/images/majordraws/prize1/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
-      { src: "/images/majordraws/prize1/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit and storage" },
-      { src: "/images/majordraws/prize1/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
-      { src: "/images/majordraws/prize1/Milwaukee 18V Charging Station.webp", alt: "Milwaukee charging station" },
-      { src: "/images/majordraws/prize1/Milwaukee 5_ Grinder.webp", alt: "Milwaukee grinder" },
-      { src: "/images/majordraws/prize1/Milwaukee 5.0AH battery.webp", alt: "Milwaukee 5.0Ah battery" },
-      { src: "/images/majordraws/prize1/Milwaukee 6.0AH battery.webp", alt: "Milwaukee 6.0Ah battery" },
-      { src: "/images/majordraws/prize1/Milwaukee Blowgun.webp", alt: "Milwaukee blowgun" },
-      { src: "/images/majordraws/prize1/Milwaukee Carry Bag.webp", alt: "Milwaukee carry bag" },
-      { src: "/images/majordraws/prize1/Milwaukee Chainsaw.webp", alt: "Milwaukee pruning saw" },
-      { src: "/images/majordraws/prize1/Milwaukee Circular Saw.webp", alt: "Milwaukee circular saw" },
-      { src: "/images/majordraws/prize1/Milwaukee Drill 18V.webp", alt: "Milwaukee hammer drill" },
-      { src: "/images/majordraws/prize1/Milwaukee Jigsaw.webp", alt: "Milwaukee jigsaw" },
-      { src: "/images/majordraws/prize1/Milwaukee Radio.webp", alt: "Milwaukee jobsite radio" },
-      { src: "/images/majordraws/prize1/Milwaukee Right Angle.webp", alt: "Milwaukee right angle tool" },
-      { src: "/images/majordraws/prize1/Milwaukee Saber Saw .webp", alt: "Milwaukee reciprocating saw" },
-      { src: "/images/majordraws/prize1/Milwaukee Sander.webp", alt: "Milwaukee orbital sander" },
-      { src: "/images/majordraws/prize1/Milwaukee Stubby Impact 1_2.webp", alt: "Milwaukee mid torque impact wrench" },
-      { src: "/images/majordraws/prize1/Milwaukee Work Light.webp", alt: "Milwaukee work light" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
+      { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit and storage" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 18V Charging Station.webp", alt: "Milwaukee charging station" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 5_ Grinder.webp", alt: "Milwaukee grinder" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 5.0AH battery.webp", alt: "Milwaukee 5.0Ah battery" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 6.0AH battery.webp", alt: "Milwaukee 6.0Ah battery" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Blowgun.webp", alt: "Milwaukee blowgun" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Carry Bag.webp", alt: "Milwaukee carry bag" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Chainsaw.webp", alt: "Milwaukee pruning saw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Circular Saw.webp", alt: "Milwaukee circular saw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Drill 18V.webp", alt: "Milwaukee hammer drill" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Jigsaw.webp", alt: "Milwaukee jigsaw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Radio.webp", alt: "Milwaukee jobsite radio" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Right Angle.webp", alt: "Milwaukee right angle tool" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Saber Saw .webp", alt: "Milwaukee reciprocating saw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Sander.webp", alt: "Milwaukee orbital sander" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Stubby Impact 1_2.webp", alt: "Milwaukee mid torque impact wrench" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Work Light.webp", alt: "Milwaukee work light" },
     ],
     highlights: [
       { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
@@ -986,40 +1010,40 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using TSTAK storage, wheeled tool bags, and the Sidchrome 356-piece professional hand-tool kit.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/prize2/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
-      { src: "/images/majordraws/prize2/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
-      { src: "/images/majordraws/prize2/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
-      { src: "/images/majordraws/prize2/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },
-      { src: "/images/majordraws/prize2/Dewalt Bag 2.jpeg", alt: "DeWalt wheeled tool bag interior" },
-      { src: "/images/majordraws/prize2/Dewalt Bag.jpeg", alt: "DeWalt wheeled tool bag exterior" },
-      { src: "/images/majordraws/prize2/Dewalt Blower.jpeg", alt: "DeWalt 18V XR blower" },
-      { src: "/images/majordraws/prize2/Dewalt Charging Station.jpeg", alt: "DeWalt dual port FlexVolt charger" },
-      { src: "/images/majordraws/prize2/Dewalt Circular Saw.jpeg", alt: "DeWalt FlexVolt circular saw" },
-      { src: "/images/majordraws/prize2/Dewalt Drill 2.jpeg", alt: "DeWalt 18V XR hammer drill" },
-      { src: "/images/majordraws/prize2/Dewalt Drill 3.jpeg", alt: "DeWalt drill kit angle view" },
-      { src: "/images/majordraws/prize2/Dewalt Drill 4.jpeg", alt: "DeWalt hammer drill close up" },
-      { src: "/images/majordraws/prize2/Dewalt Drill 5.jpeg", alt: "DeWalt hammer drill side profile" },
-      { src: "/images/majordraws/prize2/Dewalt Drill.jpeg", alt: "DeWalt drill with handle" },
-      { src: "/images/majordraws/prize2/Dewalt Grinder.jpeg", alt: "DeWalt FlexVolt grinder" },
-      { src: "/images/majordraws/prize2/Dewalt Hammer Drill.jpeg", alt: "DeWalt SDS rotary hammer" },
-      { src: "/images/majordraws/prize2/Dewalt Impact Driver 2.jpeg", alt: "DeWalt impact driver front" },
-      { src: "/images/majordraws/prize2/Dewalt Impact Driver 3.jpeg", alt: "Compact DeWalt impact driver profile" },
-      { src: "/images/majordraws/prize2/Dewalt Impact Driver.jpeg", alt: "DeWalt impact driver" },
-      { src: "/images/majordraws/prize2/Dewalt Impact Gun.jpeg", alt: "DeWalt high torque impact wrench" },
-      { src: "/images/majordraws/prize2/Dewalt Jigsaw.jpeg", alt: "DeWalt XR jigsaw" },
-      { src: "/images/majordraws/prize2/Dewalt Multi Tool.jpeg", alt: "DeWalt XR oscillating multi-tool" },
-      { src: "/images/majordraws/prize2/Dewalt Planer 2.jpeg", alt: "DeWalt planer angle view" },
-      { src: "/images/majordraws/prize2/Dewalt Planer 3.jpeg", alt: "DeWalt planer rear view" },
-      { src: "/images/majordraws/prize2/Dewalt Planer.jpeg", alt: "DeWalt XR planer" },
-      { src: "/images/majordraws/prize2/Dewalt Radio 2.jpeg", alt: "DeWalt TSTAK jobsite radio front" },
-      { src: "/images/majordraws/prize2/Dewalt Radio.jpeg", alt: "DeWalt TSTAK jobsite radio top view" },
-      { src: "/images/majordraws/prize2/Dewalt Recip Saw.jpeg", alt: "DeWalt FlexVolt reciprocating saw" },
-      { src: "/images/majordraws/prize2/Dewalt Sander 2.jpeg", alt: "DeWalt XR orbital sander detail" },
-      { src: "/images/majordraws/prize2/Dewalt Sander.jpeg", alt: "DeWalt XR orbital sander" },
-      { src: "/images/majordraws/prize2/Dewalt Stax Carry Kit.jpeg", alt: "DeWalt TSTAK storage case" },
-      { src: "/images/majordraws/prize2/Dewalt Stax Kit 2.jpeg", alt: "DeWalt TSTAK storage stack" },
-      { src: "/images/majordraws/prize2/Dewalt Stax Kit 3.jpeg", alt: "Loaded DeWalt TSTAK storage" },
-      { src: "/images/majordraws/prize2/Dewalt Vacuum.jpeg", alt: "DeWalt XR stick vacuum" },
+      { src: "/images/majordraws/dewalt-set/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
+      { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
+      { src: "/images/majordraws/dewalt-set/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
+      { src: "/images/majordraws/dewalt-set/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Bag 2.jpeg", alt: "DeWalt wheeled tool bag interior" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Bag.jpeg", alt: "DeWalt wheeled tool bag exterior" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Blower.jpeg", alt: "DeWalt 18V XR blower" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Charging Station.jpeg", alt: "DeWalt dual port FlexVolt charger" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Circular Saw.jpeg", alt: "DeWalt FlexVolt circular saw" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 2.jpeg", alt: "DeWalt 18V XR hammer drill" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 3.jpeg", alt: "DeWalt drill kit angle view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 4.jpeg", alt: "DeWalt hammer drill close up" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 5.jpeg", alt: "DeWalt hammer drill side profile" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill.jpeg", alt: "DeWalt drill with handle" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Grinder.jpeg", alt: "DeWalt FlexVolt grinder" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Hammer Drill.jpeg", alt: "DeWalt SDS rotary hammer" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Driver 2.jpeg", alt: "DeWalt impact driver front" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Driver 3.jpeg", alt: "Compact DeWalt impact driver profile" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Driver.jpeg", alt: "DeWalt impact driver" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Gun.jpeg", alt: "DeWalt high torque impact wrench" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Jigsaw.jpeg", alt: "DeWalt XR jigsaw" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Multi Tool.jpeg", alt: "DeWalt XR oscillating multi-tool" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Planer 2.jpeg", alt: "DeWalt planer angle view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Planer 3.jpeg", alt: "DeWalt planer rear view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Planer.jpeg", alt: "DeWalt XR planer" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Radio 2.jpeg", alt: "DeWalt TSTAK jobsite radio front" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Radio.jpeg", alt: "DeWalt TSTAK jobsite radio top view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Recip Saw.jpeg", alt: "DeWalt FlexVolt reciprocating saw" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Sander 2.jpeg", alt: "DeWalt XR orbital sander detail" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Sander.jpeg", alt: "DeWalt XR orbital sander" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Stax Carry Kit.jpeg", alt: "DeWalt TSTAK storage case" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Stax Kit 2.jpeg", alt: "DeWalt TSTAK storage stack" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Stax Kit 3.jpeg", alt: "Loaded DeWalt TSTAK storage" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Vacuum.jpeg", alt: "DeWalt XR stick vacuum" },
     ],
     highlights: [
       {
@@ -1068,26 +1092,26 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/prize3/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
-      { src: "/images/majordraws/prize2/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
-      { src: "/images/majordraws/prize3/dhp486z-001.jpg", alt: "Makita DHP486Z hammer drill" },
-      { src: "/images/majordraws/prize3/dtd173z-001.jpg", alt: "Makita DTD173Z impact driver" },
-      { src: "/images/majordraws/prize3/dga508z-001.jpg", alt: "Makita DGA508Z angle grinder" },
-      { src: "/images/majordraws/prize3/dhr242z-001.jpg", alt: "Makita DHR242Z rotary hammer" },
-      { src: "/images/majordraws/prize3/dhs680z-001.jpg", alt: "Makita DHS680Z circular saw" },
-      { src: "/images/majordraws/prize3/djr187z-001.jpg", alt: "Makita DJR187Z reciprocating saw" },
-      { src: "/images/majordraws/prize3/dtm52zx3-001.jpg", alt: "Makita DTM52ZX3 multi-tool" },
-      { src: "/images/majordraws/prize3/dtw700z-001.jpg", alt: "Makita DTW700Z impact wrench" },
-      { src: "/images/majordraws/prize3/dbo180z-001.jpg", alt: "Makita DBO180Z orbital sander" },
-      { src: "/images/majordraws/prize3/dcl283zbx1-001.jpg", alt: "Makita DCL283ZBX1 stick vacuum" },
-      { src: "/images/majordraws/prize3/djv184z-001.jpg", alt: "Makita DJV184Z jigsaw" },
-      { src: "/images/majordraws/prize3/dkp181z-001.jpg", alt: "Makita DKP181Z planer" },
-      { src: "/images/majordraws/prize3/dub185z-001.jpg", alt: "Makita DUB185Z blower" },
-      { src: "/images/majordraws/prize3/mr002gz-001.jpg", alt: "Makita MR002GZ jobsite radio" },
-      { src: "/images/majordraws/prize3/dml812-002.jpg", alt: "Makita DML812 flashlight" },
-      { src: "/images/majordraws/prize3/bl1850b-001.jpg", alt: "Makita BL1850B batteries" },
-      { src: "/images/majordraws/prize3/dc18rd-001.jpg", alt: "Makita DC18RD charger" },
-      { src: "/images/majordraws/prize3/199936-9-001.jpg", alt: "Makita tool carry bags" },
+      { src: "/images/majordraws/makita-set/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
+      { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
+      { src: "/images/majordraws/makita-set/dhp486z-001.jpg", alt: "Makita DHP486Z hammer drill" },
+      { src: "/images/majordraws/makita-set/dtd173z-001.jpg", alt: "Makita DTD173Z impact driver" },
+      { src: "/images/majordraws/makita-set/dga508z-001.jpg", alt: "Makita DGA508Z angle grinder" },
+      { src: "/images/majordraws/makita-set/dhr242z-001.jpg", alt: "Makita DHR242Z rotary hammer" },
+      { src: "/images/majordraws/makita-set/dhs680z-001.jpg", alt: "Makita DHS680Z circular saw" },
+      { src: "/images/majordraws/makita-set/djr187z-001.jpg", alt: "Makita DJR187Z reciprocating saw" },
+      { src: "/images/majordraws/makita-set/dtm52zx3-001.jpg", alt: "Makita DTM52ZX3 multi-tool" },
+      { src: "/images/majordraws/makita-set/dtw700z-001.jpg", alt: "Makita DTW700Z impact wrench" },
+      { src: "/images/majordraws/makita-set/dbo180z-001.jpg", alt: "Makita DBO180Z orbital sander" },
+      { src: "/images/majordraws/makita-set/dcl283zbx1-001.jpg", alt: "Makita DCL283ZBX1 stick vacuum" },
+      { src: "/images/majordraws/makita-set/djv184z-001.jpg", alt: "Makita DJV184Z jigsaw" },
+      { src: "/images/majordraws/makita-set/dkp181z-001.jpg", alt: "Makita DKP181Z planer" },
+      { src: "/images/majordraws/makita-set/dub185z-001.jpg", alt: "Makita DUB185Z blower" },
+      { src: "/images/majordraws/makita-set/mr002gz-001.jpg", alt: "Makita MR002GZ jobsite radio" },
+      { src: "/images/majordraws/makita-set/dml812-002.jpg", alt: "Makita DML812 flashlight" },
+      { src: "/images/majordraws/makita-set/bl1850b-001.jpg", alt: "Makita BL1850B batteries" },
+      { src: "/images/majordraws/makita-set/dc18rd-001.jpg", alt: "Makita DC18RD charger" },
+      { src: "/images/majordraws/makita-set/199936-9-001.jpg", alt: "Makita tool carry bags" },
     ],
     highlights: [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
@@ -1130,6 +1154,233 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     ],
   },
   {
+    slug: "milwaukee-milwaukee",
+    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
+    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
+    heroSubheading:
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    summary:
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    detailedDescription:
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+    prizeValueLabel: "$35,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
+      { src: "/images/majordraws/toolbox/milwaukee-toolbox.png", alt: "Milwaukee 56 inch high capacity combination tool storage" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 18V Charging Station.webp", alt: "Milwaukee charging station" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 5_ Grinder.webp", alt: "Milwaukee grinder" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 5.0AH battery.webp", alt: "Milwaukee 5.0Ah battery" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 6.0AH battery.webp", alt: "Milwaukee 6.0Ah battery" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Blowgun.webp", alt: "Milwaukee blowgun" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Carry Bag.webp", alt: "Milwaukee carry bag" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Chainsaw.webp", alt: "Milwaukee pruning saw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Circular Saw.webp", alt: "Milwaukee circular saw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Drill 18V.webp", alt: "Milwaukee hammer drill" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Jigsaw.webp", alt: "Milwaukee jigsaw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Radio.webp", alt: "Milwaukee jobsite radio" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Right Angle.webp", alt: "Milwaukee right angle tool" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Saber Saw .webp", alt: "Milwaukee reciprocating saw" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Sander.webp", alt: "Milwaukee orbital sander" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Stubby Impact 1_2.webp", alt: "Milwaukee mid torque impact wrench" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee Work Light.webp", alt: "Milwaukee work light" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
+      {
+        icon: "Package",
+        title: "Milwaukee 56\" Toolbox",
+        description: "High capacity combination tool storage with electronic lock.",
+      },
+      {
+        icon: "Battery",
+        title: "REDLITHIUM™ Power System",
+        description: "High-output 5.0Ah packs keep every skin running.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools",
+        summary: "Everyday essentials through to specialised cutting, fastening, and lighting tools.",
+        items: MILWAUKEE_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "REDLITHIUM™ 5.0Ah batteries deliver long runtime and intelligent overload protection.",
+        items: MILWAUKEE_POWER_SYSTEM,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "Milwaukee 56\" High Capacity Combination tool storage with premium features.",
+        items: MILWAUKEE_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "dewalt-milwaukee",
+    label: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
+    heroHeading: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
+    heroSubheading:
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    summary:
+      "Heavy-duty DeWalt FlexVolt cordless lineup, premium Milwaukee tool storage, and comprehensive power tool collection plus $5000 cash.",
+    detailedDescription:
+      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+    prizeValueLabel: "$30,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/dewalt-set/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
+      { src: "/images/majordraws/toolbox/milwaukee-toolbox.png", alt: "Milwaukee 56 inch high capacity combination tool storage" },
+      { src: "/images/majordraws/dewalt-set/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
+      { src: "/images/majordraws/dewalt-set/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Bag 2.jpeg", alt: "DeWalt wheeled tool bag interior" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Bag.jpeg", alt: "DeWalt wheeled tool bag exterior" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Blower.jpeg", alt: "DeWalt 18V XR blower" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Charging Station.jpeg", alt: "DeWalt dual port FlexVolt charger" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Circular Saw.jpeg", alt: "DeWalt FlexVolt circular saw" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 2.jpeg", alt: "DeWalt 18V XR hammer drill" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 3.jpeg", alt: "DeWalt drill kit angle view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 4.jpeg", alt: "DeWalt hammer drill close up" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill 5.jpeg", alt: "DeWalt hammer drill side profile" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Drill.jpeg", alt: "DeWalt drill with handle" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Grinder.jpeg", alt: "DeWalt FlexVolt grinder" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Hammer Drill.jpeg", alt: "DeWalt SDS rotary hammer" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Driver 2.jpeg", alt: "DeWalt impact driver front" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Driver 3.jpeg", alt: "Compact DeWalt impact driver profile" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Driver.jpeg", alt: "DeWalt impact driver" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Impact Gun.jpeg", alt: "DeWalt high torque impact wrench" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Jigsaw.jpeg", alt: "DeWalt XR jigsaw" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Multi Tool.jpeg", alt: "DeWalt XR oscillating multi-tool" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Planer 2.jpeg", alt: "DeWalt planer angle view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Planer 3.jpeg", alt: "DeWalt planer rear view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Planer.jpeg", alt: "DeWalt XR planer" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Radio 2.jpeg", alt: "DeWalt TSTAK jobsite radio front" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Radio.jpeg", alt: "DeWalt TSTAK jobsite radio top view" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Recip Saw.jpeg", alt: "DeWalt FlexVolt reciprocating saw" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Sander 2.jpeg", alt: "DeWalt XR orbital sander detail" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Sander.jpeg", alt: "DeWalt XR orbital sander" },
+      { src: "/images/majordraws/dewalt-set/Dewalt Vacuum.jpeg", alt: "DeWalt XR stick vacuum" },
+    ],
+    highlights: [
+      {
+        icon: "Zap",
+        title: "FlexVolt Muscle",
+        description: "54V tools for circular, rotary, and reciprocating power.",
+      },
+      { icon: "Package", title: "Milwaukee 56\" Toolbox", description: "High capacity combination tool storage with electronic lock." },
+      {
+        icon: "Battery",
+        title: "High-Capacity Power",
+        description: "FlexVolt + XR batteries with twin-port fast charging.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Jobsite Gear",
+        summary: "FlexVolt and XR tools covering drilling, fastening, demolition, cutting, dust control, and lighting.",
+        items: DEWALT_SIDCHROME_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "FlexVolt batteries and dual-port charging to keep every tool ready.",
+        items: DEWALT_SIDCHROME_POWER_SYSTEM,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "Milwaukee 56\" High Capacity Combination tool storage with premium features.",
+        items: MILWAUKEE_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "makita-milwaukee",
+    label: "Milwaukee Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
+    heroHeading: "Milwaukee Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
+    heroSubheading:
+      "Complete Makita 18V LXT brushless professional toolkit with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    summary:
+      "Makita 18V LXT brushless power tools, advanced battery ecosystem, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    detailedDescription:
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+    prizeValueLabel: "$30,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/makita-set/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
+      { src: "/images/majordraws/toolbox/milwaukee-toolbox.png", alt: "Milwaukee 56 inch high capacity combination tool storage" },
+      { src: "/images/majordraws/makita-set/dhp486z-001.jpg", alt: "Makita DHP486Z hammer drill" },
+      { src: "/images/majordraws/makita-set/dtd173z-001.jpg", alt: "Makita DTD173Z impact driver" },
+      { src: "/images/majordraws/makita-set/dga508z-001.jpg", alt: "Makita DGA508Z angle grinder" },
+      { src: "/images/majordraws/makita-set/dhr242z-001.jpg", alt: "Makita DHR242Z rotary hammer" },
+      { src: "/images/majordraws/makita-set/dhs680z-001.jpg", alt: "Makita DHS680Z circular saw" },
+      { src: "/images/majordraws/makita-set/djr187z-001.jpg", alt: "Makita DJR187Z reciprocating saw" },
+      { src: "/images/majordraws/makita-set/dtm52zx3-001.jpg", alt: "Makita DTM52ZX3 multi-tool" },
+      { src: "/images/majordraws/makita-set/dtw700z-001.jpg", alt: "Makita DTW700Z impact wrench" },
+      { src: "/images/majordraws/makita-set/dbo180z-001.jpg", alt: "Makita DBO180Z orbital sander" },
+      { src: "/images/majordraws/makita-set/dcl283zbx1-001.jpg", alt: "Makita DCL283ZBX1 stick vacuum" },
+      { src: "/images/majordraws/makita-set/djv184z-001.jpg", alt: "Makita DJV184Z jigsaw" },
+      { src: "/images/majordraws/makita-set/dkp181z-001.jpg", alt: "Makita DKP181Z planer" },
+      { src: "/images/majordraws/makita-set/dub185z-001.jpg", alt: "Makita DUB185Z blower" },
+      { src: "/images/majordraws/makita-set/mr002gz-001.jpg", alt: "Makita MR002GZ jobsite radio" },
+      { src: "/images/majordraws/makita-set/dml812-002.jpg", alt: "Makita DML812 flashlight" },
+      { src: "/images/majordraws/makita-set/bl1850b-001.jpg", alt: "Makita BL1850B batteries" },
+      { src: "/images/majordraws/makita-set/dc18rd-001.jpg", alt: "Makita DC18RD charger" },
+      { src: "/images/majordraws/makita-set/199936-9-001.jpg", alt: "Makita tool carry bags" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
+      {
+        icon: "Package",
+        title: "Milwaukee 56\" Toolbox",
+        description: "High capacity combination tool storage with electronic lock.",
+      },
+      {
+        icon: "Battery",
+        title: "LXT Power System",
+        description: "High-capacity 5.0Ah packs with rapid dual-port charging.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Jobsite Gear",
+        summary:
+          "Complete Makita 18V LXT brushless tool range covering drilling, fastening, cutting, sanding, dust control, and lighting.",
+        items: MAKITA_SIDCHROME_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "LXT 5.0Ah batteries and rapid dual-port charger keep every tool ready.",
+        items: MAKITA_SIDCHROME_POWER_SYSTEM,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "Milwaukee 56\" High Capacity Combination tool storage with premium features.",
+        items: MILWAUKEE_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
     slug: "cash-prize",
     label: "$10,000 Tax Free Cash",
     heroHeading: "$10,000 Tax Free Cash",
@@ -1138,7 +1389,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     detailedDescription:
       "Win $10,000 in cold hard cash! No tools, no equipment, no strings attached. Just a straight $10,000 cash prize deposited directly to your bank account. Use it however you want - pay bills, take a vacation, invest in your future, or buy whatever you need. The choice is yours.",
     prizeValueLabel: "$10,000 Cash",
-    gallery: [{ src: "/images/majordraws/prize4/10000cash.jpg", alt: "$10,000 cash prize" }],
+    gallery: [{ src: "/images/majordraws/cash-prize/10000cash.jpg", alt: "$10,000 cash prize" }],
     highlights: [
       {
         icon: "DollarSign",
@@ -1186,7 +1437,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
 ];
 
-export const DEFAULT_PRIZE_SLUG: PrizeSlug = "milwaukee-sidchrome";
+export const DEFAULT_PRIZE_SLUG: PrizeSlug = "milwaukee-milwaukee";
 
 export function getPrizeBySlug(slug: string): PrizeCatalogEntry | undefined {
   return PRIZE_CATALOG.find((prize) => prize.slug === slug);
@@ -1221,6 +1472,15 @@ export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | un
   }
   if (slug === "makita-sidchrome") {
     return "Sidchrome + Makita + $5,000 Cash";
+  }
+  if (slug === "milwaukee-milwaukee") {
+    return "Milwaukee Toolbox + Milwaukee + $5,000 Cash";
+  }
+  if (slug === "dewalt-milwaukee") {
+    return "Milwaukee Toolbox + DeWalt + $5,000 Cash";
+  }
+  if (slug === "makita-milwaukee") {
+    return "Milwaukee Toolbox + Makita + $5,000 Cash";
   }
   
   // Fallback to full label

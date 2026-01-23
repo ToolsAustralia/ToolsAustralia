@@ -73,7 +73,7 @@ export default async function MajorGiveawayTermsPage() {
               Tools Australia – Major Giveaway December 2025
             </h1>
             <p className="text-gray-300">
-              Authorised under NSW License TP/04720. These terms outline participation rules, prize details, compliance,
+              Authorised under NSW License TP/04720. Notification Number: NTP/15640. These terms outline participation rules, prize details, compliance,
               and consumer protections for the Major Giveaway.
             </p>
           </header>
