@@ -24,6 +24,7 @@ export async function GET() {
         nextDraw: {
           name: nextDraw.name,
           _id: String(nextDraw._id),
+          activationDate: nextDraw.activationDate ? nextDraw.activationDate.toISOString() : null,
         },
       });
   } catch (error) {

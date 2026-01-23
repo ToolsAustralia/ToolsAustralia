@@ -13,8 +13,9 @@ import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQ
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
-import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
@@ -155,6 +156,9 @@ export default function MembershipSection({
   // Fetch user data to check membership status
   const { userData, loading: userLoading } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
+  const { data: nextDraw } = useNextDraw();
+  const { requestModal } = useModalPriorityStore();
 
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
@@ -173,6 +177,17 @@ export default function MembershipSection({
       console.log("🎯 MembershipSection received openMembershipModal event:", event.detail);
       const { plan } = event.detail;
       if (plan) {
+        // Check if gates are closed (freeze period or gap period)
+        const gatesClosed = currentMajorDraw?.status !== "active";
+        if (gatesClosed) {
+          // Show gate-closed modal instead of opening payment modals
+          requestModal("gate-closed", true, {
+            nextActivationDate: nextDraw?.activationDate ?? null,
+            nextDrawName: nextDraw?.name,
+          });
+          return;
+        }
+
         membershipModal.setSelectedPlan(plan);
         membershipModal.openModal();
       }
@@ -183,7 +198,7 @@ export default function MembershipSection({
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
-  }, [membershipModal]);
+  }, [membershipModal, currentMajorDraw, nextDraw, requestModal]);
 
   // Check if user has an active subscription (only for recurring subscription plans)
   const hasActiveSubscription = userData?.subscription?.isActive || false;
@@ -263,6 +278,17 @@ export default function MembershipSection({
 
   // Handle plan selection and open modal
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
+    // Check if gates are closed (freeze period or gap period)
+    const gatesClosed = currentMajorDraw?.status !== "active";
+    if (gatesClosed) {
+      // Show gate-closed modal instead of opening payment modals
+      requestModal("gate-closed", true, {
+        nextActivationDate: nextDraw?.activationDate ?? null,
+        nextDrawName: nextDraw?.name,
+      });
+      return;
+    }
+
     const hierarchy = getPlanHierarchy(plan);
 
     // If user has active subscription and this is a downgrade, navigate to my-account
