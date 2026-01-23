@@ -43,6 +43,11 @@ const adminTabs = [
     icon: BarChart3,
   },
   {
+    id: "ab-testing",
+    label: "A/B Testing",
+    icon: FlaskConical,
+  },
+  {
     id: "facebook-ads",
     label: "Facebook Ads",
     icon: TrendingUp,
@@ -113,11 +118,6 @@ const adminTabs = [
     id: "affiliates",
     label: "Affiliates",
     icon: UserCheck,
-  },
-  {
-    id: "ab-testing",
-    label: "A/B Testing",
-    icon: FlaskConical,
   },
   {
     id: "error-reports",
