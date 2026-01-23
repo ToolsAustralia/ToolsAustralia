@@ -10,6 +10,7 @@ import UserSetupModal from "./UserSetupModal";
 import UpsellModal from "./UpsellModal";
 import SpecialPackagesModal from "./SpecialPackagesModal";
 import PixelConsentModal from "./PixelConsentModal";
+import GateClosedModal from "./GateClosedModal";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 
 // Import data
@@ -39,6 +40,7 @@ const UnifiedModalManager: React.FC = () => {
   const isSetupModalOpen = activeModal === "user-setup";
   const isUpsellActive = activeModal === "upsell";
   const isSpecialPackagesOpen = activeModal === "special-packages";
+  const isGateClosedOpen = activeModal === "gate-closed";
 
   // Get exclusive member-only packages for SpecialPackagesModal
   const specialPackages = useMemo(() => {
@@ -57,7 +59,7 @@ const UnifiedModalManager: React.FC = () => {
   /**
    * Handle modal close with proper cleanup and queue progression
    */
-  const handleModalClose = (modalType: "user-setup" | "upsell" | "special-packages" | "pixel-consent") => {
+  const handleModalClose = (modalType: "user-setup" | "upsell" | "special-packages" | "pixel-consent" | "gate-closed") => {
     // console.log(`🎭 Closing modal: ${modalType}`);
 
     // Mark modal as shown in session (for one-time modals)
@@ -156,6 +158,20 @@ const UnifiedModalManager: React.FC = () => {
               // Handle pixel consent decline
               handleModalClose("pixel-consent");
             }}
+          />
+        );
+
+      case "gate-closed":
+        const gateClosedData = activeModalData as {
+          nextActivationDate: string | null;
+          nextDrawName?: string;
+        } | null;
+        return (
+          <GateClosedModal
+            isOpen={isGateClosedOpen}
+            onClose={() => handleModalClose("gate-closed")}
+            nextActivationDate={gateClosedData?.nextActivationDate ?? null}
+            nextDrawName={gateClosedData?.nextDrawName}
           />
         );
 

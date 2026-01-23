@@ -402,6 +402,27 @@ export const useCompletedMajorDraws = () => {
   });
 };
 
+export const useNextDraw = () => {
+  return useQuery({
+    queryKey: ["major-draw-next"],
+    queryFn: async () => {
+      const response = await apiGet<{
+        success: boolean;
+        nextDraw: {
+          name: string;
+          _id: string;
+          activationDate: string | null;
+        } | null;
+      }>("/api/major-draw/next");
+      return response.nextDraw;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes - next draw doesn't change often
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+};
+
 export const useMajorDrawPrefetch = () => {
   const queryClient = useQueryClient();
 
