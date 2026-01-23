@@ -51,9 +51,10 @@ const nextConfig: NextConfig = {
   // console.error is preserved for critical error reporting
   // ✅ FIX: Only remove console logs in production, not in staging
   // This allows console logs to work in staging environment for debugging
+  // ✅ TEMPORARY: Allow ENABLE_CONSOLE_LOGS to override production log removal for debugging
   compiler: {
     removeConsole:
-      process.env.NODE_ENV === "production"
+      process.env.NODE_ENV === "production" && process.env.ENABLE_CONSOLE_LOGS !== "true"
         ? {
             exclude: ["error"], // Keep console.error for critical errors
           }

@@ -1563,13 +1563,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setSetupIntentClientSecret(null);
       setPaymentIntentId(null);
       setShowCardForm(false); // ✅ Force unmount Elements component
-      setIsCreatingSubscription(false);
+      // ✅ FIX: Set isCreatingSubscription to true IMMEDIATELY to prevent any form submission
+      setIsCreatingSubscription(true);
       setCardFormError(null);
       // ✅ CRITICAL: Increment remount key to ensure Elements remounts with new clientSecret
       setElementsRemountKey((prev) => prev + 1);
       
       try {
-        setIsCreatingSubscription(true);
 
         // Get package ID and name for new plan
         const newPackageId = getPackageId(newPlan, [...subscriptionPackages, ...oneTimePackages]);
@@ -1634,6 +1634,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               setElementsRemountKey((prev) => prev + 1);
               setPaymentIntentClientSecret(clientSecret);
               setSetupIntentClientSecret(null);
+              setPaymentIntentId(null);
               setCardFormError(null);
               // ✅ CRITICAL: Show card form AFTER setting clientSecret to trigger Elements mount
               setShowCardForm(true);
@@ -1652,10 +1653,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 paymentIntentId: clientSecret.split("_secret_")[0],
               });
 
-              // ✅ CRITICAL FIX: Clear loading state after a brief delay to ensure Elements mounts
+              // ✅ CRITICAL FIX: Clear loading state after a longer delay to ensure Elements is fully mounted and ready
+              // This prevents form submission before the payment form is actually ready
               setTimeout(() => {
                 setIsCreatingSubscription(false);
-              }, 200);
+              }, 500); // Increased delay to ensure Elements is fully ready
             }, 150); // Small delay to ensure previous Elements is unmounted
           } else {
             if (subscriptionData?.subscriptionId) {
@@ -2609,6 +2611,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       console.warn("⚠️ Payment already in progress, ignoring duplicate submission");
       return;
     }
+
+    // ✅ FIX: Prevent form submission when package is being changed
+    // When package changes, a new subscription is created and payment form is being set up
+    // We should not allow form submission during this process
+    if (isCreatingSubscription) {
+      console.warn("⚠️ Package change in progress, ignoring form submission");
+      return;
+    }
     
     setIsSubmitting(true);
 
@@ -2740,8 +2750,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         // PaymentElement will collect payment method and confirm PaymentIntent
         console.log("✅ Subscription already created, confirming payment via PaymentElement");
         
+        // ✅ FIX: Don't confirm if package is being changed or form is not ready
+        if (isCreatingSubscription) {
+          throw new Error("Please wait for the payment form to load before confirming payment.");
+        }
+        
         if (!cardFormRef.current) {
           throw new Error("Payment form not available. Please try again.");
+        }
+        
+        if (!showCardForm) {
+          throw new Error("Payment form is not ready. Please wait a moment and try again.");
         }
         
         // PaymentElement will handle payment confirmation
@@ -2838,7 +2857,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         const isSubscription = activePlan?.period === "mo";
         const subscriptionAlreadyCreated = isSubscription && subscriptionCreatedRef.current && paymentIntentClientSecret;
 
-        if ((showCardForm || hasClientSecret) && cardFormRef.current) {
+        // ✅ FIX: Only confirm if form is shown, ready, and package is not being changed
+        if ((showCardForm || hasClientSecret) && cardFormRef.current && !isCreatingSubscription) {
           console.log("💳 Confirming payment...", {
             showCardForm,
             hasClientSecret,
@@ -2846,6 +2866,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hasPaymentIntent: !!paymentIntentClientSecret,
             isSubscription,
             subscriptionAlreadyCreated,
+            isCreatingSubscription,
           });
           const result = await cardFormRef.current.confirmSetup();
 
@@ -3060,8 +3081,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           }
         } else if (selectedPaymentMethod) {
           paymentMethodId = selectedPaymentMethod.paymentMethodId;
-        } else if (hasClientSecret && cardFormRef.current) {
+        } else if (hasClientSecret && cardFormRef.current && !isCreatingSubscription) {
           // ✅ FIX: If we have a client secret but showCardForm is false, try to confirm anyway
+          // But only if package is not being changed
           console.log("💳 Attempting to confirm with client secret even though showCardForm is false");
           const result = await cardFormRef.current.confirmSetup();
 
@@ -4593,8 +4615,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     const isCreatingIntent =
       createPaymentIntent.isPending || createSetupIntent.isPending || isCreatingPaymentIntentRef.current;
 
-    // If we're creating an intent, form is not valid yet
-    if (isCreatingIntent) {
+    // ✅ FIX: Also disable button when subscription is being created (package change in progress)
+    // This prevents form submission during package changes
+    if (isCreatingIntent || isCreatingSubscription) {
       return false;
     }
 
@@ -4604,6 +4627,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // ✅ CRITICAL: If card form is shown but no client secret yet, form is not ready
     // This handles the case where PaymentElement is still mounting
     if (showCardForm && !hasIntentClientSecret) {
+      return false;
+    }
+
+    // ✅ FIX: If card form has errors, form is not valid
+    if (showCardForm && cardFormError) {
       return false;
     }
 
@@ -4776,7 +4804,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             {/* Step 2: Payment Details */}
             {/* ✅ STRIPE BEST PRACTICE: Wrap Step 2 in form with onSubmit for proper user activation chain */}
             {currentStep === 2 && (
-              <form onSubmit={handleSubmit} className="space-y-2 sm:space-y-3">
+              <form 
+                onSubmit={handleSubmit} 
+                className="space-y-2 sm:space-y-3"
+                onKeyDown={(e) => {
+                  // ✅ FIX: Prevent Enter key from submitting form during package changes
+                  if (e.key === "Enter" && (isCreatingSubscription || isSubmitting)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.warn("⚠️ Form submission prevented: Package change in progress");
+                    return false;
+                  }
+                }}
+              >
                 {/* Payment Method Selector - Always show for authenticated users */}
                 {isAuthenticated && (
                   <PaymentMethodSelector
@@ -4918,11 +4958,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   ) : (
                     <Button
                       type="submit"
-                      disabled={!isFormValid() || isSubmitting}
+                      disabled={!isFormValid() || isSubmitting || isCreatingSubscription}
                       variant="metallic"
                       fullWidth
                       size="lg"
-                      loading={isSubmitting || createPaymentIntent.isPending || createSetupIntent.isPending}
+                      loading={isSubmitting || createPaymentIntent.isPending || createSetupIntent.isPending || isCreatingSubscription}
                       className="font-bold text-sm sm:text-base"
                     >
                       {isSubmitting ? (

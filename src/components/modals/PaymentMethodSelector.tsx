@@ -372,14 +372,10 @@ const StripeCardForm = React.forwardRef<
           return { error: "Stripe not loaded" };
         }
 
-        // ✅ CRITICAL FIX: Check if wallet payment is selected - if so, do NOT call confirmPayment
-        // Wallet button clicks are handled automatically by PaymentElement internally
-        // Calling confirmPayment for wallet payments breaks the user activation chain and prevents wallet UI from opening
-        if (selectedPaymentMethodType === "wallet") {
-          return {
-            error: "Wallet payments are handled automatically by PaymentElement. Please click the wallet button (Google Pay/Apple Pay) directly in the payment form to complete your payment."
-          };
-        }
+        // ✅ CRITICAL: This function is ONLY called for card payments via form submission
+        // Wallet button clicks are handled automatically by PaymentElement and bypass form submission entirely
+        // If we reach here, it means the user clicked the form submit button, which should only happen for card payments
+        // Note: onChange fires when wallet TAB is selected, but wallet BUTTON clicks are handled separately by PaymentElement
 
         try {
           const billingDetailsData = buildBillingDetails();
@@ -632,10 +628,10 @@ const StripeCardForm = React.forwardRef<
     // ✅ STRIPE BEST PRACTICE: For backward compatibility, but prefer form submit for card payments
     React.useImperativeHandle(ref, () => ({
       confirmSetup: async () => {
-        // ✅ FIX: With wallets: "auto", PaymentElement handles wallet payments automatically
-        // Wallet button clicks are handled by PaymentElement internally and don't trigger form submission
-        // This function only handles card payments via form submission
-        // If wallet payment is selected, PaymentElement has already handled it automatically
+        // ✅ CRITICAL: Do NOT block wallet payments here
+        // Wallet button clicks bypass form submission entirely and are handled automatically by PaymentElement
+        // This function is only called for card payments via form submission
+        // If wallet button is clicked, PaymentElement handles it internally and this function is never called
         return await performConfirmation();
       },
     }));
@@ -675,8 +671,10 @@ const StripeCardForm = React.forwardRef<
           ref={formRef}
           className="mt-0"
           // ✅ CRITICAL: Prevent Enter key from interfering with wallet button clicks
+          // Wallet buttons handle their own clicks and maintain user activation chain
           onKeyDown={(e) => {
-            // Allow Enter key to work normally for card inputs, but don't interfere with wallet buttons
+            // Allow Enter key to work normally for card inputs
+            // Wallet button clicks are handled automatically by PaymentElement and don't need Enter key handling
             if (e.key === "Enter" && selectedPaymentMethodType === "wallet") {
               e.preventDefault();
               console.log("⚠️ Enter key pressed while wallet payment selected - wallet button must be clicked directly");
@@ -703,16 +701,18 @@ const StripeCardForm = React.forwardRef<
                   packageName,
                   walletsEnabled: shouldEnableWallets,
                   note: "With wallets: 'auto', clicking wallet buttons should automatically open wallet UI",
+                  important: "Wallet button clicks are handled automatically - do NOT call confirmPayment for wallets",
                 });
                 
                 // ✅ DEBUG: Check PaymentIntent state to ensure it's ready for wallet payments
-                if (intentType === "payment" && clientSecret) {
-                  stripe?.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+                if (intentType === "payment" && clientSecret && stripe) {
+                  stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
                     console.log("🔍 PaymentIntent state check:", {
                       status: paymentIntent?.status,
                       amount: paymentIntent?.amount,
                       currency: paymentIntent?.currency,
                       note: "PaymentIntent should be 'requires_payment_method' for wallet payments to work",
+                      isReady: paymentIntent?.status === "requires_payment_method",
                     });
                   }).catch((err) => {
                     console.warn("Could not retrieve PaymentIntent:", err);
@@ -767,14 +767,16 @@ const StripeCardForm = React.forwardRef<
               if (isWalletPayment) {
                 setSelectedPaymentMethodType("wallet");
                 onPaymentMethodTypeChange?.("wallet");
-                console.log("✅ Wallet payment method selected - PaymentElement will handle wallet button clicks automatically");
-                // ✅ CRITICAL: With wallets: "auto", PaymentElement automatically handles wallet button clicks
-                // When user clicks the wallet button (Google Pay/Apple Pay), PaymentElement will:
-                // 1. Open the wallet UI automatically (maintains user activation chain)
-                // 2. Call confirmPayment() internally
-                // 3. Handle the entire payment flow
-                // We should NOT call confirmPayment() ourselves for wallet payments - it breaks the user activation chain
-                // The form submit button should only handle card payments
+                console.log("✅ Wallet payment method TAB selected - this is just tab selection, not button click");
+                console.log("🔍 IMPORTANT: Wallet button clicks are handled separately by PaymentElement");
+                console.log("🔍 When user clicks the actual wallet button (not just the tab), PaymentElement will:");
+                console.log("   1. Automatically open the wallet UI (Google Pay/Apple Pay)");
+                console.log("   2. Call confirmPayment() internally");
+                console.log("   3. Handle the entire payment flow");
+                console.log("🔍 The form submit button should NOT be used for wallet payments");
+                // ✅ CRITICAL: onChange fires when wallet TAB is selected, but wallet BUTTON clicks are separate
+                // The actual wallet button click (inside the tab) is handled automatically by PaymentElement
+                // We should NOT call confirmPayment() for wallet payments - PaymentElement does it internally
               } else if (paymentMethodType === "card") {
                 setSelectedPaymentMethodType("card");
                 onPaymentMethodTypeChange?.("card");
