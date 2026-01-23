@@ -2808,6 +2808,32 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         return;
       }
 
+      // ✅ NEW: Handle wallet payments - Stripe handles payment internally when wallet button is clicked
+      // When wallet payment is selected, Stripe's PaymentElement automatically confirms the payment
+      // We need to skip manual confirmation and let the webhook handle the activation
+      if (isWalletPaymentSelected && paymentIntentClientSecret) {
+        console.log("✅ Wallet payment detected - Stripe handles payment internally, proceeding with purchase flow");
+        
+        // For wallet payments, Stripe handles the payment confirmation internally
+        // We'll show a processing message and let the webhook handle the activation
+        // The paymentIntentId will be extracted from the webhook event
+        showLoading("Processing Wallet Payment", "", [
+          "Completing payment",
+          "Processing transaction",
+          isAuthenticated ? "Activating your membership" : "Creating your account",
+        ]);
+        
+        // Extract payment intent ID from client secret for tracking
+        const paymentIntentId = paymentIntentClientSecret.split("_secret_")[0];
+        setPaymentIntentId(paymentIntentId);
+        setProcessingPackageName(activePlan?.name || "");
+        setShowPaymentProcessing(true);
+        
+        // Don't proceed with manual confirmation - webhook will handle activation
+        // The PaymentProcessingScreen will poll for payment status
+        return;
+      }
+
       // Determine payment method to use
       let paymentMethodId: string;
       let isNewPaymentMethod = false;
@@ -4792,6 +4818,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     onPaymentMethodTypeChange={(type) => {
                       setIsWalletPaymentSelected(type === "wallet");
                     }}
+                    onWalletPaymentClick={() => {
+                      // ✅ NEW: Automatically trigger purchase flow when wallet payment is clicked
+                      // This allows wallet payments to work without requiring a separate purchase button click
+                      handleSubmit();
+                    }}
                   />
                 )}
 
@@ -4823,6 +4854,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       packageName={promoEnhancedPlan?.name || activePlan?.name}
                       onPaymentMethodTypeChange={(type) => {
                         setIsWalletPaymentSelected(type === "wallet");
+                      }}
+                      onWalletPaymentClick={() => {
+                        // ✅ NEW: Automatically trigger purchase flow when wallet payment is clicked
+                        // This allows wallet payments to work without requiring a separate purchase button click
+                        handleSubmit();
                       }}
                     />
                   )}
@@ -4901,7 +4937,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   ) : (
                     <Button
                       type="submit"
-                      disabled={!isFormValid() || isSubmitting || isWalletPaymentSelected}
+                      disabled={!isFormValid() || isSubmitting}
                       variant="metallic"
                       fullWidth
                       size="lg"

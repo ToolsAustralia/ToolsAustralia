@@ -607,38 +607,9 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
                   fontSizeBase: "14px",
                 },
                 rules: {
-                  ".Tab": {
-                    display: "flex",
-                    alignItems: "center",
-                    flexDirection: "row",
-                    gap: "8px",
-                  },
-                  ".Tab--selected": {
-                    display: "flex",
-                    alignItems: "center",
-                    flexDirection: "row",
-                    gap: "8px",
-                  },
-                  "button[role='tab']": {
-                    display: "flex",
-                    alignItems: "center",
-                    flexDirection: "row",
-                    gap: "8px",
-                  },
-                  ".TabIcon, svg, img": {
-                    display: "inline-flex",
-                    alignItems: "center",
-                    flexShrink: "0",
-                    marginRight: "0",
-                  },
-                  ".TabLabel, span": {
-                    display: "inline-flex",
-                    alignItems: "center",
-                  },
                   ".Input": {
                     fontSize: "14px",
                     padding: "10px",
-                    minHeight: "auto",
                   },
                 },
               },

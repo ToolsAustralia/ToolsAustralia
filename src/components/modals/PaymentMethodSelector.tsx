@@ -73,6 +73,8 @@ interface PaymentMethodSelectorProps {
   elementsRemountKey?: number;
   // ✅ STRIPE BEST PRACTICE: Callback to notify parent when payment method type changes
   onPaymentMethodTypeChange?: (type: "card" | "wallet" | null) => void;
+  // ✅ NEW: Callback to trigger purchase flow when wallet payment is clicked
+  onWalletPaymentClick?: () => void;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
@@ -97,6 +99,7 @@ const StripeCardForm = React.forwardRef<
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
     onPaymentMethodTypeChange?: (type: "card" | "wallet" | null) => void; // ✅ STRIPE BEST PRACTICE: Callback for payment method type changes
+    onWalletPaymentClick?: () => void; // ✅ NEW: Callback to trigger purchase flow when wallet payment is clicked
   }
 >(
   (
@@ -106,9 +109,10 @@ const StripeCardForm = React.forwardRef<
       onCardElementChange,
       cardError,
       billingDetails,
-      amount,
-      packageName,
-      onPaymentMethodTypeChange,
+    amount,
+    packageName,
+    onPaymentMethodTypeChange,
+    onWalletPaymentClick,
     },
     ref
   ) => {
@@ -785,7 +789,15 @@ const StripeCardForm = React.forwardRef<
               if (isWalletPayment) {
                 setSelectedPaymentMethodType("wallet");
                 onPaymentMethodTypeChange?.("wallet");
-                console.log("✅ Wallet payment method selected - form submit button disabled");
+                console.log("✅ Wallet payment method selected - triggering purchase flow");
+                // ✅ NEW: Automatically trigger purchase flow when wallet payment is clicked
+                // This allows wallet payments to work without requiring a separate purchase button click
+                if (onWalletPaymentClick) {
+                  // Use setTimeout to ensure this runs after the current event cycle
+                  setTimeout(() => {
+                    onWalletPaymentClick();
+                  }, 0);
+                }
               } else if (paymentMethodType === "card") {
                 setSelectedPaymentMethodType("card");
                 onPaymentMethodTypeChange?.("card");
@@ -834,6 +846,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   packageName,
   elementsRemountKey = 0,
   onPaymentMethodTypeChange,
+  onWalletPaymentClick,
 }) => {
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
@@ -966,71 +979,16 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     fontSizeBase: "14px", // text-sm equivalent
                   },
                   rules: {
-                    // Ensure wallet payment method tabs have icon and text on same row
-                    ".Tab": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    ".Tab--selected": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    // Target tab button content
-                    "button[role='tab']": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    // Ensure icons are inline
-                    ".TabIcon, svg, img": {
-                      display: "inline-flex",
-                      alignItems: "center",
-                      flexShrink: "0",
-                      marginRight: "0",
-                    },
-                    // Ensure payment method labels are inline with icons
-                    ".TabLabel, span": {
-                      display: "inline-flex",
-                      alignItems: "center",
-                    },
                     // Match coupon code input field size on mobile
                     ".Input": {
                       fontSize: "14px", // text-sm
                       padding: "10px", // py-2 equivalent
-                      minHeight: "auto",
                     },
                     ".Input--empty": {
                       fontSize: "14px",
                     },
-                    ".Input--focus": {
-                      fontSize: "14px",
-                    },
                     ".Input--invalid": {
                       fontSize: "14px",
-                    },
-                    // Card number, expiration, and CVC inputs
-                    "input[data-elements-stable-field-name='cardNumber']": {
-                      fontSize: "14px",
-                      padding: "8px",
-                    },
-                    "input[data-elements-stable-field-name='cardExpiry']": {
-                      fontSize: "14px",
-                      padding: "8px",
-                    },
-                    "input[data-elements-stable-field-name='cardCvc']": {
-                      fontSize: "14px",
-                      padding: "8px",
-                    },
-                    // Input container
-                    ".InputElement": {
-                      fontSize: "14px",
-                      padding: "8px",
-                      minHeight: "auto",
                     },
                   },
                 },
@@ -1046,6 +1004,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 amount={amount}
                 packageName={packageName}
                 onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+                onWalletPaymentClick={onWalletPaymentClick}
               />
             </Elements>
           ) : cardFormError ? (
@@ -1323,6 +1282,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     amount={amount}
                     packageName={packageName}
                     onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+                    onWalletPaymentClick={onWalletPaymentClick}
                   />
                 </Elements>
               ) : (
