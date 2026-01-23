@@ -124,7 +124,8 @@ const StripeCardForm = React.forwardRef<
     // ✅ STRIPE BEST PRACTICE: Track selected payment method type to prevent form submit for wallet payments
     const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState<"card" | "wallet" | null>(null);
     // ✅ STRIPE BEST PRACTICE: Form ref for form-based submission (maintains user activation chain)
-    const formRef = React.useRef<HTMLFormElement>(null);
+    // ✅ FIX: Changed to div ref since we're using div instead of form to avoid nested forms
+    const formRef = React.useRef<HTMLDivElement>(null);
     // Store confirmation result for ref access
     const confirmationResultRef = React.useRef<{
       paymentMethodId?: string;
@@ -248,20 +249,33 @@ const StripeCardForm = React.forwardRef<
     // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
     const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
 
-    // Build paymentRequest configuration - only include if amount is valid
-    // This ensures PaymentElement shows correct amount in wallet UIs
-    const paymentRequestConfig:
-      | { country: string; currency: string; total: { label: string; amount: number } }
-      | undefined = shouldEnableWallets
-      ? {
-          country: "AU",
-          currency: "aud",
-          total: {
-            label: packageName || "Membership",
-            amount: amount, // Amount in cents - only set when valid
-          },
+    // ✅ DEBUG: Monitor wallet button availability and PaymentIntent state
+    useEffect(() => {
+      if (!shouldEnableWallets || !elementsReady || !elements) return;
+
+      // Log PaymentIntent details to help debug wallet button issues
+      const checkPaymentIntent = async () => {
+        try {
+          // PaymentElement with wallets: "auto" should automatically handle wallet clicks
+          // If wallet buttons are visible but not opening, check:
+          // 1. PaymentIntent status (should be requires_payment_method or requires_confirmation)
+          // 2. Browser/device compatibility (HTTPS, Chrome for Google Pay, Safari for Apple Pay)
+          // 3. User has cards saved in wallet
+          console.log("🔍 Wallet button debugging info:", {
+            hasClientSecret: !!clientSecret,
+            intentType,
+            amount,
+            walletsEnabled: shouldEnableWallets,
+            elementsReady,
+            note: "If wallet buttons are visible but not opening, check browser console for errors when clicking",
+          });
+        } catch (error) {
+          console.error("Error checking PaymentIntent:", error);
         }
-      : undefined;
+      };
+
+      checkPaymentIntent();
+    }, [shouldEnableWallets, elementsReady, elements, clientSecret, intentType, amount]);
 
     // ✅ DEBUG: Log wallet configuration for troubleshooting
     useEffect(() => {
@@ -273,8 +287,6 @@ const StripeCardForm = React.forwardRef<
           amountInDollars: amount ? `$${(amount / 100).toFixed(2)}` : "N/A",
           packageName,
           hasClientSecret: !!clientSecret,
-          paymentRequestConfigured: !!paymentRequestConfig,
-          paymentRequestDetails: paymentRequestConfig,
         });
       } else {
         console.log("ℹ️ Wallets disabled:", {
@@ -284,18 +296,20 @@ const StripeCardForm = React.forwardRef<
           reason: intentType !== "payment" ? "Not a PaymentIntent" : !amount || amount <= 0 ? "Invalid amount" : "Unknown",
         });
       }
-    }, [shouldEnableWallets, intentType, amount, packageName, clientSecret, paymentRequestConfig]);
+    }, [shouldEnableWallets, intentType, amount, packageName, clientSecret]);
 
     // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
     // ✅ STRIPE BEST PRACTICE: PaymentElement wallet configuration
     // - Wallets are set to "auto" which allows PaymentElement to automatically handle wallet button clicks
     // - When wallet button is clicked, PaymentElement internally calls confirmPayment() - we don't need to do anything
-    // - paymentRequest is included to provide amount/currency info for wallet UIs
+    // - PaymentElement automatically reads amount/currency from PaymentIntent client secret
+    // - paymentRequest parameter is NOT valid for PaymentElement (it's only for Payment Request Button API)
     // - This configuration allows wallet buttons to work automatically without manual intervention
     const paymentElementOptions = {
       layout: "tabs" as const,
       // ✅ CRITICAL: Only enable wallets when PaymentIntent is ready with correct amount
       // This prevents $0.00 display in Google Pay/Apple Pay wallet sheets
+      // PaymentElement automatically reads amount from PaymentIntent client secret
       wallets: shouldEnableWallets
         ? {
             applePay: "auto" as const, // ✅ PaymentElement automatically handles Apple Pay button clicks
@@ -303,10 +317,6 @@ const StripeCardForm = React.forwardRef<
           }
         : undefined, // Disable wallets until PaymentIntent is ready
       paymentMethodOrder: shouldEnableWallets ? ["card", "apple_pay", "google_pay"] : ["card"],
-      // ✅ CRITICAL: paymentRequest provides amount/currency for wallet UIs
-      // PaymentElement uses this to display correct amount in wallet sheets
-      // Only include paymentRequest when amount is valid to prevent $0.00 display
-      ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
       fields: {
         billingDetails: "never" as const, // Hide country, address, and postal code fields
       },
@@ -624,46 +634,9 @@ const StripeCardForm = React.forwardRef<
         }
     };
 
-    // ✅ STRIPE BEST PRACTICE: Form onSubmit handler - maintains user activation chain for card payments
-    const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-
-      // ✅ CRITICAL: Wallet payments must be initiated ONLY by clicking the wallet button directly
-      // Do NOT process wallet payments through form submit - Stripe handles this internally
-      // When user clicks wallet button (Google Pay/Apple Pay), Stripe's Payment Element:
-      // 1. Creates PaymentMethod
-      // 2. Attaches to customer
-      // 3. Confirms PaymentIntent internally
-      // 4. Backend webhook (invoice.paid or payment_intent.succeeded) handles subscription activation
-      // 5. May redirect to return_url if configured (Stripe handles this internally)
-      // Our code never calls confirmPayment() for wallet - it's entirely Stripe-driven
-      if (selectedPaymentMethodType === "wallet") {
-        console.log("⚠️ Wallet payment selected - form submit ignored. User must click wallet button directly.");
-        confirmationResultRef.current = {
-          error: "Please click the wallet payment button (Google Pay, Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main submit button."
-        };
-        return;
-      }
-
-      // ✅ STRIPE BEST PRACTICE: Only process card payments through form submit
-      // This maintains the user activation chain required by Stripe
-      if (!stripe || !elements) {
-        const error = "Stripe not loaded. Please refresh and try again.";
-        onCardElementChange({ error: { message: error } });
-        confirmationResultRef.current = { error };
-        return;
-      }
-
-      // Perform confirmation for card payments
-      const result = await performConfirmation();
-      confirmationResultRef.current = result;
-      
-      if (result.error) {
-        onCardElementChange({ error: { message: result.error } });
-      } else {
-        console.log("✅ Payment confirmed via form submit:", result);
-      }
-    };
+    // ✅ REMOVED: handleFormSubmit - no longer needed since parent form (MembershipModal) handles submission
+    // The parent form calls cardFormRef.current.confirmSetup() which uses performConfirmation()
+    // This avoids nested forms which cause hydration errors
 
     // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
     // ✅ STRIPE BEST PRACTICE: For backward compatibility, but prefer form submit for card payments
@@ -715,12 +688,20 @@ const StripeCardForm = React.forwardRef<
           <CreditCard className="w-4 h-4 text-red-600" />
           Payment Details
         </h4>
-        {/* ✅ STRIPE BEST PRACTICE: Wrap Payment Element in form with onSubmit for proper user activation chain */}
-        <form
+        {/* ✅ FIX: Use div instead of form to avoid nested forms (parent MembershipModal already has a form) */}
+        {/* PaymentElement doesn't require a form wrapper - it works within the parent form */}
+        <div
           ref={formRef}
           id="payment-form"
-          onSubmit={handleFormSubmit}
           className="mt-0"
+          // ✅ CRITICAL: Prevent Enter key from interfering with wallet button clicks
+          onKeyDown={(e) => {
+            // Allow Enter key to work normally for card inputs, but don't interfere with wallet buttons
+            if (e.key === "Enter" && selectedPaymentMethodType === "wallet") {
+              e.preventDefault();
+              console.log("⚠️ Enter key pressed while wallet payment selected - wallet button must be clicked directly");
+            }
+          }}
         >
           <div className="p-3 border border-gray-300 rounded-lg bg-white">
             <PaymentElement
@@ -738,7 +719,6 @@ const StripeCardForm = React.forwardRef<
                   amount,
                   packageName,
                   walletsEnabled: shouldEnableWallets,
-                  paymentRequestConfigured: !!paymentRequestConfig,
                 });
               }
             }}
@@ -812,7 +792,7 @@ const StripeCardForm = React.forwardRef<
             }}
           />
           </div>
-        </form>
+        </div>
         {cardError && <p className="text-red-500 text-sm mt-2">{cardError}</p>}
       </div>
     );
