@@ -125,6 +125,7 @@ const StripeCardForm = React.forwardRef<
     const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState<"card" | "wallet" | null>(null);
     // ✅ STRIPE BEST PRACTICE: Form ref for form-based submission (maintains user activation chain)
     // ✅ FIX: Changed to div ref since we're using div instead of form to avoid nested forms
+    // PaymentElement creates its own internal form, so we use a div wrapper to avoid nested forms
     const formRef = React.useRef<HTMLDivElement>(null);
     // Store confirmation result for ref access
     const confirmationResultRef = React.useRef<{
@@ -205,6 +206,14 @@ const StripeCardForm = React.forwardRef<
       }
     }, [stripe, elements, showToast, clientSecret]);
 
+    // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
+    // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
+    // For subscriptions: PaymentIntent must be created before wallets can show correct amount
+    // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
+    // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
+    // ✅ FIX: Moved before appearance rules usage to fix TypeScript error
+    const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
+
     // Inject custom CSS for wallet payment method layout (icons and text on same row)
     // Note: Stripe uses shadow DOM, so we inject styles that target the iframe content
     useEffect(() => {
@@ -241,13 +250,6 @@ const StripeCardForm = React.forwardRef<
         }
       };
     }, []);
-
-    // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
-    // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
-    // For subscriptions: PaymentIntent must be created before wallets can show correct amount
-    // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
-    // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
-    const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
 
     // ✅ DEBUG: Monitor wallet button availability and PaymentIntent state
     useEffect(() => {
@@ -361,14 +363,10 @@ const StripeCardForm = React.forwardRef<
           return { error: "Stripe not loaded" };
         }
 
-        // ✅ STRIPE BEST PRACTICE: Check if wallet payment is selected
-        // ALL wallet payments (Google Pay, Apple Pay, Link, etc.) must be initiated by clicking the wallet button directly
-        // Calling confirmPayment() from a form submit button breaks the user activation chain
-        if (selectedPaymentMethodType === "wallet") {
-          return {
-            error: "Please click the wallet payment button (Google Pay, Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main submit button."
-          };
-        }
+        // ✅ FIX: With wallets: "auto", PaymentElement handles wallet payments automatically
+        // Wallet button clicks are handled by PaymentElement internally and don't trigger form submission
+        // This function only handles card payments via form submission
+        // If wallet payment is selected, PaymentElement has already handled it automatically
 
         try {
           const billingDetailsData = buildBillingDetails();
@@ -642,20 +640,10 @@ const StripeCardForm = React.forwardRef<
     // ✅ STRIPE BEST PRACTICE: For backward compatibility, but prefer form submit for card payments
     React.useImperativeHandle(ref, () => ({
       confirmSetup: async () => {
-        // ✅ STRIPE BEST PRACTICE: Check if wallet payment is selected
-        // ALL wallet payments (Google Pay, Apple Pay, Link, etc.) must be initiated by clicking the wallet button directly
-        // Calling confirmPayment() from a form submit button breaks the user activation chain
-        if (selectedPaymentMethodType === "wallet") {
-          return {
-            error: "Please click the wallet payment button (Google Pay, Apple Pay, etc.) directly in the payment form to complete your payment. Do not use the main submit button."
-          };
-        }
-
-        // ✅ STRIPE BEST PRACTICE: If form exists and we want to maintain user activation chain,
-        // we could trigger form.requestSubmit(), but that would require waiting for async result.
-        // For backward compatibility with existing code that expects immediate result, call performConfirmation directly.
-        // The parent should ideally use form submit (wrapping PaymentElement in form with type="submit" button),
-        // but this ref method maintains compatibility.
+        // ✅ FIX: With wallets: "auto", PaymentElement handles wallet payments automatically
+        // Wallet button clicks are handled by PaymentElement internally and don't trigger form submission
+        // This function only handles card payments via form submission
+        // If wallet payment is selected, PaymentElement has already handled it automatically
         return await performConfirmation();
       },
     }));
@@ -689,10 +677,10 @@ const StripeCardForm = React.forwardRef<
           Payment Details
         </h4>
         {/* ✅ FIX: Use div instead of form to avoid nested forms (parent MembershipModal already has a form) */}
-        {/* PaymentElement doesn't require a form wrapper - it works within the parent form */}
+        {/* PaymentElement creates its own internal form, so we use a div wrapper to avoid nested forms */}
+        {/* No form attributes needed - PaymentElement handles its own form submission */}
         <div
           ref={formRef}
-          id="payment-form"
           className="mt-0"
           // ✅ CRITICAL: Prevent Enter key from interfering with wallet button clicks
           onKeyDown={(e) => {
@@ -955,6 +943,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     fontSizeBase: "14px", // text-sm equivalent
                   },
                   rules: {
+                    // ✅ FIX: Only use supported Stripe appearance properties
                     // Match coupon code input field size on mobile
                     ".Input": {
                       fontSize: "14px", // text-sm
@@ -1178,71 +1167,19 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                         fontSizeBase: "14px", // text-sm equivalent
                       },
                       rules: {
-                        // Ensure wallet payment method tabs have icon and text on same row
-                        ".Tab": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        ".Tab--selected": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        // Target tab button content
-                        "button[role='tab']": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        // Ensure icons are inline
-                        ".TabIcon, svg, img": {
-                          display: "inline-flex",
-                          alignItems: "center",
-                          flexShrink: "0",
-                          marginRight: "0",
-                        },
-                        // Ensure payment method labels are inline with icons
-                        ".TabLabel, span": {
-                          display: "inline-flex",
-                          alignItems: "center",
-                        },
+                        // ✅ FIX: Only use supported Stripe appearance properties
+                        // Removed invalid selectors: .Tab, .Tab--selected, button[role='tab'], .TabIcon, .TabLabel, attribute selectors, .InputElement
+                        // Stripe doesn't support: display, alignItems, flexDirection, gap, minHeight, attribute selectors, complex selectors
                         // Match coupon code input field size on mobile
                         ".Input": {
                           fontSize: "14px", // text-sm
                           padding: "10px",
-                          minHeight: "auto",
                         },
                         ".Input--empty": {
                           fontSize: "14px",
                         },
-                        ".Input--focus": {
-                          fontSize: "14px",
-                        },
                         ".Input--invalid": {
                           fontSize: "14px",
-                        },
-                        // Card number, expiration, and CVC inputs
-                        "input[data-elements-stable-field-name='cardNumber']": {
-                          fontSize: "14px",
-                          padding: "8px",
-                        },
-                        "input[data-elements-stable-field-name='cardExpiry']": {
-                          fontSize: "14px",
-                          padding: "8px",
-                        },
-                        "input[data-elements-stable-field-name='cardCvc']": {
-                          fontSize: "14px",
-                          padding: "8px",
-                        },
-                        // Input container
-                        ".InputElement": {
-                          fontSize: "14px",
-                          padding: "8px",
-                          minHeight: "auto",
                         },
                       },
                     },
