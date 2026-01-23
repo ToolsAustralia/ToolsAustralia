@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         currentConfigLocked = true;
         currentLockedAt = currentFreeze;
 
-        nextActivation = new Date(now.getTime() + 4 * 60 * 60 * 1000); // +4 hours from now
+        nextActivation = new Date(currentDrawEnd.getTime() + 4 * 60 * 60 * 1000); // +4 hours from currentDrawEnd
         nextStatus = "queued";
         nextIsActive = false;
         break;

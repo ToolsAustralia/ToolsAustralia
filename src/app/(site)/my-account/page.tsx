@@ -19,6 +19,7 @@ import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import MembershipModal from "@/components/modals/MembershipModal";
 import SettingsModal from "@/components/modals/SettingsModal";
 import ReferFriendModal from "@/components/modals/ReferFriendModal";
@@ -125,6 +126,7 @@ export default function MyAccountPage() {
   // Add membership hooks
   const membershipModal = useMembershipModal();
   const { requestModal, activeModal, closeModal } = useModalPriorityStore();
+  const { openEntryFlow } = useMajorDrawEntryCta();
 
   // Fetch 8 most recent active mini-draws
   const { data: miniDrawsData, isLoading: miniDrawsLoading } = useMiniDraws({
@@ -681,15 +683,8 @@ export default function MyAccountPage() {
                   {hasAccessToAdditionalPackages && (
                     <button
                       onClick={() => {
-                        // Clear session tracking for special packages modal so it can show
-                        const { clearModalFromSession } = useModalPriorityStore.getState();
-                        clearModalFromSession("special-packages");
-                        // Clear sessionStorage flag as well to bypass session check
-                        if (typeof window !== "undefined") {
-                          sessionStorage.removeItem("specialPackagesModalShown");
-                        }
-                        // Request special packages modal through priority system (force=true to bypass checks)
-                        requestModal("special-packages", true);
+                        // Use openEntryFlow hook which handles gate checking and modal opening
+                        openEntryFlow();
                       }}
                       className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
                     >
@@ -1009,15 +1004,8 @@ export default function MyAccountPage() {
                   {hasAccessToAdditionalPackages && (
                     <button
                       onClick={() => {
-                        // Clear session tracking for special packages modal so it can show
-                        const { clearModalFromSession } = useModalPriorityStore.getState();
-                        clearModalFromSession("special-packages");
-                        // Clear sessionStorage flag as well to bypass session check
-                        if (typeof window !== "undefined") {
-                          sessionStorage.removeItem("specialPackagesModalShown");
-                        }
-                        // Request special packages modal through priority system (force=true to bypass checks)
-                        requestModal("special-packages", true);
+                        // Use openEntryFlow hook which handles gate checking and modal opening
+                        openEntryFlow();
                       }}
                       className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-4 py-2 rounded-lg font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl w-full"
                     >

@@ -5,7 +5,7 @@ import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 interface UseMajorDrawEntryCtaResult {
@@ -29,6 +29,8 @@ interface UseMajorDrawEntryCtaResult {
 export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { hasActiveSubscription, userData } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
+  const { data: nextDraw } = useNextDraw();
   const membershipModal = useMembershipModal();
   const { requestModal, clearModalFromSession } = useModalPriorityStore();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
@@ -248,6 +250,18 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
   const openEntryFlow = useCallback(
     ({ openLocalModal = true }: { openLocalModal?: boolean } = {}) => {
+      // Check if gates are closed (freeze period or gap period)
+      const gatesClosed = currentMajorDraw?.status !== "active";
+      
+      if (gatesClosed) {
+        // Show gate-closed modal instead of opening payment modals
+        requestModal("gate-closed", true, {
+          nextActivationDate: nextDraw?.activationDate ?? null,
+          nextDrawName: nextDraw?.name,
+        });
+        return;
+      }
+
       // Check if user has access (subscription OR current draw entries)
       const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
       if (hasAccess) {
@@ -275,7 +289,16 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         );
       }
     },
-    [clearModalFromSession, getHeavyDutyPack, userData, userMajorDrawStats, membershipModal, requestModal]
+    [
+      clearModalFromSession,
+      getHeavyDutyPack,
+      userData,
+      userMajorDrawStats,
+      membershipModal,
+      requestModal,
+      currentMajorDraw,
+      nextDraw,
+    ]
   );
 
   return useMemo(
