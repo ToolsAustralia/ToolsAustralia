@@ -318,6 +318,9 @@ const StripeCardForm = React.forwardRef<
       // PaymentElement automatically reads amount from PaymentIntent client secret
       wallets: shouldEnableWallets
         ? {
+            // ✅ FIX: PaymentElement automatically handles wallet button clicks - we should NOT call confirmPayment for wallets
+            // When wallet button is clicked, PaymentElement internally calls confirmPayment() and opens wallet UI
+            // The "auto" setting allows PaymentElement to detect and show wallet buttons on compatible devices
             applePay: "auto" as const, // ✅ PaymentElement automatically handles Apple Pay button clicks and opens wallet UI
             googlePay: "auto" as const, // ✅ PaymentElement automatically handles Google Pay button clicks and opens wallet UI
           }
@@ -362,55 +365,40 @@ const StripeCardForm = React.forwardRef<
     };
 
     // ✅ STRIPE BEST PRACTICE: Core confirmation logic (extracted for reuse in form onSubmit and ref)
+    // ✅ CRITICAL: This function ONLY handles CARD payments via form submission
+    // Wallet payments are handled automatically by PaymentElement - we should NOT call confirmPayment for wallets
     const performConfirmation = async () => {
         if (!stripe || !elements) {
           return { error: "Stripe not loaded" };
         }
 
-        // ✅ FIX: With wallets: "auto", PaymentElement handles wallet payments automatically
-        // Wallet button clicks are handled by PaymentElement internally and don't trigger form submission
-        // This function only handles card payments via form submission
-        // If wallet payment is selected, PaymentElement has already handled it automatically
+        // ✅ CRITICAL FIX: Check if wallet payment is selected - if so, do NOT call confirmPayment
+        // Wallet button clicks are handled automatically by PaymentElement internally
+        // Calling confirmPayment for wallet payments breaks the user activation chain and prevents wallet UI from opening
+        if (selectedPaymentMethodType === "wallet") {
+          return {
+            error: "Wallet payments are handled automatically by PaymentElement. Please click the wallet button (Google Pay/Apple Pay) directly in the payment form to complete your payment."
+          };
+        }
 
         try {
           const billingDetailsData = buildBillingDetails();
 
-          // Handle PaymentIntent (for wallet payments with amount display)
+          // Handle PaymentIntent (for card payments only - wallets are handled automatically)
           if (intentType === "payment") {
             // ✅ CRITICAL: Stripe REQUIRES elements.submit() before confirmPayment()
-            // However, for wallet payments, submit() may return wallet-specific errors
-            // We need to call submit() to maintain user activation chain (called from button click)
-            // But proceed with confirmPayment() even if submit() fails with wallet errors
-            
+            // This validates the card input fields
             const submitResult = await elements.submit();
             
-            // Check if this is a wallet payment error (not a card validation error)
-            const isWalletPaymentError = submitResult.error && (
-              submitResult.error.code === "google_pay.payment_exception" ||
-              submitResult.error.code === "apple_pay.payment_exception" ||
-              String(submitResult.error.type || "").toLowerCase().includes("google_pay") ||
-              String(submitResult.error.type || "").toLowerCase().includes("apple_pay") ||
-              submitResult.error.message?.toLowerCase().includes("google pay") ||
-              submitResult.error.message?.toLowerCase().includes("apple pay") ||
-              submitResult.error.message?.toLowerCase().includes("wallet") ||
-              submitResult.error.message?.toLowerCase().includes("payment_exception") ||
-              submitResult.error.message?.toLowerCase().includes("unable to show")
-            );
-
-            // Block only if it's a real card validation error (not wallet payment error)
-            if (submitResult.error && !isWalletPaymentError) {
+            // If there's a validation error, return it
+            if (submitResult.error) {
               console.error("PaymentElement validation error:", submitResult.error);
               return { error: submitResult.error.message || "Please complete all required fields." };
             }
 
-            // For wallet payment errors, proceed - confirmPayment() will handle wallet payments
-
-            // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
-            // No upfront PaymentIntent exists - this is the only PaymentIntent for the subscription payment
-
-            // ✅ CRITICAL: Must call confirmPayment() after submit() (Stripe requirement)
-            // For wallet payments, confirmPayment() will handle the wallet UI
-            // For card payments, confirmPayment() will process the validated card
+            // ✅ CRITICAL: Only call confirmPayment() for CARD payments
+            // Wallet payments are handled automatically by PaymentElement when wallet button is clicked
+            // Do NOT call confirmPayment for wallet payments - it breaks the user activation chain
             const { paymentIntent, error } = await stripe.confirmPayment({
               elements,
               clientSecret,
@@ -779,13 +767,14 @@ const StripeCardForm = React.forwardRef<
               if (isWalletPayment) {
                 setSelectedPaymentMethodType("wallet");
                 onPaymentMethodTypeChange?.("wallet");
-                console.log("✅ Wallet payment method selected - clicking wallet button should open wallet UI");
-                // ✅ FIX: With wallets: "auto", PaymentElement should automatically handle wallet button clicks
+                console.log("✅ Wallet payment method selected - PaymentElement will handle wallet button clicks automatically");
+                // ✅ CRITICAL: With wallets: "auto", PaymentElement automatically handles wallet button clicks
                 // When user clicks the wallet button (Google Pay/Apple Pay), PaymentElement will:
-                // 1. Open the wallet UI automatically
+                // 1. Open the wallet UI automatically (maintains user activation chain)
                 // 2. Call confirmPayment() internally
-                // 3. Handle the payment flow
-                // We don't need to do anything here - just ensure PaymentIntent is ready
+                // 3. Handle the entire payment flow
+                // We should NOT call confirmPayment() ourselves for wallet payments - it breaks the user activation chain
+                // The form submit button should only handle card payments
               } else if (paymentMethodType === "card") {
                 setSelectedPaymentMethodType("card");
                 onPaymentMethodTypeChange?.("card");

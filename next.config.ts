@@ -49,6 +49,8 @@ const nextConfig: NextConfig = {
   // Compiler options to remove console logs in production
   // This strips console.log, console.info, console.debug, and console.warn at build time
   // console.error is preserved for critical error reporting
+  // ✅ FIX: Only remove console logs in production, not in staging
+  // This allows console logs to work in staging environment for debugging
   compiler: {
     removeConsole:
       process.env.NODE_ENV === "production"
