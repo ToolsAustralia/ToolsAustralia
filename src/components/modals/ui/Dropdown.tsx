@@ -146,15 +146,15 @@ const Dropdown: React.FC<DropdownProps> = ({
       const spaceAbove = rect.top;
       
       // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
-      // Use same max-height as Select (320px = max-h-80) for longer dropdown
+      // Use same max-height as Select (400px) for longer dropdown
       const maxHeight = Math.min(
         spaceBelow - 20, // 20px padding from bottom/footer
         spaceAbove - 20, // 20px padding from top (if we need to open upward)
-        320 // max-h-80 equivalent (20rem = 320px)
+        400
       );
 
       if (optionsRef.current) {
-        optionsRef.current.style.maxHeight = `${Math.max(maxHeight, 160)}px`; // Minimum 160px
+        optionsRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px
       }
     };
 
@@ -273,28 +273,16 @@ const Dropdown: React.FC<DropdownProps> = ({
         <div
           id="dropdown-options"
           ref={optionsRef}
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-auto"
+          data-dropdown-list
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
           style={{
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",
             overscrollBehavior: "contain",
-            willChange: "scroll-position",
-            WebkitTransform: "translateZ(0)", // Hardware acceleration for smooth scrolling
+            WebkitTransform: "translateZ(0)",
             transform: "translateZ(0)",
           }}
-          onTouchStart={(e) => {
-            // Ensure touch events work properly for scrolling on mobile
-            e.stopPropagation();
-          }}
-          onTouchMove={(e) => {
-            // Allow native touch scrolling behavior on mobile
-            e.stopPropagation();
-          }}
-          onWheel={(e) => {
-            // Allow native wheel scrolling within dropdown (desktop)
-            // Stop propagation to prevent modal from scrolling
-            e.stopPropagation();
-          }}
+          onWheel={(e) => e.stopPropagation()}
         >
           {options.length === 0 ? (
             <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
@@ -307,6 +295,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                   type="button"
                   onClick={() => handleOptionClick(option.value)}
                   disabled={option.disabled}
+                  style={{ touchAction: "pan-y" }}
                   className={`
                     w-full px-4 py-3 text-left text-sm transition-colors duration-150
                     flex items-center justify-between gap-2

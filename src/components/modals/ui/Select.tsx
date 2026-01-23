@@ -186,15 +186,15 @@ const Select: React.FC<SelectProps> = ({
       const spaceAbove = rect.top;
       
       // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
-      // Use same max-height as Dropdown (320px = max-h-80) for longer dropdown
+      // Use same max-height as Dropdown (400px) for longer dropdown
       const maxHeight = Math.min(
         spaceBelow - 20, // 20px padding from bottom/footer
         spaceAbove - 20, // 20px padding from top
-        320 // max-h-80 equivalent (20rem = 320px) - same as Dropdown
+        400 // longer dropdown
       );
 
       if (optionsListRef.current) {
-        optionsListRef.current.style.maxHeight = `${Math.max(maxHeight, 160)}px`; // Minimum 160px
+        optionsListRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px
       }
     };
 
@@ -296,28 +296,16 @@ const Select: React.FC<SelectProps> = ({
         {isOpen && !disabled && (
           <div
             ref={optionsListRef}
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-auto"
+            data-dropdown-list
+            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
             style={{
               touchAction: "pan-y",
               WebkitOverflowScrolling: "touch",
               overscrollBehavior: "contain",
-              willChange: "scroll-position",
-              WebkitTransform: "translateZ(0)", // Hardware acceleration for smooth scrolling
+              WebkitTransform: "translateZ(0)",
               transform: "translateZ(0)",
             }}
-            onTouchStart={(e) => {
-              // Ensure touch events work properly for scrolling on mobile
-              e.stopPropagation();
-            }}
-            onTouchMove={(e) => {
-              // Allow native touch scrolling behavior on mobile
-              e.stopPropagation();
-            }}
-            onWheel={(e) => {
-              // Allow native wheel scrolling within dropdown (desktop)
-              // Stop propagation to prevent modal from scrolling
-              e.stopPropagation();
-            }}
+            onWheel={(e) => e.stopPropagation()}
           >
             {/* Search Input */}
             {searchable && (
@@ -346,6 +334,7 @@ const Select: React.FC<SelectProps> = ({
                   key={option.value}
                   type="button"
                   onClick={() => handleOptionSelect(option)}
+                  style={{ touchAction: "pan-y" }}
                   className={`w-full px-4 py-3 text-sm text-left hover:bg-red-50 focus:bg-red-50 focus:outline-none transition-colors duration-150 ${
                     value === option.value
                       ? "bg-red-100 text-red-900"
