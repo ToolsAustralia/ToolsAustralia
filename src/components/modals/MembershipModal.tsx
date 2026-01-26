@@ -2523,9 +2523,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               paymentMethodId = result.paymentMethodId;
               console.log("⚠️ Using existing payment method after recovery failure:", paymentMethodId);
             }
-          } else if (result.error?.includes("SETUP_INTENT_HAS_ERROR_RETRY") || result.needsRecovery) {
-            // ✅ NEW: Handle SetupIntent with last_setup_error - automatic recovery
-            console.log("⚠️ SetupIntent has last_setup_error, triggering automatic recovery...", result.lastSetupError);
+          } else if (result.error?.includes("SETUP_INTENT_CANCELED_RETRY") || 
+                     result.needsRecovery) {
+            // ✅ STRIPE BEST PRACTICE: Handle canceled SetupIntent - automatic recovery
+            // Only canceled SetupIntents need recovery (requires_payment_method with last_setup_error is still valid)
+            console.log("⚠️ SetupIntent was canceled, triggering automatic recovery...");
             
             // ✅ EXPERT ERROR HANDLING: Use recovery function for seamless retry
             // Note: handlePaymentRecovery already updates setupIntentClientSecret internally
@@ -2571,6 +2573,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           } else if (result.error) {
             // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent
             // When PaymentIntent is canceled, automatically create a new one and retry
+            // Note: Card declines don't need recovery - PaymentIntent can be reused
             if (result.error.includes("PAYMENT_INTENT_CANCELED_RETRY") || 
                 (result.error.includes("canceled") && result.error.includes("unexpected_state"))) {
               console.warn("⚠️ PaymentIntent was canceled - automatically creating new PaymentIntent and retrying...");
@@ -2692,9 +2695,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           console.log("💳 Attempting to confirm with client secret even though showCardForm is false");
           const result = await cardFormRef.current.confirmSetup();
 
-          // ✅ NEW: Handle SetupIntent with last_setup_error - automatic recovery (second occurrence)
-          if (result.error?.includes("SETUP_INTENT_HAS_ERROR_RETRY") || result.needsRecovery) {
-            console.log("⚠️ SetupIntent has last_setup_error, triggering automatic recovery...", result.lastSetupError);
+          // ✅ STRIPE BEST PRACTICE: Handle canceled SetupIntent - automatic recovery (second occurrence)
+          // Only canceled SetupIntents need recovery (requires_payment_method with last_setup_error is still valid)
+          if (result.error?.includes("SETUP_INTENT_CANCELED_RETRY") || 
+              result.needsRecovery) {
+            console.log("⚠️ SetupIntent was canceled, triggering automatic recovery...");
             
             // ✅ EXPERT ERROR HANDLING: Use recovery function for seamless retry
             // Note: handlePaymentRecovery already updates setupIntentClientSecret internally
@@ -2740,6 +2745,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           } else if (result.error) {
             // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent (second occurrence)
             // When PaymentIntent is canceled, automatically create a new one and retry
+            // Note: Card declines don't need recovery - PaymentIntent can be reused
             if (result.error.includes("PAYMENT_INTENT_CANCELED_RETRY") || 
                 (result.error.includes("canceled") && result.error.includes("unexpected_state"))) {
               console.warn("⚠️ PaymentIntent was canceled - automatically creating new PaymentIntent and retrying...");
