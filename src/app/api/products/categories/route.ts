@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 
+// Next.js ISR configuration
+export const revalidate = 300; // Revalidate every 5 minutes (categories change less frequently)
+
 export async function GET() {
   try {
     await connectDB();
@@ -42,19 +45,34 @@ export async function GET() {
       },
     ]);
 
-    return NextResponse.json({
-      categories: categories.map((cat) => ({
-        name: cat._id,
-        count: cat.count,
-      })),
-      brands: brands.map((brand) => ({
-        name: brand._id,
-        count: brand.count,
-      })),
-      priceRange: priceRange[0] || { minPrice: 0, maxPrice: 0 },
-    });
+    return NextResponse.json(
+      {
+        categories: categories.map((cat) => ({
+          name: cat._id,
+          count: cat.count,
+        })),
+        brands: brands.map((brand) => ({
+          name: brand._id,
+          count: brand.count,
+        })),
+        priceRange: priceRange[0] || { minPrice: 0, maxPrice: 0 },
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600", // Cache 5min, serve stale up to 10min
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching categories:", error);
-    return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch categories" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   }
 }

@@ -4,6 +4,9 @@ import Product from "@/models/Product";
 import { z } from "zod";
 // import { Product as ProductType, ProductSearchResult } from "@/types/product"; // TODO: Use for type validation
 
+// Next.js ISR configuration
+export const revalidate = 60; // Revalidate every 60 seconds (ISR)
+
 // Query parameters validation
 const querySchema = z.object({
   page: z.string().optional().default("1"),
@@ -93,17 +96,24 @@ export async function GET(request: NextRequest) {
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
 
-    return NextResponse.json({
-      products,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalCount,
-        hasNextPage,
-        hasPrevPage,
-        limit,
+    return NextResponse.json(
+      {
+        products,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalCount,
+          hasNextPage,
+          hasPrevPage,
+          limit,
+        },
       },
-    });
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300", // Cache 1min, serve stale up to 5min
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching products:", error);
 
@@ -122,6 +132,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid query parameters", details: error.issues }, { status: 400 });
     }
 
-    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch products" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   }
 }
