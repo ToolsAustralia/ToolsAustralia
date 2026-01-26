@@ -6,6 +6,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 
+// Next.js ISR configuration
+export const revalidate = 60; // Revalidate every 60 seconds (ISR)
+
 // Query parameters validation (updated for entry-based system)
 const querySchema = z.object({
   page: z.string().optional().default("1"),
@@ -151,28 +154,51 @@ export async function GET(request: NextRequest) {
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
 
-    return NextResponse.json({
-      miniDraws: miniDrawsWithMembership,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalCount,
-        hasNextPage,
-        hasPrevPage,
-        limit,
+    return NextResponse.json(
+      {
+        miniDraws: miniDrawsWithMembership,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalCount,
+          hasNextPage,
+          hasPrevPage,
+          limit,
+        },
       },
-    });
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300", // Cache 1min, serve stale up to 5min
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching mini draws:", error);
 
     // Handle specific error types
     if (error instanceof Error) {
       if (error.message === "Query timeout") {
-        return NextResponse.json({ error: "Query timeout - please try again" }, { status: 408 });
+        return NextResponse.json(
+          { error: "Query timeout - please try again" },
+          {
+            status: 408,
+            headers: {
+              "Cache-Control": "no-store, no-cache, must-revalidate",
+            },
+          }
+        );
       }
 
       if (error.message.includes("MongoServerError")) {
-        return NextResponse.json({ error: "Database connection error" }, { status: 503 });
+        return NextResponse.json(
+          { error: "Database connection error" },
+          {
+            status: 503,
+            headers: {
+              "Cache-Control": "no-store, no-cache, must-revalidate",
+            },
+          }
+        );
       }
     }
 
@@ -180,6 +206,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid query parameters", details: error.issues }, { status: 400 });
     }
 
-    return NextResponse.json({ error: "Failed to fetch mini draws" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch mini draws" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   }
 }
