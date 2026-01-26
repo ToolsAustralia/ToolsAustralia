@@ -391,17 +391,18 @@ const StripeCardForm = React.forwardRef<
               });
               
               // ✅ CRITICAL FIX: Handle canceled PaymentIntent error
-              if (error.code === "payment_intent_unexpected_state") {
-                const errorMessage = error.message || "";
-                
-                // Check if PaymentIntent was canceled
-                if (errorMessage.includes("canceled") || errorMessage.includes("canceled")) {
-                  // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
-                  // If canceled, return error for automatic recovery
-                  return { 
-                    error: "PAYMENT_INTENT_CANCELED_RETRY: This payment attempt was canceled. Creating a new payment form..." 
-                  };
-                }
+              // Check both error code and PaymentIntent status for comprehensive detection
+              const isCanceledPaymentIntent = 
+                (error.code === "payment_intent_unexpected_state" && 
+                 (error.message?.includes("canceled") || error.message?.includes("canceled"))) ||
+                error.payment_intent?.status === "canceled";
+
+              if (isCanceledPaymentIntent) {
+                // ✅ STRIPE BEST PRACTICE: Subscriptions use invoice PaymentIntent only
+                // If canceled, return error for automatic recovery
+                return { 
+                  error: "PAYMENT_INTENT_CANCELED_RETRY: This payment attempt was canceled. Creating a new payment form..." 
+                };
               }
               
               // ✅ ADD: Better error handling for Google Pay sandbox errors
@@ -458,14 +459,14 @@ const StripeCardForm = React.forwardRef<
                 if (result.success && result.data) {
                   const statusResult = result.data;
 
-                  // ✅ NEW: Detect SetupIntent with last_setup_error - needs recovery
-                  if (statusResult.hasLastSetupError && statusResult.status === "requires_payment_method") {
-                    console.log("⚠️ SetupIntent has last_setup_error, needs recovery:", statusResult.lastSetupError);
+                  // ✅ STRIPE BEST PRACTICE: Only trigger recovery for canceled SetupIntent (terminal state)
+                  // SetupIntent with requires_payment_method + last_setup_error is still valid and can be reused
+                  if (statusResult.status === "canceled") {
+                    console.log("⚠️ SetupIntent was canceled, needs recovery");
                     // Return special flag to trigger automatic recovery
                     return {
-                      error: "SETUP_INTENT_HAS_ERROR_RETRY: SetupIntent has a previous error. Creating a new one. Please try again.",
+                      error: "SETUP_INTENT_CANCELED_RETRY: SetupIntent was canceled. Creating a new one. Please try again.",
                       needsRecovery: true,
-                      lastSetupError: statusResult.lastSetupError,
                     };
                   }
 
@@ -567,6 +568,7 @@ const StripeCardForm = React.forwardRef<
               }
 
               // ✅ Use formatted error message for all errors
+              // Note: Card decline errors are handled normally - SetupIntent can be reused with new payment method
               const formattedError = formatPaymentError(error);
               return { 
                 error: formattedError.message,
