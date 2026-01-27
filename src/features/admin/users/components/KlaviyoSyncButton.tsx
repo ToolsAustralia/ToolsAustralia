@@ -131,21 +131,17 @@ export default function KlaviyoSyncButton() {
                 clearInterval(progressIntervalRef.current);
                 progressIntervalRef.current = null;
               }
-              // Use the stored result from the execute response
-              if (executeResponseRef.current) {
-                setSyncResult(executeResponseRef.current);
-                setStep("complete");
-                setIsExecuting(false);
-              } else {
-                // Fallback: if we don't have the result, wait a bit and check progress again
-                setTimeout(() => {
-                  if (executeResponseRef.current) {
-                    setSyncResult(executeResponseRef.current);
-                    setStep("complete");
-                    setIsExecuting(false);
-                  }
-                }, 1000);
-              }
+              // Construct result from progress data (API returns immediately, so we get final stats from progress)
+              const finalResult = {
+                processed: data.data.processed || 0,
+                synced: data.data.synced || 0,
+                errors: data.data.errors || 0,
+                duration: data.data.startTime ? Date.now() - data.data.startTime : 0,
+                errorDetails: [], // Error details not available in progress, but errors count is
+              };
+              setSyncResult(finalResult);
+              setStep("complete");
+              setIsExecuting(false);
             }
           }
         } catch (error) {
@@ -187,23 +183,14 @@ export default function KlaviyoSyncButton() {
         throw new Error(data.error || "Failed to execute sync");
       }
 
-      // Store the result for when progress shows complete
-      executeResponseRef.current = data.data;
+      // Sync started in background - progress polling will handle updates
+      // The response now returns immediately, sync continues in background
+      // We'll poll progress endpoint to track completion
       
       // Wait a moment for progress to initialize
       await new Promise((resolve) => setTimeout(resolve, 1000));
       
-      // Check if sync completed quickly (before progress polling started)
-      const quickCheck = await fetch("/api/admin/klaviyo/draw-reset-progress");
-      const quickData = await quickCheck.json();
-      
-      if (quickData.success && quickData.data && !quickData.data.isRunning) {
-        // Sync completed already
-        setSyncResult(data.data);
-        setStep("complete");
-        setIsExecuting(false);
-      }
-      // Otherwise, progress polling will handle updates
+      // Progress polling in useEffect will detect completion
     } catch (error) {
       console.error("Error executing sync:", error);
       setExecuteError(error instanceof Error ? error.message : "Failed to execute sync");
