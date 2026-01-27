@@ -42,41 +42,40 @@ export async function POST(request: NextRequest) {
     isManualSyncInProgress = true;
     console.log("🔄 Starting manual Klaviyo sync (source: admin panel)");
 
-    try {
-      const result = await resetDrawPropertiesForAllUsers(undefined, true); // Enable progress tracking
-
-      console.log(`✅ Manual Klaviyo sync completed:`, {
-        processed: result.processed,
-        synced: result.synced,
-        errors: result.errors,
-        duration: `${result.duration}ms`,
+    // Start sync in background (non-blocking) to prevent Vercel timeout
+    // Progress tracking is enabled so UI can poll for updates
+    resetDrawPropertiesForAllUsers(undefined, true)
+      .then((result) => {
+        console.log(`✅ Manual Klaviyo sync completed:`, {
+          processed: result.processed,
+          synced: result.synced,
+          errors: result.errors,
+          duration: `${result.duration}ms`,
+        });
+      })
+      .catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        console.error(`❌ Manual Klaviyo sync failed:`, errorMessage);
+      })
+      .finally(() => {
+        // Always clear lock, even if sync fails
+        isManualSyncInProgress = false;
+        console.log("🔓 Manual Klaviyo sync lock released");
       });
 
-      return NextResponse.json(
-        {
-          success: true,
-          data: {
-            processed: result.processed,
-            synced: result.synced,
-            errors: result.errors,
-            duration: result.duration,
-            errorDetails: result.errorDetails,
-          },
+    // Return immediately - sync continues in background
+    // UI will poll /api/admin/klaviyo/draw-reset-progress to track completion
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Sync started in background. Use progress endpoint to track status.",
+        data: {
+          started: true,
+          progressEndpoint: "/api/admin/klaviyo/draw-reset-progress",
         },
-        { status: 200 }
-      );
-    } finally {
-      // Always clear lock and progress, even if sync fails
-      isManualSyncInProgress = false;
-      // Clear progress after a short delay to allow final progress check
-      setTimeout(() => {
-        const progress = getSyncProgress();
-        if (progress) {
-          // Progress will be cleared by the reset function, but ensure it's cleared
-        }
-      }, 1000);
-      console.log("🔓 Manual Klaviyo sync lock released");
-    }
+      },
+      { status: 200 }
+    );
   } catch (error) {
     // Clear lock on error
     isManualSyncInProgress = false;
