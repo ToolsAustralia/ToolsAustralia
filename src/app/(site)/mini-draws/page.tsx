@@ -102,7 +102,7 @@ export default async function MiniDrawsPage() {
       {/* How It Works Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* This copy mirrors the actual membership-gated entry flow used in the mini draw components */}
-        <section className="bg-white rounded-lg shadow-sm border p-8 mb-12">
+        <section className="bg-white rounded-lg shadow-sm border p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">How Mini Draws Work</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
@@ -135,8 +135,8 @@ export default async function MiniDrawsPage() {
       </div>
 
       {/* Membership Section */}
-      <div className="bg-gradient-to-b from-black via-slate-900 to-black max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="pt-8 pb-32" titleColor="text-white" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="pt-8 pb-32" titleColor="" />
       </div>
     </div>
   );

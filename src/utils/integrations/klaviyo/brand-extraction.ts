@@ -16,10 +16,13 @@ import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
  * - "milwaukee-sidchrome" → "milwaukee"
  * - "dewalt-sidchrome" → "dewalt"
  * - "makita-sidchrome" → "makita"
+ * - "milwaukee-milwaukee" → "milwaukee"
+ * - "dewalt-milwaukee" → "dewalt"
+ * - "makita-milwaukee" → "makita"
  * - "cash-prize" → "milwaukee" (default)
  * - "unknown-slug" → "milwaukee" (default)
  *
- * @param slug - Promotion slug (e.g., "milwaukee-sidchrome")
+ * @param slug - Promotion slug (e.g., "milwaukee-sidchrome", "dewalt-milwaukee")
  * @returns Lowercase brand name (e.g., "milwaukee", "dewalt", "makita")
  */
 export function extractBrandFromSlug(slug: string | null | undefined): string {
@@ -38,8 +41,8 @@ export function extractBrandFromSlug(slug: string | null | undefined): string {
     return defaultBrand;
   }
 
-  // Extract brand from slug format: "brand-sidchrome" or "brand-other"
-  // Split by hyphen and take the first part
+  // Extract brand from slug format: "brand-sidchrome", "brand-milwaukee", or "brand-other"
+  // Split by hyphen and take the first part (e.g., "milwaukee-milwaukee" → "milwaukee")
   const parts = normalizedSlug.split("-");
   const brand = parts[0];
 
@@ -53,4 +56,3 @@ export function extractBrandFromSlug(slug: string | null | undefined): string {
   // If brand is not recognized, default to milwaukee
   return defaultBrand;
 }
-

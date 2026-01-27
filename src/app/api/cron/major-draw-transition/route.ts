@@ -3,7 +3,7 @@
  *
  * GET /api/cron/major-draw-transition
  *
- * Runs daily at 2:00 PM UTC (midnight AEST) as a backup safety net.
+ * Runs daily at 1:30 PM UTC (9:30 PM PH time) as a backup safety net.
  *
  * PRIMARY: Major draw transitions are now handled automatically by Mongoose middleware
  * in the MajorDraw model (runs on every query). This provides real-time transitions
@@ -163,20 +163,17 @@ export async function GET() {
 
     if (recentlyActivatedDraws.length > 0) {
       logs.push(
-        `🔄 IMMEDIATELY resetting Klaviyo draw-specific properties for ${recentlyActivatedDraws.length} recently activated draw(s)...`
+        `🔄 Initiating Klaviyo reset for ${recentlyActivatedDraws.length} recently activated draw(s) in background (non-blocking)...`
       );
       console.log(
-        `🔄 IMMEDIATELY resetting Klaviyo properties for ${recentlyActivatedDraws.length} draw(s) - PRIORITY for email campaigns`
+        `🔄 Initiating Klaviyo reset for ${recentlyActivatedDraws.length} draw(s) in background (non-blocking) - source: cron`
       );
 
       // Process each activated draw (usually just one, but handle multiple)
       // Process in parallel for faster execution
       const klaviyoResetPromises = recentlyActivatedDraws.map(async (activatedDraw) => {
         try {
-          logs.push(
-            `   Processing draw: ${activatedDraw.name} (activated: ${new Date(activatedDraw.activationDate).toISOString()})`
-          );
-          console.log(`   Processing draw: ${activatedDraw.name} (ID: ${activatedDraw._id})`);
+          console.log(`   Processing draw: ${activatedDraw.name} (ID: ${activatedDraw._id}) - source: cron`);
 
           // Fetch full document for type safety (lean() returns plain objects)
           const fullDraw = await MajorDraw.findById(activatedDraw._id);
@@ -185,38 +182,38 @@ export async function GET() {
           }
           const resetResult = await resetDrawPropertiesForAllUsers(fullDraw);
 
-          logs.push(`✅ Klaviyo reset completed for ${activatedDraw.name}:`);
-          logs.push(`   Processed: ${resetResult.processed} users`);
-          logs.push(`   Synced: ${resetResult.synced} users`);
-          logs.push(`   Errors: ${resetResult.errors} users`);
-          logs.push(`   Duration: ${resetResult.duration}ms`);
-
-          console.log(`✅ Klaviyo reset completed for ${activatedDraw.name}:`);
+          console.log(`✅ Klaviyo reset completed for ${activatedDraw.name} (source: cron):`);
           console.log(`   Processed: ${resetResult.processed} users`);
           console.log(`   Synced: ${resetResult.synced} users`);
           console.log(`   Errors: ${resetResult.errors} users`);
           console.log(`   Duration: ${resetResult.duration}ms`);
 
           if (resetResult.errors > 0) {
-            logs.push(`⚠️ ${resetResult.errors} users had errors during reset`);
+            console.warn(`⚠️ ${resetResult.errors} users had errors during reset (source: cron)`);
             resetResult.errorDetails.slice(0, 5).forEach((error) => {
-              logs.push(`   Error: ${error.email} - ${error.error}`);
+              console.warn(`   Error: ${error.email} - ${error.error}`);
             });
-            console.warn(`⚠️ ${resetResult.errors} users had errors during reset`);
           }
 
           return { success: true, draw: activatedDraw, result: resetResult };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Unknown error";
-          logs.push(`❌ Klaviyo reset failed for ${activatedDraw.name}: ${errorMessage}`);
-          console.error(`❌ Klaviyo reset failed for ${activatedDraw.name}:`, error);
+          console.error(`❌ Klaviyo reset failed for ${activatedDraw.name} (source: cron):`, errorMessage);
           return { success: false, draw: activatedDraw, error: errorMessage };
         }
       });
 
-      // Wait for all Klaviyo resets to complete (parallel execution for speed)
-      await Promise.allSettled(klaviyoResetPromises);
-      console.log(`✅ All Klaviyo resets completed (parallel execution)`);
+      // Fire-and-forget: Don't await - let it run in background
+      // This prevents cron timeout while still processing Klaviyo syncs
+      Promise.allSettled(klaviyoResetPromises)
+        .then(() => {
+          console.log(`✅ All Klaviyo resets completed in background (source: cron)`);
+        })
+        .catch((error) => {
+          console.error(`❌ Klaviyo reset failed in background (source: cron):`, error);
+        });
+
+      logs.push("🔄 Klaviyo reset initiated in background (non-blocking)");
     } else {
       logs.push("ℹ️ No recently activated draws found - skipping Klaviyo reset");
       console.log("ℹ️ No recently activated draws found - skipping Klaviyo reset");

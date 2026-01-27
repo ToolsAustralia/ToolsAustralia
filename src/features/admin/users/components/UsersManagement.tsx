@@ -16,6 +16,7 @@ import { Users, CreditCard, CheckCircle, Shield } from "lucide-react";
 import UserFiltersComponent from "./UserFilters";
 import UserList from "./UserList";
 import UserDetailModal from "@/components/admin/UserDetailModal";
+import KlaviyoSyncButton from "./KlaviyoSyncButton";
 
 /**
  * Main users management component
@@ -163,6 +164,7 @@ export default function UsersManagement() {
         <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
           User Management
         </h2>
+        <KlaviyoSyncButton />
       </div>
 
       {/* Stats Cards */}

@@ -29,9 +29,10 @@ interface LatestWinner {
 
 interface LatestWinnerHeroProps {
   className?: string;
+  contentWrapperClassName?: string; // Optional className for the inner content wrapper
 }
 
-export default function LatestWinnerHero({ className = "" }: LatestWinnerHeroProps) {
+export default function LatestWinnerHero({ className = "", contentWrapperClassName }: LatestWinnerHeroProps) {
   const [winner, setWinner] = useState<LatestWinner | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -77,7 +78,7 @@ export default function LatestWinnerHero({ className = "" }: LatestWinnerHeroPro
 
   return (
     <section className={`py-4 bg-gradient-to-b from-transparent via-gray-50/30 to-transparent ${className}`}>
-      <div className="max-w-7xl mx-auto">
+      <div className={contentWrapperClassName || "max-w-7xl mx-auto"}>
         {/* Section Header */}
         <div className="text-center mb-2 sm:mb-8 lg:mb-10">
           <div className="inline-flex items-center gap-1.5 sm:gap-3 mb-1 sm:mb-4 relative">

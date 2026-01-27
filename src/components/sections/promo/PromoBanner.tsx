@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
-import { useMajorDrawCountdown } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawCountdown, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
 import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
 import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST, getNowInAEST } from "@/utils/common/timezone";
@@ -59,6 +59,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
+  const { isLoading: isDrawLoading } = useCurrentMajorDraw();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   
   // Get variant config from context
@@ -82,6 +83,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const [bannerHeight, setBannerHeight] = useState<number | null>(null);
   const [timezoneAbbr, setTimezoneAbbr] = useState<string>("AEDT");
   const [isMobile, setIsMobile] = useState(false);
+  const [isContentReady, setIsContentReady] = useState(false);
 
   // Fetch active scheduled banner text
   const { data: activeBannerTextData } = useActivePromoBannerText();
@@ -472,6 +474,26 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Memoize font size calculation
   const fontSize = useMemo(() => calculateFontSize(badgeText, isMobile), [badgeText, isMobile]);
 
+  // Mark content as ready once all data is loaded and font size is calculated
+  // Reset when data changes to ensure we always show correct data with animation
+  useEffect(() => {
+    // Reset content ready state when data changes (badgeText, multiplier, or draw data)
+    setIsContentReady(false);
+    
+    // Content is ready when:
+    // 1. Badge text is available
+    // 2. Font size is calculated
+    // 3. Mobile detection is done
+    // 4. Draw data has finished loading (to prevent showing fallback text before draw status is checked)
+    if (badgeText && fontSize && typeof isMobile === "boolean" && !isDrawLoading) {
+      // Small delay to ensure styles are applied
+      const timer = setTimeout(() => {
+        setIsContentReady(true);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [badgeText, fontSize, isMobile, isDrawLoading, multiplier]);
+
   // Get formatted draw time for display
   const getDrawTimeText = (): string | null => {
     if (!currentDraw?.drawDate) return null;
@@ -557,39 +579,48 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 {/* First Line - "FIRST 500 PEOPLE" Badge - Matches width of second line */}
                 <div className="relative w-full">
                   {/* Outer glow effect - pulsing animation */}
-                  <div
-                    className="absolute inset-0 rounded-full animate-pulse"
-                    style={{
-                      background: `radial-gradient(circle, rgba(251, 191, 36, 0.5) 0%, rgba(245, 158, 11, 0.3) 40%, rgba(217, 119, 6, 0.15) 70%, transparent 100%)`,
-                      filter: "blur(5px)",
-                      transform: "scale(1.08)",
-                      zIndex: 0,
-                    }}
-                  />
+                  {isContentReady && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
+                      className="absolute inset-0 rounded-full animate-pulse"
+                      style={{
+                        background: `radial-gradient(circle, rgba(251, 191, 36, 0.5) 0%, rgba(245, 158, 11, 0.3) 40%, rgba(217, 119, 6, 0.15) 70%, transparent 100%)`,
+                        filter: "blur(5px)",
+                        transform: "scale(1.08)",
+                        zIndex: 0,
+                      }}
+                    />
+                  )}
 
                   {/* Main badge container - Gold gradient with depth - Matches second line width */}
-                  <div
-                    className="relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden"
-                    style={{
-                      background: `linear-gradient(135deg, 
-                      #ffd700 0%, 
-                      #ffed4e 20%, 
-                      #fbbf24 40%, 
-                      #f59e0b 60%, 
-                      #d97706 80%, 
-                      #b45309 100%
-                    )`,
-                      boxShadow: `
-                      0 0 15px rgba(251, 191, 36, 0.6),
-                      0 0 30px rgba(245, 158, 11, 0.3),
-                      0 4px 16px rgba(0, 0, 0, 0.4),
-                      inset 0 1px 4px rgba(255, 255, 255, 0.4),
-                      inset 0 -1px 4px rgba(0, 0, 0, 0.3)
-                    `,
-                      border: "1.5px solid rgba(255, 255, 255, 0.3)",
-                      zIndex: 1,
-                    }}
-                  >
+                  {isContentReady ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
+                      className="relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden"
+                      style={{
+                        background: `linear-gradient(135deg, 
+                        #ffd700 0%, 
+                        #ffed4e 20%, 
+                        #fbbf24 40%, 
+                        #f59e0b 60%, 
+                        #d97706 80%, 
+                        #b45309 100%
+                      )`,
+                        boxShadow: `
+                        0 0 15px rgba(251, 191, 36, 0.6),
+                        0 0 30px rgba(245, 158, 11, 0.3),
+                        0 4px 16px rgba(0, 0, 0, 0.4),
+                        inset 0 1px 4px rgba(255, 255, 255, 0.4),
+                        inset 0 -1px 4px rgba(0, 0, 0, 0.3)
+                      `,
+                        border: "1.5px solid rgba(255, 255, 255, 0.3)",
+                        zIndex: 1,
+                      }}
+                    >
                     {/* Metallic shine effect - matching BestChanceBadge style */}
                     <div
                       className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent transform -skew-x-12 rounded-full"
@@ -614,40 +645,73 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       }}
                     />
 
-                    {/* Text content - centered with dynamic font size */}
-                    <span
-                      className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
-                      style={{
-                        fontSize: fontSize,
-                        textShadow: `
-                        0 0 6px rgba(255, 255, 255, 0.8),
-                        0 0 12px rgba(255, 240, 180, 0.6),
-                        0 1px 3px rgba(0, 0, 0, 0.8),
-                        0 2px 6px rgba(0, 0, 0, 0.6)
-                      `,
-                        filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
-                      }}
-                      suppressHydrationWarning
+                      {/* Text content - centered with dynamic font size */}
+                      <span
+                        className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
+                        style={{
+                          fontSize: fontSize,
+                          textShadow: `
+                          0 0 6px rgba(255, 255, 255, 0.8),
+                          0 0 12px rgba(255, 240, 180, 0.6),
+                          0 1px 3px rgba(0, 0, 0, 0.8),
+                          0 2px 6px rgba(0, 0, 0, 0.6)
+                        `,
+                          filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
+                        }}
+                        suppressHydrationWarning
+                      >
+                        {badgeText}
+                      </span>
+                    </motion.div>
+                  ) : (
+                    // Placeholder to maintain layout - invisible but maintains space
+                    <div
+                      className="relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden opacity-0"
+                      style={{ fontSize: fontSize }}
+                      aria-hidden="true"
                     >
-                      {badgeText}
-                    </span>
-                  </div>
+                      <span
+                        className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
+                        style={{ fontSize: fontSize }}
+                      >
+                        {badgeText || "BIGGEST BONUS"}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Second Line - "GET 2x ENTRIES" with Metallic Text */}
                 {/* Second Line - "GET 2x ENTRIES" - Matches width of first line */}
-                <div className="w-full" suppressHydrationWarning>
-                  <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
-                    {/* "GET" text - White */}
-                    <span className="text-white">GET </span>
+                {/* Only render when content is ready to prevent layout shift */}
+                {isContentReady ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3, ease: "easeOut", delay: 0.1 }}
+                    className="w-full"
+                    suppressHydrationWarning
+                  >
+                    <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
+                      {/* "GET" text - White */}
+                      <span className="text-white">GET </span>
 
-                    {/* "2X" with fiery effect - readable on dark background */}
-                    <span className="text-red-500" suppressHydrationWarning>{multiplier}X</span>
+                      {/* "2X" with fiery effect - readable on dark background */}
+                      <span className="text-red-500" suppressHydrationWarning>{multiplier}X</span>
 
-                    {/* "ENTRIES" text - White */}
-                    <span className="text-white"> ENTRIES</span>
-                  </span>
-                </div>
+                      {/* "ENTRIES" text - White */}
+                      <span className="text-white"> ENTRIES</span>
+                    </span>
+                  </motion.div>
+                ) : (
+                  // Placeholder to maintain layout
+                  <div className="w-full opacity-0" aria-hidden="true">
+                    <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
+                      <span className="text-white">GET </span>
+                      <span className="text-red-500">10X</span>
+                      <span className="text-white"> ENTRIES</span>
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -665,8 +729,35 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
               // If draw is tonight, show countdown to freeze time
               if (drawStatus === "today" && currentDraw?.freezeEntriesAt) {
+                // Only show actual countdown when content is ready, otherwise show 00 00 00
+                if (!isContentReady || isDrawLoading) {
+                  return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
+                        <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
+                          <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                        </div>
+                        <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
+                          <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                        </div>
+                        <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
+                          <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
                 return (
-                  <div className="flex flex-col items-center justify-center gap-1">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
+                    className="flex flex-col items-center justify-center gap-1"
+                  >
                     <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                       {/* Countdown to freeze time */}
                       <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
@@ -688,14 +779,35 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               }
 
               // If draw is tomorrow, show text with time
               if (drawStatus === "tomorrow" && drawTime) {
+                // Only show when content is ready, otherwise show placeholder
+                if (!isContentReady || isDrawLoading) {
+                  return (
+                    <div className="flex items-center justify-center">
+                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 opacity-0">
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md">
+                          <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                            <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">DRAWN TOMORROW</div>
+                            <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">12:00 AM AEDT</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
                 return (
-                  <div className="flex items-center justify-center">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
+                    className="flex items-center justify-center"
+                  >
                     <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3">
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md">
                         {/* Always stack vertically in 2 rows */}
@@ -709,13 +821,40 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               }
 
               // Otherwise, show the countdown timer
+              // Only show actual countdown when content is ready, otherwise show 00 00 00
+              if (!isContentReady || isDrawLoading) {
+                return (
+                  <div className="flex flex-col items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
+                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
+                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
+                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
+                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
               return (
-                <div className="flex flex-col items-center justify-center gap-1">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
+                  className="flex flex-col items-center justify-center gap-1"
+                >
                   <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                     {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
                     {/* Fixed width classes to prevent size changes on load */}
@@ -738,8 +877,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
                     </div>
                   </div>
-                 
-                </div>
+                </motion.div>
               );
             })()}
           </div>

@@ -42,6 +42,7 @@ import { useAdminUsers, useAdminUserActions } from "@/hooks/queries/useAdminQuer
 import UserDetailModal from "./UserDetailModal";
 import UserExportModal from "./UserExportModal";
 import ChargePastDueModal from "./ChargePastDueModal";
+import KlaviyoSyncButton from "@/features/admin/users/components/KlaviyoSyncButton";
 import { useDebounce } from "@/hooks/useDebounce";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { UserMetricsView } from "./metrics/UserMetricsView";
@@ -408,6 +409,8 @@ export default function UsersManagement() {
         </h2>
         {/* Actions - Export button and View Mode Toggle */}
         <div className="flex items-center gap-2">
+          {/* Klaviyo Sync Button */}
+          <KlaviyoSyncButton />
           {/* Charge Past Due Button */}
           <button
             onClick={() => setIsChargeModalOpen(true)}

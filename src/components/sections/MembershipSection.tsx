@@ -524,7 +524,7 @@ export default function MembershipSection({
                   One-Time
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                   {/* Show badge if there's an active promo OR an alternating multiplier */}
-                  {activeTab === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
+                  {isMounted && activeTab === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
                     <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
                   )}
                 </button>
@@ -550,7 +550,7 @@ export default function MembershipSection({
                   Membership Packs
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                   {/* Show badge if there's an active promo OR an alternating multiplier */}
-                  {activeTab === "membership" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
+                  {isMounted && activeTab === "membership" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
                     <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
                   )}
                 </button>
@@ -568,7 +568,7 @@ export default function MembershipSection({
                   One-Time Packs
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                   {/* Show badge if there's an active promo OR an alternating multiplier */}
-                  {resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
+                  {isMounted && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
                     <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
                   )}
                 </div>

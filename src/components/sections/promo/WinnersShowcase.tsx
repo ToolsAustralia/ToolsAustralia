@@ -70,7 +70,7 @@ export default function WinnersShowcase({
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 pointer-events-none"></div>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(238,0,0,0.1),transparent_50%)] pointer-events-none"></div>
 
-      <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
+      <div className="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10">
         {/* Section Header */}
         <div className="text-center mb-10 sm:mb-14">
           <div className="inline-flex items-center gap-3 mb-4">
