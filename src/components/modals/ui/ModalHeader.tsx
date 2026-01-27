@@ -66,7 +66,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
       )}
 
       {/* Title */}
-      <h2 className="text-center text-xl font-bold">{title}</h2>
+      <h2 className="text-center text-base sm:text-lg font-bold">{title}</h2>
 
       {/* Subtitle */}
       {subtitle && <p className="text-center text-white/80 text-sm mt-1">{subtitle}</p>}

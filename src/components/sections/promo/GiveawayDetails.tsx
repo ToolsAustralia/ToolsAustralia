@@ -107,7 +107,7 @@ export default function GiveawayDetails() {
     {
       icon: IdCard,
       title: "License Numbers",
-      description: "TP/04720 and NTP/15438",
+      description: "NTP/15640",
       color: "text-red-500",
       bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
     },
@@ -116,15 +116,13 @@ export default function GiveawayDetails() {
   return (
     <section
       ref={detailsRef}
-      className="py-6 sm:py-12 lg:py-16 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 relative overflow-hidden"
+      className="py-6 sm:py-12 lg:py-16 relative overflow-hidden"
     >
-      {/* Add metallic shine overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 pointer-events-none"></div>
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
         {/* Section Header */}
         <div className="text-center mb-3 sm:mb-8">
-          <h2 className="text-xl sm:text-3xl lg:text-4xl font-bold text-white font-['Poppins'] mb-4 drop-shadow-lg">
-            KEY DETAILS
+          <h2 className="text-xl sm:text-3xl lg:text-4xl font-bold font-['Poppins'] mb-4 drop-shadow-lg">
+            HOW IT WORKS
           </h2>
         </div>
 
@@ -133,7 +131,7 @@ export default function GiveawayDetails() {
           {details.map((detail, index) => (
             <div
               key={index}
-              className="relative bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-xl p-3 sm:p-4 
+              className="relative bg-gradient-to-br from-slate-800/95 via-slate-700/95 to-slate-800/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 
                          shadow-[0_8px_32px_rgba(0,0,0,0.4)]
                          border border-slate-500/30
                          flex items-center gap-2 sm:gap-4"

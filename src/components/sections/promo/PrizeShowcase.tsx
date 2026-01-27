@@ -8,15 +8,16 @@ import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Check } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
+import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
 import { useSearchParams } from "next/navigation";
+import type { PrizeCatalogEntry } from "@/config/prizes";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -53,10 +54,13 @@ const resolveHighlightIcon = (iconName?: string): LucideIcon => {
 const getBrandLogoPath = (slug: string): string | null => {
   switch (slug) {
     case "milwaukee-sidchrome":
+    case "milwaukee-milwaukee":
       return "/images/brands/milwaukee.png";
     case "dewalt-sidchrome":
+    case "dewalt-milwaukee":
       return "/images/brands/dewalt-black.png";
     case "makita-sidchrome":
+    case "makita-milwaukee":
       return "/images/brands/Makita-red.png";
     case "cash-prize":
       return null; // No watermark for cash prize
@@ -69,37 +73,115 @@ const getBrandLogoPath = (slug: string): string | null => {
 const getFirstPrizeImagePath = (slug: string): string => {
   switch (slug) {
     case "dewalt-sidchrome":
+    case "dewalt-milwaukee":
       return "/images/promotion/FirstPrizeText/1stprice-dewalt.png";
     case "makita-sidchrome":
+    case "makita-milwaukee":
       return "/images/promotion/FirstPrizeText/1stprice-makita.png";
     case "cash-prize":
       return "/images/promotion/FirstPrizeText/1stprice-cash.png";
     case "milwaukee-sidchrome":
+    case "milwaukee-milwaukee":
     default:
       return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png";
   }
 };
 
 // Helper function to get formatted multi-line label for prize cards
-const getFormattedLabel = (label: string) => {
-  if (label.includes("Milwaukee")) {
+const getFormattedLabel = (label: string, slug?: string, isMobile?: boolean) => {
+  // Check slug first for more accurate detection
+  if (slug) {
+    if (slug === "milwaukee-sidchrome") {
+      return {
+        line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+        line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "dewalt-sidchrome") {
+      return {
+        line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+        line2: isMobile ? "DeWalt Powertools" : "DeWalt",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "makita-sidchrome") {
+      return {
+        line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+        line2: isMobile ? "Makita Powertools" : "Makita",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "milwaukee-milwaukee") {
+      return {
+        line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+        line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "dewalt-milwaukee") {
+      return {
+        line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+        line2: isMobile ? "DeWalt Powertools" : "DeWalt",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "makita-milwaukee") {
+      return {
+        line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+        line2: isMobile ? "Makita Powertools" : "Makita",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "cash-prize") {
+      return {
+        line1: "$10,000 Tax Free Cash",
+        line2: null,
+        line3: null,
+      };
+    }
+  }
+  
+  // Fallback to label parsing
+  if (label.includes("Milwaukee Toolbox") && label.includes("Milwaukee")) {
     return {
-      line1: "Sidchrome",
-      line2: "Milwaukee",
+      line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+      line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
       line3: "$5000 Cash Prize",
     };
   }
-  if (label.includes("DeWalt")) {
+  if (label.includes("Milwaukee Toolbox") && label.includes("DeWalt")) {
     return {
-      line1: "Sidchrome",
-      line2: "DeWalt",
+      line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+      line2: isMobile ? "DeWalt Powertools" : "DeWalt",
       line3: "$5000 Cash Prize",
     };
   }
-  if (label.includes("Makita")) {
+  if (label.includes("Milwaukee Toolbox") && label.includes("Makita")) {
     return {
-      line1: "Sidchrome",
-      line2: "Makita",
+      line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+      line2: isMobile ? "Makita Powertools" : "Makita",
+      line3: "$5000 Cash Prize",
+    };
+  }
+  if (label.includes("Sidchrome") && label.includes("Milwaukee")) {
+    return {
+      line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+      line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
+      line3: "$5000 Cash Prize",
+    };
+  }
+  if (label.includes("Sidchrome") && label.includes("DeWalt")) {
+    return {
+      line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+      line2: isMobile ? "DeWalt Powertools" : "DeWalt",
+      line3: "$5000 Cash Prize",
+    };
+  }
+  if (label.includes("Sidchrome") && label.includes("Makita")) {
+    return {
+      line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+      line2: isMobile ? "Makita Powertools" : "Makita",
       line3: "$5000 Cash Prize",
     };
   }
@@ -116,6 +198,34 @@ const getFormattedLabel = (label: string) => {
     line2: null,
     line3: null,
   };
+};
+
+// Helper function to get toolbox type from slug
+const getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash" => {
+  if (slug === "cash-prize") return "cash";
+  // Check if slug is a Milwaukee toolbox combo (starts with "milwaukee-" or ends with "-milwaukee")
+  // but exclude sidchrome combos (e.g., "milwaukee-sidchrome")
+  if ((slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")) {
+    return "milwaukee";
+  }
+  // Check if slug includes "sidchrome" (for sidchrome toolbox combos)
+  if (slug.includes("sidchrome")) return "sidchrome";
+  // Default fallback (shouldn't happen with valid slugs)
+  return "sidchrome";
+};
+
+// Helper function to filter prizes by toolbox type
+const filterPrizesByToolboxType = (prizes: PrizeCatalogEntry[], toolboxType: "sidchrome" | "milwaukee" | "cash") => {
+  if (toolboxType === "cash") {
+    return prizes.filter((p) => p.slug === "cash-prize");
+  }
+  if (toolboxType === "sidchrome") {
+    return prizes.filter((p) => p.slug.includes("sidchrome"));
+  }
+  if (toolboxType === "milwaukee") {
+    return prizes.filter((p) => p.slug.includes("milwaukee") && !p.slug.includes("sidchrome"));
+  }
+  return prizes;
 };
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
@@ -146,7 +256,9 @@ const formatTimeWithoutPeriod = (date: Date): string => {
 export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const prizeRef = useScrollAnimation();
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
+  const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
@@ -155,6 +267,83 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   const router = useRouter();
   const searchParams = useSearchParams();
+  
+  // Toolbox type toggle state - initialize from activeSlug to prevent navigation issues
+  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
+  
+  // Update toolbox type based on current slug when it changes
+  // This ensures the toggle reflects the current page's toolbox type
+  // Initialize on mount and update when slug changes
+  useEffect(() => {
+    if (activeSlug) {
+      const typeFromSlug = getToolboxTypeFromSlug(activeSlug);
+      setToolboxType((currentType) => {
+        // Only update if the type actually changed to prevent unnecessary re-renders
+        if (currentType !== typeFromSlug) {
+          localStorage.setItem("prizeToolboxType", typeFromSlug);
+          return typeFromSlug;
+        }
+        return currentType;
+      });
+    }
+  }, [activeSlug]);
+  
+  // Filter prizes based on selected toolbox type
+  const filteredPrizes = filterPrizesByToolboxType(prizes, toolboxType);
+  
+  // Find the index of the active prize in the filtered list for mobile navigation
+  const activePrizeIndex = filteredPrizes.findIndex((p) => p.slug === activeSlug);
+  
+  // Update mobile prize index when activeSlug changes
+  useEffect(() => {
+    if (activePrizeIndex >= 0) {
+      setMobilePrizeIndex(activePrizeIndex);
+    }
+  }, [activeSlug, activePrizeIndex]);
+  
+  // On mobile, prevent scroll when slug changes (navigation)
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth >= 640) return;
+    
+    // Save scroll position when slug changes
+    const scrollY = window.scrollY;
+    
+    // Prevent scroll immediately
+    const preventScroll = () => {
+      if (Math.abs(window.scrollY - scrollY) > 5) {
+        window.scrollTo({ top: scrollY, behavior: 'auto' });
+      }
+    };
+    
+    // Check and restore scroll position multiple times
+    const timeouts = [
+      setTimeout(preventScroll, 0),
+      setTimeout(preventScroll, 10),
+      setTimeout(preventScroll, 50),
+      setTimeout(preventScroll, 100),
+    ];
+    
+    return () => {
+      timeouts.forEach(clearTimeout);
+    };
+  }, [activeSlug]);
+  
+  // Navigation handlers for mobile prize selector
+  const handlePreviousPrize = () => {
+    if (filteredPrizes.length > 0) {
+      const newIndex = mobilePrizeIndex > 0 ? mobilePrizeIndex - 1 : filteredPrizes.length - 1;
+      setMobilePrizeIndex(newIndex);
+      handleSelectPrize(filteredPrizes[newIndex].slug);
+    }
+  };
+  
+  const handleNextPrize = () => {
+    if (filteredPrizes.length > 0) {
+      const newIndex = mobilePrizeIndex < filteredPrizes.length - 1 ? mobilePrizeIndex + 1 : 0;
+      setMobilePrizeIndex(newIndex);
+      handleSelectPrize(filteredPrizes[newIndex].slug);
+    }
+  };
   
   // Check if draw is completed or queued (gap state)
   const isCompleted = currentMajorDraw?.status === "completed";
@@ -226,7 +415,56 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     const affiliateCode = searchParams.get("aff");
     const newUrl = affiliateCode ? `/promotions/${nextSlug}?aff=${affiliateCode}` : `/promotions/${nextSlug}`;
 
-    router.push(newUrl, { scroll: false });
+    // On mobile, aggressively prevent scroll behavior
+    if (typeof window !== 'undefined' && window.innerWidth < 640) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      
+      // Disable smooth scrolling globally
+      const originalHtmlScrollBehavior = document.documentElement.style.scrollBehavior;
+      const originalBodyScrollBehavior = document.body.style.scrollBehavior;
+      document.documentElement.style.scrollBehavior = 'auto';
+      document.body.style.scrollBehavior = 'auto';
+      
+      // Navigate without scroll
+      router.push(newUrl, { scroll: false });
+      
+      // Restore scroll position immediately and prevent any scroll changes
+      const restoreScroll = () => {
+        window.scrollTo({ top: scrollY, behavior: 'auto' });
+        // Prevent scroll for a longer period to ensure navigation completes
+        setTimeout(() => {
+          document.documentElement.style.scrollBehavior = originalHtmlScrollBehavior;
+          document.body.style.scrollBehavior = originalBodyScrollBehavior;
+        }, 300);
+      };
+      
+      // Use multiple methods to ensure scroll position is maintained
+      requestAnimationFrame(restoreScroll);
+      setTimeout(restoreScroll, 0);
+      setTimeout(restoreScroll, 50);
+    } else {
+      // Desktop: normal navigation
+      router.push(newUrl, { scroll: false });
+    }
+  };
+  
+  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "cash") => {
+    // Only navigate if the type is actually changing
+    if (toolboxType === type) return;
+    
+    setToolboxType(type);
+    localStorage.setItem("prizeToolboxType", type);
+    
+    if (type === "cash") {
+      handleSelectPrize("cash-prize");
+      return;
+    }
+    
+    // Get default slug for the selected toolbox type
+    const defaultSlug = type === "sidchrome" ? "milwaukee-sidchrome" : "milwaukee-milwaukee";
+    // Always navigate to default when toolbox type changes (user clicked the toggle button)
+    handleSelectPrize(defaultSlug);
   };
 
   if (!activePrize) {
@@ -234,11 +472,22 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   }
 
   // Get brand colors for active prize to match View Specs button and prize header
-  const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-sidchrome");
+  const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-milwaukee");
   const highlights = activePrize.highlights ?? [];
 
   return (
-    <section ref={prizeRef} className=" pb-8 sm:pb-12 relative">
+    <section 
+      ref={prizeRef} 
+      className=" pb-8 sm:pb-12 relative"
+      style={{ 
+        scrollMarginTop: 0,
+        // On mobile, prevent scroll snapping during navigation
+        ...(typeof window !== 'undefined' && window.innerWidth < 640 && isNavigating ? {
+          scrollSnapAlign: 'none',
+          scrollSnapStop: 'normal',
+        } : {}),
+      }}
+    >
       <div className="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10">
         <div className="text-center mb-6 sm:mb-12">
           {/* First Prize Image - Conditionally displayed based on selected prize */}
@@ -252,102 +501,254 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               priority
             />
           </div>
-          <div className={`inline-block bg-gradient-to-br ${brandColors.gradient} rounded-xl sm:rounded-2xl px-4 sm:px-6 py-2 sm:py-3 mb-4 shadow-lg border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')}`}>
-            <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-bold ${brandColors.textColor} font-['Poppins'] drop-shadow-lg`}>
-              {activePrize.heroHeading}
-            </h2>
+          {/* Prize description section - hidden for now */}
+          <div className="hidden">
+            <div className={`inline-block bg-gradient-to-br ${brandColors.gradient} rounded-xl sm:rounded-2xl px-4 sm:px-6 py-2 sm:py-3 mb-4 shadow-lg border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')}`}>
+              <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-bold ${brandColors.textColor} font-['Poppins'] drop-shadow-lg`}>
+                {activePrize.heroHeading}
+              </h2>
+            </div>
+            {activePrize.heroSubheading && (
+              <p className="hidden sm:block text-sm sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">
+                {activePrize.heroSubheading}
+              </p>
+            )}
+            {activePrize.summary && (
+              <p className="text-xs sm:text-base text-gray-500 font-['Inter'] max-w-2xl mx-auto mt-3">
+                {activePrize.summary}
+              </p>
+            )}
           </div>
-          {activePrize.heroSubheading && (
-            <p className="hidden sm:block text-sm sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">
-              {activePrize.heroSubheading}
-            </p>
-          )}
-          {activePrize.summary && (
-            <p className="text-xs sm:text-base text-gray-500 font-['Inter'] max-w-2xl mx-auto mt-3">
-              {activePrize.summary}
-            </p>
-          )}
 
           {prizes.length > 1 && (
             <div className="mt-4 sm:mt-6">
               <p className="text-lg sm:text-xl font-bold text-black font-['Poppins'] mb-2 sm:mb-3 text-center">
                 Pick Your Toolset
               </p>
-              <div className="grid grid-cols-2 gap-2 sm:gap-4 max-w-3xl mx-auto">
-                {prizes.map((prizeOption) => {
-                  const isActive = prizeOption.slug === activeSlug;
-                  const brandColors = getPrizeBrandColors(prizeOption.slug);
-                  const brandLogoPath = getBrandLogoPath(prizeOption.slug);
-                  const formattedLabel = getFormattedLabel(prizeOption.label);
-                  return (
-                    <button
-                      key={prizeOption.slug}
-                      onClick={() => handleSelectPrize(prizeOption.slug)}
-                      tabIndex={-1}
-                      style={{ outline: "none", boxShadow: "none" }}
-                      className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
-                        isActive
-                          ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                          : `bg-white text-gray-700 border-gray-700 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
-                      }`}
-                    >
-                      {/* Brand logo watermark - only shown when active */}
-                      {isActive && brandLogoPath && (
-                        <div className="absolute inset-0 rounded-xl sm:rounded-2xl overflow-hidden pointer-events-none">
-                          <Image
-                            src={brandLogoPath}
-                            alt=""
-                            fill
-                            className="object-contain opacity-20"
-                            sizes="(max-width: 640px) 100px, 150px"
-                          />
-                        </div>
-                      )}
-
-                      {/* Hover glow effect for inactive cards */}
-                      {!isActive && (
-                        <div
-                          className={`absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
-                        />
-                      )}
-
-                      {/* Active shimmer effect */}
-                      {isActive && (
-                        <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                      )}
-
-                      {/* Active checkmark badge */}
-                      {isActive && (
-                        <div className="absolute -top-2 -right-2 sm:-top-2.5 sm:-right-2.5 w-6 h-6 sm:w-7 sm:h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
-                          <Check className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${brandColors.checkmarkColor}`} />
-                        </div>
-                      )}
-
-                      {/* Card content - formatted multi-line text */}
-                      <div className="relative z-10 w-full overflow-visible">
-                        <div
-                          className={`text-xs sm:text-base font-bold font-['Poppins'] leading-tight transition-colors duration-200 break-words text-center ${
-                            isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
+              
+              {/* Toolbox Type Toggle */}
+              <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+                <button
+                  onClick={() => handleToolboxTypeChange("sidchrome")}
+                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                    toolboxType === "sidchrome"
+                      ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
+                  }`}
+                >
+                  Sidchrome Toolbox
+                </button>
+                <button
+                  onClick={() => handleToolboxTypeChange("milwaukee")}
+                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                    toolboxType === "milwaukee"
+                      ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
+                  }`}
+                >
+                  Milwaukee Toolbox
+                </button>
+                <button
+                  onClick={() => handleToolboxTypeChange("cash")}
+                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                    toolboxType === "cash"
+                      ? "bg-gradient-to-br from-green-500 via-green-600 to-green-700 text-white border-green-500 shadow-lg shadow-green-500/40"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600"
+                  }`}
+                >
+                  $10,000 Cash
+                </button>
+              </div>
+              
+              {/* Only show prize selector when not on cash option (cash has only one option) */}
+              {toolboxType !== "cash" && (
+                <>
+                  {/* Mobile: Single horizontal box with navigation arrows */}
+                  <div className="sm:hidden relative max-w-md mx-auto overflow-visible">
+                    {filteredPrizes.length > 0 && filteredPrizes[mobilePrizeIndex] && (() => {
+                      const prizeOption = filteredPrizes[mobilePrizeIndex];
+                      const isActive = prizeOption.slug === activeSlug;
+                      const brandColors = getPrizeBrandColors(prizeOption.slug);
+                      const brandLogoPath = getBrandLogoPath(prizeOption.slug);
+                      const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
+                      return (
+                        <button
+                          onClick={() => handleSelectPrize(prizeOption.slug)}
+                          tabIndex={-1}
+                          style={!isActive ? {
+                            outline: "none",
+                            boxShadow: `0 0 15px ${getBrandGlowColor(prizeOption.slug)}`,
+                            borderColor: getBrandBorderColor(prizeOption.slug),
+                          } : { 
+                            outline: "none", 
+                            boxShadow: "none",
+                            borderColor: getBrandBorderColor(prizeOption.slug),
+                          }}
+                          className={`relative w-full p-5 rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[110px] group ${
+                            isActive
+                              ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
+                              : `bg-white text-gray-700 border-opacity-100 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]`
                           }`}
                         >
-                          <div className="block">{formattedLabel.line1}</div>
-                          {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
-                          {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                          {/* Brand logo watermark - only shown when active */}
+                          {isActive && brandLogoPath && (
+                            <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                              <Image
+                                src={brandLogoPath}
+                                alt=""
+                                fill
+                                className="object-contain opacity-20"
+                                sizes="(max-width: 640px) 100px, 150px"
+                              />
+                            </div>
+                          )}
+
+                          {/* Hover glow effect for inactive cards */}
+                          {!isActive && (
+                            <div
+                              className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
+                            />
+                          )}
+
+                          {/* Active shimmer effect */}
+                          {isActive && (
+                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                          )}
+
+                          {/* Active checkmark badge */}
+                          {isActive && (
+                            <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
+                              <Check className={`w-4 h-4 ${brandColors.checkmarkColor}`} />
+                            </div>
+                          )}
+
+                          {/* Card content - formatted multi-line text */}
+                          <div className="relative z-10 w-full overflow-visible">
+                            <div
+                              className={`text-base font-bold font-['Poppins'] leading-tight transition-colors duration-200 break-words text-center ${
+                                isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
+                              }`}
+                            >
+                              <div className="block">{formattedLabel.line1}</div>
+                              {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
+                              {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })()}
+                    
+                    {/* Navigation arrows for mobile - simple buttons, not swiper navigation */}
+                    {filteredPrizes.length > 1 && (
+                      <>
+                        <button
+                          onClick={handlePreviousPrize}
+                          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                          aria-label="Previous prize"
+                        >
+                          <ChevronLeft className="w-6 h-6 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={handleNextPrize}
+                          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                          aria-label="Next prize"
+                        >
+                          <ChevronRight className="w-6 h-6 text-gray-700" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Desktop: Grid layout */}
+                  <div className={`hidden sm:grid ${filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-4 max-w-5xl mx-auto overflow-visible`}>
+                    {filteredPrizes.map((prizeOption) => {
+                      const isActive = prizeOption.slug === activeSlug;
+                      const brandColors = getPrizeBrandColors(prizeOption.slug);
+                      const brandLogoPath = getBrandLogoPath(prizeOption.slug);
+                      const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
+                      return (
+                        <button
+                          key={prizeOption.slug}
+                          onClick={() => handleSelectPrize(prizeOption.slug)}
+                          tabIndex={-1}
+                          style={!isActive ? {
+                            outline: "none",
+                            boxShadow: `0 0 15px ${getBrandGlowColor(prizeOption.slug)}`,
+                            borderColor: getBrandBorderColor(prizeOption.slug),
+                          } : { 
+                            outline: "none", 
+                            boxShadow: "none",
+                            borderColor: getBrandBorderColor(prizeOption.slug),
+                          }}
+                          className={`relative p-5 rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[110px] group ${
+                            isActive
+                              ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
+                              : `bg-white text-gray-700 border-opacity-100 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]`
+                          }`}
+                        >
+                          {/* Brand logo watermark - only shown when active */}
+                          {isActive && brandLogoPath && (
+                            <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                              <Image
+                                src={brandLogoPath}
+                                alt=""
+                                fill
+                                className="object-contain opacity-20"
+                                sizes="(max-width: 640px) 100px, 150px"
+                              />
+                            </div>
+                          )}
+
+                          {/* Hover glow effect for inactive cards */}
+                          {!isActive && (
+                            <div
+                              className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
+                            />
+                          )}
+
+                          {/* Active shimmer effect */}
+                          {isActive && (
+                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                          )}
+
+                          {/* Active checkmark badge */}
+                          {isActive && (
+                            <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
+                              <Check className={`w-4 h-4 ${brandColors.checkmarkColor}`} />
+                            </div>
+                          )}
+
+                          {/* Card content - formatted multi-line text */}
+                          <div className="relative z-10 w-full overflow-visible">
+                            <div
+                              className={`text-base font-bold font-['Poppins'] leading-tight transition-colors duration-200 break-words text-center ${
+                                isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
+                              }`}
+                            >
+                              <div className="block">{formattedLabel.line1}</div>
+                              {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
+                              {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-start">
           <div className="relative order-1 lg:order-1 space-y-3 sm:space-y-4">
-            <div className="relative rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-
+            <div 
+              className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden"
+              style={{
+                borderColor: getBrandBorderColor(activeSlug || "milwaukee-milwaukee"),
+                boxShadow: `0 0 20px ${getBrandGlowColor(activeSlug || "milwaukee-milwaukee")}, 0 8px 32px rgba(0,0,0,0.4)`,
+              }}
+            >
               {activePrize.gallery.length > 1 ? (
                 <Swiper
                   modules={[Navigation, Pagination, Thumbs]}
@@ -355,12 +756,13 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   navigation
                   pagination={{ clickable: true }}
                   className="main-swiper"
+                  data-brand-slug={activeSlug}
                   spaceBetween={0}
                   slidesPerView={1}
                 >
                   {activePrize.gallery.map((image, index) => (
                     <SwiperSlide key={`${image.src}-${index}`}>
-                      <div className="relative aspect-square lg:aspect-[4/3] bg-gray-900">
+                      <div className="relative aspect-square lg:aspect-[4/3]">
                         <Image
                           src={image.src}
                           alt={image.alt || `Prize view ${index + 1}`}
@@ -374,7 +776,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   ))}
                 </Swiper>
               ) : (
-                <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                <div className="relative aspect-square lg:aspect-[4/3]">
                   <Image
                     src={activePrize.gallery[0]?.src || "/images/grand-draw.jpg"}
                     alt={activePrize.gallery[0]?.alt || "Prize view"}
@@ -414,11 +816,16 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 freeMode
                 watchSlidesProgress
                 className="thumbs-swiper"
+                data-brand-slug={activeSlug}
               >
                 {activePrize.gallery.map((image, index) => (
                   <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-16 sm:!w-24 sm:!h-24">
-                    <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-gray-700 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
+                    <div 
+                      className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer"
+                      style={{
+                        borderColor: getBrandGlowColor(activeSlug || "milwaukee-milwaukee"),
+                      }}
+                    >
                       <Image
                         src={image.src}
                         alt={image.alt || `Prize thumbnail ${index + 1}`}

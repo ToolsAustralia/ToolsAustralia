@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 
 /**
  * Variant Configuration Interface
@@ -6,7 +7,12 @@ import mongoose, { Document, Schema } from "mongoose";
  */
 export interface VariantConfig {
   hero?: {
-    imageSrc?: string; // Override hero background image
+    /**
+     * Override hero background image
+     * Supports both single path (string) for backward compatibility
+     * and separate mobile/desktop paths (PromoImagePaths) for responsive images
+     */
+    imageSrc?: string | PromoImagePaths;
     messaging?: string; // Optional hero text overlay
     ctaText?: string; // "ENTER NOW" button text override
     ctaStyle?: {

@@ -6,6 +6,7 @@ import { Check } from "lucide-react";
 import ModalContainer from "./ui/ModalContainer";
 import ModalHeader from "./ui/ModalHeader";
 import ModalContent from "./ui/ModalContent";
+import ModalFooter from "./ui/ModalFooter";
 import type { PrizeCatalogEntry, PrizeSpecItem, PrizeSpecSection } from "@/config/prizes";
 import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
 
@@ -17,7 +18,39 @@ interface PrizeSpecificationsModalProps {
 
 const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecificationsModalProps) => {
   // Memoise sections so we don't recreate arrays on every render.
-  const sections = useMemo<PrizeSpecSection[]>(() => prize?.specSections ?? [], [prize]);
+  const sections = useMemo<PrizeSpecSection[]>(() => {
+    if (!prize) return [];
+    const baseSections = prize.specSections ?? [];
+    
+    // Add "5000 Cash" tab for all non-cash-prize entries
+    if (prize.slug !== "cash-prize") {
+      return [
+        ...baseSections,
+        {
+          id: "cash-prize",
+          label: "5000 Cash",
+          summary: "Cash prize details and payment information.",
+          items: [
+            {
+              name: "$5,000 Cash Prize",
+              description:
+                "A $5,000 cash prize included with your prize package. The money will be deposited directly to your bank account upon verification.",
+              specifications: [
+                "Prize Amount: $5,000 AUD",
+                "Payment Method: Direct bank transfer",
+                "Verification: Standard winner verification process required",
+                "Tax: Winner responsible for applicable taxes",
+                "Included with prize package",
+                "Cash prize is in addition to all tools and equipment",
+              ],
+            },
+          ],
+        },
+      ];
+    }
+    
+    return baseSections;
+  }, [prize]);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
   // Get brand colors for the prize to match View Specs button styling
@@ -93,6 +126,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
         showLogo={false}
         variant="metallic-red"
         className={brandColors ? `!bg-gradient-to-br ${brandColors.gradient}` : ""}
+        showCloseButton={true}
       />
 
       <ModalContent scrollbar="metallic" padding="lg" className="max-h-[80vh]">
@@ -145,6 +179,8 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
           </>
         )}
       </ModalContent>
+      
+      <ModalFooter onClose={onClose} brandColors={brandColors} />
     </ModalContainer>
   );
 };
