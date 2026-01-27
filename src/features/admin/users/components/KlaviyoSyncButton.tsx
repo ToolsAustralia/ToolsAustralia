@@ -7,7 +7,7 @@
 
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { RefreshCw, Users, CheckCircle, AlertCircle, X, Loader2 } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent } from "@/components/modals/ui";
 
@@ -53,6 +53,13 @@ export default function KlaviyoSyncButton() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [executeError, setExecuteError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    total: number;
+    processed: number;
+    synced: number;
+    errors: number;
+    currentUserEmail?: string;
+  } | null>(null);
 
   const handleOpen = () => {
     setIsOpen(true);
@@ -77,6 +84,8 @@ export default function KlaviyoSyncButton() {
       setPreviewError(null);
       setSyncResult(null);
       setExecuteError(null);
+      setProgress(null);
+      executeResponseRef.current = null;
     }, 300);
   };
 
@@ -101,12 +110,71 @@ export default function KlaviyoSyncButton() {
     }
   };
 
+  // Poll for progress updates
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const executeResponseRef = useRef<SyncResult | null>(null);
+
+  useEffect(() => {
+    if (isExecuting && step === "executing") {
+      // Poll for progress every 1 second
+      progressIntervalRef.current = setInterval(async () => {
+        try {
+          const response = await fetch("/api/admin/klaviyo/draw-reset-progress");
+          const data = await response.json();
+
+          if (data.success && data.data) {
+            setProgress(data.data);
+            
+            // If sync is complete, stop polling and show results
+            if (!data.data.isRunning && syncResult === null) {
+              if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+                progressIntervalRef.current = null;
+              }
+              // Use the stored result from the execute response
+              if (executeResponseRef.current) {
+                setSyncResult(executeResponseRef.current);
+                setStep("complete");
+                setIsExecuting(false);
+              } else {
+                // Fallback: if we don't have the result, wait a bit and check progress again
+                setTimeout(() => {
+                  if (executeResponseRef.current) {
+                    setSyncResult(executeResponseRef.current);
+                    setStep("complete");
+                    setIsExecuting(false);
+                  }
+                }, 1000);
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching progress:", error);
+        }
+      }, 1000);
+    } else {
+      // Clear interval when not executing
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, [isExecuting, step, syncResult]);
+
   const handleExecute = async () => {
     setIsExecuting(true);
     setStep("executing");
     setExecuteError(null);
+    setProgress(null);
 
     try {
+      // Start the sync - it will run and we'll poll for progress
       const response = await fetch("/api/admin/klaviyo/draw-reset-execute", {
         method: "POST",
       });
@@ -119,13 +187,27 @@ export default function KlaviyoSyncButton() {
         throw new Error(data.error || "Failed to execute sync");
       }
 
-      setSyncResult(data.data);
-      setStep("complete");
+      // Store the result for when progress shows complete
+      executeResponseRef.current = data.data;
+      
+      // Wait a moment for progress to initialize
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      // Check if sync completed quickly (before progress polling started)
+      const quickCheck = await fetch("/api/admin/klaviyo/draw-reset-progress");
+      const quickData = await quickCheck.json();
+      
+      if (quickData.success && quickData.data && !quickData.data.isRunning) {
+        // Sync completed already
+        setSyncResult(data.data);
+        setStep("complete");
+        setIsExecuting(false);
+      }
+      // Otherwise, progress polling will handle updates
     } catch (error) {
       console.error("Error executing sync:", error);
       setExecuteError(error instanceof Error ? error.message : "Failed to execute sync");
       setStep("preview"); // Go back to preview on error
-    } finally {
       setIsExecuting(false);
     }
   };
@@ -305,10 +387,47 @@ export default function KlaviyoSyncButton() {
 
             {/* Executing Step */}
             {step === "executing" && (
-              <div className="flex flex-col items-center justify-center py-12">
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
                 <Loader2 className="w-12 h-12 text-[#ee0000] animate-spin mb-4" />
                 <p className="text-lg font-semibold text-gray-900 mb-2">Syncing profiles to Klaviyo...</p>
-                <p className="text-sm text-gray-600">This may take a few minutes. Please do not close this window.</p>
+                
+                {progress && (
+                  <div className="w-full max-w-md space-y-3">
+                    {/* Progress Bar */}
+                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] h-3 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${progress.total > 0 ? (progress.processed / progress.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Progress Stats */}
+                    <div className="text-center space-y-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        Processing: {progress.processed.toLocaleString()} / {progress.total.toLocaleString()} users
+                      </p>
+                      {progress.currentUserEmail && (
+                        <p className="text-xs text-gray-600">
+                          Current: {progress.currentUserEmail}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-center gap-4 text-xs text-gray-600 mt-2">
+                        <span className="text-green-600">✓ Synced: {progress.synced.toLocaleString()}</span>
+                        {progress.errors > 0 && (
+                          <span className="text-red-600">✗ Errors: {progress.errors.toLocaleString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {!progress && (
+                  <p className="text-sm text-gray-600">Initializing sync... Please wait.</p>
+                )}
+                
+                <p className="text-xs text-gray-500 mt-4">This may take a few minutes. Please do not close this window.</p>
               </div>
             )}
 

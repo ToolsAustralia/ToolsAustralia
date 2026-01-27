@@ -26,6 +26,22 @@ export interface ResetResult {
 }
 
 /**
+ * Progress tracking for sync operations
+ */
+interface SyncProgress {
+  isRunning: boolean;
+  total: number;
+  processed: number;
+  synced: number;
+  errors: number;
+  currentUserEmail?: string;
+  startTime?: number;
+}
+
+// In-memory progress tracker (only for manual syncs)
+let syncProgress: SyncProgress | null = null;
+
+/**
  * Preview result for Klaviyo reset
  */
 export interface PreviewResult {
@@ -36,6 +52,13 @@ export interface PreviewResult {
   skippedUsers: number;
   reductionPercentage: number;
   sampleUsers: Array<{ userId: string; email: string; name?: string }>;
+}
+
+/**
+ * Get current sync progress (for manual syncs only)
+ */
+export function getSyncProgress(): SyncProgress | null {
+  return syncProgress;
 }
 
 /**
@@ -59,10 +82,12 @@ export interface PreviewResult {
  * 5. Return summary with processed, synced, and error counts
  *
  * @param newDraw - The newly activated major draw (optional, will be fetched if not provided)
+ * @param trackProgress - Whether to track progress for manual syncs (default: false)
  * @returns Summary of reset operation
  */
 export async function resetDrawPropertiesForAllUsers(
-  _newDraw?: IMajorDraw
+  _newDraw?: IMajorDraw,
+  trackProgress: boolean = false
 ): Promise<ResetResult> {
   const startTime = Date.now();
   let processed = 0;
@@ -145,6 +170,18 @@ export async function resetDrawPropertiesForAllUsers(
     console.log(`📊 Found ${totalParticipants} users with major draw participation (optimized query)`);
     console.log(`   Total users: ${totalUsers}, Skipping: ${skippedUsers} non-participants (~${reductionPercentage}% reduction)`);
 
+    // Initialize progress tracking if requested
+    if (trackProgress) {
+      syncProgress = {
+        isRunning: true,
+        total: totalParticipants,
+        processed: 0,
+        synced: 0,
+        errors: 0,
+        startTime: Date.now(),
+      };
+    }
+
     // Process users in batches of 500 (for fetching from DB)
     const BATCH_SIZE = 500;
     // Process Klaviyo syncs in smaller concurrent batches to avoid rate limits
@@ -176,23 +213,54 @@ export async function resetDrawPropertiesForAllUsers(
         
         // Process each user in the concurrent batch
         const syncPromises = concurrentBatch.map(async (user) => {
+          const userEmail = user.email || "unknown";
+          
           try {
+            // Update progress tracking - show current user being processed
+            if (trackProgress && syncProgress) {
+              syncProgress.currentUserEmail = userEmail;
+            }
+            
+            const currentProcessed = processed + 1; // For logging only
+            console.log(`🔄 Syncing user: ${userEmail} (${currentProcessed}/${totalParticipants})`);
+            
             // Sync to Klaviyo (this will update the profile with new draw-specific properties)
             // Note: draw-specific properties are calculated inside syncUserProfileToKlaviyo
             // via userToKlaviyoProfile -> calculateDrawSpecificPropertiesForUser
             await syncUserProfileToKlaviyo(user as IUser);
 
+            // Increment counters after successful sync
             processed++;
             synced++;
+            
+            // Update progress tracking
+            if (trackProgress && syncProgress) {
+              syncProgress.processed = processed;
+              syncProgress.synced = synced;
+              syncProgress.currentUserEmail = userEmail; // Keep showing last synced user
+            }
+            
+            console.log(`✅ Successfully synced user: ${userEmail} (${processed}/${totalParticipants})`);
           } catch (error) {
-            errors++;
             const errorMessage = error instanceof Error ? error.message : String(error);
+            
+            // Increment counters after error
+            processed++;
+            errors++;
+            
+            // Update progress tracking
+            if (trackProgress && syncProgress) {
+              syncProgress.processed = processed;
+              syncProgress.errors = errors;
+              syncProgress.currentUserEmail = userEmail; // Keep showing last user (even if error)
+            }
+            
             errorDetails.push({
               userId: String(user._id),
-              email: user.email || "unknown",
+              email: userEmail,
               error: errorMessage,
             });
-            console.error(`❌ Error processing user ${user.email}:`, errorMessage);
+            console.error(`❌ Error processing user ${userEmail} (${processed}/${totalParticipants}):`, errorMessage);
           }
         });
 
@@ -215,6 +283,20 @@ export async function resetDrawPropertiesForAllUsers(
 
     const duration = Date.now() - startTime;
 
+    // Update final progress
+    if (trackProgress && syncProgress) {
+      syncProgress.processed = processed;
+      syncProgress.synced = synced;
+      syncProgress.errors = errors;
+      syncProgress.currentUserEmail = undefined;
+      syncProgress.isRunning = false;
+      
+      // Clear progress after a delay to allow final poll
+      setTimeout(() => {
+        syncProgress = null;
+      }, 5000); // Keep progress for 5 seconds after completion
+    }
+
     console.log(`✅ Draw reset completed (OPTIMIZED - only draw participants):`);
     console.log(`   Total participants found: ${totalParticipants} users`);
     console.log(`   Processed: ${processed} users`);
@@ -234,6 +316,11 @@ export async function resetDrawPropertiesForAllUsers(
     const duration = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`❌ Draw reset failed after ${duration}ms:`, errorMessage);
+
+    // Clear progress on error
+    if (trackProgress) {
+      syncProgress = null;
+    }
 
     return {
       processed,

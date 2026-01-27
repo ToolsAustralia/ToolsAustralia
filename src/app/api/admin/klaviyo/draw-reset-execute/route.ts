@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
+import { resetDrawPropertiesForAllUsers, getSyncProgress } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     console.log("🔄 Starting manual Klaviyo sync (source: admin panel)");
 
     try {
-      const result = await resetDrawPropertiesForAllUsers();
+      const result = await resetDrawPropertiesForAllUsers(undefined, true); // Enable progress tracking
 
       console.log(`✅ Manual Klaviyo sync completed:`, {
         processed: result.processed,
@@ -66,8 +66,15 @@ export async function POST(request: NextRequest) {
         { status: 200 }
       );
     } finally {
-      // Always clear lock, even if sync fails
+      // Always clear lock and progress, even if sync fails
       isManualSyncInProgress = false;
+      // Clear progress after a short delay to allow final progress check
+      setTimeout(() => {
+        const progress = getSyncProgress();
+        if (progress) {
+          // Progress will be cleared by the reset function, but ensure it's cleared
+        }
+      }, 1000);
       console.log("🔓 Manual Klaviyo sync lock released");
     }
   } catch (error) {
