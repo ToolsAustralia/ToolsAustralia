@@ -535,6 +535,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                       ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                       : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
                   }`}
+                  suppressHydrationWarning
                 >
                   Sidchrome Toolbox
                 </button>
@@ -545,6 +546,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                       ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                       : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
                   }`}
+                  suppressHydrationWarning
                 >
                   Milwaukee Toolbox
                 </button>
@@ -555,6 +557,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                       ? "bg-gradient-to-br from-green-500 via-green-600 to-green-700 text-white border-green-500 shadow-lg shadow-green-500/40"
                       : "bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600"
                   }`}
+                  suppressHydrationWarning
                 >
                   $10,000 Cash
                 </button>
