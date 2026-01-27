@@ -27,6 +27,7 @@ import ExperimentEvent from "@/models/ab-testing/ExperimentEvent";
 import ExperimentDailyMetricsRepository from "@/repositories/ab-testing/ExperimentDailyMetricsRepository";
 import PaymentEvent from "@/models/PaymentEvent";
 import mongoose from "mongoose";
+import { waitForPoolCapacity } from "@/utils/database/connection-health";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,6 +52,13 @@ export async function GET() {
     console.log(`   Time: ${new Date().toISOString()}`);
 
     await connectDB();
+    
+    // ✅ OPTIMIZATION: Wait for pool capacity before starting bulk operation
+    const hasCapacity = await waitForPoolCapacity(80, 10000);
+    if (!hasCapacity) {
+      console.warn("⚠️ Connection pool still near capacity after wait, proceeding anyway");
+    }
+    
     logs.push("✅ Database connected");
     console.log("✅ Database connected");
 
@@ -148,6 +156,7 @@ export async function GET() {
         if (aggregated.length > 0 && aggregated[0].eventCount > 0) {
           const metrics = aggregated[0];
 
+          // ✅ OPTIMIZATION: Use lean() for read-only query
           // Get revenue from PaymentEvents for this date range
           const paymentEvents = await PaymentEvent.find({
             experimentId,
