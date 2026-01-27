@@ -1,0 +1,10 @@
+node_modules
+.next
+dist
+build
+out
+logs
+uploads
+coverage
+.env
+.git
