@@ -26,6 +26,19 @@ export interface ResetResult {
 }
 
 /**
+ * Preview result for Klaviyo reset
+ */
+export interface PreviewResult {
+  targetDraw: { id: string; name: string; status: string; activationDate: Date };
+  cutoffDate: Date;
+  totalUsers: number;
+  totalParticipants: number;
+  skippedUsers: number;
+  reductionPercentage: number;
+  sampleUsers: Array<{ userId: string; email: string; name?: string }>;
+}
+
+/**
  * Reset draw-specific properties for all users when a new draw activates
  *
  * OPTIMIZED: Only processes users who have participated in major draws (have entries in any draw).
@@ -236,6 +249,97 @@ export async function resetDrawPropertiesForAllUsers(
       ],
       duration,
     };
+  }
+}
+
+/**
+ * Get preview of users who will be synced to Klaviyo
+ * Returns information about target draw, user counts, and sample users without actually syncing
+ *
+ * @returns Preview data including target draw info, user counts, and sample users
+ */
+export async function getUsersForKlaviyoResetPreview(): Promise<PreviewResult> {
+  try {
+    await connectDB();
+
+    // Get target draw and cutoff date
+    const drawInfo = await getTargetDrawForCalculation();
+
+    if (!drawInfo) {
+      throw new Error("No target draw found for preview");
+    }
+
+    const { targetDraw, cutoffDate } = drawInfo;
+
+    // Find all major draws that have entries (active, frozen, or completed)
+    const majorDrawsWithEntries = await MajorDraw.find({
+      status: { $in: ["active", "frozen", "completed"] },
+      "entries.0": { $exists: true }, // Has at least one entry
+    }).select("entries.userId");
+
+    // Extract all unique user IDs from all draws
+    const userIdsWithEntries = new Set<string>();
+    majorDrawsWithEntries.forEach((draw) => {
+      if (draw.entries && draw.entries.length > 0) {
+        draw.entries.forEach((entry: { userId: mongoose.Types.ObjectId | string }) => {
+          const userId = entry.userId instanceof mongoose.Types.ObjectId 
+            ? entry.userId.toString() 
+            : String(entry.userId);
+          userIdsWithEntries.add(userId);
+        });
+      }
+    });
+
+    const uniqueUserIds = Array.from(userIdsWithEntries);
+
+    // Convert to ObjectIds for MongoDB query
+    const userIdsObjectIds = uniqueUserIds.map((id) => new mongoose.Types.ObjectId(id));
+
+    // Query to find users by their IDs
+    const participantsQuery = {
+      _id: { $in: userIdsObjectIds },
+    };
+
+    // Get total counts
+    const [totalParticipants, totalUsers] = await Promise.all([
+      User.countDocuments(participantsQuery),
+      User.countDocuments({}), // Total users
+    ]);
+    const skippedUsers = totalUsers - totalParticipants;
+    const reductionPercentage = totalUsers > 0 ? Math.round((skippedUsers / totalUsers) * 100) : 0;
+
+    // Get sample users (first 50) for preview
+    const sampleUsers = await User.find(participantsQuery)
+      .limit(50)
+      .select("_id email firstName lastName")
+      .lean();
+
+    const sampleUsersFormatted = sampleUsers.map((user) => ({
+      userId: String(user._id),
+      email: user.email || "unknown",
+      name: user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}` 
+        : user.firstName || user.lastName || undefined,
+    }));
+
+    return {
+      targetDraw: {
+        id: String(targetDraw._id),
+        name: targetDraw.name,
+        status: targetDraw.status,
+        activationDate: targetDraw.activationDate,
+      },
+      cutoffDate,
+      totalUsers,
+      totalParticipants,
+      skippedUsers,
+      reductionPercentage,
+      sampleUsers: sampleUsersFormatted,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`❌ Preview failed:`, errorMessage);
+    throw error;
   }
 }
 

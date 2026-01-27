@@ -939,8 +939,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/sidchrome-milwaukee-toggle.png",
     gallery: [
-      { src: "/images/majordraws/milwaukee-set/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
       { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit and storage" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 18V Charging Station.webp", alt: "Milwaukee charging station" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 5_ Grinder.webp", alt: "Milwaukee grinder" },
@@ -1010,8 +1010,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using TSTAK storage, wheeled tool bags, and the Sidchrome 356-piece professional hand-tool kit.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/dewalt-set/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
       { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
+      { src: "/images/majordraws/dewalt-set/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
       { src: "/images/majordraws/dewalt-set/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
       { src: "/images/majordraws/dewalt-set/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },
       { src: "/images/majordraws/dewalt-set/Dewalt Bag 2.jpeg", alt: "DeWalt wheeled tool bag interior" },
@@ -1092,8 +1092,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/makita-set/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
       { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
+      { src: "/images/majordraws/makita-set/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
       { src: "/images/majordraws/makita-set/dhp486z-001.jpg", alt: "Makita DHP486Z hammer drill" },
       { src: "/images/majordraws/makita-set/dtd173z-001.jpg", alt: "Makita DTD173Z impact driver" },
       { src: "/images/majordraws/makita-set/dga508z-001.jpg", alt: "Makita DGA508Z angle grinder" },
@@ -1165,8 +1165,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$35,000+ Value",
     gallery: [
-      { src: "/images/majordraws/milwaukee-set/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
       { src: "/images/majordraws/toolbox/milwaukee-toolbox.png", alt: "Milwaukee 56 inch high capacity combination tool storage" },
+      { src: "/images/majordraws/milwaukee-set/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 18V Charging Station.webp", alt: "Milwaukee charging station" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 5_ Grinder.webp", alt: "Milwaukee grinder" },
@@ -1236,8 +1236,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/dewalt-set/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
       { src: "/images/majordraws/toolbox/milwaukee-toolbox.png", alt: "Milwaukee 56 inch high capacity combination tool storage" },
+      { src: "/images/majordraws/dewalt-set/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
       { src: "/images/majordraws/dewalt-set/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
       { src: "/images/majordraws/dewalt-set/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },
       { src: "/images/majordraws/dewalt-set/Dewalt Bag 2.jpeg", alt: "DeWalt wheeled tool bag interior" },
@@ -1319,8 +1319,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/makita-set/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
       { src: "/images/majordraws/toolbox/milwaukee-toolbox.png", alt: "Milwaukee 56 inch high capacity combination tool storage" },
+      { src: "/images/majordraws/makita-set/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
       { src: "/images/majordraws/makita-set/dhp486z-001.jpg", alt: "Makita DHP486Z hammer drill" },
       { src: "/images/majordraws/makita-set/dtd173z-001.jpg", alt: "Makita DTD173Z impact driver" },
       { src: "/images/majordraws/makita-set/dga508z-001.jpg", alt: "Makita DGA508Z angle grinder" },

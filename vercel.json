@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/major-draw-transition",
-      "schedule": "0 14 * * *"
+      "schedule": "30 13 * * *"
     },
     {
       "path": "/api/cron/process-partner-discount-queues",

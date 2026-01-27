@@ -115,13 +115,13 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       <div
         className="main-banner-image absolute inset-0 z-0"
         role="img"
-        aria-label={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
+        aria-label={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
       >
         {/* Mobile Background */}
         <div className="lg:hidden absolute inset-0">
           <Image
             src={heroImagePaths.mobile}
-            alt={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
+            alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
             fill
             unoptimized
             className="object-cover"
@@ -134,7 +134,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
         <div className="hidden lg:block absolute inset-0">
           <Image
             src={heroImagePaths.desktop}
-            alt={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
+            alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
             fill
             priority
             unoptimized

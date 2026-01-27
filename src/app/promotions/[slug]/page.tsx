@@ -191,7 +191,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
           </Suspense>
 
           <Suspense fallback={<div className="min-h-[400px]" />}>
-            <LatestWinnerHero />
+            <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
           </Suspense>
 
           <Suspense fallback={<div className="min-h-[300px]" />}>

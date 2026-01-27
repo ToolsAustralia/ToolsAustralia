@@ -23,6 +23,28 @@ import { formatDateInAEST } from "@/utils/common/timezone";
 import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
 import WinnerEditModal from "@/components/modals/WinnerEditModal";
 import ExportModal from "@/components/modals/ExportModal";
+import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
+
+// Import MajorDrawData type from modal
+type MajorDrawData = {
+  _id: string;
+  name: string;
+  description: string;
+  prize: {
+    name: string;
+    description: string;
+    value: number;
+    images: (string | File)[];
+    brand?: string;
+    specifications?: Record<string, string | number | string[]>;
+    terms?: string[];
+  };
+  drawDate: string;
+  activationDate: string;
+  freezeEntriesAt: string;
+  status: "queued" | "active" | "frozen" | "completed" | "cancelled";
+  configurationLocked: boolean;
+};
 
 // Types
 interface DrawResult {
@@ -181,6 +203,10 @@ export default function DrawResults() {
     testimony?: string | null;
     selectedPrize?: string | null;
   } | null>(null);
+  // Edit Draw Modal
+  const [editingDraw, setEditingDraw] = useState<DrawResult | null>(null);
+  const [isEditDrawModalOpen, setIsEditDrawModalOpen] = useState(false);
+  const [isSubmittingDraw, setIsSubmittingDraw] = useState(false);
 
   // Fetch draws
   const fetchDraws = useCallback(
@@ -363,6 +389,84 @@ export default function DrawResults() {
   const handleExport = (draw: DrawResult) => {
     setSelectedDraw(draw);
     setIsExportModalOpen(true);
+  };
+
+  // Convert DrawResult to MajorDrawData format for the modal
+  const convertToMajorDrawData = (draw: DrawResult) => {
+    return {
+      _id: draw._id,
+      name: draw.name,
+      description: draw.description,
+      prize: {
+        name: draw.prize.name,
+        description: draw.prize.description,
+        value: draw.prize.value,
+        images: [...(draw.prize.images || [])],
+        brand: draw.prize.brand || "",
+        specifications: undefined, // Specifications field - modal will handle if needed
+        terms: draw.prize.terms || [],
+      },
+      drawDate: draw.drawDate instanceof Date ? draw.drawDate.toISOString() : draw.drawDate,
+      activationDate: draw.activationDate instanceof Date ? draw.activationDate.toISOString() : draw.activationDate,
+      freezeEntriesAt: draw.freezeEntriesAt instanceof Date ? draw.freezeEntriesAt.toISOString() : draw.freezeEntriesAt,
+      status: draw.status,
+      configurationLocked: draw.configurationLocked,
+    };
+  };
+
+  // Handle edit draw
+  const handleEditDraw = (draw: DrawResult) => {
+    setEditingDraw(draw);
+    setIsEditDrawModalOpen(true);
+  };
+
+  // Handle save draw - accepts MajorDrawData format from modal
+  const handleSaveDraw = async (data: Partial<MajorDrawData>) => {
+    if (!editingDraw) return;
+
+    setIsSubmittingDraw(true);
+    try {
+      const response = await fetch(`/api/admin/major-draw/update?id=${editingDraw._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to update draw" }));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Refresh the draws list
+      await fetchDraws(pagination.currentPage);
+      setIsEditDrawModalOpen(false);
+      setEditingDraw(null);
+
+      // Show success toast
+      showToast({
+        type: "success",
+        title: "Draw Updated Successfully!",
+        message: `${editingDraw.name} has been updated and changes are now live.`,
+        duration: 5000,
+      });
+    } catch (err) {
+      console.error("Error updating draw:", err);
+
+      // Show error toast
+      const errorMessage = err instanceof Error ? err.message : "Failed to update draw";
+      showToast({
+        type: "error",
+        title: "Failed to Update Draw",
+        message: errorMessage,
+        duration: 7000,
+      });
+
+      throw err;
+    } finally {
+      setIsSubmittingDraw(false);
+    }
   };
 
   // Format date in AEST
@@ -631,8 +735,8 @@ export default function DrawResults() {
                           Edit Winner
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" icon={Eye}>
-                        View Details
+                      <Button onClick={() => handleEditDraw(draw)} size="sm" variant="outline" icon={Edit}>
+                        Edit Draw
                       </Button>
                       <Button onClick={() => handleExport(draw)} size="sm" variant="outline" icon={Download}>
                         Export
@@ -727,6 +831,20 @@ export default function DrawResults() {
               // Refresh the draws list after update
               await fetchDraws(pagination.currentPage);
             }}
+          />
+        )}
+
+        {/* Edit Draw Modal */}
+        {editingDraw && (
+          <MajorDrawEditModal
+            isOpen={isEditDrawModalOpen}
+            onCloseAction={() => {
+              setIsEditDrawModalOpen(false);
+              setEditingDraw(null);
+            }}
+            onSaveAction={handleSaveDraw}
+            majorDraw={convertToMajorDrawData(editingDraw)}
+            isLoading={isSubmittingDraw}
           />
         )}
       </div>
