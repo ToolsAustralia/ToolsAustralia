@@ -1,4 +1,5 @@
 import { VariantConfig } from "@/models/ab-testing/Variant";
+import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 
 /**
  * Variant Config Service
@@ -72,8 +73,18 @@ export class VariantConfigService {
         errors.push("Hero config must be an object");
       } else {
         const hero = cfg.hero as Record<string, unknown>;
-        if (hero.imageSrc && typeof hero.imageSrc !== "string") {
-          errors.push("Hero imageSrc must be a string");
+        // Validate imageSrc: can be string or PromoImagePaths object
+        if (hero.imageSrc) {
+          const imageSrc = hero.imageSrc;
+          if (typeof imageSrc !== "string" && typeof imageSrc !== "object") {
+            errors.push("Hero imageSrc must be a string or an object with desktop and mobile properties");
+          } else if (typeof imageSrc === "object") {
+            // Validate PromoImagePaths structure
+            const paths = imageSrc as Record<string, unknown>;
+            if (typeof paths.desktop !== "string" || typeof paths.mobile !== "string") {
+              errors.push("Hero imageSrc object must have desktop and mobile string properties");
+            }
+          }
         }
         if (hero.messaging && typeof hero.messaging !== "string") {
           errors.push("Hero messaging must be a string");

@@ -40,6 +40,8 @@ import mongoose from "mongoose";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
+import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
+import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -58,26 +60,17 @@ const getCachedPrize = createCachedQuery(async (slug: string) => {
 });
 
 /**
- * Helper function to determine hero image path based on promo multiplier
- * Used for preloading the correct hero image
+ * Helper function to determine hero image paths based on promo multiplier
+ * Used for preloading the correct hero images (responsive)
+ * Note: Draw date status and variant config overrides are handled client-side
+ * 
+ * @param multiplier - Active promo multiplier
+ * @returns PromoImagePaths object with desktop and mobile paths
  */
-function getHeroImageSrc(multiplier?: number): string {
-  if (!multiplier) {
-    return "/images/background/promo/$20.png";
-  }
-
-  switch (multiplier) {
-    case 10:
-      return "/images/background/promo/x10 entries.webp";
-    case 5:
-      return "/images/background/promo/x5 entries.png";
-    case 3:
-      return "/images/background/promo/x3 entries.png";
-    case 2:
-      return "/images/background/promo/$20.png";
-    default:
-      return "/images/background/promo/$20.png";
-  }
+function getHeroImagePaths(multiplier?: number): PromoImagePaths {
+  return getPromoImagePaths({
+    multiplier: multiplier ?? null,
+  });
 }
 
 export async function generateMetadata({ params }: PromotionsPageProps): Promise<Metadata> {
@@ -139,8 +132,9 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   const membershipPromo = activePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = activePromos.find((p) => p.type === "one-time-packages") || null;
 
-  // Determine hero image for preloading (will be overridden by variant config if present)
-  const heroImageSrc = getHeroImageSrc(membershipPromo?.multiplier);
+  // Determine hero image paths for preloading (will be overridden by variant config if present)
+  // Note: Draw date status is determined client-side, so we only use multiplier here
+  const heroImagePaths = getHeroImagePaths(membershipPromo?.multiplier);
 
   // Get experiment ID for variant assignment
   const experimentId = activeExperiment?._id 
@@ -155,8 +149,21 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
 
   return (
     <>
-      {/* Preload hero image for faster LCP */}
-      <link rel="preload" as="image" href={heroImageSrc} imageSizes="100vw" />
+      {/* Preload hero images for faster LCP - responsive with media queries */}
+      <link 
+        rel="preload" 
+        as="image" 
+        href={heroImagePaths.desktop} 
+        media="(min-width: 1024px)"
+        imageSizes="100vw" 
+      />
+      <link 
+        rel="preload" 
+        as="image" 
+        href={heroImagePaths.mobile} 
+        media="(max-width: 1023px)"
+        imageSizes="100vw" 
+      />
 
       <VariantAssignmentWrapper 
         experimentId={experimentId}

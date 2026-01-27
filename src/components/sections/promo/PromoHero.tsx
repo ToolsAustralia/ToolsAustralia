@@ -10,6 +10,8 @@ import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
+import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
+import type { DrawDateStatus } from "@/utils/promo/promo-hero-types";
 
 interface PromoHeroProps {
   initialPromo?: ServerPromo | null;
@@ -50,7 +52,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   };
 
   // Helper function to check if draw date is today or tomorrow (in AEST)
-  const getDrawDateStatus = (): "today" | "tomorrow" | null => {
+  const getDrawDateStatus = (): DrawDateStatus => {
     if (!majorDraw?.drawDate) return null;
 
     const drawDateUTC = new Date(majorDraw.drawDate);
@@ -75,42 +77,14 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
     return null;
   };
 
-  // Conditionally render hero image based on variant config, draw date, or active promo multiplier
+  // Resolve hero image paths using centralized utility
   // Priority: Variant config > Draw date (today/tomorrow) > multiplier-based images
-  // 10x → x10 entries.webp, 5x → x5 entries.webp, 3x → x3 entries.webp, no promo → $20.png
-  const getHeroImageSrc = () => {
-    // Priority 1: Variant config override
-    if (variantConfig?.hero?.imageSrc) {
-      return variantConfig.hero.imageSrc;
-    }
-
-    const drawStatus = getDrawDateStatus();
-
-    // Priority 2: If draw is today or tomorrow, use date-based images
-    if (drawStatus === "tomorrow") {
-      return "/images/background/promo/drawn tomorrow.webp";
-    }
-    if (drawStatus === "today") {
-      return "/images/background/promo/drawn tonight.webp";
-    }
-
-    // Priority 3: Fall back to multiplier-based logic
-    // Use resolved multiplier (includes alternating multiplier if no active promo)
-    switch (resolvedMultiplier) {
-      case 10:
-        return "/images/background/promo/x10 entries.webp";
-      case 5:
-        return "/images/background/promo/x5 entries.webp";
-      case 3:
-        return "/images/background/promo/x3 entries.webp";
-      case 2:
-        return "/images/background/promo/$20.png";
-      default:
-        return "/images/background/promo/$20.png";
-    }
-  };
-
-  const heroImageSrc = getHeroImageSrc();
+  const drawDateStatus = getDrawDateStatus();
+  const heroImagePaths = getPromoImagePaths({
+    multiplier: resolvedMultiplier,
+    drawDateStatus,
+    variantImageOverride: variantConfig?.hero?.imageSrc,
+  });
   
   // Get CTA text from variant config or use default
   const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";
@@ -137,23 +111,39 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 h-[50vh] min-h-[430px] lg:h-[83vh] lg:min-h-0"
     >
       {/* Background Banner Image with Ellipse Clip-Path */}
-      {/* Using Next.js Image with clip-path for smooth rounded bottom effect and better performance */}
+      {/* Responsive images: separate mobile and desktop paths for optimal performance */}
       <div
         className="main-banner-image absolute inset-0 z-0"
         role="img"
-          aria-label={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
-        >
-        <Image
-          src={heroImageSrc}
-          alt={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
-          fill
-          priority
-          unoptimized
-          className="object-cover"
-          style={{
-            objectPosition: "50%",
-          }}
-        />
+        aria-label={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
+      >
+        {/* Mobile Background */}
+        <div className="lg:hidden absolute inset-0">
+          <Image
+            src={heroImagePaths.mobile}
+            alt={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
+            fill
+            unoptimized
+            className="object-cover"
+            style={{
+              objectPosition: "50%",
+            }}
+          />
+        </div>
+        {/* Desktop Background */}
+        <div className="hidden lg:block absolute inset-0">
+          <Image
+            src={heroImagePaths.desktop}
+            alt={`Win Ford F-150 & Luxury Float - ${resolvedMultiplier}x Entries Active`}
+            fill
+            priority
+            unoptimized
+            className="object-cover"
+            style={{
+              objectPosition: "50%",
+            }}
+          />
+        </div>
       </div>
 
       {/* Hero Content - Optional messaging overlay from variant config */}
