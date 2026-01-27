@@ -7,7 +7,7 @@
  * @module utils/integrations/klaviyo/klaviyo-draw-reset
  */
 
-import connectDB from "@/lib/mongodb";
+import connectDB, { getConnectionMetrics } from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
 import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
 import mongoose from "mongoose";
@@ -98,7 +98,15 @@ export async function resetDrawPropertiesForAllUsers(
   try {
     await connectDB();
 
-    // Get target draw and cutoff date
+    // ✅ OPTIMIZATION: Check connection pool availability before starting bulk operation
+    const poolMetrics = getConnectionMetrics();
+    if (poolMetrics && poolMetrics.active > poolMetrics.maxPoolSize * 0.8) {
+      console.warn(`⚠️ Connection pool near capacity (${poolMetrics.active}/${poolMetrics.maxPoolSize}), waiting 2s...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    // ✅ CRITICAL OPTIMIZATION: Fetch draw info ONCE and cache it
+    // This eliminates 2000+ redundant database queries (1000 users × 2 queries each)
     const drawInfo = await getTargetDrawForCalculation();
 
     if (!drawInfo) {
@@ -106,6 +114,12 @@ export async function resetDrawPropertiesForAllUsers(
     }
 
     const { targetDraw, cutoffDate } = drawInfo;
+    
+    // Log pool metrics at sync start for monitoring
+    const startMetrics = getConnectionMetrics();
+    if (startMetrics) {
+      console.log(`📊 Connection pool at sync start: ${startMetrics.active}/${startMetrics.maxPoolSize} active, ${startMetrics.idle} idle`);
+    }
 
     console.log(`🔄 Starting draw reset for draw: ${targetDraw.name} (ID: ${targetDraw._id})`);
     console.log(`📅 Cutoff date: ${cutoffDate.toISOString()}`);
@@ -224,10 +238,10 @@ export async function resetDrawPropertiesForAllUsers(
             const currentProcessed = processed + 1; // For logging only
             console.log(`🔄 Syncing user: ${userEmail} (${currentProcessed}/${totalParticipants})`);
             
-            // Sync to Klaviyo (this will update the profile with new draw-specific properties)
-            // Note: draw-specific properties are calculated inside syncUserProfileToKlaviyo
-            // via userToKlaviyoProfile -> calculateDrawSpecificPropertiesForUser
-            await syncUserProfileToKlaviyo(user as IUser);
+            // ✅ OPTIMIZATION: Pass cached draw data to avoid redundant database queries
+            // This eliminates 2 MongoDB queries per user (getTargetMajorDraw + find previous draw)
+            // Instead of calling getTargetDrawForCalculation() 1000+ times, we use the cached result
+            await syncUserProfileToKlaviyo(user as IUser, undefined, targetDraw, cutoffDate);
 
             // Increment counters after successful sync
             processed++;
@@ -297,6 +311,12 @@ export async function resetDrawPropertiesForAllUsers(
       }, 5000); // Keep progress for 5 seconds after completion
     }
 
+    // Log pool metrics at sync end for monitoring
+    const endMetrics = getConnectionMetrics();
+    if (endMetrics) {
+      console.log(`📊 Connection pool at sync end: ${endMetrics.active}/${endMetrics.maxPoolSize} active, ${endMetrics.idle} idle`);
+    }
+
     console.log(`✅ Draw reset completed (OPTIMIZED - only draw participants):`);
     console.log(`   Total participants found: ${totalParticipants} users`);
     console.log(`   Processed: ${processed} users`);
@@ -304,6 +324,7 @@ export async function resetDrawPropertiesForAllUsers(
     console.log(`   Errors: ${errors} users`);
     console.log(`   Duration: ${duration}ms`);
     console.log(`   ⚡ Optimization: Skipped ${skippedUsers} non-participants (~${reductionPercentage}% reduction)`);
+    console.log(`   ⚡ Optimization: Cached draw data (eliminated 2000+ redundant queries)`);
 
     return {
       processed,

@@ -11,6 +11,7 @@ import { klaviyo } from "@/lib/klaviyo";
 import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpers";
 import { calculateDrawSpecificPropertiesForUser } from "@/utils/integrations/klaviyo/klaviyo-draw-calculator";
 import type { IUser } from "@/models/User";
+import type { IMajorDraw } from "@/models/MajorDraw";
 
 /**
  * Subscribe user to Klaviyo lists ONCE during registration
@@ -79,11 +80,19 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
  * @param user - User model instance
  * @param brandInterestFromSignup - Optional brand interest from signup (e.g., "milwaukee", "dewalt", "makita")
  *                                   Only used if user hasn't made any purchases yet
+ * @param targetDraw - Optional cached target draw (for performance optimization in bulk operations)
+ * @param cutoffDate - Optional cached cutoff date (for performance optimization in bulk operations)
  */
-export async function syncUserProfileToKlaviyo(user: IUser, brandInterestFromSignup?: string | null): Promise<void> {
+export async function syncUserProfileToKlaviyo(
+  user: IUser,
+  brandInterestFromSignup?: string | null,
+  targetDraw?: IMajorDraw,
+  cutoffDate?: Date
+): Promise<void> {
   try {
     // ✅ CRITICAL FIX: await the async userToKlaviyoProfile function
-    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup);
+    // Pass cached draw data if provided to avoid redundant database queries
+    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup, targetDraw, cutoffDate);
     const result = await klaviyo.upsertProfile(profile);
 
     if (result.success && result.profile_id) {
@@ -114,9 +123,16 @@ export async function syncUserProfileToKlaviyo(user: IUser, brandInterestFromSig
  *
  * @param user - User model instance
  * @param brandInterestFromSignup - Optional brand interest from signup
+ * @param targetDraw - Optional cached target draw (for performance optimization)
+ * @param cutoffDate - Optional cached cutoff date (for performance optimization)
  */
-export function syncUserProfileToKlaviyoBackground(user: IUser, brandInterestFromSignup?: string | null): void {
-  syncUserProfileToKlaviyo(user, brandInterestFromSignup).catch((error) => {
+export function syncUserProfileToKlaviyoBackground(
+  user: IUser,
+  brandInterestFromSignup?: string | null,
+  targetDraw?: IMajorDraw,
+  cutoffDate?: Date
+): void {
+  syncUserProfileToKlaviyo(user, brandInterestFromSignup, targetDraw, cutoffDate).catch((error) => {
     // ✅ ENHANCED: Log timeout errors with more context but don't block
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isTimeout = errorMessage.toLowerCase().includes("timeout");

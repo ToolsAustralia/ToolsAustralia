@@ -12,7 +12,8 @@ import type { KlaviyoProfile } from "@/types/klaviyo";
 import { getStateByCode } from "@/data/australianStates";
 import { getPackageById } from "@/data/membershipPackages";
 import { extractBrandFromSlug } from "./brand-extraction";
-import { calculateDrawSpecificPropertiesForUser, type DrawSpecificProperties } from "./klaviyo-draw-calculator";
+import { calculateDrawSpecificPropertiesForUser, calculateDrawSpecificProperties, type DrawSpecificProperties } from "./klaviyo-draw-calculator";
+import type { IMajorDraw } from "@/models/MajorDraw";
 
 /**
  * Calculate entry breakdown by source
@@ -98,10 +99,14 @@ export function hasUserMadePurchase(user: IUser): boolean {
  * @param user - User model instance
  * @param brandInterestFromSignup - Optional brand interest from signup (e.g., "milwaukee", "dewalt", "makita")
  *                                   Only used if user hasn't made any purchases yet
+ * @param targetDraw - Optional cached target draw (for performance optimization in bulk operations)
+ * @param cutoffDate - Optional cached cutoff date (for performance optimization in bulk operations)
  */
 export async function userToKlaviyoProfile(
   user: IUser,
-  brandInterestFromSignup?: string | null
+  brandInterestFromSignup?: string | null,
+  targetDraw?: IMajorDraw,
+  cutoffDate?: Date
 ): Promise<KlaviyoProfile> {
   // ✅ DEBUG: Log user data structure to identify sync issues
   // console.log(`🔍 userToKlaviyoProfile called for ${user.email}:`, {
@@ -152,7 +157,18 @@ export async function userToKlaviyoProfile(
   };
 
   try {
-    const drawProps = await calculateDrawSpecificPropertiesForUser(user);
+    // Use cached draw data if provided (performance optimization for bulk operations)
+    // Otherwise fetch it (for single user operations)
+    let drawProps: DrawSpecificProperties | null = null;
+    
+    if (targetDraw && cutoffDate) {
+      // Use cached draw data - no database query needed
+      drawProps = await calculateDrawSpecificProperties(user, targetDraw, cutoffDate);
+    } else {
+      // Fetch draw data (for single user operations)
+      drawProps = await calculateDrawSpecificPropertiesForUser(user);
+    }
+    
     if (drawProps) {
       drawSpecificProperties = drawProps;
     } else {
