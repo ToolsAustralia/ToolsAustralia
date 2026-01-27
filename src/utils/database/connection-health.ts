@@ -37,6 +37,15 @@ export async function checkConnectionHealth(): Promise<ConnectionHealthStatus> {
     const conn = await connectDB();
     
     // Verify connection is responsive with ping
+    if (!conn.db) {
+      return {
+        healthy: false,
+        readyState: conn.readyState,
+        poolMetrics: null,
+        error: "Database instance not available",
+      };
+    }
+    
     await conn.db.admin().ping();
     
     const metrics = getConnectionMetrics();
