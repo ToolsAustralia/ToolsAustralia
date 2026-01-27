@@ -26,6 +26,9 @@ if (!cached) {
 // Connection lifecycle tracking for leak detection (development only)
 let connectionStartTime: number | null = null;
 
+// Track if event listeners are already registered to prevent duplicates
+let eventListenersRegistered = false;
+
 if (process.env.NODE_ENV === "development") {
   // Monitor for connection leaks - warn if connection stays open > 5 minutes
   setInterval(() => {
@@ -47,13 +50,24 @@ if (process.env.NODE_ENV === "development") {
 function getMaxPoolSize(): number {
   const rawValue = process.env.MONGODB_MAX_POOL;
   const parsedValue = rawValue ? Number(rawValue) : NaN;
-  if (Number.isNaN(parsedValue) || parsedValue <= 0) {
-    // Default to 30 for MongoDB M10 tier (1500 connections per node)
-    // Provides buffer for concurrent operations while staying well under limit
-    // Can be overridden via MONGODB_MAX_POOL env var if needed
-    return 30;
+  
+  // Explicit override takes precedence
+  if (!Number.isNaN(parsedValue) && parsedValue > 0) {
+    return parsedValue;
   }
-  return parsedValue;
+  
+  // Auto-detect: Vercel serverless needs smaller pools per instance
+  // In serverless, each function instance creates its own pool
+  // 20 instances × 5 connections = 100 max (well under M10's 1500 limit)
+  const isVercel = !!process.env.VERCEL;
+  
+  if (isVercel) {
+    // Serverless: 5 connections per instance
+    return 5;
+  }
+  
+  // Local development: single instance, can use more connections
+  return 10;
 }
 
 /**
@@ -159,15 +173,16 @@ async function connectDB(): Promise<mongoose.Connection> {
 
   if (!cached.promise) {
     const maxPoolSize = getMaxPoolSize();
+    const isVercel = !!process.env.VERCEL;
     const opts: mongoose.ConnectOptions = {
       bufferCommands: false,
-      // Production optimizations for M10 tier
-      maxPoolSize, // Default: 30 (optimized for M10 tier 1500 connections per node)
-      minPoolSize: 3, // Maintain minimum warm connections
-      maxConnecting: 10, // Limit concurrent connection attempts
+      // Optimized for serverless: smaller pools per instance prevent connection multiplication
+      maxPoolSize, // 5 for Vercel serverless, 10 for local dev
+      minPoolSize: isVercel ? 0 : 1, // 0 for serverless (avoids stale TLS sockets in frozen Lambdas), 1 for local dev
+      maxConnecting: isVercel ? 3 : 5, // Limit concurrent connection attempts per instance
       serverSelectionTimeoutMS: 10000, // 10s - fast enough for API routes, prevents webhook timeouts
       connectTimeoutMS: 10000, // 10s - connection establishment timeout
-      socketTimeoutMS: 45000, // Keep existing
+      socketTimeoutMS: isVercel ? 30000 : 45000, // 30s for serverless (API route latency), 45s for local dev
       maxIdleTimeMS: 30000, // 30s - close idle connections (stable, not aggressive)
       family: 4, // Use IPv4, skip trying IPv6
       retryWrites: true, // Retry write operations on transient failures
@@ -178,29 +193,34 @@ async function connectDB(): Promise<mongoose.Connection> {
       // tlsAllowInvalidCertificates: false,
     };
 
-    // Set up connection event handlers
-    mongoose.connection.on('disconnected', () => {
-      console.warn('⚠️ MongoDB disconnected');
-      cached.conn = null;
-      cached.promise = null;
-    });
-
-    mongoose.connection.on('error', (err) => {
-      console.error('❌ MongoDB connection error:', err);
-      // Clear cache on SSL errors to force fresh connection
-      if (isSSLRetryableError(err)) {
+    // Set up connection event handlers (only once to prevent listener accumulation)
+    if (!eventListenersRegistered) {
+      mongoose.connection.on('disconnected', () => {
+        console.warn('⚠️ MongoDB disconnected');
         cached.conn = null;
         cached.promise = null;
-      }
-    });
+      });
 
-    mongoose.connection.on('reconnected', () => {
-      console.log('✅ MongoDB reconnected');
-    });
+      mongoose.connection.on('error', (err) => {
+        console.error('❌ MongoDB connection error:', err);
+        // Clear cache on SSL errors to force fresh connection
+        if (isSSLRetryableError(err)) {
+          cached.conn = null;
+          cached.promise = null;
+        }
+      });
+
+      mongoose.connection.on('reconnected', () => {
+        console.log('✅ MongoDB reconnected');
+      });
+
+      eventListenersRegistered = true;
+    }
 
     cached.promise = connectWithRetry(getMongoURI(), opts)
       .then((conn) => {
-        console.log(`✅ MongoDB connected successfully (maxPoolSize=${maxPoolSize})`);
+        const env = isVercel ? "serverless" : "local";
+        console.log(`✅ MongoDB connected successfully (maxPoolSize=${maxPoolSize}, env=${env})`);
         // Track connection start time for leak detection
         if (process.env.NODE_ENV === "development") {
           connectionStartTime = Date.now();
