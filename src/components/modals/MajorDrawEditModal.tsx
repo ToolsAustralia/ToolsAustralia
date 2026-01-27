@@ -308,7 +308,7 @@ export default function MajorDrawEditModal({
                 <span className="text-sm font-medium text-yellow-800">Configuration Locked</span>
               </div>
               <p className="text-sm text-yellow-700">
-                This draw&apos;s configuration is locked and cannot be edited. Only basic information can be modified.
+                This draw&apos;s prize value and dates are locked and cannot be edited. Prize images, name, description, and other details can still be modified.
               </p>
             </div>
           )}
@@ -392,7 +392,6 @@ export default function MajorDrawEditModal({
                   onChange={(e) => handlePrizeChange("name", e.target.value)}
                   error={errors["prize.name"]}
                   required
-                  disabled={majorDraw.configurationLocked}
                 />
 
                 <Input
@@ -433,7 +432,6 @@ export default function MajorDrawEditModal({
                   label="Brand (optional)"
                   value={formData.prize?.brand || ""}
                   onChange={(e) => handlePrizeChange("brand", e.target.value)}
-                  disabled={majorDraw.configurationLocked}
                 />
               </div>
 
@@ -446,7 +444,6 @@ export default function MajorDrawEditModal({
                   maxFileSize={10}
                   uploadToCloudinary={false}
                   storeLocally={true}
-                  disabled={majorDraw.configurationLocked}
                   accept="image/*"
                   error={errors["prize.images"]}
                 />
