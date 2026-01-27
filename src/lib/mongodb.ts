@@ -111,8 +111,8 @@ async function connectWithRetry(uri: string, opts: mongoose.ConnectOptions, maxR
   
   // Check circuit breaker before attempting connection
   if (!canAttemptConnection()) {
-    const error = new Error('Circuit breaker is OPEN - connection attempts blocked due to repeated failures');
-    (error as any).code = 'CIRCUIT_BREAKER_OPEN';
+    const error = new Error('Circuit breaker is OPEN - connection attempts blocked due to repeated failures') as Error & { code: string };
+    error.code = 'CIRCUIT_BREAKER_OPEN';
     throw error;
   }
   
@@ -262,7 +262,20 @@ export function getConnectionMetrics(): {
   
   try {
     const conn = cached.conn;
-    const server = (conn.db as any).serverConfig;
+    // MongoDB internal structure - accessing serverConfig for pool metrics
+    const db = conn.db as mongoose.mongo.Db & {
+      serverConfig?: {
+        s?: {
+          pool?: {
+            totalConnectionCount?: number;
+            availableConnectionCount?: number;
+            options?: { maxPoolSize?: number };
+            waitQueue?: { length?: number };
+          };
+        };
+      };
+    };
+    const server = db.serverConfig;
     
     // Access connection pool if available
     if (server?.s?.pool) {
