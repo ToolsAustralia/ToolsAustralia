@@ -13,6 +13,7 @@ import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
 import mongoose from "mongoose";
 import { syncUserProfileToKlaviyo } from "./klaviyo-profile-sync";
 import { getTargetDrawForCalculation } from "./klaviyo-draw-calculator";
+import { waitForPoolCapacity } from "@/utils/database/connection-health";
 
 /**
  * Result of reset operation
@@ -98,11 +99,11 @@ export async function resetDrawPropertiesForAllUsers(
   try {
     await connectDB();
 
-    // ✅ OPTIMIZATION: Check connection pool availability before starting bulk operation
-    const poolMetrics = getConnectionMetrics();
-    if (poolMetrics && poolMetrics.active > poolMetrics.maxPoolSize * 0.8) {
-      console.warn(`⚠️ Connection pool near capacity (${poolMetrics.active}/${poolMetrics.maxPoolSize}), waiting 2s...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // ✅ OPTIMIZATION: Wait for pool capacity before starting bulk operation
+    // This ensures we don't exhaust connections during the sync
+    const hasCapacity = await waitForPoolCapacity(80, 10000);
+    if (!hasCapacity) {
+      console.warn("⚠️ Connection pool still near capacity after wait, proceeding anyway");
     }
 
     // ✅ CRITICAL OPTIMIZATION: Fetch draw info ONCE and cache it
