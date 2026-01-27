@@ -19,7 +19,7 @@
 
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
+import User, { IUser } from "@/models/User";
 import { processPartnerDiscountQueue } from "@/utils/partner-discounts/partner-discount-queue";
 import { waitForPoolCapacity } from "@/utils/database/connection-health";
 
@@ -51,20 +51,20 @@ export async function POST() {
       console.warn("⚠️ Connection pool still near capacity after wait, proceeding anyway");
     }
 
-    // ✅ OPTIMIZATION: Process in smaller batches with lean() for better performance
+    // ✅ OPTIMIZATION: Process in smaller batches for better performance
     const BATCH_SIZE = 200; // Reduced from 1000 to reduce connection pressure
     let skip = 0;
     let hasMore = true;
-    const allUsers: any[] = [];
+    const allUsers: IUser[] = [];
 
     // Fetch users in batches
+    // Note: Not using .lean() because we need to call .save() on documents
     while (hasMore) {
       const batch = await User.find({
         partnerDiscountQueue: { $exists: true, $ne: [] },
       })
         .skip(skip)
-        .limit(BATCH_SIZE)
-        .lean(); // Use lean() for read-only operations
+        .limit(BATCH_SIZE);
 
       if (batch.length === 0) {
         hasMore = false;
