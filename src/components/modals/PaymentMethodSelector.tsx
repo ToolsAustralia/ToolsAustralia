@@ -470,10 +470,16 @@ const StripeCardForm = React.forwardRef<
                     };
                   }
 
-                  // If SetupIntent already succeeded, extract payment method and return it
+                  // If SetupIntent already succeeded, signal that a new SetupIntent is needed for new card
+                  // ✅ CRITICAL: A succeeded SetupIntent cannot be reused - user needs new SetupIntent for new card
                   if (statusResult.status === "succeeded" && statusResult.paymentMethodId) {
-                    console.log("✅ SetupIntent already succeeded, extracting payment method:", statusResult.paymentMethodId);
-                    return { paymentMethodId: statusResult.paymentMethodId };
+                    console.log("⚠️ SetupIntent already succeeded with payment method:", statusResult.paymentMethodId);
+                    console.log("⚠️ User entered new card - new SetupIntent required");
+                    // Return flag to trigger new SetupIntent creation
+                    return { 
+                      setupIntentAlreadySucceeded: true,
+                      paymentMethodId: statusResult.paymentMethodId, // Keep old for reference, but new one will be created
+                    };
                   }
 
                   // If SetupIntent is in an unexpected state but has a payment method, try to extract it

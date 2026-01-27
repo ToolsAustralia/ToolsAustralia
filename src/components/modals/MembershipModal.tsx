@@ -193,6 +193,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const isCreatingSetupIntentRef = useRef<boolean>(false);
   // ✅ STRIPE BEST PRACTICE: Track if subscription was already created to prevent duplicate creation
   const subscriptionCreatedRef = useRef<string | null>(null); // Store subscriptionId once created
+  const userIdRef = useRef<string | null>(null); // Store userId for retry scenarios
   // ✅ NEW: Track recovery attempts to prevent duplicate recoveries
   const recoveryAttemptedRef = useRef<{ errorMessage: string; attempted: boolean } | null>(null);
   const cardFormRef = useRef<{
@@ -454,6 +455,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
       // ✅ STRIPE BEST PRACTICE: Reset subscription tracking when modal opens for new purchase
       subscriptionCreatedRef.current = null;
+      userIdRef.current = null; // ✅ Reset userId tracking for clean state
       // Success state is now handled by global LoadingContext
       // console.log("🔄 Reset upsell trigger guard and payment processing state for new purchase");
     } else {
@@ -2475,53 +2477,73 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hasClientSecret,
             hasSetupIntent: !!setupIntentClientSecret,
             hasPaymentIntent: !!paymentIntentClientSecret,
+            subscriptionExists: !!subscriptionCreatedRef.current, // ✅ Log if subscription already exists
           });
           const result = await cardFormRef.current.confirmSetup();
+          
+          // ✅ CRITICAL: Log paymentMethodId extraction for debugging retry scenarios
+          if (result.paymentMethodId) {
+            console.log("✅ PaymentMethodId extracted from SetupIntent:", result.paymentMethodId);
+          } else {
+            console.warn("⚠️ No paymentMethodId in confirmSetup result - this may cause issues on retry");
+          }
 
-          // ✅ FIX: Handle SetupIntent that already succeeded - allow user to use different payment method
-          if (result.setupIntentAlreadySucceeded && result.paymentMethodId) {
-            console.log("⚠️ SetupIntent already succeeded. Attempting automatic recovery...");
+          // ✅ CRITICAL: Handle SetupIntent that already succeeded - create new SetupIntent for new card
+          // A succeeded SetupIntent cannot be reused - user entered new card, need new SetupIntent
+          if (result.setupIntentAlreadySucceeded) {
+            console.log("⚠️ SetupIntent already succeeded. User entered new card - creating new SetupIntent...");
             
-            // ✅ EXPERT ERROR HANDLING: Use recovery function for seamless retry
-            const recoveryResult = await handlePaymentRecovery("setup_intent_recovery", result.error);
+            // Clear old SetupIntent and create new one
+            setSetupIntentClientSecret(null);
             
-            if (recoveryResult.success) {
-              // Recovery succeeded - retry with new SetupIntent
-              console.log("✅ SetupIntent recovery succeeded, retrying with new SetupIntent...");
-              
-              // Wait for PaymentElement to remount
-              await new Promise((resolve) => setTimeout(resolve, 500));
-              
-              // Retry confirmation
-              if (cardFormRef.current) {
-                const retryResult = await cardFormRef.current.confirmSetup();
-                if (retryResult.error) {
-                  // Recovery succeeded but retry failed - show error with state preserved
-                  // ✅ FIXED: Mark as manual retry to prevent duplicate recovery
-                  await handlePaymentError(retryResult.error, {
-                    preserveState: true,
-                    packageId,
-                    packageName: activePlan.name,
-                    isManualRetry: true, // ✅ NEW: Prevent automatic recovery on manual retry
-                  });
-                  throw new Error(retryResult.error);
+            // Create new SetupIntent for new card
+            if (!isCreatingSetupIntentRef.current) {
+              isCreatingSetupIntentRef.current = true;
+              try {
+                const setupResult = await createSetupIntent.mutateAsync();
+                if (setupResult.success && setupResult.client_secret) {
+                  setSetupIntentClientSecret(setupResult.client_secret);
+                  console.log("✅ New SetupIntent created for new card");
+                  
+                  // Wait for PaymentElement to update with new SetupIntent
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                  
+                  // Retry confirmation with new SetupIntent
+                  if (cardFormRef.current) {
+                    const retryResult = await cardFormRef.current.confirmSetup();
+                    if (retryResult.error) {
+                      await handlePaymentError(retryResult.error, {
+                        preserveState: true,
+                        packageId,
+                        packageName: activePlan.name,
+                      });
+                      throw new Error(retryResult.error);
+                    }
+                    if (retryResult.paymentMethodId) {
+                      paymentMethodId = retryResult.paymentMethodId;
+                      console.log("✅ New payment method extracted from new SetupIntent:", paymentMethodId);
+                    } else {
+                      throw new Error("Failed to extract payment method from new SetupIntent");
+                    }
+                  } else {
+                    throw new Error("Payment form unavailable after SetupIntent creation");
+                  }
+                } else {
+                  throw new Error("Failed to create new SetupIntent");
                 }
-                paymentMethodId = retryResult.paymentMethodId || result.paymentMethodId;
-              } else {
-                // Use existing payment method as fallback
-                paymentMethodId = result.paymentMethodId;
+              } catch (recoveryError) {
+                console.error("❌ Failed to create new SetupIntent:", recoveryError);
+                await handlePaymentError(recoveryError instanceof Error ? recoveryError.message : "Failed to create new SetupIntent", {
+                  preserveState: true,
+                  packageId,
+                  packageName: activePlan.name,
+                });
+                throw recoveryError;
+              } finally {
+                isCreatingSetupIntentRef.current = false;
               }
-              console.log("✅ Using payment method from recovered SetupIntent:", paymentMethodId);
             } else {
-              // Recovery failed - use existing payment method with formatted error
-              await handlePaymentError(result.error || "SetupIntent recovery failed", {
-                preserveState: true,
-                packageId,
-                packageName: activePlan.name,
-              });
-              // Still use existing payment method to allow retry
-              paymentMethodId = result.paymentMethodId;
-              console.log("⚠️ Using existing payment method after recovery failure:", paymentMethodId);
+              throw new Error("SetupIntent creation already in progress");
             }
           } else if (result.error?.includes("SETUP_INTENT_CANCELED_RETRY") || 
                      result.needsRecovery) {
@@ -2991,6 +3013,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               data: {
                 subscriptionId: subscriptionCreatedRef.current,
                 clientSecret: paymentIntentClientSecret || undefined,
+                userId: userIdRef.current || undefined, // ✅ Include userId from ref if available (for consistency)
               },
             };
           } else {
@@ -3068,8 +3091,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           const subscriptionId = stateUpdate.subscriptionId!; // Validated above
           const finalClientSecret = stateUpdate.clientSecret;
           
-          // Check if PaymentIntent is ready for confirmation
-          if (!isStateUpdateReadyForPayment(stateUpdate)) {
+          // ✅ Only show "Payment Processing" toast during initial subscription creation, not on retries
+          // If subscription already exists (retry scenario), skip this check
+          if (!subscriptionCreatedRef.current && !isStateUpdateReadyForPayment(stateUpdate)) {
             const error = handlePaymentIntentNotReadyError();
             console.warn(`⚠️ ${error.message}`);
             // PaymentIntent might not be ready yet - show user-friendly message
@@ -3099,6 +3123,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 subscriptionId,
                 clientSecret: finalClientSecret, // ✅ Invoice PaymentIntent clientSecret (not upfront)
                 userId: undefined, // Existing user - no userId needed
+                paymentMethodId: paymentMethodId, // ✅ Pass new payment method from SetupIntent
                 userEmail: isAuthenticated ? capturedUserEmail : undefined, // ✅ NEW: Send user email
                 guestEmail: !isAuthenticated ? capturedUserEmail : undefined, // ✅ NEW: Send guest email
               }),
@@ -3140,14 +3165,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             }
 
             if (!confirmResponse.ok) {
-              // ✅ RETRY FIX: Don't clear SetupIntent or payment method on API errors
-              // This allows seamless retry without recreating SetupIntent
-              console.warn("⚠️ Subscription confirmation failed, preserving SetupIntent for retry:", {
-                error: confirmResult.error,
-                details: confirmResult.details,
-                code: confirmResult.code,
-              });
-              
+              // ✅ Error will be caught by catch block below, which will create new SetupIntent
               throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
             }
 
@@ -3182,10 +3200,34 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             
             console.error("❌ Subscription payment confirmation failed:", confirmError);
             
+            // ✅ CRITICAL: Payment failed - SetupIntent already succeeded, cannot be reused
+            // Create new SetupIntent BEFORE clearing old one to prevent PaymentElement from losing clientSecret
+            console.warn("⚠️ Payment failed - creating new SetupIntent for retry (in catch block)");
+            
+            // ✅ Create new SetupIntent FIRST (before clearing old one)
+            if (!isCreatingSetupIntentRef.current) {
+              isCreatingSetupIntentRef.current = true;
+              try {
+                const setupResult = await createSetupIntent.mutateAsync();
+                if (setupResult.success && setupResult.client_secret) {
+                  // Only set new AFTER it's ready - don't clear old one until new is ready
+                  setSetupIntentClientSecret(setupResult.client_secret);
+                  console.log("✅ New SetupIntent created after payment failure (catch block) - ready for new card");
+                } else {
+                  // If creation failed, don't clear old one - let PaymentElement keep working
+                  console.error("❌ SetupIntent creation returned no client_secret, keeping old SetupIntent");
+                }
+              } catch (setupError) {
+                console.error("❌ Failed to create new SetupIntent after payment failure (catch block):", setupError);
+                // Don't clear old SetupIntent if new one fails - PaymentElement needs clientSecret
+              } finally {
+                isCreatingSetupIntentRef.current = false;
+              }
+            } else {
+              console.warn("⚠️ SetupIntent creation already in progress, skipping duplicate creation");
+            }
+            
             // ✅ EXPERT ERROR HANDLING: Handle error gracefully with state preservation
-            // ✅ CRITICAL: Do NOT clear setupIntentClientSecret on errors
-            // ✅ CRITICAL: Do NOT clear paymentMethodId on errors
-            // State is preserved, allowing seamless retry
             await handlePaymentError(confirmError, {
               preserveState: true,
               autoRetry: true,
@@ -3395,15 +3437,48 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
         // ✅ STRIPE BEST PRACTICE: Check if subscription was already created to prevent duplicate creation
         // Use ref to track subscription creation (more reliable than checking paymentIntentId format)
+        // ✅ CRITICAL: Even if subscription exists, we still need to confirm the new SetupIntent to get the new paymentMethodId
+        // The paymentMethodId from confirmSetup() above (line 2481) should already be extracted, but we verify it's available
         if (activePlan.period === "mo" && subscriptionCreatedRef.current) {
           // Subscription was already created - skip duplicate creation
           console.log("✅ Subscription already created, skipping duplicate creation:", subscriptionCreatedRef.current);
+          console.log("💳 Current paymentMethodId from SetupIntent:", paymentMethodId);
+          
+          // ✅ CRITICAL: Ensure paymentMethodId is available from the new SetupIntent confirmation
+          // If paymentMethodId is not set, it means confirmSetup() was skipped - try to call it now
+          if (!paymentMethodId) {
+            console.warn("⚠️ paymentMethodId is missing - confirmSetup() may have been skipped. Attempting to confirm now...");
+            
+            // Try to confirm SetupIntent if we have a client secret and card form
+            if ((showCardForm || setupIntentClientSecret || paymentIntentClientSecret) && cardFormRef.current) {
+              try {
+                const retryResult = await cardFormRef.current.confirmSetup();
+                if (retryResult.paymentMethodId) {
+                  paymentMethodId = retryResult.paymentMethodId;
+                  console.log("✅ Successfully extracted paymentMethodId on retry:", paymentMethodId);
+                } else if (retryResult.error) {
+                  console.error("❌ confirmSetup() failed on retry:", retryResult.error);
+                  throw new Error(retryResult.error || "Payment method confirmation failed. Please try again.");
+                } else {
+                  throw new Error("Failed to confirm payment method. Please enter your card details again.");
+                }
+              } catch (retryError) {
+                console.error("❌ Failed to confirm SetupIntent on retry:", retryError);
+                throw new Error("Payment method confirmation failed. Please enter your card details again.");
+              }
+            } else {
+              console.error("❌ Cannot retry confirmSetup() - missing client secret or card form");
+              throw new Error("Payment method confirmation failed. Please enter your card details again.");
+            }
+          }
+          
           // Retrieve the existing subscription data
           result = {
             success: true,
             data: {
               subscriptionId: subscriptionCreatedRef.current,
               clientSecret: paymentIntentClientSecret || undefined,
+              userId: userIdRef.current || undefined, // ✅ Include userId from ref for retry scenarios
             },
           };
         } else {
@@ -3461,6 +3536,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               if (result?.success && result.data?.subscriptionId) {
                 subscriptionCreatedRef.current = result.data.subscriptionId;
                 console.log("✅ Subscription created and tracked:", result.data.subscriptionId);
+                // ✅ Store userId for retry scenarios
+                if (result.data?.userId) {
+                  userIdRef.current = result.data.userId;
+                  console.log("✅ UserId stored for retry scenarios:", result.data.userId);
+                }
               }
             }
           } else {
@@ -3506,9 +3586,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
             const subscriptionId = stateUpdate.subscriptionId!; // Validated above
             const clientSecret = stateUpdate.clientSecret;
-            const userId = subscriptionData.userId || result.data?.userId;
+            const userId = subscriptionData.userId || result.data?.userId || userIdRef.current; // ✅ Include userId from ref for retry scenarios
 
-            if (!clientSecret) {
+            // ✅ Only show "Payment Processing" toast during initial subscription creation, not on retries
+            // If subscription already exists (retry scenario), skip this check
+            if (!subscriptionCreatedRef.current && !clientSecret) {
               const error = handlePaymentIntentNotReadyError();
               console.warn(`⚠️ ${error.message}`);
               showToast({
@@ -3530,11 +3612,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   "Content-Type": "application/json",
                 },
                 credentials: "include",
-                body: JSON.stringify({
-                  subscriptionId,
-                  clientSecret: clientSecret, // ✅ PaymentIntent client_secret from Stripe (invoice PaymentIntent)
-                  userId: userId, // New user - include userId
-                }),
+              body: JSON.stringify({
+                subscriptionId,
+                clientSecret: clientSecret, // ✅ PaymentIntent client_secret from Stripe (invoice PaymentIntent)
+                userId: userId, // New user - include userId
+                paymentMethodId: paymentMethodId, // ✅ Pass new payment method from SetupIntent
+              }),
               });
 
               const confirmResult = await confirmResponse.json();
@@ -3573,14 +3656,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               }
 
               if (!confirmResponse.ok) {
-                // ✅ RETRY FIX: Don't clear SetupIntent or payment method on API errors
-                // This allows seamless retry without recreating SetupIntent
-                console.warn("⚠️ Subscription confirmation failed, preserving SetupIntent for retry:", {
-                  error: confirmResult.error,
-                  details: confirmResult.details,
-                  code: confirmResult.code,
-                });
-                
+                // ✅ Error will be caught by catch block below, which will create new SetupIntent
                 throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
               }
 
@@ -3590,7 +3666,35 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               await handlePaymentSuccess(confirmResult.data);
               return;
             } catch (confirmError) {
-              console.error("? New user subscription payment confirmation failed:", confirmError);
+              console.error("❌ New user subscription payment confirmation failed:", confirmError);
+              
+              // ✅ CRITICAL: Payment failed - SetupIntent already succeeded, cannot be reused
+              // Create new SetupIntent BEFORE clearing old one to prevent PaymentElement from losing clientSecret
+              console.warn("⚠️ Payment failed - creating new SetupIntent for retry (in catch block)");
+              
+              // ✅ Create new SetupIntent FIRST (before clearing old one)
+              if (!isCreatingSetupIntentRef.current) {
+                isCreatingSetupIntentRef.current = true;
+                try {
+                  const setupResult = await createSetupIntent.mutateAsync();
+                  if (setupResult.success && setupResult.client_secret) {
+                    // Only set new AFTER it's ready - don't clear old one until new is ready
+                    setSetupIntentClientSecret(setupResult.client_secret);
+                    console.log("✅ New SetupIntent created after payment failure (catch block) - ready for new card");
+                  } else {
+                    // If creation failed, don't clear old one - let PaymentElement keep working
+                    console.error("❌ SetupIntent creation returned no client_secret, keeping old SetupIntent");
+                  }
+                } catch (setupError) {
+                  console.error("❌ Failed to create new SetupIntent after payment failure (catch block):", setupError);
+                  // Don't clear old SetupIntent if new one fails - PaymentElement needs clientSecret
+                } finally {
+                  isCreatingSetupIntentRef.current = false;
+                }
+              } else {
+                console.warn("⚠️ SetupIntent creation already in progress, skipping duplicate creation");
+              }
+              
               throw confirmError;
             }
           } else if (activePlan.period === "one-time") {
