@@ -5,6 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
 import { getTimeUntilFreeze, getTimeUntilDraw } from "@/utils/common/timezone";
 
+// Next.js ISR configuration
+export const revalidate = 60; // Revalidate every 60 seconds (ISR)
+
 // Interface for the MajorDraw document from database with new fields
 interface MajorDrawDocument {
   _id: string;

@@ -44,6 +44,7 @@ const confirmPaymentSchema = z.object({
   subscriptionId: z.string().min(1, "Subscription ID is required"),
   clientSecret: z.string().optional().nullable(),
   userId: z.string().optional(), // For new user registration flow
+  paymentMethodId: z.string().optional(), // Payment method from SetupIntent (for new cards)
 });
 
 /**
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
-    const { subscriptionId, clientSecret, userId } = confirmPaymentSchema.parse(body);
+    const { subscriptionId, clientSecret, userId, paymentMethodId } = confirmPaymentSchema.parse(body);
 
     // console.log(`💳 Confirming payment for subscription: ${subscriptionId}`);
     // console.log(`💳 Request body:`, { subscriptionId, clientSecret: clientSecret ? "provided" : "null", userId });
@@ -75,17 +76,47 @@ export async function POST(request: NextRequest) {
       // console.log(`👤 Existing user flow - checking session`);
       const session = await getServerSession(authOptions);
       if (!session?.user?.id) {
-        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      }
+        // ✅ FALLBACK: If session is missing but subscription exists, try to find user from subscription
+        // This handles retry scenarios where session might be lost but subscription is valid
+        if (subscriptionId) {
+          try {
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+            if (subscription.customer) {
+              const customerId = typeof subscription.customer === "string" 
+                ? subscription.customer 
+                : subscription.customer.id;
+              const fallbackUser = await User.findOne({ stripeCustomerId: customerId });
+              if (fallbackUser) {
+                // Found user via subscription - verify subscription belongs to this user
+                if (fallbackUser.stripeSubscriptionId !== subscriptionId) {
+                  return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+                }
+                // Use found user instead of session user
+                user = fallbackUser;
+                console.log("✅ Fallback: Found user from subscription:", fallbackUser._id);
+              }
+            }
+          } catch (fallbackError) {
+            // Fallback failed - will return authentication error below
+            console.warn("⚠️ Session missing and fallback user lookup failed:", fallbackError);
+          }
+        }
+        
+        // If fallback also failed or no subscriptionId provided, return authentication error
+        if (!user) {
+          return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+        }
+      } else {
+        // Session exists - use normal flow
+        user = await User.findById(session.user.id);
+        if (!user) {
+          return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
 
-      user = await User.findById(session.user.id);
-      if (!user) {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
-
-      // Verify the subscription belongs to this user (only for existing users)
-      if (user.stripeSubscriptionId !== subscriptionId) {
-        return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+        // Verify the subscription belongs to this user (only for existing users)
+        if (user.stripeSubscriptionId !== subscriptionId) {
+          return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+        }
       }
     }
 
@@ -225,8 +256,19 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // ✅ OPTIMIZED: Use utility function to find available payment method (parallelizes strategies)
-          const defaultPaymentMethod = await findAvailablePaymentMethod(customer, user);
+          // ✅ CRITICAL: Use provided paymentMethodId if available (from new SetupIntent), otherwise find default
+          // This ensures new payment methods are used instead of old failed ones
+          let defaultPaymentMethod: string | undefined;
+          if (paymentMethodId) {
+            // Use the new payment method from SetupIntent
+            console.log("✅ Using provided payment method from SetupIntent:", paymentMethodId);
+            defaultPaymentMethod = paymentMethodId;
+          } else {
+            // Fallback to finding default payment method (for existing users with saved cards)
+            console.log("⚠️ No paymentMethodId provided, finding default payment method...");
+            const foundPaymentMethod = await findAvailablePaymentMethod(customer, user);
+            defaultPaymentMethod = foundPaymentMethod || undefined;
+          }
 
           if (!defaultPaymentMethod) {
             console.error("❌ No payment method found for customer after all fallback strategies", {
@@ -292,10 +334,18 @@ export async function POST(request: NextRequest) {
           // #endregion
           
           // Pay the invoice directly - this will create a PaymentIntent and trigger webhook
+          // ✅ CRITICAL: Use provided paymentMethodId if available (from new SetupIntent), otherwise use defaultPaymentMethod
+          // This ensures new payment methods are used instead of old failed ones
+          const paymentMethodToUse = paymentMethodId || defaultPaymentMethod;
+          console.log("💳 Paying invoice with payment method:", paymentMethodToUse, {
+            isNewPaymentMethod: !!paymentMethodId,
+            isDefaultPaymentMethod: !paymentMethodId,
+          });
+          
           let paidInvoice;
           try {
             paidInvoice = await stripe.invoices.pay(latestInvoice?.id || "", {
-              payment_method: defaultPaymentMethod,
+              payment_method: paymentMethodToUse,
             });
             
             // #region agent log
@@ -518,6 +568,23 @@ export async function POST(request: NextRequest) {
       // If we have a client secret, try to confirm the payment
       if (clientSecret) {
         try {
+          // ✅ CRITICAL: If new paymentMethodId is provided and PaymentIntent requires payment method,
+          // update the PaymentIntent to use the new payment method before confirming
+          // This ensures retry attempts use the new card instead of the old failed one
+          if (paymentMethodId && paymentIntent.status === "requires_payment_method") {
+            console.log("✅ Updating PaymentIntent with new payment method before confirmation:", paymentMethodId);
+            try {
+              const paymentIntentId = typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
+              await stripe.paymentIntents.update(paymentIntentId, {
+                payment_method: paymentMethodId,
+              });
+              console.log("✅ PaymentIntent updated with new payment method");
+            } catch (updateError) {
+              console.error("❌ Failed to update PaymentIntent with new payment method:", updateError);
+              // Continue with confirmation - might still work if payment method is already attached
+            }
+          }
+          
           const confirmedPaymentIntent = await stripe.paymentIntents.confirm(clientSecret);
 
           if (confirmedPaymentIntent.status === "succeeded") {
@@ -653,6 +720,22 @@ export async function POST(request: NextRequest) {
       if (paymentIntent && paymentIntent.status === "requires_payment_method") {
         if (clientSecret) {
           try {
+            // ✅ CRITICAL: If new paymentMethodId is provided, update the PaymentIntent to use it
+            // This ensures retry attempts use the new card instead of the old failed one
+            if (paymentMethodId) {
+              console.log("✅ Updating PaymentIntent with new payment method for incomplete subscription:", paymentMethodId);
+              try {
+                const paymentIntentId = typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
+                await stripe.paymentIntents.update(paymentIntentId, {
+                  payment_method: paymentMethodId,
+                });
+                console.log("✅ PaymentIntent updated with new payment method");
+              } catch (updateError) {
+                console.error("❌ Failed to update PaymentIntent with new payment method:", updateError);
+                // Continue with confirmation - might still work if payment method is already attached
+              }
+            }
+            
             // console.log("💳 Confirming payment intent for incomplete subscription");
             const confirmedPaymentIntent = await stripe.paymentIntents.confirm(clientSecret);
 
@@ -712,6 +795,21 @@ export async function POST(request: NextRequest) {
           // No client secret provided - try to create one using the existing payment intent
           // console.log("🔑 No client secret provided, using existing payment intent");
           try {
+            // ✅ CRITICAL: If new paymentMethodId is provided, update the PaymentIntent to use it
+            // This ensures retry attempts use the new card instead of the old failed one
+            if (paymentMethodId && paymentIntent.status === "requires_payment_method") {
+              console.log("✅ Updating PaymentIntent with new payment method (no clientSecret path):", paymentMethodId);
+              try {
+                await stripe.paymentIntents.update(paymentIntent.id, {
+                  payment_method: paymentMethodId,
+                });
+                console.log("✅ PaymentIntent updated with new payment method");
+              } catch (updateError) {
+                console.error("❌ Failed to update PaymentIntent with new payment method:", updateError);
+                // Continue with confirmation - might still work if payment method is already attached
+              }
+            }
+            
             const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntent.id);
 
             if (confirmedPaymentIntent.status === "succeeded") {

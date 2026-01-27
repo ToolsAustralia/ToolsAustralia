@@ -41,6 +41,7 @@ import { AdminUserListItem, UserFilters } from "@/types/admin";
 import { useAdminUsers, useAdminUserActions } from "@/hooks/queries/useAdminQueries";
 import UserDetailModal from "./UserDetailModal";
 import UserExportModal from "./UserExportModal";
+import ChargePastDueModal from "./ChargePastDueModal";
 import { useDebounce } from "@/hooks/useDebounce";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { UserMetricsView } from "./metrics/UserMetricsView";
@@ -74,6 +75,7 @@ export default function UsersManagement() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false); // Mobile filter collapse state
   
   // View mode with URL persistence
@@ -406,6 +408,16 @@ export default function UsersManagement() {
         </h2>
         {/* Actions - Export button and View Mode Toggle */}
         <div className="flex items-center gap-2">
+          {/* Charge Past Due Button */}
+          <button
+            onClick={() => setIsChargeModalOpen(true)}
+            disabled={isLoading}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-700 text-white text-xs sm:text-sm font-medium hover:from-yellow-700 hover:to-yellow-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shadow-sm hover:shadow-md"
+            title="Charge past due customers"
+          >
+            <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Charge Past Due</span>
+          </button>
           {/* Export Button */}
           <button
             onClick={() => setIsExportModalOpen(true)}
@@ -957,6 +969,32 @@ export default function UsersManagement() {
       />
 
       {/* User Export Modal */}
+      {/* Charge Past Due Modal */}
+      <ChargePastDueModal
+        isOpen={isChargeModalOpen}
+        onClose={() => setIsChargeModalOpen(false)}
+        onConfirm={async () => {
+          const response = await fetch("/api/admin/invoices/charge-past-due", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ confirmation: "CHARGE" }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || data.error || "Failed to charge invoices");
+          }
+
+          // Refresh user list
+          refetch();
+
+          return data;
+        }}
+      />
+
       <UserExportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}

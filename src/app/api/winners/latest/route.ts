@@ -5,6 +5,9 @@ import MajorDraw from "@/models/MajorDraw";
 import mongoose, { Types } from "mongoose";
 import "@/models/User";
 
+// Next.js ISR configuration
+export const revalidate = 60; // Revalidate every 60 seconds (ISR)
+
 export async function GET() {
   try {
     await connectDB();
@@ -56,32 +59,39 @@ export async function GET() {
         ? (winner.drawId as { _id?: Types.ObjectId })._id?.toString() || winner.drawId.toString()
         : (winner.drawId as Types.ObjectId).toString();
       
-      return NextResponse.json({
-        success: true,
-        winner: {
-          id: winner._id.toString(),
-          drawId: drawIdString,
-          drawName: majorDraw?.name || "Major Draw",
-          drawType: "major" as const,
-          prize: {
-            name: winner.prizeSnapshot?.name || majorDraw?.prize?.name || "Major Prize",
-            description: winner.prizeSnapshot?.description || majorDraw?.prize?.description || "",
-            value: winner.prizeSnapshot?.value || majorDraw?.prize?.value || 0,
-            images: winner.prizeSnapshot?.images || majorDraw?.prize?.images || [],
+      return NextResponse.json(
+        {
+          success: true,
+          winner: {
+            id: winner._id.toString(),
+            drawId: drawIdString,
+            drawName: majorDraw?.name || "Major Draw",
+            drawType: "major" as const,
+            prize: {
+              name: winner.prizeSnapshot?.name || majorDraw?.prize?.name || "Major Prize",
+              description: winner.prizeSnapshot?.description || majorDraw?.prize?.description || "",
+              value: winner.prizeSnapshot?.value || majorDraw?.prize?.value || 0,
+              images: winner.prizeSnapshot?.images || majorDraw?.prize?.images || [],
+            },
+            winnerName: winnerUser
+              ? `${winnerUser.firstName} ${winnerUser.lastName}`
+              : "Unknown",
+            winnerFirstName: winnerUser?.firstName || "",
+            winnerLastName: winnerUser?.lastName || "",
+            winnerState: winnerUser?.state || "",
+            imageUrl: winner.imageUrl,
+            selectedDate: winner.selectedDate,
+            drawDate: majorDraw?.drawDate || winner.selectedDate,
+            entryNumber: winner.entryNumber,
+            selectedPrize: winner.selectedPrize || winner.selectedPrizeSlug || undefined,
           },
-          winnerName: winnerUser
-            ? `${winnerUser.firstName} ${winnerUser.lastName}`
-            : "Unknown",
-          winnerFirstName: winnerUser?.firstName || "",
-          winnerLastName: winnerUser?.lastName || "",
-          winnerState: winnerUser?.state || "",
-          imageUrl: winner.imageUrl,
-          selectedDate: winner.selectedDate,
-          drawDate: majorDraw?.drawDate || winner.selectedDate,
-          entryNumber: winner.entryNumber,
-          selectedPrize: winner.selectedPrize || winner.selectedPrizeSlug || undefined,
         },
-      });
+        {
+          headers: {
+            "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300", // Cache 1min, serve stale up to 5min
+          },
+        }
+      );
     }
 
     // Fallback to latest mini draw winner
@@ -107,36 +117,50 @@ export async function GET() {
       
       const miniDrawIdString = (miniWinner.drawId as Types.ObjectId).toString();
       
-      return NextResponse.json({
-        success: true,
-        winner: {
-          id: miniWinner._id.toString(),
-          drawId: miniDrawIdString,
-          drawName: miniWinner.prizeSnapshot?.name || "Mini Draw",
-          drawType: "mini" as const,
-          prize: {
-            name: miniWinner.prizeSnapshot?.name || "",
-            description: miniWinner.prizeSnapshot?.description || "",
-            value: miniWinner.prizeSnapshot?.value || 0,
-            images: miniWinner.prizeSnapshot?.images || [],
+      return NextResponse.json(
+        {
+          success: true,
+          winner: {
+            id: miniWinner._id.toString(),
+            drawId: miniDrawIdString,
+            drawName: miniWinner.prizeSnapshot?.name || "Mini Draw",
+            drawType: "mini" as const,
+            prize: {
+              name: miniWinner.prizeSnapshot?.name || "",
+              description: miniWinner.prizeSnapshot?.description || "",
+              value: miniWinner.prizeSnapshot?.value || 0,
+              images: miniWinner.prizeSnapshot?.images || [],
+            },
+            winnerName: winnerUser
+              ? `${winnerUser.firstName} ${winnerUser.lastName}`
+              : "Unknown",
+            winnerFirstName: winnerUser?.firstName || "",
+            winnerLastName: winnerUser?.lastName || "",
+            winnerState: winnerUser?.state || "",
+            imageUrl: miniWinner.imageUrl,
+            selectedDate: miniWinner.selectedDate,
+            entryNumber: miniWinner.entryNumber,
           },
-          winnerName: winnerUser
-            ? `${winnerUser.firstName} ${winnerUser.lastName}`
-            : "Unknown",
-          winnerFirstName: winnerUser?.firstName || "",
-          winnerLastName: winnerUser?.lastName || "",
-          winnerState: winnerUser?.state || "",
-          imageUrl: miniWinner.imageUrl,
-          selectedDate: miniWinner.selectedDate,
-          entryNumber: miniWinner.entryNumber,
         },
-      });
+        {
+          headers: {
+            "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300", // Cache 1min, serve stale up to 5min
+          },
+        }
+      );
     }
 
-    return NextResponse.json({
-      success: false,
-      message: "No winners found",
-    });
+    return NextResponse.json(
+      {
+        success: false,
+        message: "No winners found",
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300", // Cache 1min, serve stale up to 5min
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching latest winner:", error);
     return NextResponse.json(
@@ -144,8 +168,12 @@ export async function GET() {
         success: false,
         error: "Failed to fetch latest winner",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
     );
   }
 }
-

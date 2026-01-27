@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 
+// Next.js ISR configuration
+export const revalidate = 60; // Revalidate every 60 seconds (ISR)
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -16,10 +19,21 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    return NextResponse.json(newArrivals);
+    return NextResponse.json(newArrivals, {
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300", // Cache 1min, serve stale up to 5min
+      },
+    });
   } catch (error) {
     console.error("Error fetching new arrivals:", error);
-    return NextResponse.json({ error: "Failed to fetch new arrivals" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch new arrivals" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   }
 }
-
