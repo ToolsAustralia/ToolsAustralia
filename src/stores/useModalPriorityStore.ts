@@ -10,7 +10,14 @@ import { devtools } from "zustand/middleware";
  * This store manages modal conflicts and ensures proper priority handling
  */
 
-export type ModalType = "user-setup" | "upsell" | "special-packages" | "pixel-consent" | "renewal-failed" | "gate-closed";
+export type ModalType =
+  | "user-setup"
+  | "upsell"
+  | "special-packages"
+  | "pixel-consent"
+  | "renewal-failed"
+  | "gate-closed"
+  | "subscription-explainer";
 
 interface ModalData {
   [key: string]: unknown;
@@ -53,6 +60,7 @@ const MODAL_PRIORITIES: Record<ModalType, number> = {
   "user-setup": 2, // Second priority
   "gate-closed": 2.5, // Between user-setup and special-packages - important user communication
   "special-packages": 1, // Lower priority
+  "subscription-explainer": 1, // Same as special-packages; active subscribers only, once per account
   "pixel-consent": 0, // Lowest priority
 };
 

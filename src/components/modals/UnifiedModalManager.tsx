@@ -11,6 +11,8 @@ import UpsellModal from "./UpsellModal";
 import SpecialPackagesModal from "./SpecialPackagesModal";
 import PixelConsentModal from "./PixelConsentModal";
 import GateClosedModal from "./GateClosedModal";
+import SubscriptionExplainerModal from "./SubscriptionExplainerModal";
+import { markExplainerSeen } from "@/utils/subscription-explainer-storage";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 
 // Import data
@@ -41,6 +43,7 @@ const UnifiedModalManager: React.FC = () => {
   const isUpsellActive = activeModal === "upsell";
   const isSpecialPackagesOpen = activeModal === "special-packages";
   const isGateClosedOpen = activeModal === "gate-closed";
+  const isSubscriptionExplainerOpen = activeModal === "subscription-explainer";
 
   // Get exclusive member-only packages for SpecialPackagesModal
   const specialPackages = useMemo(() => {
@@ -59,16 +62,21 @@ const UnifiedModalManager: React.FC = () => {
   /**
    * Handle modal close with proper cleanup and queue progression
    */
-  const handleModalClose = (modalType: "user-setup" | "upsell" | "special-packages" | "pixel-consent" | "gate-closed") => {
-    // console.log(`🎭 Closing modal: ${modalType}`);
-
-    // Mark modal as shown in session (for one-time modals)
-    markModalShown(modalType);
-
-    // Modal states are now managed by the priority system
-    // No need to call individual store methods
-
-    // Progress to next modal in queue
+  const handleModalClose = (
+    modalType:
+      | "user-setup"
+      | "upsell"
+      | "special-packages"
+      | "pixel-consent"
+      | "gate-closed"
+      | "subscription-explainer"
+  ) => {
+    if (modalType === "subscription-explainer") {
+      const data = activeModalData as { userId?: string } | null;
+      if (data?.userId) markExplainerSeen(data.userId);
+    } else {
+      markModalShown(modalType);
+    }
     closeModal();
   };
 
@@ -172,6 +180,26 @@ const UnifiedModalManager: React.FC = () => {
             onClose={() => handleModalClose("gate-closed")}
             nextActivationDate={gateClosedData?.nextActivationDate ?? null}
             nextDrawName={gateClosedData?.nextDrawName}
+          />
+        );
+
+      case "subscription-explainer":
+        const explainerData = activeModalData as {
+          entriesPerMonth: number;
+          packageName?: string;
+          userId?: string;
+          lastMonthAccumulatedEntries?: number;
+          selectedPackageId?: string;
+        } | null;
+        if (!explainerData || typeof explainerData.entriesPerMonth !== "number") return null;
+        return (
+          <SubscriptionExplainerModal
+            isOpen={isSubscriptionExplainerOpen}
+            onClose={() => handleModalClose("subscription-explainer")}
+            entriesPerMonth={explainerData.entriesPerMonth}
+            packageName={explainerData.packageName}
+            lastMonthAccumulatedEntries={explainerData.lastMonthAccumulatedEntries ?? 0}
+            selectedPackageId={explainerData.selectedPackageId}
           />
         );
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Users, ArrowRight, Zap, Check } from "lucide-react";
+import { Users, ArrowRight, Zap, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -23,7 +23,12 @@ import { useCurrentMajorDraw, useUserMajorDrawStats } from "@/hooks/queries/useM
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { Skeleton } from "@/components/loading/SkeletonLoader";
-import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
+import {
+  getPrizeBrandColors,
+  getBrandBorderColor,
+  getBrandGlowColor,
+} from "@/utils/prize-brand-colors";
+import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
 
 interface MajorDrawSectionProps {
   className?: string;
@@ -69,6 +74,8 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const [desktopThumbsSwiper, setDesktopThumbsSwiper] = useState<SwiperType | null>(null);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [selectedPrizeSlug, setSelectedPrizeSlug] = useState<string | null>(null);
+  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
+  const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [nextDrawName, setNextDrawName] = useState<string | null>(null);
   const { userData: user } = useUserContext();
   const { membershipModal, openEntryFlow, getHeavyDutyPack, oneTimePackages } = useMajorDrawEntryCta();
@@ -83,7 +90,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
   useEffect(() => {
     if (!selectedPrizeSlug) {
-      setSelectedPrizeSlug(activeSlug ?? defaultSlug);
+      const slug = activeSlug ?? defaultSlug;
+      setSelectedPrizeSlug(slug);
+      setToolboxType(
+        slug === "cash-prize"
+          ? "cash"
+          : (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")
+            ? "milwaukee"
+            : slug.includes("sidchrome")
+              ? "sidchrome"
+              : "sidchrome"
+      );
     }
   }, [activeSlug, defaultSlug, selectedPrizeSlug]);
 
@@ -134,10 +151,6 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return fallbackIcon;
   };
 
-  const handlePrizeSelect = (slug: string) => {
-    setSelectedPrizeSlug(slug);
-  };
-
   const handleMobileThumbnailClick = (index: number) => {
     if (mobileMainSwiper && !mobileMainSwiper.destroyed) {
       mobileMainSwiper.slideTo(index);
@@ -148,6 +161,28 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     if (desktopMainSwiper && !desktopMainSwiper.destroyed) {
       desktopMainSwiper.slideTo(index);
     }
+  };
+
+  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "cash") => {
+    if (toolboxType === type) return;
+    setToolboxType(type);
+    const defaultSlugForType =
+      type === "cash" ? "cash-prize" : type === "sidchrome" ? "milwaukee-sidchrome" : "milwaukee-milwaukee";
+    setSelectedPrizeSlug(defaultSlugForType);
+  };
+
+  const handlePrizeCardSelect = (slug: string) => {
+    if (slug === (selectedPrizeSlug ?? activeSlug ?? defaultSlug)) return;
+    setSelectedPrizeSlug(slug);
+    setToolboxType(
+      slug === "cash-prize"
+        ? "cash"
+        : (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")
+          ? "milwaukee"
+          : slug.includes("sidchrome")
+            ? "sidchrome"
+            : "sidchrome"
+    );
   };
 
   // Check for optimistic updates (processing state)
@@ -271,17 +306,20 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     ? `/promotions/${activeSlug ?? defaultSlug}?aff=${affiliateCode}`
     : `/promotions/${activeSlug ?? defaultSlug}`;
 
-  // Helper function to get brand logo path based on prize slug
+  // Helper function to get brand logo path based on prize slug (matches PrizeShowcase)
   const getBrandLogoPath = (slug: string): string | null => {
     switch (slug) {
       case "milwaukee-sidchrome":
+      case "milwaukee-milwaukee":
         return "/images/brands/milwaukee.png";
       case "dewalt-sidchrome":
+      case "dewalt-milwaukee":
         return "/images/brands/dewalt-black.png";
       case "makita-sidchrome":
+      case "makita-milwaukee":
         return "/images/brands/Makita-red.png";
       case "cash-prize":
-        return null; // No watermark for cash prize
+        return null;
       default:
         return null;
     }
@@ -291,132 +329,362 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const getFirstPrizeImagePath = (slug: string): string => {
     switch (slug) {
       case "dewalt-sidchrome":
+      case "dewalt-milwaukee":
         return "/images/promotion/FirstPrizeText/1stprice-dewalt.png";
       case "makita-sidchrome":
+      case "makita-milwaukee":
         return "/images/promotion/FirstPrizeText/1stprice-makita.png";
       case "cash-prize":
         return "/images/promotion/FirstPrizeText/1stprice-cash.png";
       case "milwaukee-sidchrome":
+      case "milwaukee-milwaukee":
       default:
         return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png";
     }
   };
 
-  // Helper function to get formatted multi-line label for prize cards
-  const getFormattedLabel = (label: string) => {
-    if (label.includes("Milwaukee")) {
-      return {
-        line1: "Sidchrome",
-        line2: "Milwaukee",
-        line3: "$5000 Cash Prize",
-      };
-    }
-    if (label.includes("DeWalt")) {
-      return {
-        line1: "Sidchrome",
-        line2: "DeWalt",
-        line3: "$5000 Cash Prize",
-      };
-    }
-    if (label.includes("Makita")) {
-      return {
-        line1: "Sidchrome",
-        line2: "Makita",
-        line3: "$5000 Cash Prize",
-      };
+  // Formatted multi-line label for prize cards; slug-driven so Milwaukee toolbox shows
+  // "Milwaukee Toolbox" / "Milwaukee Powertools" etc. (matches PrizeShowcase)
+  const getFormattedLabel = (
+    label: string,
+    slug?: string,
+    isMobile?: boolean
+  ): { line1: string; line2: string | null; line3: string | null } => {
+    if (slug) {
+      if (slug === "milwaukee-sidchrome") {
+        return {
+          line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+          line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "dewalt-sidchrome") {
+        return {
+          line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+          line2: isMobile ? "DeWalt Powertools" : "DeWalt",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "makita-sidchrome") {
+        return {
+          line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+          line2: isMobile ? "Makita Powertools" : "Makita",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "milwaukee-milwaukee") {
+        return {
+          line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+          line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "dewalt-milwaukee") {
+        return {
+          line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+          line2: isMobile ? "DeWalt Powertools" : "DeWalt",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "makita-milwaukee") {
+        return {
+          line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+          line2: isMobile ? "Makita Powertools" : "Makita",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "cash-prize") {
+        return { line1: "$10,000 Tax Free Cash", line2: null, line3: null };
+      }
     }
     if (label.includes("$10000") || label.includes("$10,000")) {
-      return {
-        line1: "$10,000 Tax Free Cash",
-        line2: null,
-        line3: null,
-      };
+      return { line1: "$10,000 Tax Free Cash", line2: null, line3: null };
     }
-    // Fallback
-    return {
-      line1: label,
-      line2: null,
-      line3: null,
-    };
+    return { line1: label, line2: null, line3: null };
   };
 
-  const renderPrizeToggle = (layout: "mobile" | "desktop" = "mobile") => {
+  const getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash" => {
+    if (slug === "cash-prize") return "cash";
+    if (
+      (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) &&
+      !slug.includes("sidchrome")
+    ) {
+      return "milwaukee";
+    }
+    if (slug.includes("sidchrome")) return "sidchrome";
+    return "sidchrome";
+  };
+
+  const filterPrizesByToolboxType = (
+    prizeList: PrizeCatalogEntry[],
+    toolboxType: "sidchrome" | "milwaukee" | "cash"
+  ): PrizeCatalogEntry[] => {
+    if (toolboxType === "cash") {
+      return prizeList.filter((p) => p.slug === "cash-prize");
+    }
+    if (toolboxType === "sidchrome") {
+      return prizeList.filter((p) => p.slug.includes("sidchrome"));
+    }
+    if (toolboxType === "milwaukee") {
+      return prizeList.filter(
+        (p) => p.slug.includes("milwaukee") && !p.slug.includes("sidchrome")
+      );
+    }
+    return prizeList;
+  };
+
+  const displaySlug = selectedPrizeSlug ?? activeSlug ?? defaultSlug;
+  const filteredPrizes = filterPrizesByToolboxType(prizes, toolboxType);
+  const activePrizeIndexInFiltered = filteredPrizes.findIndex((p) => p.slug === displaySlug);
+
+  useEffect(() => {
+    if (activePrizeIndexInFiltered >= 0) {
+      setMobilePrizeIndex(activePrizeIndexInFiltered);
+    }
+  }, [displaySlug, activePrizeIndexInFiltered]);
+
+  const handlePreviousPrize = () => {
+    if (filteredPrizes.length === 0) return;
+    const newIndex =
+      mobilePrizeIndex > 0 ? mobilePrizeIndex - 1 : filteredPrizes.length - 1;
+    setMobilePrizeIndex(newIndex);
+    handlePrizeCardSelect(filteredPrizes[newIndex].slug);
+  };
+
+  const handleNextPrize = () => {
+    if (filteredPrizes.length === 0) return;
+    const newIndex =
+      mobilePrizeIndex < filteredPrizes.length - 1 ? mobilePrizeIndex + 1 : 0;
+    setMobilePrizeIndex(newIndex);
+    handlePrizeCardSelect(filteredPrizes[newIndex].slug);
+  };
+
+  const renderPickYourToolset = (layout: "mobile" | "desktop" = "mobile") => {
     if (prizes.length <= 1) return null;
 
     return (
-      <div className={layout === "desktop" ? "max-w-3xl mx-auto" : ""}>
+      <div className={layout === "desktop" ? "mt-4 sm:mt-6 max-w-5xl mx-auto" : "mt-4 sm:mt-6"}>
         <p className="text-lg sm:text-xl font-bold text-black font-['Poppins'] mb-2 sm:mb-3 text-center">
-          What will YOU choose?
+          Pick Your Toolset
         </p>
-        <div className="grid grid-cols-2 gap-2 sm:gap-4">
-          {prizes.map((prizeOption) => {
-            const isActive = prizeOption.slug === activeSlug;
-            const brandColors = getPrizeBrandColors(prizeOption.slug);
-            const brandLogoPath = getBrandLogoPath(prizeOption.slug);
-            const formattedLabel = getFormattedLabel(prizeOption.label);
-
+        {/* Toolbox type toggle - clickable, updates content only (no URL nav) */}
+        <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+          {(["sidchrome", "milwaukee", "cash"] as const).map((type) => {
+            const isActive = toolboxType === type;
+            const label =
+              type === "sidchrome" ? "Sidchrome Toolbox" : type === "milwaukee" ? "Milwaukee Toolbox" : "$10,000 Cash";
             return (
               <button
-                key={prizeOption.slug}
-                onClick={() => {
-                  handlePrizeSelect(prizeOption.slug);
-                }}
-                tabIndex={-1}
-                style={{ outline: "none", boxShadow: "none" }}
-                className={`relative p-3 sm:p-5 rounded-xl sm:rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[85px] sm:min-h-[110px] group ${
-                  isActive
-                    ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                    : `bg-white text-gray-700 border-gray-700 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] hover:border-opacity-80 active:scale-[0.98]`
+                key={type}
+                type="button"
+                onClick={() => handleToolboxTypeChange(type)}
+                className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                  isActive && type !== "cash"
+                    ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
+                    : isActive && type === "cash"
+                      ? "bg-gradient-to-br from-green-500 via-green-600 to-green-700 text-white border-green-500 shadow-lg shadow-green-500/40"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
                 }`}
               >
-                {/* Brand logo watermark - only shown when active */}
-                {isActive && brandLogoPath && (
-                  <div className="absolute inset-0 rounded-xl sm:rounded-2xl overflow-hidden pointer-events-none">
-                    <Image
-                      src={brandLogoPath}
-                      alt=""
-                      fill
-                      className="object-contain opacity-20"
-                      sizes="(max-width: 640px) 100px, 150px"
-                    />
-                  </div>
-                )}
-
-                {/* Hover glow effect for inactive cards */}
-                {!isActive && (
-                  <div
-                    className={`absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
-                  />
-                )}
-
-                {/* Active shimmer effect */}
-                {isActive && (
-                  <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                )}
-
-                {/* Active checkmark badge */}
-                {isActive && (
-                  <div className="absolute -top-2 -right-2 sm:-top-2.5 sm:-right-2.5 w-6 h-6 sm:w-7 sm:h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
-                    <Check className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${brandColors.checkmarkColor}`} />
-                  </div>
-                )}
-
-                {/* Card content - formatted multi-line text */}
-                <div className="relative z-10 w-full overflow-visible">
-                  <div
-                    className={`text-xs sm:text-base font-bold font-['Poppins'] leading-tight transition-colors duration-200 break-words text-center ${
-                      isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
-                    }`}
-                  >
-                    <div className="block">{formattedLabel.line1}</div>
-                    {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
-                    {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
-                  </div>
-                </div>
+                {label}
               </button>
             );
           })}
         </div>
+        {/* Prize cards - clickable, updates gallery/content only (no URL nav) */}
+        {toolboxType !== "cash" && (
+          <>
+            {/* Mobile: single card + chevron nav (matches PrizeShowcase) */}
+            {layout === "mobile" && (
+              <div className="relative max-w-md mx-auto overflow-visible">
+                {filteredPrizes.length > 0 && filteredPrizes[mobilePrizeIndex] && (() => {
+                  const prizeOption = filteredPrizes[mobilePrizeIndex];
+                  const isActive = prizeOption.slug === displaySlug;
+                  const pc = getPrizeBrandColors(prizeOption.slug as PrizeSlug);
+                  const brandLogoPath = getBrandLogoPath(prizeOption.slug);
+                  const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => handlePrizeCardSelect(prizeOption.slug)}
+                      tabIndex={-1}
+                      style={
+                        !isActive
+                          ? {
+                              outline: "none",
+                              boxShadow: `0 0 15px ${getBrandGlowColor(prizeOption.slug as PrizeSlug)}`,
+                              borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
+                            }
+                          : {
+                              outline: "none",
+                              boxShadow: "none",
+                              borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
+                            }
+                      }
+                      className={`relative w-full p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
+                        isActive
+                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
+                          : "bg-white text-gray-700 border-opacity-100 hover:scale-[1.02]"
+                      }`}
+                    >
+                      {isActive && brandLogoPath && (
+                        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                          <Image
+                            src={brandLogoPath}
+                            alt=""
+                            fill
+                            className="object-contain opacity-20"
+                            sizes="(max-width: 640px) 100px, 150px"
+                          />
+                        </div>
+                      )}
+                      {isActive && (
+                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
+                          <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                        </div>
+                      )}
+                      <div className="relative z-10 w-full overflow-visible">
+                        <div
+                          className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
+                            isActive ? "text-white" : "text-gray-900"
+                          }`}
+                        >
+                          <div className="block">{formattedLabel.line1}</div>
+                          {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
+                          {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })()}
+                {filteredPrizes.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handlePreviousPrize}
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                      aria-label="Previous prize"
+                    >
+                      <ChevronLeft className="w-6 h-6 text-gray-700" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextPrize}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                      aria-label="Next prize"
+                    >
+                      <ChevronRight className="w-6 h-6 text-gray-700" />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            {/* Desktop: grid */}
+            {layout === "desktop" && (
+              <div
+                className={`grid ${filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-4 max-w-5xl mx-auto overflow-visible`}
+              >
+                {filteredPrizes.map((prizeOption) => {
+                  const isActive = prizeOption.slug === displaySlug;
+                  const pc = getPrizeBrandColors(prizeOption.slug as PrizeSlug);
+                  const brandLogoPath = getBrandLogoPath(prizeOption.slug);
+                  const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
+
+                  return (
+                    <button
+                      key={prizeOption.slug}
+                      type="button"
+                      onClick={() => handlePrizeCardSelect(prizeOption.slug)}
+                      tabIndex={0}
+                      style={
+                        !isActive
+                          ? {
+                              outline: "none",
+                              boxShadow: `0 0 15px ${getBrandGlowColor(prizeOption.slug as PrizeSlug)}`,
+                              borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
+                            }
+                          : {
+                              outline: "none",
+                              boxShadow: "none",
+                              borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
+                            }
+                      }
+                      className={`relative p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
+                        isActive
+                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
+                          : "bg-white text-gray-700 border-opacity-100 hover:scale-[1.02]"
+                      }`}
+                    >
+                      {isActive && brandLogoPath && (
+                        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                          <Image
+                            src={brandLogoPath}
+                            alt=""
+                            fill
+                            className="object-contain opacity-20"
+                            sizes="(max-width: 640px) 100px, 150px"
+                          />
+                        </div>
+                      )}
+                      {isActive && (
+                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
+                          <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                        </div>
+                      )}
+                      <div className="relative z-10 w-full overflow-visible">
+                        <div
+                          className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
+                            isActive ? "text-white" : "text-gray-900"
+                          }`}
+                        >
+                          <div className="block">{formattedLabel.line1}</div>
+                          {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
+                          {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+        {toolboxType === "cash" && filteredPrizes[0] && (() => {
+          const prizeOption = filteredPrizes[0];
+          const isActive = prizeOption.slug === displaySlug;
+          const pc = getPrizeBrandColors(prizeOption.slug as PrizeSlug);
+          const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
+          return (
+            <button
+              type="button"
+              onClick={() => handlePrizeCardSelect(prizeOption.slug)}
+              tabIndex={0}
+              style={{
+                outline: "none",
+                boxShadow: isActive ? "none" : `0 0 15px ${getBrandGlowColor(prizeOption.slug as PrizeSlug)}`,
+                borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
+              }}
+              className={`relative p-5 rounded-2xl border-2 text-center overflow-visible min-h-[110px] max-w-md mx-auto block w-full cursor-pointer ${
+                isActive
+                  ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
+                  : "bg-white text-gray-700 hover:scale-[1.02]"
+              }`}
+            >
+              {isActive && (
+                <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
+                  <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                </div>
+              )}
+              <div className="relative z-10">
+                <div className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${isActive ? "text-white" : "text-gray-900"}`}>
+                  <div className="block">{formattedLabel.line1}</div>
+                  {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
+                  {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
+                </div>
+              </div>
+            </button>
+          );
+        })()}
       </div>
     );
   };
@@ -518,9 +786,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   priority
                 />
               </div>
-              {renderPrizeToggle()}
-              <div className="relative w-full max-w-sm mx-auto rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-800 to-black overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
+              {renderPickYourToolset()}
+              <div
+                className="relative w-full max-w-sm mx-auto rounded-2xl border-2 overflow-hidden bg-white"
+                style={{
+                  borderColor: getBrandBorderColor(activePrizeSlug as PrizeSlug),
+                  boxShadow: `0 0 20px ${getBrandGlowColor(activePrizeSlug as PrizeSlug)}, 0 8px 32px rgba(0,0,0,0.4)`,
+                }}
+              >
                 <div className="absolute top-3 right-3 z-20">
                   <button
                     onClick={() => setIsSpecsModalOpen(true)}
@@ -562,7 +835,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   >
                     {prizeImages.map((image, index) => (
                       <SwiperSlide key={`${image.src}-${index}`}>
-                        <div className="relative aspect-square lg:aspect-[4/3] bg-gray-900">
+                        <div className="relative aspect-square lg:aspect-[4/3] bg-white">
                           <Image
                             src={image.src}
                             alt={image.alt || `Prize image ${index + 1}`}
@@ -576,7 +849,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     ))}
                   </Swiper>
                 ) : (
-                  <div className="relative aspect-square lg:aspect-[4/3] bg-slate-800/50">
+                  <div className="relative aspect-square lg:aspect-[4/3] bg-white">
                     <Image
                       src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
                       alt={prizeImages[0]?.alt || "Prize image"}
@@ -606,8 +879,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       className="!w-16 !h-16 sm:!w-20 sm:!h-20"
                       onClick={() => handleMobileThumbnailClick(index)}
                     >
-                      <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-gray-700 hover:border-red-500/50 transition-all duration-300 cursor-pointer bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
+                      <div
+                        className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white"
+                        style={{
+                          borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
+                        }}
+                      >
                         <Image
                           src={image.src}
                           alt={image.alt || `Prize thumbnail ${index + 1}`}
@@ -880,12 +1157,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   priority
                 />
               </div>
-              {renderPrizeToggle("desktop")}
+              {renderPickYourToolset("desktop")}
             </div>
             {/* Left Column - Gallery & Countdown */}
             <div className="flex flex-col space-y-6">
-              <div className="relative rounded-3xl shadow-[0_12px_48px_rgba(15,23,42,0.25)] border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-800 to-black overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
+              <div
+                className="relative rounded-2xl border-2 overflow-hidden bg-white"
+                style={{
+                  borderColor: getBrandBorderColor(activePrizeSlug as PrizeSlug),
+                  boxShadow: `0 0 20px ${getBrandGlowColor(activePrizeSlug as PrizeSlug)}, 0 8px 32px rgba(0,0,0,0.4)`,
+                }}
+              >
                 <div className="absolute top-4 right-4 z-20">
                   <button
                     onClick={() => setIsSpecsModalOpen(true)}
@@ -934,7 +1216,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   >
                     {prizeImages.map((image, index) => (
                       <SwiperSlide key={`${image.src}-${index}`}>
-                        <div className="relative aspect-[4/3]">
+                        <div className="relative aspect-square lg:aspect-[4/3] bg-white">
                           <Image
                             src={image.src}
                             alt={image.alt || `Prize image ${index + 1}`}
@@ -948,7 +1230,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     ))}
                   </Swiper>
                 ) : (
-                  <div className="relative aspect-[4/3]">
+                  <div className="relative aspect-square lg:aspect-[4/3] bg-white">
                     <Image
                       src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
                       alt={prizeImages[0]?.alt || "Prize image"}
@@ -980,8 +1262,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         className="!w-20 !h-20 xl:!w-24 xl:!h-24 flex items-center justify-center cursor-pointer"
                         onClick={() => handleDesktopThumbnailClick(index)}
                       >
-                        <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-gray-700 hover:border-red-500/40 transition-all duration-300 bg-gradient-to-br from-gray-900 via-gray-800 to-black cursor-pointer">
-                          <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10" />
+                        <div
+                          className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 bg-white cursor-pointer"
+                          style={{
+                            borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
+                          }}
+                        >
                           <Image
                             src={image.src}
                             alt={image.alt || `Prize thumbnail ${index + 1}`}
@@ -1146,11 +1432,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
                     </h2>
                   </div>
-                  {prizeLabel && (
-                    <p className="text-sm uppercase tracking-[0.35em] text-red-600 font-semibold mt-1">{prizeLabel}</p>
-                  )}
-                  {prizeHeroHeading && <p className="text-base text-gray-600 font-medium mt-2">{prizeHeroHeading}</p>}
-                  {prizeSubheading && <p className="text-sm text-gray-500 font-medium mt-1">{prizeSubheading}</p>}
+                 
                 </div>
 
                 {resolvedHighlights.length > 0 && <div>{renderHighlights("grid grid-cols-2 gap-4")}</div>}

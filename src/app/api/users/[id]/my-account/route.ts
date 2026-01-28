@@ -82,11 +82,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     };
 
     // Get membership package details from static data for subscription
-    // ✅ FIX: Only return package data if subscription is ACTIVE
-    // This prevents showing package badges and membership status for cancelled subscriptions
-    // packageId is still stored in database (useful for resubscription), but not returned in API
+    // Return package data if subscription is ACTIVE or past_due (failed renewal).
+    // This ensures failed-renewal users see the correct tier (e.g. Boss) in the Membership card.
+    // Do not return for cancelled / no subscription.
     let subscriptionPackageData = null;
-    if (userData.subscription?.packageId && userData.subscription?.isActive) {
+    const sub = userData.subscription;
+    const hasActiveOrPastDueSubscription =
+      sub?.packageId && (sub?.isActive || sub?.status === "past_due");
+    if (hasActiveOrPastDueSubscription && sub) {
       try {
         // Use smart benefit resolution to get effective benefits
         const effectiveBenefits = getEffectiveBenefits(userData as unknown as import("@/models/User").IUser);
@@ -95,11 +98,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           // console.log(
           //   `🔍 Using smart benefit resolution in my-account: ${
           //     effectiveBenefits.packageName
-          //   } (preserved during downgrade: ${effectiveBenefits.packageId !== userData.subscription.packageId})`
+          //   } (preserved during downgrade: ${effectiveBenefits.packageId !== sub.packageId})`
           // );
         } else {
           // Fallback to direct lookup
-          const packageIdStr = String(userData.subscription.packageId);
+          const packageIdStr = String(sub.packageId);
           subscriptionPackageData = getPackageById(packageIdStr);
           // console.log(`🔍 Fallback to direct lookup in my-account: ${subscriptionPackageData?.name || "Not found"}`);
         }
@@ -113,8 +116,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
       } catch (error) {
         console.log(
-          `⚠️ Could not find membership package ${userData.subscription.packageId} (${typeof userData.subscription
-            .packageId}):`,
+          `⚠️ Could not find membership package ${sub.packageId} (${typeof sub.packageId}):`,
           error
         );
       }

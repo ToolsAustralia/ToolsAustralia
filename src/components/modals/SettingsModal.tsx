@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useToast } from "@/components/ui/Toast";
 import SubscriptionManagementModal from "./SubscriptionManagementModal";
@@ -17,6 +17,8 @@ type SubscriptionUser = React.ComponentProps<typeof SubscriptionManagementModal>
 type SettingsModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  /** When set, modal opens directly to this tab (e.g. "subscription" from "Resolve payment" CTA). */
+  initialTab?: SettingsSection;
   user: {
     _id: string;
     firstName: string;
@@ -38,12 +40,30 @@ const tabButtonClass = (active: boolean) =>
 /**
  * Unified Settings modal that centralizes profile, subscription, and password management.
  */
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, membershipModal }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  initialTab,
+  user,
+  membershipModal,
+}) => {
   const { data: session } = useSession();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const didApplyInitialTab = useRef(false);
 
   const [activeTab, setActiveTab] = useState<SettingsSection>("profile");
+
+  useEffect(() => {
+    if (!isOpen) {
+      didApplyInitialTab.current = false;
+      return;
+    }
+    if (initialTab && !didApplyInitialTab.current) {
+      setActiveTab(initialTab);
+      didApplyInitialTab.current = true;
+    }
+  }, [isOpen, initialTab]);
   const [mobile, setMobile] = useState(user.mobile || "");
   const [state, setState] = useState(user.state || "");
   const [profession, setProfession] = useState(user.profession || "");
@@ -478,7 +498,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, user, me
           <button className={tabButtonClass(activeTab === "subscription")} onClick={() => setActiveTab("subscription")}>
             <span className="flex items-center gap-1">
               Subscription
-              {hasFailed && <AlertTriangle className="w-4 h-4 text-red-600" />}
+              {hasFailed && (
+              <AlertTriangle
+                className="w-4 h-4 text-amber-500 animate-pulse"
+                strokeWidth={2.5}
+                aria-hidden
+              />
+            )}
             </span>
           </button>
           <button className={tabButtonClass(activeTab === "password")} onClick={() => setActiveTab("password")}>
