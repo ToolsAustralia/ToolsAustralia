@@ -2,7 +2,7 @@
  * Month comparison and date range utilities
  */
 
-import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
+import { startOfMonth, endOfMonth, subMonths, addMonths, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
 
@@ -89,5 +89,28 @@ export function getDaysInRange(startDate: Date, endDate: Date): Date[] {
  */
 export function formatDateString(date: Date): string {
   return format(date, "yyyy-MM-dd");
+}
+
+/**
+ * Format renewal date for compact UI display using the actual date and time
+ * (e.g. "28/01/2026, 7:30pm"). Uses DD/MM/YYYY and 12-hour time from the Date.
+ * Time is shown in the user's local timezone when run on the client.
+ *
+ * @param date - Renewal date (e.g. subscription endDate from Stripe current_period_end)
+ * @returns Formatted string like "28/01/2026, 7:30pm"
+ */
+export function formatRenewalDate(date: Date): string {
+  return format(date, "dd/MM/yyyy, h:mma");
+}
+
+/**
+ * Fallback renewal date when endDate is missing: startDate + 1 month.
+ * Approximate only (accurate for first renewal).
+ *
+ * @param startDate - Subscription start date
+ * @returns Date one month after start
+ */
+export function getFallbackRenewalDate(startDate: Date): Date {
+  return addMonths(startDate, 1);
 }
 

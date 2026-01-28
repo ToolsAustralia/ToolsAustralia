@@ -27,7 +27,10 @@ import RenewalFailedModal from "@/components/modals/RenewalFailedModal";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
-import { Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Hourglass } from "lucide-react";
+import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { hasSeenExplainer, markExplainerSeen } from "@/utils/subscription-explainer-storage";
+import { formatRenewalDate, getFallbackRenewalDate } from "@/utils/dates/month-helpers";
+import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
@@ -36,6 +39,14 @@ import { getPackageById } from "@/data/membershipPackages";
 import { useMemberships } from "@/hooks/useMemberships";
 import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+
+/** Pending entries display data when user has active/failed-renewal but 0 entries in draw */
+type PendingEntriesData = {
+  expectedEntries: number;
+  renewalDate: Date | null;
+  isFailedRenewal: boolean;
+  isPending: true;
+};
 
 // Partner Discounts Section Component
 // Conditionally renders UnlockDiscounts based on user's partner discount access
@@ -189,15 +200,13 @@ export default function MyAccountPage() {
 
   // Local state for subscription management modal
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [openSettingsToSubscription, setOpenSettingsToSubscription] = useState(false);
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
   const [isRenewalFailedModalOpen, setIsRenewalFailedModalOpen] = useState(false);
 
   // State for accumulation tooltip
   const [showAccumulationTooltip, setShowAccumulationTooltip] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
-  // State for pending entries tooltip
-  const [showPendingTooltip, setShowPendingTooltip] = useState(false);
-  const [pendingTooltipPosition, setPendingTooltipPosition] = useState<{ top: number; left: number } | null>(null);
 
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -308,6 +317,34 @@ export default function MyAccountPage() {
       // console.log("✅ User setup already completed, no modals needed");
     }
   }, [status, loading, session, accountData, requestModal]);
+
+  // Subscription explainer: one-time per account, active subscribers only, after higher-priority modals
+  const userId = session?.user?.id;
+  const profileSetupCompleted = accountData?.user?.profileSetupCompleted;
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !userId || !accountData) return;
+    if (status === "loading" || loading || activeModal) return;
+    if (accountData.user?.subscription?.isActive !== true) return;
+    if (hasFailedRenewal(accountData.user as unknown as import("@/models/User").IUser)) return;
+    if (hasSeenExplainer(userId)) return;
+    if (!profileSetupCompleted) return;
+    if (sessionStorage.getItem("pendingUpsellFlag") === "true") return;
+
+    const pkg = accountData.user?.subscriptionPackageData || accountData.user?.enrichedOneTimePackages?.find((p: { isActive: boolean }) => p.isActive)?.packageData;
+    const entriesPerMonth = (pkg && "entriesPerMonth" in pkg && pkg.entriesPerMonth) || 0;
+    const packageName = pkg && "name" in pkg ? (pkg.name as string) : undefined;
+    const sub = accountData.user?.subscription as { lastMonthAccumulatedEntries?: number; packageId?: string } | undefined;
+    const lastMonthAccumulatedEntries = sub?.lastMonthAccumulatedEntries ?? entriesPerMonth;
+    const selectedPackageId = sub?.packageId != null ? String(sub.packageId) : undefined;
+
+    requestModal("subscription-explainer", false, {
+      entriesPerMonth,
+      packageName,
+      userId,
+      lastMonthAccumulatedEntries,
+      selectedPackageId,
+    });
+  }, [userId, profileSetupCompleted, status, loading, activeModal, accountData, requestModal]);
 
   // Show loading while checking authentication or fetching data
   if (status === "loading" || loading || majorDrawStatsLoading || currentMajorDrawLoading) {
@@ -448,10 +485,8 @@ export default function MyAccountPage() {
   // Combine: participant draws first, then others
   const activeMiniDraws = [...participantMiniDraws, ...otherMiniDraws];
 
-  // Determine membership info from real data
-  // Use enriched package data for both subscription and one-time packages
-  const membershipPackage =
-    user.subscriptionPackageData || user.enrichedOneTimePackages?.find((pkg) => pkg.isActive)?.packageData;
+  // Membership card shows subscription package only (never one-time). One-time badges go in One-time card.
+  const membershipPackage = user.subscriptionPackageData ?? null;
 
   /**
    * Check if user has active membership that includes "Mini Draws" feature
@@ -501,9 +536,7 @@ export default function MyAccountPage() {
   const getProjectionData = () => {
     if (!hasActiveMembership || !membershipPackage || !userSubscription) return null;
 
-    // Only show for subscription packages
-    if (user.subscriptionPackageData !== membershipPackage) return null;
-
+    // membershipPackage is subscription-only; no one-time fallback
     // Check if package has entriesPerMonth (subscription packages only)
     if (membershipPackage.type !== "subscription" || !("entriesPerMonth" in membershipPackage)) return null;
 
@@ -528,65 +561,43 @@ export default function MyAccountPage() {
   // Check if current user is the winner
   const isWinner = currentMajorDraw?.winner?.userId?.toString() === session?.user?.id;
 
-  // Calculate pending entries - Show in ALL states if user has active membership but 0 membership entries
-  // Simplified: Check if user has active membership but 0 membership entries in the draw
-  const getPendingEntries = () => {
-    // Wait for majorDrawStats to load
-    // majorDrawStats will be an object (not null) even if user has no entries (returns zeros)
-    if (majorDrawStatsLoading || !majorDrawStats) {
-      return null;
-    }
+  // Calculate pending entries: (A) active subscribers or (B) failed-renewal users with 0 entries in draw
+  const getPendingEntries = (): PendingEntriesData | null => {
+    if (majorDrawStatsLoading || !majorDrawStats) return null;
 
-    // Check if user has active membership
-    if (!hasActiveMembership) {
-      return null; // No active membership, no pending entries to show
-    }
-
-    // Get membership entries from the current draw
     const membershipEntriesInDraw = majorDrawStats?.membershipEntries ?? 0;
-    
-    // Get displayed membership entries (what's actually shown to user)
-    // Always use actual draw entries, not accumulated from previous months
-    // Only hide entries when draw is completed (previous draw), not when queued (upcoming draw)
-    const displayedMembershipEntries = isCompleted
-      ? 0
-      : majorDrawStats?.membershipEntries ?? 0;
+    const displayedMembershipEntries = isCompleted ? 0 : majorDrawStats?.membershipEntries ?? 0;
+    if (membershipEntriesInDraw !== 0 || displayedMembershipEntries !== 0) return null;
 
-    // Show pending ONLY if:
-    // 1. User has active membership
-    // 2. Membership entries in current draw are 0 (entries will be added on renewal)
-    // 3. AND displayed membership entries are also 0 (user doesn't see any entries currently)
-    // This prevents showing pending when user already has accumulated entries displayed
-    if (membershipEntriesInDraw === 0 && displayedMembershipEntries === 0) {
-      // Try to calculate expected entries from package (for tooltip display)
-      // If package info is available, use it; otherwise use subscription data
-      let expectedEntries = 0;
-      let baseEntries = 0;
-      let lastAccumulated = 0;
+    const isEligibleActive = hasActiveMembership;
+    const isEligibleFailedRenewal = hasFailedRenewal(user as unknown as import("@/models/User").IUser);
+    if (!isEligibleActive && !isEligibleFailedRenewal) return null;
 
-      if (membershipPackage && membershipPackage.type === "subscription" && "entriesPerMonth" in membershipPackage) {
-        baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
-        lastAccumulated = userSubscription?.lastMonthAccumulatedEntries ?? baseEntries;
-        expectedEntries = lastAccumulated + baseEntries;
-      } else if (userSubscription?.lastMonthAccumulatedEntries) {
-        // Fallback: Use lastMonthAccumulatedEntries if package data not available
-        lastAccumulated = userSubscription.lastMonthAccumulatedEntries;
-        expectedEntries = lastAccumulated; // Best guess without package info
-      } else {
-        // Can't calculate expected entries, but still show pending icon
-        expectedEntries = 0;
-      }
-
-      return {
-        expectedEntries,
-        baseEntries,
-        lastAccumulated,
-        needsRenewal: false, // Active membership, just waiting for renewal cycle
-      };
+    let expectedEntries = 0;
+    if (membershipPackage && membershipPackage.type === "subscription" && "entriesPerMonth" in membershipPackage) {
+      const baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
+      const lastAccumulated = userSubscription?.lastMonthAccumulatedEntries ?? baseEntries;
+      expectedEntries = lastAccumulated + baseEntries;
+    } else if (userSubscription?.lastMonthAccumulatedEntries) {
+      expectedEntries = userSubscription.lastMonthAccumulatedEntries;
     }
 
-    // If membership entries > 0, they're already in the draw, no pending
-    return null;
+    const sub = user.subscription as { endDate?: Date | string; startDate?: Date | string } | undefined;
+    let renewalDate: Date | null = null;
+    if (!isEligibleFailedRenewal && sub) {
+      if (sub.endDate) {
+        renewalDate = new Date(sub.endDate);
+      } else if (sub.startDate) {
+        renewalDate = getFallbackRenewalDate(new Date(sub.startDate));
+      }
+    }
+
+    return {
+      expectedEntries,
+      renewalDate,
+      isFailedRenewal: isEligibleFailedRenewal,
+      isPending: true,
+    };
   };
 
   const pendingEntriesData = getPendingEntries();
@@ -665,6 +676,13 @@ export default function MyAccountPage() {
                         />
                       </svg>
                       Settings
+                      {hasFailedRenewal(user as unknown as import("@/models/User").IUser) && (
+                        <AlertTriangle
+                          className="w-4 h-4 text-amber-300 drop-shadow-[0_0_4px_rgba(0,0,0,0.5)] animate-pulse"
+                          strokeWidth={2.5}
+                          aria-hidden
+                        />
+                      )}
                     </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
@@ -801,43 +819,18 @@ export default function MyAccountPage() {
                           month3={projectionData.month3}
                         />
                       )}
-                      {/* Pending Entries Tooltip - Positioned relative to stats grid */}
-                      {showPendingTooltip && pendingTooltipPosition && pendingEntriesData && (
-                        <div
-                          className="absolute px-3 py-2 sm:px-4 sm:py-3 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white text-[11px] sm:text-sm rounded-xl shadow-2xl border border-slate-500/50 pointer-events-none w-[180px] sm:w-auto sm:min-w-[220px] backdrop-blur-sm"
-                          style={{
-                            zIndex: 10000,
-                            left: `${pendingTooltipPosition.left}px`,
-                            top: `${pendingTooltipPosition.top}px`,
-                            transform: "translateY(-50%)",
-                          }}
-                        >
-                          <div className="font-bold mb-2 sm:mb-3 text-[12px] sm:text-base bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                            Pending Entries
-                          </div>
-                          <div className="space-y-2 sm:space-y-2.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-gray-300 text-[10px] sm:text-xs font-medium">Expected</span>
-                              <span className="text-white font-bold text-[11px] sm:text-sm tabular-nums">
-                                {pendingEntriesData.expectedEntries.toLocaleString()}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-2 sm:mt-2.5 pt-2 sm:pt-2.5 border-t border-slate-700/50">
-                            <div className="text-gray-300 text-[10px] sm:text-xs">
-                              Will be automatically added to the draw once your subscription is renewed
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
                       {/* Membership Entries */}
-                      <div className="group relative bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30">
+                      <div
+                        className={`group relative backdrop-blur-sm rounded-xl p-3 border ${
+                          pendingEntriesData?.isFailedRenewal
+                            ? "bg-gradient-to-br from-amber-500/20 via-amber-400/10 to-orange-500/20 border-amber-400/30"
+                            : pendingEntriesData
+                              ? "bg-gradient-to-br from-slate-500/20 via-blue-400/10 to-indigo-500/20 border-blue-300/30"
+                              : "bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 border-blue-400/30"
+                        }`}
+                      >
                         {/* Info Button - Top Left */}
-                        {hasActiveMembership &&
-                          membershipPackage &&
-                          user.subscriptionPackageData === membershipPackage &&
-                          projectionData && (
+                        {hasActiveMembership && membershipPackage && projectionData && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -864,31 +857,45 @@ export default function MyAccountPage() {
                               Membership
                             </span>
                           </div>
-                          <div className="flex items-center justify-center gap-1.5 mb-1">
-                            <div className="text-xl font-bold text-white drop-shadow-lg">
-                              {displayMembershipEntries}
+                          <div className="flex flex-col items-center justify-center gap-0.5 mb-1">
+                            <div
+                              className={`text-xl font-bold drop-shadow-lg ${
+                                pendingEntriesData?.isFailedRenewal
+                                  ? "text-amber-400"
+                                  : pendingEntriesData
+                                    ? "text-blue-200"
+                                    : "text-white"
+                              }`}
+                            >
+                              {pendingEntriesData ? pendingEntriesData.expectedEntries : displayMembershipEntries}
                             </div>
-                            {/* Pending icon indicator during frozen/gap state */}
                             {pendingEntriesData && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  const statsGrid = e.currentTarget.closest(".grid.grid-cols-2") as HTMLElement;
-                                  if (statsGrid) {
-                                    const gridRect = statsGrid.getBoundingClientRect();
-                                    setPendingTooltipPosition({
-                                      top: rect.top - gridRect.top + rect.height / 2,
-                                      left: rect.right - gridRect.left + 8,
-                                    });
-                                    setShowPendingTooltip(true);
-                                  }
-                                }}
-                                className="flex items-center justify-center w-4 h-4 text-blue-300 hover:text-blue-200 transition-colors cursor-help relative z-20"
-                                aria-label="Pending entries info"
+                              <span
+                                className={`text-[10px] sm:text-xs font-medium text-center ${
+                                  pendingEntriesData.isFailedRenewal ? "text-amber-400" : "text-blue-200"
+                                }`}
                               >
-                                <Hourglass className="w-4 h-4 animate-hourglass-flip" />
-                              </button>
+                                {pendingEntriesData.isFailedRenewal ? (
+                                  <>
+                                    Update payment to add entries.{" "}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenSettingsToSubscription(true);
+                                        setIsSettingsModalOpen(true);
+                                      }}
+                                      className="underline underline-offset-1 hover:no-underline focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-1 focus:ring-offset-transparent rounded"
+                                      aria-label="Resolve payment – open Settings subscription tab"
+                                    >
+                                      Resolve payment
+                                    </button>
+                                  </>
+                                ) : pendingEntriesData.renewalDate ? (
+                                  `Added on renewal · ${formatRenewalDate(pendingEntriesData.renewalDate)}`
+                                ) : (
+                                  "Added on renewal"
+                                )}
+                              </span>
                             )}
                           </div>
                           {membershipPackage && (
@@ -896,9 +903,7 @@ export default function MyAccountPage() {
                               <MembershipBadge
                                 packageData={membershipPackage}
                                 isActive={true}
-                                membershipType={
-                                  user.subscriptionPackageData === membershipPackage ? "subscription" : "one-time"
-                                }
+                                membershipType="subscription"
                               />
                               {/* Show preserved benefits countdown */}
                               {user &&
@@ -928,6 +933,22 @@ export default function MyAccountPage() {
                             {displayOneTimeEntries}
                           </div>
                           <div className="text-xs text-white/70 uppercase tracking-wide">Packages</div>
+                          {(user.enrichedOneTimePackages ?? []).filter(
+                            (pkg) => pkg.isActive && pkg.packageData
+                          ).length > 0 && (
+                            <div className="flex flex-col gap-1 items-center mt-2">
+                              {(user.enrichedOneTimePackages ?? [])
+                                .filter((pkg) => pkg.isActive && pkg.packageData)
+                                .map((pkg) => (
+                                  <MembershipBadge
+                                    key={String(pkg.packageId)}
+                                    packageData={pkg.packageData}
+                                    isActive={true}
+                                    membershipType="one-time"
+                                  />
+                                ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -984,6 +1005,13 @@ export default function MyAccountPage() {
                           />
                         </svg>
                         Settings
+                        {hasFailedRenewal(user as unknown as import("@/models/User").IUser) && (
+                          <AlertTriangle
+                            className="w-4 h-4 text-amber-300 drop-shadow-[0_0_4px_rgba(0,0,0,0.5)] animate-pulse"
+                            strokeWidth={2.5}
+                            aria-hidden
+                          />
+                        )}
                       </span>
                       <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     </button>
@@ -1319,7 +1347,11 @@ export default function MyAccountPage() {
 
       <SettingsModal
         isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
+        onClose={() => {
+          setOpenSettingsToSubscription(false);
+          setIsSettingsModalOpen(false);
+        }}
+        initialTab={openSettingsToSubscription ? "subscription" : undefined}
         user={user}
         membershipModal={membershipModal}
       />
@@ -1342,10 +1374,6 @@ export default function MyAccountPage() {
       {/* Click outside to close accumulation tooltip */}
       {showAccumulationTooltip && (
         <div className="fixed inset-0 z-[9998]" onClick={() => setShowAccumulationTooltip(false)} />
-      )}
-      {/* Click outside to close pending tooltip */}
-      {showPendingTooltip && (
-        <div className="fixed inset-0 z-[9998]" onClick={() => setShowPendingTooltip(false)} />
       )}
     </div>
   );

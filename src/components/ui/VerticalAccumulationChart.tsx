@@ -4,6 +4,8 @@ import { usePromoByType } from "@/hooks/queries/usePromoQueries";
 
 interface VerticalAccumulationChartProps {
   selectedPackageId?: string;
+  /** When true, show only the selected package (e.g. in explainer modal). Default false. */
+  showOnlySelectedPackage?: boolean;
 }
 
 // Package data for the 3 main subscription packages
@@ -67,12 +69,20 @@ function calculateAccumulation(baseEntries: number, promoMultiplier: number = 1)
   return { month1, month2, month3 };
 }
 
-export default function VerticalAccumulationChart({ selectedPackageId }: VerticalAccumulationChartProps) {
+export default function VerticalAccumulationChart({
+  selectedPackageId,
+  showOnlySelectedPackage = false,
+}: VerticalAccumulationChartProps) {
   const { data: membershipPromo } = usePromoByType("membership-packages");
   const promoMultiplier = membershipPromo?.multiplier ?? 1;
 
-  // Calculate data for all packages
-  const packageData = packages.map((pkg) => {
+  const packagesToShow =
+    showOnlySelectedPackage && selectedPackageId
+      ? packages.filter((p) => p.id === selectedPackageId)
+      : packages;
+
+  // Calculate data for packages to display
+  const packageData = packagesToShow.map((pkg) => {
     const accumulation = calculateAccumulation(pkg.baseEntries, promoMultiplier);
     const colorScheme = getPackageColorScheme(pkg.id);
     const isSelected = selectedPackageId === pkg.id;
@@ -86,7 +96,13 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
   });
 
   // Find max value for scaling
-  const maxValue = Math.max(...packageData.map((pkg) => Math.max(pkg.month1, pkg.month2, pkg.month3)));
+  const maxValue =
+    packageData.length > 0
+      ? Math.max(...packageData.map((pkg) => Math.max(pkg.month1, pkg.month2, pkg.month3)))
+      : 1;
+  // Use padded scale for bar heights so the tallest bar doesn't reach 100% and the value
+  // label above it doesn't overlap the "3rd Month" header (single-package / explainer case).
+  const scaleMax = maxValue * 1.2;
 
   return (
     <div className="w-full">
@@ -146,7 +162,7 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
             <div className="flex-1 flex flex-col items-center max-w-[80px] sm:max-w-[100px] h-full relative">
               <div className="flex items-end justify-center gap-1 sm:gap-1.5 w-full h-full">
                 {packageData.map((pkg) => {
-                  const barHeight = (pkg.month1 / maxValue) * 100;
+                  const barHeight = (pkg.month1 / scaleMax) * 100;
                   return (
                     <div key={`${pkg.id}-month1`} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
@@ -174,7 +190,7 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
             <div className="flex-1 flex flex-col items-center max-w-[80px] sm:max-w-[100px] h-full relative">
               <div className="flex items-end justify-center gap-1 sm:gap-1.5 w-full h-full">
                 {packageData.map((pkg) => {
-                  const barHeight = (pkg.month2 / maxValue) * 100;
+                  const barHeight = (pkg.month2 / scaleMax) * 100;
                   return (
                     <div key={`${pkg.id}-month2`} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
@@ -202,7 +218,7 @@ export default function VerticalAccumulationChart({ selectedPackageId }: Vertica
             <div className="flex-1 flex flex-col items-center max-w-[80px] sm:max-w-[100px] h-full relative">
               <div className="flex items-end justify-center gap-1 sm:gap-1.5 w-full h-full">
                 {packageData.map((pkg) => {
-                  const barHeight = (pkg.month3 / maxValue) * 100;
+                  const barHeight = (pkg.month3 / scaleMax) * 100;
                   return (
                     <div key={`${pkg.id}-month3`} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
