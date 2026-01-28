@@ -34,6 +34,18 @@ export interface PaymentMetadata {
 export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Promise<IMajorDraw> {
   // console.log("🔍 getTargetMajorDraw called with metadata:", paymentMetadata);
 
+  // ✅ Transition major draws if needed (before draw selection)
+  // Ensures draw statuses are up-to-date before selecting target draw
+  // Service is debounced and idempotent, so safe to call here
+  try {
+    const { transitionMajorDrawsIfNeeded } = await import("./major-draw-transition-service");
+    await transitionMajorDrawsIfNeeded();
+    // Don't log or block on errors - debouncing will prevent excessive calls
+  } catch (error) {
+    // Silently continue - transition errors shouldn't block draw selection
+    // Cron job serves as fallback for transitions
+  }
+
   // Step 1: Find currently active or frozen draw
   const currentDraw = await MajorDraw.findOne({
     status: { $in: ["active", "frozen"] },
@@ -114,6 +126,20 @@ export async function getNextQueuedDraw(): Promise<IMajorDraw | null> {
 export async function getCurrentMajorDrawForDisplay(
   includeQueuedDuringGap: boolean = true
 ): Promise<IMajorDraw | null> {
+  // ✅ Transition major draws if needed (before fetching for display)
+  // Ensures draw statuses are up-to-date before displaying to users
+  // Service is debounced and idempotent, so safe to call here
+  try {
+    const { transitionMajorDrawsIfNeeded } = await import("@/utils/draws/major-draw-transition-service");
+    await transitionMajorDrawsIfNeeded();
+    // Don't block on transition errors - continue with display logic
+  } catch (transitionError) {
+    // Log but don't block display
+    if (process.env.NODE_ENV === "development" || process.env.WEBHOOK_VERBOSE_LOGGING === "true") {
+      console.warn(`⚠️ Major draw transition service error in display helper (non-blocking): ${transitionError}`);
+    }
+  }
+
   const now = new Date();
 
   // Step 1: Try to find active or frozen draw

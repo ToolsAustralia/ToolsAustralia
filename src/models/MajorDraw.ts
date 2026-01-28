@@ -272,92 +272,26 @@ MajorDrawSchema.pre("save", function (next) {
   next();
 });
 
-// NOTE: Middleware must be attached to the schema BEFORE compiling the model.
-// We will compile the model at the very end of the file.
-
 // ========================================
-// Auto-Transition Middleware
+// Status Transition Architecture
 // ========================================
-// Similar to promo middleware - automatically transitions major draw statuses
-// without needing cron jobs. Uses atomic updateMany operations for safety.
-
-// Pre-hook middleware that runs before any find query
-MajorDrawSchema.pre(/^find/, async function (next) {
-  const currentDate = new Date();
-
-  try {
-    // Check if mongoose is connected before running database operations
-    // This prevents errors during build time when the database might not be connected
-    if (mongoose.connection.readyState !== 1) {
-      // Connection not ready, skip middleware and continue with query
-      return next();
-    }
-
-    // Get the compiled model safely from mongoose registry
-    const MajorDrawModel = (mongoose.models.MajorDraw ||
-      mongoose.model<IMajorDraw>("MajorDraw")) as mongoose.Model<IMajorDraw>;
-
-    await MajorDrawModel.updateMany(
-      {
-        status: { $in: ["active", "frozen"] },
-        drawDate: { $lte: currentDate }, // Draw date has passed
-      },
-      {
-        $set: {
-          status: "completed",
-          isActive: false, // Backward compatibility
-          configurationLocked: true,
-          lockedAt: currentDate,
-        },
-      }
-    );
-
-    // ========================================
-    // STEP 2: Activate queued draws (atomic operation)
-    // ========================================
-    // Activate queued draws that reached their activation date
-    // Happens after completing draws to avoid status conflicts
-    await MajorDrawModel.updateMany(
-      {
-        status: "queued",
-        activationDate: { $lte: currentDate }, // Activation time has arrived
-      },
-      {
-        $set: {
-          status: "active",
-          isActive: true, // Backward compatibility
-        },
-      }
-    );
-
-    // ========================================
-    // STEP 3: Freeze active draws (atomic operation)
-    // ========================================
-    // Freeze active draws that reached freeze time but haven't completed yet
-    // Happens last since it only affects active draws
-    await MajorDrawModel.updateMany(
-      {
-        status: "active",
-        freezeEntriesAt: { $lte: currentDate }, // Freeze time has arrived
-        drawDate: { $gt: currentDate }, // Draw hasn't happened yet
-      },
-      {
-        $set: {
-          status: "frozen",
-          configurationLocked: true,
-          lockedAt: currentDate,
-        },
-      }
-    );
-  } catch (error) {
-    // Log error but don't block the query - middleware failures shouldn't
-    // prevent data retrieval. The cron job backup will handle any missed transitions.
-    console.error("❌ Error in major draw transition middleware:", error);
-  }
-
-  // Continue with the original query
-  next();
-});
+// Major draw status transitions (completed, activated, frozen) are handled by
+// a dedicated service, not middleware. This follows best practices:
+//
+// - Separation of concerns: Business logic separated from query hooks
+// - Performance: No writes on every read query
+// - Reliability: Proper timeout protection and error handling
+// - Maintainability: Single source of truth for transition logic
+//
+// The transition service is called:
+// 1. Explicitly in webhook handlers (on-demand freshness)
+// 2. In helper functions like getTargetMajorDraw() (before draw selection)
+// 3. By cron job (scheduled safety net)
+//
+// See: src/utils/draws/major-draw-transition-service.ts
+//
+// NOTE: Pre-find middleware was removed to avoid architectural anti-pattern
+// of performing write operations in read query hooks.
 
 // Compile and export the model AFTER all middleware is attached
 export default mongoose.models.MajorDraw || mongoose.model<IMajorDraw>("MajorDraw", MajorDrawSchema);
