@@ -191,7 +191,23 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
       return true; // Return true to indicate webhook was handled (even though it was a duplicate)
     }
 
-    // Remove database connection tests - they're unnecessary overhead
+    // ✅ Transition major draws if needed (before draw selection)
+    // Ensures draw statuses are up-to-date before processing payment entries
+    // Service is debounced and idempotent, so safe to call here
+    try {
+      const { transitionMajorDrawsIfNeeded } = await import("@/utils/draws/major-draw-transition-service");
+      const transitionResult = await transitionMajorDrawsIfNeeded();
+      if (!transitionResult.skipped && (transitionResult.completed > 0 || transitionResult.activated > 0 || transitionResult.frozen > 0)) {
+        webhookLog("info", `🔄 Major draw transitions: ${transitionResult.completed} completed, ${transitionResult.activated} activated, ${transitionResult.frozen} frozen`);
+      }
+      // Don't block on transition errors - continue with payment processing
+      if (!transitionResult.success && transitionResult.error) {
+        webhookLog("warn", `⚠️ Major draw transition had errors (non-blocking): ${transitionResult.error}`);
+      }
+    } catch (transitionError) {
+      // Log but don't block payment processing
+      webhookLog("warn", `⚠️ Major draw transition service error (non-blocking): ${transitionError}`);
+    }
 
     // Find user by customer ID
     let user;

@@ -1,23 +1,28 @@
 /**
- * Vercel Cron Job: Major Draw Status Transitions (Backup)
+ * Vercel Cron Job: Major Draw Status Transitions (Primary Scheduler)
  *
  * GET /api/cron/major-draw-transition
  *
- * Runs daily at 1:30 PM UTC (9:30 PM PH time) as a backup safety net.
+ * Runs daily at 2:00 PM UTC (12:00 AM AEST / 1:00 AM AEDT) as the primary scheduled transition handler.
+ * This schedule aligns with midnight AEST/AEDT for queued draw activation.
  *
- * PRIMARY: Major draw transitions are now handled automatically by Mongoose middleware
- * in the MajorDraw model (runs on every query). This provides real-time transitions
- * without waiting for cron jobs.
+ * ARCHITECTURE: Major draw transitions are handled by a dedicated service
+ * (src/utils/draws/major-draw-transition-service.ts) which is called:
+ * 1. By this cron job (primary scheduler - ensures daily transitions)
+ * 2. On-demand in webhook handlers (for real-time freshness on payment events)
+ * 3. In helper functions like getTargetMajorDraw() (before draw selection)
+ * 4. In getCurrentMajorDrawForDisplay() (for real-time updates when users view the page)
  *
- * BACKUP: This cron job serves as a safety net to:
- * 1. Catch any missed transitions (edge cases, low-traffic periods)
- * 2. Freeze draws that reached freeze time (30 mins before draw date)
- * 3. Complete draws that reached draw date
- * 4. Activate queued draws that reached activation date
+ * This cron job:
+ * 1. Calls the transition service to handle status transitions (completed, activated, frozen)
+ * 2. Processes Klaviyo resets for newly activated draws
+ * 3. Creates next queued draw if needed (7 days before current draw date) - MUST run daily
+ * 4. Performs cleanup operations
  *
- * REQUIRED: Still handles critical operations that should run on schedule:
- * 5. Create next queued draw (7 days before current draw date) - MUST run daily
- * 6. Cleanup old user major draw entries (keep last 6 completed draws)
+ * The transition service is idempotent, debounced, and timeout-protected,
+ * making it safe to call from multiple sources. Real-time updates are provided
+ * via traffic-driven transitions (user visits trigger updates), while this cron
+ * ensures daily transitions even without traffic.
  *
  * Security: Protected by Vercel's internal infrastructure
  */
@@ -36,10 +41,13 @@ import {
 import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
 
 /**
- * Cron job handler (Backup for middleware transitions)
+ * Cron job handler (Primary scheduler for transitions)
  * Vercel cron jobs are automatically protected and can only be called internally
  *
- * Note: Transitions are primarily handled by middleware, but this serves as backup
+ * Note: Transitions are handled by the transition service, which is called
+ * from multiple sources (cron, webhooks, helpers, display helper) for reliability
+ * and real-time freshness. This cron serves as a safety net to ensure daily
+ * transitions even without user traffic.
  */
 
 export const dynamic = 'force-dynamic';
@@ -59,7 +67,7 @@ export async function GET() {
     // No additional authentication needed as they can only be called internally
     logs.push("✅ Cron job authenticated via Vercel infrastructure");
     logs.push(`🕐 Started at: ${new Date().toISOString()}`);
-    logs.push("ℹ️ Running as backup - primary transitions handled by middleware");
+    logs.push("ℹ️ Using transition service for status transitions");
     console.log("✅ Cron job authenticated via Vercel infrastructure");
 
     await connectDB();
@@ -69,75 +77,29 @@ export async function GET() {
     const now = new Date();
 
     // ========================================
-    // STEP 1: Complete draws that reached draw date (MATCHES MIDDLEWARE ORDER)
+    // STEP 1-3: Transition major draws using dedicated service
     // ========================================
-    // CRITICAL: This must happen FIRST to free up "active" status before activating new draws
-    // This prevents draw skipping (e.g., Draw 1 completes → Draw 2 activates, not Draw 3)
-    // Uses updateMany for idempotency - safe to run multiple times, won't double-update
-    // Matches middleware: Completes active/frozen draws when drawDate <= now
-    const completedResult = await MajorDraw.updateMany(
-      {
-        status: { $in: ["active", "frozen"] },
-        drawDate: { $lte: now }, // Draw date has passed
-      },
-      {
-        $set: {
-          status: "completed",
-          isActive: false, // Backward compatibility
-          configurationLocked: true,
-          lockedAt: now,
-        },
-      }
-    );
+    // Uses the transition service for single source of truth
+    // Service handles: completing, activating, and freezing draws
+    // All operations are idempotent, timeout-protected, and observable
+    const { transitionMajorDrawsIfNeeded } = await import("@/utils/draws/major-draw-transition-service");
+    const transitionResult = await transitionMajorDrawsIfNeeded();
 
-    logs.push(`✅ Completed ${completedResult.modifiedCount} draw(s)`);
-    console.log(`✅ Completed ${completedResult.modifiedCount} draw(s) (idempotent - safe if already completed)`);
+    if (transitionResult.success) {
+      logs.push(`✅ Transitions completed: ${transitionResult.completed} completed, ${transitionResult.activated} activated, ${transitionResult.frozen} frozen`);
+      console.log(
+        `✅ Major draw transitions: ${transitionResult.completed} completed, ${transitionResult.activated} activated, ${transitionResult.frozen} frozen (${transitionResult.duration}ms)`
+      );
+    } else {
+      logs.push(`⚠️ Transition service had errors: ${transitionResult.error || "Unknown error"}`);
+      console.error(`❌ Major draw transition service error: ${transitionResult.error || "Unknown error"}`);
+      // Continue with cron job - other tasks (Klaviyo, draw creation) can still run
+    }
 
-    // ========================================
-    // STEP 2: Activate queued draws (MATCHES MIDDLEWARE ORDER)
-    // ========================================
-    // Happens after completing draws to avoid status conflicts
-    // Uses updateMany for idempotency - safe to run multiple times
-    // Matches middleware: Activates queued draws when activationDate <= now
-    const activatedResult = await MajorDraw.updateMany(
-      {
-        status: "queued",
-        activationDate: { $lte: now }, // Activation time has arrived
-      },
-      {
-        $set: {
-          status: "active",
-          isActive: true, // Backward compatibility
-        },
-      }
-    );
-
-    logs.push(`✅ Activated ${activatedResult.modifiedCount} draw(s)`);
-    console.log(`✅ Activated ${activatedResult.modifiedCount} draw(s) (idempotent - safe if already activated)`);
-
-    // ========================================
-    // STEP 3: Freeze active draws (MATCHES MIDDLEWARE ORDER)
-    // ========================================
-    // Happens last since it only affects active draws
-    // Uses updateMany for idempotency - safe to run multiple times
-    // Matches middleware: Freezes active draws when freezeEntriesAt <= now AND drawDate > now
-    const frozenResult = await MajorDraw.updateMany(
-      {
-        status: "active",
-        freezeEntriesAt: { $lte: now }, // Freeze time has arrived
-        drawDate: { $gt: now }, // Draw hasn't happened yet
-      },
-      {
-        $set: {
-          status: "frozen",
-          configurationLocked: true,
-          lockedAt: now,
-        },
-      }
-    );
-
-    logs.push(`✅ Frozen ${frozenResult.modifiedCount} draw(s)`);
-    console.log(`✅ Frozen ${frozenResult.modifiedCount} draw(s) (idempotent - safe if already frozen)`);
+    // Extract counts for summary (use transition service results)
+    const completedCount = transitionResult.completed;
+    const activatedCount = transitionResult.activated;
+    const frozenCount = transitionResult.frozen;
 
     // ========================================
     // STEP 3.5: IMMEDIATE Klaviyo reset for newly activated draws (PRIORITY)
@@ -309,9 +271,9 @@ export async function GET() {
       {
         success: true,
         summary: {
-          completed: completedResult.modifiedCount,
-          activated: activatedResult.modifiedCount,
-          frozen: frozenResult.modifiedCount,
+          completed: completedCount,
+          activated: activatedCount,
+          frozen: frozenCount,
           klaviyoResets: klaviyoResetsCount,
           nextDrawCreated: shouldCreate,
           usersCleanedUp: 0, // Using single source of truth - no user cleanup needed

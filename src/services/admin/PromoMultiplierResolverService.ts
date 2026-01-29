@@ -1,19 +1,31 @@
 /**
  * Promo Multiplier Resolver Service
- * 
+ *
  * Centralized service for resolving promo multipliers with priority logic.
- * Priority: Active Promo > Alternating Multiplier > null (no promo)
- * 
+ * Priority: Scheduled Promo > Toggle Promo > Alternating Multiplier > null (no promo)
+ *
  * This service ensures consistent multiplier resolution across:
  * - Frontend display components (PromoBanner, PromoHero)
  * - Payment processing (webhook, one-time purchases, upsells)
  * - Package calculations
  */
 
+import type { EffectiveForBannerEntry } from "@/types/admin";
 import Promo from "@/models/Promo";
+import ScheduledPromo from "@/models/ScheduledPromo";
 import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
 import { getAlternatingMultiplier } from "@/utils/promo-banner/alternating-multiplier-manager";
 import connectDB from "@/lib/mongodb";
+
+export type ResolverSource = "scheduled" | "toggle" | "alternating" | "none";
+
+export interface ResolvedMultiplierWithSource {
+  multiplier: number | null;
+  source: ResolverSource;
+  promoId?: string;
+  scheduledEndDate?: string; // ISO, only when source === "scheduled"
+  durationMs?: number; // only when source === "scheduled"
+}
 
 export type PackageType = "membership-packages" | "one-time-packages" | "mini-packages";
 export type PackageTypeShort = "membership" | "one-time" | "mini-draw";
@@ -36,14 +48,23 @@ function convertPackageType(type: PackageTypeShort): PackageType {
 
 export class PromoMultiplierResolverService {
   /**
-   * Get active promo multiplier for a package type
+   * Get active promo multiplier for a package type.
+   * Priority: Scheduled (if now in range) > Toggle Promo > null.
+   * Does not include alternating; use resolveMultiplierForDisplay/ForPayment for full chain.
+   *
    * @param type - Package type (short form)
-   * @returns Active promo multiplier or null if no active promo
+   * @returns Active promo multiplier or null if no scheduled/toggle promo
    */
   async getActivePromoMultiplier(type: PackageTypeShort): Promise<number | null> {
     try {
       await connectDB();
       const fullType = convertPackageType(type);
+
+      const now = new Date();
+      const scheduled = await ScheduledPromo.getActiveByTypeAndDate(fullType, now);
+      if (scheduled) {
+        return scheduled.multiplier;
+      }
 
       const activePromo = await Promo.findOne({
         type: fullType,
@@ -55,6 +76,134 @@ export class PromoMultiplierResolverService {
       console.error(`Error fetching active promo multiplier for ${type}:`, error);
       return null;
     }
+  }
+
+  /**
+   * Resolve multiplier at a specific date (for payment reconciliation).
+   * Priority: Scheduled at date > Toggle Promo (current) > null.
+   *
+   * @param type - Package type (short form)
+   * @param date - Date to resolve at (e.g. purchase time)
+   * @returns Resolved multiplier or null
+   */
+  async getActivePromoMultiplierAt(type: PackageTypeShort, date: Date): Promise<number | null> {
+    try {
+      await connectDB();
+      const fullType = convertPackageType(type);
+
+      const scheduled = await ScheduledPromo.getActiveByTypeAndDate(fullType, date);
+      if (scheduled) {
+        return scheduled.multiplier;
+      }
+
+      const activePromo = await Promo.findOne({
+        type: fullType,
+        isActive: true,
+      }).sort({ createdAt: -1 });
+
+      return activePromo ? activePromo.multiplier : null;
+    } catch (error) {
+      console.error(`Error fetching active promo multiplier at date for ${type}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Resolve multiplier with source (for logging and effective endpoint).
+   * Priority: Scheduled > Toggle > Alternating > none.
+   */
+  async getResolvedMultiplierWithSource(type: PackageTypeShort): Promise<ResolvedMultiplierWithSource> {
+    try {
+      await connectDB();
+      const fullType = convertPackageType(type);
+      const now = new Date();
+
+      const scheduled = await ScheduledPromo.getActiveByTypeAndDate(fullType, now);
+      if (scheduled) {
+        const startMs = new Date(scheduled.startDate).getTime();
+        const endMs = new Date(scheduled.endDate).getTime();
+        return {
+          multiplier: scheduled.multiplier,
+          source: "scheduled",
+          promoId: String(scheduled._id),
+          scheduledEndDate: scheduled.endDate.toISOString(),
+          durationMs: endMs - startMs,
+        };
+      }
+
+      const togglePromo = await Promo.findOne({
+        type: fullType,
+        isActive: true,
+      }).sort({ createdAt: -1 });
+      if (togglePromo) {
+        return {
+          multiplier: togglePromo.multiplier,
+          source: "toggle",
+          promoId: togglePromo._id.toString(),
+        };
+      }
+
+      const config = await AlternatingPromoMultiplier.findOne({
+        type: fullType,
+        isEnabled: true,
+      });
+      if (config) {
+        const multiplier = getAlternatingMultiplier(config.multipliers);
+        return { multiplier, source: "alternating" };
+      }
+
+      return { multiplier: null, source: "none" };
+    } catch (error) {
+      console.error(`Error resolving multiplier with source for ${type}:`, error);
+      return { multiplier: null, source: "none" };
+    }
+  }
+
+  /**
+   * Get effective multipliers for all package types (for admin effective endpoint).
+   */
+  async getEffectiveMultipliers(): Promise<
+    Record<PackageType, { multiplier: number | null; source: ResolverSource; promoId?: string }>
+  > {
+    const types: PackageTypeShort[] = ["membership", "one-time", "mini-draw"];
+    const result = {} as Record<PackageType, { multiplier: number | null; source: ResolverSource; promoId?: string }>;
+
+    for (const shortType of types) {
+      const fullType = convertPackageType(shortType);
+      const resolved = await this.getResolvedMultiplierWithSource(shortType);
+      result[fullType] = {
+        multiplier: resolved.multiplier,
+        source: resolved.source,
+        promoId: resolved.promoId,
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Get effective multipliers with scheduled meta for banner display (public API).
+   * Returns per-type entry including source and scheduledEndDate/durationMs when source is scheduled.
+   */
+  async getEffectiveForBanner(): Promise<Record<PackageType, EffectiveForBannerEntry>> {
+    const types: PackageTypeShort[] = ["membership", "one-time", "mini-draw"];
+    const result = {} as Record<PackageType, EffectiveForBannerEntry>;
+
+    for (const shortType of types) {
+      const fullType = convertPackageType(shortType);
+      const resolved = await this.getResolvedMultiplierWithSource(shortType);
+      result[fullType] = {
+        multiplier: resolved.multiplier,
+        source: resolved.source,
+        promoId: resolved.promoId,
+        ...(resolved.source === "scheduled" && {
+          scheduledEndDate: resolved.scheduledEndDate,
+          durationMs: resolved.durationMs,
+        }),
+      };
+    }
+
+    return result;
   }
 
   /**
@@ -117,26 +266,25 @@ export class PromoMultiplierResolverService {
 
   /**
    * Resolve multiplier for payment context (payment processing)
-   * Priority: Active Promo > Alternating > null (no promo, use 1x)
-   * 
+   * Priority: Scheduled > Toggle Promo > Alternating > null (no promo, use 1x)
+   * Logs resolution for incident response and Stripe reconciliation.
+   *
    * @param type - Package type (short form)
    * @returns Resolved multiplier or null if no active/alternating promo (should use 1x in payment)
    */
   async resolveMultiplierForPayment(type: PackageTypeShort): Promise<number | null> {
-    // Priority 1: Active promo
-    const activePromo = await this.getActivePromoMultiplier(type);
-    if (activePromo !== null) {
-      return activePromo;
+    const resolved = await this.getResolvedMultiplierWithSource(type);
+
+    if (process.env.NODE_ENV !== "test") {
+      console.info("[PromoMultiplierResolver] Payment resolution", {
+        type,
+        multiplier: resolved.multiplier,
+        source: resolved.source,
+        ...(resolved.promoId && { promoId: resolved.promoId }),
+      });
     }
 
-    // Priority 2: Alternating multiplier
-    const alternating = await this.getAlternatingMultiplier(type);
-    if (alternating !== null) {
-      return alternating;
-    }
-
-    // No promo active (returns null, caller should use 1x)
-    return null;
+    return resolved.multiplier;
   }
 
   /**

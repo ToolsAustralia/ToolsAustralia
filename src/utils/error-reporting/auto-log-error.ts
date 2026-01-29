@@ -14,7 +14,7 @@
  */
 
 import { ErrorContext } from "@/types/error-reporting";
-import { collectErrorContext } from "./collect-error-context";
+import { collectErrorContext, type CollectErrorContextRequest } from "./collect-error-context";
 
 /**
  * Automatically log an error to the database
@@ -34,8 +34,11 @@ export async function autoLogError(
     amount?: number;
     packageId?: string;
     packageName?: string;
-    userEmail?: string; // NEW: User email (authenticated or guest)
-    guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
+    userEmail?: string;
+    guestEmail?: string;
+    apiEndpoint?: string;
+    httpMethod?: string;
+    httpStatus?: number;
     [key: string]: unknown;
   },
   options?: {
@@ -44,14 +47,17 @@ export async function autoLogError(
   }
 ): Promise<void> {
   try {
-    // Collect error context
-    // ✅ ENHANCED: Pass guest email to context collection
-    const errorContext = await collectErrorContext(error, {
-      url: additionalContext?.apiEndpoint as string | undefined,
-      method: additionalContext?.httpMethod as string | undefined,
-      status: additionalContext?.httpStatus as number | undefined,
-      guestEmail: additionalContext?.guestEmail, // ✅ NEW: Pass guest email
-    });
+    // Collect error context (including guest email for non-authenticated users)
+    const requestInfo: CollectErrorContextRequest | undefined = additionalContext
+      ? {
+          url: additionalContext.apiEndpoint as string | undefined,
+          method: additionalContext.httpMethod as string | undefined,
+          status: additionalContext.httpStatus as number | undefined,
+          userEmail: additionalContext.userEmail,
+          guestEmail: additionalContext.guestEmail,
+        }
+      : undefined;
+    const errorContext = await collectErrorContext(error, requestInfo);
 
     // ✅ ENHANCED: Handle user email prioritization
     // If userEmail is provided in additionalContext, use it (overrides context collection)
@@ -133,24 +139,27 @@ export async function autoLogError(
   }
 }
 
+/** Payment details shape for autoLogPaymentError (exported for callers) */
+export type PaymentErrorDetails = {
+  paymentIntentId?: string;
+  customerId?: string;
+  amount?: number;
+  packageId?: string;
+  packageName?: string;
+  userEmail?: string;
+  guestEmail?: string;
+  errorCode?: string;
+  declineCode?: string;
+  errorMessage?: string;
+};
+
 /**
  * Auto-log payment-related errors
  * Convenience function specifically for payment errors
  */
 export async function autoLogPaymentError(
   error: unknown,
-  paymentDetails: {
-    paymentIntentId?: string;
-    customerId?: string;
-    amount?: number;
-    packageId?: string;
-    packageName?: string;
-    userEmail?: string; // NEW: User email (authenticated or guest)
-    guestEmail?: string; // NEW: Guest user email
-    errorCode?: string;
-    declineCode?: string;
-    errorMessage?: string;
-  }
+  paymentDetails: PaymentErrorDetails
 ): Promise<void> {
   // Build user-friendly error message
   let errorMessage = "Payment failed";

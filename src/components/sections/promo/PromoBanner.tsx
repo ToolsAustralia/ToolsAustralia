@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
-import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
 import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
-import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST, getNowInAEST } from "@/utils/common/timezone";
+import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST } from "@/utils/common/timezone";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 
 // AEST/AEDT timezone identifier (matches timezone.ts)
@@ -16,6 +16,9 @@ const AEST_TIMEZONE = "Australia/Sydney";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
 import { getAlternatingDefaultText } from "@/utils/promo-banner/default-text-manager";
+import { resolveBadgeText } from "@/utils/promo-banner/resolve-badge-text";
+import { resolveCountdownDisplay, formatTimeLeft } from "@/utils/promo-banner/countdown-mode";
+import { NO_PROMO_BADGE, NO_PROMO_MAIN_LINE, NO_PROMO_RIGHT_LABEL } from "@/constants/promo-banner";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
 // Helper function to get current timezone abbreviation (AEST or AEDT)
@@ -62,8 +65,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const { isLoading: isDrawLoading } = useCurrentMajorDraw();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   
-  // Get variant config from context
-  const { variantConfig } = useVariantContext();
+  // Get variant config from context (wait for variant to resolve so we know countdown mode etc.)
+  const { variantConfig, isLoading: isVariantLoading } = useVariantContext();
 
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
@@ -77,6 +80,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     minutes: 0,
     seconds: 0,
   });
+
+  const [scheduledEndTimeLeft, setScheduledEndTimeLeft] = useState<{
+    days?: number;
+    hours: number;
+    minutes: number;
+    seconds: number;
+  }>({ hours: 0, minutes: 0, seconds: 0 });
 
   const [isScrolled, setIsScrolled] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
@@ -112,11 +122,18 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Get promos for each type (use initial data if available, fallback to client-side fetch)
+  // Effective-for-banner: multiplier, source, scheduled meta (for countdown mode and badge)
+  const { data: effectiveForBanner, isLoading: isEffectiveForBannerLoading } = useEffectiveForBanner();
+  const currentType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
+  const effectiveEntry = effectiveForBanner?.[currentType];
+
+  // Promo "fully resolved" = we know for sure whether there is an active promo or no-promo state
+  const isPromoResolved =
+    !isEffectiveForBannerLoading && !isDrawLoading && !isVariantLoading;
+
+  // Legacy: use initial data for "active promo" object when provided (e.g. promotions page SSR)
   const { data: membershipPromoClient } = usePromoByType("membership-packages");
   const { data: oneTimePromoClient } = usePromoByType("one-time-packages");
-
-  // Use initial data if available, otherwise use client-fetched data
   const membershipPromo = initialMembershipPromo || membershipPromoClient;
   const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
 
@@ -367,50 +384,15 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
   }, []);
 
-  // Resolve multiplier with priority: Variant config > Active Promo > Alternating > null (no promo)
+  // Resolve multiplier: Variant config > Effective-for-banner for current tab
   const multiplier = useMemo(() => {
-    // Priority 0: Variant config override (highest priority)
     if (variantConfig?.banner?.multiplier !== undefined) {
       return variantConfig.banner.multiplier;
     }
+    return effectiveEntry?.multiplier ?? null;
+  }, [variantConfig?.banner?.multiplier, effectiveEntry?.multiplier]);
 
-    // Priority 1: Active promo
-    if (activePromo?.multiplier) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("🎯 PromoBanner multiplier: Using active promo", activePromo.multiplier);
-      }
-      return activePromo.multiplier;
-    }
-
-    // Priority 2: Alternating multiplier (for current tab type)
-    const currentType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
-    // Check both state and query data
-    const alternatingFromState = alternatingMultiplier;
-    const alternatingFromQuery = currentAlternatingMultipliers?.data?.[currentType];
-    const alternating = alternatingFromState ?? alternatingFromQuery ?? null;
-    
-    if (alternating !== null && alternating !== undefined && alternating > 0) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("🎯 PromoBanner multiplier: Using alternating", {
-          alternating,
-          fromState: alternatingFromState,
-          fromQuery: alternatingFromQuery,
-          currentType,
-        });
-      }
-      return alternating;
-    }
-
-    // No promo active
-    if (process.env.NODE_ENV === "development") {
-      console.log("🎯 PromoBanner multiplier: No promo active", {
-        alternatingFromState,
-        alternatingFromQuery,
-        currentAlternatingMultipliers: currentAlternatingMultipliers?.data,
-      });
-    }
-    return null;
-  }, [variantConfig?.banner?.multiplier, activePromo?.multiplier, alternatingMultiplier, currentAlternatingMultipliers, activeTab]);
+  const isNoPromo = multiplier === null && variantConfig?.banner?.multiplier === undefined;
 
   // Helper function to determine if draw is today or tomorrow (in AEST)
   const getDrawDateStatus = (): "today" | "tomorrow" | null => {
@@ -438,38 +420,52 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return null;
   };
 
-  // Memoize badge text calculation for performance and reactivity
-  // Priority order:
-  // 0. Variant config override (highest priority)
-  // 1. Draw status ("DRAWN TONIGHT" / "DRAWN TOMORROW")
-  // 2. Active scheduled text (from service layer, resolved in AEST)
-  // 3. Alternating default texts ("BIGGEST BONUS" / "FIRST 500 PEOPLE")
+  // Badge text via util (variant override → 10x → draw status → scheduled text → alternating default; no-promo uses constant)
   const badgeText = useMemo(() => {
-    // Priority 0: Variant config override (highest priority)
-    // Only override if badgeText exists and is not empty/whitespace
-    const variantBadgeText = variantConfig?.banner?.badgeText;
-    if (variantBadgeText && variantBadgeText.trim().length > 0) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("🎯 [PromoBanner] Using variant badgeText:", variantBadgeText);
-      }
-      return variantBadgeText.trim();
-    }
-    
-    if (process.env.NODE_ENV === "development" && variantConfig?.banner) {
-      console.log("⚠️ [PromoBanner] Variant has banner config but badgeText is empty/blank, using default");
-    }
-
-    // Priority 1: Draw status
+    if (isNoPromo) return NO_PROMO_BADGE;
     const drawStatus = getDrawDateStatus();
-    if (drawStatus === "today") return "DRAWN TONIGHT";
-    if (drawStatus === "tomorrow") return "DRAWN TOMORROW";
+    return resolveBadgeText({
+      variantBadgeText: variantConfig?.banner?.badgeText,
+      drawStatus,
+      activeScheduledText: activeScheduledText ?? undefined,
+      alternatingDefault,
+      multiplier,
+    });
+  }, [isNoPromo, variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault, multiplier]);
 
-    // Priority 2: Active scheduled text
-    if (activeScheduledText) return activeScheduledText;
+  // Countdown display mode (Variant A: limited_time_only; Variant B: scheduled_end; default: draw/midnight)
+  const countdownDisplay = useMemo(() => {
+    const drawStatus = getDrawDateStatus();
+    return resolveCountdownDisplay({
+      countdownMode: variantConfig?.banner?.countdownMode ?? "default",
+      showCountdown: variantConfig?.banner?.showCountdown !== false,
+      source: effectiveEntry?.source ?? "none",
+      scheduledEndDate: effectiveEntry?.scheduledEndDate ?? undefined,
+      durationMs: effectiveEntry?.durationMs ?? undefined,
+      drawStatus,
+    });
+  }, [
+    variantConfig?.banner?.countdownMode,
+    variantConfig?.banner?.showCountdown,
+    effectiveEntry?.source,
+    effectiveEntry?.scheduledEndDate,
+    effectiveEntry?.durationMs,
+    currentDraw?.drawDate,
+  ]);
 
-    // Priority 3: Alternating default fallback
-    return alternatingDefault;
-  }, [variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault]);
+  // Scheduled-end countdown ticker (when countdownDisplay.type === "scheduled_end")
+  useEffect(() => {
+    if (countdownDisplay.type !== "scheduled_end" || countdownDisplay.endMs == null) return;
+    const update = () => {
+      const now = Date.now();
+      const remainingMs = Math.max(0, countdownDisplay.endMs! - now);
+      const useDays = countdownDisplay.useDays ?? false;
+      setScheduledEndTimeLeft(formatTimeLeft(remainingMs, useDays));
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [countdownDisplay.type, countdownDisplay.endMs, countdownDisplay.useDays]);
 
   // Memoize font size calculation
   const fontSize = useMemo(() => calculateFontSize(badgeText, isMobile), [badgeText, isMobile]);
@@ -517,13 +513,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => window.removeEventListener("resize", measureBanner);
   }, [isScrolled, activePromo, multiplier]);
 
-  // Don't render if:
-  // - On 404 page
-  // - Sidebar is open
-  // - No badge text AND no multiplier (no promo active)
-  if (pathname === "/not-found" || isAnySidebarOpen || (!badgeText && !multiplier)) {
-    return null;
-  }
+  // Don't render if: 404, sidebar open, promo not yet resolved, or (not no-promo and no badge and no multiplier)
+  if (pathname === "/not-found" || isAnySidebarOpen) return null;
+  if (!isPromoResolved) return null; // Hide until we know active promo vs no-promo
+  if (!isNoPromo && !badgeText && !multiplier) return null;
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
   // Use wrapper to prevent layout shift when banner becomes fixed
@@ -545,6 +538,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       <motion.div
         ref={bannerRef}
         layout
+        initial={{ opacity: 0 }}
+        animate={{
+          borderRadius: isScrolled ? "9999px" : "0px",
+          opacity: 1,
+        }}
         className={` ${
           isScrolled
             ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
@@ -560,13 +558,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             ? { border: "2px solid rgba(251, 191, 36, 0.5)" }
             : { borderBottom: "2px solid rgba(239, 68, 68, 0.6)" }),
         }}
-        animate={{
-          borderRadius: isScrolled ? "9999px" : "0px",
-        }}
         transition={{
           duration: 0.5,
           ease: "easeInOut",
           layout: { duration: 0.5, ease: "easeInOut" },
+          opacity: { duration: 0.35, ease: "easeOut" },
         }}
       >
         <motion.div className="min-h-16 sm:min-h-20 pt-2 pb-1.5 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
@@ -576,7 +572,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             <div className="flex flex-col items-start">
               {/* Wrapper to match widths */}
               <div className="flex flex-col items-start w-fit gap-0 ">
-                {/* First Line - "FIRST 500 PEOPLE" Badge - Matches width of second line */}
+                {/* First Line - Badge (default: BONUS ENTRIES) - Matches width of second line */}
                 <div className="relative w-full">
                   {/* Outer glow effect - pulsing animation */}
                   {isContentReady && (
@@ -674,15 +670,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
                         style={{ fontSize: fontSize }}
                       >
-                        {badgeText || "BIGGEST BONUS"}
+                        {badgeText || "BONUS ENTRIES"}
                       </span>
                     </div>
                   )}
                 </div>
 
-                {/* Second Line - "GET 2x ENTRIES" with Metallic Text */}
-                {/* Second Line - "GET 2x ENTRIES" - Matches width of first line */}
-                {/* Only render when content is ready to prevent layout shift */}
+                {/* Second Line - "GET X ENTRIES" or no-promo main line */}
                 {isContentReady ? (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -692,18 +686,18 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     suppressHydrationWarning
                   >
                     <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
-                      {/* "GET" text - White */}
-                      <span className="text-white">GET </span>
-
-                      {/* "2X" with fiery effect - readable on dark background */}
-                      <span className="text-red-500" suppressHydrationWarning>{multiplier}X</span>
-
-                      {/* "ENTRIES" text - White */}
-                      <span className="text-white"> ENTRIES</span>
+                      {isNoPromo ? (
+                        <span className="text-white">{NO_PROMO_MAIN_LINE}</span>
+                      ) : (
+                        <>
+                          <span className="text-white">GET </span>
+                          <span className="text-red-500" suppressHydrationWarning>{multiplier}X</span>
+                          <span className="text-white"> ENTRIES</span>
+                        </>
+                      )}
                     </span>
                   </motion.div>
                 ) : (
-                  // Placeholder to maintain layout
                   <div className="w-full opacity-0" aria-hidden="true">
                     <span className="font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5">
                       <span className="text-white">GET </span>
@@ -717,18 +711,84 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
             {/* Right Side - Draw Date Text or Countdown */}
             {(() => {
-              // Check if countdown should be hidden (variant config override)
-              const showCountdown = variantConfig?.banner?.showCountdown !== false; // Default to true unless explicitly false
-              
-              if (!showCountdown) {
-                return null; // Hide countdown if variant config says so
-              }
+              if (countdownDisplay.type === "hidden") return null;
 
-              const drawStatus = getDrawDateStatus();
               const drawTime = getDrawTimeText();
 
-              // If draw is tonight, show countdown to freeze time
-              if (drawStatus === "today" && currentDraw?.freezeEntriesAt) {
+              // No promo: show replacement label
+              if (isNoPromo) {
+                return (
+                  <div className="flex items-center justify-center">
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap">
+                        {NO_PROMO_RIGHT_LABEL}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Variant A: LIMITED TIME ONLY (unless 24h scheduled, then handled as scheduled_end below)
+              if (countdownDisplay.type === "limited_time_only") {
+                return (
+                  <div className="flex items-center justify-center">
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
+                        LIMITED TIME ONLY
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Variant B: scheduled end countdown (DAYS HRS MINS or HRS MINS SECS)
+              if (countdownDisplay.type === "scheduled_end") {
+                const useDays = countdownDisplay.useDays ?? false;
+                const tileClass = "bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3";
+                const labelClass = "text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm";
+                return (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
+                    className="flex flex-col items-center justify-center gap-1"
+                  >
+                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
+                      {useDays && scheduledEndTimeLeft.days != null && (
+                        <div className={tileClass}>
+                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                            {scheduledEndTimeLeft.days.toString().padStart(2, "0")}
+                          </div>
+                          <div className={labelClass}>DAYS</div>
+                        </div>
+                      )}
+                      <div className={tileClass}>
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                          {scheduledEndTimeLeft.hours.toString().padStart(2, "0")}
+                        </div>
+                        <div className={labelClass}>HRS</div>
+                      </div>
+                      <div className={tileClass}>
+                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                          {scheduledEndTimeLeft.minutes.toString().padStart(2, "0")}
+                        </div>
+                        <div className={labelClass}>MINS</div>
+                      </div>
+                      {!useDays && (
+                        <div className={tileClass}>
+                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                            {scheduledEndTimeLeft.seconds.toString().padStart(2, "0")}
+                          </div>
+                          <div className={labelClass}>SECS</div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              }
+
+              // Draw tonight: countdown to freeze time
+              if (countdownDisplay.type === "draw_tonight" && currentDraw?.freezeEntriesAt) {
                 // Only show actual countdown when content is ready, otherwise show 00 00 00
                 if (!isContentReady || isDrawLoading) {
                   return (
@@ -783,8 +843,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 );
               }
 
-              // If draw is tomorrow, show text with time
-              if (drawStatus === "tomorrow" && drawTime) {
+              // Draw tomorrow: show text with time
+              if (countdownDisplay.type === "draw_tomorrow" && drawTime) {
                 // Only show when content is ready, otherwise show placeholder
                 if (!isContentReady || isDrawLoading) {
                   return (
@@ -825,8 +885,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 );
               }
 
-              // Otherwise, show the countdown timer
-              // Only show actual countdown when content is ready, otherwise show 00 00 00
+              // Midnight: show countdown to next midnight AEST
               if (!isContentReady || isDrawLoading) {
                 return (
                   <div className="flex flex-col items-center justify-center gap-1">

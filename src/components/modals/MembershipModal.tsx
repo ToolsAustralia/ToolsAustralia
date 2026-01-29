@@ -41,7 +41,7 @@ import { trackCompleteRegistration, trackFacebookEvent } from "@/components/Face
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePaymentIntent } from "@/hooks/usePaymentIntent";
-import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
@@ -50,7 +50,7 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
-import { autoLogPaymentError, autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
+import { autoLogPaymentError, autoLogStripeError, type PaymentErrorDetails } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { ErrorContext } from "@/types/error-reporting";
@@ -268,11 +268,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   // ✅ FIX: stripePromise is now initialized at module level (line ~18) to prevent endless API calls
 
-  // Get active promos for different package types (for checking if promo is active)
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
-  const { data: miniPromo } = usePromoByType("mini-packages");
-
-  // Get resolved multipliers (includes alternating multiplier if no active promo)
+  // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
@@ -382,7 +378,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     }
 
     return activePlan;
-  }, [activePlan, oneTimePromo, miniPromo]);
+  }, [activePlan, resolvedOneTimeMultiplier, resolvedMiniMultiplier]);
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { trackInitiateCheckout } = usePixelTracking();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
@@ -1737,7 +1733,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       console.warn("Failed to auto-log error:", logError);
       // Fallback to old method if ErrorLoggingService fails
       // ✅ FIXED: Use same email capture logic for fallback
-      autoLogPaymentError(error, {
+      const paymentErrorDetails: PaymentErrorDetails = {
         paymentIntentId: paymentIntentId || undefined,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         customerId: (userData as any)?.stripeCustomerId || undefined,
@@ -1747,7 +1743,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         errorMessage: formattedError.message,
         userEmail: isAuthenticated ? capturedUserEmail : undefined,
         guestEmail: !isAuthenticated ? capturedUserEmail : undefined,
-      }).catch(() => {
+      };
+      autoLogPaymentError(error, paymentErrorDetails).catch(() => {
         // Silently fail if both methods fail
       });
     });

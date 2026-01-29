@@ -4,15 +4,21 @@ import type { CurrentAlternatingMultipliersResponse } from "@/types/admin";
 
 /**
  * GET /api/promo/alternating-multiplier/current
- * Get current alternating multipliers for all enabled types (public route)
- * Only returns multipliers when no active promo exists for that type
+ * Returns effective multipliers for all package types (public route).
+ * Resolution order: Scheduled promo > Toggle promo > Alternating > null.
+ * Frontend uses this for display; same shape as before so scheduled/toggle now appear correctly.
  */
 export async function GET() {
   try {
     const resolver = new PromoMultiplierResolverService();
-    const multipliers = await resolver.getCurrentAlternatingMultipliers();
+    const effective = await resolver.getEffectiveMultipliers();
 
-    // Debug logging (development only)
+    const multipliers = {
+      "membership-packages": effective["membership-packages"].multiplier,
+      "one-time-packages": effective["one-time-packages"].multiplier,
+      "mini-packages": effective["mini-packages"].multiplier,
+    };
+
     if (process.env.NODE_ENV === "development") {
       console.log("🔍 Current alternating multipliers API response:", multipliers);
     }

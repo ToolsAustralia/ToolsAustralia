@@ -28,7 +28,7 @@ export interface ErrorContext {
   // User and session information
   userId?: string;
   userEmail?: string;
-  guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
+  guestEmail?: string;
   isAuthenticated: boolean;
   
   // Browser/environment information

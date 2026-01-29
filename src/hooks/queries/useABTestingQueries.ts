@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { VariantConfig } from "@/models/ab-testing/Variant";
 
 // Types
 export interface StoppingRules {
@@ -47,30 +48,7 @@ export interface Variant {
   experimentId: string;
   name: string;
   trafficPercentage: number;
-  config: {
-    hero?: {
-      imageSrc?: string;
-      messaging?: string;
-      ctaText?: string;
-      ctaStyle?: {
-        backgroundColor?: string;
-        textColor?: string;
-      };
-    };
-    banner?: {
-      badgeText?: string;
-      multiplier?: number;
-      showCountdown?: boolean;
-    };
-    packages?: {
-      displayOrder?: string[];
-      highlightPackage?: string;
-      hidePackages?: string[];
-    };
-    membershipModal?: {
-      showPackageSelectionFirst?: boolean;
-    };
-  };
+  config: VariantConfig;
   isControl: boolean;
   createdAt: string;
   updatedAt: string;

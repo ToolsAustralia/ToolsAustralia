@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAdminActivePromos } from "@/hooks/queries/usePromoQueries";
 import AdminPromoToggle from "@/components/modals/AdminPromoToggle";
 import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
 import BonusEntryPromoList from "@/components/admin/BonusEntryPromoList";
+import AdminScheduledPromoModal from "@/components/modals/AdminScheduledPromoModal";
+import ScheduledPromoList from "@/components/admin/ScheduledPromoList";
 import AdminPromoLinkModal from "@/components/modals/AdminPromoLinkModal";
 import PromoLinkList from "@/components/admin/PromoLinkList";
 import AdminPromoBannerTextModal from "@/components/modals/AdminPromoBannerTextModal";
@@ -12,15 +15,19 @@ import PromoBannerTextList from "@/components/admin/PromoBannerTextList";
 import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatingMultiplierModal";
 import AlternatingMultiplierList from "@/components/admin/AlternatingMultiplierList";
 import PromoBadge from "@/components/ui/PromoBadge";
+import type { ScheduledPromo } from "@/types/admin";
 import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat } from "lucide-react";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
+  const [isScheduledModalOpen, setIsScheduledModalOpen] = useState(false);
+  const [editingScheduledPromo, setEditingScheduledPromo] = useState<ScheduledPromo | null>(null);
   const [isBonusEntryModalOpen, setIsBonusEntryModalOpen] = useState(false);
   const [isPromoLinkModalOpen, setIsPromoLinkModalOpen] = useState(false);
   const [isBannerTextModalOpen, setIsBannerTextModalOpen] = useState(false);
   const [isAlternatingMultiplierModalOpen, setIsAlternatingMultiplierModalOpen] = useState(false);
 
+  const queryClient = useQueryClient();
   const { data: activePromos = [], isLoading: activeLoading, refetch: refetchActive } = useAdminActivePromos();
 
   return (
@@ -97,6 +104,39 @@ export default function PromoManagement() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Scheduled Promos Section */}
+      <div className="mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-red-600" />
+              Scheduled Promos
+            </h3>
+            <p className="text-gray-600 mt-1 text-sm">
+              Define campaign phases with date ranges and multipliers; they apply automatically when the current time
+              falls within a phase. Priority: Scheduled &gt; Toggle Promo &gt; Alternating.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditingScheduledPromo(null);
+              setIsScheduledModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            <Plus className="w-4 h-4" />
+            Schedule Promo
+          </button>
+        </div>
+
+        <ScheduledPromoList
+          onEditRequested={(promo) => {
+            setEditingScheduledPromo(promo);
+            setIsScheduledModalOpen(true);
+          }}
+        />
       </div>
 
       {/* Bonus Entry Promos Section */}
@@ -201,6 +241,22 @@ export default function PromoManagement() {
 
       {/* Toggle Promo Modal */}
       <AdminPromoToggle isOpen={isToggleModalOpen} onClose={() => setIsToggleModalOpen(false)} />
+
+      {/* Scheduled Promo Modal */}
+      <AdminScheduledPromoModal
+        isOpen={isScheduledModalOpen}
+        onClose={() => {
+          setIsScheduledModalOpen(false);
+          setEditingScheduledPromo(null);
+        }}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["promos", "scheduled"] });
+          queryClient.invalidateQueries({ queryKey: ["promos", "admin", "active"] });
+          setIsScheduledModalOpen(false);
+          setEditingScheduledPromo(null);
+        }}
+        editingPromo={editingScheduledPromo}
+      />
 
       {/* Bonus Entry Promo Modal */}
       <AdminBonusEntryPromoModal

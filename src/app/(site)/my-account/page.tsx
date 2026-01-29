@@ -37,7 +37,7 @@ import MembershipBadge from "@/components/ui/MembershipBadge";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import { getPackageById } from "@/data/membershipPackages";
 import { useMemberships } from "@/hooks/useMemberships";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 
 /** Pending entries display data when user has active/failed-renewal but 0 entries in draw */
@@ -192,8 +192,8 @@ export default function MyAccountPage() {
 
   // Get membership packages and promo for modal integration
   const { subscriptionPackages } = useMemberships();
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
 
   const isRewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
