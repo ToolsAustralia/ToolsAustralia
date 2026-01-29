@@ -12,7 +12,7 @@ import StripePaymentModal from "./StripePaymentModal";
 import CancellationUpsellModal from "./CancellationUpsellModal";
 import RenewalFailedModal from "./RenewalFailedModal";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
@@ -230,8 +230,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   // Use parent's membershipModal if provided, otherwise create a new instance
   const localMembershipModal = useMembershipModal();
   const membershipModal = parentMembershipModal || localMembershipModal;
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
 
   // Helper function to get Tradie subscription package for non-subscribers
   const getTradiePackage = (): LocalMembershipPlan => {

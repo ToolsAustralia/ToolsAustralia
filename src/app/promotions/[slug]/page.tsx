@@ -33,7 +33,7 @@ const LatestWinnerHero = dynamic(() => import("@/components/sections/LatestWinne
   ssr: true, // Keep SSR for SEO
 });
 import { getPrizeBySlug, listPrizes } from "@/config/prizes";
-import { getActivePromos } from "@/utils/database/queries/promo-queries";
+import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-queries";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import mongoose from "mongoose";
@@ -121,16 +121,16 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
     notFound();
   }
 
-  // Fetch promo, major draw, and A/B testing experiment data server-side in parallel
-  const [activePromos, majorDraw, activeExperiment] = await Promise.all([
-    getActivePromos().catch(() => []), // Gracefully handle errors
+  // Fetch effective promos (scheduled > toggle > alternating), major draw, and A/B testing experiment data server-side in parallel
+  const [effectivePromos, majorDraw, activeExperiment] = await Promise.all([
+    getEffectivePromosForDisplay().catch(() => []), // Gracefully handle errors
     getCurrentMajorDrawServer().catch(() => null), // Gracefully handle errors
     ExperimentService.getActiveExperimentForSlug(slug).catch(() => null), // Gracefully handle errors
   ]);
 
-  // Extract promo data for components
-  const membershipPromo = activePromos.find((p) => p.type === "membership-packages") || null;
-  const oneTimePromo = activePromos.find((p) => p.type === "one-time-packages") || null;
+  // Extract promo data for components (effective includes scheduled, toggle, and alternating)
+  const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
+  const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
   // Determine hero image paths for preloading (will be overridden by variant config if present)
   // Note: Draw date status is determined client-side, so we only use multiplier here

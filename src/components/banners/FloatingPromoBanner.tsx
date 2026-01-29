@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { useSidebar } from "@/contexts/SidebarContext";
 
@@ -23,10 +23,10 @@ const FloatingPromoBanner: React.FC = () => {
   const lastScrollY = useRef(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Get promos for each type
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
-  const { data: miniPromo } = usePromoByType("mini-packages");
+  // Get resolved multipliers (includes scheduled, toggle, and alternating)
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
   // Check if we're on a mini draw page (main page or details pages)
   const isMiniDrawPage = pathname?.startsWith("/mini-draws");
@@ -120,22 +120,13 @@ const FloatingPromoBanner: React.FC = () => {
     };
   }, []);
 
-  // Determine which promo to display
-  const getActivePromo = () => {
-    // On mini draw details page: show mini-packages promo
-    if (isMiniDrawPage) {
-      return miniPromo;
-    }
-
-    // On other pages: show promo based on active tab
-    if (activeTab === "membership") {
-      return membershipPromo;
-    } else {
-      return oneTimePromo;
-    }
-  };
-
-  const activePromo = getActivePromo();
+  // Effective multiplier for current context (scheduled, toggle, or alternating)
+  const activeMultiplier =
+    isMiniDrawPage
+      ? resolvedMiniMultiplier
+      : activeTab === "membership"
+        ? resolvedMembershipMultiplier
+        : resolvedOneTimeMultiplier;
 
   // Don't render at all if:
   // - On 404 page
@@ -147,8 +138,8 @@ const FloatingPromoBanner: React.FC = () => {
   // - On terms page (hide banner on terms page)
   // - On privacy page (hide banner on privacy page)
   // - On competition terms page (hide banner on competition terms page)
-  // - On mini draw page but no active mini promo (hide if no promo available)
-  // - No active promo for current context
+  // - On mini draw page but no effective multiplier > 1
+  // - No effective multiplier > 1 for current context
   if (
     pathname === "/not-found" ||
     isAnySidebarOpen ||
@@ -159,8 +150,9 @@ const FloatingPromoBanner: React.FC = () => {
     isTermsPage ||
     isPrivacyPage ||
     isCompetitionTermsPage ||
-    (isMiniDrawPage && !miniPromo) ||
-    !activePromo
+    (isMiniDrawPage && (resolvedMiniMultiplier == null || resolvedMiniMultiplier <= 1)) ||
+    activeMultiplier == null ||
+    activeMultiplier <= 1
   ) {
     return null;
   }
@@ -187,7 +179,7 @@ const FloatingPromoBanner: React.FC = () => {
             {/* Centered badge only - no text */}
             <div className="flex items-center justify-center">
               <PromoBadge
-                multiplier={activePromo.multiplier as 2 | 3 | 5 | 10}
+                multiplier={activeMultiplier as 2 | 3 | 5 | 10}
                 size="small"
                 customText="ENTRY BOOST ENDING SOON"
               />

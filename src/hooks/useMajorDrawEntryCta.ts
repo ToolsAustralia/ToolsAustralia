@@ -3,7 +3,7 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
@@ -36,11 +36,12 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { subscriptionPackages, oneTimePackages } = useMemberships();
   const safeOneTimePackages = useMemo(() => oneTimePackages ?? [], [oneTimePackages]);
   const safeSubscriptionPackages = useMemo(() => subscriptionPackages ?? [], [subscriptionPackages]);
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
+  // Use resolved multiplier (scheduled > toggle > alternating) so preselected package shows correct entries when "Enter Now" is clicked
+  const resolvedMembership = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTime = useResolvedMultiplier("one-time-packages", "display");
 
-  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
-  const oneTimePromoMultiplier = oneTimePromo?.multiplier ?? 1;
+  const membershipPromoMultiplier = resolvedMembership ?? 1;
+  const oneTimePromoMultiplier = resolvedOneTime ?? 1;
 
   const getHeavyDutyPack = useCallback((): LocalMembershipPlan => {
     // Check if user has access to additional packages (subscription OR current draw entries)

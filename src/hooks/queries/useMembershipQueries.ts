@@ -202,13 +202,9 @@ export const usePurchaseMembership = () => {
       // console.log("🔍 DEBUG: Selected package found:", selectedPackage);
 
       if (selectedPackage) {
-        // Get resolved multiplier (includes alternating if no active promo)
-        // This ensures seamless integration with alternating multiplier feature
-        // Note: We can't use hooks in onMutate, so we get the data from query cache directly
-        const activePromos = queryClient.getQueryData<
-          Array<{ type: string; multiplier: number; isActive: boolean; isExpired: boolean }>
-        >(["promos", "active"]);
-        const currentAlternating = queryClient.getQueryData<{
+        // Get effective multiplier from cache (API returns scheduled > toggle > alternating)
+        // Note: We can't use hooks in onMutate, so we read from query cache
+        const currentEffective = queryClient.getQueryData<{
           data: {
             "membership-packages": number | null;
             "one-time-packages": number | null;
@@ -216,32 +212,12 @@ export const usePurchaseMembership = () => {
           };
         }>(["alternating-multiplier", "current"]);
 
-        // Resolve multiplier with priority: Active Promo > Alternating > Default (1x)
-        let promoMultiplier = 1;
-        if (selectedPackage.type === "subscription") {
-          const membershipPromo = activePromos?.find((p) => p.type === "membership-packages" && p.isActive);
-          if (membershipPromo?.multiplier) {
-            promoMultiplier = membershipPromo.multiplier;
-          } else {
-            // Check alternating multiplier
-            const alternating = currentAlternating?.data?.["membership-packages"];
-            if (alternating !== null && alternating !== undefined && alternating > 0) {
-              promoMultiplier = alternating;
-            }
-          }
-        } else {
-          // One-time package
-          const oneTimePromo = activePromos?.find((p) => p.type === "one-time-packages" && p.isActive);
-          if (oneTimePromo?.multiplier) {
-            promoMultiplier = oneTimePromo.multiplier;
-          } else {
-            // Check alternating multiplier
-            const alternating = currentAlternating?.data?.["one-time-packages"];
-            if (alternating !== null && alternating !== undefined && alternating > 0) {
-              promoMultiplier = alternating;
-            }
-          }
-        }
+        const effectiveForType =
+          selectedPackage.type === "subscription"
+            ? currentEffective?.data?.["membership-packages"]
+            : currentEffective?.data?.["one-time-packages"];
+        const promoMultiplier =
+          effectiveForType != null && effectiveForType > 0 ? effectiveForType : 1;
 
         // Calculate entry count with promo applied
         const baseEntries =

@@ -15,7 +15,7 @@ import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import MembershipModal from "@/components/modals/MembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 
 export default function MembershipPageClient() {
@@ -30,8 +30,8 @@ export default function MembershipPageClient() {
     (userData as unknown as import("@/models/User").IUser) ?? null
   );
   const { subscriptionPackages } = useMemberships();
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const membershipPromoMultiplier = membershipPromo?.multiplier ?? 1;
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
 
   // Helper function to get Tradie subscription package for non-subscribers
   const getTradiePackage = (): LocalMembershipPlan => {

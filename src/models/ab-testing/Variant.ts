@@ -21,7 +21,7 @@ export interface VariantConfig {
     };
   };
   banner?: {
-    badgeText?: string; // Override "FIRST 500 PEOPLE" / "BIGGEST BONUS"
+    badgeText?: string; // Override "FIRST 500 PEOPLE" / "BONUS ENTRIES"
     multiplier?: number; // Override multiplier display (2x, 3x, 5x, 10x)
     showCountdown?: boolean; // Toggle countdown visibility
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 
 interface VerticalAccumulationChartProps {
   selectedPackageId?: string;
@@ -73,8 +73,8 @@ export default function VerticalAccumulationChart({
   selectedPackageId,
   showOnlySelectedPackage = false,
 }: VerticalAccumulationChartProps) {
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const promoMultiplier = membershipPromo?.multiplier ?? 1;
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const promoMultiplier = resolvedMembershipMultiplier ?? 1;
 
   const packagesToShow =
     showOnlySelectedPackage && selectedPackageId

@@ -174,6 +174,15 @@ function extractApiEndpoint(error: unknown, requestInfo?: { url?: string; method
   return result;
 }
 
+/** Request info passed to collectErrorContext (exported for callers) */
+export interface CollectErrorContextRequest {
+  url?: string;
+  method?: string;
+  status?: number;
+  userEmail?: string;
+  guestEmail?: string;
+}
+
 /**
  * Collect comprehensive error context
  * 
@@ -183,12 +192,7 @@ function extractApiEndpoint(error: unknown, requestInfo?: { url?: string; method
  */
 export async function collectErrorContext(
   error: unknown,
-  requestInfo?: {
-    url?: string;
-    method?: string;
-    status?: number;
-    guestEmail?: string; // NEW: Guest user email (for non-authenticated users)
-  }
+  requestInfo?: CollectErrorContextRequest
 ): Promise<ErrorContext> {
   const timestamp = Date.now();
 

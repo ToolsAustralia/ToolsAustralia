@@ -6,7 +6,7 @@ import { getOneTimePackages, getPackagesWithPromo } from "@/data/membershipPacka
 import { getMiniDrawPackages, getMiniPackagesWithPromo } from "@/data/miniDrawPackages";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { usePromoByType } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
@@ -44,26 +44,26 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
   const [currentUserPoints, setCurrentUserPoints] = useState(user.rewardsPoints);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Get active promos
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
-  const { data: miniPromo } = usePromoByType("mini-packages");
+  // Get resolved multipliers (includes scheduled, toggle, and alternating)
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
-  // Get available packages for redemption (5x multiplier) with promo applied
+  // Get available packages for redemption with effective promo applied
   const allOneTimePackages = useMemo(() => {
     const packages = getOneTimePackages();
-    if (oneTimePromo) {
-      return getPackagesWithPromo(packages, oneTimePromo.multiplier, "one-time-packages");
+    if (resolvedOneTimeMultiplier != null && resolvedOneTimeMultiplier > 1) {
+      return getPackagesWithPromo(packages, resolvedOneTimeMultiplier, "one-time-packages");
     }
     return packages;
-  }, [oneTimePromo]);
+  }, [resolvedOneTimeMultiplier]);
 
   const miniDrawPackages = useMemo(() => {
     const packages = getMiniDrawPackages();
-    if (miniPromo) {
-      return getMiniPackagesWithPromo(packages, miniPromo.multiplier);
+    if (resolvedMiniMultiplier != null && resolvedMiniMultiplier > 1) {
+      return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
     }
     return packages;
-  }, [miniPromo]);
+  }, [resolvedMiniMultiplier]);
 
   const getIcon = (type: string) => {
     switch (type) {

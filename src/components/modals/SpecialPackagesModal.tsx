@@ -19,7 +19,7 @@ import { type StaticMembershipPackage } from "@/data/membershipPackages";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
-import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { usePromoLink } from "@/hooks/usePromoLink";
 
@@ -60,11 +60,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   // Get promo link code from URL/sessionStorage (for bonus entries)
   const { promoCode: promoLinkCode } = usePromoLink();
 
-  // Get resolved multiplier (includes alternating multiplier if no active promo)
-  // This ensures seamless integration with alternating multiplier feature
+  // Get resolved multiplier (includes scheduled, toggle, and alternating)
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
-  // Only fetch oneTimePromo to determine if multiplier is from active promo (for display purposes)
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
 
   // Get packages with promo applied (same logic as MembershipSection)
   // Uses resolved multiplier which includes alternating multipliers
@@ -83,7 +80,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           totalEntries: promoEntries,
           originalEntries, // Store original for display purposes
           promoMultiplier: resolvedOneTimeMultiplier,
-          isPromoActive: !!oneTimePromo, // True if active promo, false if alternating (for display only)
+          isPromoActive: (resolvedOneTimeMultiplier ?? 1) > 1,
         };
       }
 

@@ -9,7 +9,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
@@ -163,11 +163,7 @@ export default function MembershipSection({
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
 
-  // Get active promos for each package type (for checking if promo is active)
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
-
-  // Get resolved multipliers (includes alternating multiplier if no active promo)
+  // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
@@ -401,7 +397,7 @@ export default function MembershipSection({
             entriesCount: promoEntries,
             originalEntries,
               promoMultiplier: resolvedOneTimeMultiplier,
-              isPromoActive: !!oneTimePromo, // True if active promo, false if alternating
+              isPromoActive: (resolvedOneTimeMultiplier ?? 1) > 1,
           },
         };
         }
@@ -422,7 +418,7 @@ export default function MembershipSection({
             entriesCount: promoEntries,
             originalEntries,
               promoMultiplier: resolvedMembershipMultiplier,
-              isPromoActive: !!membershipPromo, // True if active promo, false if alternating
+              isPromoActive: (resolvedMembershipMultiplier ?? 1) > 1, // True if active promo, false if alternating
             isInitialPurchaseOnly: true, // Mark as initial purchase only
           },
         };

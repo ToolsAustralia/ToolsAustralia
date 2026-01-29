@@ -2,7 +2,7 @@
  * Default Text Manager Utility
  * 
  * Manages alternating default texts when no scheduled text is active.
- * Alternates once per day (AEST) between "BIGGEST BONUS" and "FIRST 500 PEOPLE".
+ * Alternates once per day (AEST) between "BONUS ENTRIES" and "FIRST 500 PEOPLE".
  * Uses date-based deterministic seed to ensure consistency across all users.
  * All users will see the same text on the same day (AEST).
  */
@@ -12,12 +12,12 @@ import { formatInTimeZone } from "date-fns-tz";
 // AEST/AEDT timezone identifier (matches timezone.ts)
 const AEST_TIMEZONE = "Australia/Sydney";
 
-const DEFAULT_TEXTS = [ "FIRST 500 PEOPLE", "BIGGEST BONUS"];
+const DEFAULT_TEXTS = [ "FIRST 500 PEOPLE", "BONUS ENTRIES"];
 
 /**
  * Get the alternating default text for the current day (AEST)
  * Uses day-of-year as deterministic seed - all users see the same text on the same day
- * Alternates between "BIGGEST BONUS" and "FIRST 500 PEOPLE" once per day
+ * Alternates between "BONUS ENTRIES" and "FIRST 500 PEOPLE" once per day
  * 
  * Algorithm: Uses day-of-year (1-365/366) for guaranteed alternation
  * - Calculates the day number within the year (Jan 1 = day 1, Dec 31 = day 365/366)
@@ -63,7 +63,7 @@ export function getAlternatingDefaultText(): string {
     // Use day-of-year modulo 2 to determine index (0 or 1)
     // This guarantees alternation: day 31 → index 0, day 32 → index 1
     // Example: Jan 31 = day 31 → (31-1) % 2 = 0 → "FIRST 500 PEOPLE"
-    //          Feb 1 = day 32 → (32-1) % 2 = 1 → "BIGGEST BONUS"
+    //          Feb 1 = day 32 → (32-1) % 2 = 1 → "BONUS ENTRIES"
     const index = (dayOfYear - 1) % 2;
     
     return DEFAULT_TEXTS[index];

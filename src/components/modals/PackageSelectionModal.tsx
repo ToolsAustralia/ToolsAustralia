@@ -9,7 +9,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserData } from "@/hooks/queries";
 import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
-import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
@@ -129,11 +129,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   // Fetch real membership data from API
   const { subscriptionPackages, oneTimePackages, loading, error } = useMemberships();
 
-  // Get active promos (for checking if promo is active)
-  const { data: membershipPromo } = usePromoByType("membership-packages");
-  const { data: oneTimePromo } = usePromoByType("one-time-packages");
-
-  // Get resolved multipliers (includes alternating multiplier if no active promo)
+  // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
@@ -207,7 +203,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             entriesCount: promoEntries,
             originalEntries,
             promoMultiplier,
-            isPromoActive: !!oneTimePromo, // True if active promo, false if alternating
+            isPromoActive: (resolvedOneTimeMultiplier ?? 1) > 1,
           },
         };
       }
@@ -435,7 +431,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 entriesCount: promoEntries,
                 originalEntries,
                 promoMultiplier: resolvedOneTimeMultiplier,
-                isPromoActive: !!oneTimePromo, // True if active promo, false if alternating
+                isPromoActive: (resolvedOneTimeMultiplier ?? 1) > 1,
               },
             };
           });
@@ -620,8 +616,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 >
                   Membership Packs
                   {/* Multiplier Badge - Upper right */}
-                  {membershipPromo && oneTimeSubTab === "membership" && (
-                    <PromoMultiplierBadge multiplier={membershipPromo.multiplier as 2 | 3 | 5 | 10} />
+                  {resolvedMembershipMultiplier != null && resolvedMembershipMultiplier > 1 && oneTimeSubTab === "membership" && (
+                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
                   )}
                 </button>
               </div>

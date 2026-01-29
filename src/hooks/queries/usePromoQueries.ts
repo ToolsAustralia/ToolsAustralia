@@ -137,7 +137,9 @@ export const usePromoByType = (type: "one-time-packages" | "mini-packages" | "me
 };
 
 /**
- * Resolve multiplier with priority: Active Promo > Alternating > null (no promo)
+ * Resolve multiplier using server hierarchy: Scheduled > Toggle > Alternating > null.
+ * Uses GET /api/promo/alternating-multiplier/current (effective multipliers) as single source of truth
+ * so client always matches server resolution.
  * @param type - Package type (full form: "membership-packages" | "one-time-packages" | "mini-packages")
  * @param context - "display" or "payment" (both return null if no promo, no defaults)
  * @returns Resolved multiplier or null if no active/alternating promo
@@ -146,25 +148,15 @@ export const useResolvedMultiplier = (
   type: "one-time-packages" | "mini-packages" | "membership-packages",
   context: "display" | "payment" = "display"
 ): number | null => {
-  const { data: promos } = useActivePromos();
-  const { data: currentAlternating } = useCurrentAlternatingMultipliers();
+  const { data: currentEffective } = useCurrentAlternatingMultipliers();
 
   return useMemo(() => {
-    // Priority 1: Active promo
-    const activePromo = promos?.find((p) => p.type === type && p.isActive);
-    if (activePromo?.multiplier) {
-      return activePromo.multiplier;
+    const effective = currentEffective?.data?.[type];
+    if (effective !== null && effective !== undefined && effective > 0) {
+      return effective;
     }
-
-    // Priority 2: Alternating multiplier
-    const alternating = currentAlternating?.data?.[type];
-    if (alternating !== null && alternating !== undefined) {
-      return alternating;
-    }
-
-    // No promo active
     return null;
-  }, [promos, currentAlternating, type, context]);
+  }, [currentEffective, type, context]);
 };
 
 // useCreatePromo hook removed - replaced with useTogglePromo

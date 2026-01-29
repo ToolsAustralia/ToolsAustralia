@@ -112,11 +112,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Get promos for each type (use initial data if available, fallback to client-side fetch)
+  // Resolved multipliers (scheduled → toggle → alternating) - single source for display
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+
+  // Legacy: use initial data for "active promo" object when provided (e.g. promotions page SSR)
   const { data: membershipPromoClient } = usePromoByType("membership-packages");
   const { data: oneTimePromoClient } = usePromoByType("one-time-packages");
-
-  // Use initial data if available, otherwise use client-fetched data
   const membershipPromo = initialMembershipPromo || membershipPromoClient;
   const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
 
@@ -367,50 +369,14 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
   }, []);
 
-  // Resolve multiplier with priority: Variant config > Active Promo > Alternating > null (no promo)
+  // Resolve multiplier: Variant config > Resolved (scheduled/toggle/alternating) for current tab
   const multiplier = useMemo(() => {
-    // Priority 0: Variant config override (highest priority)
     if (variantConfig?.banner?.multiplier !== undefined) {
       return variantConfig.banner.multiplier;
     }
-
-    // Priority 1: Active promo
-    if (activePromo?.multiplier) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("🎯 PromoBanner multiplier: Using active promo", activePromo.multiplier);
-      }
-      return activePromo.multiplier;
-    }
-
-    // Priority 2: Alternating multiplier (for current tab type)
-    const currentType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
-    // Check both state and query data
-    const alternatingFromState = alternatingMultiplier;
-    const alternatingFromQuery = currentAlternatingMultipliers?.data?.[currentType];
-    const alternating = alternatingFromState ?? alternatingFromQuery ?? null;
-    
-    if (alternating !== null && alternating !== undefined && alternating > 0) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("🎯 PromoBanner multiplier: Using alternating", {
-          alternating,
-          fromState: alternatingFromState,
-          fromQuery: alternatingFromQuery,
-          currentType,
-        });
-      }
-      return alternating;
-    }
-
-    // No promo active
-    if (process.env.NODE_ENV === "development") {
-      console.log("🎯 PromoBanner multiplier: No promo active", {
-        alternatingFromState,
-        alternatingFromQuery,
-        currentAlternatingMultipliers: currentAlternatingMultipliers?.data,
-      });
-    }
-    return null;
-  }, [variantConfig?.banner?.multiplier, activePromo?.multiplier, alternatingMultiplier, currentAlternatingMultipliers, activeTab]);
+    const resolvedForTab = activeTab === "membership" ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
+    return resolvedForTab ?? null;
+  }, [variantConfig?.banner?.multiplier, activeTab, resolvedMembershipMultiplier, resolvedOneTimeMultiplier]);
 
   // Helper function to determine if draw is today or tomorrow (in AEST)
   const getDrawDateStatus = (): "today" | "tomorrow" | null => {
@@ -443,7 +409,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // 0. Variant config override (highest priority)
   // 1. Draw status ("DRAWN TONIGHT" / "DRAWN TOMORROW")
   // 2. Active scheduled text (from service layer, resolved in AEST)
-  // 3. Alternating default texts ("BIGGEST BONUS" / "FIRST 500 PEOPLE")
+  // 3. Alternating default texts ("BONUS ENTRIES" / "FIRST 500 PEOPLE")
   const badgeText = useMemo(() => {
     // Priority 0: Variant config override (highest priority)
     // Only override if badgeText exists and is not empty/whitespace
@@ -674,7 +640,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
                         style={{ fontSize: fontSize }}
                       >
-                        {badgeText || "BIGGEST BONUS"}
+                        {badgeText || "BONUS ENTRIES"}
                       </span>
                     </div>
                   )}

@@ -542,6 +542,74 @@ export interface BonusEntryPromoConflict {
 }
 
 // ========================================
+// SCHEDULED PROMO TYPES
+// ========================================
+
+export type ScheduledPromoType = "membership-packages" | "one-time-packages" | "mini-packages";
+export type ScheduledPromoMultiplier = 2 | 3 | 5 | 10;
+
+export interface ScheduledPromo {
+  id: string;
+  type: ScheduledPromoType;
+  multiplier: ScheduledPromoMultiplier;
+  startDate: string;
+  endDate: string;
+  startDateFormatted?: string;
+  endDateFormatted?: string;
+  isActive: boolean;
+  isCurrentlyActive?: boolean;
+  isUpcoming?: boolean;
+  isExpired?: boolean;
+  name?: string;
+  description?: string;
+  deletedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  } | null;
+}
+
+export interface CreateScheduledPromoPayload {
+  type: ScheduledPromoType;
+  multiplier: ScheduledPromoMultiplier;
+  startDate: string; // ISO
+  endDate: string; // ISO
+  name?: string;
+  description?: string;
+}
+
+export interface UpdateScheduledPromoPayload {
+  type?: ScheduledPromoType;
+  multiplier?: ScheduledPromoMultiplier;
+  startDate?: string; // ISO
+  endDate?: string; // ISO
+  name?: string | null;
+  description?: string | null;
+  isActive?: boolean;
+}
+
+export interface ScheduledPromoListResponse {
+  success: boolean;
+  data: ScheduledPromo[];
+  count: number;
+}
+
+export interface ScheduledPromoConflict {
+  existingPromo: {
+    id: string;
+    type: ScheduledPromoType;
+    multiplier: ScheduledPromoMultiplier;
+    startDate: string;
+    endDate: string;
+  };
+  message: string;
+}
+
+// ========================================
 // PROMO LINK TYPES
 // ========================================
 
