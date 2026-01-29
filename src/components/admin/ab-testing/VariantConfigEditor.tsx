@@ -8,6 +8,7 @@ import {
   Checkbox,
   Button,
   FormSection,
+  Select,
 } from "@/components/modals/ui";
 import { Variant, CreateVariantPayload } from "@/hooks/queries/useABTestingQueries";
 
@@ -125,7 +126,11 @@ export default function VariantConfigEditor({
             id="heroImageSrc"
             name="heroImageSrc"
             type="text"
-            value={formData.config.hero?.imageSrc || ""}
+            value={
+              typeof formData.config.hero?.imageSrc === "string"
+                ? formData.config.hero.imageSrc
+                : formData.config.hero?.imageSrc?.desktop ?? ""
+            }
             onChange={(e) =>
               setFormData({
                 ...formData,
@@ -193,7 +198,7 @@ export default function VariantConfigEditor({
               })
             }
             label="Badge Text (Optional)"
-            placeholder="FIRST 500 PEOPLE"
+            placeholder="BONUS ENTRIES"
           />
           <Input
             id="bannerMultiplier"
@@ -235,6 +240,29 @@ export default function VariantConfigEditor({
             }
             label="Show Countdown Timer"
             description="Display the countdown timer in the banner"
+          />
+          <Select
+            id="countdownMode"
+            name="countdownMode"
+            value={formData.config.banner?.countdownMode || "default"}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                config: {
+                  ...formData.config,
+                  banner: {
+                    ...formData.config.banner,
+                    countdownMode: e.target.value as "default" | "limited_time_only" | "scheduled_end",
+                  },
+                },
+              })
+            }
+            label="Countdown behaviour"
+            options={[
+              { value: "default", label: "Default", description: "Draw/midnight countdown" },
+              { value: "limited_time_only", label: "Limited time only (Variant A)", description: "Show LIMITED TIME ONLY unless scheduled promo is exactly 24h" },
+              { value: "scheduled_end", label: "Scheduled end timer (Variant B)", description: "Timer to scheduled promo end; DAYS HRS MINS when >24h, HRS MINS SECS when ≤24h" },
+            ]}
           />
         </div>
       </FormSection>

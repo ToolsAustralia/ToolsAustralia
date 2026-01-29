@@ -782,3 +782,20 @@ export interface CurrentAlternatingMultipliersResponse {
   success: boolean;
   data: Record<AlternatingPromoMultiplierType, number | null>;
 }
+
+/** Source of effective multiplier for banner display */
+export type EffectiveForBannerSource = "scheduled" | "toggle" | "alternating" | "none";
+
+/** Per-type entry for effective-for-banner API (includes scheduled meta when source is scheduled) */
+export interface EffectiveForBannerEntry {
+  multiplier: number | null;
+  source: EffectiveForBannerSource;
+  promoId?: string;
+  scheduledEndDate?: string; // ISO, only when source === "scheduled"
+  durationMs?: number; // only when source === "scheduled"
+}
+
+export interface EffectiveForBannerResponse {
+  success: boolean;
+  data: Record<AlternatingPromoMultiplierType, EffectiveForBannerEntry>;
+}

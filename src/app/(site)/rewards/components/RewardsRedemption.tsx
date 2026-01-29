@@ -48,10 +48,14 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
+  // Valid promo multipliers for one-time packages (must match getPackagesWithPromo signature)
+  const isValidOneTimeMultiplier = (n: number): n is 2 | 3 | 5 | 10 =>
+    n === 2 || n === 3 || n === 5 || n === 10;
+
   // Get available packages for redemption with effective promo applied
   const allOneTimePackages = useMemo(() => {
     const packages = getOneTimePackages();
-    if (resolvedOneTimeMultiplier != null && resolvedOneTimeMultiplier > 1) {
+    if (resolvedOneTimeMultiplier != null && isValidOneTimeMultiplier(resolvedOneTimeMultiplier)) {
       return getPackagesWithPromo(packages, resolvedOneTimeMultiplier, "one-time-packages");
     }
     return packages;
@@ -59,7 +63,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
 
   const miniDrawPackages = useMemo(() => {
     const packages = getMiniDrawPackages();
-    if (resolvedMiniMultiplier != null && resolvedMiniMultiplier > 1) {
+    if (resolvedMiniMultiplier != null && isValidOneTimeMultiplier(resolvedMiniMultiplier)) {
       return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
     }
     return packages;

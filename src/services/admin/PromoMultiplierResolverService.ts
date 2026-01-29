@@ -10,6 +10,7 @@
  * - Package calculations
  */
 
+import type { EffectiveForBannerEntry } from "@/types/admin";
 import Promo from "@/models/Promo";
 import ScheduledPromo from "@/models/ScheduledPromo";
 import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
@@ -22,6 +23,8 @@ export interface ResolvedMultiplierWithSource {
   multiplier: number | null;
   source: ResolverSource;
   promoId?: string;
+  scheduledEndDate?: string; // ISO, only when source === "scheduled"
+  durationMs?: number; // only when source === "scheduled"
 }
 
 export type PackageType = "membership-packages" | "one-time-packages" | "mini-packages";
@@ -117,10 +120,14 @@ export class PromoMultiplierResolverService {
 
       const scheduled = await ScheduledPromo.getActiveByTypeAndDate(fullType, now);
       if (scheduled) {
+        const startMs = new Date(scheduled.startDate).getTime();
+        const endMs = new Date(scheduled.endDate).getTime();
         return {
           multiplier: scheduled.multiplier,
           source: "scheduled",
           promoId: String(scheduled._id),
+          scheduledEndDate: scheduled.endDate.toISOString(),
+          durationMs: endMs - startMs,
         };
       }
 
@@ -168,6 +175,31 @@ export class PromoMultiplierResolverService {
         multiplier: resolved.multiplier,
         source: resolved.source,
         promoId: resolved.promoId,
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Get effective multipliers with scheduled meta for banner display (public API).
+   * Returns per-type entry including source and scheduledEndDate/durationMs when source is scheduled.
+   */
+  async getEffectiveForBanner(): Promise<Record<PackageType, EffectiveForBannerEntry>> {
+    const types: PackageTypeShort[] = ["membership", "one-time", "mini-draw"];
+    const result = {} as Record<PackageType, EffectiveForBannerEntry>;
+
+    for (const shortType of types) {
+      const fullType = convertPackageType(shortType);
+      const resolved = await this.getResolvedMultiplierWithSource(shortType);
+      result[fullType] = {
+        multiplier: resolved.multiplier,
+        source: resolved.source,
+        promoId: resolved.promoId,
+        ...(resolved.source === "scheduled" && {
+          scheduledEndDate: resolved.scheduledEndDate,
+          durationMs: resolved.durationMs,
+        }),
       };
     }
 

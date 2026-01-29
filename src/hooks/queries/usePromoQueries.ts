@@ -4,6 +4,7 @@ import type {
   BonusEntryPromo,
   CreateBonusEntryPromoPayload,
   UpdateBonusEntryPromoPayload,
+  EffectiveForBannerResponse,
   PromoLink,
   CreatePromoLinkPayload,
   UpdatePromoLinkPayload,
@@ -157,6 +158,29 @@ export const useResolvedMultiplier = (
     }
     return null;
   }, [currentEffective, type, context]);
+};
+
+const fetchEffectiveForBanner = async (): Promise<EffectiveForBannerResponse["data"]> => {
+  const response = await fetch("/api/promo/effective-for-banner", { cache: "no-store" });
+  if (!response.ok) throw new Error("Failed to fetch effective for banner");
+  const result: EffectiveForBannerResponse = await response.json();
+  return result.data;
+};
+
+/**
+ * Effective multiplier + source + scheduled meta for banner (current tab uses one type).
+ * Use this in PromoBanner for countdown mode and badge; other components keep useResolvedMultiplier.
+ */
+export const useEffectiveForBanner = () => {
+  return useQuery({
+    queryKey: ["promo", "effective-for-banner"],
+    queryFn: fetchEffectiveForBanner,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+  });
 };
 
 // useCreatePromo hook removed - replaced with useTogglePromo
