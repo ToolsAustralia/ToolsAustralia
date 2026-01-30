@@ -21,7 +21,7 @@ export class VariantConfigService {
         // Defaults: use existing component logic
       },
       membershipModal: {
-        // Defaults: use existing component logic (no auto-open by default)
+        // Defaults: use existing component logic (same pattern as hero/banner/packages)
       },
     };
   }
