@@ -808,6 +808,10 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       if (data.success) {
         // Email sent successfully, now show the verification modal
         setShowEmailVerification(true);
+      } else if (data.error?.toLowerCase().includes("already verified")) {
+        // User is already verified (e.g. OAuth) — don't show error; treat as verified so they can complete the flow
+        setError(null);
+        setIsEmailVerified(true);
       } else {
         setError(data.error || "Failed to send verification email");
       }

@@ -495,12 +495,12 @@ export async function getUsers(filters: UserFilters) {
         //   Note: past_due users may have isActive = false due to payment failures, but they haven't cancelled
         //   EXCLUDE "incomplete" status (users who just registered but haven't purchased)
         // - autoRenew is not false (true or undefined)
-        // - No endDate set OR endDate is null (meaning they haven't cancelled at period end)
+        // - endDate not set, null, OR endDate > now (active subs have endDate = current period end; only cancelled have autoRenew false)
         // - Must have a packageId (actually purchased a subscription, not just registered)
         // - Must have lastMonthAccumulatedEntries > 0 (have actually accumulated entries, been active subscribers)
         // We DON'T filter by isActive because:
         //   - past_due users may have isActive = false (payment issue, not cancellation)
-        //   - The key indicator of "will renew" is: no endDate (haven't cancelled) + autoRenew !== false + has packageId + has accumulated entries
+        //   - The key indicator of "will renew" is: autoRenew !== false + (endDate not set / null / in future) + has packageId + has accumulated entries
         autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
         autoRenewFilter["subscription.autoRenew"] = { $ne: false };
         autoRenewFilter["subscription.packageId"] = { $exists: true, $ne: null };
@@ -510,9 +510,10 @@ export async function getUsers(filters: UserFilters) {
     } else if (autoRenew === "false") {
       // Users who are CANCELLED (won't renew):
       // - Status is "active" OR "past_due" (not cancelled status)
-      // - Has endDate set (meaning they cancelled at period end)
-      // These are users who cancelled but are still in their billing period
+      // - autoRenew is false (cancelled at period end)
+      // - Has endDate set (period end when access ends)
       autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
+      autoRenewFilter["subscription.autoRenew"] = false;
       autoRenewFilter["subscription.endDate"] = { $exists: true, $ne: null };
     }
   }
@@ -531,10 +532,11 @@ export async function getUsers(filters: UserFilters) {
   if (Object.keys(autoRenewFilter).length > 0) {
     // For "Will Renew", we need to handle endDate separately with $or
     if (autoRenew === "true") {
-      // Extract endDate condition and add to $or conditions
+      // Will Renew: endDate not set, null, or in the future (current period end is set for all active subs)
       endDateOrConditions.push(
         { "subscription.endDate": { $exists: false } },
-        { "subscription.endDate": null }
+        { "subscription.endDate": null },
+        { "subscription.endDate": { $gt: new Date() } }
       );
       // Remove endDate from autoRenewFilter since we'll handle it separately
       const { "subscription.endDate": _endDate, ...restAutoRenew } = autoRenewFilter;

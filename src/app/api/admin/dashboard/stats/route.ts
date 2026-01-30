@@ -162,10 +162,11 @@ export async function GET(request: NextRequest) {
         profileSetupCompleted: true,
         isActive: true,
       }),
-      // Cancelled memberships: users with scheduled cancellation
-      // (endDate set, meaning they cancelled at period end but are still in billing period)
+      // Cancelled memberships: users with scheduled cancellation (cancel at period end)
+      // endDate set + autoRenew false so we don't count active subs who have endDate populated
       User.countDocuments({
         "subscription.endDate": { $exists: true, $ne: null },
+        "subscription.autoRenew": false,
         "subscription.status": { $in: ["active", "past_due"] },
         isActive: true,
       }),

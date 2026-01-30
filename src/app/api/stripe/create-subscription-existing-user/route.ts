@@ -11,6 +11,9 @@ import { authOptions } from "@/lib/auth";
 import { getInvoicePaymentIntentFromSubscription } from "@/utils/payment/stripe/invoice-payment-intent";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
+import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserSchema = z.object({
@@ -46,16 +49,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check if user already has an active subscription
-    if (existingUser.subscription?.isActive) {
-      return NextResponse.json(
-        {
-          error:
-            "User already has an active subscription. Please manage your existing subscription instead of creating a new one.",
-          code: "EXISTING_SUBSCRIPTION",
-        },
-        { status: 409 }
-      );
+    const canCreate = checkCanCreateSubscription(existingUser);
+    if (!canCreate.allowed) {
+      return NextResponse.json(canCreate.body, { status: canCreate.status });
     }
 
     // Get the membership package
@@ -210,30 +206,38 @@ export async function POST(request: NextRequest) {
     const idempotencyKey =
       validatedData.idempotencyKey || `sub_${validatedData.packageId}_${stripeCustomerId}_${existingUser.email}`;
 
-    // Create the subscription with metadata for webhook processing
-    // Use payment_behavior to match new user flow and ensure proper webhook processing
+    const anchorParams = getSubscriptionCreateParamsForAnchor(new Date());
+    const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
+
+    const baseMetadata = {
+      packageId: validatedData.packageId,
+      packageName: membershipPackage.name,
+      userEmail: existingUser.email,
+      ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+      ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+      ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
+    };
+
+    const createPayload: Stripe.SubscriptionCreateParams = {
+      customer: stripeCustomerId,
+      items: [{ price: stripePriceId }],
+      default_payment_method: finalPaymentMethodId,
+      payment_behavior: "default_incomplete",
+      expand: ["latest_invoice.payment_intent"],
+      description: `${membershipPackage.name}`,
+      collection_method: "charge_automatically",
+      metadata: baseMetadata as Stripe.MetadataParam,
+      ...restAnchorParams,
+    };
+
+    if (createPayload.collection_method !== undefined && createPayload.collection_method !== "charge_automatically") {
+      throw new Error("Anchor billing requires charge_automatically");
+    }
+
     const subscription = await stripe.subscriptions.create(
+      createPayload,
       {
-        customer: stripeCustomerId,
-        items: [{ price: stripePriceId }], // ✅ Use existing Price ID
-        default_payment_method: finalPaymentMethodId,
-        payment_behavior: "default_incomplete", // Creates incomplete subscription requiring payment confirmation
-        // ✅ CRITICAL FIX: Do NOT save payment method automatically on subscription creation
-        // Payment method will only be saved AFTER payment succeeds (handled by webhook)
-        // This prevents saving payment methods when payments fail due to insufficient funds
-        // payment_settings: { save_default_payment_method: "on_subscription" }, // REMOVED
-        expand: ["latest_invoice.payment_intent"],
-        description: `${membershipPackage.name}`, // Set description directly on subscription
-        metadata: {
-          packageId: validatedData.packageId,
-          packageName: membershipPackage.name,
-          userEmail: existingUser.email,
-          ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-          ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-        },
-      },
-      {
-        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate subscription creation
+        idempotencyKey: idempotencyKey,
       }
     );
 
@@ -241,6 +245,10 @@ export async function POST(request: NextRequest) {
     // console.log(
     //   `📝 Saving subscription to user database: packageId=${membershipPackage._id}, subscriptionId=${subscription.id}`
     // );
+
+    const subscriptionPeriodEnd = getSubscriptionPeriodEnd(subscription);
+    const subscriptionEndDate =
+      subscriptionPeriodEnd != null ? new Date(subscriptionPeriodEnd * 1000) : undefined;
 
     // ✅ CRITICAL: Preserve lastMonthAccumulatedEntries when resubscribing
     // Check if this is a resubscription (user had subscription before but it's not active)
@@ -259,7 +267,7 @@ export async function POST(request: NextRequest) {
       pendingChange: undefined, // Initialize pendingChange field for subscription management
       isActive: subscription.status === "active", // ✅ Set based on Stripe subscription status
       startDate: new Date(),
-      endDate: undefined, // Subscription doesn't have an end date
+      endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
       autoRenew: true,
       status: subscription.status, // Track subscription status
       // ✅ PRESERVE: Keep lastMonthAccumulatedEntries for resubscription continuation

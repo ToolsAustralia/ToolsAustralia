@@ -11,7 +11,11 @@
     "mini-draw:order": "tsx scripts/update-mini-draw-order.ts",
     "migrate:accumulated-entries": "tsx scripts/migrate-accumulated-entries.ts",
     "migrate:package-type": "tsx scripts/migrate-package-type-subscription-to-membership.ts",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
+    "test:anchor-billing": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
+    "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
+    "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

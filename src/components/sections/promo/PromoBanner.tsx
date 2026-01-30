@@ -433,11 +433,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     });
   }, [isNoPromo, variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault, multiplier]);
 
-  // Countdown display mode (Variant A: limited_time_only; Variant B: scheduled_end; default: draw/midnight)
+  // Countdown display: fixed to Variant A (LIMITED TIME ONLY) — winner of split test; 24h scheduled still shows countdown per countdown-mode.ts
   const countdownDisplay = useMemo(() => {
     const drawStatus = getDrawDateStatus();
     return resolveCountdownDisplay({
-      countdownMode: variantConfig?.banner?.countdownMode ?? "default",
+      countdownMode: "limited_time_only",
       showCountdown: variantConfig?.banner?.showCountdown !== false,
       source: effectiveEntry?.source ?? "none",
       scheduledEndDate: effectiveEntry?.scheduledEndDate ?? undefined,
@@ -445,7 +445,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       drawStatus,
     });
   }, [
-    variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
     effectiveEntry?.source,
     effectiveEntry?.scheduledEndDate,

@@ -26,6 +26,9 @@ import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subsc
 import { createOrUpdateSubscriptionUser } from "@/utils/payment/user-subscription-utils";
 // Klaviyo integration handled by webhook for best practices
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
+import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
 
 // Interface for Stripe errors
 interface StripeError {
@@ -113,6 +116,14 @@ export async function POST(request: NextRequest) {
     // Check if user already exists (from registration)
     // console.log("👤 Checking if user already exists...");
     const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
+
+    const canCreate = checkCanCreateSubscription(registeredUser ?? null);
+    if (!canCreate.allowed) {
+      return NextResponse.json(
+        { success: false, ...canCreate.body },
+        { status: canCreate.status }
+      );
+    }
 
     // Handle payment method creation following Stripe best practices
     const finalPaymentMethodId = validatedData.paymentMethodId;
@@ -355,50 +366,51 @@ export async function POST(request: NextRequest) {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:358',message:'BEFORE subscription creation',data:{customerId:customer.id,stripePriceId,hasDefaultPaymentMethod:!!(canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"),defaultPaymentMethodId:canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method" ? finalPaymentMethodId : null,packageId:validatedData.packageId,userEmail:validatedData.userEmail},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
     // #endregion
-    
+
+    const anchorParams = getSubscriptionCreateParamsForAnchor(new Date());
+    const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
+
+    const baseMetadata = {
+      packageId: validatedData.packageId,
+      packageName: membershipPackage.name,
+      userEmail: validatedData.userEmail,
+      ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
+      ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+      ...(experimentAssignment && {
+        experimentId: experimentAssignment.experimentId,
+        variantId: experimentAssignment.variantId,
+      }),
+      ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+      ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+      ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+      ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
+    };
+
+    const createPayload: Stripe.SubscriptionCreateParams = {
+      customer: customer.id,
+      items: [{ price: stripePriceId }],
+      ...(canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"
+        ? { default_payment_method: finalPaymentMethodId }
+        : {}),
+      payment_behavior: "default_incomplete",
+      expand: ["latest_invoice.payment_intent"],
+      description: `${membershipPackage.name}`,
+      collection_method: "charge_automatically",
+      metadata: baseMetadata as Stripe.MetadataParam,
+      ...restAnchorParams,
+    };
+
+    if (createPayload.collection_method !== undefined && createPayload.collection_method !== "charge_automatically") {
+      throw new Error("Anchor billing requires charge_automatically");
+    }
+
     let subscription;
     try {
       subscription = await stripe.subscriptions.create(
+        createPayload,
         {
-          customer: customer.id,
-          items: [
-            {
-              price: stripePriceId, // ✅ Use existing Price ID
-            },
-          ],
-          // ✅ Include default_payment_method so Stripe creates PaymentIntent immediately
-          // Payment will still be collected via PaymentElement (not auto-paid)
-          // Only set default_payment_method if we can use the payment method (not consumed)
-          ...(canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"
-            ? { default_payment_method: finalPaymentMethodId }
-            : {}),
-          payment_behavior: "default_incomplete", // ✅ Stripe creates PaymentIntent automatically with correct amount
-          // ✅ CRITICAL FIX: Do NOT save payment method automatically on subscription creation
-          // Payment method will only be saved AFTER payment succeeds (handled by webhook)
-          // This prevents saving payment methods when payments fail due to insufficient funds
-          // payment_settings: { save_default_payment_method: "on_subscription" }, // REMOVED
-          expand: ["latest_invoice.payment_intent"], // ✅ Get PaymentIntent from invoice
-          description: `${membershipPackage.name}`,
-          metadata: {
-            packageId: validatedData.packageId,
-            packageName: membershipPackage.name,
-            userEmail: validatedData.userEmail,
-            ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-            ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-            // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
-            ...(experimentAssignment && {
-              experimentId: experimentAssignment.experimentId,
-              variantId: experimentAssignment.variantId,
-            }),
-            // Store request context for Facebook CAPI (webhook will extract and use)
-            ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-            ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-            ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-            ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-          },
-        },
-        {
-          idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate subscription creation
+          idempotencyKey: idempotencyKey,
         }
       );
 
@@ -769,6 +781,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const subscriptionPeriodEnd = getSubscriptionPeriodEnd(subscription);
+    const subscriptionEndDate =
+      subscriptionPeriodEnd != null ? new Date(subscriptionPeriodEnd * 1000) : undefined;
+
     let user;
 
     if (registeredUser) {
@@ -790,7 +806,7 @@ export async function POST(request: NextRequest) {
             subscription: {
               packageId: String(membershipPackage._id), // Force string conversion
               startDate: new Date(),
-              endDate: undefined, // Subscriptions don't have end dates
+              endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
               isActive: subscription.status === "active", // ✅ Set based on Stripe subscription status
               autoRenew: true,
               status: subscription.status, // Track subscription status
@@ -839,7 +855,7 @@ export async function POST(request: NextRequest) {
         subscription: {
           packageId: String(membershipPackage._id), // Force string conversion
           startDate: new Date(),
-          endDate: undefined, // Subscriptions don't have end dates
+          endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
           isActive: subscription.status === "active", // ✅ Set based on Stripe subscription status
           autoRenew: true,
           status: subscription.status, // Track subscription status

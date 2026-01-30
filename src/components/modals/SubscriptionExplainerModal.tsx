@@ -42,8 +42,13 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
           <VerticalAccumulationChart
             selectedPackageId={selectedPackageId}
             showOnlySelectedPackage
+            userAccumulation={{
+              baseEntriesPerMonth: entriesPerMonth,
+              lastMonthAccumulatedEntries,
+            }}
           />
         )}
+        {/* Billing rule: 25–27 joiners renew on 24th; source of truth: src/utils/billing/anchor-billing.ts */}
         <div className="rounded-xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 sm:px-5 sm:py-4 shadow-sm">
           <p className="text-amber-900 text-sm sm:text-base font-semibold leading-snug">
             If you joined on the <strong className="text-amber-700">25th, 26th, or 27th</strong>, you&apos;ll be billed

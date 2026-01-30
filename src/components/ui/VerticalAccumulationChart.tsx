@@ -2,10 +2,18 @@
 
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 
+/** When set (e.g. in my-account explainer), chart shows user's actual accumulation from lastMonthAccumulatedEntries; multiplier is not applied and promo badge is hidden. */
+export interface UserAccumulationInput {
+  baseEntriesPerMonth: number;
+  lastMonthAccumulatedEntries: number;
+}
+
 interface VerticalAccumulationChartProps {
   selectedPackageId?: string;
   /** When true, show only the selected package (e.g. in explainer modal). Default false. */
   showOnlySelectedPackage?: boolean;
+  /** When set, use this for the selected package: month1 = lastMonthAccumulatedEntries, month2/3 = + baseEntriesPerMonth. Multiplier and promo badge are hidden. */
+  userAccumulation?: UserAccumulationInput;
 }
 
 // Package data for the 3 main subscription packages
@@ -72,6 +80,7 @@ function calculateAccumulation(baseEntries: number, promoMultiplier: number = 1)
 export default function VerticalAccumulationChart({
   selectedPackageId,
   showOnlySelectedPackage = false,
+  userAccumulation,
 }: VerticalAccumulationChartProps) {
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const promoMultiplier = resolvedMembershipMultiplier ?? 1;
@@ -81,11 +90,23 @@ export default function VerticalAccumulationChart({
       ? packages.filter((p) => p.id === selectedPackageId)
       : packages;
 
+  // When userAccumulation is provided (e.g. explainer modal), use the user's lastMonthAccumulatedEntries so the chart accurately shows what they will get in 3 months; no multiplier.
+  const useUserData =
+    !!userAccumulation && !!selectedPackageId && packagesToShow.some((p) => p.id === selectedPackageId);
+
   // Calculate data for packages to display
   const packageData = packagesToShow.map((pkg) => {
-    const accumulation = calculateAccumulation(pkg.baseEntries, promoMultiplier);
-    const colorScheme = getPackageColorScheme(pkg.id);
     const isSelected = selectedPackageId === pkg.id;
+    const accumulation =
+      useUserData && isSelected && userAccumulation
+        ? {
+            month1: userAccumulation.lastMonthAccumulatedEntries,
+            month2: userAccumulation.lastMonthAccumulatedEntries + userAccumulation.baseEntriesPerMonth,
+            month3:
+              userAccumulation.lastMonthAccumulatedEntries + 2 * userAccumulation.baseEntriesPerMonth,
+          }
+        : calculateAccumulation(pkg.baseEntries, useUserData ? 1 : promoMultiplier);
+    const colorScheme = getPackageColorScheme(pkg.id);
 
     return {
       ...pkg,
@@ -267,8 +288,8 @@ export default function VerticalAccumulationChart({
           </div>
         </div>
 
-        {/* Promo Badge */}
-        {promoMultiplier > 1 && (
+        {/* Promo Badge - hidden when chart uses user's own accumulation (explainer) to avoid confusion */}
+        {promoMultiplier > 1 && !userAccumulation && (
           <div className="mt-1 text-center">
             <div className="inline-flex items-center gap-1.5 bg-yellow-400/20 border border-yellow-400/30 rounded-full px-2.5 py-1">
               <span className="text-yellow-400 text-[10px] sm:text-[12px] font-bold font-['Poppins']">
