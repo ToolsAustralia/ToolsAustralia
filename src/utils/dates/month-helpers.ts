@@ -5,6 +5,7 @@
 import { startOfMonth, endOfMonth, subMonths, addMonths, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
+import { getNextAnchorTimestamp, isJoinDateAnchoredTo24 } from "@/utils/billing/anchor-billing";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -104,12 +105,16 @@ export function formatRenewalDate(date: Date): string {
 }
 
 /**
- * Fallback renewal date when endDate is missing: startDate + 1 month.
- * Approximate only (accurate for first renewal).
+ * Fallback renewal date when endDate is missing.
+ * If startDate is 25th, 26th, or 27th in AEST (anchor rule), returns the next 24th in AEST.
+ * Otherwise returns startDate + 1 month (approximate first renewal).
  *
- * @param startDate - Subscription start date
- * @returns Date one month after start
+ * @param startDate - Subscription start date (join date)
+ * @returns Next renewal date (next 24th for 25–27 joiners, else one month after start)
  */
 export function getFallbackRenewalDate(startDate: Date): Date {
+  if (isJoinDateAnchoredTo24(startDate)) {
+    return new Date(getNextAnchorTimestamp(startDate) * 1000);
+  }
   return addMonths(startDate, 1);
 }

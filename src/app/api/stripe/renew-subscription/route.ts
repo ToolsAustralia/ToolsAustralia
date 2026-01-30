@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
+import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -357,23 +358,39 @@ export async function POST(request: NextRequest) {
     // CREATE NEW SUBSCRIPTION
     // ====================================
 
-    // console.log(`🆕 [CREATE_NEW] Creating new subscription`);
+    // Use original join date when available so users who joined 25–27 keep 24th anchor when they renew
+    const joinDateForAnchor = user.subscription?.startDate
+      ? new Date(user.subscription.startDate)
+      : new Date();
+    const anchorParams = getSubscriptionCreateParamsForAnchor(joinDateForAnchor);
+    const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
 
-    const newSubscription = await stripe.subscriptions.create({
+    const baseMetadata = {
+      packageId: targetPackage._id,
+      packageName: targetPackage.name,
+      userEmail: user.email,
+      userId: user._id.toString(),
+      renewalType: "new_subscription",
+      ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
+    };
+
+    const createPayload: Stripe.SubscriptionCreateParams = {
       customer: stripeCustomerId,
       items: [{ price: targetPackage.stripePriceId }],
       default_payment_method: paymentMethod.id,
       payment_behavior: "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
-      metadata: {
-        packageId: targetPackage._id,
-        packageName: targetPackage.name,
-        userEmail: user.email,
-        userId: user._id.toString(),
-        renewalType: "new_subscription",
-      },
-    });
+      collection_method: "charge_automatically",
+      metadata: baseMetadata as Stripe.MetadataParam,
+      ...restAnchorParams,
+    };
+
+    if (createPayload.collection_method !== undefined && createPayload.collection_method !== "charge_automatically") {
+      throw new Error("Anchor billing requires charge_automatically");
+    }
+
+    const newSubscription = await stripe.subscriptions.create(createPayload);
 
     // console.log(`✅ New subscription created:`, {
     //   id: newSubscription.id,

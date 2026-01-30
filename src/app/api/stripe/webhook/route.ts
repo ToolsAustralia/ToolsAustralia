@@ -30,6 +30,7 @@ import {
   createInvoiceGeneratedEvent,
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
+import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { trackPixelPaymentFailed, trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
@@ -1840,20 +1841,26 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         // If cancel_at_period_end is true and cancelledAt is not set, this is a new cancellation
         if (subscription.cancel_at_period_end && !user.subscription.cancelledAt) {
           user.subscription.cancelledAt = new Date();
+          const periodEnd = getSubscriptionPeriodEnd(subscription);
+          if (periodEnd != null) user.subscription.endDate = new Date(periodEnd * 1000);
         } else if (!subscription.cancel_at_period_end && user.subscription.cancelledAt) {
           // If cancel_at_period_end is false (cancellation cancelled), clear cancelledAt
           user.subscription.cancelledAt = undefined;
           user.subscription.endDate = undefined;
         }
+        // Sync endDate from Stripe period end for active/trialing subs so dashboard "Added on renewal" is correct
+        // (e.g. after migration sets trial_end, subscription.updated fires with status trialing and we need to show new renewal date)
+        if (subscription.status === "active" || subscription.status === "trialing") {
+          const periodEnd = getSubscriptionPeriodEnd(subscription);
+          if (periodEnd != null) user.subscription.endDate = new Date(periodEnd * 1000);
+        }
       } else if (subscription.status === "canceled" || subscription.status === "past_due") {
         // Only update for explicit cancellations or past due
         console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: ${subscription.status} for user ${user.email}`);
 
-        // ✅ Set endDate consistently - use subscription period end or current date
-        const subscriptionWithPeriod = subscription as Stripe.Subscription & { current_period_end?: number };
-        const endDate = subscriptionWithPeriod.current_period_end
-          ? new Date(subscriptionWithPeriod.current_period_end * 1000)
-          : new Date(); // Fallback to now
+        // ✅ Set endDate consistently - use subscription period end (Basil: items; legacy: sub) or current date
+        const periodEnd = getSubscriptionPeriodEnd(subscription);
+        const endDate = periodEnd != null ? new Date(periodEnd * 1000) : new Date(); // Fallback to now
 
         // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved when subscription is canceled
         const preservedAccumulatedEntries = user.subscription.lastMonthAccumulatedEntries;
@@ -2113,11 +2120,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 
     console.log(`✅ [SUBSCRIPTION DELETED] Processing deletion for user ${user.email}`);
 
-    // ✅ Set endDate consistently - use subscription period end or current date
-    const subscriptionWithPeriod = subscription as Stripe.Subscription & { current_period_end?: number };
-    const endDate = subscriptionWithPeriod.current_period_end
-      ? new Date(subscriptionWithPeriod.current_period_end * 1000)
-      : new Date(); // Fallback to now
+    // ✅ Set endDate consistently - use subscription period end (Basil: items; legacy: sub) or current date
+    const periodEnd = getSubscriptionPeriodEnd(subscription);
+    const endDate = periodEnd != null ? new Date(periodEnd * 1000) : new Date(); // Fallback to now
 
     // Only deactivate if this is genuinely the user's current subscription
     if (user.subscription) {
@@ -2308,9 +2313,9 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
           // Only check for renewal failures - initial failures don't have a period to end
           try {
             const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
-            const subscriptionWithPeriod = stripeSubscription as Stripe.Subscription & { current_period_end?: number };
-            if (stripeSubscription.cancel_at_period_end && subscriptionWithPeriod.current_period_end) {
-              const endDate = new Date(subscriptionWithPeriod.current_period_end * 1000);
+            const periodEnd = getSubscriptionPeriodEnd(stripeSubscription);
+            if (stripeSubscription.cancel_at_period_end && periodEnd != null) {
+              const endDate = new Date(periodEnd * 1000);
               user.subscription.endDate = endDate;
               console.log(
                 `📅 [INVOICE PAYMENT FAILED] Set endDate to ${endDate.toISOString()} for subscription that will be canceled`

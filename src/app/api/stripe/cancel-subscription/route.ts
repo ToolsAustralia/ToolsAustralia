@@ -10,14 +10,7 @@ import { klaviyo } from "@/lib/klaviyo";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
 import { createSubscriptionCancelledEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
-
-// Extended Stripe subscription interface to include current_period_end
-interface StripeSubscriptionWithPeriodEnd {
-  id: string;
-  status: string;
-  current_period_end: number;
-  cancel_at_period_end: boolean;
-}
+import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 
 const cancelSubscriptionSchema = z.object({
   cancelAtPeriodEnd: z.boolean().optional().default(true), // Cancel at end of billing period by default
@@ -87,12 +80,6 @@ export async function POST(request: NextRequest) {
 
     const latestSubscription = (await stripe.subscriptions.retrieve(user.stripeSubscriptionId)) as Stripe.Subscription;
 
-    const getCurrentPeriodEnd = (subscription?: Stripe.Subscription): number | undefined => {
-      if (!subscription) return undefined;
-      const withPeriod = subscription as Partial<StripeSubscriptionWithPeriodEnd>;
-      return typeof withPeriod.current_period_end === "number" ? withPeriod.current_period_end : undefined;
-    };
-
     const getCancelAt = (subscription?: Stripe.Subscription): number | undefined => {
       if (!subscription) return undefined;
       return typeof subscription.cancel_at === "number" ? subscription.cancel_at : undefined;
@@ -101,9 +88,10 @@ export async function POST(request: NextRequest) {
     const resolveTimestamp = (...timestamps: Array<number | undefined>) =>
       timestamps.find((value) => typeof value === "number");
 
+    // Use shared helper so period end is correct for Basil API (items) and legacy (subscription)
     const resolvedEndTimestamp = resolveTimestamp(
-      getCurrentPeriodEnd(canceledSubscription),
-      getCurrentPeriodEnd(latestSubscription),
+      getSubscriptionPeriodEnd(canceledSubscription),
+      getSubscriptionPeriodEnd(latestSubscription),
       getCancelAt(latestSubscription),
       getCancelAt(canceledSubscription)
     );
