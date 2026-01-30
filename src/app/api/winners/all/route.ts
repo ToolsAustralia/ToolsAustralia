@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         .populate({
           path: "drawId",
           model: "MajorDraw", // Using string is consistent with codebase pattern
-          select: "name prize",
+          select: "name prize drawDate",
         })
         .lean();
 
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
         // Type assertion for lean() result with populated fields
         const w = winner as unknown as {
           _id: Types.ObjectId | string;
-          drawId: Types.ObjectId | string | { _id?: Types.ObjectId | string; name?: string; prize?: { name?: string; description?: string; value?: number; images?: string[] } };
+          drawId: Types.ObjectId | string | { _id?: Types.ObjectId | string; name?: string; prize?: { name?: string; description?: string; value?: number; images?: string[] }; drawDate?: Date };
           userId: Types.ObjectId | string | { firstName?: string; lastName?: string; state?: string };
           prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
           imageUrl?: string;
@@ -66,8 +66,10 @@ export async function GET(request: NextRequest) {
         
         // Check if drawId was populated (object with name property)
         const majorDraw = (typeof w.drawId === 'object' && !(w.drawId instanceof Types.ObjectId) && 'name' in w.drawId) 
-          ? w.drawId 
+          ? w.drawId as { name?: string; prize?: { name?: string; description?: string; value?: number; images?: string[] }; drawDate?: Date }
           : null;
+        // Won on = draw end date (drawDate) when available, not the admin selection date
+        const wonOnDate = majorDraw?.drawDate ? majorDraw.drawDate : w.selectedDate;
         
         // Extract testimony and selectedPrize directly from the lean result (prefer new field, fallback to legacy)
         const testimonyValue = w.testimony || undefined;
@@ -89,6 +91,7 @@ export async function GET(request: NextRequest) {
           winnerState: winnerUser?.state || "",
           imageUrl: w.imageUrl,
           selectedDate: w.selectedDate.toISOString(),
+          wonOnDate: wonOnDate.toISOString(),
           entryNumber: w.entryNumber,
           testimony: testimonyValue,
           selectedPrize: selectedPrizeValue,
@@ -127,6 +130,7 @@ export async function GET(request: NextRequest) {
         const testimonyValue = w.testimony || undefined;
         const selectedPrizeValue = w.selectedPrize || w.selectedPrizeSlug || undefined;
         
+        // Mini draws don't have a drawDate on the model; use selectedDate for "won on"
         winners.push({
           id: toIdString(w._id),
           drawId: toIdString(w.drawId),
@@ -143,6 +147,7 @@ export async function GET(request: NextRequest) {
           winnerState: winnerUser?.state || "",
           imageUrl: w.imageUrl,
           selectedDate: w.selectedDate.toISOString(),
+          wonOnDate: w.selectedDate.toISOString(),
           entryNumber: w.entryNumber,
           testimony: testimonyValue,
           selectedPrize: selectedPrizeValue,

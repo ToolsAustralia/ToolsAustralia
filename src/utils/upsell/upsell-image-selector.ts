@@ -2,7 +2,7 @@
  * Upsell Image Selector Utility
  *
  * Dynamically selects upsell promotional images based on:
- * - Active promo multiplier (2x, 3x for one-time; 10x for membership)
+ * - Active promo multiplier (2x, 3x, 5x, 10x for membership Package images; 2x, 3x, 5x for one-time Plus/Upgrade)
  * - Package type (membership vs one-time)
  * - Upsell category (Pack vs Upgrade vs Package)
  *
@@ -173,8 +173,7 @@ function getPromoImagePath(
   // - Upgrades (additional packs): "2x Apprentice Upgrade.png" (lowercase x)
   let imageFileName: string;
   if (imageCategory === "Package") {
-    // Membership packages: "10X Tradie Package.png"
-    // Only valid for membership packages with 10X multiplier
+    // Membership packages: "2X/3X/5X/10X {Package} Package.png" (e.g. 3X Boss Package.png, 5X Tradie Package.png; 2X images upcoming)
     imageFileName = `${multiplier}X ${normalizedPackageName} Package.png`;
   } else if (imageCategory === "Pack") {
     // One-time packs: "2X Apprentice Plus.png" or "3X Tradie Plus.png"
@@ -199,72 +198,33 @@ function getPromoImagePath(
 export function getUpsellImagePath(params: UpsellImageParams): string {
   const { offerId, packageType, promoMultiplier, category } = params;
 
-  // 🔍 DEBUG: Log function call parameters
-  console.log("🖼️ getUpsellImagePath called with:", {
-    offerId,
-    packageType,
-    promoMultiplier,
-    category,
-    promoMultiplierType: typeof promoMultiplier,
-    promoMultiplierIsNull: promoMultiplier === null,
-    promoMultiplierIsUndefined: promoMultiplier === undefined,
-    promoMultiplierEquals10: promoMultiplier === 10,
-  });
-
   // Extract package info from offer ID (we need this for package name and fallback category checks)
   const extractedInfo = extractPackageInfo(offerId);
   const { packageName } = extractedInfo;
 
   // Determine image category from the category parameter (primary source of truth)
-  // This ensures we use the correct category based on business logic, not just offerId
   const imageCategory = getImageCategoryFromUpsellCategory(category, packageType);
 
-  // 🔍 DEBUG: Log extracted info
-  console.log("🖼️ Extracted info:", {
-    packageName,
-    extractedImageCategory: extractedInfo.imageCategory,
-    imageCategory,
-    offerIdEndsWithPlusPackage: offerId.endsWith("-plus-package"),
-  });
+  // Supported membership promo multipliers for Package images: 2x, 3x, 5x, 10x (2X images upcoming)
+  const membershipPromoMultipliers = [2, 3, 5, 10] as const;
 
-  // Handle membership packages with 10x promo FIRST (before the null check)
-  // This ensures membership packages with 10X promo always get the promo image
-  if (packageType === "membership" && promoMultiplier === 10) {
-    // 🔍 DEBUG: Log membership 10X check
-    console.log("🖼️ ✅ Membership 10X check passed!");
-
-    // Only subscription-plus packages have 10x images
-    // Check multiple ways to determine if this is a subscription-plus package:
-    // 1. Explicit category parameter
-    // 2. Image category from offerId extraction (subscription-plus packages have "Package" category)
-    // 3. OfferId pattern (ends with "-plus-package")
-    const isSubscriptionPlus = 
-      category === "subscription-plus" || 
+  // Handle membership packages with 2x, 3x, 5x, or 10x promo FIRST (before the null check)
+  // This ensures membership packages get the correct promo image (e.g. 3X Boss Package.png, 5X Tradie Package.png)
+  if (
+    packageType === "membership" &&
+    promoMultiplier != null &&
+    (membershipPromoMultipliers as readonly number[]).includes(promoMultiplier)
+  ) {
+    // Only subscription-plus packages have promo Package images (2X/3X/5X/10X {Package} Package.png)
+    const isSubscriptionPlus =
+      category === "subscription-plus" ||
       extractedInfo.imageCategory === "Package" ||
-      offerId.endsWith("-plus-package"); // Fallback: check offerId pattern for subscription-plus packages
-    
-    // 🔍 DEBUG: Log subscription-plus check
-    console.log("🖼️ Subscription-plus check:", {
-      isSubscriptionPlus,
-      categoryCheck: category === "subscription-plus",
-      extractedCategoryCheck: extractedInfo.imageCategory === "Package",
-      offerIdPatternCheck: offerId.endsWith("-plus-package"),
-    });
-    
+      offerId.endsWith("-plus-package");
+
     if (isSubscriptionPlus) {
-      // Ensure we use "Package" category for membership packages
-      const promoImagePath = getPromoImagePath(10, packageName, "Package");
-      console.log("🖼️ ✅ Returning 10X promo image:", promoImagePath);
+      const promoImagePath = getPromoImagePath(promoMultiplier, packageName, "Package");
       return promoImagePath;
     }
-  } else {
-    // 🔍 DEBUG: Log why membership 10X check failed
-    console.log("🖼️ ❌ Membership 10X check failed:", {
-      packageTypeIsMembership: packageType === "membership",
-      promoMultiplierIs10: promoMultiplier === 10,
-      actualPromoMultiplier: promoMultiplier,
-      packageType,
-    });
   }
 
   // If no promo is active (null or undefined) or package type is missing, use base images

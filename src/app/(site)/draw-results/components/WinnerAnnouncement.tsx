@@ -53,9 +53,9 @@ export default function WinnerAnnouncement({ latestWinner }: WinnerAnnouncementP
                   <Clock className="w-4 h-4 text-white" />
                 </div>
                 <span>
-                  Selected:{" "}
+                  Won on:{" "}
                   <strong>
-                    {new Date(latestWinner.selectedDate).toLocaleDateString("en-AU", {
+                    {new Date(latestWinner.wonOnDate ?? latestWinner.selectedDate).toLocaleDateString("en-AU", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",

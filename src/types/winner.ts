@@ -16,6 +16,8 @@ export interface WinnerSummary {
   winnerState?: string;
   entryNumber?: number;
   selectedDate: string;
+  /** Draw end date (e.g. drawDate for major draws) – use for "Won on" display instead of selectedDate */
+  wonOnDate?: string;
   imageUrl?: string;
   selectedBy?: string;
   cycle: number;

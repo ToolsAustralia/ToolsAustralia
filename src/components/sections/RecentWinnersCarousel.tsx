@@ -21,6 +21,7 @@ interface Winner {
   winnerState?: string;
   imageUrl?: string;
   selectedDate: string;
+  wonOnDate?: string;
   entryNumber?: number;
   selectedPrize?: string;
 }
@@ -152,7 +153,7 @@ export default function WinnersSection({
                 const displayImage =
                   winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
                 const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-                const selectedDate = new Date(winner.selectedDate);
+                const wonOnDate = new Date(winner.wonOnDate ?? winner.selectedDate);
 
                 return (
                   <div
@@ -210,9 +211,9 @@ export default function WinnersSection({
                           {/* Animated shimmer effect */}
                           <div className="absolute inset-0 sm:-translate-x-full sm:group-hover:translate-x-full animate-shimmer-horizontal sm:animate-none transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
                           
-                          {/* Winner Name */}
-                          <div className="relative">
-                            <p className="text-base sm:text-2xl font-bold font-['Poppins'] mb-1 sm:mb-2 tracking-tight relative inline-block">
+                          {/* Winner Name and Location - Same Row */}
+                          <div className="relative flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1">
+                            <p className="text-base sm:text-2xl font-bold font-['Poppins'] tracking-tight relative inline-block">
                               <span 
                                 className="absolute inset-0 bg-gradient-to-r from-yellow-400/30 via-white/40 to-yellow-400/30 bg-clip-text text-transparent blur-md opacity-60 animate-pulse"
                                 aria-hidden="true"
@@ -223,14 +224,13 @@ export default function WinnersSection({
                                 {formattedName}
                               </span>
                             </p>
+                            {winner.winnerState && (
+                              <div className="flex items-center gap-1.5 sm:gap-2 relative z-10">
+                                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-300 sm:text-gray-300 sm:group-hover:text-yellow-300 transition-colors duration-300 flex-shrink-0" />
+                                <span className="text-xs sm:text-sm text-gray-100 sm:text-gray-200 sm:group-hover:text-gray-100 transition-colors duration-300">{winner.winnerState}</span>
+                              </div>
+                            )}
                           </div>
-                          
-                          {winner.winnerState && (
-                            <div className="flex items-center gap-1.5 sm:gap-2 relative z-10">
-                              <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-300 sm:text-gray-300 sm:group-hover:text-yellow-300 transition-colors duration-300" />
-                              <span className="text-xs sm:text-sm text-gray-100 sm:text-gray-200 sm:group-hover:text-gray-100 transition-colors duration-300">{winner.winnerState}</span>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -257,7 +257,7 @@ export default function WinnersSection({
                           <div className="text-right">
                             <span className="text-[10px] sm:text-xs text-gray-500 font-['Inter'] font-medium block">Won on</span>
                             <p className="text-xs sm:text-sm text-gray-900 font-['Inter'] font-semibold whitespace-nowrap">
-                              {selectedDate.toLocaleDateString("en-AU", {
+                              {wonOnDate.toLocaleDateString("en-AU", {
                                 month: "short",
                                 day: "numeric",
                                 year: "numeric",
