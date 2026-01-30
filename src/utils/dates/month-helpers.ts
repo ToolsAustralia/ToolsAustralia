@@ -113,4 +113,3 @@ export function formatRenewalDate(date: Date): string {
 export function getFallbackRenewalDate(startDate: Date): Date {
   return addMonths(startDate, 1);
 }
-

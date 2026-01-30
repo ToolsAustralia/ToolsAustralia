@@ -90,6 +90,11 @@ export default function RichTextEditor({
     return null;
   }
 
+  // Hide placeholder when there is text: from the value prop (e.g. loaded from DB) or from the editor
+  const valueHasText = typeof value === "string" && value.replace(/<[^>]*>/g, "").trim() !== "";
+  const editorHasText = editor.getText().trim() !== "";
+  const showPlaceholder = !valueHasText && !editorHasText;
+
   return (
     <div className="border-2 border-gray-200 rounded-lg overflow-hidden focus-within:border-[#ee0000] focus-within:ring-2 focus-within:ring-[#ee0000]/20 transition-all duration-200 bg-white">
       {/* Toolbar */}
@@ -247,7 +252,7 @@ export default function RichTextEditor({
           editor={editor}
           className="focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[200px] [&_.ProseMirror]:font-['Inter'] [&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:text-gray-800 [&_.ProseMirror_p]:my-3 [&_.ProseMirror_p:first-child]:mt-0 [&_.ProseMirror_p:last-child]:mb-0 [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_ul]:my-3 [&_.ProseMirror_ol]:my-3 [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:my-4 [&_.ProseMirror_blockquote]:text-gray-600 [&_.ProseMirror_mark]:bg-yellow-200 [&_.ProseMirror_mark]:px-1 [&_.ProseMirror_mark]:rounded [&_.ProseMirror_strong]:font-semibold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline"
         />
-        {!editor.getText() && (
+        {showPlaceholder && (
           <div className="absolute top-4 left-4 pointer-events-none text-gray-400 font-['Inter']">
             {placeholder}
           </div>

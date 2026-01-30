@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Trophy, MessageSquare, Gift, AlertCircle, CheckCircle } from "lucide-react";
+import { Trophy, MessageSquare, Gift, AlertCircle, Image as ImageIcon } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
+import ImageUpload from "./ui/ImageUpload";
 import { useToast } from "@/components/ui/Toast";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 
@@ -15,6 +16,7 @@ interface WinnerEditModalProps {
   drawType: "major" | "mini";
   currentTestimony?: string | null;
   currentSelectedPrize?: string | null;
+  currentImageUrl?: string | null;
   onUpdate: () => void | Promise<void>;
 }
 
@@ -31,11 +33,13 @@ export default function WinnerEditModal({
   drawType,
   currentTestimony,
   currentSelectedPrize,
+  currentImageUrl,
   onUpdate,
 }: WinnerEditModalProps) {
   const { showToast } = useToast();
   const [testimony, setTestimony] = useState("");
   const [selectedPrize, setSelectedPrize] = useState("");
+  const [winnerImages, setWinnerImages] = useState<(File | string)[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,9 +48,10 @@ export default function WinnerEditModal({
     if (isOpen) {
       setTestimony(currentTestimony || "");
       setSelectedPrize(currentSelectedPrize || "");
+      setWinnerImages(currentImageUrl ? [currentImageUrl] : []);
       setError(null);
     }
-  }, [isOpen, currentTestimony, currentSelectedPrize]);
+  }, [isOpen, currentTestimony, currentSelectedPrize, currentImageUrl]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,6 +63,7 @@ export default function WinnerEditModal({
       const updateData: {
         testimony?: string | null;
         selectedPrize?: string | null;
+        imageUrl?: string | null;
       } = {};
 
       // Only include fields that have changed
@@ -67,6 +73,42 @@ export default function WinnerEditModal({
 
       if (selectedPrize.trim() !== (currentSelectedPrize || "")) {
         updateData.selectedPrize = selectedPrize.trim() || null;
+      }
+
+      // Resolve image URL for major draws: upload new file or use existing URL; only send if changed
+      if (drawType === "major") {
+        const fileImage = winnerImages.find((img): img is File => img instanceof File);
+        const existingUrl = winnerImages.find((img): img is string => typeof img === "string");
+        const currentImage = currentImageUrl ?? null;
+
+        let resolvedImageUrl: string | null = null;
+        if (fileImage) {
+          const uploadFormData = new FormData();
+          uploadFormData.append("file", fileImage);
+          uploadFormData.append("folder", "major-draw-winners");
+
+          const uploadResponse = await fetch("/api/upload/cloudinary", {
+            method: "POST",
+            body: uploadFormData,
+          });
+
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json();
+            throw new Error(errorData.error || "Failed to upload winner image");
+          }
+
+          const uploadData = await uploadResponse.json();
+          if (!uploadData.url) {
+            throw new Error("Failed to get image URL from upload response");
+          }
+          resolvedImageUrl = uploadData.url;
+        } else if (existingUrl) {
+          resolvedImageUrl = existingUrl;
+        }
+
+        if (resolvedImageUrl !== currentImage) {
+          updateData.imageUrl = resolvedImageUrl;
+        }
       }
 
       // If nothing changed, just close
@@ -92,7 +134,7 @@ export default function WinnerEditModal({
       showToast({
         type: "success",
         title: "Winner Updated",
-        message: "Winner testimony and prize selection have been updated successfully.",
+        message: "Winner testimony, prize selection, and photo have been updated successfully.",
         duration: 5000,
       });
 
@@ -140,6 +182,31 @@ export default function WinnerEditModal({
               />
               <p className="mt-1 text-xs text-gray-500">
                 Enter the prize selected by the winner. This will be displayed on the winners page. You can enter any prize description (e.g., &quot;$15,000 Cash&quot;, &quot;Milwaukee + Sidchrome Tool Set&quot;, etc.).
+              </p>
+            </div>
+          )}
+
+          {/* Winner Photo - Only for major draws */}
+          {drawType === "major" && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-gray-500" />
+                  Winner Photo
+                </div>
+              </label>
+              <ImageUpload
+                images={winnerImages}
+                onImagesChange={(images) => setWinnerImages(images.slice(0, 1))}
+                maxImages={1}
+                accept="image/*"
+                uploadToCloudinary={false}
+                storeLocally
+                className="border border-dashed border-gray-200 rounded-lg"
+              />
+              <p className="flex items-center gap-2 text-xs text-gray-500">
+                <ImageIcon className="w-4 h-4 text-gray-400" />
+                Upload or replace the winner photo. Remove the image to clear it.
               </p>
             </div>
           )}

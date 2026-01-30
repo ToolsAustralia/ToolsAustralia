@@ -695,6 +695,7 @@ export default function MajorDrawManagement() {
             drawType="major"
             currentTestimony={currentWinner.testimony}
             currentSelectedPrize={currentWinner.selectedPrize}
+            currentImageUrl={currentWinner.imageUrl}
             onUpdate={async () => {
               // Refetch winner data after update
               refetch();

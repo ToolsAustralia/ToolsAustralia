@@ -186,7 +186,6 @@ export default function KlaviyoSyncButton() {
       // Sync started in background - progress polling will handle updates
       // The response now returns immediately, sync continues in background
       // We'll poll progress endpoint to track completion
-      
       // Wait a moment for progress to initialize
       await new Promise((resolve) => setTimeout(resolve, 1000));
       
