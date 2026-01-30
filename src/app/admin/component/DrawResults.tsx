@@ -202,6 +202,7 @@ export default function DrawResults() {
     winnerName: string;
     testimony?: string | null;
     selectedPrize?: string | null;
+    imageUrl?: string | null;
   } | null>(null);
   // Edit Draw Modal
   const [editingDraw, setEditingDraw] = useState<DrawResult | null>(null);
@@ -296,6 +297,7 @@ export default function DrawResults() {
                   winnerName: `${winnerDetailsData.winner.winnerFirstName} ${winnerDetailsData.winner.winnerLastName}`.trim(),
                   testimony: winnerDetailsData.winner.testimony,
                   selectedPrize: winnerDetailsData.winner.selectedPrize || winnerDetailsData.winner.selectedPrizeSlug,
+                  imageUrl: winnerDetailsData.winner.imageUrl ?? null,
                 });
                 setSelectedDraw(draw);
                 setIsEditWinnerModalOpen(true);
@@ -827,6 +829,7 @@ export default function DrawResults() {
             drawType="major"
             currentTestimony={editingWinner.testimony}
             currentSelectedPrize={editingWinner.selectedPrize}
+            currentImageUrl={editingWinner.imageUrl}
             onUpdate={async () => {
               // Refresh the draws list after update
               await fetchDraws(pagination.currentPage);

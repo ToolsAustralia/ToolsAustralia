@@ -23,6 +23,7 @@ const updateWinnerSchema = z.object({
   selectedPrize: z.string().trim().optional().nullable(),
   // Legacy field - kept for backward compatibility
   selectedPrizeSlug: z.string().optional().nullable(),
+  imageUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
 });
 
 /**
@@ -184,6 +185,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       winner.selectedPrize = validatedData.selectedPrizeSlug || undefined;
     }
 
+    // Update winner image URL (optional; null or empty clears it)
+    if (validatedData.imageUrl !== undefined) {
+      winner.imageUrl = validatedData.imageUrl && validatedData.imageUrl.trim() !== "" ? validatedData.imageUrl : undefined;
+    }
+
     await winner.save();
 
     // Fetch updated winner with populated data
@@ -230,6 +236,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         testimony: updatedWinner.testimony || null,
         selectedPrize: (updatedWinner.selectedPrize || updatedWinner.selectedPrizeSlug) || null, // Prefer new field, fallback to legacy
         selectedPrizeSlug: updatedWinner.selectedPrizeSlug || null, // Legacy field
+        imageUrl: updatedWinner.imageUrl ?? null,
       },
     });
   } catch (error) {
