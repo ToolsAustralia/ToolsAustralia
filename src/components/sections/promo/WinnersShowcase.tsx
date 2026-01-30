@@ -22,6 +22,7 @@ interface Winner {
   winnerState?: string;
   imageUrl?: string;
   selectedDate: string;
+  wonOnDate?: string;
   entryNumber?: number;
 }
 
@@ -115,7 +116,7 @@ export default function WinnersShowcase({
               const displayImage =
                 winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
               const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-              const selectedDate = new Date(winner.selectedDate);
+              const wonOnDate = new Date(winner.wonOnDate ?? winner.selectedDate);
 
               return (
                 <div
@@ -146,13 +147,13 @@ export default function WinnersShowcase({
                       </div>
                     )}
 
-                    {/* Winner Badge */}
+                    {/* Winner Badge - Name and Location Same Row */}
                     <div className="absolute bottom-3 left-3 right-3 z-20">
-                      <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/20">
+                      <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/20 flex flex-wrap items-center gap-x-2 gap-y-1">
                         <p className="text-white font-bold text-sm font-['Poppins']">{formattedName}</p>
                         {winner.winnerState && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <MapPin className="w-3 h-3 text-slate-300" />
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-300 flex-shrink-0" />
                             <span className="text-xs text-slate-300 font-['Inter']">{winner.winnerState}</span>
                           </div>
                         )}
@@ -173,7 +174,7 @@ export default function WinnersShowcase({
                     <div className="flex items-center gap-2 text-slate-300 mb-3">
                       <Calendar className="w-4 h-4 flex-shrink-0" />
                       <span className="text-xs font-['Inter']">
-                        {selectedDate.toLocaleDateString("en-AU", {
+                        {wonOnDate.toLocaleDateString("en-AU", {
                           day: "numeric",
                           month: "short",
                           year: "numeric",

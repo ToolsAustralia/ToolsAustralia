@@ -3,7 +3,7 @@
 ## Overview
 
 The Upsell Image Selector system dynamically selects promotional images for upsell offers based on:
-- Active promo multiplier (2x, 3x, 5x for one-time packages; 10x for membership packages)
+- Active promo multiplier (2x, 3x, 5x for one-time Plus/Upgrade; 2x, 3x, 5x, 10x for membership Package images; 2X Package images upcoming)
 - Package type (membership vs one-time vs mini-draw)
 - Upsell category (subscription-plus, one-time-plus, additional-upgrade)
 
@@ -236,9 +236,16 @@ public/images/upsells/
 │   ├── Tradie Plus.png
 │   └── Tradie Upgrade.png
 └── active-promo/                    # Promo active
-    ├── 10X Tradie Package.png      # Membership 10X
+    ├── 2X Boss Package.png          # Membership 2X (upcoming)
+    ├── 3X Boss Package.png          # Membership 3X
+    ├── 5X Boss Package.png          # Membership 5X
+    ├── 10X Boss Package.png         # Membership 10X
+    ├── 3X Foreman Package.png
+    ├── 5X Foreman Package.png
     ├── 10X Foreman Package.png
-    ├── 10X Boss Package.png
+    ├── 3X Tradie Package.png
+    ├── 5X Tradie Package.png
+    ├── 10X Tradie Package.png
     ├── 2X Tradie Plus.png           # One-time 2X
     ├── 3X Tradie Plus.png           # One-time 3X
     ├── 2x Tradie Upgrade.png        # Additional 2x (lowercase x)
@@ -249,7 +256,7 @@ public/images/upsells/
 
 | Package Type | Category | Multiplier | Filename Pattern | Example |
 |-------------|----------|------------|------------------|---------|
-| Membership | subscription-plus | 10 | `10X {Package} Package.png` | `10X Tradie Package.png` |
+| Membership | subscription-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Package.png` | `3X Boss Package.png`, `5X Tradie Package.png`, `10X Foreman Package.png` (2X upcoming) |
 | One-time | one-time-plus | 2, 3, 5 | `{multiplier}X {Package} Plus.png` | `2X Tradie Plus.png` |
 | One-time | additional-upgrade | 2, 3, 5 | `{multiplier}x {Package} Upgrade.png` | `2x Tradie Upgrade.png` |
 

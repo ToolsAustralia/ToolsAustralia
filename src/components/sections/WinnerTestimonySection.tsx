@@ -13,6 +13,7 @@ interface WinnerWithTestimony {
   drawName: string;
   drawType: "major" | "mini";
   selectedDate: string;
+  wonOnDate?: string;
   testimony?: string;
   selectedPrize?: string;
   prize: {
@@ -73,7 +74,7 @@ export default function WinnerTestimonySection({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 xl:gap-10">
           {winnersWithTestimonies.map((winner) => {
             const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-            const selectedDate = new Date(winner.selectedDate);
+            const wonOnDate = new Date(winner.wonOnDate ?? winner.selectedDate);
             const prizeLabel = winner.selectedPrize || winner.prize.name;
 
             return (
@@ -143,7 +144,7 @@ export default function WinnerTestimonySection({
                     <div className="flex items-center gap-1.5 sm:gap-2">
                       <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-400 flex-shrink-0" />
                       <span className="text-[10px] sm:text-xs lg:text-sm text-gray-300 font-['Inter']">
-                        {selectedDate.toLocaleDateString("en-AU", {
+                        {wonOnDate.toLocaleDateString("en-AU", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
