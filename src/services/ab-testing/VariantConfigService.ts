@@ -110,12 +110,12 @@ export class VariantConfigService {
         if (banner.showCountdown !== undefined && typeof banner.showCountdown !== "boolean") {
           errors.push("Banner showCountdown must be a boolean");
         }
-        const validCountdownModes = ["default", "limited_time_only", "scheduled_end"];
+        const validCountdownModes = ["default", "limited_time_only", "scheduled_end", "ending"];
         if (
           banner.countdownMode !== undefined &&
           (typeof banner.countdownMode !== "string" || !validCountdownModes.includes(banner.countdownMode as string))
         ) {
-          errors.push("Banner countdownMode must be one of: default, limited_time_only, scheduled_end");
+          errors.push("Banner countdownMode must be one of: default, limited_time_only, scheduled_end, ending");
         }
       }
     }

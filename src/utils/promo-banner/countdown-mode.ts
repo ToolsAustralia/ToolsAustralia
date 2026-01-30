@@ -5,12 +5,12 @@
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_24H = 24 * MS_PER_HOUR;
-/** Within 1 hour of 24h counts as "exactly 24h" for Variant A and format choice */
+/** Within 1 hour of 24h counts as "exactly 24h" for limited_time_only/ending and format choice */
 const TOLERANCE_MS = MS_PER_HOUR;
 
 /**
  * True when scheduled promo duration is effectively 24 hours (within 1 hour).
- * Used for Variant A (show countdown only when 24h) and Variant B (use HRS MINS SECS when ≤24h).
+ * Used for limited_time_only/ending (show countdown only when 24h) and scheduled_end (use HRS MINS SECS when ≤24h).
  */
 export function isScheduledDuration24h(durationMs: number | undefined): boolean {
   if (durationMs == null || durationMs < 0) return false;
@@ -21,6 +21,7 @@ export function isScheduledDuration24h(durationMs: number | undefined): boolean 
 export type CountdownDisplayType =
   | "hidden"
   | "limited_time_only"
+  | "ending"
   | "draw_tonight"
   | "draw_tomorrow"
   | "midnight"
@@ -33,7 +34,7 @@ export interface ResolveCountdownDisplayResult {
 }
 
 export interface ResolveCountdownDisplayParams {
-  countdownMode: "default" | "limited_time_only" | "scheduled_end";
+  countdownMode: "default" | "limited_time_only" | "scheduled_end" | "ending";
   showCountdown: boolean;
   source: "scheduled" | "toggle" | "alternating" | "none";
   scheduledEndDate?: string | null;
@@ -42,7 +43,7 @@ export interface ResolveCountdownDisplayParams {
 }
 
 /**
- * Resolves what to show in the countdown slot: hidden, "LIMITED TIME ONLY", draw countdown, or scheduled end countdown.
+ * Resolves what to show in the countdown slot: hidden, "LIMITED TIME ONLY", "ENDING", draw countdown, or scheduled end countdown.
  * Component uses result.type and, for scheduled_end, endMs + useDays to drive display.
  */
 export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): ResolveCountdownDisplayResult {
@@ -62,6 +63,14 @@ export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): 
       return { type: "scheduled_end", endMs: endMs!, useDays: false };
     }
     return { type: "limited_time_only" };
+  }
+
+  if (countdownMode === "ending") {
+    const is24h = isScheduledDuration24h(durationMs ?? undefined);
+    if (source === "scheduled" && is24h && timeLeftMs != null && timeLeftMs > 0) {
+      return { type: "scheduled_end", endMs: endMs!, useDays: false };
+    }
+    return { type: "ending" };
   }
 
   if (countdownMode === "scheduled_end" && source === "scheduled" && timeLeftMs != null && timeLeftMs > 0) {

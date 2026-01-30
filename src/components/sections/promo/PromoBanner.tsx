@@ -433,11 +433,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     });
   }, [isNoPromo, variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault, multiplier]);
 
-  // Countdown display: fixed to Variant A (LIMITED TIME ONLY) — winner of split test; 24h scheduled still shows countdown per countdown-mode.ts
+  // Countdown display: variant config drives behaviour; default is limited_time_only
   const countdownDisplay = useMemo(() => {
     const drawStatus = getDrawDateStatus();
     return resolveCountdownDisplay({
-      countdownMode: "limited_time_only",
+      countdownMode: variantConfig?.banner?.countdownMode ?? "limited_time_only",
       showCountdown: variantConfig?.banner?.showCountdown !== false,
       source: effectiveEntry?.source ?? "none",
       scheduledEndDate: effectiveEntry?.scheduledEndDate ?? undefined,
@@ -445,6 +445,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       drawStatus,
     });
   }, [
+    variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
     effectiveEntry?.source,
     effectiveEntry?.scheduledEndDate,
@@ -727,7 +728,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 );
               }
 
-              // Variant A: LIMITED TIME ONLY (unless 24h scheduled, then handled as scheduled_end below)
               if (countdownDisplay.type === "limited_time_only") {
                 return (
                   <div className="flex items-center justify-center">
@@ -740,7 +740,19 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 );
               }
 
-              // Variant B: scheduled end countdown (DAYS HRS MINS or HRS MINS SECS)
+              if (countdownDisplay.type === "ending") {
+                return (
+                  <div className="flex items-center justify-center">
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
+                        PROMO ENDING
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Scheduled end countdown (DAYS HRS MINS or HRS MINS SECS)
               if (countdownDisplay.type === "scheduled_end") {
                 const useDays = countdownDisplay.useDays ?? false;
                 const tileClass = "bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3";

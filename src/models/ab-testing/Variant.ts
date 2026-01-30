@@ -24,7 +24,7 @@ export interface VariantConfig {
     badgeText?: string; // Override badge text (default: BONUS ENTRIES)
     multiplier?: number; // Override multiplier display (2x, 3x, 5x, 10x)
     showCountdown?: boolean; // Toggle countdown visibility
-    countdownMode?: "default" | "limited_time_only" | "scheduled_end"; // Variant A: limited time only unless 24h scheduled; Variant B: timer to scheduled end
+    countdownMode?: "default" | "limited_time_only" | "scheduled_end" | "ending";
   };
   packages?: {
     displayOrder?: string[]; // Reorder package IDs

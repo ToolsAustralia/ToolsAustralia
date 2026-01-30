@@ -5,7 +5,7 @@ import type { EffectiveForBannerResponse } from "@/types/admin";
 /**
  * GET /api/promo/effective-for-banner
  * Returns effective multipliers with source and scheduled meta for banner display (public route).
- * Used by PromoBanner for countdown mode (Variant A/B) and badge logic.
+ * Used by PromoBanner for countdown mode and badge logic.
  */
 export async function GET() {
   try {
