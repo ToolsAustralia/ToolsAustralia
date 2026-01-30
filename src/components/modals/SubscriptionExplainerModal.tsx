@@ -42,6 +42,10 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
           <VerticalAccumulationChart
             selectedPackageId={selectedPackageId}
             showOnlySelectedPackage
+            userAccumulation={{
+              baseEntriesPerMonth: entriesPerMonth,
+              lastMonthAccumulatedEntries,
+            }}
           />
         )}
         {/* Billing rule: 25–27 joiners renew on 24th; source of truth: src/utils/billing/anchor-billing.ts */}
