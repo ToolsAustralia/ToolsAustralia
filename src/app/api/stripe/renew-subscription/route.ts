@@ -9,6 +9,7 @@ import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
 import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
+import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -327,13 +328,17 @@ export async function POST(request: NextRequest) {
       //   cancelAtPeriodEnd: reactivatedSubscription.cancel_at_period_end,
       // });
 
-      // Update user subscription
+      // Update user subscription (sync endDate from Stripe so UI shows correct next renewal)
+      const reactivatePeriodEnd = getSubscriptionPeriodEnd(reactivatedSubscription);
+      const reactivateEndDate =
+        reactivatePeriodEnd != null ? new Date(reactivatePeriodEnd * 1000) : undefined;
+
       if (user.subscription) {
         user.subscription.isActive = true;
         user.subscription.status = "active";
         user.subscription.autoRenew = true;
         user.subscription.packageId = targetPackage._id;
-        user.subscription.endDate = undefined;
+        user.subscription.endDate = reactivateEndDate; // End of current billing period from Stripe
         user.subscription.cancelledAt = undefined; // Clear cancellation timestamp when reactivated
       }
 
@@ -401,14 +406,19 @@ export async function POST(request: NextRequest) {
     const latestInvoice = newSubscription.latest_invoice as Stripe.Invoice;
     const paymentIntent = (latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent })?.payment_intent;
 
+    const newSubscriptionPeriodEnd = getSubscriptionPeriodEnd(newSubscription);
+    const newSubscriptionEndDate =
+      newSubscriptionPeriodEnd != null ? new Date(newSubscriptionPeriodEnd * 1000) : undefined;
+
     // Check if payment completed immediately
     if (latestInvoice?.status === "paid" && newSubscription.status === "active") {
       // console.log(`✅ Payment completed immediately`);
 
-      // Update user subscription
+      // Update user subscription (sync endDate from Stripe so UI shows correct next renewal)
       user.subscription = {
         packageId: targetPackage._id,
         startDate: new Date(),
+        endDate: newSubscriptionEndDate, // End of current billing period from Stripe
         isActive: true,
         autoRenew: true,
         status: "active",
@@ -440,10 +450,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create payment intent" }, { status: 500 });
     }
 
-    // Update user with new subscription (pending activation)
+    // Update user with new subscription (pending activation); set endDate so UI shows next renewal when payment completes
     user.subscription = {
       packageId: targetPackage._id,
       startDate: new Date(),
+      endDate: newSubscriptionEndDate, // End of current billing period from Stripe
       isActive: false,
       autoRenew: true,
       status: newSubscription.status,
