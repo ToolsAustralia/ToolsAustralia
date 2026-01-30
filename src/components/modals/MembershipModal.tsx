@@ -582,23 +582,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   }, [isAuthenticated, userData, isOpen]);
 
   /**
-   * Auto-open package selection modal in step 2 based on variant config or promotion page
-   * This gives users more package options when they click "Enter Now" from promotion pages
-   * 
-   * ✅ A/B Testing: Now controlled by variant config (membershipModal.showPackageSelectionFirst)
-   * - If config.showPackageSelectionFirst === true: Auto-open package selection
-   * - If config.showPackageSelectionFirst === false: Don't auto-open
-   * - If config is undefined: Falls back to pathname check for backward compatibility
-   * 
-   * @see VariantConfig.membershipModal.showPackageSelectionFirst
+   * Auto-open package selection modal on step 2 (same pattern as PromoBanner countdown).
+   * Component default: show package selection first unless variant explicitly sets false.
+   * - variantConfig?.membershipModal?.showPackageSelectionFirst !== false → show (default)
+   * - No variant config: use pathname (promotions page) as fallback to open on /promotions/...
    */
   useEffect(() => {
-    // Determine if we should auto-open package selection
-    // ✅ FIX: Only fall back to pathname check if membershipModal config doesn't exist at all
-    // If config exists (even if empty {}), respect it and only auto-open if explicitly true
-    const shouldAutoOpen = finalMembershipModalConfig !== null && finalMembershipModalConfig !== undefined
-      ? (finalMembershipModalConfig.showPackageSelectionFirst === true) // Only if explicitly true
-      : pathname?.match(/^\/promotions\/([^/?#]+)/) !== null; // Fallback only if config doesn't exist
+    // Same pattern as banner: showCountdown !== false → default true in component
+    const isPromotionsPage = pathname?.match(/^\/promotions\/([^/?#]+)/) !== null;
+    const shouldAutoOpen = finalMembershipModalConfig == null
+      ? isPromotionsPage
+      : (finalMembershipModalConfig.showPackageSelectionFirst !== false);
 
     // Only auto-open if all conditions are met:
     // 1. Modal is open
