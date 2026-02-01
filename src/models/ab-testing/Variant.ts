@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
+import type { CountdownMode } from "@/utils/promo-banner/countdown-mode";
 
 /**
  * Variant Configuration Interface
@@ -24,7 +25,7 @@ export interface VariantConfig {
     badgeText?: string; // Override badge text (default: BONUS ENTRIES)
     multiplier?: number; // Override multiplier display (2x, 3x, 5x, 10x)
     showCountdown?: boolean; // Toggle countdown visibility
-    countdownMode?: "default" | "limited_time_only" | "scheduled_end" | "ending";
+    countdownMode?: CountdownMode;
   };
   packages?: {
     displayOrder?: string[]; // Reorder package IDs
@@ -82,7 +83,7 @@ const VariantSchema = new Schema<IVariant>(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Indexes
@@ -93,4 +94,3 @@ VariantSchema.index({ experimentId: 1, isControl: 1 });
 const Variant = mongoose.models.Variant || mongoose.model<IVariant>("Variant", VariantSchema);
 
 export default Variant;
-

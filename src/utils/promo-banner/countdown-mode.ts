@@ -33,8 +33,11 @@ export interface ResolveCountdownDisplayResult {
   useDays?: boolean;
 }
 
+/** Valid countdown modes for variant banner config - shared with Variant model */
+export type CountdownMode = "default" | "limited_time_only" | "scheduled_end" | "ending";
+
 export interface ResolveCountdownDisplayParams {
-  countdownMode: "default" | "limited_time_only" | "scheduled_end" | "ending";
+  countdownMode: CountdownMode;
   showCountdown: boolean;
   source: "scheduled" | "toggle" | "alternating" | "none";
   scheduledEndDate?: string | null;
@@ -47,7 +50,7 @@ export interface ResolveCountdownDisplayParams {
  * Component uses result.type and, for scheduled_end, endMs + useDays to drive display.
  */
 export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): ResolveCountdownDisplayResult {
-  const { countdownMode, showCountdown, source, scheduledEndDate, durationMs, drawStatus } = params;
+  const { countdownMode, showCountdown, source, scheduledEndDate, drawStatus } = params;
 
   if (!showCountdown) {
     return { type: "hidden" };
@@ -58,16 +61,18 @@ export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): 
   const timeLeftMs = endMs != null ? endMs - now : undefined;
 
   if (countdownMode === "limited_time_only") {
-    const is24h = isScheduledDuration24h(durationMs ?? undefined);
-    if (source === "scheduled" && is24h && timeLeftMs != null && timeLeftMs > 0) {
+    // Show countdown when scheduled promo has less than 24 hours remaining (not total duration)
+    const withinLast24h = timeLeftMs != null && timeLeftMs > 0 && timeLeftMs <= MS_24H;
+    if (source === "scheduled" && withinLast24h) {
       return { type: "scheduled_end", endMs: endMs!, useDays: false };
     }
     return { type: "limited_time_only" };
   }
 
   if (countdownMode === "ending") {
-    const is24h = isScheduledDuration24h(durationMs ?? undefined);
-    if (source === "scheduled" && is24h && timeLeftMs != null && timeLeftMs > 0) {
+    // Show countdown when scheduled promo has less than 24 hours remaining (not total duration)
+    const withinLast24h = timeLeftMs != null && timeLeftMs > 0 && timeLeftMs <= MS_24H;
+    if (source === "scheduled" && withinLast24h) {
       return { type: "scheduled_end", endMs: endMs!, useDays: false };
     }
     return { type: "ending" };
