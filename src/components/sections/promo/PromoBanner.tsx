@@ -443,10 +443,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       scheduledEndDate: effectiveEntry?.scheduledEndDate ?? undefined,
       durationMs: effectiveEntry?.durationMs ?? undefined,
       drawStatus,
+      countdownLabel: variantConfig?.banner?.countdownLabel ?? undefined,
     });
   }, [
     variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
+    variantConfig?.banner?.countdownLabel,
     effectiveEntry?.source,
     effectiveEntry?.scheduledEndDate,
     effectiveEntry?.durationMs,
@@ -728,24 +730,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 );
               }
 
-              if (countdownDisplay.type === "limited_time_only") {
+              if (countdownDisplay.type === "static_urgency" && countdownDisplay.label) {
                 return (
                   <div className="flex items-center justify-center">
                     <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3">
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
-                        LIMITED TIME ONLY
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (countdownDisplay.type === "ending") {
-                return (
-                  <div className="flex items-center justify-center">
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3">
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
-                        PROMO ENDING
+                        {countdownDisplay.label}
                       </div>
                     </div>
                   </div>

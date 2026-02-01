@@ -71,7 +71,13 @@ const Button: React.FC<ButtonProps> = ({
   `.trim();
 
   return (
-    <button type={type} onClick={onClick} disabled={disabled || loading} className={buttonClasses}>
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={buttonClasses}
+      suppressHydrationWarning
+    >
       {/* Loading Spinner */}
       {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />}
 

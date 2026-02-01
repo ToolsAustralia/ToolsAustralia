@@ -102,9 +102,7 @@ export function formatDateString(date: Date): string {
  */
 export function formatRenewalDate(date: Date): string {
   return format(date, "dd/MM/yyyy, h:mma");
-}
-
-/**
+}/**
  * Fallback renewal date when endDate is missing.
  * If startDate is 25th, 26th, or 27th in AEST (anchor rule), returns the next 24th in AEST.
  * Otherwise returns startDate + 1 month (approximate first renewal).
