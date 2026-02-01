@@ -150,6 +150,22 @@ export async function GET(request: NextRequest) {
     // ========================================
     // For user stats, we always show all-time totals (not filtered by date range)
     // But new signups are filtered by date range
+    // Cancelled memberships: date-dependent
+    // - all-time: total users with scheduled cancellation (endDate + autoRenew false)
+    // - today/yesterday/custom/etc: cancellations that happened in the selected period (cancelledAt in range)
+    const cancelledMembershipsQuery =
+      dateRange === "all-time"
+        ? {
+            "subscription.endDate": { $exists: true, $ne: null },
+            "subscription.autoRenew": false,
+            "subscription.status": { $in: ["active", "past_due"] },
+            isActive: true,
+          }
+        : {
+            "subscription.cancelledAt": { $gte: startDate, $lte: endDate },
+            isActive: true,
+          };
+
     const [totalUsers, activeSubscriptions, newSignupsInRange, usersWithCompletedProfiles, cancelledMemberships] = await Promise.all([
       User.countDocuments({ isActive: true }),
       // Active subscriptions: only count subscriptions that will auto-renew (matches projected income calculation)
@@ -162,14 +178,7 @@ export async function GET(request: NextRequest) {
         profileSetupCompleted: true,
         isActive: true,
       }),
-      // Cancelled memberships: users with scheduled cancellation (cancel at period end)
-      // endDate set + autoRenew false so we don't count active subs who have endDate populated
-      User.countDocuments({
-        "subscription.endDate": { $exists: true, $ne: null },
-        "subscription.autoRenew": false,
-        "subscription.status": { $in: ["active", "past_due"] },
-        isActive: true,
-      }),
+      User.countDocuments(cancelledMembershipsQuery),
     ]);
 
     // Calculate profile completion rate

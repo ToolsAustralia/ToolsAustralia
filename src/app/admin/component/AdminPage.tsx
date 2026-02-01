@@ -806,10 +806,26 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                     />
                     {/* Churn Metric */}
                     <MetricCard
-                      title="Cancelled Memberships"
+                      title={
+                        dateRange === "today"
+                          ? "Cancelled Today"
+                          : dateRange === "yesterday"
+                          ? "Cancelled Yesterday"
+                          : dateRange === "all-time"
+                          ? "Cancelled Memberships"
+                          : "Cancellations"
+                      }
                       value={dashboardStats.users.cancelledMemberships.toLocaleString()}
                       icon={UserX}
-                      subtitle="Scheduled cancellation"
+                      subtitle={
+                        dateRange === "today"
+                          ? "Cancelled today"
+                          : dateRange === "yesterday"
+                          ? "Cancelled yesterday"
+                          : dateRange === "all-time"
+                          ? "Total scheduled cancellation"
+                          : "In selected period"
+                      }
                       color="red"
                     />
                   </>
