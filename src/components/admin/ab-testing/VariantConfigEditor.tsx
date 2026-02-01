@@ -2,15 +2,9 @@
 
 import React, { useState } from "react";
 import { Save, X, Image, Type, Package, ShoppingCart } from "lucide-react";
-import {
-  Input,
-  Textarea,
-  Checkbox,
-  Button,
-  FormSection,
-  Select,
-} from "@/components/modals/ui";
+import { Input, Textarea, Checkbox, Button, FormSection, Select } from "@/components/modals/ui";
 import { Variant, CreateVariantPayload } from "@/hooks/queries/useABTestingQueries";
+import type { CountdownMode } from "@/utils/promo-banner/countdown-mode";
 
 interface VariantConfigEditorProps {
   variant?: Variant;
@@ -23,12 +17,7 @@ interface VariantConfigEditorProps {
  * Variant Config Editor
  * Edit variant configuration using existing form components
  */
-export default function VariantConfigEditor({
-  variant,
-  experimentId,
-  onSave,
-  onCancel,
-}: VariantConfigEditorProps) {
+export default function VariantConfigEditor({ variant, experimentId, onSave, onCancel }: VariantConfigEditorProps) {
   const [formData, setFormData] = useState<CreateVariantPayload>({
     name: variant?.name || "",
     trafficPercentage: variant?.trafficPercentage || 50,
@@ -129,7 +118,7 @@ export default function VariantConfigEditor({
             value={
               typeof formData.config.hero?.imageSrc === "string"
                 ? formData.config.hero.imageSrc
-                : formData.config.hero?.imageSrc?.desktop ?? ""
+                : (formData.config.hero?.imageSrc?.desktop ?? "")
             }
             onChange={(e) =>
               setFormData({
@@ -252,17 +241,33 @@ export default function VariantConfigEditor({
                   ...formData.config,
                   banner: {
                     ...formData.config.banner,
-                    countdownMode: e.target.value as "default" | "limited_time_only" | "scheduled_end" | "ending",
+                    countdownMode: e.target.value as CountdownMode,
                   },
                 },
               })
             }
             label="Countdown behaviour"
             options={[
-              { value: "default", label: "Draw/midnight countdown", description: "Draw tonight, draw tomorrow, or midnight countdown" },
-              { value: "limited_time_only", label: "Limited time only", description: "Show LIMITED TIME ONLY unless scheduled promo is exactly 24h" },
-              { value: "scheduled_end", label: "Scheduled end timer", description: "Timer to scheduled promo end; DAYS HRS MINS when >24h, HRS MINS SECS when ≤24h" },
-              { value: "ending", label: "Ending", description: "Show ENDING unless scheduled promo is exactly 24h (then show countdown)" },
+              {
+                value: "default",
+                label: "Draw/midnight countdown",
+                description: "Draw tonight, draw tomorrow, or midnight countdown",
+              },
+              {
+                value: "limited_time_only",
+                label: "Limited time only",
+                description: "Show LIMITED TIME ONLY unless scheduled promo is exactly 24h",
+              },
+              {
+                value: "scheduled_end",
+                label: "Scheduled end timer",
+                description: "Timer to scheduled promo end; DAYS HRS MINS when >24h, HRS MINS SECS when ≤24h",
+              },
+              {
+                value: "ending",
+                label: "Ending",
+                description: "Show ENDING unless scheduled promo is exactly 24h (then show countdown)",
+              },
             ]}
           />
         </div>
