@@ -18,10 +18,12 @@ export function isScheduledDuration24h(durationMs: number | undefined): boolean 
   return diff <= TOLERANCE_MS;
 }
 
+/** Preset labels for static urgency mode - used in admin UI only */
+export const STATIC_URGENCY_LABEL_PRESETS = ["LIMITED TIME ONLY", "PROMO ENDING", "ENDING SOON"] as const;
+
 export type CountdownDisplayType =
   | "hidden"
-  | "limited_time_only"
-  | "ending"
+  | "static_urgency"
   | "draw_tonight"
   | "draw_tomorrow"
   | "midnight"
@@ -29,12 +31,14 @@ export type CountdownDisplayType =
 
 export interface ResolveCountdownDisplayResult {
   type: CountdownDisplayType;
+  /** Label text when type is static_urgency */
+  label?: string;
   endMs?: number;
   useDays?: boolean;
 }
 
 /** Valid countdown modes for variant banner config - shared with Variant model */
-export type CountdownMode = "default" | "limited_time_only" | "scheduled_end" | "ending";
+export type CountdownMode = "default" | "limited_time_only" | "scheduled_end" | "ending" | "static_urgency";
 
 export interface ResolveCountdownDisplayParams {
   countdownMode: CountdownMode;
@@ -43,14 +47,23 @@ export interface ResolveCountdownDisplayParams {
   scheduledEndDate?: string | null;
   durationMs?: number | null;
   drawStatus: "today" | "tomorrow" | null;
+  /** Admin-configured label for static_urgency mode; optional override for legacy modes */
+  countdownLabel?: string | null;
 }
 
+/** Default labels for legacy countdown modes (used when countdownLabel not provided) */
+const LEGACY_MODE_DEFAULTS: Record<string, string> = {
+  limited_time_only: "LIMITED TIME ONLY",
+  ending: "PROMO ENDING",
+  static_urgency: "ENDING SOON",
+};
+
 /**
- * Resolves what to show in the countdown slot: hidden, "LIMITED TIME ONLY", "ENDING", draw countdown, or scheduled end countdown.
- * Component uses result.type and, for scheduled_end, endMs + useDays to drive display.
+ * Resolves what to show in the countdown slot: hidden, static label, draw countdown, or scheduled end countdown.
+ * Component uses result.type and, for static_urgency, result.label. For scheduled_end, endMs + useDays drive display.
  */
 export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): ResolveCountdownDisplayResult {
-  const { countdownMode, showCountdown, source, scheduledEndDate, drawStatus } = params;
+  const { countdownMode, showCountdown, source, scheduledEndDate, drawStatus, countdownLabel } = params;
 
   if (!showCountdown) {
     return { type: "hidden" };
@@ -60,22 +73,18 @@ export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): 
   const endMs = scheduledEndDate ? new Date(scheduledEndDate).getTime() : undefined;
   const timeLeftMs = endMs != null ? endMs - now : undefined;
 
-  if (countdownMode === "limited_time_only") {
-    // Show countdown when scheduled promo has less than 24 hours remaining (not total duration)
+  // Static urgency modes: show countdown when scheduled promo has <24h remaining, else show label
+  const staticUrgencyModes: CountdownMode[] = ["limited_time_only", "ending", "static_urgency"];
+  if (staticUrgencyModes.includes(countdownMode)) {
     const withinLast24h = timeLeftMs != null && timeLeftMs > 0 && timeLeftMs <= MS_24H;
     if (source === "scheduled" && withinLast24h) {
       return { type: "scheduled_end", endMs: endMs!, useDays: false };
     }
-    return { type: "limited_time_only" };
-  }
-
-  if (countdownMode === "ending") {
-    // Show countdown when scheduled promo has less than 24 hours remaining (not total duration)
-    const withinLast24h = timeLeftMs != null && timeLeftMs > 0 && timeLeftMs <= MS_24H;
-    if (source === "scheduled" && withinLast24h) {
-      return { type: "scheduled_end", endMs: endMs!, useDays: false };
-    }
-    return { type: "ending" };
+    const label =
+      (countdownLabel?.trim() && countdownLabel.trim()) ||
+      LEGACY_MODE_DEFAULTS[countdownMode] ||
+      "ENDING SOON";
+    return { type: "static_urgency", label };
   }
 
   if (countdownMode === "scheduled_end" && source === "scheduled" && timeLeftMs != null && timeLeftMs > 0) {

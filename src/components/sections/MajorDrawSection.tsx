@@ -478,6 +478,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 key={type}
                 type="button"
                 onClick={() => handleToolboxTypeChange(type)}
+                suppressHydrationWarning
                 className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
                   isActive && type !== "cash"
                     ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
@@ -508,6 +509,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       type="button"
                       onClick={() => handlePrizeCardSelect(prizeOption.slug)}
                       tabIndex={-1}
+                      suppressHydrationWarning
                       style={
                         !isActive
                           ? {
@@ -562,6 +564,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     <button
                       type="button"
                       onClick={handlePreviousPrize}
+                      suppressHydrationWarning
                       className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
                       aria-label="Previous prize"
                     >
@@ -570,6 +573,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     <button
                       type="button"
                       onClick={handleNextPrize}
+                      suppressHydrationWarning
                       className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
                       aria-label="Next prize"
                     >
@@ -596,6 +600,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       type="button"
                       onClick={() => handlePrizeCardSelect(prizeOption.slug)}
                       tabIndex={0}
+                      suppressHydrationWarning
                       style={
                         !isActive
                           ? {
@@ -659,6 +664,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               type="button"
               onClick={() => handlePrizeCardSelect(prizeOption.slug)}
               tabIndex={0}
+              suppressHydrationWarning
               style={{
                 outline: "none",
                 boxShadow: isActive ? "none" : `0 0 15px ${getBrandGlowColor(prizeOption.slug as PrizeSlug)}`,

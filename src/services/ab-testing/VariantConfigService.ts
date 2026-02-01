@@ -110,12 +110,20 @@ export class VariantConfigService {
         if (banner.showCountdown !== undefined && typeof banner.showCountdown !== "boolean") {
           errors.push("Banner showCountdown must be a boolean");
         }
-        const validCountdownModes = ["default", "limited_time_only", "scheduled_end", "ending"];
+        const validCountdownModes = ["default", "limited_time_only", "scheduled_end", "ending", "static_urgency"];
         if (
           banner.countdownMode !== undefined &&
           (typeof banner.countdownMode !== "string" || !validCountdownModes.includes(banner.countdownMode as string))
         ) {
-          errors.push("Banner countdownMode must be one of: default, limited_time_only, scheduled_end, ending");
+          errors.push("Banner countdownMode must be one of: default, limited_time_only, scheduled_end, ending, static_urgency");
+        }
+        if (banner.countdownMode === "static_urgency") {
+          const label = banner.countdownLabel;
+          if (!label || typeof label !== "string" || !label.trim()) {
+            errors.push("Banner countdownLabel is required when countdownMode is static_urgency");
+          } else if (label.length > 50) {
+            errors.push("Banner countdownLabel must be 50 characters or less");
+          }
         }
       }
     }

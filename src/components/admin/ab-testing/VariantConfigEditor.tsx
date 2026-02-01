@@ -5,6 +5,7 @@ import { Save, X, Image, Type, Package, ShoppingCart } from "lucide-react";
 import { Input, Textarea, Checkbox, Button, FormSection, Select } from "@/components/modals/ui";
 import { Variant, CreateVariantPayload } from "@/hooks/queries/useABTestingQueries";
 import type { CountdownMode } from "@/utils/promo-banner/countdown-mode";
+import { STATIC_URGENCY_LABEL_PRESETS } from "@/utils/promo-banner/countdown-mode";
 
 interface VariantConfigEditorProps {
   variant?: Variant;
@@ -45,6 +46,20 @@ export default function VariantConfigEditor({ variant, experimentId, onSave, onC
     if (formData.trafficPercentage < 0 || formData.trafficPercentage > 100) {
       setErrors({ trafficPercentage: "Traffic percentage must be between 0 and 100" });
       return;
+    }
+
+    // Require countdownLabel when static_urgency mode is selected
+    const countdownMode = formData.config.banner?.countdownMode || "default";
+    if (countdownMode === "static_urgency") {
+      const label = formData.config.banner?.countdownLabel?.trim();
+      if (!label) {
+        setErrors({ countdownLabel: "Label is required when using static urgency mode" });
+        return;
+      }
+      if (label.length > 50) {
+        setErrors({ countdownLabel: "Label must be 50 characters or less" });
+        return;
+      }
     }
 
     onSave(formData);
@@ -234,18 +249,26 @@ export default function VariantConfigEditor({ variant, experimentId, onSave, onC
             id="countdownMode"
             name="countdownMode"
             value={formData.config.banner?.countdownMode || "default"}
-            onChange={(e) =>
+            onChange={(e) => {
+              const mode = e.target.value as CountdownMode;
               setFormData({
                 ...formData,
                 config: {
                   ...formData.config,
                   banner: {
                     ...formData.config.banner,
-                    countdownMode: e.target.value as CountdownMode,
+                    countdownMode: mode,
+                    // Clear countdownLabel when switching away from static_urgency
+                    ...(mode !== "static_urgency" ? { countdownLabel: undefined } : {}),
                   },
                 },
-              })
-            }
+              });
+              setErrors((prev) => {
+                const next = { ...prev };
+                delete next.countdownLabel;
+                return next;
+              });
+            }}
             label="Countdown behaviour"
             options={[
               {
@@ -254,22 +277,88 @@ export default function VariantConfigEditor({ variant, experimentId, onSave, onC
                 description: "Draw tonight, draw tomorrow, or midnight countdown",
               },
               {
-                value: "limited_time_only",
-                label: "Limited time only",
-                description: "Show LIMITED TIME ONLY unless scheduled promo is exactly 24h",
-              },
-              {
                 value: "scheduled_end",
                 label: "Scheduled end timer",
                 description: "Timer to scheduled promo end; DAYS HRS MINS when >24h, HRS MINS SECS when ≤24h",
               },
               {
+                value: "limited_time_only",
+                label: "Limited time only",
+                description: "Show LIMITED TIME ONLY unless scheduled promo is <24h (then show countdown)",
+              },
+              {
                 value: "ending",
                 label: "Ending",
-                description: "Show ENDING unless scheduled promo is exactly 24h (then show countdown)",
+                description: "Show PROMO ENDING unless scheduled promo is <24h (then show countdown)",
+              },
+              {
+                value: "static_urgency",
+                label: "Static urgency label (custom)",
+                description: "Custom label unless scheduled promo is <24h (then show countdown). Configure label below.",
               },
             ]}
           />
+          {(formData.config.banner?.countdownMode === "static_urgency" && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Urgency label</label>
+              <div className="flex flex-wrap gap-2">
+                {STATIC_URGENCY_LABEL_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          banner: {
+                            ...formData.config.banner,
+                            countdownLabel: preset,
+                          },
+                        },
+                      })
+                    }
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      formData.config.banner?.countdownLabel === preset
+                        ? "bg-amber-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <Input
+                id="countdownLabel"
+                name="countdownLabel"
+                type="text"
+                value={formData.config.banner?.countdownLabel || ""}
+                onChange={(e) => {
+                  setFormData({
+                    ...formData,
+                    config: {
+                      ...formData.config,
+                      banner: {
+                        ...formData.config.banner,
+                        countdownLabel: e.target.value,
+                      },
+                    },
+                  });
+                  setErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.countdownLabel;
+                    return next;
+                  });
+                }}
+                label="Custom label (or use presets above)"
+                placeholder="e.g. ENDING SOON, FLASH SALE"
+                maxLength={50}
+                error={errors.countdownLabel}
+                required
+              />
+            </div>
+          )) ||
+            null}
         </div>
       </FormSection>
 

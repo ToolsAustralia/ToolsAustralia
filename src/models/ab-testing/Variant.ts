@@ -26,6 +26,8 @@ export interface VariantConfig {
     multiplier?: number; // Override multiplier display (2x, 3x, 5x, 10x)
     showCountdown?: boolean; // Toggle countdown visibility
     countdownMode?: CountdownMode;
+    /** Custom label for static_urgency mode; required when countdownMode is "static_urgency" */
+    countdownLabel?: string;
   };
   packages?: {
     displayOrder?: string[]; // Reorder package IDs
