@@ -11,6 +11,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
 import { getActiveSubscriptionFilter, getActiveSubscriptionSubFilter } from "@/utils/admin/userFilterBuilder";
+import { trendCalculationService } from "@/services/admin/TrendCalculationService";
 
 /**
  * GET /api/admin/dashboard/stats
@@ -143,6 +144,19 @@ export async function GET(request: NextRequest) {
         break;
       default:
         startDate = startOfToday;
+    }
+
+    // ========================================
+    // COMPARISON PERIOD (for trend calculation)
+    // ========================================
+    const includeTrends = dateRange !== "all-time";
+    let comparisonStartDate: Date | null = null;
+    let comparisonEndDate: Date | null = null;
+
+    if (includeTrends) {
+      const comparison = trendCalculationService.getComparisonPeriod(startDate, endDate);
+      comparisonStartDate = comparison.start;
+      comparisonEndDate = comparison.end;
     }
 
     // ========================================
@@ -447,6 +461,179 @@ export async function GET(request: NextRequest) {
     }
 
     // ========================================
+    // COMPARISON PERIOD METRICS (for trends)
+    // ========================================
+    let totalUsersTrend = undefined;
+    let newInRangeTrend = undefined;
+    let cancelledMembershipsTrend = undefined;
+    let totalRevenueTrend = undefined;
+    let conversionRateTrend = undefined;
+    let adSpendTrend = undefined;
+    let roasTrend = undefined;
+    const revenueBreakdownTrends: Record<
+      string,
+      { value: number; direction: "up" | "down" | "neutral"; previousValue?: number }
+    > = {};
+
+    if (includeTrends && comparisonStartDate && comparisonEndDate) {
+      const cancelledMembershipsComparisonQuery = {
+        "subscription.cancelledAt": { $gte: comparisonStartDate, $lte: comparisonEndDate },
+        isActive: true,
+      };
+
+      const [
+        previousTotalUsers,
+        previousNewSignupsInRange,
+        previousCancelledMemberships,
+        previousRevenueEvents,
+      ] = await Promise.all([
+        User.countDocuments({ isActive: true, createdAt: { $lte: comparisonEndDate } }),
+        User.countDocuments({
+          createdAt: { $gte: comparisonStartDate, $lte: comparisonEndDate },
+          isActive: true,
+        }),
+        User.countDocuments(cancelledMembershipsComparisonQuery),
+        PaymentEvent.find({
+          eventType: "BenefitsGranted",
+          timestamp: { $gte: comparisonStartDate, $lte: comparisonEndDate },
+        })
+          .select("userId packageType packageId data timestamp")
+          .lean()
+          .limit(10000),
+      ]);
+
+      let previousTotalRevenue = 0;
+      const previousMembershipPurchaseData = { revenue: 0 };
+      const previousMembershipRenewalData = { revenue: 0 };
+      const previousOneTimePurchaseData = { revenue: 0 };
+      const previousAdditionalOneTimePurchaseData = { revenue: 0 };
+      const previousMiniDrawData = { revenue: 0 };
+      const previousUpsellData = { revenue: 0 };
+
+      for (const event of previousRevenueEvents) {
+        const price = event.data?.price || 0;
+        previousTotalRevenue += price;
+
+        if (event.packageType === "membership") {
+          const billingReason = event.data?.billingReason as string | undefined;
+          if (billingReason === "subscription_cycle") {
+            previousMembershipRenewalData.revenue += price;
+          } else {
+            previousMembershipPurchaseData.revenue += price;
+          }
+        } else if (event.packageType === "mini-draw") {
+          previousMiniDrawData.revenue += price;
+        } else if (event.packageType === "upsell") {
+          previousUpsellData.revenue += price;
+        } else if (event.packageType === "one-time") {
+          const packageId = event.packageId || "";
+          if (packageId.startsWith("additional-")) {
+            previousAdditionalOneTimePurchaseData.revenue += price;
+          } else {
+            previousOneTimePurchaseData.revenue += price;
+          }
+        }
+      }
+
+      let previousConversionRate = 0;
+      const previousConvertedUsersInRange = await User.countDocuments({
+        createdAt: { $gte: comparisonStartDate, $lte: comparisonEndDate },
+        $or: [
+          getActiveSubscriptionSubFilter(),
+          { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
+          { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
+        ],
+        isActive: true,
+      });
+      previousConversionRate =
+        previousNewSignupsInRange > 0
+          ? Math.round((previousConvertedUsersInRange / previousNewSignupsInRange) * 100)
+          : 0;
+
+      let previousFacebookAdsSpend = 0;
+      let previousFacebookAdsRoas = 0;
+      try {
+        const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
+        const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
+        if (accessToken && adAccountId) {
+          const compStartYear = parseInt(
+            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "yyyy"),
+            10
+          );
+          const compStartMonth = parseInt(
+            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "M"),
+            10
+          );
+          const compStartDay = parseInt(
+            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "d"),
+            10
+          );
+          const compEndYear = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "yyyy"), 10);
+          const compEndMonth = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "M"), 10);
+          const compEndDay = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "d"), 10);
+          const compDateStr = `${compStartYear}-${String(compStartMonth).padStart(2, "0")}-${String(compStartDay).padStart(2, "0")}`;
+          const compEndDateStr = `${compEndYear}-${String(compEndMonth).padStart(2, "0")}-${String(compEndDay).padStart(2, "0")}`;
+
+          const compInsightsData = await fetchFacebookInsights(
+            adAccountId,
+            accessToken,
+            { since: compDateStr, until: compEndDateStr },
+            "account"
+          );
+          if (compInsightsData && compInsightsData.length > 0) {
+            previousFacebookAdsSpend = compInsightsData[0].metrics.spend / 100;
+            previousFacebookAdsRoas = compInsightsData[0].metrics.roas;
+          }
+        }
+      } catch {
+        // Ignore - use 0 for comparison
+      }
+
+      totalUsersTrend = trendCalculationService.calculateTrend(totalUsers, previousTotalUsers);
+      newInRangeTrend = trendCalculationService.calculateTrend(newSignupsInRange, previousNewSignupsInRange);
+      cancelledMembershipsTrend = trendCalculationService.calculateTrend(
+        cancelledMemberships,
+        previousCancelledMemberships,
+        { invertedPositive: true }
+      );
+      totalRevenueTrend = trendCalculationService.calculateTrend(totalRevenue, previousTotalRevenue);
+      conversionRateTrend = trendCalculationService.calculateTrend(
+        conversionRate,
+        previousConversionRate
+      );
+      adSpendTrend = trendCalculationService.calculateTrend(
+        facebookAdsSpend,
+        previousFacebookAdsSpend
+      );
+      roasTrend = trendCalculationService.calculateTrend(facebookAdsRoas, previousFacebookAdsRoas);
+
+      revenueBreakdownTrends.membershipPurchase = trendCalculationService.calculateTrend(
+        membershipPurchaseData.revenue,
+        previousMembershipPurchaseData.revenue
+      );
+      revenueBreakdownTrends.membershipRenewal = trendCalculationService.calculateTrend(
+        membershipRenewalData.revenue,
+        previousMembershipRenewalData.revenue
+      );
+      revenueBreakdownTrends.oneTimePurchase = trendCalculationService.calculateTrend(
+        oneTimePurchaseData.revenue,
+        previousOneTimePurchaseData.revenue
+      );
+      revenueBreakdownTrends.additionalOneTimePurchase = trendCalculationService.calculateTrend(
+        additionalOneTimePurchaseData.revenue,
+        previousAdditionalOneTimePurchaseData.revenue
+      );
+      revenueBreakdownTrends.miniDraw = trendCalculationService.calculateTrend(
+        miniDrawData.revenue,
+        previousMiniDrawData.revenue
+      );
+      revenueBreakdownTrends.upsell = trendCalculationService.calculateTrend(
+        upsellData.revenue,
+        previousUpsellData.revenue
+      );
+    }
+
+    // ========================================
     // ENHANCED METRICS (using service layer)
     // ========================================
     let enhancedMetrics = null;
@@ -464,13 +651,17 @@ export async function GET(request: NextRequest) {
     const stats = {
       users: {
         total: totalUsers,
+        ...(totalUsersTrend && { totalTrend: totalUsersTrend }),
         activeSubscriptions,
         newInRange: newSignupsInRange,
+        ...(newInRangeTrend && { newInRangeTrend }),
         profileCompletion: profileCompletionRate,
         cancelledMemberships,
+        ...(cancelledMembershipsTrend && { cancelledMembershipsTrend }),
       },
       revenue: {
         total: totalRevenue,
+        ...(totalRevenueTrend && { totalTrend: totalRevenueTrend }),
         breakdown: {
           subscriptions: membershipPurchaseData.revenue + membershipRenewalData.revenue, // Backward compatibility
           oneTimePackages: oneTimePurchaseData.revenue + additionalOneTimePurchaseData.revenue + miniDrawData.revenue + upsellData.revenue, // Backward compatibility
@@ -479,31 +670,45 @@ export async function GET(request: NextRequest) {
             revenue: membershipPurchaseData.revenue,
             purchaseCount: membershipPurchaseData.purchaseCount,
             userCount: membershipPurchaseData.userIds.size,
+            ...(revenueBreakdownTrends.membershipPurchase && {
+              trend: revenueBreakdownTrends.membershipPurchase,
+            }),
           },
           membershipRenewal: {
             revenue: membershipRenewalData.revenue,
             purchaseCount: membershipRenewalData.purchaseCount,
             userCount: membershipRenewalData.userIds.size,
+            ...(revenueBreakdownTrends.membershipRenewal && {
+              trend: revenueBreakdownTrends.membershipRenewal,
+            }),
           },
           oneTimePurchase: {
             revenue: oneTimePurchaseData.revenue,
             purchaseCount: oneTimePurchaseData.purchaseCount,
             userCount: oneTimePurchaseData.userIds.size,
+            ...(revenueBreakdownTrends.oneTimePurchase && {
+              trend: revenueBreakdownTrends.oneTimePurchase,
+            }),
           },
           additionalOneTimePurchase: {
             revenue: additionalOneTimePurchaseData.revenue,
             purchaseCount: additionalOneTimePurchaseData.purchaseCount,
             userCount: additionalOneTimePurchaseData.userIds.size,
+            ...(revenueBreakdownTrends.additionalOneTimePurchase && {
+              trend: revenueBreakdownTrends.additionalOneTimePurchase,
+            }),
           },
           miniDraw: {
             revenue: miniDrawData.revenue,
             purchaseCount: miniDrawData.purchaseCount,
             userCount: miniDrawData.userIds.size,
+            ...(revenueBreakdownTrends.miniDraw && { trend: revenueBreakdownTrends.miniDraw }),
           },
           upsell: {
             revenue: upsellData.revenue,
             purchaseCount: upsellData.purchaseCount,
             userCount: upsellData.userIds.size,
+            ...(revenueBreakdownTrends.upsell && { trend: revenueBreakdownTrends.upsell }),
           },
         },
       },
@@ -512,9 +717,12 @@ export async function GET(request: NextRequest) {
         activeDraws: activeDrawsCount,
       },
       conversionRate,
+      ...(conversionRateTrend && { conversionRateTrend }),
       facebookAds: {
         spend: facebookAdsSpend,
+        ...(adSpendTrend && { spendTrend: adSpendTrend }),
         roas: facebookAdsRoas,
+        ...(roasTrend && { roasTrend }),
       },
       dateRange: {
         start: startDate.toISOString(),

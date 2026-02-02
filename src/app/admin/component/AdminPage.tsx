@@ -34,7 +34,8 @@ import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManageme
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
 import UserDetailModal from "@/components/admin/UserDetailModal";
-import type { RevenueCategory } from "@/hooks/queries/useAdminQueries";
+import type { RevenueCategory, RevenueBreakdownItem } from "@/hooks/queries/useAdminQueries";
+import type { TrendData } from "@/types/admin/trend-types";
 import {
   Users,
   DollarSign,
@@ -217,15 +218,33 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     refetch: refetchStats,
   } = useAdminDashboardStats(dateRange, customStartDate ? customStartDate : undefined, customEndDate ? customEndDate : undefined);
 
-  // Helper function to extract revenue value and counts (handles both number and object formats)
-  const getRevenueData = (
-    breakdownValue: number | { revenue: number; purchaseCount: number; userCount: number } | undefined
-  ) => {
-    if (!breakdownValue) return { revenue: 0, purchaseCount: 0, userCount: 0 };
+  // Helper function to extract revenue value, counts, and trend (handles both number and object formats)
+  const getRevenueData = (breakdownValue: RevenueBreakdownItem | undefined) => {
+    if (!breakdownValue) return { revenue: 0, purchaseCount: 0, userCount: 0, trend: undefined };
     if (typeof breakdownValue === "number") {
-      return { revenue: breakdownValue, purchaseCount: 0, userCount: 0 };
+      return { revenue: breakdownValue, purchaseCount: 0, userCount: 0, trend: undefined };
     }
-    return breakdownValue;
+    return {
+      revenue: breakdownValue.revenue,
+      purchaseCount: breakdownValue.purchaseCount,
+      userCount: breakdownValue.userCount,
+      trend: breakdownValue.trend,
+    };
+  };
+
+  // For cancellations: up is bad, down is good - flip direction for display
+  const getTrendForDisplay = (
+    trend: TrendData | undefined,
+    invertedPositive = false
+  ): { value: number; direction: "up" | "down" | "neutral" } | undefined => {
+    if (!trend) return undefined;
+    if (invertedPositive && trend.direction !== "neutral") {
+      return {
+        ...trend,
+        direction: trend.direction === "up" ? "down" : "up",
+      };
+    }
+    return { value: trend.value, direction: trend.direction };
   };
 
   // Handler to open revenue detail modal
@@ -707,6 +726,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                             : "Selected period"
                         }
                         color="emerald"
+                        trend={dashboardStats.revenue.totalTrend}
                       />
                       {/* Click indicator */}
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -739,6 +759,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       icon={Users}
                       subtitle="Active users"
                       color="indigo"
+                      trend={dashboardStats.users.totalTrend}
                     />
                     <MetricCard
                       title={
@@ -762,6 +783,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           : "In selected period"
                       }
                       color="blue"
+                      trend={dashboardStats.users.newInRangeTrend}
                     />
                     {/* Performance Metrics */}
                     <MetricCard
@@ -770,6 +792,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       icon={Target}
                       subtitle="Paying customers"
                       color="indigo"
+                      trend={dashboardStats.conversionRateTrend}
                     />
                     <MetricCard
                       title={
@@ -796,6 +819,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           : "Facebook Ads spend"
                       }
                       color="blue"
+                      trend={dashboardStats.facebookAds?.spendTrend}
                     />
                     <MetricCard
                       title="ROAS"
@@ -803,6 +827,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       icon={Target}
                       subtitle="Return on ad spend"
                       color="green"
+                      trend={dashboardStats.facebookAds?.roasTrend}
                     />
                     {/* Churn Metric */}
                     <MetricCard
@@ -827,6 +852,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           : "In selected period"
                       }
                       color="red"
+                      trend={getTrendForDisplay(dashboardStats.users.cancelledMembershipsTrend, true)}
                     />
                   </>
                 ) : null}
@@ -862,6 +888,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       onClick={() => handleRevenueCardClick("membership-purchase")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.membershipPurchase).purchaseCount}
                       countLabel="subscriptions"
+                      trend={getRevenueData(dashboardStats.revenue.breakdown.membershipPurchase).trend}
                     />
                     <MetricCard
                       title={
@@ -877,6 +904,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       onClick={() => handleRevenueCardClick("membership-renewal")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.membershipRenewal).purchaseCount}
                       countLabel="renewals"
+                      trend={getRevenueData(dashboardStats.revenue.breakdown.membershipRenewal).trend}
                     />
                     <MetricCard
                       title={
@@ -892,6 +920,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       onClick={() => handleRevenueCardClick("one-time-purchase")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.oneTimePurchase).purchaseCount}
                       countLabel="purchases"
+                      trend={getRevenueData(dashboardStats.revenue.breakdown.oneTimePurchase).trend}
                     />
                     <MetricCard
                       title={
@@ -907,6 +936,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       onClick={() => handleRevenueCardClick("additional-one-time")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.additionalOneTimePurchase).purchaseCount}
                       countLabel="purchases"
+                      trend={getRevenueData(dashboardStats.revenue.breakdown.additionalOneTimePurchase).trend}
                     />
                     <MetricCard
                       title={
@@ -922,6 +952,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       onClick={() => handleRevenueCardClick("mini-draw")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.miniDraw).purchaseCount}
                       countLabel="purchases"
+                      trend={getRevenueData(dashboardStats.revenue.breakdown.miniDraw).trend}
                     />
                     <MetricCard
                       title="Upsells"
@@ -932,6 +963,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       onClick={() => handleRevenueCardClick("upsell")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.upsell).purchaseCount}
                       countLabel="purchases"
+                      trend={getRevenueData(dashboardStats.revenue.breakdown.upsell).trend}
                     />
                   </div>
                 </div>
