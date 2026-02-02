@@ -195,8 +195,11 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     }
   }, []);
 
-  // Convert Australian states to dropdown options
-  const stateOptions: DropdownOption[] = AUSTRALIAN_STATES.map((state) => ({
+  // Convert Australian states to dropdown options (excludes SA, ACT)
+  const EXCLUDED_STATES = ["SA", "ACT"];
+  const stateOptions: DropdownOption[] = AUSTRALIAN_STATES.filter(
+    (state) => !EXCLUDED_STATES.includes(state.code)
+  ).map((state) => ({
     value: state.code,
     label: state.name,
   }));
