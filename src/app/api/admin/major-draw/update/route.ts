@@ -55,10 +55,19 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Major draw not found" }, { status: 404 });
     }
 
-    // Check if configuration is locked
+    // Check if configuration is locked (e.g. completed draws)
     if (majorDraw.configurationLocked) {
-      // Only allow limited updates when locked
-      const allowedFields = ["name", "description", "status"];
+      // Allow updates when locked: basic info, prize (images etc.), and dates (frontend sends full form)
+      const allowedFields = [
+        "name",
+        "description",
+        "status",
+        "prize",
+        "startDate",
+        "endDate",
+        "drawDate",
+        "activationDate",
+      ];
       const hasRestrictedFields = Object.keys(validatedData).some((key) => !allowedFields.includes(key));
 
       if (hasRestrictedFields) {
