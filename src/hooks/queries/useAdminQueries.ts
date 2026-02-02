@@ -132,6 +132,18 @@ export interface AdminDashboardStats {
   };
 }
 
+// Types for membership by package
+export interface MembershipByPackageItem {
+  packageId: string;
+  packageName: string;
+  activeCount: number;
+  cancelledCount: number;
+}
+
+export interface MembershipByPackageData {
+  packages: MembershipByPackageItem[];
+}
+
 // Types for projected income
 export interface ProjectedIncomeData {
   projectedIncome: number;
@@ -422,6 +434,30 @@ export function useProjectedIncome() {
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
+    retry: 2,
+  });
+}
+
+export function useMembershipByPackage() {
+  return useQuery<MembershipByPackageData>({
+    queryKey: ["admin", "membership-by-package"],
+    queryFn: async (): Promise<MembershipByPackageData> => {
+      const response = await fetch("/api/admin/dashboard/membership-by-package");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch membership by package");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch membership by package");
+      }
+
+      return result.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
     retry: 2,
   });
 }

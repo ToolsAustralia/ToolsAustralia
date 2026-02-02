@@ -22,6 +22,7 @@ import {
   useRecentActivities,
   useRevenueBreakdown,
   useProjectedIncome,
+  useMembershipByPackage,
   useMajorDrawsForDateRange,
   useCurrentAndLastDrawDates,
 } from "@/hooks/queries/useAdminQueries";
@@ -36,6 +37,8 @@ import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
 import UserDetailModal from "@/components/admin/UserDetailModal";
 import type { RevenueCategory, RevenueBreakdownItem } from "@/hooks/queries/useAdminQueries";
 import type { TrendData } from "@/types/admin/trend-types";
+import Image from "next/image";
+import { getPackageIcon } from "@/utils/images/package-icons";
 import {
   Users,
   DollarSign,
@@ -75,7 +78,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
-  const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(false);
+  const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(true);
+  const [isMembershipByPackageExpanded, setIsMembershipByPackageExpanded] = useState(true);
   const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isRevenueDetailModalOpen, setIsRevenueDetailModalOpen] = useState(false);
@@ -273,6 +277,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
   // Fetch projected income for next month
   const { data: projectedIncome, isLoading: projectedIncomeLoading } = useProjectedIncome();
+
+  // Fetch membership by package for breakdown
+  const { data: membershipByPackageData, isLoading: membershipByPackageLoading } = useMembershipByPackage();
 
   // Handle mobile sidebar close with animation
   const handleCloseMobileSidebar = () => {
@@ -737,30 +744,42 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                         )}
                       </div>
                     </div>
-                    <MetricCard
-                      title="Projected Income"
-                      value={`$${(projectedIncome?.projectedIncome || 0).toLocaleString("en-AU", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`}
-                      icon={TrendingUp}
-                      subtitle={
-                        <span className="text-xs">
-                          {(
-                            (projectedIncome?.activeSubscriptions ??
-                              dashboardStats?.users?.activeSubscriptions ??
-                              0) +
-                            (dashboardStats?.users?.totalScheduledCancellation ?? 0)
-                          ).toLocaleString()}{" "}
-                          memberships
-                          {dashboardStats?.users?.totalScheduledCancellation != null && (
-                            <> · {dashboardStats.users.totalScheduledCancellation.toLocaleString()} cancelled</>
-                          )}
-                        </span>
-                      }
-                      color="purple"
-                      loading={projectedIncomeLoading}
-                    />
+                    <div
+                      onClick={() => setIsMembershipByPackageExpanded(!isMembershipByPackageExpanded)}
+                      className="cursor-pointer group relative"
+                    >
+                      <MetricCard
+                        title="Projected Income"
+                        value={`$${(projectedIncome?.projectedIncome || 0).toLocaleString("en-AU", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`}
+                        icon={TrendingUp}
+                        subtitle={
+                          <span className="text-xs">
+                            {(
+                              (projectedIncome?.activeSubscriptions ??
+                                dashboardStats?.users?.activeSubscriptions ??
+                                0) +
+                              (dashboardStats?.users?.totalScheduledCancellation ?? 0)
+                            ).toLocaleString()}{" "}
+                            memberships
+                            {dashboardStats?.users?.totalScheduledCancellation != null && (
+                              <> · {dashboardStats.users.totalScheduledCancellation.toLocaleString()} cancelled</>
+                            )}
+                          </span>
+                        }
+                        color="purple"
+                        loading={projectedIncomeLoading}
+                      />
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isMembershipByPackageExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-purple-600" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-purple-600" />
+                        )}
+                      </div>
+                    </div>
                     {/* User Metrics */}
                     <MetricCard
                       title="Total Users"
@@ -969,6 +988,72 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       trend={getRevenueData(dashboardStats.revenue.breakdown.upsell).trend}
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Membership by Package - Expandable */}
+              {dashboardStats && isMembershipByPackageExpanded && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6 transition-all duration-300 ease-in-out">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900">Membership by Package</h3>
+                    <button
+                      onClick={() => setIsMembershipByPackageExpanded(false)}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      aria-label="Close breakdown"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  {membershipByPackageLoading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="border rounded-lg p-4 flex items-center gap-3 animate-pulse"
+                        >
+                          <div className="w-12 h-12 bg-gray-200 rounded" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-24" />
+                            <div className="h-3 bg-gray-200 rounded w-16" />
+                            <div className="h-3 bg-gray-200 rounded w-20" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {membershipByPackageData?.packages.map((pkg) => {
+                        const packageIcon = getPackageIcon(pkg.packageId);
+                        return (
+                          <div
+                            key={pkg.packageId}
+                            className="border-2 border-gray-200 rounded-lg p-4 flex items-center gap-3 hover:border-purple-200 transition-colors"
+                          >
+                            {packageIcon ? (
+                              <Image
+                                src={packageIcon}
+                                alt={pkg.packageName}
+                                width={48}
+                                height={48}
+                                className="flex-shrink-0 rounded"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded flex items-center justify-center bg-gray-100 flex-shrink-0">
+                                <Package className="w-6 h-6 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-semibold text-gray-900 truncate">{pkg.packageName}</p>
+                              <p className="text-sm text-gray-600">Active: {pkg.activeCount.toLocaleString()}</p>
+                              <p className="text-sm text-red-600">Cancelled: {pkg.cancelledCount.toLocaleString()}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
