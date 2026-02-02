@@ -746,7 +746,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       icon={TrendingUp}
                       subtitle={
                         <span className="text-xs">
-                          {projectedIncome?.activeSubscriptions || 0} memberships
+                          {(projectedIncome?.activeSubscriptions ??
+                            dashboardStats?.users?.activeSubscriptions ??
+                            0
+                          ).toLocaleString()}{" "}
+                          memberships
+                          {dashboardStats?.users?.totalScheduledCancellation != null && (
+                            <> · {dashboardStats.users.totalScheduledCancellation.toLocaleString()} cancelled</>
+                          )}
                         </span>
                       }
                       color="purple"
@@ -829,30 +836,24 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       color="green"
                       trend={dashboardStats.facebookAds?.roasTrend}
                     />
-                    {/* Churn Metric */}
+                    {/* Drop-off Rate */}
                     <MetricCard
-                      title={
-                        dateRange === "today"
-                          ? "Cancelled Today"
-                          : dateRange === "yesterday"
-                          ? "Cancelled Yesterday"
-                          : dateRange === "all-time"
-                          ? "Cancelled Memberships"
-                          : "Cancellations"
-                      }
-                      value={dashboardStats.users.cancelledMemberships.toLocaleString()}
+                      title="Drop-off Rate"
+                      value={`${(dashboardStats.users.dropOffRate ?? 0).toFixed(1)}%`}
                       icon={UserX}
                       subtitle={
-                        dateRange === "today"
-                          ? "Cancelled today"
-                          : dateRange === "yesterday"
-                          ? "Cancelled yesterday"
-                          : dateRange === "all-time"
-                          ? "Total scheduled cancellation"
-                          : "In selected period"
+                        dashboardStats.users.periodChurnRate != null
+                          ? `${dashboardStats.users.periodChurnRate.toFixed(2)}% churned ${
+                              dateRange === "today"
+                                ? "today"
+                                : dateRange === "yesterday"
+                                ? "yesterday"
+                                : "in period"
+                            }`
+                          : "Of members scheduled to cancel"
                       }
                       color="red"
-                      trend={getTrendForDisplay(dashboardStats.users.cancelledMembershipsTrend, true)}
+                      trend={getTrendForDisplay(dashboardStats.users.dropOffRateTrend, true)}
                     />
                   </>
                 ) : null}

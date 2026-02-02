@@ -72,6 +72,10 @@ export interface AdminDashboardStats {
     profileCompletion: number;
     cancelledMemberships: number;
     cancelledMembershipsTrend?: TrendData;
+    totalScheduledCancellation: number;
+    dropOffRate: number;
+    dropOffRateTrend?: TrendData;
+    periodChurnRate?: number;
   };
   revenue: {
     total: number;
