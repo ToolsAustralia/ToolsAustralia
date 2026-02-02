@@ -60,6 +60,11 @@ export const PACKAGE_ICONS: Record<string, PackageIconData> = {
   tradie: tradie,
   foreman: foreman,
   boss: boss,
+
+  // Subscription package IDs (tradie-subscription, etc.)
+  "tradie-subscription": tradie,
+  "foreman-subscription": foreman,
+  "boss-subscription": boss,
 };
 
 /**
