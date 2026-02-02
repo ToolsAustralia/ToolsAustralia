@@ -8,6 +8,7 @@ import {
   UserActionResponse,
   UserFilters,
 } from "@/types/admin";
+import type { TrendData } from "@/types/admin/trend-types";
 
 // Types for recent activities
 export interface RecentActivity {
@@ -50,27 +51,41 @@ export interface RevenueBreakdownResponse {
   period: "days" | "months" | "years";
 }
 
+// Revenue breakdown item with optional trend
+export type RevenueBreakdownItem =
+  | number
+  | {
+      revenue: number;
+      purchaseCount: number;
+      userCount: number;
+      trend?: TrendData;
+    };
+
 // Types for admin dashboard stats
 export interface AdminDashboardStats {
   users: {
     total: number;
+    totalTrend?: TrendData;
     activeSubscriptions: number;
     newInRange: number;
+    newInRangeTrend?: TrendData;
     profileCompletion: number;
     cancelledMemberships: number;
+    cancelledMembershipsTrend?: TrendData;
   };
   revenue: {
     total: number;
+    totalTrend?: TrendData;
     breakdown: {
       subscriptions: number; // Backward compatibility: membershipPurchase + membershipRenewal
       oneTimePackages: number; // Backward compatibility: oneTimePurchase + additionalOneTimePurchase + miniDraw + upsell
       // Detailed breakdown - supports both number (legacy) and object (new) formats
-      membershipPurchase: number | { revenue: number; purchaseCount: number; userCount: number };
-      membershipRenewal: number | { revenue: number; purchaseCount: number; userCount: number };
-      oneTimePurchase: number | { revenue: number; purchaseCount: number; userCount: number };
-      additionalOneTimePurchase: number | { revenue: number; purchaseCount: number; userCount: number };
-      miniDraw: number | { revenue: number; purchaseCount: number; userCount: number };
-      upsell: number | { revenue: number; purchaseCount: number; userCount: number };
+      membershipPurchase: RevenueBreakdownItem;
+      membershipRenewal: RevenueBreakdownItem;
+      oneTimePurchase: RevenueBreakdownItem;
+      additionalOneTimePurchase: RevenueBreakdownItem;
+      miniDraw: RevenueBreakdownItem;
+      upsell: RevenueBreakdownItem;
     };
   };
   majorDraw: {
@@ -78,9 +93,12 @@ export interface AdminDashboardStats {
     activeDraws: number;
   };
   conversionRate: number;
+  conversionRateTrend?: TrendData;
   facebookAds?: {
     spend: number;
+    spendTrend?: TrendData;
     roas: number;
+    roasTrend?: TrendData;
   };
   dateRange?: {
     start: string;
