@@ -72,4 +72,26 @@ export function getFailedRenewalStatus(user: IUser | null | undefined): {
   };
 }
 
+/** Subscription statuses that block purchasing a new subscription */
+const BLOCKING_SUBSCRIPTION_STATUSES = ["active", "past_due", "unpaid"] as const;
+
+/**
+ * Check if user has a subscription that blocks purchasing a new one
+ *
+ * Users with active, past_due, or unpaid subscriptions cannot buy a new
+ * subscription until they resolve (pay, cancel) their existing one.
+ * Use this to prevent showing "Enter Now" when the API would reject the purchase.
+ *
+ * @param user - User object with subscription data (IUser, UserData, or any with subscription.status)
+ * @returns true if user has a blocking subscription, false otherwise
+ */
+export function hasBlockingSubscription(user: { subscription?: { status?: string } } | null | undefined): boolean {
+  if (!user?.subscription?.status) {
+    return false;
+  }
+  return BLOCKING_SUBSCRIPTION_STATUSES.includes(
+    user.subscription.status as (typeof BLOCKING_SUBSCRIPTION_STATUSES)[number]
+  );
+}
+
 

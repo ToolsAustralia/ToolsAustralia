@@ -25,6 +25,7 @@ export interface UserData {
     startDate: string;
     endDate?: string;
     autoRenew: boolean;
+    status?: string; // Stripe status: active, past_due, unpaid, cancelled, etc.
   };
   oneTimePackages: Array<{
     packageId: string;

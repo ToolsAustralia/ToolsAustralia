@@ -4,7 +4,7 @@
  */
 
 const MS_PER_HOUR = 60 * 60 * 1000;
-const MS_24H = 24 * MS_PER_HOUR;
+export const MS_24H = 24 * MS_PER_HOUR;
 /** Within 1 hour of 24h counts as "exactly 24h" for limited_time_only/ending and format choice */
 const TOLERANCE_MS = MS_PER_HOUR;
 
@@ -69,6 +69,10 @@ export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): 
     return { type: "hidden" };
   }
 
+  // Draw status takes priority: when draw is today or tomorrow, always show draw countdown/text
+  if (drawStatus === "today") return { type: "draw_tonight" };
+  if (drawStatus === "tomorrow") return { type: "draw_tomorrow" };
+
   const now = Date.now();
   const endMs = scheduledEndDate ? new Date(scheduledEndDate).getTime() : undefined;
   const timeLeftMs = endMs != null ? endMs - now : undefined;
@@ -95,8 +99,6 @@ export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): 
     };
   }
 
-  if (drawStatus === "today") return { type: "draw_tonight" };
-  if (drawStatus === "tomorrow") return { type: "draw_tomorrow" };
   return { type: "midnight" };
 }
 
