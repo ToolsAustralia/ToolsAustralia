@@ -746,9 +746,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       icon={TrendingUp}
                       subtitle={
                         <span className="text-xs">
-                          {(projectedIncome?.activeSubscriptions ??
-                            dashboardStats?.users?.activeSubscriptions ??
-                            0
+                          {(
+                            (projectedIncome?.activeSubscriptions ??
+                              dashboardStats?.users?.activeSubscriptions ??
+                              0) +
+                            (dashboardStats?.users?.totalScheduledCancellation ?? 0)
                           ).toLocaleString()}{" "}
                           memberships
                           {dashboardStats?.users?.totalScheduledCancellation != null && (
