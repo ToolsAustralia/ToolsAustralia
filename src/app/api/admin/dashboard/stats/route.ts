@@ -180,7 +180,15 @@ export async function GET(request: NextRequest) {
             isActive: true,
           };
 
-    const [totalUsers, activeSubscriptions, newSignupsInRange, usersWithCompletedProfiles, cancelledMemberships] = await Promise.all([
+    // totalScheduledCancellation: always the "stock" count (members currently scheduled to cancel)
+    const totalScheduledCancellationQuery = {
+      "subscription.endDate": { $exists: true, $ne: null },
+      "subscription.autoRenew": false,
+      "subscription.status": { $in: ["active", "past_due"] },
+      isActive: true,
+    };
+
+    const [totalUsers, activeSubscriptions, newSignupsInRange, usersWithCompletedProfiles, cancelledMemberships, totalScheduledCancellation] = await Promise.all([
       User.countDocuments({ isActive: true }),
       // Active subscriptions: only count subscriptions that will auto-renew (matches projected income calculation)
       User.countDocuments(getActiveSubscriptionFilter()),
@@ -193,7 +201,21 @@ export async function GET(request: NextRequest) {
         isActive: true,
       }),
       User.countDocuments(cancelledMembershipsQuery),
+      User.countDocuments(totalScheduledCancellationQuery),
     ]);
+
+    // Drop-off rate: % of membership base (active + scheduled) that has scheduled cancellation
+    const membershipBase = activeSubscriptions + totalScheduledCancellation;
+    const dropOffRate =
+      membershipBase > 0
+        ? Math.round((totalScheduledCancellation / membershipBase) * 1000) / 10
+        : 0;
+
+    // Period churn rate: % of active subscribers who cancelled in the selected period (only when not all-time)
+    const periodChurnRate =
+      dateRange !== "all-time" && activeSubscriptions > 0
+        ? Math.round((cancelledMemberships / activeSubscriptions) * 10000) / 100
+        : undefined;
 
     // Calculate profile completion rate
     const profileCompletionRate = totalUsers > 0 ? Math.round((usersWithCompletedProfiles / totalUsers) * 100) : 0;
@@ -466,6 +488,7 @@ export async function GET(request: NextRequest) {
     let totalUsersTrend = undefined;
     let newInRangeTrend = undefined;
     let cancelledMembershipsTrend = undefined;
+    let dropOffRateTrend = undefined;
     let totalRevenueTrend = undefined;
     let conversionRateTrend = undefined;
     let adSpendTrend = undefined;
@@ -481,10 +504,19 @@ export async function GET(request: NextRequest) {
         isActive: true,
       };
 
+      // previousTotalScheduledCancellation: scheduled to cancel as of end of comparison period (endDate was still in future)
+      const previousTotalScheduledCancellationQuery = {
+        "subscription.endDate": { $gt: comparisonEndDate },
+        "subscription.autoRenew": false,
+        "subscription.status": { $in: ["active", "past_due"] },
+        isActive: true,
+      };
+
       const [
         previousTotalUsers,
         previousNewSignupsInRange,
         previousCancelledMemberships,
+        previousTotalScheduledCancellation,
         previousRevenueEvents,
       ] = await Promise.all([
         User.countDocuments({ isActive: true, createdAt: { $lte: comparisonEndDate } }),
@@ -493,6 +525,7 @@ export async function GET(request: NextRequest) {
           isActive: true,
         }),
         User.countDocuments(cancelledMembershipsComparisonQuery),
+        User.countDocuments(previousTotalScheduledCancellationQuery),
         PaymentEvent.find({
           eventType: "BenefitsGranted",
           timestamp: { $gte: comparisonStartDate, $lte: comparisonEndDate },
@@ -591,6 +624,16 @@ export async function GET(request: NextRequest) {
 
       totalUsersTrend = trendCalculationService.calculateTrend(totalUsers, previousTotalUsers);
       newInRangeTrend = trendCalculationService.calculateTrend(newSignupsInRange, previousNewSignupsInRange);
+
+      const previousMembershipBase = activeSubscriptions + previousTotalScheduledCancellation;
+      const previousDropOffRate =
+        previousMembershipBase > 0
+          ? Math.round((previousTotalScheduledCancellation / previousMembershipBase) * 1000) / 10
+          : 0;
+      dropOffRateTrend = trendCalculationService.calculateTrend(dropOffRate, previousDropOffRate, {
+        invertedPositive: true,
+      });
+
       cancelledMembershipsTrend = trendCalculationService.calculateTrend(
         cancelledMemberships,
         previousCancelledMemberships,
@@ -658,6 +701,10 @@ export async function GET(request: NextRequest) {
         profileCompletion: profileCompletionRate,
         cancelledMemberships,
         ...(cancelledMembershipsTrend && { cancelledMembershipsTrend }),
+        totalScheduledCancellation,
+        dropOffRate,
+        ...(periodChurnRate != null && { periodChurnRate }),
+        ...(dropOffRateTrend && { dropOffRateTrend }),
       },
       revenue: {
         total: totalRevenue,
