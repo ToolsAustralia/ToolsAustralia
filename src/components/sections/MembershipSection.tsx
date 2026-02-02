@@ -15,6 +15,7 @@ import HexagonalPromoBadge from "@/components/ui/HexagonalPromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
@@ -200,6 +201,10 @@ export default function MembershipSection({
   const hasActiveSubscription = userData?.subscription?.isActive || false;
   const currentUserSubscription = userData?.subscriptionPackageData;
 
+  // past_due users have a subscription that blocks new purchases - show "Update payment" not "Enter Now"
+  const hasBlockingSub = hasBlockingSubscription(userData);
+  const isPastDue = (userData?.subscription as { status?: string } | undefined)?.status === "past_due";
+
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
@@ -254,8 +259,17 @@ export default function MembershipSection({
 
   // Determine plan hierarchy for subscription management
   const getPlanHierarchy = (plan: LocalMembershipPlan) => {
+    // past_due users cannot purchase - they must resolve payment first
+    const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
+    const cannotPurchaseDueToBlocking = hasBlockingSub && isSubscriptionPlan;
+
     if (!hasActiveSubscription || !currentUserSubscription || plan.period === "one-time") {
-      return { isCurrent: false, isUpgrade: false, isDowngrade: false, canPurchase: true };
+      return {
+        isCurrent: false,
+        isUpgrade: false,
+        isDowngrade: false,
+        canPurchase: !cannotPurchaseDueToBlocking,
+      };
     }
 
     const currentPrice = currentUserSubscription.price || 0;
@@ -268,7 +282,7 @@ export default function MembershipSection({
       isCurrent,
       isUpgrade,
       isDowngrade,
-      canPurchase: !isCurrent && !hasActiveSubscription, // Can only purchase if no active subscription
+      canPurchase: !isCurrent && !hasActiveSubscription && !cannotPurchaseDueToBlocking,
     };
   };
 
@@ -286,6 +300,12 @@ export default function MembershipSection({
     }
 
     const hierarchy = getPlanHierarchy(plan);
+
+    // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
+    if (hasBlockingSub && isPastDue) {
+      router.push("/my-account");
+      return;
+    }
 
     // If user has active subscription and this is a downgrade, navigate to my-account
     if (hasActiveSubscription && hierarchy.isDowngrade) {
@@ -1073,6 +1093,8 @@ export default function MembershipSection({
                               ) : (
                                 (() => {
                                   const hierarchy = getPlanHierarchy(plan);
+                                  const isSubscriptionPlan =
+                                    plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                                   let buttonText = "Enter Now";
                                   // Reduce height for additional packages (one-time packages)
                                   const isAdditionalPackage =
@@ -1096,7 +1118,11 @@ export default function MembershipSection({
                                     colorScheme.gradient
                                   } text-white lg:hover:shadow-[0_0_20px_rgba(0,0,0,0.8)]`;
 
-                                  if (hasActiveSubscription && activeTab === "membership") {
+                                  // past_due: show "Update payment" for subscription plans - route to my-account
+                                  if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
+                                    buttonText = "Update payment";
+                                    buttonClass += " bg-amber-600 text-white hover:bg-amber-700";
+                                  } else if (hasActiveSubscription && activeTab === "membership") {
                                     if (hierarchy.isCurrent) {
                                       buttonText = "Current Plan";
                                       buttonClass +=
@@ -1445,13 +1471,19 @@ export default function MembershipSection({
                         ) : (
                           (() => {
                             const hierarchy = getPlanHierarchy(plan);
+                            const isSubscriptionPlan =
+                              plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                             let buttonText = "Enter Now";
                             // Reduce height for additional packages (one-time packages)
                             const isAdditionalPackage = plan.id.includes("additional-") || plan.period === "one-time";
                             const buttonHeight = isAdditionalPackage ? "h-[40px] sm:h-[45px]" : "h-[50px] sm:h-[55px]";
                             let buttonClass = `w-full ${buttonHeight} rounded-2xl flex items-center justify-center font-bold text-[14px] sm:text-[16px] transition-all duration-300 transform hover:scale-105 hover:shadow-xl bg-gradient-to-r ${colorScheme.gradient} text-white hover:shadow-[0_0_20px_rgba(0,0,0,0.8)]`;
 
-                            if (hasActiveSubscription && activeTab === "membership") {
+                            // past_due: show "Update payment" for subscription plans - route to my-account
+                            if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
+                              buttonText = "Update payment";
+                              buttonClass += " bg-amber-600 text-white hover:bg-amber-700";
+                            } else if (hasActiveSubscription && activeTab === "membership") {
                               if (hierarchy.isCurrent) {
                                 buttonText = "Current Plan";
                                 buttonClass +=

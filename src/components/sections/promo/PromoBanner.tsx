@@ -17,7 +17,7 @@ import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
 import { getAlternatingDefaultText } from "@/utils/promo-banner/default-text-manager";
 import { resolveBadgeText } from "@/utils/promo-banner/resolve-badge-text";
-import { resolveCountdownDisplay, formatTimeLeft } from "@/utils/promo-banner/countdown-mode";
+import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-banner/countdown-mode";
 import { NO_PROMO_BADGE, NO_PROMO_MAIN_LINE, NO_PROMO_RIGHT_LABEL } from "@/constants/promo-banner";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
@@ -52,6 +52,8 @@ const getTimezoneAbbr = (): string => {
  * - Shows appropriate promo based on active tab
  * - Hides when sidebar is open or on 404 page
  * - Accepts initial data from server-side for faster initial render
+ *
+ * @see docs/PROMO_BANNER_BEHAVIOUR.md — Full behaviour documentation
  */
 interface PromoBannerProps {
   initialMembershipPromo?: ServerPromo | null;
@@ -420,18 +422,39 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return null;
   };
 
-  // Badge text via util (variant override → 10x → draw status → scheduled text → alternating default; no-promo uses constant)
+  // Scheduled promo state: badge "BIG BONUS"/"ENDS TONIGHT" + right "PROMO ENDING"/countdown (split-test winner default)
+  const scheduledPromoState = useMemo(() => {
+    const hasScheduledPromo = effectiveEntry?.source === "scheduled" && effectiveEntry?.scheduledEndDate;
+    if (!hasScheduledPromo) return { hasScheduledPromo: false as const, isUrgent: false };
+    const endMs = new Date(effectiveEntry!.scheduledEndDate!).getTime();
+    const timeLeftMs = endMs - Date.now();
+    const isUrgent = timeLeftMs > 0 && timeLeftMs <= MS_24H;
+    return { hasScheduledPromo: true, isUrgent };
+  }, [effectiveEntry?.source, effectiveEntry?.scheduledEndDate]);
+
+  // Badge text (gold pill): draw status → variant override → scheduled promo default → 10x → scheduled text → alternating default; no-promo uses constant
   const badgeText = useMemo(() => {
     if (isNoPromo) return NO_PROMO_BADGE;
     const drawStatus = getDrawDateStatus();
+    // Draw status takes priority (DRAWN TONIGHT / DRAWN TOMORROW)
+    if (drawStatus === "today") return "DRAWN TONIGHT";
+    if (drawStatus === "tomorrow") return "DRAWN TOMORROW";
+    // Variant override (split test) — must run before scheduled promo default so split tests can override
+    if (variantConfig?.banner?.badgeText?.trim()) {
+      return variantConfig.banner.badgeText.trim();
+    }
+    // Scheduled promo default: BIG BONUS (>=24h) or ENDS TONIGHT (<24h)
+    if (scheduledPromoState.hasScheduledPromo) {
+      return scheduledPromoState.isUrgent ? "ENDS TONIGHT" : "BIG BONUS";
+    }
     return resolveBadgeText({
-      variantBadgeText: variantConfig?.banner?.badgeText,
+      variantBadgeText: undefined, // Already checked above
       drawStatus,
       activeScheduledText: activeScheduledText ?? undefined,
       alternatingDefault,
       multiplier,
     });
-  }, [isNoPromo, variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault, multiplier]);
+  }, [isNoPromo, scheduledPromoState, variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault, multiplier]);
 
   // Countdown display: variant config drives behaviour; default is limited_time_only
   const countdownDisplay = useMemo(() => {
@@ -724,6 +747,26 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3">
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap">
                         {NO_PROMO_RIGHT_LABEL}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Scheduled promo >=24h: show label (variant countdownLabel overrides "PROMO ENDING" for split tests) - skip when draw is today/tomorrow
+              const drawStatus = getDrawDateStatus();
+              if (
+                scheduledPromoState.hasScheduledPromo &&
+                !scheduledPromoState.isUrgent &&
+                drawStatus !== "today" &&
+                drawStatus !== "tomorrow"
+              ) {
+                const promoEndingLabel = variantConfig?.banner?.countdownLabel?.trim() || "PROMO ENDING";
+                return (
+                  <div className="flex items-center justify-center">
+                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3">
+                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
+                        {promoEndingLabel}
                       </div>
                     </div>
                   </div>
