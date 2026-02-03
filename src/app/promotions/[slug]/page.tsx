@@ -178,7 +178,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
             {/* Ensure hero + brands share the first mobile viewport for better context */}
             <div className="flex flex-col  lg:min-h-0 w-full ">
               <PromoHero initialPromo={membershipPromo} initialMajorDraw={majorDraw} />
-              <BrandsShowcase />
+           
             </div>
 
             {/* Lazy load below-fold components */}

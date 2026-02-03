@@ -1523,19 +1523,7 @@ export default function MembershipSection({
         </div>
       )}
 
-      {/* Payment Methods Image */}
-      <div className="flex justify-center mt-8 sm:mt-12 mb-4 sm:mb-6">
-        <div className="max-w-2xl w-full lg:max-w-md">
-          <Image
-            src="/images/payment-methods-clean.webp"
-            alt="Accepted Payment Methods"
-            width={800}
-            height={100}
-            className="w-full h-auto object-contain"
-            priority={false}
-          />
-        </div>
-      </div>
+      
 
       {/* Toggle Button for Package Inclusions - Mobile Only, Additional Packages */}
       {(() => {
