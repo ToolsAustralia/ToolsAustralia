@@ -180,6 +180,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [useSavedPaymentMethod, setUseSavedPaymentMethod] = useState(false);
   const [showCardForm, setShowCardForm] = useState(false);
   const [isCreatingSubscription, setIsCreatingSubscription] = useState(false); // Loading state while invoice PaymentIntent is being created (for Payment Element)
+  const [paymentMethodTypeFromElement, setPaymentMethodTypeFromElement] = useState<string | null>(null); // Option A: hide main Purchase when google_pay/apple_pay selected
 
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
@@ -456,6 +457,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       subscriptionPackageIdRef.current = null;
       previousSubscriptionToCancelRef.current = null;
       setIsCreatingSubscription(false);
+      setPaymentMethodTypeFromElement(null);
       userIdRef.current = null; // ✅ Reset userId tracking for clean state
       // Success state is now handled by global LoadingContext
       // console.log("🔄 Reset upsell trigger guard and payment processing state for new purchase");
@@ -4626,6 +4628,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     isCreatingSetupIntent={createSetupIntent.isPending}
                     isCreatingPaymentIntent={createPaymentIntent.isPending}
                     isCreatingSubscription={isCreatingSubscription}
+                    onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
                     billingDetails={resolvedBillingDetails}
                     amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                     packageName={promoEnhancedPlan?.name || activePlan?.name}
@@ -4654,6 +4657,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       isCreatingSetupIntent={createSetupIntent.isPending}
                     isCreatingPaymentIntent={createPaymentIntent.isPending}
                     isCreatingSubscription={isCreatingSubscription}
+                    onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
                       billingDetails={resolvedBillingDetails}
                       amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                       packageName={promoEnhancedPlan?.name || activePlan?.name}
@@ -4728,9 +4732,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   )}
 
                   {/* Purchase Button - Moved above Selected Package for better UX */}
+                  {/* Option A (wallet UX): when Google Pay or Apple Pay is selected, hide main Purchase and show instruction to click wallet button in form */}
                   {!activePlan || activePlan.id === "placeholder" ? (
                     // Payment Button Skeleton
                     <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                  ) : (paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay" || paymentMethodTypeFromElement === "apple_pay" || paymentMethodTypeFromElement === "applePay") ? (
+                    <div className="rounded-lg sm:rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4 text-center">
+                      <p className="text-sm font-medium text-amber-900">
+                        To pay with {(paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay") ? "Google Pay" : "Apple Pay"}, click the{" "}
+                        {(paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay") ? "Google Pay" : "Apple Pay"} button in the payment form above—do not use a separate Purchase button.
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        This keeps your payment secure and avoids browser restrictions.
+                      </p>
+                    </div>
                   ) : (
                     <Button
                       type="button"

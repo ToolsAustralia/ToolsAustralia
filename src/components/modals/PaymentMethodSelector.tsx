@@ -65,6 +65,8 @@ interface PaymentMethodSelectorProps {
   // Amount and package name for wallet payment display (Apple Pay/Google Pay)
   amount?: number; // Amount in cents
   packageName?: string; // Package name for payment request label
+  /** Option A (wallet UX): parent uses this to hide/disable main Purchase when google_pay/apple_pay selected */
+  onPaymentMethodTypeChange?: (type: string | null) => void;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
@@ -88,6 +90,7 @@ const StripeCardForm = React.forwardRef<
     };
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
+    onPaymentMethodTypeChange?: (type: string | null) => void;
   }
 >(
   (
@@ -99,6 +102,7 @@ const StripeCardForm = React.forwardRef<
       billingDetails,
       amount,
       packageName,
+      onPaymentMethodTypeChange,
     },
     ref
   ) => {
@@ -658,6 +662,12 @@ const StripeCardForm = React.forwardRef<
                 // Payment method is complete
                 onCardElementChange({});
               }
+              // Option A (wallet UX): notify parent of selected payment method type so main Purchase can be hidden for wallets
+              const value = (event as { value?: { payment_method?: { type?: string } | string } }).value;
+              const pm = value?.payment_method;
+              const type =
+                pm == null ? null : typeof pm === "string" ? pm : (pm as { type?: string }).type ?? null;
+              onPaymentMethodTypeChange?.(type ?? null);
             }}
           />
         </div>
@@ -688,6 +698,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   billingDetails,
   amount,
   packageName,
+  onPaymentMethodTypeChange,
 }) => {
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
@@ -917,6 +928,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 billingDetails={billingDetails}
                 amount={amount}
                 packageName={packageName}
+                onPaymentMethodTypeChange={onPaymentMethodTypeChange}
               />
             </Elements>
           ) : cardFormError ? (
@@ -1169,6 +1181,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     billingDetails={billingDetails}
                     amount={amount}
                     packageName={packageName}
+                    onPaymentMethodTypeChange={onPaymentMethodTypeChange}
                   />
                 </Elements>
               ) : (
