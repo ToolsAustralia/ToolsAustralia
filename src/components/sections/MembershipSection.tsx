@@ -625,10 +625,10 @@ export default function MembershipSection({
                             : "w-full"
                         } ${
                           isTwoColumn && plan.isMemberOnly
-                            ? "h-[280px] sm:h-[300px]"
+                            ? "h-[260px] sm:h-[280px]"
                             : isTwoColumn
-                            ? "h-[320px] sm:h-[340px]"
-                            : "h-[480px]"
+                            ? "h-[300px] sm:h-[320px]"
+                            : "h-[380px]"
                         } rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 lg:hover:scale-105 lg:hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible ${
                           highlighted
                             ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105"
@@ -789,8 +789,8 @@ export default function MembershipSection({
                                 return (
                                   <h3
                                     className={`${
-                                      isTwoColumn ? "text-[14px] sm:text-[18px]" : "text-[22px] sm:text-[28px]"
-                                    } font-bold mb-1.5 ${colorScheme.text} tracking-wide leading-tight`}
+                                      isTwoColumn ? "text-[12px] sm:text-[14px]" : "text-[14px] sm:text-[16px]"
+                                    } font-bold mb-0.5 ${colorScheme.text} tracking-wide leading-tight`}
                                   >
                                     {isAdditionalPackage ? (
                                       <>
@@ -807,7 +807,7 @@ export default function MembershipSection({
                                 <p
                                   className={`${
                                     isTwoColumn ? "text-[10px] sm:text-[13px]" : "text-[13px] sm:text-[16px]"
-                                  } font-medium mb-3 text-white/80`}
+                                  } font-medium mb-1 text-white/80`}
                                 >
                                   {plan.subtitle}
                                 </p>
@@ -815,7 +815,7 @@ export default function MembershipSection({
 
                               {/* Entries - Main Focus */}
                               <div
-                                className={isTwoColumn && plan.isMemberOnly ? "mb-1.5" : isTwoColumn ? "mb-2" : "mb-3"}
+                                className={isTwoColumn && plan.isMemberOnly ? "mb-1" : isTwoColumn ? "mb-1" : "mb-1.5"}
                               >
                                 {(() => {
                                   // Extract entries from features
@@ -885,7 +885,7 @@ export default function MembershipSection({
                                         <div
                                           className={`${
                                             isTwoColumn ? "text-[12px] sm:text-[16px]" : "text-[20px] sm:text-[24px]"
-                                          } ${colorScheme.text} mt-1`}
+                                          } ${colorScheme.text} mt-0.5`}
                                         >
                                           Free Entries
                                         </div>
@@ -900,14 +900,14 @@ export default function MembershipSection({
                             {/* Horizontal Divider */}
                             <div
                               className={`w-full p-[0.25px] bg-white/80 ${
-                                isTwoColumn && plan.isMemberOnly ? "mb-1.5" : isTwoColumn ? "mb-2" : "mb-3"
+                                isTwoColumn && plan.isMemberOnly ? "mb-1" : isTwoColumn ? "mb-1.5" : "mb-1.5"
                               }`}
                             ></div>
 
-                            {/* Features List - Flexible height with max height */}
+                            {/* Price + space for button - tickmarks moved to expandable below */}
                             <div
-                              className={`flex-1 overflow-visible space-y-2 sm:space-y-3 ${
-                                isTwoColumn && plan.isMemberOnly ? "mb-1" : "mb-4"
+                              className={`flex-1 overflow-visible ${
+                                isTwoColumn && plan.isMemberOnly ? "mb-1" : "mb-2"
                               } ${
                                 isTwoColumn && plan.isMemberOnly
                                   ? "pb-[34px] sm:pb-[38px]"
@@ -973,73 +973,7 @@ export default function MembershipSection({
                                   </div>
                                 </div>
                               </div>
-                              {/* Smart rendering for additional packages - no features displayed (entries shown in header) */}
-                              {/* Additional packages: skip features list to save space (entries shown in header) */}
-                              {!(isTwoColumn && plan.isMemberOnly) &&
-                                plan.features.map((feature, index) => {
-                                  // Check if this feature mentions entries and we have multiplier data
-                                  // Show original → multiplied format when multiplier > 1 (active promo OR alternating)
-                                  const promoMultiplier = typeof plan.metadata?.promoMultiplier === 'number' ? plan.metadata.promoMultiplier : 0;
-                                  const hasMultiplier = promoMultiplier > 1;
-                                  const originalEntries = plan.metadata?.originalEntries;
-
-                                  if (
-                                    hasMultiplier &&
-                                    originalEntries &&
-                                    (feature.text.includes("Entries") || feature.text.includes("entries"))
-                                  ) {
-                                    // Replace the multiplied number with original number in the feature text
-                                    const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
-                                    if (match) {
-                                      const multipliedNumber = parseInt(match[1]);
-                                      const originalNumber = originalEntries;
-                                      const updatedText = feature.text.replace(
-                                        multipliedNumber.toString(),
-                                        originalNumber.toString()
-                                      );
-
-                                      return (
-                                        <div
-                                          key={index}
-                                          className={`flex items-start ${isTwoColumn ? "gap-2" : "gap-3"}`}
-                                        >
-                                          <div className="flex-shrink-0 mt-1">
-                                            <Check
-                                              className={`${isTwoColumn ? "h-3.5 w-3.5" : "h-5 w-5"} ${
-                                                colorScheme.text
-                                              }`}
-                                            />
-                                          </div>
-                                          <span
-                                            className={`${
-                                              isTwoColumn ? "text-[11px] sm:text-[13px]" : "text-[14px] sm:text-[16px]"
-                                            } leading-relaxed text-white/90`}
-                                          >
-                                            {updatedText}
-                                          </span>
-                                        </div>
-                                      );
-                                    }
-                                  }
-
-                                  // Default feature display
-                                  return (
-                                    <div key={index} className={`flex items-start ${isTwoColumn ? "gap-2" : "gap-3"}`}>
-                                      <div className="flex-shrink-0 mt-1">
-                                        <Check
-                                          className={`${isTwoColumn ? "h-3.5 w-3.5" : "h-5 w-5"} ${colorScheme.text}`}
-                                        />
-                                      </div>
-                                      <span
-                                        className={`${
-                                          isTwoColumn ? "text-[11px] sm:text-[13px]" : "text-[14px] sm:text-[16px]"
-                                        } leading-relaxed text-white/90`}
-                                      >
-                                        {feature.text}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                              {/* Tickmarks hidden on mobile - see "Click here to see full package inclusion" below */}
                             </div>
 
                             {/* Action Button - Fixed position at bottom */}
@@ -1525,17 +1459,11 @@ export default function MembershipSection({
 
       
 
-      {/* Toggle Button for Package Inclusions - Mobile Only, Additional Packages */}
+      {/* Toggle Button for Package Inclusions - Mobile Only, All Packages */}
       {(() => {
-        const showingMemberExclusive =
-          activeTab === "one-time" && membershipPlans.some((plan) => plan.isMemberOnly === true);
-        const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
-        const shouldShowToggle = showingMemberExclusive && hasAccess && !loading && !error;
+        const shouldShowToggle = membershipPlans.length > 0 && !loading && !error;
 
         if (!shouldShowToggle) return null;
-
-        // Get additional packages for the expanded view
-        const additionalPackages = membershipPlans.filter((plan) => plan.isMemberOnly === true);
 
         return (
           <div className="lg:hidden ">
@@ -1547,8 +1475,8 @@ export default function MembershipSection({
               {isInclusionsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
             </button>
 
-            {/* Package Inclusions Expanded Component */}
-            <PackageInclusionsExpanded isExpanded={isInclusionsExpanded} packages={additionalPackages} />
+            {/* Package Inclusions Expanded Component - shows all currently displayed packages */}
+            <PackageInclusionsExpanded isExpanded={isInclusionsExpanded} packages={membershipPlans} />
           </div>
         );
       })()}

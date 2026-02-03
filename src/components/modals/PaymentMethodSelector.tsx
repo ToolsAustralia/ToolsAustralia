@@ -193,20 +193,20 @@ const StripeCardForm = React.forwardRef<
       };
     }, []);
 
-    // Enable wallet payments (Apple Pay, Google Pay) whenever possible - show wallets first for both SetupIntent and PaymentIntent
-    // Note: SetupIntent may show $0.00 in wallet sheet; PaymentIntent shows actual amount
-    const shouldEnableWallets = true;
+    // Enable wallets only for PaymentIntent (one-time). SetupIntent (subscriptions) causes google_pay.payment_exception:
+    // Stripe's Google Pay iframe tries to navigate but is sandboxed; wallet must be clicked directly; works poorly with our "Complete Purchase" button flow.
+    const shouldEnableWallets = intentType === "payment" && !!amount && amount > 0;
 
-    // Build paymentRequest configuration - use actual amount when available, 0 for SetupIntent (may show $0.00)
+    // Build paymentRequest configuration - only when wallets enabled (PaymentIntent with amount)
     const paymentRequestConfig:
       | { country: string; currency: string; total: { label: string; amount: number } }
-      | undefined = shouldEnableWallets
+      | undefined = shouldEnableWallets && amount && amount > 0
       ? {
           country: "AU",
           currency: "aud",
           total: {
             label: packageName || "Membership",
-            amount: amount ?? 0,
+            amount,
           },
         }
       : undefined;
