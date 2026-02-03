@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
+import { stripe } from "@/lib/stripe";
 
 const verifyPaymentSchema = z.object({
   userId: z.string().min(1, "User ID is required"),
+  paymentIntentId: z.string().optional(), // Optional: validate PI belongs to user/subscription
 });
 
 /**
@@ -15,7 +17,7 @@ const verifyPaymentSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId } = verifyPaymentSchema.parse(body);
+    const { userId, paymentIntentId } = verifyPaymentSchema.parse(body);
 
     await connectDB();
 
@@ -28,6 +30,30 @@ export async function POST(request: NextRequest) {
         },
         { status: 404 }
       );
+    }
+
+    // Optional: validate PaymentIntent belongs to this user and expected subscription
+    if (paymentIntentId && user.stripeCustomerId) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        const piCustomerId = typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer?.id;
+        if (piCustomerId !== user.stripeCustomerId) {
+          return NextResponse.json(
+            { success: false, error: "PaymentIntent does not belong to this user" },
+            { status: 403 }
+          );
+        }
+        const piSubscriptionId = paymentIntent.metadata?.subscription_id;
+        if (piSubscriptionId && user.stripeSubscriptionId && piSubscriptionId !== user.stripeSubscriptionId) {
+          return NextResponse.json(
+            { success: false, error: "PaymentIntent does not belong to user's subscription" },
+            { status: 403 }
+          );
+        }
+      } catch (retrieveError) {
+        console.warn("Verify payment: could not validate PaymentIntent:", retrieveError);
+        // Continue – validation is optional
+      }
     }
 
     console.log(`🔍 Verifying payment webhook processing for ${user.email}`);

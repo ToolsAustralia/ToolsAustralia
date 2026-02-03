@@ -70,21 +70,34 @@ export function extractSubscriptionData(response: unknown): SubscriptionResponse
     typeof responseObj.subscription === "object" &&
     "id" in responseObj.subscription
   ) {
-    const subscription = responseObj.subscription as { id: string; status?: string; clientSecret?: string };
+    const subscription = responseObj.subscription as {
+      id: string;
+      status?: string;
+      clientSecret?: string | { client_secret?: string };
+      invoicePaymentIntentClientSecret?: string | { client_secret?: string };
+    };
     subscriptionId = subscription.id;
     status = subscription.status || "unknown";
-    clientSecret = subscription.clientSecret || null;
+    const rawSubSecret = subscription.invoicePaymentIntentClientSecret ?? subscription.clientSecret;
+    if (typeof rawSubSecret === "string") {
+      clientSecret = rawSubSecret;
+    } else if (rawSubSecret && typeof rawSubSecret === "object" && typeof rawSubSecret.client_secret === "string") {
+      clientSecret = rawSubSecret.client_secret;
+    }
 
     // Also check data.subscription for nested format
     if (responseObj.data && typeof responseObj.data === "object") {
       const data = responseObj.data as Record<string, unknown>;
       if (data.subscription && typeof data.subscription === "object") {
-        const nestedSubscription = data.subscription as { id?: string; clientSecret?: string };
+        const nestedSubscription = data.subscription as { id?: string; clientSecret?: string | { client_secret?: string } };
         if (nestedSubscription.id) {
           subscriptionId = nestedSubscription.id;
         }
-        if (nestedSubscription.clientSecret) {
-          clientSecret = nestedSubscription.clientSecret;
+        const nestedSecret = nestedSubscription.clientSecret;
+        if (typeof nestedSecret === "string") {
+          clientSecret = nestedSecret;
+        } else if (nestedSecret && typeof nestedSecret === "object" && typeof nestedSecret.client_secret === "string") {
+          clientSecret = nestedSecret.client_secret;
         }
       }
     }
@@ -101,21 +114,33 @@ export function extractSubscriptionData(response: unknown): SubscriptionResponse
 
     // Check for nested subscription object
     if (data.subscription && typeof data.subscription === "object") {
-      const subscription = data.subscription as { id?: string; status?: string; clientSecret?: string };
+      const subscription = data.subscription as { id?: string; status?: string; clientSecret?: string | { client_secret?: string } };
       if (subscription.id) {
         subscriptionId = subscription.id;
       }
       if (subscription.status) {
         status = subscription.status;
       }
-      if (subscription.clientSecret) {
-        clientSecret = subscription.clientSecret;
+      const subSecret = subscription.clientSecret;
+      if (typeof subSecret === "string") {
+        clientSecret = subSecret;
+      } else if (subSecret && typeof subSecret === "object" && typeof subSecret.client_secret === "string") {
+        clientSecret = subSecret.client_secret;
       }
     }
 
-    // Check for clientSecret directly in data
-    if (typeof data.clientSecret === "string") {
-      clientSecret = data.clientSecret;
+    // Check for invoicePaymentIntentClientSecret (Option A) or clientSecret (string or { client_secret, type })
+    const rawInvoiceSecret = data.invoicePaymentIntentClientSecret;
+    const rawClientSecret = data.clientSecret;
+    if (typeof rawInvoiceSecret === "string") {
+      clientSecret = rawInvoiceSecret;
+    } else if (rawInvoiceSecret && typeof rawInvoiceSecret === "object" && typeof (rawInvoiceSecret as { client_secret?: string }).client_secret === "string") {
+      clientSecret = (rawInvoiceSecret as { client_secret: string }).client_secret;
+    }
+    if (!clientSecret && typeof rawClientSecret === "string") {
+      clientSecret = rawClientSecret;
+    } else if (!clientSecret && rawClientSecret && typeof rawClientSecret === "object" && typeof (rawClientSecret as { client_secret?: string }).client_secret === "string") {
+      clientSecret = (rawClientSecret as { client_secret: string }).client_secret;
     }
 
     // Check for status directly in data
