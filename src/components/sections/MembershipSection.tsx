@@ -17,6 +17,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
+import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -939,21 +940,28 @@ export default function MembershipSection({
                     );
                   })}
             </div>
+            {/* Entry accumulation chart - under package cards when membership selected */}
+            {activeTab === "membership" && (
+              <div className="mt-6 sm:mt-8 max-w-md mx-auto">
+                <VerticalAccumulationChart />
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Desktop: Grid Layout */}
       {!loading && !error && (
-        <div
-          className={`hidden lg:grid gap-4 sm:gap-5 justify-items-center overflow-visible pt-8 ${
-            activeTab === "membership"
-              ? "max-w-5xl mx-auto grid-cols-3 justify-center"
-              : "max-w-7xl mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5"
-          }`}
-        >
-          {membershipPlans.length > 0 ? (
-            membershipPlans.map((plan) => {
+        <div className="hidden lg:block overflow-visible">
+          <div
+            className={`grid gap-4 sm:gap-5 justify-items-center overflow-visible pt-8 ${
+              activeTab === "membership"
+                ? "max-w-5xl mx-auto grid-cols-3 justify-center"
+                : "max-w-7xl mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5"
+            }`}
+          >
+            {membershipPlans.length > 0 ? (
+              membershipPlans.map((plan) => {
               const colorScheme = getPackageColorScheme(plan.id);
               const highlighted = isHighlighted(plan.id);
               return (
@@ -1276,6 +1284,13 @@ export default function MembershipSection({
           ) : (
             <div className="col-span-full text-center py-12">
               <p className="text-gray-600">No membership packages available</p>
+            </div>
+          )}
+          </div>
+          {/* Entry accumulation chart - at bottom of package cards when membership selected */}
+          {activeTab === "membership" && (
+            <div className="mt-8 pt-8 border-t border-slate-700/30 max-w-4xl mx-auto">
+              <VerticalAccumulationChart />
             </div>
           )}
         </div>

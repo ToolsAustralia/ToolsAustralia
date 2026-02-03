@@ -44,6 +44,10 @@ export default async function TermsPage() {
             <div className="grid gap-2 text-gray-300 sm:grid-cols-[max-content,1fr]">
               <span className="font-semibold text-white">Name:</span>
               <span>Tools Australia Pty Ltd</span>
+              <span className="font-semibold text-white">ABN:</span>
+              <span>54690397061</span>
+              <span className="font-semibold text-white">ACN:</span>
+              <span>690397061</span>
               <span className="font-semibold text-white">Website:</span>
               <span>
                 <a className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline" href={baseUrl}>
@@ -60,7 +64,7 @@ export default async function TermsPage() {
                 </a>
               </span>
               <span className="font-semibold text-white">Last Updated:</span>
-              <span>25/11/2025</span>
+              <span>03/02/2026</span>
             </div>
           </section>
 
@@ -131,58 +135,9 @@ export default async function TermsPage() {
             </p>
           </section>
 
-          {/* 4. Reward Points System */}
-          <section id="reward-points" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">4. Reward Points System</h2>
-            <div className="space-y-4 text-gray-300">
-              <div>
-                <h3 className="text-xl font-semibold text-white">4.1 Earning Reward Points:</h3>
-                <ul className="list-inside list-disc space-y-2">
-                  <li>
-                    Members may earn reward points through purchases, referrals, promotional activities, or other means
-                    specified on the website
-                  </li>
-                  <li>
-                    Reward points are credited to member accounts according to the terms specified at the time of
-                    earning
-                  </li>
-                  <li>Points accumulation rates and earning opportunities are displayed on the website and may vary</li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">4.2 Redeeming Reward Points:</h3>
-                <ul className="list-inside list-disc space-y-2">
-                  <li>
-                    Reward points can be redeemed for entry packages, giveaway participation, or other benefits as
-                    specified on the website
-                  </li>
-                  <li>Redemption values and options are clearly displayed at the time of redemption</li>
-                  <li>
-                    Once redeemed, reward points cannot be reversed except in cases of system error or as required by
-                    law
-                  </li>
-                  <li>Reward points have no cash value and cannot be transferred, sold, or exchanged for cash</li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">4.3 Reward Points Expiry and Cancellation:</h3>
-                <ul className="list-inside list-disc space-y-2">
-                  <li>
-                    Reward points may expire if account remains inactive for a specified period (details on website)
-                  </li>
-                  <li>Upon membership cancellation, unused reward points are forfeited unless otherwise specified</li>
-                  <li>
-                    Tools Australia reserves the right to adjust, cancel, or modify the reward points program with
-                    reasonable notice to members
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </section>
-
-          {/* 5. Membership Fees and Billing */}
+          {/* 4. Membership Fees and Billing */}
           <section id="billing" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">5. Membership Fees and Billing</h2>
+            <h2 className="text-2xl font-semibold text-white">4. Membership Fees and Billing</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>Membership fees are outlined on our website and are non-refundable once purchased</li>
               <li>One-Time Packages are charged once for the chosen tier</li>
@@ -192,18 +147,22 @@ export default async function TermsPage() {
                 Tools Australia reserves the right to change membership fees or plans at any time, with reasonable
                 notice provided to members
               </li>
+              <li>
+                <strong>Billing Exception:</strong> If your billing cycle falls on the 25th, 26th, or 27th of any given
+                month, you will be charged on the 24th instead to ensure eligibility for the upcoming monthly giveaway.
+              </li>
             </ul>
           </section>
 
-          {/* 6. Competition Entries */}
+          {/* 5. Competition Entries */}
           <section
             id="competition-entries"
             className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
           >
-            <h2 className="text-2xl font-semibold text-white">6. Competition Entries</h2>
+            <h2 className="text-2xl font-semibold text-white">5. Competition Entries</h2>
             <div className="space-y-4 text-gray-300">
               <div>
-                <h3 className="text-xl font-semibold text-white">6.1 Entry Allocation:</h3>
+                <h3 className="text-xl font-semibold text-white">5.1 Entry Allocation:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>
                     One-Time Packages: Entries for both Major Giveaway and Mini Draw competitions for the specified
@@ -214,21 +173,24 @@ export default async function TermsPage() {
                     competitions
                   </li>
                   <li>
-                    Additional entries may be offered via promotions, referrals, reward points redemption, or free entry
-                    methods
+                    Additional entries may be offered via promotions, referrals, or free entry methods
                   </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.2 Entry Limits:</h3>
+                <h3 className="text-xl font-semibold text-white">5.2 Entry Limits:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>Entry limits specified in each competition&apos;s terms and conditions</li>
-                  <li>Mini Draws may have capped entry limits. Once reached, the draw closes to new entries</li>
+                  <li>
+                    Mini Draws have a threshold based on One-Time Package entries sold. Once the specified number is
+                    reached, the Mini Draw closes to new One-Time Package purchases and the draw is conducted.
+                  </li>
+                  <li>Member entries are automatically included in Mini Draws and do not count toward that threshold.</li>
                   <li>Maximum entries per member may apply as specified in competition-specific terms</li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.3 Entry Validity:</h3>
+                <h3 className="text-xl font-semibold text-white">5.3 Entry Validity:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>
                     Membership Package entries are accumulated monthly and carried forward as long as the subscription
@@ -244,12 +206,12 @@ export default async function TermsPage() {
                   </li>
                   <li>
                     Suspended memberships may be eligible for entry restoration upon re-activation in accordance with
-                    Section 6.10
+                    Section 5.10
                   </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.4 Repeat Winner Restriction:</h3>
+                <h3 className="text-xl font-semibold text-white">5.4 Repeat Winner Restriction:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>
                     First Prize Winners cannot win another Tools Australia major giveaway for 10 months from date of win
@@ -262,35 +224,39 @@ export default async function TermsPage() {
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.5 Employee Exclusion:</h3>
+                <h3 className="text-xl font-semibold text-white">5.5 Employee Exclusion:</h3>
                 <p>
                   Tools Australia employees and immediate family (spouse, de facto partner, child, sibling) ineligible.
                 </p>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.6 Entry Adjustments:</h3>
+                <h3 className="text-xl font-semibold text-white">5.6 Entry Adjustments:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>Tools Australia may adjust entries to correct errors or as compensation</li>
                   <li>Where feasible, errors rectified rather than entries cancelled</li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.7 Competition Disruption:</h3>
+                <h3 className="text-xl font-semibold text-white">5.7 Competition Disruption:</h3>
                 <p>
                   If competition is impacted by system failure or force majeure, Tools Australia may re-run using
                   existing entries or transfer entries to equivalent future competition.
                 </p>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.8 Competition-Specific Terms:</h3>
+                <h3 className="text-xl font-semibold text-white">5.8 Competition-Specific Terms:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>Each competition has separate terms and conditions</li>
                   <li>Review competition-specific terms in addition to these general terms</li>
-                  <li>Mini Draws may have specific entry caps and closure conditions</li>
+                  <li>
+                    Mini Draws have specific One-Time Package entry thresholds and closure conditions. All active
+                    Membership Package holders automatically receive their member entries regardless of the One-Time
+                    Package threshold.
+                  </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">6.9 Technical Failures and Notification Delays:</h3>
+                <h3 className="text-xl font-semibold text-white">5.9 Technical Failures and Notification Delays:</h3>
                 <p>
                   Tools Australia is not liable for any delays or failures in sending notifications, communications, or
                   promotional messages (including SMS, email, or website notifications) due to technical issues, system
@@ -310,17 +276,15 @@ export default async function TermsPage() {
                   basis to ensure fairness. Members affected by such technical issues should contact{" "}
                   <a
                     className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                    href="mailto:info@toolsaustralia.com.au"
+                    href="mailto:hello@toolsaustralia.com.au"
                   >
-                    info@toolsaustralia.com.au
+                    hello@toolsaustralia.com.au
                   </a>{" "}
                   for assistance.
                 </p>
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-white">
-                  6.10 Entry Restoration for Re-activated Memberships:
-                </h3>
+                <h3 className="text-xl font-semibold text-white">5.10 Entry Restoration for Re-activated Memberships:</h3>
                 <p>
                   If a Membership Package subscription is suspended due to payment failure and subsequently re-activated
                   within 90 days:
@@ -354,9 +318,9 @@ export default async function TermsPage() {
             </div>
           </section>
 
-          {/* 7. Cancellation and Termination */}
+          {/* 6. Cancellation and Termination */}
           <section id="cancellation" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">7. Cancellation and Termination</h2>
+            <h2 className="text-2xl font-semibold text-white">6. Cancellation and Termination</h2>
             <div className="space-y-4 text-gray-300">
               <div>
                 <h3 className="text-xl font-semibold text-white">Membership Package Cancellation by You:</h3>
@@ -365,7 +329,6 @@ export default async function TermsPage() {
                   <li>Takes effect end of current billing period</li>
                   <li>No refunds for unused portion</li>
                   <li>Entries for current competition period remain valid</li>
-                  <li>Unused reward points are forfeited upon cancellation</li>
                 </ul>
               </div>
               <div>
@@ -380,12 +343,12 @@ export default async function TermsPage() {
             </div>
           </section>
 
-          {/* 8. Intellectual Property */}
+          {/* 7. Intellectual Property */}
           <section
             id="intellectual-property"
             className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
           >
-            <h2 className="text-2xl font-semibold text-white">8. Intellectual Property</h2>
+            <h2 className="text-2xl font-semibold text-white">7. Intellectual Property</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>All website content owned by Tools Australia or licensed to Tools Australia</li>
               <li>Limited license for personal, non-commercial use only</li>
@@ -396,9 +359,9 @@ export default async function TermsPage() {
             </ul>
           </section>
 
-          {/* 9. Acceptable Use */}
+          {/* 8. Acceptable Use */}
           <section id="acceptable-use" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">9. Acceptable Use</h2>
+            <h2 className="text-2xl font-semibold text-white">8. Acceptable Use</h2>
             <p className="text-gray-300">You must not:</p>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>Use services for unlawful purposes</li>
@@ -407,26 +370,20 @@ export default async function TermsPage() {
               <li>Create multiple accounts to circumvent entry limits</li>
               <li>Engage in fraud or misrepresentation</li>
               <li>Interfere with site operation</li>
-              <li>Abuse the reward points system or attempt to exploit system vulnerabilities</li>
+              <li>Attempt to exploit system vulnerabilities</li>
             </ul>
             <p className="text-gray-300">
               You are responsible for account security. Notify us immediately of unauthorized access.
             </p>
           </section>
 
-          {/* 10. Privacy */}
+          {/* 9. Privacy */}
           <section id="privacy" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">10. Privacy</h2>
+            <h2 className="text-2xl font-semibold text-white">9. Privacy</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>Personal information handled per Privacy Act 1988 (Cth)</li>
-              <li>
-                Collected information: name, contact details, payment information, account activity, reward points
-                balance
-              </li>
-              <li>
-                Used for: service provision, competition administration, payment processing, communications, reward
-                points management
-              </li>
+              <li>Collected information: name, contact details, payment information, account activity</li>
+              <li>Used for: service provision, competition administration, payment processing, communications</li>
               <li>
                 May be shared with third-party providers for payment processing, prize fulfillment, draw conduct, or
                 compliance
@@ -453,9 +410,9 @@ export default async function TermsPage() {
             </ul>
           </section>
 
-          {/* 11. Third-Party Links and Suppliers */}
+          {/* 10. Third-Party Links and Suppliers */}
           <section id="third-parties" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">11. Third-Party Links and Suppliers</h2>
+            <h2 className="text-2xl font-semibold text-white">10. Third-Party Links and Suppliers</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>Site may link to third-party websites not controlled by Tools Australia</li>
               <li>Tools Australia not responsible for third-party content, policies, or practices</li>
@@ -467,9 +424,9 @@ export default async function TermsPage() {
             </ul>
           </section>
 
-          {/* 12. Disclaimers and Liability */}
+          {/* 11. Disclaimers and Liability */}
           <section id="liability" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">12. Disclaimers and Liability</h2>
+            <h2 className="text-2xl font-semibold text-white">11. Disclaimers and Liability</h2>
             <p className="text-gray-300">
               Services provided &quot;as is&quot; without warranties. Tools Australia not liable for indirect,
               incidental, or consequential damages, except where liability cannot be excluded by law.
@@ -485,12 +442,12 @@ export default async function TermsPage() {
             </p>
           </section>
 
-          {/* 13. Responsible Participation */}
+          {/* 12. Responsible Participation */}
           <section
             id="responsible-participation"
             className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10"
           >
-            <h2 className="text-2xl font-semibold text-white">13. Responsible Participation</h2>
+            <h2 className="text-2xl font-semibold text-white">12. Responsible Participation</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>Competitions involve chance; prizes not guaranteed</li>
               <li>Only spend what you can afford</li>
@@ -508,17 +465,17 @@ export default async function TermsPage() {
             </ul>
           </section>
 
-          {/* 14. Tax */}
+          {/* 13. Tax */}
           <section id="tax" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">14. Tax</h2>
+            <h2 className="text-2xl font-semibold text-white">13. Tax</h2>
             <p className="text-gray-300">
               Winners solely responsible for any tax obligations. Seek independent tax advice.
             </p>
           </section>
 
-          {/* 15. Force Majeure */}
+          {/* 14. Force Majeure */}
           <section id="force-majeure" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">15. Force Majeure</h2>
+            <h2 className="text-2xl font-semibold text-white">14. Force Majeure</h2>
             <p className="text-gray-300">
               Tools Australia is not liable for failure due to events beyond reasonable control (natural disasters,
               pandemic, government restrictions, system failures, third-party service failures, telecommunications or
@@ -526,21 +483,25 @@ export default async function TermsPage() {
             </p>
           </section>
 
-          {/* 16. Governing Law and Dispute Resolution */}
+          {/* 15. Governing Law and Dispute Resolution */}
           <section id="governing-law" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">16. Governing Law and Dispute Resolution</h2>
+            <h2 className="text-2xl font-semibold text-white">15. Governing Law and Dispute Resolution</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>These Terms will be governed by and construed in accordance with the laws of Australia</li>
               <li>
-                Any disputes arising out of or relating to these Terms will be resolved through binding arbitration in
-                accordance with the rules of the Australian Commercial Arbitration Centre
+                These Terms are governed by and construed in accordance with the laws of Victoria, Australia and the
+                Commonwealth of Australia.
               </li>
+              <li>
+                Any disputes arising out of or relating to these Terms are subject to the non-exclusive jurisdiction of
+                the courts of Victoria.
+              </li>
+              <li>Where possible, resolve disputes directly with Tools Australia before commencing legal action.</li>
             </ul>
           </section>
 
-          {/* 17. Amendments */}
+          {/* 16. Amendments */}
           <section id="amendments" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">17. Amendments</h2>
+            <h2 className="text-2xl font-semibold text-white">16. Amendments</h2>
             <p className="text-gray-300">
               Tools Australia reserves the right to amend these Terms at any time by posting the amended Terms on the
               website. Your continued use of the Service after the posting of amended Terms constitutes your acceptance
@@ -548,9 +509,9 @@ export default async function TermsPage() {
             </p>
           </section>
 
-          {/* 18. Acknowledgment */}
+          {/* 17. Acknowledgment */}
           <section id="acknowledgment" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
-            <h2 className="text-2xl font-semibold text-white">18. Acknowledgment</h2>
+            <h2 className="text-2xl font-semibold text-white">17. Acknowledgment</h2>
             <p className="text-gray-300">By purchasing or using Tools Australia services, you confirm:</p>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>You have read and agree to these terms</li>
@@ -563,7 +524,6 @@ export default async function TermsPage() {
                 You understand Membership Package entries are accumulated monthly and apply to both Major Giveaway and
                 Mini Draw competitions
               </li>
-              <li>You understand the reward points system and redemption terms</li>
               <li>You are responsible for maintaining accurate contact details</li>
             </ul>
             <p className="text-gray-300">
