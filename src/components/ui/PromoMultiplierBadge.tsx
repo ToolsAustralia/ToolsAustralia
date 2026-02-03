@@ -30,14 +30,7 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
           boxShadow: `0 0 20px rgba(220, 38, 38, 0.8), 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4)`,
         }}
       >
-        {/* Metallic shine effect */}
-        <div
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent transform -skew-x-12"
-          style={{
-            background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.4) 25%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.4) 75%, transparent 100%)`,
-            animation: "shimmer 2s infinite",
-          }}
-        />
+        {/* Subtle static highlight - no shimmer/light shine effect */}
         {/* Content - Multiplier with optional PROMO text */}
         <span
           className="relative z-10 text-white font-black"

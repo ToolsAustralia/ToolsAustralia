@@ -74,54 +74,54 @@ export default function GiveawayDetails() {
       title: `Entries Close (${formattedDates.timezone || ""})`,
       description: !isMounted || isLoading ? "TBA" : formattedDates.entriesClose,
       color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
+      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
     },
     {
       icon: Calendar,
       title: `Draw Date (${formattedDates.timezone || ""})`,
       description: !isMounted || isLoading ? "TBA" : formattedDates.drawDate,
       color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
+      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
     },
     {
       icon: Truck,
       title: "Delivery",
       description: "Australia-wide, free of charge",
       color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
+      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
     },
     {
       icon: Zap,
       title: "We'll Call You",
       description: "Winner contacted by phone at the draw",
       color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
+      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
     },
     {
       icon: Shield,
       title: "Eligibility",
       description: "Open to all Australian residents 18+ (Excluding SA & ACT)",
       color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
+      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
     },
     {
       icon: IdCard,
       title: "License Numbers",
       description: "NTP/15640",
       color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-slate-600/80 via-slate-500/80 to-slate-600/80",
+      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
     },
   ];
 
   return (
     <section
       ref={detailsRef}
-      className="py-6 sm:py-12 lg:py-16 relative overflow-hidden"
+      className="py-6 sm:py-12 lg:py-16 relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
     >
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
         {/* Section Header */}
         <div className="text-center mb-3 sm:mb-8">
-          <h2 className="text-xl sm:text-3xl lg:text-4xl font-bold font-['Poppins'] mb-4 drop-shadow-lg">
+          <h2 className="text-xl sm:text-3xl lg:text-4xl font-bold font-['Poppins'] mb-4 drop-shadow-lg text-white">
             HOW IT WORKS
           </h2>
         </div>
@@ -131,9 +131,9 @@ export default function GiveawayDetails() {
           {details.map((detail, index) => (
             <div
               key={index}
-              className="relative bg-gradient-to-br from-slate-800/95 via-slate-700/95 to-slate-800/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 
-                         shadow-[0_8px_32px_rgba(0,0,0,0.4)]
-                         border border-slate-500/30
+              className="relative bg-gradient-to-br from-gray-800/95 via-gray-700/95 to-gray-800/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 
+                         shadow-[0_8px_32px_rgba(0,0,0,0.5)]
+                         border border-gray-600/40
                          flex items-center gap-2 sm:gap-4"
             >
               {/* Metallic shine overlay */}
@@ -156,7 +156,7 @@ export default function GiveawayDetails() {
                 <h3 className="text-sm sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md">
                   {detail.title}
                 </h3>
-                <p className="text-slate-200 font-['Inter'] leading-relaxed text-xs sm:text-sm">{detail.description}</p>
+                <p className="text-gray-200 font-['Inter'] leading-relaxed text-xs sm:text-sm">{detail.description}</p>
               </div>
             </div>
           ))}

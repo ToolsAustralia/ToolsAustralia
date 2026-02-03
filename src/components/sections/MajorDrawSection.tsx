@@ -696,7 +696,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   };
 
   const renderHighlights = (gridClasses: string) => (
-    <div className={gridClasses}>
+    <div className={`${gridClasses} overflow-hidden`}>
       {resolvedHighlights.map((highlight, index) => {
         const Icon = resolveHighlightIcon(highlight.icon);
         return (
@@ -705,19 +705,19 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
           >
             <div
-              className={`absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br ${
+              className={`relative w-7 h-7 sm:w-12 sm:h-12 flex-shrink-0 bg-gradient-to-br ${
                 brandColors.gradient
-              } rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 ${brandColors.borderColor
+              } rounded-lg sm:rounded-xl flex items-center justify-center border-2 ${brandColors.borderColor
                 .replace("border-", "border-")
                 .replace("-500", "-400/30")} shadow-lg z-10`}
             >
-              <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${brandColors.textColor}`} />
+              <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${brandColors.textColor}`} />
             </div>
-            <div className="flex-1 relative z-10 pl-10 sm:pl-0">
-              <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">
+            <div className="flex-1 min-w-0 relative z-10">
+              <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                 {highlight.title}
               </h3>
-              <p className="text-[10px] sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed">
+              <p className="text-[10px] sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
                 {highlight.description}
               </p>
             </div>
@@ -904,10 +904,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </Swiper>
               )}
 
-              {resolvedHighlights.length > 0 && renderHighlights("grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4")}
+              {resolvedHighlights.length > 0 && renderHighlights("grid grid-cols-2 gap-2 sm:gap-4")}
 
               <div className="px-3 sm:px-4">
-                <p className="text-xs sm:text-base text-gray-700 leading-tight sm:leading-relaxed font-['Inter'] text-center sm:text-left">
+                <p className="text-xs sm:text-base text-gray-700 leading-tight sm:leading-relaxed font-['Inter'] text-center sm:text-left mb-4">
                   {prizeSummary}
                 </p>
               </div>
@@ -983,58 +983,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 </div>
 
-                {/* Facebook Follow Link */}
-                <div className="mt-4 text-center">
-                  <a
-                    href="https://www.facebook.com/toolsaust"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] font-medium transition-colors underline"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                    {isGapState ? (
-                      <>
-                        <div className="relative">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
-                        </div>
-                        Watch ongoing draw
-                      </>
-                    ) : (
-                      "Follow for live draw updates"
-                    )}
-                  </a>
-                </div>
               </div>
             ) : !isCompleted ? (
               <div className="rounded-3xl p-4 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-gray-900 via-gray-800 to-black text-center">
                 <p className="text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
                 <p className="text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
-                <div className="mt-3 text-center">
-                  <a
-                    href="https://www.facebook.com/toolsaust"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors underline"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                    {isGapState ? (
-                      <>
-                        <div className="relative">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
-                        </div>
-                        Watch ongoing draw
-                      </>
-                    ) : (
-                      "Follow for live draw updates"
-                    )}
-                  </a>
-                </div>
               </div>
             ) : null}
 
@@ -1126,26 +1079,27 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
             {/* Mobile: Action Buttons */}
             <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => {
-                  // Shared handler decides which modal or upsell to show.
-                  openEntryFlow();
-                }}
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 rounded-xl font-semibold text-[16px] transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+              <button
+                onClick={() => openEntryFlow()}
+                className="promo-hero-cta-button relative w-full overflow-visible rounded-full group"
               >
-                <Zap className="w-5 h-5" />
-                {primaryCtaLabel}
-              </Button>
+                <div className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }} />
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+                <div className="relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full">
+                  <Zap className="w-5 h-5 text-white" />
+                  <span className="font-bold text-base text-white drop-shadow-lg">{primaryCtaLabel}</span>
+                </div>
+              </button>
 
-              <Link href={detailsHref}>
-                <Button
-                  variant="outline"
-                  className="border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white px-6 py-3 rounded-xl font-semibold text-[16px] transition-all duration-200 flex items-center justify-center gap-2 w-full"
-                >
-                  View Details
-                  <ArrowRight className="w-5 h-5" />
-                </Button>
-              </Link>
+              <div className="w-full">
+                <Image
+                  src="/images/safe-checkout-stripe.png"
+                  alt="Guaranteed safe & secure checkout powered by Stripe"
+                  width={600}
+                  height={160}
+                  className="w-full h-auto"
+                />
+              </div>
             </div>
           </div>
 
@@ -1349,57 +1303,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     ))}
                   </div>
 
-                  <div className="mt-4 text-center">
-                    <a
-                      href="https://www.facebook.com/toolsaust"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-white/90 hover:text-white text-sm font-medium transition-colors underline"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                      </svg>
-                      {isGapState ? (
-                        <>
-                          <div className="relative">
-                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                            <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
-                          </div>
-                          Watch ongoing draw
-                        </>
-                      ) : (
-                        "Follow for live draw updates"
-                      )}
-                    </a>
-                  </div>
                 </div>
               ) : !isCompleted ? (
                 <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10 text-center">
                   <p className="text-white text-sm font-semibold uppercase tracking-[0.35em]">Draw Date</p>
                   <p className="text-white text-3xl font-bold mt-2">{drawDateLabel}</p>
-                  <div className="mt-4 text-center">
-                    <a
-                      href="https://www.facebook.com/toolsaust"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-white/90 hover:text-white text-sm font-medium transition-colors underline"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                      </svg>
-                      {isGapState ? (
-                        <>
-                          <div className="relative">
-                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                            <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
-                          </div>
-                          Watch ongoing draw
-                        </>
-                      ) : (
-                        "Follow for live draw updates"
-                      )}
-                    </a>
-                  </div>
                 </div>
               ) : (
                 <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10">
@@ -1443,7 +1351,15 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
                 {resolvedHighlights.length > 0 && <div>{renderHighlights("grid grid-cols-2 gap-4")}</div>}
 
-                <p className="text-base text-gray-700 leading-relaxed font-['Inter']">{prizeDescription}</p>
+                <div className="w-full">
+                  <Image
+                    src="/images/safe-checkout-stripe.png"
+                    alt="Guaranteed safe & secure checkout powered by Stripe"
+                    width={600}
+                    height={160}
+                    className="w-full h-auto"
+                  />
+                </div>
               </div>
 
               {user ? (
@@ -1507,24 +1423,28 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 )
               ) : null}
 
-              <div className="flex flex-col lg:flex-row gap-3 border-t border-gray-200 pt-4">
-                <Button
+              <div className="flex flex-col gap-3 border-t border-gray-200 pt-4">
+                <button
                   onClick={() => openEntryFlow()}
-                  className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:to-red-900 text-white px-6 py-3 rounded-xl font-semibold text-lg transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 flex-1"
+                  className="promo-hero-cta-button relative w-full overflow-visible rounded-full group"
                 >
-                  <Zap className="w-5 h-5" />
-                  {primaryCtaLabel}
-                </Button>
+                  <div className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }} />
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+                  <div className="relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full">
+                    <Zap className="w-5 h-5 text-white" />
+                    <span className="font-bold text-lg text-white drop-shadow-lg">{primaryCtaLabel}</span>
+                  </div>
+                </button>
 
-                <Link href={detailsHref} className="flex-1">
-                  <Button
-                    variant="outline"
-                    className="border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white px-6 py-3 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center justify-center gap-2 w-full"
-                  >
-                    View Details
-                    <ArrowRight className="w-5 h-5" />
-                  </Button>
-                </Link>
+                <div className="w-full">
+                  <Image
+                    src="/images/safe-checkout-stripe.png"
+                    alt="Guaranteed safe & secure checkout powered by Stripe"
+                    width={600}
+                    height={160}
+                    className="w-full h-auto"
+                  />
+                </div>
               </div>
             </div>
           </div>

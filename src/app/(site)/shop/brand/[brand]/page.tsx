@@ -299,7 +299,9 @@ export default async function BrandShopPage({ params }: BrandPageProps) {
         </Suspense>
 
         <div className="bg-gradient-to-b from-black via-slate-900 to-black">
-          <MembershipSection title="Level Up Your Toolkit" padding="pt-8 pb-32" titleColor="text-white" />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <MembershipSection title="Level Up Your Toolkit" padding="pt-8 pb-32" titleColor="text-white" />
+          </div>
         </div>
       </div>
     </>

@@ -115,15 +115,15 @@ export async function POST(request: NextRequest) {
         // Legacy support: migrate selectedPrizeSlug to selectedPrize
         existingWinner.selectedPrize = validatedData.selectedPrizeSlug || undefined;
       }
-      // Update prize snapshot if prize changed
-      if (majorDraw.prize) {
-        existingWinner.prizeSnapshot = {
-          name: majorDraw.prize.name || "",
-          description: majorDraw.prize.description || "",
-          value: majorDraw.prize.value || 0,
-          images: majorDraw.prize.images || [],
-        };
-      }
+      // Update prize snapshot - use draw name/description fallback when prize is empty
+      const snapshotName = (majorDraw.prize?.name || majorDraw.name || "Major Prize").trim() || "Major Prize";
+      const snapshotDesc = (majorDraw.prize?.description || majorDraw.description || "").trim() || "Major draw prize";
+      existingWinner.prizeSnapshot = {
+        name: snapshotName,
+        description: snapshotDesc,
+        value: majorDraw.prize?.value ?? 0,
+        images: majorDraw.prize?.images ?? [],
+      };
       await existingWinner.save();
 
       // Update major draw status
@@ -162,6 +162,11 @@ export async function POST(request: NextRequest) {
     // Image URL is already uploaded to Cloudinary by the client, just use it
     const imageUrlToSave = validatedData.imageUrl;
 
+    // Build prize snapshot - Winner schema requires non-empty name/description.
+    // Major draw prize is deprecated; fall back to draw name/description when empty.
+    const prizeName = (majorDraw.prize?.name || majorDraw.name || "Major Prize").trim() || "Major Prize";
+    const prizeDescription = (majorDraw.prize?.description || majorDraw.description || "").trim() || "Major draw prize";
+
     // Use transaction for atomic operations (like mini draws)
     const trx = await mongoose.startSession();
     trx.startTransaction();
@@ -196,10 +201,10 @@ export async function POST(request: NextRequest) {
         selectedBy: new Types.ObjectId(session.user.id),
         selectionMethod: undefined, // Not used for major draws
         prizeSnapshot: {
-          name: majorDraw.prize?.name || "",
-          description: majorDraw.prize?.description || "",
-          value: majorDraw.prize?.value || 0,
-          images: majorDraw.prize?.images || [],
+          name: prizeName,
+          description: prizeDescription,
+          value: majorDraw.prize?.value ?? 0,
+          images: majorDraw.prize?.images ?? [],
         },
         imageUrl: imageUrlToSave || undefined, // Convert null to undefined
         testimony: validatedData.testimony || undefined,

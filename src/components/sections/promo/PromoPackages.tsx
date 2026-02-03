@@ -14,11 +14,13 @@ export default function PromoPackages() {
     <>
       {/* Packages Section with scroll target */}
       <section id="packages" className="bg-white">
-        <MembershipSection 
-          title="Choose Your Entry Package" 
-          padding="py-4 sm:py-8 px-4"
-          variantConfig={packagesConfig}
-        />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <MembershipSection 
+            title="Choose Your Entry Package" 
+            padding="py-4 sm:py-8"
+            variantConfig={packagesConfig}
+          />
+        </div>
       </section>
     </>
   );

@@ -6,6 +6,8 @@ import { Star } from "lucide-react";
 interface BestChanceBadgeProps {
   size?: "xs" | "small" | "medium" | "large";
   className?: string;
+  /** Optional package-themed styles to match the card (background, boxShadow, border) */
+  badgeStyle?: { background: string; boxShadow: string; border: string };
 }
 
 /**
@@ -16,6 +18,7 @@ interface BestChanceBadgeProps {
 const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
   size = "medium",
   className = "",
+  badgeStyle: customBadgeStyle,
 }) => {
   // Size configurations
   const sizeConfig = {
@@ -43,29 +46,34 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
 
   const config = sizeConfig[size];
 
+  const defaultStyle = {
+    background: "linear-gradient(135deg, #a855f7 0%, #9333ea 25%, #7e22ce 50%, #6b21a8 75%, #581c87 100%)",
+    boxShadow: "0 0 25px rgba(168, 85, 247, 0.8), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
+    border: "2px solid rgba(216, 180, 254, 0.5)",
+  };
+  const style = customBadgeStyle ?? defaultStyle;
+
   return (
     <div
       className={`
         ${config.container}
         ${config.text}
-        bg-gradient-to-r from-purple-500 via-violet-600 to-purple-700
         text-white font-bold uppercase tracking-wide
         rounded-full shadow-lg
         relative overflow-hidden
-        border-2 border-purple-300/50
         ${className}
       `}
       style={{
-        background: `linear-gradient(135deg, #a855f7 0%, #9333ea 25%, #7e22ce 50%, #6b21a8 75%, #581c87 100%)`,
-        boxShadow: `0 0 25px rgba(168, 85, 247, 0.8), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)`,
+        background: style.background,
+        boxShadow: style.boxShadow,
+        border: style.border,
       }}
     >
-      {/* Metallic shine effect */}
+      {/* Subtle static highlight - no shimmer */}
       <div
-        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent transform -skew-x-12"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.4) 25%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.4) 75%, transparent 100%)`,
-          animation: "shimmer 2s infinite",
+          background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
         }}
       />
 

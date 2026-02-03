@@ -11,7 +11,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import MembershipSection from "@/components/sections/MembershipSection";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
-import MajorDrawSection from "@/components/sections/MajorDrawSection";
+import PrizeShowcase from "@/components/sections/promo/PrizeShowcase";
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
@@ -1070,8 +1070,10 @@ export default function MyAccountPage() {
             <MembershipSection title="BOOST YOUR ODDS 50%" padding="py-8 sm:py-12" />
           </div>
 
-          {/* Major Draw Section */}
-          <MajorDrawSection className="mb-12" />
+          {/* Major Draw Section - PrizeShowcase for uniformity */}
+          <div className="mb-12">
+            <PrizeShowcase />
+          </div>
 
           {/* Latest Winner Hero Section */}
           <LatestWinnerHero className="mb-12" />

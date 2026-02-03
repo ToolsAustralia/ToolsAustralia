@@ -193,20 +193,24 @@ const StripeCardForm = React.forwardRef<
       };
     }, []);
 
-    // Enable wallets only for PaymentIntent (one-time). SetupIntent (subscriptions) causes google_pay.payment_exception:
-    // Stripe's Google Pay iframe tries to navigate but is sandboxed; wallet must be clicked directly; works poorly with our "Complete Purchase" button flow.
-    const shouldEnableWallets = intentType === "payment" && !!amount && amount > 0;
+    // ✅ STRIPE BEST PRACTICE: Only enable wallet payments when PaymentIntent is ready with correct amount
+    // This prevents Google Pay/Apple Pay from showing $0.00 when PaymentIntent hasn't been created yet
+    // For subscriptions: PaymentIntent must be created before wallets can show correct amount
+    // For one-time: PaymentIntent is created upfront, so wallets can be enabled immediately
+    // Note: For SetupIntent (intentType === "setup"), wallets should be disabled as they show $0.00
+    const shouldEnableWallets = intentType === "payment" && amount && amount > 0;
 
-    // Build paymentRequest configuration - only when wallets enabled (PaymentIntent with amount)
+    // Build paymentRequest configuration - only include if amount is valid
+    // This ensures PaymentElement shows correct amount in wallet UIs
     const paymentRequestConfig:
       | { country: string; currency: string; total: { label: string; amount: number } }
-      | undefined = shouldEnableWallets && amount && amount > 0
+      | undefined = shouldEnableWallets
       ? {
           country: "AU",
           currency: "aud",
           total: {
             label: packageName || "Membership",
-            amount,
+            amount: amount, // Amount in cents - only set when valid
           },
         }
       : undefined;
@@ -214,13 +218,16 @@ const StripeCardForm = React.forwardRef<
     // Build PaymentElement options object (moved before conditional return to ensure hooks are called consistently)
     const paymentElementOptions = {
       layout: "tabs" as const,
+      // ✅ CRITICAL: Only enable wallets when PaymentIntent is ready with correct amount
+      // This prevents $0.00 display in Google Pay/Apple Pay wallet sheets
       wallets: shouldEnableWallets
         ? {
             applePay: "auto" as const,
             googlePay: "auto" as const,
           }
-        : undefined,
-      paymentMethodOrder: shouldEnableWallets ? ["apple_pay", "google_pay", "card"] : ["card"],
+        : undefined, // Disable wallets until PaymentIntent is ready
+      paymentMethodOrder: shouldEnableWallets ? ["card", "apple_pay", "google_pay"] : ["card"],
+      // Only include paymentRequest when amount is valid to prevent $0.00 display
       ...(paymentRequestConfig && { paymentRequest: paymentRequestConfig }),
       fields: {
         billingDetails: "never" as const, // Hide country, address, and postal code fields
