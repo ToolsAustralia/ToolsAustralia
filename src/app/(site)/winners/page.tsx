@@ -187,11 +187,13 @@ export default function WinnersPage() {
 
       {/* Membership Section - Be Our Next Winner */}
       <section className="bg-gradient-to-br from-gray-50 via-white to-gray-50">
-        <MembershipSection
-          title="BE OUR NEXT WINNER"
-          padding="py-12 sm:py-16 lg:py-20"
-          titleColor="text-gray-900"
-        />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <MembershipSection
+            title="BE OUR NEXT WINNER"
+            padding="pb-28 sm:pb-36"
+            titleColor="text-gray-900"
+          />
+        </div>
       </section>
 
      

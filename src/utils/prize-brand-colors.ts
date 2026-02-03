@@ -1,7 +1,7 @@
 /**
  * Brand color mapping utility for prize toggles
  * Maps prize slugs to their corresponding brand gradient classes
- * Used in MajorDrawSection and PrizeShowcase components
+ * Used in PrizeShowcase component
  */
 
 import type { PrizeSlug } from "@/config/prizes";

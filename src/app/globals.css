@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Acumin Pro Condensed - Ultra Black Italic. Add font file (e.g. AcuminProCondensed-UltraBlackItalic.woff2) to public/fonts/ to load. */
+@font-face {
+  font-family: "Acumin Pro Condensed";
+  src: local("Acumin Pro Condensed Ultra Black Italic"), local("AcuminProCondensed-UltraBlackItalic"), url("/fonts/AcuminProCondensed-UltraBlackItalic.woff2") format("woff2");
+  font-weight: 950;
+  font-style: italic;
+  font-display: swap;
+}
+
 @layer utilities {
   /* Promo Hero Banner - Ellipse clip-path for rounded bottom effect */
   /* Mobile: 50vh height, 135% ellipse width, min-height 430px */
@@ -1288,6 +1297,65 @@
 
 .animate-pulse-button {
   animation: pulse-button 2s ease-in-out infinite;
+}
+
+@keyframes cta-shimmer-pass {
+  0% {
+    transform: translateX(-130%);
+  }
+  45% {
+    transform: translateX(130%);
+  }
+  55% {
+    transform: translateX(130%);
+  }
+  100% {
+    transform: translateX(-130%);
+  }
+}
+
+.promo-hero-cta-button {
+  position: relative;
+  outline: none;
+  cursor: pointer;
+  border: none;
+  border-radius: 1000px;
+  overflow: hidden;
+  box-shadow: 0 18px 30px rgba(185, 28, 28, 0.4);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.promo-hero-cta-button:focus-visible {
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35), 0 18px 30px rgba(185, 28, 28, 0.45);
+}
+
+.promo-hero-cta-button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
+  opacity: 0.7;
+  transform: translateX(-130%);
+  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.promo-hero-cta-button > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Shimmer runs once only (e.g. floating CTA when in view) */
+.promo-hero-cta-button.shimmer-once::before {
+  animation: cta-shimmer-pass 4.5s ease-in-out 1;
+}
+
+@media (hover: hover) and (min-width: 1024px) {
+  .promo-hero-cta-button:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 22px 34px rgba(185, 28, 28, 0.45);
+  }
 }
 
 /* Hourglass flip animation - rotates 180 degrees in one direction with pause */

@@ -158,26 +158,17 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
 
       {/* Elevated ENTER NOW button - Absolutely positioned at bottom */}
       {/* Positioned above the rounded bottom curve with adequate clearance */}
-      <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30">
+      <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30 overflow-visible">
         <button
           onClick={handleEnterNow}
-          className="group relative inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white 
-                      bg-gradient-to-br from-red-600 via-red-700 to-red-800
-                      backdrop-blur-lg transition-all duration-300 hover:scale-110 animate-pulse-button"
+          className="promo-hero-cta-button inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white backdrop-blur-lg"
           style={{
-            border: "3px solid #ee4927",
-            ...(ctaStyle?.backgroundColor && { backgroundColor: ctaStyle.backgroundColor }),
+            background: ctaStyle?.backgroundColor ?? "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)",
             ...(ctaStyle?.textColor && { color: ctaStyle.textColor }),
           }}
           suppressHydrationWarning
         >
           <span className="relative z-10" suppressHydrationWarning>{ctaText}</span>
-
-          {/* Expanding and fading pulse animation rings with complementary background */}
-          {/* First pulse */}
-          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-red-400/40 via-red-500/30 to-red-600/20 animate-pulse-expand-fade"></span>
-          {/* Second pulse - follows the first with a delay */}
-          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-red-400/40 via-red-500/30 to-red-600/20 animate-pulse-expand-fade-delayed"></span>
         </button>
       </div>
     </section>

@@ -4813,9 +4813,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               </div>
             )}
 
-            {/* Security Section - Only visible in payment step */}
+            {/* Security Section - Only visible in payment step (no border) */}
             {currentStep === 2 && (
-              <div className="mt-4 sm:mt-6 border border-gray-700">
+              <div className="mt-4 sm:mt-6">
                 <div className="flex justify-center w-full">
                   <Image
                     src="/images/safe-checkout-stripe.png"

@@ -51,8 +51,11 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "sans-serif"],
         poppins: ["var(--font-poppins)", "Poppins", "sans-serif"],
+        agency: ["AgencyFB BlackWide", "sans-serif"],
+        acumin: ["Acumin Pro Condensed", "sans-serif"],
       },
       fontSize: {
+        "agency-title": ["2.8125rem", { lineHeight: "0.79" }],
         "6xl": ["3.75rem", { lineHeight: "1" }],
         "7xl": ["4.5rem", { lineHeight: "1" }],
         "8xl": ["6rem", { lineHeight: "1" }],

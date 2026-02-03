@@ -63,7 +63,6 @@ export default function PromoFAQs() {
   return (
     <FAQSection
       title="Frequently Asked Questions"
-      subtitle="Got questions? We've got answers. Everything you need to know about the Ultimate Tool Giveaway."
       faqs={faqs}
       showCategoryFilter={false}
       variant="red"

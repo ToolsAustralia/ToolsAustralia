@@ -16,7 +16,7 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 import type { PrizeCatalogEntry } from "@/config/prizes";
 
 import "swiper/css";
@@ -267,6 +267,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const useParentContainer = pathname === "/" || pathname === "/my-account";
   
   // Toolbox type toggle state - initialize from activeSlug to prevent navigation issues
   const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
@@ -488,7 +490,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
         } : {}),
       }}
     >
-      <div className="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10">
+      <div className={useParentContainer ? "relative z-10 w-full" : "w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10"}>
         <div className="text-center mb-6 sm:mb-12">
           {/* First Prize Image - Conditionally displayed based on selected prize */}
           <div className="flex justify-center">
@@ -522,15 +524,15 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
           {prizes.length > 1 && (
             <div className="mt-4 sm:mt-6">
-              <p className="text-lg sm:text-xl font-bold text-black font-['Poppins'] mb-2 sm:mb-3 text-center">
-                Pick Your Toolset
+              <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-lg sm:text-[32px] lg:text-agency-title leading-[1.08]">
+                Pick Your <span style={{ color: "#EE0000" }}>Toolset</span>
               </p>
               
-              {/* Toolbox Type Toggle */}
-              <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+              {/* Toolbox Type Toggle - Sidchrome and Milwaukee only */}
+              <div className="flex justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <button
                   onClick={() => handleToolboxTypeChange("sidchrome")}
-                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-xl transition-all duration-200 border-2 ${
                     toolboxType === "sidchrome"
                       ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                       : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
@@ -541,7 +543,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 </button>
                 <button
                   onClick={() => handleToolboxTypeChange("milwaukee")}
-                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-xl transition-all duration-200 border-2 ${
                     toolboxType === "milwaukee"
                       ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                       : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
@@ -550,120 +552,11 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 >
                   Milwaukee Toolbox
                 </button>
-                <button
-                  onClick={() => handleToolboxTypeChange("cash")}
-                  className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
-                    toolboxType === "cash"
-                      ? "bg-gradient-to-br from-green-500 via-green-600 to-green-700 text-white border-green-500 shadow-lg shadow-green-500/40"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600"
-                  }`}
-                  suppressHydrationWarning
-                >
-                  $10,000 Cash
-                </button>
               </div>
               
-              {/* Only show prize selector when not on cash option (cash has only one option) */}
+              {/* Prize selection - 3-card grid when sidchrome or milwaukee */}
               {toolboxType !== "cash" && (
-                <>
-                  {/* Mobile: Single horizontal box with navigation arrows */}
-                  <div className="sm:hidden relative max-w-md mx-auto overflow-visible">
-                    {filteredPrizes.length > 0 && filteredPrizes[mobilePrizeIndex] && (() => {
-                      const prizeOption = filteredPrizes[mobilePrizeIndex];
-                      const isActive = prizeOption.slug === activeSlug;
-                      const brandColors = getPrizeBrandColors(prizeOption.slug);
-                      const brandLogoPath = getBrandLogoPath(prizeOption.slug);
-                      const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
-                      return (
-                        <button
-                          onClick={() => handleSelectPrize(prizeOption.slug)}
-                          tabIndex={-1}
-                          style={!isActive ? {
-                            outline: "none",
-                            boxShadow: `0 0 15px ${getBrandGlowColor(prizeOption.slug)}`,
-                            borderColor: getBrandBorderColor(prizeOption.slug),
-                          } : { 
-                            outline: "none", 
-                            boxShadow: "none",
-                            borderColor: getBrandBorderColor(prizeOption.slug),
-                          }}
-                          className={`relative w-full p-5 rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[110px] group ${
-                            isActive
-                              ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                              : `bg-white text-gray-700 border-opacity-100 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]`
-                          }`}
-                        >
-                          {/* Brand logo watermark - only shown when active */}
-                          {isActive && brandLogoPath && (
-                            <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-                              <Image
-                                src={brandLogoPath}
-                                alt=""
-                                fill
-                                className="object-contain opacity-20"
-                                sizes="(max-width: 640px) 100px, 150px"
-                              />
-                            </div>
-                          )}
-
-                          {/* Hover glow effect for inactive cards */}
-                          {!isActive && (
-                            <div
-                              className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
-                            />
-                          )}
-
-                          {/* Active shimmer effect */}
-                          {isActive && (
-                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                          )}
-
-                          {/* Active checkmark badge */}
-                          {isActive && (
-                            <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
-                              <Check className={`w-4 h-4 ${brandColors.checkmarkColor}`} />
-                            </div>
-                          )}
-
-                          {/* Card content - formatted multi-line text */}
-                          <div className="relative z-10 w-full overflow-visible">
-                            <div
-                              className={`text-base font-bold font-['Poppins'] leading-tight transition-colors duration-200 break-words text-center ${
-                                isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
-                              }`}
-                            >
-                              <div className="block">{formattedLabel.line1}</div>
-                              {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
-                              {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })()}
-                    
-                    {/* Navigation arrows for mobile - simple buttons, not swiper navigation */}
-                    {filteredPrizes.length > 1 && (
-                      <>
-                        <button
-                          onClick={handlePreviousPrize}
-                          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
-                          aria-label="Previous prize"
-                        >
-                          <ChevronLeft className="w-6 h-6 text-gray-700" />
-                        </button>
-                        <button
-                          onClick={handleNextPrize}
-                          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
-                          aria-label="Next prize"
-                        >
-                          <ChevronRight className="w-6 h-6 text-gray-700" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Desktop: Grid layout */}
-                  <div className={`hidden sm:grid ${filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-4 max-w-5xl mx-auto overflow-visible`}>
+                  <div className={`grid ${filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 sm:gap-4 max-w-5xl mx-auto overflow-visible`}>
                     {filteredPrizes.map((prizeOption) => {
                       const isActive = prizeOption.slug === activeSlug;
                       const brandColors = getPrizeBrandColors(prizeOption.slug);
@@ -683,7 +576,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                             boxShadow: "none",
                             borderColor: getBrandBorderColor(prizeOption.slug),
                           }}
-                          className={`relative p-5 rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[110px] group ${
+                          className={`relative p-3 sm:p-5 rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[90px] sm:min-h-[110px] group ${
                             isActive
                               ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
                               : `bg-white text-gray-700 border-opacity-100 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]`
@@ -721,14 +614,13 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                             </div>
                           )}
 
-                          {/* Card content - formatted multi-line text */}
+                          {/* Card content - line2 & line3 only (line1/toolbox removed - already in Pick Your Toolset) */}
                           <div className="relative z-10 w-full overflow-visible">
                             <div
-                              className={`text-base font-bold font-['Poppins'] leading-tight transition-colors duration-200 break-words text-center ${
+                              className={`font-acumin font-[950] text-xs sm:text-lg leading-[1.08] transition-colors duration-200 break-words text-center ${
                                 isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
                               }`}
                             >
-                              <div className="block">{formattedLabel.line1}</div>
                               {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
                               {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
                             </div>
@@ -737,14 +629,34 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                       );
                     })}
                   </div>
-                </>
               )}
+
+              {/* $10,000 Cash - long row button, bg image only when selected (like toolbox buttons) */}
+              <button
+                onClick={() => {
+                  handleToolboxTypeChange("cash");
+                  const cashPrize = prizes.find((p) => p.slug === "cash-prize");
+                  if (cashPrize) handleSelectPrize(cashPrize.slug);
+                }}
+                className={`mt-4 w-full max-w-5xl mx-auto py-2.5 sm:py-4 rounded-xl sm:rounded-2xl font-acumin font-[950] text-sm sm:text-2xl transition-all duration-200 border-2 relative overflow-hidden flex items-center justify-center ${
+                  toolboxType === "cash"
+                    ? "border-green-500 shadow-lg shadow-green-500/40 bg-cover bg-center"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600 hover:shadow-lg"
+                }`}
+                style={toolboxType === "cash" ? { backgroundImage: `url('/images/majordraws/cash-prize/cash-prize-10000.png')` } : undefined}
+                suppressHydrationWarning
+              >
+                {toolboxType === "cash" && (
+                  <div className="absolute inset-0 z-0 bg-gradient-to-br from-green-600/85 via-green-600/75 to-green-700/85" />
+                )}
+                <span className={`relative z-10 ${toolboxType === "cash" ? "text-white drop-shadow-lg" : ""}`}>$10,000 Cash</span>
+              </button>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-start">
-          <div className="relative order-1 lg:order-1 space-y-3 sm:space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
+          <div className="relative order-1 space-y-3 sm:space-y-4">
             <div 
               className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden"
               style={{
@@ -802,7 +714,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   <div className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace('/40', '/25')} blur-xl animate-ping`}></div>
                   <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace('/40', '/20')} blur-xl`}></div>
                   <div className={`relative z-10 flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2 border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} rounded-full`}>
-                    <span className={`font-bold text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}>
+                    <span className={`font-acumin font-[950] text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}>
                       VIEW SPECS
                     </span>
                   </div>
@@ -842,6 +754,76 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </Swiper>
             )}
 
+          </div>
+
+          <div className="space-y-3 sm:space-y-4 order-2 lg:row-span-2">
+            <div className="grid grid-cols-2 gap-1 sm:gap-4">
+              {highlights.map((highlight, index) => {
+                const Icon = resolveHighlightIcon(highlight.icon);
+                return (
+                  <div
+                    key={`${highlight.title}-${index}`}
+                    className="relative flex items-center gap-2 sm:gap-3 p-2 sm:p-3 min-h-[40px] sm:min-h-[60px] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
+                    <div className={`relative w-7 h-7 sm:w-12 sm:h-12 flex-shrink-0 bg-gradient-to-br ${brandColors.gradient.replace('from-', 'from-').replace('via-', 'via-').replace('to-', 'to-')}/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} shadow-lg z-10`}>
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-lg sm:rounded-xl pointer-events-none"></div>
+                      <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${brandColors.textColor} relative z-10`} />
+                    </div>
+                    <div className="flex-1 relative z-10 min-w-0 flex flex-col justify-center">
+                      <h3 className="text-[11px] sm:text-lg font-bold text-white font-['Poppins'] mb-0 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
+                        {highlight.title}
+                      </h3>
+                      <p className="text-[10px] sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
+                        {highlight.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setIsSpecsModalOpen(true)}
+              className="w-full relative overflow-hidden rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm transition-all duration-300 hover:border-gray-600 hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)] group text-left"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none group-hover:from-white/10"></div>
+              <div className="relative z-10 flex items-center justify-between gap-3">
+                <span className="text-sm sm:text-lg font-bold text-white font-['Poppins'] drop-shadow-md">
+                  Prize Details
+                </span>
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 group-hover:text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
+
+            <button
+              onClick={handleEnterNow}
+              suppressHydrationWarning
+              className="promo-hero-cta-button w-full rounded-full hidden lg:block px-6 py-3 sm:px-8 sm:py-4"
+              style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
+            >
+              <div className="flex items-center justify-center gap-3">
+                <span className="font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </div>
+            </button>
+
+            <div className="w-full hidden lg:block">
+              <Image
+                src="/images/safe-checkout-stripe.png"
+                alt="Guaranteed safe & secure checkout powered by Stripe"
+                width={600}
+                height={160}
+                className="w-full h-auto"
+              />
+            </div>
+          </div>
+
+          <div className="relative order-3 space-y-3 sm:space-y-4">
             {shouldShowCountdown ? (
               <div
                 className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 ${
@@ -883,69 +865,23 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   ))}
                 </div>
 
-                <div className="mt-4 text-center">
-                  <a
-                    href="https://www.facebook.com/toolsaust"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors underline"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                    {isGapState ? (
-                      <>
-                        <div className="relative">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
-                        </div>
-                        Watch ongoing draw
-                      </>
-                    ) : (
-                      "Follow for live draw updates"
-                    )}
-                  </a>
-                </div>
+               
               </div>
             ) : (
               <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-4 shadow-2xl border-2 border-white/20 text-center">
                 <p className="text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
                 <p className="text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
-                <div className="mt-3 text-center">
-                  <a
-                    href="https://www.facebook.com/toolsaust"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-white/90 hover:text-white text-[12px] sm:text-[14px] font-medium transition-colors underline"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                    {isGapState ? (
-                      <>
-                        <div className="relative">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-75"></div>
-                        </div>
-                        Watch ongoing draw
-                      </>
-                    ) : (
-                      "Follow for live draw updates"
-                    )}
-                  </a>
-                </div>
+                
               </div>
             )}
 
             <button
               onClick={handleEnterNow}
               suppressHydrationWarning
-              className="relative w-full overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group lg:hidden"
+              className="promo-hero-cta-button w-full rounded-full lg:hidden px-6 py-3 sm:px-8 sm:py-4"
+              style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-700 to-red-800"></div>
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-red-500/20 blur-xl"></div>
-              <div className="relative z-10 flex items-center justify-center gap-3 px-6 py-3 sm:px-8 sm:py-4 border-2 border-red-400/30 rounded-full">
+              <div className="flex items-center justify-center gap-3">
                 <span className="font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -954,70 +890,6 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             </button>
 
             <div className="w-full lg:hidden">
-              <Image
-                src="/images/safe-checkout-stripe.png"
-                alt="Guaranteed safe & secure checkout powered by Stripe"
-                width={600}
-                height={160}
-                className="w-full h-auto"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3 sm:space-y-4 order-2 lg:order-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-              {highlights.map((highlight, index) => {
-                const Icon = resolveHighlightIcon(highlight.icon);
-                return (
-                  <div
-                    key={`${highlight.title}-${index}`}
-                    className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
-                    <div className={`absolute top-2.5 left-2.5 sm:relative sm:top-auto sm:left-auto w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br ${brandColors.gradient.replace('from-', 'from-').replace('via-', 'via-').replace('to-', 'to-')}/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} shadow-lg z-10`}>
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-lg sm:rounded-xl"></div>
-                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${brandColors.textColor} relative z-10`} />
-                    </div>
-                    <div className="flex-1 relative z-10 pl-10 sm:pl-0">
-                      <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight">
-                        {highlight.title}
-                      </h3>
-                      <p className="text-[10px] sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed">
-                        {highlight.description}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
-              <h3 className="text-sm sm:text-lg font-bold text-white font-['Poppins'] mb-1.5 sm:mb-2 relative z-10 drop-shadow-md">
-                Prize Details
-              </h3>
-              <p className="text-xs sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed relative z-10">
-                {activePrize.detailedDescription}
-              </p>
-            </div>
-
-            <button
-              onClick={handleEnterNow}
-              suppressHydrationWarning
-              className="relative w-full overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group hidden lg:block"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-700 to-red-800"></div>
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-red-500/20 blur-xl"></div>
-              <div className="relative z-10 flex items-center justify-center gap-3 px-6 py-3 sm:px-8 sm:py-4 border-2 border-red-400/30 rounded-full">
-                <span className="font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </div>
-            </button>
-
-            <div className="w-full mt-4 hidden lg:block">
               <Image
                 src="/images/safe-checkout-stripe.png"
                 alt="Guaranteed safe & secure checkout powered by Stripe"

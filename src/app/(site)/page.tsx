@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Hero from "@/components/sections/Hero";
-import MajorDrawSection from "@/components/sections/MajorDrawSection";
+import PrizeShowcase from "@/components/sections/promo/PrizeShowcase";
 import MembershipSection from "@/components/sections/MembershipSection";
 import ProductCategories from "@/components/features/ProductCategories";
 // Temporarily disabled - no real reviews yet
@@ -57,7 +57,7 @@ export default function HomePage() {
         <Hero />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <MembershipSection padding="pt-8 pb-4" />
-          <MajorDrawSection />
+          <PrizeShowcase />
           {/* Latest Winner Hero Section */}
         <LatestWinnerHero className="mb-8" />
         </div>

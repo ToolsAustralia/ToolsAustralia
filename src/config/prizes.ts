@@ -939,7 +939,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/sidchrome-milwaukee-toggle.png",
     gallery: [
-      { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit and storage" },
+      { src: "/images/majordraws/toolbox/sidchrome-toolbox.png", alt: "Sidchrome 356 piece tool kit and storage" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 13pc Kit - Giveaway 1.webp", alt: "Milwaukee 13 piece kit" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 1_4 Impact Gun.webp", alt: "Milwaukee impact gun" },
       { src: "/images/majordraws/milwaukee-set/Milwaukee 18V Charging Station.webp", alt: "Milwaukee charging station" },
@@ -1010,7 +1010,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using TSTAK storage, wheeled tool bags, and the Sidchrome 356-piece professional hand-tool kit.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
+      { src: "/images/majordraws/toolbox/sidchrome-toolbox.png", alt: "Sidchrome 356 piece tool kit" },
       { src: "/images/majordraws/dewalt-set/DCZ1401P2X2_K1.jpg", alt: "DeWalt prize collection" },
       { src: "/images/majordraws/dewalt-set/Dewalt 9.0AH Battery.jpeg", alt: "DeWalt 9.0Ah FlexVolt battery" },
       { src: "/images/majordraws/dewalt-set/Dewalt 18v Battery.jpeg", alt: "DeWalt 18V XR 5.0Ah battery" },
@@ -1092,7 +1092,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
-      { src: "/images/majordraws/toolbox/Sidchrome SCMT11402.jpg", alt: "Sidchrome 356 piece tool kit" },
+      { src: "/images/majordraws/toolbox/sidchrome-toolbox.png", alt: "Sidchrome 356 piece tool kit" },
       { src: "/images/majordraws/makita-set/Makita15pc Giveaway.png", alt: "Makita 15 piece tool collection overview" },
       { src: "/images/majordraws/makita-set/dhp486z-001.jpg", alt: "Makita DHP486Z hammer drill" },
       { src: "/images/majordraws/makita-set/dtd173z-001.jpg", alt: "Makita DTD173Z impact driver" },
@@ -1389,7 +1389,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     detailedDescription:
       "Win $10,000 in cold hard cash! No tools, no equipment, no strings attached. Just a straight $10,000 cash prize deposited directly to your bank account. Use it however you want - pay bills, take a vacation, invest in your future, or buy whatever you need. The choice is yours.",
     prizeValueLabel: "$10,000 Cash",
-    gallery: [{ src: "/images/majordraws/cash-prize/10000cash.jpg", alt: "$10,000 cash prize" }],
+    gallery: [{ src: "/images/majordraws/cash-prize/cash-prize-10000.png", alt: "$10,000 cash prize" }],
     highlights: [
       {
         icon: "DollarSign",
