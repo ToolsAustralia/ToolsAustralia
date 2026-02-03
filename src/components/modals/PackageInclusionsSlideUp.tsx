@@ -99,7 +99,10 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
           const packageIcon = getPackageIconLocal(plan.id);
 
           return (
-            <div key={plan.id} className="space-y-3">
+            <div
+              key={plan.id}
+              className="space-y-3 rounded-2xl border border-gray-200 bg-white/95 shadow-[0_4px_20px_rgba(15,23,42,0.08)] p-4 sm:p-5 backdrop-blur-sm"
+            >
               {/* Package Name with Icon */}
               <div className="flex items-center gap-3">
                 {packageIcon && (
