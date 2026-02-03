@@ -115,6 +115,7 @@ export default function GiveawayDetails() {
 
   return (
     <section
+      id="how-it-works"
       ref={detailsRef}
       className="py-6 sm:py-12 lg:py-16 relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
     >

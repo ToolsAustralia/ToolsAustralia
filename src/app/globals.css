@@ -1346,6 +1346,11 @@
   z-index: 1;
 }
 
+/* Shimmer runs once only (e.g. floating CTA when in view) */
+.promo-hero-cta-button.shimmer-once::before {
+  animation: cta-shimmer-pass 4.5s ease-in-out 1;
+}
+
 @media (hover: hover) and (min-width: 1024px) {
   .promo-hero-cta-button:hover {
     transform: translateY(-2px) scale(1.03);

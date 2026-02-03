@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Trophy, MapPin, Gift, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import type { WinnerSummary } from "@/types/winner";
-
 interface LatestWinnerHeroProps {
   className?: string;
   contentWrapperClassName?: string;
@@ -16,7 +15,6 @@ export default function LatestWinnerHero({ className = "", contentWrapperClassNa
   const [winners, setWinners] = useState<WinnerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
-
   useEffect(() => {
     fetchWinners();
   }, []);
@@ -74,7 +72,7 @@ export default function LatestWinnerHero({ className = "", contentWrapperClassNa
   }
 
   return (
-    <section className={`py-4 bg-gradient-to-b from-transparent via-gray-50/30 to-transparent ${className}`}>
+    <section id="latest-winners" className={`py-4 bg-gradient-to-b from-transparent via-gray-50/30 to-transparent ${className}`}>
       <div className={contentWrapperClassName || "max-w-7xl mx-auto"}>
         {/* Section Header */}
         <div className="text-center mb-6 sm:mb-8 lg:mb-10">

@@ -1389,7 +1389,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     detailedDescription:
       "Win $10,000 in cold hard cash! No tools, no equipment, no strings attached. Just a straight $10,000 cash prize deposited directly to your bank account. Use it however you want - pay bills, take a vacation, invest in your future, or buy whatever you need. The choice is yours.",
     prizeValueLabel: "$10,000 Cash",
-    gallery: [{ src: "/images/majordraws/cash-prize/10000cash.jpg", alt: "$10,000 cash prize" }],
+    gallery: [{ src: "/images/majordraws/cash-prize/cash-prize-10000.png", alt: "$10,000 cash prize" }],
     highlights: [
       {
         icon: "DollarSign",

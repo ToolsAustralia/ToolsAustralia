@@ -5,18 +5,18 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function FloatingGetEntriesButton() {
   const [isVisible, setIsVisible] = useState(false);
+  const [isInWinnersOrHowItWorks, setIsInWinnersOrHowItWorks] = useState(false);
 
-  // Handle scroll detection
+  // Handle scroll detection for visibility + animate when Winners or How it Works in view
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY;
-      const heroSectionHeight = window.innerHeight; // Full viewport height
+      const heroSectionHeight = window.innerHeight;
+      const viewportHeight = window.innerHeight;
 
-      // Find the UnlockDiscounts section by looking for the section with the specific text
       const allSections = document.querySelectorAll("section");
       let unlockDiscountsSection: HTMLElement | null = null;
 
-      // Look for section containing "Unlock Partner Discounts" text
       for (const section of allSections) {
         const sectionElement = section as HTMLElement;
         if (sectionElement.textContent?.includes("Unlock Partner Discounts")) {
@@ -28,14 +28,23 @@ export default function FloatingGetEntriesButton() {
       let shouldHide = false;
       if (unlockDiscountsSection) {
         const sectionTop = unlockDiscountsSection.offsetTop;
-        // Hide button when user reaches the UnlockDiscounts section
-        shouldHide = scrollY >= sectionTop - 200; // Hide 200px before reaching the section
+        shouldHide = scrollY >= sectionTop - 200;
       }
 
-      // Show button when user scrolls past the hero section, but hide when reaching UnlockDiscounts
       setIsVisible(scrollY > heroSectionHeight && !shouldHide);
+
+      // Check if Winners or How it Works sections are in view (animate button)
+      const winners = document.getElementById("latest-winners");
+      const howItWorks = document.getElementById("how-it-works");
+      const checkInView = (el: HTMLElement | null) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.top < viewportHeight * 0.85 && r.bottom > viewportHeight * 0.15;
+      };
+      setIsInWinnersOrHowItWorks(checkInView(winners) || checkInView(howItWorks));
     };
 
+    handleScroll();
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -66,14 +75,16 @@ export default function FloatingGetEntriesButton() {
             onClick={handleGetEntries}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="group relative inline-flex items-center justify-center px-6 py-2 sm:px-10 sm:py-2.5 rounded-full font-extrabold text-sm sm:text-lg tracking-wide text-white 
-                       bg-gradient-to-br from-red-600 via-red-700 to-red-800 shadow-[0_0_40px_rgba(220,38,38,0.6)]
-                       border border-white/20 backdrop-blur-lg transition-all duration-300 hover:shadow-[0_0_60px_rgba(239,68,68,0.8)]"
+            className={`group relative inline-flex items-center justify-center px-6 py-2 sm:px-10 sm:py-2.5 rounded-full font-extrabold text-sm sm:text-lg tracking-wide text-white 
+                       border border-white/20 backdrop-blur-lg transition-all duration-300
+                       ${isInWinnersOrHowItWorks ? "promo-hero-cta-button shimmer-once overflow-hidden" : "bg-gradient-to-br from-red-600 via-red-700 to-red-800 shadow-[0_0_40px_rgba(220,38,38,0.6)] hover:shadow-[0_0_60px_rgba(239,68,68,0.8)]"}`}
+            style={isInWinnersOrHowItWorks ? { background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" } : undefined}
           >
             <span className="relative z-10">GET ENTRIES</span>
 
-            {/* glowing ring animation */}
-            <span className="absolute inset-0 rounded-full border border-red-400/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+            {!isInWinnersOrHowItWorks && (
+              <span className="absolute inset-0 rounded-full border border-red-400/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            )}
           </motion.button>
         </motion.div>
       )}
