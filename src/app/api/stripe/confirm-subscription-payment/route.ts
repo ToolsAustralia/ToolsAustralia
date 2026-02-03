@@ -124,12 +124,23 @@ export async function POST(request: NextRequest) {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ["latest_invoice.payment_intent"],
     });
-    
-    // ✅ ENHANCED: Also try to extract payment method from subscription metadata if available
-    // This helps recover payment methods that were set during subscription creation
 
     if (!subscription) {
       return NextResponse.json({ error: "Subscription not found in Stripe" }, { status: 404 });
+    }
+
+    // ✅ HARD RULE (Option A): Do not confirm first subscription charge on the backend.
+    // First charge must be confirmed client-side via stripe.confirmPayment() with the invoice PaymentIntent.
+    if ((subscription.status as string) === "incomplete") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Use client-side confirmPayment for first subscription payment.",
+          details: "The first subscription payment must be completed in the browser. Do not call this endpoint for the initial charge.",
+          code: "FIRST_CHARGE_CLIENT_ONLY",
+        },
+        { status: 400 }
+      );
     }
 
     // ✅ OPTIMIZED: Use already-expanded PaymentIntent from subscription if available
@@ -211,7 +222,8 @@ export async function POST(request: NextRequest) {
     let paymentIntent = latestInvoice?.payment_intent;
 
     // If no payment intent exists for incomplete subscription, pay the invoice directly
-    if (!paymentIntent && subscription.status === "incomplete") {
+    // Stripe returns status "incomplete" for subscriptions with unpaid first invoice; SDK types may omit it
+    if (!paymentIntent && (subscription.status as string) === "incomplete") {
       // console.log("🔧 No payment intent found for incomplete subscription, paying invoice directly...");
       try {
         // ✅ OPTIMIZED: Use already-expanded PaymentIntent if available, otherwise retrieve
@@ -281,7 +293,7 @@ export async function POST(request: NextRequest) {
 
             // ✅ ENHANCED: Provide actionable error message based on context
             const errorMessage =
-              subscription.status === "incomplete"
+              (subscription.status as string) === "incomplete"
                 ? "Your subscription was created but no payment method was found to complete the payment. This usually happens when the payment method wasn't properly saved during checkout."
                 : "No payment method found to complete this subscription payment.";
 
@@ -705,7 +717,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      } else if (subscription.status === "incomplete") {
+      } else if ((subscription.status as string) === "incomplete") {
       // Subscription is incomplete - this is expected for new subscriptions
       // console.log("⏳ Subscription is incomplete - this is normal for new subscriptions");
 

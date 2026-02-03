@@ -2934,17 +2934,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const invoicePaymentId = `invoice_${expandedInvoice.id}`;
     const eventId = `BenefitsGranted-${invoicePaymentId}`;
 
-    // ✅ DEBUG: Log invoice details for debugging
+    // ✅ DEBUG: Log invoice details (correlationId from subscription metadata when available)
+    const invoiceSubId = (() => {
+      const sub = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription }).subscription;
+      return typeof sub === "string" ? sub : (sub as Stripe.Subscription)?.id;
+    })();
     webhookLog("info", `Invoice details:`, {
       invoiceId: expandedInvoice.id,
       customerId: expandedInvoice.customer,
-      subscriptionId: (() => {
-        const subscriptionField = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
-          .subscription;
-        return typeof subscriptionField === "string"
-          ? subscriptionField
-          : (subscriptionField as Stripe.Subscription)?.id;
-      })(),
+      subscriptionId: invoiceSubId,
       metadata: expandedInvoice.metadata,
     });
 
@@ -3034,7 +3032,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           const packageName = subscription.metadata.packageName || "Subscription";
 
           await stripe.paymentIntents.update(paymentIntentId, {
-            description: `${packageName} - Subscription update`,
+            description: `${packageName} (RENEWAL)`,
           });
         } catch (updateError) {
           webhookLog("error", `Failed to update payment intent description: ${updateError}`);
@@ -3054,7 +3052,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       return;
     }
 
-    webhookLog("info", `Processing subscription payment for package: ${packageId}`);
+    webhookLog("info", `Processing subscription payment for package: ${packageId}`, {
+      ...(subscription.metadata?.subscriptionRequestId && { correlationId: subscription.metadata.subscriptionRequestId }),
+    });
 
     // Get membership package data
     const membershipPackage = getPackageById(packageId);
@@ -3392,6 +3392,37 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           webhookLog("error", `Referral processing error (non-blocking): ${referralError}`);
           // Don't throw - referral processing should not break webhook
         }
+      }
+
+      // ✅ CRITICAL: Save payment method to user only in invoice.payment_succeeded (not in create-subscription or payment_intent.succeeded)
+      try {
+        const invoiceWithPi = expandedInvoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
+        let paymentMethodId: string | null = null;
+        if (invoiceWithPi.payment_intent) {
+          const pi = invoiceWithPi.payment_intent;
+          const paymentIntent = typeof pi === "string" ? await stripe.paymentIntents.retrieve(pi, { expand: ["payment_method"] }) : pi;
+          if (paymentIntent.payment_method) {
+            paymentMethodId = typeof paymentIntent.payment_method === "string" ? paymentIntent.payment_method : paymentIntent.payment_method.id;
+          }
+        }
+        if (paymentMethodId && user.stripeCustomerId) {
+          const hasPaymentMethod = user.savedPaymentMethods?.some((pm) => pm.paymentMethodId === paymentMethodId);
+          if (!hasPaymentMethod) {
+            const freshUser = await User.findById(user._id);
+            if (freshUser) {
+              const saveResult = await savePaymentMethodToUser(freshUser, paymentMethodId, {
+                setAsDefault: (freshUser.savedPaymentMethods?.length ?? 0) === 0,
+              });
+              if (saveResult.success) {
+                webhookLog("info", `✅ Saved payment method to user (invoice.payment_succeeded): ${paymentMethodId}`);
+              } else {
+                webhookLog("warn", `⚠️ Failed to save payment method in invoice.payment_succeeded: ${saveResult.error}`);
+              }
+            }
+          }
+        }
+      } catch (savePmError) {
+        webhookLog("warn", `⚠️ Save payment method in invoice.payment_succeeded (non-blocking): ${savePmError}`);
       }
 
       // ✅ CRITICAL: For resubscription, set accumulatedEntries to newLastMonthAccumulatedEntries
@@ -4081,8 +4112,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
     }
 
-    // ✅ CRITICAL: First check if this exact Stripe event has already been processed
-    // Stripe can send the same webhook event multiple times, so we use event.id for idempotency
+    // ✅ CRITICAL: Webhook handlers must be idempotent using event.id or a processed-events table.
+    // This avoids double benefit granting if Stripe retries the same event.
     const stripeEventId = event.id;
     const stripeEventAlreadyProcessed = await isEventProcessed(`stripe_event_${stripeEventId}`);
     if (stripeEventAlreadyProcessed) {
@@ -4257,6 +4288,22 @@ export async function POST(request: NextRequest) {
         webhookLog("info", `Skipping invoice.paid - using invoice.payment_succeeded as canonical event`);
         // ✅ CRITICAL: Don't mark as processed - we're skipping this event!
         break;
+      case "invoice.finalization_failed": {
+        // Stripe could not finalize the subscription's first invoice (e.g. invalid price, tax error).
+        // Do not activate subscription or save payment method. Log for debugging; idempotent via event.id above.
+        const finalizationInvoice = event.data.object as Stripe.Invoice & { subscription?: string | Stripe.Subscription };
+        const finalizationSubId =
+          typeof finalizationInvoice.subscription === "string"
+            ? finalizationInvoice.subscription
+            : finalizationInvoice.subscription?.id;
+        webhookLog("warn", `invoice.finalization_failed`, {
+          eventId: event.id,
+          invoiceId: finalizationInvoice.id,
+          subscriptionId: finalizationSubId,
+          correlationId: finalizationInvoice.metadata?.subscriptionRequestId ?? event.id,
+        });
+        break;
+      }
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(event.data.object);
         break;

@@ -14,7 +14,6 @@ import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import mongoose from "mongoose";
-import { getInvoicePaymentIntentFromSubscription } from "@/utils/payment/stripe/invoice-payment-intent";
 import { getSubscriptionPaymentIntent, cancelDuplicatePaymentIntents } from "@/utils/payment/stripe/subscription-utils";
 import {
   attachPaymentMethodToCustomer,
@@ -25,10 +24,16 @@ import { ensureCustomerExists, updateCustomerPaymentMethod } from "@/utils/payme
 import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subscription-assignment";
 import { createOrUpdateSubscriptionUser } from "@/utils/payment/user-subscription-utils";
 // Klaviyo integration handled by webhook for best practices
-import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+
+// Rate limit: 20 create-subscription requests per minute per IP
+const createSubscriptionRateLimiter = createRateLimiter("create-subscription", {
+  windowMs: 60 * 1000,
+  maxRequests: 20,
+});
 
 // Interface for Stripe errors
 interface StripeError {
@@ -44,8 +49,10 @@ const createSubscriptionSchema = z.object({
   mobile: z.string().optional(),
   packageId: z.string().min(1, "Package ID is required"),
   password: z.string().min(6, "Password must be at least 6 characters").optional(), // Made optional for passwordless users
-  paymentMethodId: z.string().min(1, "Payment method is required"), // Payment method from SetupIntent (for saving)
-  idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
+  paymentMethodId: z.string().optional(), // Optional for Option A: when omitted, first payment uses invoice PaymentIntent only (no SetupIntent)
+  subscriptionRequestId: z.string().uuid().optional(), // Idempotency/correlation: frontend sends UUID; used as Stripe idempotency key
+  idempotencyKey: z.string().optional(), // Fallback idempotency key if subscriptionRequestId not provided
+  cancelPreviousSubscriptionId: z.string().optional(), // When user switches package: cancel this incomplete subscription before creating new one (guest: must match request email)
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
 });
@@ -57,25 +64,44 @@ const createSubscriptionSchema = z.object({
 export async function POST(request: NextRequest) {
   // Store request body and context for error logging
   let requestBody: Record<string, unknown> = {};
+  let correlationId: string | undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let membershipPackage: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
   let user: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
   let customer: any = null;
-  
+
   try {
-    // console.log("🔌 Connecting to database...");
     await connectDB();
-    // console.log("✅ Database connected successfully");
+
+    const body = await request.json();
+    requestBody = body;
+
+    correlationId =
+      (body as { subscriptionRequestId?: string })?.subscriptionRequestId ??
+      request.headers.get("x-correlation-id") ??
+      undefined;
+
+    // Rate limiting: throttle by IP to prevent abuse
+    const clientIp = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null;
+    const identifier = getClientIdentifier(clientIp, request.headers.get("x-forwarded-for"));
+    const rateLimitResult = createSubscriptionRateLimiter.check(identifier);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many requests",
+          details: "Please try again later.",
+          retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+          ...(correlationId && { correlationId }),
+        },
+        { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) } }
+      );
+    }
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
-    // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
-
-    // console.log("📥 Parsing request body...");
-    const body = await request.json();
-    requestBody = body; // Store for error logging
     // console.log("📋 Request body received:", { ...body, password: "[HIDDEN]" });
 
     // console.log("✅ Validating request data...");
@@ -89,6 +115,40 @@ export async function POST(request: NextRequest) {
     if (existingUser) {
       // console.log(`👤 User already exists, proceeding with subscription: ${existingUser._id}`);
       // User already exists (registered in step 1), proceed with subscription
+    }
+
+    // Cancel previous incomplete subscription when user switched package (plan switch mid-checkout)
+    if (validatedData.cancelPreviousSubscriptionId) {
+      try {
+        const prevSub = await stripe.subscriptions.retrieve(validatedData.cancelPreviousSubscriptionId);
+        const status = prevSub.status;
+        if (status === "incomplete" || status === "incomplete_expired") {
+          const custId = typeof prevSub.customer === "string" ? prevSub.customer : prevSub.customer?.id;
+          if (custId) {
+            const cust = await stripe.customers.retrieve(custId);
+            const custEmail = cust && !cust.deleted && "email" in cust ? (cust.email ?? "").toLowerCase() : "";
+            const requestEmail = validatedData.userEmail.toLowerCase();
+            if (custEmail === requestEmail) {
+              await stripe.subscriptions.cancel(validatedData.cancelPreviousSubscriptionId);
+              if (correlationId) {
+                console.log("[create-subscription] cancelled previous incomplete subscription (plan switch)", {
+                  correlationId,
+                  cancelledSubscriptionId: validatedData.cancelPreviousSubscriptionId,
+                });
+              }
+            }
+          }
+        }
+      } catch (cancelErr) {
+        // Don't block: subscription may already be cancelled or invalid
+        if (correlationId) {
+          console.warn("[create-subscription] cancel previous subscription failed (non-fatal)", {
+            correlationId,
+            cancelPreviousSubscriptionId: validatedData.cancelPreviousSubscriptionId,
+            error: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+          });
+        }
+      }
     }
 
     // Get membership package
@@ -125,24 +185,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Handle payment method creation following Stripe best practices
-    const finalPaymentMethodId = validatedData.paymentMethodId;
+    // Option A (no paymentMethodId): first payment uses invoice PaymentIntent only; no SetupIntent.
+    // When paymentMethodId is provided (legacy path): attach and set default before creating subscription.
+    const finalPaymentMethodId = validatedData.paymentMethodId ?? undefined;
+    const hasPaymentMethod = Boolean(
+      finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"
+    );
 
-    // Payment method should already be created via SetupIntent
-    // If we receive "new_payment_method", it means the frontend didn't complete the setup
-    if (validatedData.paymentMethodId === "new_payment_method") {
+    if (finalPaymentMethodId === "new_payment_method") {
       return NextResponse.json(
         {
           success: false,
           error: "Payment method not properly set up. Please complete card details first.",
+          ...(correlationId && { correlationId }),
         },
         { status: 400 }
       );
     }
 
-    // ✅ OPTIMIZED: Use utility functions for customer operations
-    let customer: Stripe.Customer;
-    let canUsePaymentMethod = true;
+    // ✅ OPTIMIZED: Use utility functions for customer operations (single customer variable – see top of try)
+    let canUsePaymentMethod = hasPaymentMethod;
 
     // Extract anonymousId for A/B testing (before customer operations for parallel execution)
     const anonymousId = AnonymousIdService.extractAnonymousId(request);
@@ -155,20 +217,18 @@ export async function POST(request: NextRequest) {
         if (registeredUser && registeredUser.stripeCustomerId) {
           try {
             const existingCustomer = await stripe.customers.retrieve(registeredUser.stripeCustomerId);
-            
-            // Check if customer is deleted
             if ("deleted" in existingCustomer && existingCustomer.deleted) {
               throw new Error("Customer has been deleted");
             }
-
-            // ✅ OPTIMIZED: Use utility to attach payment method
+            // Option A: no payment method – use customer as-is for invoice PaymentIntent flow
+            if (!hasPaymentMethod) {
+              return existingCustomer as Stripe.Customer;
+            }
             try {
-              await attachPaymentMethodToCustomer(finalPaymentMethodId, existingCustomer.id);
+              await attachPaymentMethodToCustomer(finalPaymentMethodId!, existingCustomer.id);
               return existingCustomer as Stripe.Customer;
             } catch (attachError: unknown) {
-              // Check if error is due to payment method being "consumed"
               const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
-              
               if (
                 errorMessage.includes("previously used without being attached") ||
                 errorMessage.includes("may not be used again") ||
@@ -176,15 +236,12 @@ export async function POST(request: NextRequest) {
               ) {
                 console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
                 canUsePaymentMethod = false;
-                return existingCustomer as Stripe.Customer; // Continue with customer even if payment method can't be reused
-              } else {
-                // Re-throw critical errors
-                throw attachError;
+                return existingCustomer as Stripe.Customer;
               }
+              throw attachError;
             }
           } catch (error) {
             console.warn(`⚠️ Failed to retrieve existing customer, will create new one:`, error);
-            // Fall through to create new customer
           }
         }
 
@@ -198,43 +255,41 @@ export async function POST(request: NextRequest) {
         // ✅ OPTIMIZED: Use utility function to ensure customer exists
         const newOrExistingCustomer = await ensureCustomerExists(validatedData.userEmail, customerMetadata);
 
-        // If payment method has a customer, check if it matches
-        try {
-          const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-          if (paymentMethod.customer) {
-            const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer.id;
-            if (pmCustomerId === newOrExistingCustomer.id) {
-              // Customer matches, update details if needed
-              const customerWithMetadata = newOrExistingCustomer as Stripe.Customer;
-              if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
-                await stripe.customers.update(newOrExistingCustomer.id, {
-                  email: validatedData.userEmail,
-                  name: `${validatedData.firstName} ${validatedData.lastName}`,
-                  phone: validatedData.mobile,
-                  metadata: customerMetadata,
-                });
+        if (hasPaymentMethod && finalPaymentMethodId) {
+          try {
+            const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+            if (paymentMethod.customer) {
+              const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer.id;
+              if (pmCustomerId === newOrExistingCustomer.id) {
+                const customerWithMetadata = newOrExistingCustomer as Stripe.Customer;
+                if (customerWithMetadata.metadata?.type === "guest" || customerWithMetadata.metadata?.temporary === "true") {
+                  await stripe.customers.update(newOrExistingCustomer.id, {
+                    email: validatedData.userEmail,
+                    name: `${validatedData.firstName} ${validatedData.lastName}`,
+                    phone: validatedData.mobile,
+                    metadata: customerMetadata,
+                  });
+                }
+                return newOrExistingCustomer;
               }
-              return newOrExistingCustomer;
             }
+          } catch (pmError) {
+            console.warn(`⚠️ Failed to check payment method customer:`, pmError);
           }
-        } catch (pmError) {
-          console.warn(`⚠️ Failed to check payment method customer:`, pmError);
-        }
-
-        // ✅ OPTIMIZED: Attach payment method using utility
-        try {
-          await attachPaymentMethodToCustomer(finalPaymentMethodId, newOrExistingCustomer.id);
-        } catch (attachError: unknown) {
-          const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
-          if (
-            errorMessage.includes("previously used without being attached") ||
-            errorMessage.includes("may not be used again") ||
-            errorMessage.includes("cannot be reused")
-          ) {
-            console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
-            canUsePaymentMethod = false;
-          } else {
-            throw attachError;
+          try {
+            await attachPaymentMethodToCustomer(finalPaymentMethodId, newOrExistingCustomer.id);
+          } catch (attachError: unknown) {
+            const errorMessage = attachError instanceof Error ? attachError.message : String(attachError);
+            if (
+              errorMessage.includes("previously used without being attached") ||
+              errorMessage.includes("may not be used again") ||
+              errorMessage.includes("cannot be reused")
+            ) {
+              console.warn("⚠️ Payment method from upfront PaymentIntent cannot be reused");
+              canUsePaymentMethod = false;
+            } else {
+              throw attachError;
+            }
           }
         }
 
@@ -253,7 +308,7 @@ export async function POST(request: NextRequest) {
 
     // Extract customer from result
     if (customerResult.status === "fulfilled") {
-      customer = customerResult.value;
+      customer = customerResult.value as Stripe.Customer;
     } else {
       const errorMessage = customerResult.reason instanceof Error ? customerResult.reason.message : String(customerResult.reason);
       console.error("❌ Failed to get/create customer:", customerResult.reason);
@@ -308,18 +363,15 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    } else if (!canUsePaymentMethod) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:313',message:'Payment method cannot be reused',data:{paymentMethodId:finalPaymentMethodId,customerId:customer.id,canUsePaymentMethod},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
-      
-      // ✅ ENHANCED: Return clear error if payment method cannot be used
+    } else if (hasPaymentMethod && !canUsePaymentMethod) {
+      // Only when client sent a payment method that we couldn't use (e.g. already consumed by a previous PaymentIntent)
       return NextResponse.json(
         {
           success: false,
           error: "Payment method cannot be reused",
           details: "The payment method was already used and cannot be reused. Please enter a new payment method.",
           suggestion: "Please enter your payment details again using the payment form.",
+          ...(correlationId && { correlationId }),
         },
         { status: 400 }
       );
@@ -352,28 +404,33 @@ export async function POST(request: NextRequest) {
 
     // ✅ OPTIMIZED: Deduplication will be handled after subscription creation (non-blocking)
 
-    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-    // Use customer ID + package ID for stable idempotency (not Date.now())
+    // ✅ STRIPE BEST PRACTICE: Use subscriptionRequestId as idempotency key when provided (Option A)
     const idempotencyKey =
-      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${customer.id}_${validatedData.userEmail}`;
+      validatedData.subscriptionRequestId ??
+      validatedData.idempotencyKey ??
+      `sub_${validatedData.packageId}_${customer.id}_${validatedData.userEmail}`;
 
-    // ✅ STRIPE BEST PRACTICE: Create subscription first, let Stripe create PaymentIntent automatically
-    // Stripe will create Invoice + PaymentIntent with correct amount for wallet payments
-    // We include default_payment_method so Stripe creates PaymentIntent immediately
-    // The PaymentIntent will be confirmed via PaymentElement (not auto-paid)
-    // console.log("📋 Creating Stripe subscription...");
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:358',message:'BEFORE subscription creation',data:{customerId:customer.id,stripePriceId,hasDefaultPaymentMethod:!!(canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"),defaultPaymentMethodId:canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method" ? finalPaymentMethodId : null,packageId:validatedData.packageId,userEmail:validatedData.userEmail},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
+    // Observability: log before subscription create
+    if (correlationId) {
+      console.log("[create-subscription] subscription create start", {
+        correlationId,
+        customerId: customer.id,
+        packageId: validatedData.packageId,
+      });
+    }
 
     const anchorParams = getSubscriptionCreateParamsForAnchor(new Date());
     const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
 
+    // Traceability: subscriptionRequestId, userId, planId for webhooks and debugging
+    const userIdForMetadata = registeredUser?._id?.toString() ?? "new";
     const baseMetadata = {
       packageId: validatedData.packageId,
       packageName: membershipPackage.name,
       userEmail: validatedData.userEmail,
+      ...(validatedData.subscriptionRequestId && { subscriptionRequestId: validatedData.subscriptionRequestId }),
+      ...(userIdForMetadata && { userId: userIdForMetadata }),
+      ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
       ...(experimentAssignment && {
@@ -390,11 +447,11 @@ export async function POST(request: NextRequest) {
     const createPayload: Stripe.SubscriptionCreateParams = {
       customer: customer.id,
       items: [{ price: stripePriceId }],
-      ...(canUsePaymentMethod && finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"
+      ...(hasPaymentMethod && finalPaymentMethodId
         ? { default_payment_method: finalPaymentMethodId }
         : {}),
       payment_behavior: "default_incomplete",
-      expand: ["latest_invoice.payment_intent"],
+      expand: ["latest_invoice.confirmation_secret"],
       description: `${membershipPackage.name}`,
       collection_method: "charge_automatically",
       metadata: baseMetadata as Stripe.MetadataParam,
@@ -414,370 +471,57 @@ export async function POST(request: NextRequest) {
         }
       );
 
-      // #region agent log
-      const latestInvoiceId = subscription.latest_invoice ? (typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice.id) : null;
-      const latestInvoiceWithPaymentIntent = subscription.latest_invoice && typeof subscription.latest_invoice !== "string" ? (subscription.latest_invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent }) : null;
-      const paymentIntentId = latestInvoiceWithPaymentIntent?.payment_intent ? (typeof latestInvoiceWithPaymentIntent.payment_intent === "string" ? latestInvoiceWithPaymentIntent.payment_intent : latestInvoiceWithPaymentIntent.payment_intent.id) : null;
-      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:400',message:'Subscription created successfully',data:{subscriptionId:subscription.id,subscriptionStatus:subscription.status,latestInvoiceId,paymentIntentId,hasPaymentIntent:!!paymentIntentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
-
-      // console.log(`📋 Created subscription: ${subscription.id}`);
+      if (correlationId) {
+        console.log("[create-subscription] subscription created", {
+          correlationId,
+          subscriptionId: subscription.id,
+          subscriptionStatus: subscription.status,
+        });
+      }
       // console.log(`📊 Subscription status: ${subscription.status}`);
     } catch (stripeError) {
-      // #region agent log
-      const errorMessage = stripeError instanceof Error ? stripeError.message : String(stripeError);
-      const errorCode = stripeError && typeof stripeError === "object" && "code" in stripeError ? String(stripeError.code) : undefined;
-      const errorType = stripeError && typeof stripeError === "object" && "type" in stripeError ? String(stripeError.type) : undefined;
-      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:402',message:'Subscription creation FAILED',data:{customerId:customer.id,stripePriceId,errorMessage,errorCode,errorType,errorStringified:JSON.stringify(stripeError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
-      
-      console.error("❌ Stripe subscription creation failed:", stripeError);
+      console.error("❌ Stripe subscription creation failed:", stripeError, correlationId ? { correlationId } : {});
       throw new Error(
         `Failed to create Stripe subscription: ${stripeError instanceof Error ? stripeError.message : "Unknown error"}`
       );
     }
 
-    // ✅ Get PaymentIntent from subscription's invoice using utility function
-    // This handles retry logic and proper detection of Stripe-created PaymentIntent
-    // ✅ NON-BLOCKING: PaymentIntent retrieval failure should not block subscription creation
-    const paymentIntentResult = await getInvoicePaymentIntentFromSubscription(subscription, subscription.id);
+    // Stripe: use subscription.latest_invoice.confirmation_secret (expand: ["latest_invoice.confirmation_secret"])
+    const latestInvoice = subscription.latest_invoice;
+    const rawConfirmationSecret =
+      typeof latestInvoice === "object" && latestInvoice !== null && "confirmation_secret" in latestInvoice
+        ? (latestInvoice as Stripe.Invoice & { confirmation_secret?: string | { client_secret?: string; type?: string } | null }).confirmation_secret
+        : undefined;
 
-    // ✅ IMPROVED ERROR HANDLING: Log detailed error but continue with subscription creation
-    if (!paymentIntentResult.success && paymentIntentResult.error) {
-      const invoiceId = paymentIntentResult.invoice?.id || "unknown";
-      console.error(`❌ Failed to get invoice PaymentIntent for subscription ${subscription.id}:`, {
-        subscriptionId: subscription.id,
-        invoiceId: invoiceId,
-        error: paymentIntentResult.error,
-        invoiceStatus: paymentIntentResult.invoice?.status,
-        hasInvoice: !!paymentIntentResult.invoice,
-      });
-      // Continue - subscription creation succeeded, PaymentIntent retrieval can be retried later
-    }
+    // Log what we got from the invoice (for debugging)
+    console.log("[create-subscription] latest_invoice.confirmation_secret (raw)", {
+      subscriptionId: subscription.id,
+      hasRaw: rawConfirmationSecret != null,
+      rawType: typeof rawConfirmationSecret,
+      rawKeys: typeof rawConfirmationSecret === "object" && rawConfirmationSecret !== null ? Object.keys(rawConfirmationSecret) : undefined,
+    });
 
-    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = paymentIntentResult.paymentIntent;
-    let latestInvoice = paymentIntentResult.invoice;
-
-    // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually as last resort
-    // This should rarely happen - Stripe usually creates PaymentIntent automatically
-    // Only create if absolutely necessary (after retries failed)
-    if (!paymentIntent && latestInvoice.status === "open") {
-      try {
-        // ✅ SAFETY: Final check - retrieve invoice one more time before manual creation
-        // This prevents creating duplicate PaymentIntents if Stripe created one asynchronously
-        if (!latestInvoice.id) {
-          throw new Error("Invoice ID is missing - cannot perform final check");
-        }
-        const finalCheckInvoice = await stripe.invoices.retrieve(latestInvoice.id, {
-          expand: ["subscription", "payment_intent", "charge"],
-        });
-
-        const finalCheckWithPaymentIntent = finalCheckInvoice as Stripe.Invoice & {
-          payment_intent?: Stripe.PaymentIntent | string;
-        };
-
-        // If PaymentIntent found in final check, use it instead of creating manual
-        if (finalCheckWithPaymentIntent.payment_intent) {
-          paymentIntent = finalCheckWithPaymentIntent.payment_intent;
-          const paymentIntentId =
-            typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
-          console.log(
-            `✅ Found PaymentIntent in final check: ${paymentIntentId} for subscription ${subscription.id}`
-          );
-          // Update latestInvoice to use the fresh invoice data
-          latestInvoice = finalCheckInvoice;
-        } else {
-          // Only now create manual PaymentIntent as true last resort
-          // ✅ FIX: Use invoice amount_due, but fallback to subscription price if amount_due is 0
-          // This handles edge cases where invoice might have 0 amount due to prorations or trials
-          const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
-          const invoiceCurrency = (latestInvoice.currency as string) || "aud";
-
-          console.log(
-            `⚠️ Invoice is open but has no PaymentIntent after final check. Creating PaymentIntent for amount: ${invoiceAmount} (invoice amount_due: ${
-              latestInvoice.amount_due
-            }, package price: ${Math.round(membershipPackage.price * 100)})`
-          );
-
-          // ✅ DEBUG: Verify amount is correct for wallet display
-          if (invoiceAmount === 0) {
-            console.warn(
-              `⚠️ WARNING: PaymentIntent amount is 0! This will show $0.00 in Google Pay/Apple Pay. Using package price fallback: ${Math.round(
-                membershipPackage.price * 100
-              )}`
-            );
-          }
-
-          // ✅ CRITICAL: Get experiment assignment for A/B testing tracking
-          // Store in metadata so webhook can use it directly (more reliable than lookup)
-          let experimentAssignment: { experimentId: string; variantId: string } | null = null;
-          if (registeredUser?._id) {
-            try {
-              // ✅ Pass anonymousId to find assignments created before user logged in
-              experimentAssignment = await getUserActiveExperimentAssignment(
-                registeredUser._id.toString(),
-                undefined, // slug
-                anonymousId || undefined // anonymousId from cookies
-              );
-              
-              // ✅ Fallback: Check cookies if database lookup failed
-              if (!experimentAssignment) {
-                // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
-                try {
-                  const activeExperiments = await ExperimentRepository.findAll({
-                    status: "active",
-                    page: 1,
-                    limit: 10,
-                  });
-                  
-                  for (const exp of activeExperiments.experiments) {
-                    const experimentId = exp._id instanceof mongoose.Types.ObjectId 
-                      ? exp._id.toString() 
-                      : String(exp._id);
-                    const cookieName = `ta_ab_assignment_${experimentId}`;
-                    const cookieValue = request.cookies.get(cookieName)?.value;
-                    
-                    if (cookieValue) {
-                      try {
-                        const assignmentData = JSON.parse(cookieValue);
-                        if (assignmentData.experimentId && assignmentData.variantId) {
-                          experimentAssignment = {
-                            experimentId: assignmentData.experimentId,
-                            variantId: assignmentData.variantId,
-                          };
-                          console.log(`✅ [A/B Testing] Found assignment from cookie:`, experimentAssignment);
-                          break;
-                        }
-                      } catch (error) {
-                        // Invalid cookie data, skip
-                        console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
-                      }
-                    }
-                  }
-                } catch (error) {
-                  // Silently fail - cookie fallback should not block payment creation
-                  console.warn("Error checking assignment cookies:", error);
-                }
-              }
-              
-              if (experimentAssignment) {
-                console.log(`✅ [A/B Testing] Storing experiment assignment in payment metadata:`, experimentAssignment);
-              }
-            } catch (error) {
-              // Silently fail - experiment tracking should not block payment creation
-              console.error("Error getting experiment assignment for payment metadata:", error);
-            }
-          }
-
-          // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
-          // This ensures that even if the API is called twice, only one PaymentIntent is created
-          const invoicePaymentIntentIdempotencyKey = `pi_invoice_${latestInvoice.id || subscription.id}_${Date.now()}`;
-
-          // ✅ CRITICAL: Create PaymentIntent with correct amount for wallet display
-          // Don't confirm it - let PaymentElement handle confirmation
-          // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
-          // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
-          // ✅ Use centralized PaymentIntent configuration with 3DS support
-          const paymentIntentConfig = createPaymentIntentConfig({
-            amount: invoiceAmount,
-            currency: invoiceCurrency,
-            customer: customer.id,
-            confirm: false, // ✅ Don't auto-confirm - let PaymentElement handle it
-            paymentType: "subscription",
-            description: membershipPackage.name,
-            setupFutureUsage: "off_session",
-            metadata: {
-                invoice_id: latestInvoice.id || "",
-                subscription_id: subscription.id,
-                packageId: validatedData.packageId,
-                packageName: membershipPackage.name,
-                userEmail: validatedData.userEmail,
-                type: "subscription", // ✅ Set 'type' for webhook compatibility
-                packageType: "membership",
-                isUpfrontPayment: "false", // ✅ CRITICAL: Mark as invoice PaymentIntent (the one that should be authorized)
-                isInvoicePaymentIntent: "true", // ✅ Additional marker for clarity
-                // ✅ REMOVED: isUpfrontPayment - This is the invoice PaymentIntent, not the upfront one
-                // The upfront PaymentIntent is the one created in create-payment-intent route and canceled at the start
-                ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-                ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-                // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
-                ...(experimentAssignment && {
-                  experimentId: experimentAssignment.experimentId,
-                  variantId: experimentAssignment.variantId,
-                }),
-                // Store request context for Facebook CAPI (webhook will extract and use)
-                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-                ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-                ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-                ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-            },
-          });
-
-          const newPaymentIntent = await stripe.paymentIntents.create(
-            paymentIntentConfig,
-            {
-              idempotencyKey: invoicePaymentIntentIdempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-            }
-          );
-
-          // Update invoice metadata to track PaymentIntent and request context (optional, but helps with tracking)
-          if (latestInvoice.id) {
-            await stripe.invoices.update(latestInvoice.id, {
-              metadata: {
-                ...(latestInvoice.metadata || {}),
-                payment_intent_id: newPaymentIntent.id,
-                // Store request context for Facebook CAPI (webhook will extract and use)
-                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-                ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-                ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-                ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-              },
-            });
-          }
-
-          paymentIntent = newPaymentIntent;
-          console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`, {
-            hasClientSecret: !!newPaymentIntent.client_secret,
-            status: newPaymentIntent.status,
-            amount: newPaymentIntent.amount,
-          });
-        }
-      } catch (createError) {
-        console.error("❌ Failed to create PaymentIntent for invoice:", createError);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to create payment intent. Please try again.",
-          },
-          { status: 500 }
-        );
-      }
-    }
-
-    // ✅ Extract client_secret from PaymentIntent (for frontend PaymentElement)
-    // PaymentElement will automatically show correct amount in wallets (Google Pay/Apple Pay)
+    // Stripe may return confirmation_secret as a string or as { client_secret, type }; always return a string for Elements
     let clientSecret: string | null = null;
-
-    if (paymentIntent) {
-      if (typeof paymentIntent === "string") {
-        // If it's a string ID, retrieve the PaymentIntent to get client_secret
-        try {
-          const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntent);
-          clientSecret = retrievedPI.client_secret || null;
-          console.log(
-            `✅ Retrieved PaymentIntent: ${retrievedPI.id}, status: ${retrievedPI.status}, amount: ${
-              retrievedPI.amount
-            }, has client_secret: ${!!clientSecret}`
-          );
-
-          // ✅ DEBUG: Verify amount matches subscription price
-          const expectedAmount = Math.round(membershipPackage.price * 100);
-          if (retrievedPI.amount !== expectedAmount) {
-            console.warn(`⚠️ PaymentIntent amount mismatch: expected ${expectedAmount}, got ${retrievedPI.amount}`);
-          }
-        } catch (retrieveError) {
-          console.error("❌ Failed to retrieve PaymentIntent:", retrieveError);
-        }
-      } else {
-        // If it's already expanded, use it directly
-        clientSecret = paymentIntent.client_secret || null;
-        console.log(
-          `✅ Using expanded PaymentIntent: ${paymentIntent.id}, status: ${paymentIntent.status}, amount: ${
-            paymentIntent.amount
-          }, has client_secret: ${!!clientSecret}`
-        );
-
-        // ✅ DEBUG: Verify amount matches subscription price
-        const expectedAmount = Math.round(membershipPackage.price * 100);
-        if (paymentIntent.amount !== expectedAmount) {
-          console.warn(`⚠️ PaymentIntent amount mismatch: expected ${expectedAmount}, got ${paymentIntent.amount}`);
-        }
-      }
-    }
-
-    // ✅ Fallback: If PaymentIntent still not found, try retrieving invoice again with expansion
-    if (!clientSecret && latestInvoice.id) {
-      try {
-        const expandedInvoice = await stripe.invoices.retrieve(latestInvoice.id, {
-          expand: ["payment_intent"],
-        });
-        const expandedPaymentIntent = (
-          expandedInvoice as Stripe.Invoice & {
-            payment_intent?: Stripe.PaymentIntent | string;
-          }
-        )?.payment_intent;
-
-        if (expandedPaymentIntent) {
-          if (typeof expandedPaymentIntent === "string") {
-            const retrievedPI = await stripe.paymentIntents.retrieve(expandedPaymentIntent);
-            clientSecret = retrievedPI.client_secret || null;
-            console.log(
-              `✅ Fallback: Retrieved PaymentIntent: ${retrievedPI.id}, has client_secret: ${!!clientSecret}`
-            );
-          } else {
-            clientSecret = expandedPaymentIntent.client_secret || null;
-            console.log(
-              `✅ Fallback: Using expanded PaymentIntent: ${
-                expandedPaymentIntent.id
-              }, has client_secret: ${!!clientSecret}`
-            );
-          }
-        }
-      } catch (retrieveError) {
-        console.error("❌ Failed to retrieve invoice with expansion:", retrieveError);
-      }
-    }
-
-    // ✅ Validate PaymentIntent belongs to invoice (safety check)
-    if (clientSecret) {
-      try {
-        // Extract PaymentIntent ID from clientSecret to verify it belongs to invoice
-        const paymentIntentId = clientSecret.split("_secret_")[0];
-        const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntentId);
-        
-        console.log(`🔍 Validating invoice PaymentIntent ${paymentIntentId}:`, {
-          status: retrievedPI.status,
-          hasInvoiceId: !!retrievedPI.metadata?.invoice_id,
-          hasSubscriptionId: !!retrievedPI.metadata?.subscription_id,
-          isInvoicePaymentIntent: retrievedPI.metadata?.isInvoicePaymentIntent,
-        });
-        
-        if (retrievedPI.status === "canceled") {
-          console.error(`❌ CRITICAL: Attempted to return canceled PaymentIntent ${paymentIntentId} as clientSecret`);
-          clientSecret = null; // Force fallback
-        } else if (!retrievedPI.metadata?.invoice_id) {
-          console.warn(`⚠️ PaymentIntent ${paymentIntentId} does not have invoice_id metadata - may not be invoice PaymentIntent`);
-        } else {
-          console.log(`✅ Invoice PaymentIntent ${paymentIntentId} validation passed - returning clientSecret`);
-        }
-      } catch (verifyError) {
-        console.warn("Could not verify PaymentIntent status:", verifyError);
-        // Continue - clientSecret might still be valid
-      }
+    if (typeof rawConfirmationSecret === "string") {
+      clientSecret = rawConfirmationSecret;
+    } else if (rawConfirmationSecret && typeof rawConfirmationSecret === "object" && "client_secret" in rawConfirmationSecret) {
+      const cs = (rawConfirmationSecret as { client_secret?: string }).client_secret;
+      clientSecret = typeof cs === "string" ? cs : null;
     }
 
     if (!clientSecret) {
-      console.error("❌ No PaymentIntent client_secret found in subscription invoice");
-      console.error("Debug details:", {
+      console.error("❌ No confirmation_secret (string or client_secret) on subscription latest_invoice", {
         subscriptionId: subscription.id,
-        subscriptionStatus: subscription.status,
-        invoiceId: latestInvoice.id,
-        invoiceStatus: latestInvoice.status,
-        hasPaymentIntent: !!paymentIntent,
-        paymentIntentType: paymentIntent ? (typeof paymentIntent === "string" ? "string" : "object") : "null",
-        paymentIntentId: paymentIntent
-          ? typeof paymentIntent === "string"
-            ? paymentIntent
-            : paymentIntent.id
-          : "null",
-        paymentIntentStatus: paymentIntent && typeof paymentIntent === "object" ? paymentIntent.status : "N/A",
+        hasLatestInvoice: !!latestInvoice,
+        latestInvoiceType: typeof latestInvoice,
       });
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to get payment intent. Please try again.",
+          error: "Payment setup is still in progress. Please try again in a moment.",
         },
-        { status: 500 }
+        { status: 503 }
       );
     }
 
@@ -872,12 +616,8 @@ export async function POST(request: NextRequest) {
         // Payment method will be saved by webhook after payment succeeds
       });
 
-      // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
-      // MongoDB generates _id immediately when creating User() instance, so it's available for response
-      // Subscription status updates are handled by webhook after payment succeeds
-      user.save().catch((error) => {
-        console.warn("Non-critical user save failed (webhook will handle):", error);
-      });
+      // Await user save for new user so response includes persisted user id
+      await user.save();
       // console.log(`✅ Created user account: ${user._id}`);
       // console.log(`⏳ Entries/points will be added via webhook upon payment confirmation`);
       // console.log(`📦 Membership will activate: ${membershipPackage.name}`);
@@ -889,23 +629,17 @@ export async function POST(request: NextRequest) {
     // ✅ Referral processing moved to webhook (after payment succeeds)
     // Referral code is stored in subscription metadata and processed by webhook
 
-    // ✅ GRACEFUL DEGRADATION: Include warning if PaymentIntent retrieval failed
-    const warning = !clientSecret && !paymentIntentResult.success
-      ? "PaymentIntent retrieval delayed. Payment confirmation may require retry. Subscription created successfully."
-      : undefined;
-
     return NextResponse.json({
       success: true,
       data: {
         subscriptionId: subscription.id,
         customerId: customer.id,
         userId: user._id,
-        clientSecret: clientSecret || null, // Explicitly set to null if not available
+        invoicePaymentIntentClientSecret: clientSecret,
+        clientSecret, // backward compatibility
         status: subscription.status,
         packageName: membershipPackage.name,
         entriesPerMonth: membershipPackage.entriesPerMonth || 0,
-        ...(warning && { warning }), // Include warning if PaymentIntent retrieval failed
-        // Include user data for auto-login
         user: {
           id: user._id,
           email: user.email,
@@ -928,6 +662,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: "Validation error",
           details: error.issues,
+          ...(correlationId && { correlationId }),
         },
         { status: 400 }
       );
@@ -935,12 +670,8 @@ export async function POST(request: NextRequest) {
 
     // Handle Stripe-specific errors
     if (error && typeof error === "object" && "type" in error) {
-      // #region agent log
       const stripeError = error as StripeError;
-      fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:857',message:'Stripe error caught in catch block',data:{errorType:stripeError.type,errorCode:stripeError.code,errorMessage:stripeError.message,packageId:typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,userEmail:typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,userId:user?._id?.toString(),customerId:customer?.id,errorStringified:JSON.stringify(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
-      
-      console.error("❌ Stripe error:", error);
+      console.error("❌ Stripe error:", error, correlationId ? { correlationId } : {});
       console.error("❌ Stripe error details (VERCEL LOGS):", {
         type: stripeError.type,
         code: stripeError.code,
@@ -963,11 +694,12 @@ export async function POST(request: NextRequest) {
             details: "There is a system issue preventing payment processing. Please contact support.",
             code: stripeError.code,
             type: stripeError.type,
+            ...(correlationId && { correlationId }),
           },
           { status: 500 }
         );
       }
-      
+
       // ✅ AUTO-LOG PAYMENT ERRORS: Automatically log Stripe payment failures
       // NOTE: We intentionally do NOT include paymentIntentId here because:
       // 1. The upfront PaymentIntent is cancelled intentionally (expected behavior)
@@ -998,18 +730,13 @@ export async function POST(request: NextRequest) {
           details: stripeError.message || "Stripe API error",
           code: stripeError.code,
           type: stripeError.type,
+          ...(correlationId && { correlationId }),
         },
         { status: 400 }
       );
     }
 
-    // #region agent log
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? (error.stack || "No stack trace") : "No stack trace";
-    fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-subscription.ts:889',message:'General error in catch block',data:{errorMessage,errorType:typeof error,packageId:typeof requestBody?.packageId === "string" ? requestBody.packageId : undefined,userEmail:typeof requestBody?.userEmail === "string" ? requestBody.userEmail : undefined,userId:user?._id?.toString(),customerId:customer?.id,errorStack:errorStack.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    
-    console.error("❌ Error creating subscription:", error);
+    console.error("❌ Error creating subscription:", error, correlationId ? { correlationId } : {});
     console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
     console.error("❌ Error type:", typeof error);
     console.error("❌ Error message:", error instanceof Error ? error.message : "No message");
@@ -1039,6 +766,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: "Failed to create subscription",
         details: error instanceof Error ? error.message : "Unknown error",
+        ...(correlationId && { correlationId }),
       },
       { status: 500 }
     );

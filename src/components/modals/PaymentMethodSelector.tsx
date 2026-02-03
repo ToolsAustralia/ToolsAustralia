@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { CreditCard, Plus, ChevronRight } from "lucide-react";
+import { CreditCard, Plus, ChevronRight, Cog } from "lucide-react";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import SavedPaymentMethodsModal from "./SavedPaymentMethodsModal";
 import { PaymentElement, useStripe, useElements, Elements } from "@stripe/react-stripe-js";
@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { categorizeError, isRecoverableError, getRecoveryStrategy } from "@/utils/payment/stripe/payment-error-detection";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
+import { getReturnUrlForPaymentTypeClient } from "@/utils/payment/stripe/payment-intent-config";
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -30,18 +31,14 @@ interface PaymentMethodSelectorProps {
   setupIntentClientSecret?: string | null; // Backward compatibility - kept for fallback
   paymentIntentClientSecret?: string | null; // NEW: PaymentIntent for wallet payments with amount
   intentType?: "setup" | "payment"; // NEW: Type of intent being used
-  cardFormRef: React.Ref<{ 
-    confirmSetup: () => Promise<{ 
-      paymentMethodId?: string; 
-      paymentIntentId?: string; 
+  cardFormRef: React.Ref<{
+    confirmStripeIntent: () => Promise<{
+      paymentMethodId?: string;
+      paymentIntentId?: string;
       error?: string;
       setupIntentAlreadySucceeded?: boolean;
-      needsRecovery?: boolean; // NEW: Flag for automatic recovery
-      lastSetupError?: {        // NEW: Last error details
-        code?: string;
-        message?: string;
-        decline_code?: string;
-      };
+      needsRecovery?: boolean;
+      lastSetupError?: { code?: string; message?: string; decline_code?: string };
       errorCategory?: "recoverable" | "retryable" | "non-recoverable";
       errorType?: string;
       isRecoverable?: boolean;
@@ -53,6 +50,7 @@ interface PaymentMethodSelectorProps {
   cardFormError: string | null;
   isCreatingSetupIntent?: boolean;
   isCreatingPaymentIntent?: boolean; // NEW: Loading state for PaymentIntent creation
+  isCreatingSubscription?: boolean; // Loading state while invoice PaymentIntent is being created (subscription Payment Element)
   // Billing details for when billingDetails: "never" is set
   billingDetails?: {
     name?: string;
@@ -67,12 +65,14 @@ interface PaymentMethodSelectorProps {
   // Amount and package name for wallet payment display (Apple Pay/Google Pay)
   amount?: number; // Amount in cents
   packageName?: string; // Package name for payment request label
+  /** Option A (wallet UX): parent uses this to hide/disable main Purchase when google_pay/apple_pay selected */
+  onPaymentMethodTypeChange?: (type: string | null) => void;
 }
 
 // Stripe Card Form Component - Now a ref-based component without buttons
 // Supports both PaymentIntent (for wallet payments with amount) and SetupIntent (for backward compatibility)
 const StripeCardForm = React.forwardRef<
-  { confirmSetup: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }> },
+  { confirmStripeIntent: () => Promise<{ paymentMethodId?: string; paymentIntentId?: string; error?: string }> },
   {
     clientSecret: string;
     intentType: "setup" | "payment"; // Type of intent: "payment" for PaymentIntent, "setup" for SetupIntent
@@ -90,6 +90,7 @@ const StripeCardForm = React.forwardRef<
     };
     amount?: number; // Amount in cents for wallet payment display
     packageName?: string; // Package name for payment request label
+    onPaymentMethodTypeChange?: (type: string | null) => void;
   }
 >(
   (
@@ -101,6 +102,7 @@ const StripeCardForm = React.forwardRef<
       billingDetails,
       amount,
       packageName,
+      onPaymentMethodTypeChange,
     },
     ref
   ) => {
@@ -312,9 +314,9 @@ const StripeCardForm = React.forwardRef<
           };
     };
 
-    // Expose confirmSetup function via ref - handles both PaymentIntent and SetupIntent
+    // Expose confirmStripeIntent via ref – handles PaymentIntent (subscription) and SetupIntent (one-time)
     React.useImperativeHandle(ref, () => ({
-      confirmSetup: async () => {
+      confirmStripeIntent: async () => {
         if (!stripe || !elements) {
           return { error: "Stripe not loaded" };
         }
@@ -372,6 +374,7 @@ const StripeCardForm = React.forwardRef<
                 payment_method_data: {
                   billing_details: billingDetailsData,
                 },
+                return_url: getReturnUrlForPaymentTypeClient("subscription"),
               },
               redirect: "if_required",
             });
@@ -592,7 +595,7 @@ const StripeCardForm = React.forwardRef<
             }
           }
         } catch (err: unknown) {
-          console.error("Error in confirmSetup:", err);
+          console.error("Error in confirmStripeIntent:", err);
           const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
           return { error: errorMessage };
         }
@@ -659,6 +662,12 @@ const StripeCardForm = React.forwardRef<
                 // Payment method is complete
                 onCardElementChange({});
               }
+              // Option A (wallet UX): notify parent of selected payment method type so main Purchase can be hidden for wallets
+              const value = (event as { value?: { payment_method?: { type?: string } | string } }).value;
+              const pm = value?.payment_method;
+              const type =
+                pm == null ? null : typeof pm === "string" ? pm : (pm as { type?: string }).type ?? null;
+              onPaymentMethodTypeChange?.(type ?? null);
             }}
           />
         </div>
@@ -685,19 +694,30 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   cardFormError,
   isCreatingSetupIntent = false,
   isCreatingPaymentIntent = false,
+  isCreatingSubscription = false,
   billingDetails,
   amount,
   packageName,
+  onPaymentMethodTypeChange,
 }) => {
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
+  // Stripe Elements requires a client_secret string; API may return { client_secret, type }
+  const clientSecretForElements: string | null =
+    typeof activeClientSecret === "string"
+      ? activeClientSecret
+      : activeClientSecret &&
+        typeof activeClientSecret === "object" &&
+        typeof (activeClientSecret as { client_secret?: string }).client_secret === "string"
+        ? (activeClientSecret as { client_secret: string }).client_secret
+        : null;
   // Use provided intentType or calculate from client secrets
   const activeIntentType: "setup" | "payment" | undefined =
     intentType || (paymentIntentClientSecret ? "payment" : setupIntentClientSecret ? "setup" : undefined);
   // ✅ FIX: Derive package type from intentType and amount for proper Elements remounting
   // PaymentIntent with amount = one-time, SetupIntent = subscription
   const packageType = paymentIntentClientSecret && amount && amount > 0 ? "one-time" : "membership";
-  const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent;
+  const isCreatingIntent = isCreatingPaymentIntent || isCreatingSetupIntent || isCreatingSubscription;
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
@@ -800,28 +820,20 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 <CreditCard className="w-4 h-4 text-red-600" />
                 Card Details
               </h4>
-              <div className="p-3 border border-gray-300 rounded-lg bg-white">
-                {/* Card number skeleton */}
-                <div className="animate-pulse bg-gray-200 h-6 rounded mb-3"></div>
-                {/* Card details row skeleton */}
-                <div className="flex gap-3">
-                  <div className="flex-1 animate-pulse bg-gray-200 h-6 rounded"></div>
-                  <div className="w-20 animate-pulse bg-gray-200 h-6 rounded"></div>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
-                  <span>Setting up secure payment form...</span>
+              <div className="p-4 sm:p-6 border border-gray-200 rounded-lg sm:rounded-xl bg-gray-50 flex flex-col items-center justify-center gap-4 min-h-[120px]">
+                <Cog className="w-8 h-8 sm:w-10 sm:h-10 text-red-600 animate-spin" aria-hidden />
+                <div className="text-center space-y-1">
+                  <p className="text-sm font-medium text-gray-900">Preparing secure checkout...</p>
+                  <p className="text-xs text-gray-500">Loading your payment form. This only takes a moment.</p>
                 </div>
               </div>
             </div>
-          ) : activeClientSecret && activeIntentType ? (
+          ) : clientSecretForElements && activeIntentType ? (
             <Elements
-              key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
+              key={`elements-${activeIntentType}-${packageType}-${clientSecretForElements.split("_secret_")[0] || clientSecretForElements.slice(0, 24)}-${amount || 0}-${packageName || "default"}`}
               stripe={stripePromise}
               options={{
-                clientSecret: activeClientSecret,
+                clientSecret: clientSecretForElements,
                 locale: "en",
                 appearance: {
                   theme: "stripe",
@@ -909,13 +921,14 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             >
               <StripeCardForm
                 ref={cardFormRef}
-                clientSecret={activeClientSecret}
+                clientSecret={clientSecretForElements}
                 intentType={activeIntentType}
                 onCardElementChange={onCardElementChange}
                 cardError={cardFormError}
                 billingDetails={billingDetails}
                 amount={amount}
                 packageName={packageName}
+                onPaymentMethodTypeChange={onPaymentMethodTypeChange}
               />
             </Elements>
           ) : cardFormError ? (
@@ -1062,43 +1075,19 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
           {showCardForm && (
             <div className="space-y-4">
               {isCreatingIntent ? (
-                // Intent Loading Skeleton
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
-                  </div>
-                  <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                    <div className="h-12 bg-gray-200 rounded animate-pulse flex items-center px-3">
-                      <div className="flex items-center space-x-2 w-full">
-                        <div className="w-6 h-4 bg-gray-300 rounded animate-pulse"></div>
-                        <div className="flex-1 h-4 bg-gray-300 rounded animate-pulse"></div>
-                        <div className="w-8 h-4 bg-gray-300 rounded animate-pulse"></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
-                      <span>Setting up secure payment form...</span>
-                    </div>
-                  </div>
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-5 h-5 text-blue-600">⏳</div>
-                      <div>
-                        <p className="text-sm text-blue-800 font-medium">Creating secure payment setup...</p>
-                        <p className="text-xs text-blue-600">This may take a few moments</p>
-                      </div>
-                    </div>
+                <div className="p-4 sm:p-6 border border-gray-200 rounded-lg sm:rounded-xl bg-gray-50 flex flex-col items-center justify-center gap-4 min-h-[120px]">
+                  <Cog className="w-8 h-8 sm:w-10 sm:h-10 text-red-600 animate-spin" aria-hidden />
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-medium text-gray-900">Preparing secure checkout...</p>
+                    <p className="text-xs text-gray-500">Loading your payment form. This only takes a moment.</p>
                   </div>
                 </div>
-              ) : activeClientSecret && activeIntentType ? (
+              ) : clientSecretForElements && activeIntentType ? (
                 <Elements
-                  key={`elements-${activeIntentType}-${packageType}-${activeClientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
+                  key={`elements-${activeIntentType}-${packageType}-${clientSecretForElements.split("_secret_")[0] || clientSecretForElements.slice(0, 24)}-${amount || 0}-${packageName || "default"}`}
                   stripe={stripePromise}
                   options={{
-                    clientSecret: activeClientSecret,
+                    clientSecret: clientSecretForElements,
                     appearance: {
                       theme: "stripe",
                       variables: {
@@ -1185,13 +1174,14 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 >
                   <StripeCardForm
                     ref={cardFormRef}
-                    clientSecret={activeClientSecret}
+                    clientSecret={clientSecretForElements}
                     intentType={activeIntentType}
                     onCardElementChange={onCardElementChange}
                     cardError={cardFormError}
                     billingDetails={billingDetails}
                     amount={amount}
                     packageName={packageName}
+                    onPaymentMethodTypeChange={onPaymentMethodTypeChange}
                   />
                 </Elements>
               ) : (

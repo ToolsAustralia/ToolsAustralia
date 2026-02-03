@@ -1,5 +1,7 @@
 # Subscription Flow Assessment
 
+> **Note (Feb 2026):** The subscription path has been migrated to **Payment Element + invoice PaymentIntent** (Option A). For the current subscription flow, idempotency, plan-switch cancellation, loading state, and webhook behavior, see **[docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md](docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md)**. The steps below describe the older SetupIntent-based flow; for subscriptions we now create the subscription first (no SetupIntent), return the invoice PaymentIntent client secret, and confirm only on the client.
+
 ## Current Flow (Step-by-Step)
 
 ### Step 1: User Registration (New Users Only)

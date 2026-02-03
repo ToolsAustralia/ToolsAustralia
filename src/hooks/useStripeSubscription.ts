@@ -24,8 +24,10 @@ export interface SubscriptionData {
   mobile?: string;
   packageId: string;
   password?: string; // Made optional for passwordless users
-  paymentMethodId: string; // Payment method from SetupIntent
-  idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
+  paymentMethodId?: string; // Optional for Option A: first payment uses invoice PaymentIntent only
+  subscriptionRequestId?: string; // Idempotency/correlation; used as Stripe idempotency key
+  idempotencyKey?: string;
+  cancelPreviousSubscriptionId?: string; // When user switches package: cancel this incomplete subscription before creating new one
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
@@ -55,8 +57,10 @@ export interface OneTimePurchaseData {
  */
 export interface ExistingUserSubscriptionData {
   packageId: string;
-  paymentMethodId: string; // Payment method from SetupIntent
-  idempotencyKey?: string; // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
+  paymentMethodId?: string; // Optional for Option A: first payment uses invoice PaymentIntent only
+  subscriptionRequestId?: string; // Idempotency/correlation; used as Stripe idempotency key
+  idempotencyKey?: string;
+  cancelPreviousSubscriptionId?: string; // When user switches package: cancel this incomplete subscription before creating new one
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;

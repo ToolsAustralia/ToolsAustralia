@@ -179,6 +179,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<SavedPaymentMethod | null>(null);
   const [useSavedPaymentMethod, setUseSavedPaymentMethod] = useState(false);
   const [showCardForm, setShowCardForm] = useState(false);
+  const [isCreatingSubscription, setIsCreatingSubscription] = useState(false); // Loading state while invoice PaymentIntent is being created (for Payment Element)
+  const [paymentMethodTypeFromElement, setPaymentMethodTypeFromElement] = useState<string | null>(null); // Option A: hide main Purchase when google_pay/apple_pay selected
 
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
@@ -191,23 +193,24 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const isCreatingPaymentIntentRef = useRef<boolean>(false);
   // ✅ FIX: Track if SetupIntent creation is in progress to prevent concurrent creation
   const isCreatingSetupIntentRef = useRef<boolean>(false);
+  const isCreatingSubscriptionRef = useRef<boolean>(false);
+  const SUBSCRIPTION_CHECKOUT_STORAGE_KEY = "membership_subscription_checkout";
+  const SUBSCRIPTION_CHECKOUT_STALE_MS = 60 * 60 * 1000; // 60 minutes
   // ✅ STRIPE BEST PRACTICE: Track if subscription was already created to prevent duplicate creation
   const subscriptionCreatedRef = useRef<string | null>(null); // Store subscriptionId once created
+  const subscriptionPackageIdRef = useRef<string | null>(null); // Package the current subscription was created for (so we can invalidate on plan change)
+  const previousSubscriptionToCancelRef = useRef<string | null>(null); // When user switches package: pass to API to cancel before creating new subscription
   const userIdRef = useRef<string | null>(null); // Store userId for retry scenarios
   // ✅ NEW: Track recovery attempts to prevent duplicate recoveries
   const recoveryAttemptedRef = useRef<{ errorMessage: string; attempted: boolean } | null>(null);
   const cardFormRef = useRef<{
-    confirmSetup: () => Promise<{ 
-      paymentMethodId?: string; 
-      paymentIntentId?: string; 
+    confirmStripeIntent: () => Promise<{
+      paymentMethodId?: string;
+      paymentIntentId?: string;
       error?: string;
       setupIntentAlreadySucceeded?: boolean;
-      needsRecovery?: boolean; // NEW: Flag for automatic recovery
-      lastSetupError?: {        // NEW: Last error details
-        code?: string;
-        message?: string;
-        decline_code?: string;
-      };
+      needsRecovery?: boolean;
+      lastSetupError?: { code?: string; message?: string; decline_code?: string };
     }>;
   } | null>(null);
   const [guestUserData, setGuestUserData] = useState<{
@@ -451,6 +454,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
       // ✅ STRIPE BEST PRACTICE: Reset subscription tracking when modal opens for new purchase
       subscriptionCreatedRef.current = null;
+      subscriptionPackageIdRef.current = null;
+      previousSubscriptionToCancelRef.current = null;
+      setIsCreatingSubscription(false);
+      setPaymentMethodTypeFromElement(null);
       userIdRef.current = null; // ✅ Reset userId tracking for clean state
       // Success state is now handled by global LoadingContext
       // console.log("🔄 Reset upsell trigger guard and payment processing state for new purchase");
@@ -758,30 +765,144 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     const shouldCreatePaymentIntent =
       isInPaymentFlow && hasCompletedRegistration && isActualPlan && (showCardForm || isSubscription); // Only for subscriptions or when card form is shown
 
-    // ✅ FIX: Ensure SetupIntent/PaymentIntent is created when user reaches Step 2
-    // This ensures PaymentElement appears automatically for new users
-    if (currentStep === 2 && hasCompletedRegistration && isActualPlan && !setupIntentClientSecret && !paymentIntentClientSecret) {
+    // ✅ Option A: When Step 2 and subscription – use invoice PaymentIntent only (no SetupIntent)
+    if (currentStep === 2 && hasCompletedRegistration && isActualPlan) {
       const isSubscription = activePlan?.period === "mo";
-      
-      if (isSubscription) {
-        // For subscriptions: Create SetupIntent proactively when Step 2 is reached
-        if (!isCreatingSetupIntentRef.current) {
-          isCreatingSetupIntentRef.current = true;
-          createSetupIntent.mutate(undefined, {
-            onSuccess: (result) => {
-              if (result.success && result.client_secret) {
-                setSetupIntentClientSecret(result.client_secret);
-                setPaymentIntentClientSecret(null);
-                setCardFormError(null);
-              }
-              isCreatingSetupIntentRef.current = false;
-            },
-            onError: (error) => {
-              console.error("Failed to create SetupIntent on Step 2:", error);
-              isCreatingSetupIntentRef.current = false;
-            },
-          });
+      const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+
+      if (isSubscription && !isCreatingSubscriptionRef.current) {
+        const currentPackageId = packageId || null;
+
+        // ✅ If user changed package, capture old subscription id for backend cancel, then clear state so we create a new one for the new package
+        if (
+          subscriptionCreatedRef.current &&
+          subscriptionPackageIdRef.current !== null &&
+          subscriptionPackageIdRef.current !== currentPackageId
+        ) {
+          previousSubscriptionToCancelRef.current = subscriptionCreatedRef.current;
+          setPaymentIntentClientSecret(null);
+          subscriptionCreatedRef.current = null;
+          subscriptionPackageIdRef.current = null;
+          try {
+            sessionStorage.removeItem(SUBSCRIPTION_CHECKOUT_STORAGE_KEY);
+          } catch {
+            // Ignore
+          }
         }
+
+        if (!paymentIntentClientSecret) {
+          try {
+            const stored = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(SUBSCRIPTION_CHECKOUT_STORAGE_KEY) : null;
+            const parsed = stored ? (JSON.parse(stored) as { subscriptionId?: string; invoicePaymentIntentClientSecret?: string | { client_secret?: string }; subscriptionRequestId?: string; ts?: number; packageId?: string }) : null;
+            const notStale = parsed?.ts && Date.now() - parsed.ts < SUBSCRIPTION_CHECKOUT_STALE_MS;
+            const storedPackageMatches = parsed?.packageId != null && parsed.packageId === currentPackageId;
+            const storedSecret = parsed?.invoicePaymentIntentClientSecret;
+            const secretStr = typeof storedSecret === "string" ? storedSecret : (storedSecret && typeof storedSecret === "object" && typeof (storedSecret as { client_secret?: string }).client_secret === "string" ? (storedSecret as { client_secret: string }).client_secret : null);
+            if (parsed?.subscriptionId && secretStr && notStale && storedPackageMatches) {
+              setPaymentIntentClientSecret(secretStr);
+              subscriptionCreatedRef.current = parsed.subscriptionId;
+              subscriptionPackageIdRef.current = currentPackageId;
+              return;
+            }
+          } catch {
+            // Ignore sessionStorage parse errors
+          }
+        }
+
+        if (!paymentIntentClientSecret) {
+          isCreatingSubscriptionRef.current = true;
+          setIsCreatingSubscription(true);
+          const subscriptionRequestId = crypto.randomUUID();
+          const cancelPreviousSubscriptionId = previousSubscriptionToCancelRef.current ?? undefined;
+          if (previousSubscriptionToCancelRef.current) previousSubscriptionToCancelRef.current = null;
+
+        const onSuccess = (res: { data?: { subscriptionId?: string; invoicePaymentIntentClientSecret?: string | { client_secret?: string }; clientSecret?: string | { client_secret?: string }; customerId?: string; userId?: string }; subscription?: { id?: string; clientSecret?: string }; success?: boolean }) => {
+          const subId = res?.data?.subscriptionId ?? res?.subscription?.id;
+          const rawSecret = res?.data?.invoicePaymentIntentClientSecret ?? res?.data?.clientSecret ?? (res as { subscription?: { clientSecret?: string } })?.subscription?.clientSecret;
+          const clientSecret = typeof rawSecret === "string" ? rawSecret : (rawSecret && typeof rawSecret === "object" && typeof (rawSecret as { client_secret?: string }).client_secret === "string" ? (rawSecret as { client_secret: string }).client_secret : null);
+          if (subId && clientSecret) {
+            setPaymentIntentClientSecret(clientSecret);
+            setSetupIntentClientSecret(null);
+            setCardFormError(null);
+            subscriptionCreatedRef.current = subId;
+            subscriptionPackageIdRef.current = packageId || null;
+            if (res?.data?.userId) userIdRef.current = res.data.userId;
+            try {
+              sessionStorage.setItem(
+                SUBSCRIPTION_CHECKOUT_STORAGE_KEY,
+                JSON.stringify({
+                  subscriptionId: subId,
+                  invoicePaymentIntentClientSecret: clientSecret,
+                  subscriptionRequestId,
+                  packageId: packageId || undefined,
+                  ts: Date.now(),
+                })
+              );
+            } catch {
+              // Ignore
+            }
+          }
+          isCreatingSubscriptionRef.current = false;
+          setIsCreatingSubscription(false);
+        };
+
+        const onError = () => {
+          isCreatingSubscriptionRef.current = false;
+          setIsCreatingSubscription(false);
+        };
+
+        if (isAuthenticated && userData) {
+          createSubscriptionExistingUser({
+            packageId: packageId || "",
+            subscriptionRequestId,
+            cancelPreviousSubscriptionId,
+            referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            affiliateCode: affiliateCode || undefined,
+            promoLinkCode: promoLinkCode || undefined,
+          })
+            .then((result) => result && onSuccess(result as never))
+            .catch(onError);
+        } else if (guestUserData && packageId) {
+          createSubscription({
+            userEmail: guestUserData.email,
+            firstName: guestUserData.firstName,
+            lastName: guestUserData.lastName,
+            mobile: guestUserData.mobile,
+            packageId,
+            subscriptionRequestId,
+            cancelPreviousSubscriptionId,
+            referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            affiliateCode: affiliateCode || undefined,
+            promoLinkCode: promoLinkCode || undefined,
+          })
+            .then((result) => result && onSuccess(result as never))
+            .catch(onError);
+        } else {
+          isCreatingSubscriptionRef.current = false;
+          setIsCreatingSubscription(false);
+        }
+        }
+      }
+    }
+
+    // One-time: ensure SetupIntent when Step 2 and no secrets yet
+    if (currentStep === 2 && hasCompletedRegistration && isActualPlan && !setupIntentClientSecret && !paymentIntentClientSecret && activePlan?.period !== "mo") {
+      if (!isCreatingSetupIntentRef.current) {
+        isCreatingSetupIntentRef.current = true;
+        createSetupIntent.mutate(undefined, {
+          onSuccess: (result) => {
+            if (result.success && result.client_secret) {
+              setSetupIntentClientSecret(result.client_secret);
+              setPaymentIntentClientSecret(null);
+              setCardFormError(null);
+            }
+            isCreatingSetupIntentRef.current = false;
+          },
+          onError: (error) => {
+            console.error("Failed to create SetupIntent on Step 2:", error);
+            isCreatingSetupIntentRef.current = false;
+          },
+        });
       }
     }
 
@@ -809,45 +930,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         return; // Already creating, skip to prevent duplicate API calls
       }
 
-      // ✅ STRIPE BEST PRACTICE: For subscriptions, do NOT create upfront PaymentIntent
-      // Subscriptions use invoice PaymentIntent created automatically by Stripe when subscription is created
-      // For payment method collection, use SetupIntent (shows $0.00 initially, but invoice PaymentIntent will be used after subscription creation)
+      // ✅ Option A: Subscription uses invoice PaymentIntent only – no SetupIntent
       if (isSubscription) {
-        // For subscriptions: Use SetupIntent for payment method collection
-        // The invoice PaymentIntent with correct amount will be provided after subscription creation
-        if (!setupIntentClientSecret && !paymentIntentClientSecret) {
-          // ✅ FIX: Prevent concurrent SetupIntent creation
-          if (isCreatingSetupIntentRef.current) {
-            return; // Already creating, prevent duplicate
-          }
-
-          // Mark as creating
-          isCreatingSetupIntentRef.current = true;
-
-          // Create SetupIntent for payment method collection
-          createSetupIntent.mutate(undefined, {
-            onSuccess: (result) => {
-              if (result.success && result.client_secret) {
-                setSetupIntentClientSecret(result.client_secret);
-                setPaymentIntentClientSecret(null); // Clear any PaymentIntent
-                setCardFormError(null);
-                // ✅ FIX: Removed redundant setShowCardForm(true) - showCardForm is already true when this effect runs
-              }
-              // ✅ FIX: Reset flag after successful creation
-              isCreatingSetupIntentRef.current = false;
-            },
-            onError: (error) => {
-              console.error("Failed to create SetupIntent:", error);
-              setCardFormError("Failed to set up payment form. Please try again.");
-              // ✅ FIX: Reset flag on error so user can retry
-              isCreatingSetupIntentRef.current = false;
-            },
-          });
-        }
-        // Clear any existing PaymentIntent for subscriptions (we use SetupIntent for collection, invoice PaymentIntent after creation)
-        if (paymentIntentClientSecret) {
-          setPaymentIntentClientSecret(null);
-        }
+        // Subscription flow: paymentIntentClientSecret comes from create-subscription (or sessionStorage). Do not create SetupIntent; do not clear paymentIntentClientSecret.
         return;
       }
 
@@ -1165,8 +1250,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         // Show card form by default for new users
         setShowCardForm(true);
 
-        // ✅ STRIPE BEST PRACTICE: For subscriptions, use SetupIntent (subscription will create PaymentIntent)
-        // For one-time purchases, use PaymentIntent (shows amount in wallets)
+        // ✅ Option A: Subscription uses invoice PaymentIntent only (no SetupIntent). Effect on step 2 will call create-subscription.
+        // One-time: create PaymentIntent here so Payment Element shows correct amount.
         const isSubscription = activePlan?.period === "mo";
         const amountInCents = Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100);
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
@@ -1174,18 +1259,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
         try {
           if (isSubscription) {
-            // ✅ STRIPE BEST PRACTICE: For subscriptions, use SetupIntent for payment method collection
-            // The invoice PaymentIntent with correct amount will be provided after subscription creation
-            // SetupIntent shows $0.00 initially, but invoice PaymentIntent will show correct amount after subscription creation
-            const setupResult = await createSetupIntent.mutateAsync();
-
-            if (setupResult.success && setupResult.client_secret) {
-              setSetupIntentClientSecret(setupResult.client_secret);
-              setPaymentIntentClientSecret(null); // Clear PaymentIntent - invoice PaymentIntent will be used after subscription creation
-              setCardFormError(null); // Clear any previous errors
-            } else {
-              throw new Error(setupResult.error || "Failed to create SetupIntent");
-            }
+            // Do NOT create SetupIntent for subscription. Effect when currentStep === 2 will call create-subscription (no paymentMethodId) and set paymentIntentClientSecret.
+            setCardFormError(null);
           } else if (amountInCents > 0) {
             // For one-time purchases: Use PaymentIntent (shows correct amount in wallets)
             const paymentResult = await createPaymentIntent.mutateAsync({
@@ -1489,34 +1564,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       const packageName = promoEnhancedPlan?.name || activePlan?.name;
 
       if (isSubscription) {
-        // ✅ FIX: Ensure SetupIntent is created when user explicitly adds payment method on Step 2
-        // Now always create a new SetupIntent when user clicks "Add New Payment Method"
-        if (currentStep === 2) {
-          // Prevent concurrent creation
-          if (!isCreatingSetupIntentRef.current) {
-            isCreatingSetupIntentRef.current = true;
-            createSetupIntent.mutate(undefined, {
-              onSuccess: (result) => {
-                if (result.success && result.client_secret) {
-                  setSetupIntentClientSecret(result.client_secret);
-                  setPaymentIntentClientSecret(null);
-                  setCardFormError(null);
-                }
-                isCreatingSetupIntentRef.current = false;
-              },
-              onError: (error) => {
-                console.error("Failed to create SetupIntent:", error);
-                setCardFormError("Failed to set up payment form. Please try again.");
-                isCreatingSetupIntentRef.current = false;
-              },
-            });
-          }
-        }
-
-        // ✅ REMOVED: Upfront PaymentIntent creation for subscriptions
-        // Subscriptions now use invoice PaymentIntent from subscription creation response
-        // The invoice PaymentIntent has the correct amount and will be provided when subscription is created
-        // For now, just show the card form - PaymentIntent will come from subscription creation
+        // ✅ Option A: Do NOT create SetupIntent for subscription. Use invoice PaymentIntent only (from create-subscription effect on step 2).
+        // If paymentIntentClientSecret is not set yet, the step-2 effect will call create-subscription and set it.
         setUseSavedPaymentMethod(false);
         setSelectedPaymentMethod(null);
         setShowCardForm(true);
@@ -1987,8 +2036,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     subscriptionId?: string;
     status?: string;
     paymentIntentStatus?: string;
+    paymentIntentId?: string;
   }) => {
-    // Payment confirmation state removed - handled directly in handleSubmit
+    const effectivePaymentIntentId = data?.paymentIntentId ?? paymentIntentId;
 
     // Check if this is a new user registration
     if (data?.user) {
@@ -2045,7 +2095,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             // CRITICAL FIX: Create local variable to avoid React state closure issue
             let contextToPass: OriginalPurchaseContext | null = null;
 
-            if (paymentIntentId) {
+            if (effectivePaymentIntentId) {
               const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
               const entriesCount = activePlan.metadata?.entriesCount || 0;
               const packageType = activePlan.period === "mo" ? "membership" : "one-time";
@@ -2070,7 +2120,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
               // Create context object in local variable to pass directly (avoids closure issue)
               contextToPass = {
-                paymentIntentId,
+                paymentIntentId: effectivePaymentIntentId,
                 packageId: packageId || "",
                 packageName: activePlan.name,
                 packageType,
@@ -2209,7 +2259,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // CRITICAL FIX: Create local variable to avoid React state closure issue
       let contextToPass: OriginalPurchaseContext | null = null;
 
-      if (paymentIntentId && activePlan.period === "one-time") {
+      if (effectivePaymentIntentId && activePlan.period === "one-time") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
         
         // Get base entries for upsell calculation
@@ -2231,7 +2281,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {
-          paymentIntentId,
+          paymentIntentId: effectivePaymentIntentId,
           packageId: packageId || "",
           packageName: activePlan.name,
           packageType: "one-time",
@@ -2243,7 +2293,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);
         // console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
-      } else if (paymentIntentId && activePlan.period === "mo") {
+      } else if (effectivePaymentIntentId && activePlan.period === "mo") {
         const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
         
         // Get base entries for upsell calculation
@@ -2265,7 +2315,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {
-          paymentIntentId,
+          paymentIntentId: effectivePaymentIntentId,
           packageId: packageId || "",
           packageName: activePlan.name,
           packageType: "membership",
@@ -2447,6 +2497,62 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         }
       }
 
+      // ✅ Option A: Subscription with invoice PaymentIntent – confirm client-side only; no confirm-subscription-payment
+      if (
+        activePlan.period === "mo" &&
+        subscriptionCreatedRef.current &&
+        paymentIntentClientSecret &&
+        cardFormRef.current
+      ) {
+        const result = await cardFormRef.current.confirmStripeIntent();
+        if (result.error) {
+          await handlePaymentError(result.error, {
+            preserveState: true,
+            packageId: packageId || "",
+            packageName: activePlan.name,
+          });
+          throw new Error(result.error);
+        }
+        if (result.paymentIntentId) {
+          // Succeeded – use original purchase success flow (in-modal success, auto-login, showSuccess, onClose)
+          setPaymentIntentId(result.paymentIntentId);
+          try {
+            sessionStorage.removeItem(SUBSCRIPTION_CHECKOUT_STORAGE_KEY);
+          } catch {
+            // Ignore
+          }
+          const userId = userIdRef.current || guestUserData?.userId;
+          const isNewUser = !!userId && !isAuthenticated;
+          const successData: Parameters<typeof handlePaymentSuccess>[0] = isNewUser
+            ? {
+                paymentIntentId: result.paymentIntentId,
+                user: {
+                  id: userId,
+                  email: guestUserData?.email || "",
+                  firstName: guestUserData?.firstName ?? "",
+                  lastName: guestUserData?.lastName ?? "",
+                  role: "user",
+                  subscription: { packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "", isActive: true, status: "active" },
+                  entryWallet: 0,
+                  rewardsPoints: 0,
+                },
+                subscriptionId: subscriptionCreatedRef.current || undefined,
+                status: "active",
+                paymentIntentStatus: "succeeded",
+              }
+            : {
+                paymentIntentId: result.paymentIntentId,
+                subscriptionId: subscriptionCreatedRef.current || undefined,
+                status: "active",
+                paymentIntentStatus: "succeeded",
+              };
+          await handlePaymentSuccess(successData);
+          return;
+        }
+        // 3DS redirect will happen – Stripe redirects to return_url; no further action here
+        return;
+      }
+
       // Determine payment method to use
       let paymentMethodId: string;
       let isNewPaymentMethod = false;
@@ -2470,13 +2576,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hasPaymentIntent: !!paymentIntentClientSecret,
             subscriptionExists: !!subscriptionCreatedRef.current, // ✅ Log if subscription already exists
           });
-          const result = await cardFormRef.current.confirmSetup();
+          const result = await cardFormRef.current.confirmStripeIntent();
           
           // ✅ CRITICAL: Log paymentMethodId extraction for debugging retry scenarios
           if (result.paymentMethodId) {
             console.log("✅ PaymentMethodId extracted from SetupIntent:", result.paymentMethodId);
           } else {
-            console.warn("⚠️ No paymentMethodId in confirmSetup result - this may cause issues on retry");
+            console.warn("⚠️ No paymentMethodId in confirmStripeIntent result - this may cause issues on retry");
           }
 
           // ✅ CRITICAL: Handle SetupIntent that already succeeded - create new SetupIntent for new card
@@ -2501,7 +2607,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   
                   // Retry confirmation with new SetupIntent
                   if (cardFormRef.current) {
-                    const retryResult = await cardFormRef.current.confirmSetup();
+                    const retryResult = await cardFormRef.current.confirmStripeIntent();
                     if (retryResult.error) {
                       await handlePaymentError(retryResult.error, {
                         preserveState: true,
@@ -2555,7 +2661,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               
               // Retry confirmation with new SetupIntent
               if (cardFormRef.current) {
-                const retryResult = await cardFormRef.current.confirmSetup();
+                const retryResult = await cardFormRef.current.confirmStripeIntent();
                 if (retryResult.error) {
                   // Recovery succeeded but retry failed - show error with state preserved
                   await handlePaymentError(retryResult.error, {
@@ -2648,7 +2754,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   
                   // Retry the confirmation with the new PaymentIntent
                   console.log("🔄 Retrying payment confirmation with new PaymentIntent...");
-                  const retryResult = await cardFormRef.current.confirmSetup();
+                  const retryResult = await cardFormRef.current.confirmStripeIntent();
                   
                   if (retryResult.error) {
                     throw new Error(retryResult.error);
@@ -2706,7 +2812,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         } else if (hasClientSecret && cardFormRef.current) {
           // ✅ FIX: If we have a client secret but showCardForm is false, try to confirm anyway
           console.log("💳 Attempting to confirm with client secret even though showCardForm is false");
-          const result = await cardFormRef.current.confirmSetup();
+          const result = await cardFormRef.current.confirmStripeIntent();
 
           // ✅ STRIPE BEST PRACTICE: Handle canceled SetupIntent - automatic recovery (second occurrence)
           // Only canceled SetupIntents need recovery (requires_payment_method with last_setup_error is still valid)
@@ -2727,7 +2833,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               
               // Retry confirmation with new SetupIntent
               if (cardFormRef.current) {
-                const retryResult = await cardFormRef.current.confirmSetup();
+                const retryResult = await cardFormRef.current.confirmStripeIntent();
                 if (retryResult.error) {
                   // Recovery succeeded but retry failed - show error with state preserved
                   await handlePaymentError(retryResult.error, {
@@ -2820,7 +2926,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   
                   // Retry the confirmation with the new PaymentIntent
                   console.log("🔄 Retrying payment confirmation with new PaymentIntent...");
-                  const retryResult = await cardFormRef.current.confirmSetup();
+                  const retryResult = await cardFormRef.current.confirmStripeIntent();
                   
                   if (retryResult.error) {
                     throw new Error(retryResult.error);
@@ -3429,21 +3535,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         // ✅ STRIPE BEST PRACTICE: Check if subscription was already created to prevent duplicate creation
         // Use ref to track subscription creation (more reliable than checking paymentIntentId format)
         // ✅ CRITICAL: Even if subscription exists, we still need to confirm the new SetupIntent to get the new paymentMethodId
-        // The paymentMethodId from confirmSetup() above (line 2481) should already be extracted, but we verify it's available
+        // The paymentMethodId from confirmStripeIntent() above should already be extracted, but we verify it's available
         if (activePlan.period === "mo" && subscriptionCreatedRef.current) {
           // Subscription was already created - skip duplicate creation
           console.log("✅ Subscription already created, skipping duplicate creation:", subscriptionCreatedRef.current);
           console.log("💳 Current paymentMethodId from SetupIntent:", paymentMethodId);
           
           // ✅ CRITICAL: Ensure paymentMethodId is available from the new SetupIntent confirmation
-          // If paymentMethodId is not set, it means confirmSetup() was skipped - try to call it now
+          // If paymentMethodId is not set, it means confirmStripeIntent() was skipped - try to call it now
           if (!paymentMethodId) {
-            console.warn("⚠️ paymentMethodId is missing - confirmSetup() may have been skipped. Attempting to confirm now...");
+            console.warn("⚠️ paymentMethodId is missing - confirmStripeIntent() may have been skipped. Attempting to confirm now...");
             
             // Try to confirm SetupIntent if we have a client secret and card form
             if ((showCardForm || setupIntentClientSecret || paymentIntentClientSecret) && cardFormRef.current) {
               try {
-                const retryResult = await cardFormRef.current.confirmSetup();
+                const retryResult = await cardFormRef.current.confirmStripeIntent();
                 if (retryResult.paymentMethodId) {
                   paymentMethodId = retryResult.paymentMethodId;
                   console.log("✅ Successfully extracted paymentMethodId on retry:", paymentMethodId);
@@ -3458,7 +3564,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 throw new Error("Payment method confirmation failed. Please enter your card details again.");
               }
             } else {
-              console.error("❌ Cannot retry confirmSetup() - missing client secret or card form");
+              console.error("❌ Cannot retry confirmStripeIntent() - missing client secret or card form");
               throw new Error("Payment method confirmation failed. Please enter your card details again.");
             }
           }
@@ -4519,8 +4625,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       cardFormRef={cardFormRef}
                       onCardElementChange={handleCardElementChange}
                       cardFormError={cardFormError}
-                      isCreatingSetupIntent={createSetupIntent.isPending}
+                    isCreatingSetupIntent={createSetupIntent.isPending}
                     isCreatingPaymentIntent={createPaymentIntent.isPending}
+                    isCreatingSubscription={isCreatingSubscription}
+                    onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
                     billingDetails={resolvedBillingDetails}
                     amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                     packageName={promoEnhancedPlan?.name || activePlan?.name}
@@ -4547,7 +4655,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       onCardElementChange={handleCardElementChange}
                       cardFormError={cardFormError}
                       isCreatingSetupIntent={createSetupIntent.isPending}
-                      isCreatingPaymentIntent={createPaymentIntent.isPending}
+                    isCreatingPaymentIntent={createPaymentIntent.isPending}
+                    isCreatingSubscription={isCreatingSubscription}
+                    onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
                       billingDetails={resolvedBillingDetails}
                       amount={Math.round((promoEnhancedPlan?.price || activePlan?.price || 0) * 100)}
                       packageName={promoEnhancedPlan?.name || activePlan?.name}
@@ -4622,9 +4732,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   )}
 
                   {/* Purchase Button - Moved above Selected Package for better UX */}
+                  {/* Option A (wallet UX): when Google Pay or Apple Pay is selected, hide main Purchase and show instruction to click wallet button in form */}
                   {!activePlan || activePlan.id === "placeholder" ? (
                     // Payment Button Skeleton
                     <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                  ) : (paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay" || paymentMethodTypeFromElement === "apple_pay" || paymentMethodTypeFromElement === "applePay") ? (
+                    <div className="rounded-lg sm:rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4 text-center">
+                      <p className="text-sm font-medium text-amber-900">
+                        To pay with {(paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay") ? "Google Pay" : "Apple Pay"}, click the{" "}
+                        {(paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay") ? "Google Pay" : "Apple Pay"} button in the payment form above—do not use a separate Purchase button.
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        This keeps your payment secure and avoids browser restrictions.
+                      </p>
+                    </div>
                   ) : (
                     <Button
                       type="button"

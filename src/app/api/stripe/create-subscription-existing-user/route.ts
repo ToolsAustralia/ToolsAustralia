@@ -8,18 +8,25 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getInvoicePaymentIntentFromSubscription } from "@/utils/payment/stripe/invoice-payment-intent";
-import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Klaviyo integration handled by webhook for best practices
+
+const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
+  windowMs: 60 * 1000,
+  maxRequests: 20,
+});
 
 const createSubscriptionExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
-  paymentMethodId: z.string().min(1, "Payment method is required"),
-  idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate subscription creation
+  paymentMethodId: z.string().optional(), // Optional for Option A: first payment uses invoice PaymentIntent only
+  subscriptionRequestId: z.string().uuid().optional(),
+  idempotencyKey: z.string().optional(),
+  cancelPreviousSubscriptionId: z.string().optional(), // When user switches package: cancel this incomplete subscription before creating new one
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
 });
@@ -29,17 +36,43 @@ const createSubscriptionExistingUserSchema = z.object({
  * Create a new Stripe subscription for an existing logged-in user
  */
 export async function POST(request: NextRequest) {
+  let correlationId: string | undefined;
+
   try {
     await connectDB();
 
-    // Get the authenticated user session
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     const body = await request.json();
+    correlationId =
+      (body as { subscriptionRequestId?: string })?.subscriptionRequestId ??
+      request.headers.get("x-correlation-id") ??
+      undefined;
+
+    // Rate limiting
+    const clientIp = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null;
+    const identifier = getClientIdentifier(clientIp, request.headers.get("x-forwarded-for"));
+    const rateLimitResult = createSubscriptionExistingUserRateLimiter.check(identifier);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many requests",
+          details: "Please try again later.",
+          retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+          ...(correlationId && { correlationId }),
+        },
+        { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) } }
+      );
+    }
+
     const validatedData = createSubscriptionExistingUserSchema.parse(body);
+
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    const requestContext = extractRequestContext(request);
 
     // console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
 
@@ -76,67 +109,72 @@ export async function POST(request: NextRequest) {
       await existingUser.save();
     }
 
-    // Handle payment method creation following Stripe best practices
-    const finalPaymentMethodId = validatedData.paymentMethodId;
+    // Cancel previous incomplete subscription when user switched package (plan switch mid-checkout)
+    if (validatedData.cancelPreviousSubscriptionId) {
+      try {
+        const prevSub = await stripe.subscriptions.retrieve(validatedData.cancelPreviousSubscriptionId);
+        const status = prevSub.status;
+        if (status === "incomplete" || status === "incomplete_expired") {
+          const subCustomerId = typeof prevSub.customer === "string" ? prevSub.customer : prevSub.customer?.id;
+          if (subCustomerId === stripeCustomerId) {
+            await stripe.subscriptions.cancel(validatedData.cancelPreviousSubscriptionId);
+            if (correlationId) {
+              console.log("[create-subscription-existing-user] cancelled previous incomplete subscription (plan switch)", {
+                correlationId,
+                cancelledSubscriptionId: validatedData.cancelPreviousSubscriptionId,
+              });
+            }
+          }
+        }
+      } catch (cancelErr) {
+        if (correlationId) {
+          console.warn("[create-subscription-existing-user] cancel previous subscription failed (non-fatal)", {
+            correlationId,
+            cancelPreviousSubscriptionId: validatedData.cancelPreviousSubscriptionId,
+            error: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+          });
+        }
+      }
+    }
 
-    // Payment method should already be created via SetupIntent
-    // If we receive "new_payment_method", it means the frontend didn't complete the setup
-    if (validatedData.paymentMethodId === "new_payment_method") {
+    const finalPaymentMethodId = validatedData.paymentMethodId ?? undefined;
+    const hasPaymentMethod = Boolean(
+      finalPaymentMethodId && finalPaymentMethodId !== "new_payment_method"
+    );
+
+    if (finalPaymentMethodId === "new_payment_method") {
       return NextResponse.json(
         {
           success: false,
           error: "Payment method not properly set up. Please complete card details first.",
+          ...(correlationId && { correlationId }),
         },
         { status: 400 }
       );
     }
 
-    // ✅ CRITICAL FIX: Ensure payment method is attached and set as default BEFORE creating subscription
-    // This prevents "No payment method found" errors when confirming subscription payment
-    // DO NOT save payment method to user database here - it will only be saved AFTER payment succeeds (via webhook)
-    // This prevents saving payment methods when payments fail due to insufficient funds
-    try {
-      // ✅ ENHANCED: Verify payment method exists and is properly attached
-      const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
-      const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer?.id;
-      
-      // ✅ ENHANCED: Ensure payment method is attached to customer (idempotent check)
-      if (!pmCustomerId || pmCustomerId !== stripeCustomerId) {
-        await stripe.paymentMethods.attach(finalPaymentMethodId, {
-          customer: stripeCustomerId,
+    if (hasPaymentMethod && finalPaymentMethodId) {
+      try {
+        const paymentMethod = await stripe.paymentMethods.retrieve(finalPaymentMethodId);
+        const pmCustomerId = typeof paymentMethod.customer === "string" ? paymentMethod.customer : paymentMethod.customer?.id;
+        if (!pmCustomerId || pmCustomerId !== stripeCustomerId) {
+          await stripe.paymentMethods.attach(finalPaymentMethodId, { customer: stripeCustomerId });
+        }
+        await stripe.customers.update(stripeCustomerId, {
+          invoice_settings: { default_payment_method: finalPaymentMethodId },
         });
-        console.log(`✅ Attached payment method ${finalPaymentMethodId} to customer ${stripeCustomerId} before subscription creation`);
+      } catch (pmError) {
+        console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Payment method setup failed",
+            details: "Unable to attach payment method to customer. Please try again or use a different payment method.",
+            ...(correlationId && { correlationId }),
+          },
+          { status: 400 }
+        );
       }
-      
-      // ✅ ENHANCED: Set as default payment method and verify it was set
-      await stripe.customers.update(stripeCustomerId, {
-        invoice_settings: {
-          default_payment_method: finalPaymentMethodId,
-        },
-      });
-      
-      // ✅ ENHANCED: Verify default payment method was set correctly
-      const updatedCustomer = await stripe.customers.retrieve(stripeCustomerId);
-      const defaultPm = (updatedCustomer as { invoice_settings?: { default_payment_method?: string } })
-        .invoice_settings?.default_payment_method;
-      
-      if (defaultPm !== finalPaymentMethodId) {
-        console.warn(`⚠️ Default payment method may not have been set correctly. Expected: ${finalPaymentMethodId}, Got: ${defaultPm}`);
-      } else {
-        console.log(`✅ Verified default payment method ${finalPaymentMethodId} is set for customer ${stripeCustomerId}`);
-      }
-    } catch (pmError) {
-      console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
-      // ✅ ENHANCED: Return clear error before subscription creation if payment method can't be attached
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Payment method setup failed",
-          details: "Unable to attach payment method to customer. Please try again or use a different payment method.",
-          suggestion: "Please refresh the page and try again, or contact support if the issue persists.",
-        },
-        { status: 400 }
-      );
     }
 
     // ✅ STRIPE BEST PRACTICE: Use existing Product/Price IDs from membership package
@@ -157,73 +195,38 @@ export async function POST(request: NextRequest) {
     const stripePriceId = membershipPackage.stripePriceId;
     // console.log(`💰 Using Stripe Price: ${stripePriceId} ($${membershipPackage.price}/month)`);
 
-    // ✅ DEDUPLICATION: Cancel any old upfront PaymentIntents for backward compatibility
-    // This handles any leftover upfront PaymentIntents from previous implementation
-    // Note: New implementation doesn't create upfront PaymentIntents, so this is mainly for cleanup
-    try {
-      const existingPaymentIntents = await stripe.paymentIntents.list({
-        customer: stripeCustomerId,
-        limit: 100, // Get recent PaymentIntents
-      });
-
-      // Filter for old upfront PaymentIntents that are cancellable
-      const oldUpfrontPaymentIntents = existingPaymentIntents.data.filter((pi) => {
-        const isUpfrontPayment = pi.metadata?.isUpfrontPayment === "true";
-        const isCancellable = [
-          "requires_payment_method",
-          "requires_confirmation",
-          "requires_action",
-          "requires_capture",
-          "processing",
-        ].includes(pi.status);
-        const isNotSucceeded = pi.status !== "succeeded";
-        const isNotCanceled = pi.status !== "canceled";
-        
-        // Only cancel old upfront PaymentIntents (for backward compatibility)
-        return isUpfrontPayment && isCancellable && isNotSucceeded && isNotCanceled;
-      });
-
-      // Cancel old upfront PaymentIntents
-      for (const oldPI of oldUpfrontPaymentIntents) {
-        try {
-          await stripe.paymentIntents.cancel(oldPI.id);
-          console.log(`✅ Cancelled old upfront PaymentIntent ${oldPI.id} (backward compatibility cleanup)`);
-        } catch (cancelError) {
-          console.warn(`⚠️ Could not cancel old upfront PaymentIntent ${oldPI.id}: ${cancelError}`);
-        }
-      }
-
-      if (oldUpfrontPaymentIntents.length > 0) {
-        console.log(`✅ Deduplication: Cancelled ${oldUpfrontPaymentIntents.length} old upfront PaymentIntent(s) for customer ${stripeCustomerId}`);
-      }
-    } catch (dedupError) {
-      console.warn(`⚠️ Deduplication check failed (non-critical): ${dedupError}`);
-      // Continue - deduplication failure shouldn't block subscription creation
-    }
-
-    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
-    // Use customer ID + package ID for stable idempotency (not Date.now())
+    // Idempotency: use subscriptionRequestId when provided (Option A)
     const idempotencyKey =
-      validatedData.idempotencyKey || `sub_${validatedData.packageId}_${stripeCustomerId}_${existingUser.email}`;
+      validatedData.subscriptionRequestId ??
+      validatedData.idempotencyKey ??
+      `sub_${validatedData.packageId}_${stripeCustomerId}_${existingUser.email}`;
 
     const anchorParams = getSubscriptionCreateParamsForAnchor(new Date());
     const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
 
+    const userIdForMetadata = existingUser._id?.toString() ?? "";
     const baseMetadata = {
       packageId: validatedData.packageId,
       packageName: membershipPackage.name,
       userEmail: existingUser.email,
+      ...(validatedData.subscriptionRequestId && { subscriptionRequestId: validatedData.subscriptionRequestId }),
+      ...(userIdForMetadata && { userId: userIdForMetadata }),
+      ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+                                                                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+      ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+      ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+      ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
     };
 
     const createPayload: Stripe.SubscriptionCreateParams = {
       customer: stripeCustomerId,
       items: [{ price: stripePriceId }],
-      default_payment_method: finalPaymentMethodId,
+      ...(hasPaymentMethod && finalPaymentMethodId ? { default_payment_method: finalPaymentMethodId } : {}),
       payment_behavior: "default_incomplete",
-      expand: ["latest_invoice.payment_intent"],
+      expand: ["latest_invoice.confirmation_secret"],
       description: `${membershipPackage.name}`,
       collection_method: "charge_automatically",
       metadata: baseMetadata as Stripe.MetadataParam,
@@ -234,12 +237,26 @@ export async function POST(request: NextRequest) {
       throw new Error("Anchor billing requires charge_automatically");
     }
 
+    if (correlationId) {
+      console.log("[create-subscription-existing-user] subscription create start", {
+        correlationId,
+        customerId: stripeCustomerId,
+        packageId: validatedData.packageId,
+      });
+    }
+
     const subscription = await stripe.subscriptions.create(
       createPayload,
-      {
-        idempotencyKey: idempotencyKey,
-      }
+      { idempotencyKey }
     );
+
+    if (correlationId) {
+      console.log("[create-subscription-existing-user] subscription created", {
+        correlationId,
+        subscriptionId: subscription.id,
+        subscriptionStatus: subscription.status,
+      });
+    }
 
     // Update user subscription info immediately but NO initial benefit allocation
     // console.log(
@@ -290,162 +307,57 @@ export async function POST(request: NextRequest) {
     });
     // console.log(`✅ User subscription saved to database: packageId=${existingUser.subscription.packageId}`);
 
-    // ✅ Get PaymentIntent from subscription's invoice using utility function
-    // This handles retry logic and proper detection of Stripe-created PaymentIntent
-    // ✅ NON-BLOCKING: PaymentIntent retrieval failure should not block subscription creation
-    const paymentIntentResult = await getInvoicePaymentIntentFromSubscription(subscription, subscription.id);
+    // Stripe: use subscription.latest_invoice.confirmation_secret (expand: ["latest_invoice.confirmation_secret"])
+    const latestInvoice = subscription.latest_invoice;
+    const rawConfirmationSecret =
+      typeof latestInvoice === "object" && latestInvoice !== null && "confirmation_secret" in latestInvoice
+        ? (latestInvoice as Stripe.Invoice & { confirmation_secret?: string | { client_secret?: string; type?: string } | null }).confirmation_secret
+        : undefined;
 
-    // ✅ IMPROVED ERROR HANDLING: Log detailed error but continue with subscription creation
-    if (!paymentIntentResult.success && paymentIntentResult.error) {
-      const invoiceId = paymentIntentResult.invoice?.id || "unknown";
-      console.error(`❌ Failed to get invoice PaymentIntent for subscription ${subscription.id}:`, {
-        subscriptionId: subscription.id,
-        invoiceId: invoiceId,
-        error: paymentIntentResult.error,
-        invoiceStatus: paymentIntentResult.invoice?.status,
-        hasInvoice: !!paymentIntentResult.invoice,
-        userEmail: existingUser.email,
-      });
-      // Continue - subscription creation succeeded, PaymentIntent retrieval can be retried later
-    }
+    // Log what we got from the invoice (for debugging)
+    console.log("[create-subscription-existing-user] latest_invoice.confirmation_secret (raw)", {
+      subscriptionId: subscription.id,
+      hasRaw: rawConfirmationSecret != null,
+      rawType: typeof rawConfirmationSecret,
+      rawKeys: typeof rawConfirmationSecret === "object" && rawConfirmationSecret !== null ? Object.keys(rawConfirmationSecret) : undefined,
+    });
 
-    let paymentIntent: Stripe.PaymentIntent | string | null | undefined = paymentIntentResult.paymentIntent;
-    let latestInvoice = paymentIntentResult.invoice;
-
-    // ✅ CRITICAL: If invoice is "open" but has no PaymentIntent, create one manually as last resort
-    // This should rarely happen - Stripe usually creates PaymentIntent automatically
-    // Only create if absolutely necessary (after retries failed)
-    if (!paymentIntent && latestInvoice && latestInvoice.status === "open") {
-      try {
-        // ✅ SAFETY: Final check - retrieve invoice one more time before manual creation
-        // This prevents creating duplicate PaymentIntents if Stripe created one asynchronously
-        if (!latestInvoice.id) {
-          throw new Error("Invoice ID is missing - cannot perform final check");
-        }
-        const finalCheckInvoice = await stripe.invoices.retrieve(latestInvoice.id, {
-          expand: ["subscription", "payment_intent", "charge"],
-        });
-
-        const finalCheckWithPaymentIntent = finalCheckInvoice as Stripe.Invoice & {
-          payment_intent?: Stripe.PaymentIntent | string;
-        };
-
-        // If PaymentIntent found in final check, use it instead of creating manual
-        if (finalCheckWithPaymentIntent.payment_intent) {
-          paymentIntent = finalCheckWithPaymentIntent.payment_intent;
-          const paymentIntentId =
-            typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id;
-          console.log(
-            `✅ Found PaymentIntent in final check: ${paymentIntentId} for subscription ${subscription.id}`
-          );
-          // Update latestInvoice to use the fresh invoice data
-          latestInvoice = finalCheckInvoice;
-        } else {
-          // Only now create manual PaymentIntent as true last resort
-          const invoiceAmount = latestInvoice.amount_due || Math.round(membershipPackage.price * 100);
-          const invoiceCurrency = (latestInvoice.currency as string) || "aud";
-
-          console.log(
-            `⚠️ Invoice is open but has no PaymentIntent after final check. Creating PaymentIntent for amount: ${invoiceAmount} (invoice amount_due: ${
-              latestInvoice.amount_due
-            }, package price: ${Math.round(membershipPackage.price * 100)})`
-          );
-
-          // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
-          const invoicePaymentIntentIdempotencyKey = `pi_invoice_${latestInvoice.id || subscription.id}_${Date.now()}`;
-
-          // ✅ FIX: Do NOT set payment_method here - let PaymentElement collect it from user (wallet or card)
-          // Setting payment_method causes errors if it was used in upfront PaymentIntent without attachment
-          // ✅ Use centralized PaymentIntent configuration with 3DS support
-          const paymentIntentConfig = createPaymentIntentConfig({
-            amount: invoiceAmount,
-            currency: invoiceCurrency,
-            customer: stripeCustomerId,
-            confirm: false,
-            paymentType: "subscription",
-            description: membershipPackage.name,
-            setupFutureUsage: "off_session",
-            metadata: {
-                invoice_id: latestInvoice.id || "",
-                subscription_id: subscription.id,
-                packageId: validatedData.packageId,
-                packageName: membershipPackage.name,
-                userEmail: existingUser.email,
-                type: "subscription",
-                packageType: "membership",
-                isUpfrontPayment: "false", // ✅ CRITICAL: Mark as invoice PaymentIntent (the one that should be authorized)
-                isInvoicePaymentIntent: "true", // ✅ Additional marker for clarity
-                ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-                ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-            },
-          });
-
-          const newPaymentIntent = await stripe.paymentIntents.create(
-            paymentIntentConfig,
-            {
-              idempotencyKey: invoicePaymentIntentIdempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-            }
-          );
-
-          if (latestInvoice.id) {
-            await stripe.invoices.update(latestInvoice.id, {
-              metadata: {
-                ...(latestInvoice.metadata || {}),
-                payment_intent_id: newPaymentIntent.id,
-              },
-            });
-          }
-
-          paymentIntent = newPaymentIntent;
-          console.log(`✅ Created PaymentIntent: ${newPaymentIntent.id} for invoice ${latestInvoice.id}`);
-        }
-      } catch (createError) {
-        console.error("❌ Failed to create PaymentIntent for invoice:", createError);
-      }
-    }
-
-    // Extract client_secret from PaymentIntent
+    // Stripe may return confirmation_secret as a string or as { client_secret, type }; always return a string for Elements
     let clientSecret: string | null = null;
-    if (paymentIntent) {
-      if (typeof paymentIntent === "string") {
-        try {
-          const retrievedPI = await stripe.paymentIntents.retrieve(paymentIntent);
-          clientSecret = retrievedPI.client_secret || null;
-        } catch (retrieveError) {
-          console.error("❌ Failed to retrieve PaymentIntent:", retrieveError);
-        }
-      } else {
-        clientSecret = paymentIntent.client_secret || null;
-      }
+    if (typeof rawConfirmationSecret === "string") {
+      clientSecret = rawConfirmationSecret;
+    } else if (rawConfirmationSecret && typeof rawConfirmationSecret === "object" && "client_secret" in rawConfirmationSecret) {
+      const cs = (rawConfirmationSecret as { client_secret?: string }).client_secret;
+      clientSecret = typeof cs === "string" ? cs : null;
     }
 
-    // ✅ Klaviyo integration handled by webhook for reliability and best practices
-    // console.log(`📊 Klaviyo events will be tracked via webhook when payment is confirmed`);
-
-    // console.log(`✅ Subscription created successfully for user: ${existingUser.email}`);
-    // console.log(`📦 Package: ${membershipPackage.name} ($${membershipPackage.price})`);
-    // console.log(`⏳ Entries/points will be added via webhook upon first payment confirmation`);
-    // console.log(`🔒 Subscription status: ${subscription.status} - benefits will activate on payment`);
-
-    // ✅ Referral processing moved to webhook (after payment succeeds)
-    // Referral code is stored in subscription metadata and processed by webhook
-
-    // ✅ GRACEFUL DEGRADATION: Include warning if PaymentIntent retrieval failed
-    const warning = !clientSecret && !paymentIntentResult.success
-      ? "PaymentIntent retrieval delayed. Payment confirmation may require retry. Subscription created successfully."
-      : undefined;
+    if (!clientSecret) {
+      console.error("❌ No confirmation_secret (string or client_secret) on subscription latest_invoice", {
+        subscriptionId: subscription.id,
+        hasLatestInvoice: !!latestInvoice,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment setup is still in progress. Please try again in a moment.",
+        },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       subscription: {
         id: subscription.id,
         status: subscription.status,
-        clientSecret: clientSecret || undefined, // ✅ Return PaymentIntent client_secret for wallet display
+        clientSecret: clientSecret || undefined,
+        invoicePaymentIntentClientSecret: clientSecret || undefined,
       },
       data: {
         subscriptionId: subscription.id,
-        clientSecret: clientSecret || undefined, // ✅ Also return in data for consistency
-        ...(warning && { warning }), // Include warning if PaymentIntent retrieval failed
+        customerId: stripeCustomerId,
+        invoicePaymentIntentClientSecret: clientSecret || undefined,
+        clientSecret: clientSecret || undefined,
       },
       user: {
         id: existingUser._id,
@@ -500,13 +412,22 @@ export async function POST(request: NextRequest) {
       });
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Validation failed", details: error.issues }, { status: 400 });
+      return NextResponse.json(
+        { error: "Validation failed", details: error.issues, ...(correlationId && { correlationId }) },
+        { status: 400 }
+      );
     }
 
     if (error instanceof Error) {
-      return NextResponse.json({ error: "Failed to create subscription", details: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to create subscription", details: error.message, ...(correlationId && { correlationId }) },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ error: "Failed to create subscription" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create subscription", ...(correlationId && { correlationId }) },
+      { status: 500 }
+    );
   }
 }

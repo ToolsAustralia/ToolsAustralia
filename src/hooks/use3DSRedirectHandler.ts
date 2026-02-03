@@ -11,8 +11,13 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useStripe } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import type { PaymentIntent } from "@stripe/stripe-js";
+
+function getStripePromise() {
+  const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  return key ? loadStripe(key) : null;
+}
 
 export type PaymentStatus = "idle" | "loading" | "succeeded" | "failed" | "processing" | "requires_action";
 
@@ -36,7 +41,6 @@ export interface Use3DSRedirectHandlerResult {
  */
 export function use3DSRedirectHandler(): Use3DSRedirectHandlerResult {
   const searchParams = useSearchParams();
-  const stripe = useStripe();
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,17 +48,16 @@ export function use3DSRedirectHandler(): Use3DSRedirectHandlerResult {
 
   useEffect(() => {
     const handle3DSRedirect = async () => {
-      // Extract client secret from URL query params
       const clientSecret = searchParams.get("payment_intent_client_secret");
-      
+
       if (!clientSecret) {
-        // No 3DS redirect - normal flow
         setPaymentStatus("idle");
         return;
       }
 
-      if (!stripe) {
-        setError("Stripe not loaded");
+      const promise = getStripePromise();
+      if (!promise) {
+        setError("Stripe not configured");
         setPaymentStatus("failed");
         return;
       }
@@ -63,8 +66,15 @@ export function use3DSRedirectHandler(): Use3DSRedirectHandlerResult {
       setError(null);
 
       try {
-        // Retrieve PaymentIntent to check status
-        const { paymentIntent: retrievedPaymentIntent, error: retrieveError } = 
+        const stripe = await promise;
+        if (!stripe) {
+          setError("Stripe not loaded");
+          setPaymentStatus("failed");
+          setIsLoading(false);
+          return;
+        }
+
+        const { paymentIntent: retrievedPaymentIntent, error: retrieveError } =
           await stripe.retrievePaymentIntent(clientSecret);
 
         if (retrieveError) {
@@ -110,7 +120,7 @@ export function use3DSRedirectHandler(): Use3DSRedirectHandlerResult {
     };
 
     handle3DSRedirect();
-  }, [searchParams, stripe]);
+  }, [searchParams]);
 
   return {
     paymentStatus,
