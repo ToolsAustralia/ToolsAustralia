@@ -110,7 +110,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
       )}
 
       {item.includes && item.includes.length > 0 && (
-        <div>
+        <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3 sm:p-4">
           <h5 className="text-sm sm:text-base font-semibold text-gray-900 mb-1.5 sm:mb-2 font-['Poppins']">Includes</h5>
           {renderList(item.includes)}
         </div>
@@ -121,7 +121,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="auto" closeOnBackdrop>
       <ModalHeader
-        title={prize ? `${prize.label} Specifications` : "Major Draw Specifications"}
+        title={prize ? prize.label : "Major Draw"}
         onClose={onClose}
         showLogo={false}
         variant="metallic-red"

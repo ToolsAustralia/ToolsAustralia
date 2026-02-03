@@ -745,7 +745,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 lg:gap-12 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
           <div className="relative order-1 space-y-3 sm:space-y-4">
             <div 
               className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden"
@@ -891,11 +891,10 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             <button
               onClick={handleEnterNow}
               suppressHydrationWarning
-              className="promo-hero-cta-button relative w-full overflow-visible rounded-full group hidden lg:block"
+              className="promo-hero-cta-button w-full rounded-full hidden lg:block px-6 py-3 sm:px-8 sm:py-4"
+              style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
             >
-              <div className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}></div>
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-              <div className="relative z-10 flex items-center justify-center gap-3 px-6 py-3 sm:px-8 sm:py-4 rounded-full">
+              <div className="flex items-center justify-center gap-3">
                 <span className="font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -969,11 +968,10 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             <button
               onClick={handleEnterNow}
               suppressHydrationWarning
-              className="promo-hero-cta-button relative w-full overflow-visible rounded-full group lg:hidden"
+              className="promo-hero-cta-button w-full rounded-full lg:hidden px-6 py-3 sm:px-8 sm:py-4"
+              style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
             >
-              <div className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}></div>
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-              <div className="relative z-10 flex items-center justify-center gap-3 px-6 py-3 sm:px-8 sm:py-4 rounded-full">
+              <div className="flex items-center justify-center gap-3">
                 <span className="font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
