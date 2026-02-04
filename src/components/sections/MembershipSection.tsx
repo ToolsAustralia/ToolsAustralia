@@ -238,12 +238,15 @@ export default function MembershipSection({
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
-  // Update default tab based on subscription status or access
+  // Update default tab: no active subscription → membership tab; with subscription and access → one-time
   useEffect(() => {
     if (!userLoading && userData) {
-      // If user has access (subscription OR entries), show one-time only
-      // Otherwise, show membership tab
-      const newTab = hasAccessToAdditionalPackages ? "one-time" : "membership";
+      // Users without an active subscription always default to membership so they can subscribe
+      const newTab = !hasActiveSubscription
+        ? "membership"
+        : hasAccessToAdditionalPackages
+          ? "one-time"
+          : "membership";
       setActiveTab(newTab);
       // Dispatch event for FloatingPromoBanner to sync
       if (typeof window !== "undefined") {
@@ -254,7 +257,7 @@ export default function MembershipSection({
         );
       }
     }
-  }, [hasAccessToAdditionalPackages, userLoading, userData]);
+  }, [hasActiveSubscription, hasAccessToAdditionalPackages, userLoading, userData]);
 
   // Check if a plan is the user's current subscription
   // Note: This only applies to subscription plans, not one-time packages
@@ -388,11 +391,8 @@ export default function MembershipSection({
 
     let apiPlans;
 
-    // Determine effective tab:
-    // - On membership page: always respect activeTab (user can switch between tabs)
-    // - On other pages: if user has access, force "one-time", otherwise use activeTab
-    const effectiveTab =
-      pathname === "/membership" ? activeTab : hasAccessToAdditionalPackages ? "one-time" : activeTab;
+    // Respect user's tab choice everywhere so they can see both one-time and membership packs
+    const effectiveTab = activeTab;
 
     if (effectiveTab === "membership") {
       // Always show subscription packages
@@ -560,14 +560,8 @@ export default function MembershipSection({
           </h2>
         </div>
 
-        {/* Toggle - Enhanced metallic design */}
-        {/* Show toggle if:
-            - User doesn't have access (show both tabs), OR
-            - User has access AND we're on the membership page (show both tabs)
-            - Otherwise, if user has access and NOT on membership page, show only "One-Time Packs" label
-        */}
-        {(!hasAccessToAdditionalPackages || pathname === "/membership") && (
-          <div className="flex justify-center mb-4 sm:mb-6 lg:mb-8">
+        {/* Toggle - Always show One-Time and Membership Packs so user can switch between both */}
+        <div className="flex justify-center mb-4 ">
             <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
               <div className="flex flex-row items-center justify-center w-full">
                 <button
@@ -625,25 +619,6 @@ export default function MembershipSection({
               </div>
             </div>
           </div>
-        )}
-
-        {/* Show one-time only label when user has access AND NOT on membership page */}
-        {hasAccessToAdditionalPackages && pathname !== "/membership" && (
-          <div className="flex justify-center mb-4 sm:mb-6 lg:mb-8">
-            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-auto inline-block">
-              <div className="flex flex-row items-center justify-center">
-                                <div className="font-agency font-black uppercase px-4 py-2.5 rounded-[16px] text-[12px] sm:text-[14px] bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)] relative whitespace-nowrap">
-                  One-Time Packs
-                  {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                  {/* Show badge if there's an active promo OR an alternating multiplier */}
-                  {isMounted && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
-                    <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Mobile/Tablet: Vertical Stack Layout */}
         {!loading && !error && (
@@ -940,8 +915,8 @@ export default function MembershipSection({
                     );
                   })}
             </div>
-            {/* Entry accumulation chart - under package cards when membership selected */}
-            {activeTab === "membership" && (
+            {/* Entry accumulation chart - only visible when package inclusions is expanded */}
+            {activeTab === "membership" && isInclusionsExpanded && (
               <div className="mt-6 sm:mt-8 max-w-md mx-auto">
                 <VerticalAccumulationChart />
               </div>
@@ -1287,12 +1262,7 @@ export default function MembershipSection({
             </div>
           )}
           </div>
-          {/* Entry accumulation chart - at bottom of package cards when membership selected */}
-          {activeTab === "membership" && (
-            <div className="mt-8 pt-8 border-t border-slate-700/30 max-w-4xl mx-auto">
-              <VerticalAccumulationChart />
-            </div>
-          )}
+        
         </div>
       )}
 

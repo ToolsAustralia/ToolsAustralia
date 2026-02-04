@@ -109,6 +109,10 @@ interface MembershipBadgeProps {
    */
   membershipType?: "subscription" | "one-time";
   /**
+   * When true, only the package icon is shown (no text). Used e.g. on my-account one-time card.
+   */
+  iconOnly?: boolean;
+  /**
    * Optional className to add to the badge
    */
   className?: string;
@@ -137,6 +141,7 @@ export default function MembershipBadge({
   packageData,
   isActive,
   membershipType,
+  iconOnly = false,
   className = "",
 }: MembershipBadgeProps) {
   // Don't render if not active or no package data
@@ -149,6 +154,22 @@ export default function MembershipBadge({
 
   // Get package icon
   const packageIcon = getPackageIcon(packageData.name, finalMembershipType);
+
+  // Icon-only: render just the icon (no text), e.g. for my-account one-time card
+  if (iconOnly) {
+    if (!packageIcon) return null;
+    return (
+      <span className={`inline-flex items-center justify-center flex-shrink-0 ${className}`} title={packageData.name}>
+        <Image
+          src={packageIcon}
+          alt={`${packageData.name} icon`}
+          className="w-6 h-6 object-contain"
+          width={24}
+          height={24}
+        />
+      </span>
+    );
+  }
 
   // Get color scheme
   const colorScheme = getPackageColorScheme(packageData.name);

@@ -1226,6 +1226,19 @@
   }
 }
 
+@keyframes latest-winners-glow {
+  /* Red animating glow for Latest Winners badge */
+  0%,
+  100% {
+    opacity: 0.5;
+    box-shadow: 0 0 15px rgba(238, 0, 0, 0.5);
+  }
+  50% {
+    opacity: 0.85;
+    box-shadow: 0 0 28px rgba(238, 0, 0, 0.75);
+  }
+}
+
 @keyframes border-glow-green {
   /* Green border glow for Foreman */
   0%,
