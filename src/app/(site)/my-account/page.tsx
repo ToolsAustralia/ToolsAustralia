@@ -933,10 +933,11 @@ export default function MyAccountPage() {
                             {displayOneTimeEntries}
                           </div>
                           <div className="text-xs text-white/70 uppercase tracking-wide">Packages</div>
+                          {/* Only show currently active one-time packages (not queued), icons only – same idea as partner discounts */}
                           {(user.enrichedOneTimePackages ?? []).filter(
                             (pkg) => pkg.isActive && pkg.packageData
                           ).length > 0 && (
-                            <div className="flex flex-col gap-1 items-center mt-2">
+                            <div className="flex flex-wrap justify-center gap-2 mt-2">
                               {(user.enrichedOneTimePackages ?? [])
                                 .filter((pkg) => pkg.isActive && pkg.packageData)
                                 .map((pkg) => (
@@ -945,6 +946,7 @@ export default function MyAccountPage() {
                                     packageData={pkg.packageData}
                                     isActive={true}
                                     membershipType="one-time"
+                                    iconOnly
                                   />
                                 ))}
                             </div>
@@ -1211,78 +1213,7 @@ export default function MyAccountPage() {
                         Get Your Name in Every Draw
                       </button>
                       <button
-                        onClick={() => {
-                          // Get Tradie package for default selection
-                          const getTradiePackage = (): LocalMembershipPlan => {
-                            const targetPackageId = "tradie-subscription";
-                            const packageData = subscriptionPackages.find((pkg) => pkg.id === targetPackageId);
-
-                            if (!packageData) {
-                              // Fallback if package not found
-                              const baseEntries = 15; // Tradie subscription has 15 entries per month
-                              const promoEntries = baseEntries * membershipPromoMultiplier;
-
-                              return {
-                                id: targetPackageId,
-                                name: "Tradie",
-                                price: 20,
-                                period: "mo",
-                                features: [
-                                  {
-                                    text: `${promoEntries} Free Accumulated Entries${
-                                      membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
-                                    }`,
-                                  },
-                                  { text: "100% Access to Partner Discounts" },
-                                  { text: "Mini Draws" },
-                                ],
-                                buttonText: "Get Started",
-                                buttonStyle: "secondary",
-                                isMemberOnly: false,
-                                metadata: {
-                                  entriesCount: promoEntries,
-                                  promoMultiplier: membershipPromoMultiplier,
-                                  originalEntries: baseEntries,
-                                  isPromoActive: membershipPromoMultiplier > 1,
-                                },
-                              };
-                            }
-
-                            const localPlan = convertToLocalPlan(packageData);
-
-                            // Apply promo multiplier if active
-                            if (membershipPromoMultiplier <= 1) {
-                              return localPlan;
-                            }
-
-                            const originalEntries = localPlan.metadata?.entriesCount ?? 0;
-                            const promoEntries = originalEntries * membershipPromoMultiplier;
-
-                            return {
-                              ...localPlan,
-                              features: localPlan.features.map((feature) => {
-                                if (feature.text.toLowerCase().includes("entries")) {
-                                  return {
-                                    ...feature,
-                                    text: feature.text.replace(/\d+/, promoEntries.toString()),
-                                  };
-                                }
-                                return feature;
-                              }),
-                              metadata: {
-                                ...localPlan.metadata,
-                                entriesCount: promoEntries,
-                                originalEntries,
-                                promoMultiplier: membershipPromoMultiplier,
-                                isPromoActive: true,
-                              },
-                            };
-                          };
-
-                          const tradiePlan = getTradiePackage();
-                          membershipModal.setSelectedPlan(tradiePlan);
-                          membershipModal.openModal();
-                        }}
+                        onClick={() => membershipModal.openModalWithPackageSelectionFirst()}
                         className="flex-1 bg-white border-2 border-blue-600 text-blue-700 hover:bg-blue-50 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
                       >
                         Subscribe to Membership Package
@@ -1345,6 +1276,11 @@ export default function MyAccountPage() {
         onClose={membershipModal.closeModal}
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
+        membershipModalConfig={
+          membershipModal.openWithPackageSelectionFirst
+            ? { showPackageSelectionFirst: true }
+            : undefined
+        }
       />
 
       <SettingsModal

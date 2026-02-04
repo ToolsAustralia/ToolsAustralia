@@ -203,6 +203,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const subscriptionPackageIdRef = useRef<string | null>(null); // Package the current subscription was created for (so we can invalidate on plan change)
   const previousSubscriptionToCancelRef = useRef<string | null>(null); // When user switches package: pass to API to cancel before creating new subscription
   const userIdRef = useRef<string | null>(null); // Store userId for retry scenarios
+  // First subscription charge must be confirmed client-side; when true we run confirmStripeIntent() after Payment Element has invoice secret
+  const [pendingFirstSubscriptionConfirm, setPendingFirstSubscriptionConfirm] = useState(false);
   // ✅ NEW: Track recovery attempts to prevent duplicate recoveries
   const recoveryAttemptedRef = useRef<{ errorMessage: string; attempted: boolean } | null>(null);
   const cardFormRef = useRef<{
@@ -273,7 +275,25 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     []
   );
 
-  const activePlan = selectedPlan || placeholderPlan;
+  // When opening with package selection first (e.g. subscription tab / Enter now), show membership packages tab
+  const membershipPlaceholderPlan = React.useMemo<LocalMembershipPlan>(
+    () => ({
+      ...placeholderPlan,
+      id: "placeholder-membership",
+      period: "mo",
+      name: "Select a membership package",
+      subtitle: "Choose a plan to continue",
+    }),
+    [placeholderPlan]
+  );
+
+  const showPackageSelectionFirst = finalMembershipModalConfig?.showPackageSelectionFirst === true;
+  const activePlan =
+    selectedPlan || (showPackageSelectionFirst ? membershipPlaceholderPlan : placeholderPlan);
+
+  /** Plan is a placeholder (user must select a real package); used to block API calls and disable purchase. */
+  const isPlaceholderPlan =
+    !activePlan || activePlan.id === "placeholder" || activePlan.id.startsWith("placeholder-");
 
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
@@ -497,7 +517,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       }
 
       // Only validate for subscription or one-time packages (not placeholder)
-      if (!activePlan || activePlan.id === "placeholder") {
+      if (isPlaceholderPlan) {
         setPromoLinkInfo(null);
         return;
       }
@@ -796,7 +816,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // 3. User is viewing payment form OR has selected a plan (not placeholder)
     const isInPaymentFlow = currentStep >= 2;
     const hasCompletedRegistration = isAuthenticated || guestUserData !== null;
-    const isActualPlan = activePlan && activePlan.id !== "placeholder";
+    const isActualPlan = !isPlaceholderPlan;
     const shouldCreatePaymentIntent =
       isInPaymentFlow && hasCompletedRegistration && isActualPlan && (showCardForm || isSubscription); // Only for subscriptions or when card form is shown
 
@@ -887,16 +907,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         };
 
         if (isAuthenticated && userData) {
-          createSubscriptionExistingUser({
-            packageId: packageId || "",
-            subscriptionRequestId,
-            cancelPreviousSubscriptionId,
-            referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
-            affiliateCode: affiliateCode || undefined,
-            promoLinkCode: promoLinkCode || undefined,
-          })
-            .then((result) => result && onSuccess(result as never))
-            .catch(onError);
+          if (selectedPaymentMethod) {
+            // User has saved/default payment method selected – don't create subscription here; create in handleSubmit with paymentMethodId so first invoice is charged with saved card
+            isCreatingSubscriptionRef.current = false;
+            setIsCreatingSubscription(false);
+          } else {
+            createSubscriptionExistingUser({
+              packageId: packageId || "",
+              subscriptionRequestId,
+              cancelPreviousSubscriptionId,
+              referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+              affiliateCode: affiliateCode || undefined,
+              promoLinkCode: promoLinkCode || undefined,
+            })
+              .then((result) => result && onSuccess(result as never))
+              .catch(onError);
+          }
         } else if (guestUserData && packageId) {
           createSubscription({
             userEmail: guestUserData.email,
@@ -1064,6 +1090,96 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     userData?.email,
     guestUserData?.email,
     isOpen, // ✅ Added to prevent Stripe calls when modal is closed
+  ]);
+
+  // ✅ First subscription charge (existing user): confirm invoice PaymentIntent client-side after state has updated
+  useEffect(() => {
+    if (
+      !pendingFirstSubscriptionConfirm ||
+      !paymentIntentClientSecret ||
+      !subscriptionCreatedRef.current ||
+      !cardFormRef.current ||
+      activePlan?.period !== "mo"
+    ) {
+      return;
+    }
+    setPendingFirstSubscriptionConfirm(false);
+    const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+    // Brief delay so Payment Element has re-mounted with the invoice client secret
+    const t = setTimeout(() => {
+      if (!cardFormRef.current) return;
+      cardFormRef.current.confirmStripeIntent().then(
+      async (result) => {
+        if (result.error) {
+          await handlePaymentError(result.error, {
+            preserveState: true,
+            packageId: packageId || "",
+            packageName: activePlan?.name ?? "",
+          });
+          return;
+        }
+        if (result.paymentIntentId) {
+          setPaymentIntentId(result.paymentIntentId);
+          try {
+            sessionStorage.removeItem(SUBSCRIPTION_CHECKOUT_STORAGE_KEY);
+          } catch {
+            // Ignore
+          }
+          const userId = userIdRef.current || guestUserData?.userId;
+          const isNewUser = !!userId && !isAuthenticated;
+          const successData: Parameters<typeof handlePaymentSuccess>[0] = isNewUser
+            ? {
+                paymentIntentId: result.paymentIntentId,
+                user: {
+                  id: userId,
+                  email: guestUserData?.email ?? "",
+                  firstName: guestUserData?.firstName ?? "",
+                  lastName: guestUserData?.lastName ?? "",
+                  role: "user",
+                  subscription: {
+                    packageId: packageId || "",
+                    isActive: true,
+                    status: "active",
+                  },
+                  entryWallet: 0,
+                  rewardsPoints: 0,
+                },
+                subscriptionId: subscriptionCreatedRef.current || undefined,
+                status: "active",
+                paymentIntentStatus: "succeeded",
+              }
+            : {
+                paymentIntentId: result.paymentIntentId,
+                subscriptionId: subscriptionCreatedRef.current || undefined,
+                status: "active",
+                paymentIntentStatus: "succeeded",
+              };
+          await handlePaymentSuccess(successData);
+        }
+      },
+      (err) => {
+        console.error("❌ Deferred subscription confirm failed:", err);
+        handlePaymentError(err instanceof Error ? err.message : String(err), {
+          preserveState: true,
+          packageId: packageId || "",
+          packageName: activePlan?.name ?? "",
+        });
+      }
+    );
+    }, 300);
+    return () => clearTimeout(t);
+  }, [
+    pendingFirstSubscriptionConfirm,
+    paymentIntentClientSecret,
+    activePlan?.period,
+    activePlan?.name,
+    subscriptionPackages,
+    oneTimePackages,
+    guestUserData?.userId,
+    guestUserData?.email,
+    guestUserData?.firstName,
+    guestUserData?.lastName,
+    isAuthenticated,
   ]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -2439,6 +2555,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           activePlan.period === "mo" ? "membership" : "one-time",
           finalContextToPass
         );
+
+        // Navigate existing user to dashboard (my-account) after success, same as new-user flow
+        router.push("/my-account");
       }, 2000); // 2 second delay
 
       // Close modal after triggering upsell
@@ -2452,6 +2571,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // ✅ CRITICAL FIX: Check isSubmitting BEFORE setting it to prevent race conditions
     if (isSubmitting) {
       console.warn("⚠️ Payment already in progress, ignoring duplicate submission");
+      return;
+    }
+
+    // Block submit when no real package selected (e.g. still showing placeholder from "package selection first" flow)
+    if (isPlaceholderPlan) {
+      showToast({
+        type: "error",
+        title: "Select a package",
+        message: "Please choose a membership or one-time package above before purchasing.",
+        duration: 5000,
+      });
       return;
     }
     
@@ -2576,11 +2706,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       }
 
       // ✅ Option A: Subscription with invoice PaymentIntent – confirm client-side only; no confirm-subscription-payment
+      // Only use Payment Element when user is paying with the form; if they selected a saved/default payment method, use the saved-method path below instead (avoids "card number is incomplete" on empty Element)
       if (
         activePlan.period === "mo" &&
         subscriptionCreatedRef.current &&
         paymentIntentClientSecret &&
-        cardFormRef.current
+        cardFormRef.current &&
+        !(useSavedPaymentMethod && selectedPaymentMethod)
       ) {
         const result = await cardFormRef.current.confirmStripeIntent();
         if (result.error) {
@@ -3253,6 +3385,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             throw new Error(error.message);
           }
 
+          // When subscription was created with saved payment method, Stripe may have charged the first invoice already – show success immediately
+          const resultSub = (result as { subscription?: { id?: string; status?: string } })?.subscription;
+          if (resultSub?.status === "active" && paymentMethodId) {
+            hideLoading();
+            await handlePaymentSuccess({
+              subscriptionId: resultSub.id,
+              status: "active",
+              paymentIntentStatus: "succeeded",
+            });
+            return;
+          }
+
           // ✅ Clean separation: State update using utility function
           const stateUpdate = createSubscriptionStateUpdate(subscriptionData);
           
@@ -3263,156 +3407,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             console.log(`✅ Using invoice PaymentIntent ${invoicePIId} for subscription payment`);
           }
 
-          const subscriptionId = stateUpdate.subscriptionId!; // Validated above
-          const finalClientSecret = stateUpdate.clientSecret;
-          
-          // ✅ Only show "Payment Processing" toast during initial subscription creation, not on retries
-          // If subscription already exists (retry scenario), skip this check
-          if (!subscriptionCreatedRef.current && !isStateUpdateReadyForPayment(stateUpdate)) {
-            const error = handlePaymentIntentNotReadyError();
-            console.warn(`⚠️ ${error.message}`);
-            // PaymentIntent might not be ready yet - show user-friendly message
-            showToast({
-              type: "warning",
-              title: "Payment Processing",
-              message: error.userMessage,
-              duration: 4000,
-            });
-            // Still try to confirm - backend will handle retry logic
-          }
-
-          // Confirm subscription payment directly
-          try {
-            // ✅ FIXED: Capture user email for error logging
-            const capturedUserEmail = isAuthenticated 
-              ? userData?.email 
-              : (guestUserData?.email || formData.email || undefined);
-            
-            const confirmResponse = await fetch("/api/stripe/confirm-subscription-payment", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              credentials: "include",
-              body: JSON.stringify({
-                subscriptionId,
-                clientSecret: finalClientSecret, // ✅ Invoice PaymentIntent clientSecret (not upfront)
-                userId: undefined, // Existing user - no userId needed
-                paymentMethodId: paymentMethodId, // ✅ Pass new payment method from SetupIntent
-                userEmail: isAuthenticated ? capturedUserEmail : undefined, // ✅ NEW: Send user email
-                guestEmail: !isAuthenticated ? capturedUserEmail : undefined, // ✅ NEW: Send guest email
-              }),
-            });
-
-            const confirmResult = await confirmResponse.json();
-
-            // ✅ CRITICAL: Handle 3DS authentication requirement
-            if (confirmResult.requiresPaymentConfirmation && confirmResult.data?.paymentIntent?.clientSecret) {
-              console.log("⏳ Payment requires 3DS authentication - handling redirect");
-              
-              // Use the PaymentIntent client_secret for 3DS handling
-              const threeDSClientSecret = confirmResult.data.paymentIntent.clientSecret;
-              
-              // Import Stripe confirmation utility
-              const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
-              
-              // Load Stripe instance for 3DS confirmation (doesn't require Elements context)
-              const stripe = await stripePromise;
-              if (!stripe) {
-                throw new Error("Stripe not loaded. Please refresh and try again.");
-              }
-
-              // Confirm payment with 3DS redirect
-              const { error: confirmError } = await stripe.confirmPayment({
-                clientSecret: threeDSClientSecret,
-                confirmParams: {
-                  return_url: getReturnUrlForPaymentTypeClient("subscription"),
-                },
-              });
-
-              if (confirmError) {
-                throw new Error(confirmError.message || "3D Secure authentication failed");
-              }
-
-              // 3DS redirect will happen - user will be redirected to success page
-              // Don't throw error - let the redirect happen
-              return;
-            }
-
-            if (!confirmResponse.ok) {
-              // ✅ Error will be caught by catch block below, which will create new SetupIntent
-              throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
-            }
-
-            // console.log("✅ Subscription payment confirmed successfully");
-
-            // Extract paymentIntentId for invoice context
-            let extractedPaymentIntentId: string | null = null;
-            if (confirmResult.data?.paymentIntentId) {
-              extractedPaymentIntentId = confirmResult.data.paymentIntentId;
-            } else if (confirmResult.data?.latestInvoice?.payment_intent) {
-              extractedPaymentIntentId =
-                typeof confirmResult.data.latestInvoice.payment_intent === "string"
-                  ? confirmResult.data.latestInvoice.payment_intent
-                  : confirmResult.data.latestInvoice.payment_intent.id;
-            }
-
-            // Store for invoice finalization
-            if (extractedPaymentIntentId) {
-              setPaymentIntentId(extractedPaymentIntentId);
-              // console.log("📧 Stored paymentIntentId from subscription confirmation");
-            }
-
-            // Handle success directly
-            await handlePaymentSuccess(confirmResult.data);
-            return;
-          } catch (confirmError) {
-            // #region agent log
-            const errorMessage = confirmError instanceof Error ? confirmError.message : String(confirmError);
-            const errorCode = confirmError && typeof confirmError === "object" && "code" in confirmError ? String(confirmError.code) : undefined;
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MembershipModal.tsx:2559',message:'Subscription payment confirmation FAILED',data:{subscriptionId,errorMessage,errorCode,packageId,packageName:activePlan.name,userId:userData?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
-            // #endregion
-            
-            console.error("❌ Subscription payment confirmation failed:", confirmError);
-            
-            // ✅ CRITICAL: Payment failed - SetupIntent already succeeded, cannot be reused
-            // Create new SetupIntent BEFORE clearing old one to prevent PaymentElement from losing clientSecret
-            console.warn("⚠️ Payment failed - creating new SetupIntent for retry (in catch block)");
-            
-            // ✅ Create new SetupIntent FIRST (before clearing old one)
-            if (!isCreatingSetupIntentRef.current) {
-              isCreatingSetupIntentRef.current = true;
-              try {
-                const setupResult = await createSetupIntent.mutateAsync();
-                if (setupResult.success && setupResult.client_secret) {
-                  // Only set new AFTER it's ready - don't clear old one until new is ready
-                  setSetupIntentClientSecret(setupResult.client_secret);
-                  console.log("✅ New SetupIntent created after payment failure (catch block) - ready for new card");
-                } else {
-                  // If creation failed, don't clear old one - let PaymentElement keep working
-                  console.error("❌ SetupIntent creation returned no client_secret, keeping old SetupIntent");
-                }
-              } catch (setupError) {
-                console.error("❌ Failed to create new SetupIntent after payment failure (catch block):", setupError);
-                // Don't clear old SetupIntent if new one fails - PaymentElement needs clientSecret
-              } finally {
-                isCreatingSetupIntentRef.current = false;
-              }
-            } else {
-              console.warn("⚠️ SetupIntent creation already in progress, skipping duplicate creation");
-            }
-            
-            // ✅ EXPERT ERROR HANDLING: Handle error gracefully with state preservation
-            await handlePaymentError(confirmError, {
-              preserveState: true,
-              autoRetry: true,
-              packageId,
-              packageName: activePlan.name,
-            });
-            
-            // Re-throw for upstream handling if needed
-            throw confirmError;
-          }
+          // ✅ First subscription charge must be confirmed in the browser (Stripe requirement).
+          // Do NOT call confirm-subscription-payment; trigger client-side confirm after Payment Element has the invoice secret.
+          setSetupIntentClientSecret(null); // So Elements use invoice PaymentIntent, not SetupIntent
+          setPendingFirstSubscriptionConfirm(true);
+          return;
         } else if (activePlan.period === "one-time") {
           // console.log("🚀 One-time purchase completed for existing user");
 
@@ -4603,50 +4602,52 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     />
   </div>
 )}
-            {/* 2-step indicator: Your Details | Billing Info - clickable; step 2 only when step 1 complete */}
-            <div className="grid grid-cols-2 gap-0 w-full mb-4 sm:mb-5 rounded-lg overflow-hidden border border-gray-200 divide-x divide-gray-200">
-              <button
-                type="button"
-                onClick={() => handleStepClick(1)}
-                className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
-                  currentStep === 1 ? "bg-[#ee0000] text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
-                }`}
-                aria-current={currentStep === 1 ? "step" : undefined}
-              >
-                <span
-                  className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                    currentStep === 1 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+            {/* Step indicator: only for guests (2-step). Hidden for authenticated users to avoid redundant button-like UI. */}
+            {!isAuthenticated && (
+              <div className="grid grid-cols-2 gap-0 w-full mb-4 sm:mb-5 rounded-lg overflow-hidden border border-gray-200 divide-x divide-gray-200">
+                <button
+                  type="button"
+                  onClick={() => handleStepClick(1)}
+                  className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
+                    currentStep === 1 ? "bg-[#ee0000] text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
                   }`}
+                  aria-current={currentStep === 1 ? "step" : undefined}
                 >
-                  1
-                </span>
-                <span className="text-xs sm:text-sm whitespace-nowrap">Your Details</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => hasCompletedRegistration && handleStepClick(2)}
-                disabled={!hasCompletedRegistration}
-                className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors ${
-                  !hasCompletedRegistration
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-80"
-                    : currentStep === 2
-                      ? "bg-[#ee0000] text-white font-bold cursor-pointer"
-                      : "bg-gray-100 text-gray-500 font-medium cursor-pointer hover:bg-gray-200"
-                }`}
-                aria-current={currentStep === 2 ? "step" : undefined}
-                aria-disabled={!hasCompletedRegistration}
-                title={!hasCompletedRegistration ? "Complete your details first" : undefined}
-              >
-                <span
-                  className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                    currentStep === 2 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+                  <span
+                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
+                      currentStep === 1 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+                    }`}
+                  >
+                    1
+                  </span>
+                  <span className="text-xs sm:text-sm whitespace-nowrap">Your Details</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => hasCompletedRegistration && handleStepClick(2)}
+                  disabled={!hasCompletedRegistration}
+                  className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors ${
+                    !hasCompletedRegistration
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-80"
+                      : currentStep === 2
+                        ? "bg-[#ee0000] text-white font-bold cursor-pointer"
+                        : "bg-gray-100 text-gray-500 font-medium cursor-pointer hover:bg-gray-200"
                   }`}
+                  aria-current={currentStep === 2 ? "step" : undefined}
+                  aria-disabled={!hasCompletedRegistration}
+                  title={!hasCompletedRegistration ? "Complete your details first" : undefined}
                 >
-                  2
-                </span>
-                <span className="text-xs sm:text-sm whitespace-nowrap">Billing Info</span>
-              </button>
-            </div>
+                  <span
+                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
+                      currentStep === 2 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+                    }`}
+                  >
+                    2
+                  </span>
+                  <span className="text-xs sm:text-sm whitespace-nowrap">Billing Info</span>
+                </button>
+              </div>
+            )}
 
             {/* Step 1: Personal Details for new users */}
             {currentStep === 1 && (
@@ -4884,8 +4885,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
                   {/* Purchase Button - Moved above Selected Package for better UX */}
                   {/* Option A (wallet UX): when Google Pay or Apple Pay is selected, hide main Purchase and show instruction to click wallet button in form */}
-                  {!activePlan || activePlan.id === "placeholder" ? (
-                    // Payment Button Skeleton
+                  {isPlaceholderPlan ? (
+                    // Payment Button Skeleton – user must select a package first
                     <div className="h-11 bg-gray-200 rounded-lg animate-pulse"></div>
                   ) : (paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay" || paymentMethodTypeFromElement === "apple_pay" || paymentMethodTypeFromElement === "applePay") ? (
                     <div className="rounded-lg sm:rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4 text-center">
@@ -4928,7 +4929,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
                   {/* Selected Package */}
                   <div className="bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl p-2 sm:p-3">
-                    {!promoEnhancedPlan || promoEnhancedPlan.id === "placeholder" ? (
+                    {!promoEnhancedPlan || promoEnhancedPlan.id === "placeholder" || promoEnhancedPlan.id.startsWith("placeholder-") ? (
                       // Package Selection Skeleton
                       <div className="space-y-3">
                         <div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div>

@@ -307,14 +307,136 @@ export async function POST(request: NextRequest) {
     });
     // console.log(`✅ User subscription saved to database: packageId=${existingUser.subscription.packageId}`);
 
-    // Stripe: use subscription.latest_invoice.confirmation_secret (expand: ["latest_invoice.confirmation_secret"])
     const latestInvoice = subscription.latest_invoice;
+    const latestInvoiceId =
+      typeof latestInvoice === "string" ? latestInvoice : (latestInvoice as Stripe.Invoice | null)?.id ?? null;
+
+    // When user pays with a saved payment method: pay the first invoice on the server so subscription becomes active
+    if (hasPaymentMethod && finalPaymentMethodId && latestInvoiceId) {
+      try {
+        const paidInvoice = await stripe.invoices.pay(latestInvoiceId, {
+          payment_method: finalPaymentMethodId,
+        });
+
+        if (correlationId) {
+          console.log("[create-subscription-existing-user] invoice paid with saved PM", {
+            correlationId,
+            subscriptionId: subscription.id,
+            invoiceId: paidInvoice.id,
+          });
+        }
+
+        // Re-retrieve subscription to get updated status (active)
+        const subscriptionUpdated = await stripe.subscriptions.retrieve(subscription.id);
+        const periodEnd = getSubscriptionPeriodEnd(subscriptionUpdated);
+        const endDate = periodEnd != null ? new Date(periodEnd * 1000) : undefined;
+
+        existingUser.subscription = {
+          ...existingUser.subscription!,
+          isActive: subscriptionUpdated.status === "active",
+          status: subscriptionUpdated.status,
+          endDate,
+        };
+        existingUser.save().catch((err) => {
+          console.warn("Non-critical user save after invoice pay failed (webhook will handle):", err);
+        });
+
+        return NextResponse.json({
+          success: true,
+          subscription: {
+            id: subscription.id,
+            status: subscriptionUpdated.status,
+            clientSecret: undefined,
+            invoicePaymentIntentClientSecret: undefined,
+          },
+          data: {
+            subscriptionId: subscription.id,
+            customerId: stripeCustomerId,
+            invoicePaymentIntentClientSecret: undefined,
+            clientSecret: undefined,
+          },
+          user: {
+            id: existingUser._id,
+            email: existingUser.email,
+            subscription: existingUser.subscription,
+            oneTimePackages: existingUser.oneTimePackages,
+            entryWallet: existingUser.entryWallet,
+            accumulatedEntries: existingUser.accumulatedEntries,
+            rewardsPoints: existingUser.rewardsPoints,
+          },
+        });
+      } catch (payError) {
+        const errorMessage = payError instanceof Error ? payError.message : String(payError);
+        const stripeError = payError as { code?: string; type?: string; decline_code?: string };
+        const errorCode = stripeError?.code;
+        const declineCode = stripeError?.decline_code;
+        const errorType = stripeError?.type;
+
+        if (correlationId) {
+          console.warn("[create-subscription-existing-user] invoice pay failed", {
+            correlationId,
+            subscriptionId: subscription.id,
+            errorCode,
+            errorMessage,
+          });
+        }
+
+        // 3DS required: return client_secret for frontend confirmPayment
+        if (errorCode === "invoice_payment_intent_requires_action") {
+          try {
+            const invoiceWithPaymentIntent = await stripe.invoices.retrieve(latestInvoiceId, {
+              expand: ["payment_intent"],
+            });
+            const paymentIntent = (invoiceWithPaymentIntent as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent })
+              .payment_intent;
+
+            if (paymentIntent && typeof paymentIntent === "object" && paymentIntent.client_secret) {
+              return NextResponse.json({
+                success: false,
+                requiresPaymentConfirmation: true,
+                message: "3D Secure authentication required. Please complete the authentication.",
+                data: {
+                  paymentIntent: {
+                    id: paymentIntent.id,
+                    clientSecret: paymentIntent.client_secret,
+                    amount: paymentIntent.amount,
+                    currency: paymentIntent.currency,
+                    status: paymentIntent.status,
+                  },
+                  subscription: {
+                    id: subscription.id,
+                    status: subscription.status,
+                  },
+                  invoiceId: latestInvoiceId,
+                },
+              });
+            }
+          } catch (retrieveErr) {
+            console.error("Failed to retrieve PaymentIntent for 3DS handling:", retrieveErr);
+          }
+        }
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Payment failed",
+            details: errorMessage || "Unable to process payment",
+            ...(errorCode && { code: errorCode }),
+            ...(declineCode && { decline_code: declineCode }),
+            ...(errorType && { type: errorType }),
+            ...(correlationId && { correlationId }),
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // No saved payment method: return invoice confirmation_secret for Payment Element (e.g. "Pay with other card")
     const rawConfirmationSecret =
       typeof latestInvoice === "object" && latestInvoice !== null && "confirmation_secret" in latestInvoice
         ? (latestInvoice as Stripe.Invoice & { confirmation_secret?: string | { client_secret?: string; type?: string } | null }).confirmation_secret
         : undefined;
 
-    // Log what we got from the invoice (for debugging)
     console.log("[create-subscription-existing-user] latest_invoice.confirmation_secret (raw)", {
       subscriptionId: subscription.id,
       hasRaw: rawConfirmationSecret != null,
@@ -322,7 +444,6 @@ export async function POST(request: NextRequest) {
       rawKeys: typeof rawConfirmationSecret === "object" && rawConfirmationSecret !== null ? Object.keys(rawConfirmationSecret) : undefined,
     });
 
-    // Stripe may return confirmation_secret as a string or as { client_secret, type }; always return a string for Elements
     let clientSecret: string | null = null;
     if (typeof rawConfirmationSecret === "string") {
       clientSecret = rawConfirmationSecret;

@@ -1143,9 +1143,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               <Button
                 onClick={() => {
                   onClose(); // Close SubscriptionManagementModal
-                  const tradiePlan = getTradiePackage(); // Get Tradie package directly
-                  membershipModal.setSelectedPlan(tradiePlan);
-                  membershipModal.openModal(); // Open MembershipModal
+                  membershipModal.openModalWithPackageSelectionFirst(); // Same as Enter now on promotions: show package selection first
                 }}
                 variant="primary"
                 className="mt-4"
@@ -1170,9 +1168,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               <Button
                 onClick={() => {
                   onClose(); // Close SubscriptionManagementModal
-                  const tradiePlan = getTradiePackage(); // Get Tradie package directly
-                  membershipModal.setSelectedPlan(tradiePlan);
-                  membershipModal.openModal(); // Open MembershipModal
+                  membershipModal.openModalWithPackageSelectionFirst(); // Same as Enter now on promotions: show package selection first
                 }}
                 variant="primary"
                 className="mt-4 bg-[#ee0000] hover:bg-red-700"
@@ -1190,9 +1186,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               <Button
                 onClick={() => {
                   onClose(); // Close SubscriptionManagementModal
-                  const tradiePlan = getTradiePackage(); // Get Tradie package directly
-                  membershipModal.setSelectedPlan(tradiePlan);
-                  membershipModal.openModal(); // Open MembershipModal
+                  membershipModal.openModalWithPackageSelectionFirst(); // Same as Enter now on promotions: show package selection first
                 }}
                 variant="primary"
                 className="mt-4 bg-[#ee0000] hover:bg-red-700"

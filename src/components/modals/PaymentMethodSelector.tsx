@@ -1075,9 +1075,12 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             </div>
           )}
 
-          {/* Show card form when adding new payment method for authenticated users */}
-          {showCardForm && (
-            <div className="space-y-4">
+          {/* Show card form when adding new payment method, OR mount hidden form for subscription invoice when using saved method (so confirmStripeIntent can run) */}
+          {(showCardForm || (clientSecretForElements && activeIntentType === "payment")) && (
+            <div
+              className={`space-y-4 ${selectedPaymentMethod && !showCardForm ? "absolute -left-[9999px] w-[400px] h-[200px] overflow-hidden opacity-0 pointer-events-none" : ""}`}
+              aria-hidden={!!(selectedPaymentMethod && !showCardForm)}
+            >
               {isCreatingIntent ? (
                 <div className="p-4 sm:p-6 border border-gray-200 rounded-lg sm:rounded-xl bg-gray-50 flex flex-col items-center justify-center gap-4 min-h-[120px]">
                   <Cog className="w-8 h-8 sm:w-10 sm:h-10 text-red-600 animate-spin" aria-hidden />
