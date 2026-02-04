@@ -1,30 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Trophy, MapPin, Calendar, Award } from "lucide-react";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
-
-interface Winner {
-  id: string;
-  drawId: string;
-  drawName: string;
-  drawType: "major";
-  prize: {
-    name: string;
-    description: string;
-    value: number;
-    images: string[];
-  };
-  winnerFirstName: string;
-  winnerLastName: string;
-  winnerState?: string;
-  imageUrl?: string;
-  selectedDate: string;
-  wonOnDate?: string;
-  entryNumber?: number;
-}
+import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 
 interface WinnersShowcaseProps {
   className?: string;
@@ -38,29 +18,11 @@ export default function WinnersShowcase({
   subtitle = "Celebrating our incredible major draw winners and their amazing prizes!",
 }: WinnersShowcaseProps) {
   const winnersRef = useScrollAnimation();
-  const [winners, setWinners] = useState<Winner[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: winners = [], isLoading: loading } = useMajorDrawWinners();
+  // Show first 8 in grid (same as before); data is shared with homepage/modal cache
+  const displayWinners = winners.slice(0, 8);
 
-  useEffect(() => {
-    fetchWinners();
-  }, []);
-
-  const fetchWinners = async () => {
-    try {
-      const response = await fetch("/api/winners/major-draws?limit=8");
-      const data = await response.json();
-
-      if (data.success && data.winners) {
-        setWinners(data.winners);
-      }
-    } catch (error) {
-      console.error("Error fetching major draw winners:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const hasWinners = winners && winners.length > 0;
+  const hasWinners = displayWinners.length > 0;
 
   return (
     <section
@@ -112,11 +74,11 @@ export default function WinnersShowcase({
         {/* Winners Grid */}
         {!loading && hasWinners && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {winners.map((winner) => {
+            {displayWinners.map((winner) => {
               const displayImage =
                 winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
               const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-              const wonOnDate = new Date(winner.wonOnDate ?? winner.selectedDate);
+              const wonOnDate = new Date(winner.drawDate ?? winner.selectedDate);
 
               return (
                 <div

@@ -17,18 +17,19 @@ export async function GET(request: NextRequest) {
       .populate({
         path: "drawId",
         model: "MajorDraw",
-        select: "name prize",
+        select: "name prize drawDate",
       })
       .lean();
 
     const winners = majorDrawWinners.map((winner: {
       _id: { toString(): string };
-      drawId: { toString(): string } | { name?: string; prize?: { name?: string; description?: string; value?: number; images?: string[] } };
+      drawId: { toString(): string } | { name?: string; prize?: { name?: string; description?: string; value?: number; images?: string[] }; drawDate?: Date };
       userId: { firstName?: string; lastName?: string; state?: string } | { toString(): string };
       prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
       imageUrl?: string;
       selectedDate: Date;
       entryNumber?: number;
+      selectedPrize?: string;
     }) => {
       const winnerUser = (typeof winner.userId === 'object' && 'firstName' in winner.userId) 
         ? winner.userId 
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
         drawId: winner.drawId.toString(),
         drawName: majorDraw?.name || "Major Draw",
         drawType: "major" as const,
+        drawDate: majorDraw?.drawDate ?? winner.selectedDate,
         prize: {
           name: winner.prizeSnapshot?.name || majorDraw?.prize?.name || "Major Prize",
           description: winner.prizeSnapshot?.description || majorDraw?.prize?.description || "",
@@ -53,6 +55,7 @@ export async function GET(request: NextRequest) {
         imageUrl: winner.imageUrl,
         selectedDate: winner.selectedDate,
         entryNumber: winner.entryNumber,
+        selectedPrize: winner.selectedPrize,
       };
     });
 

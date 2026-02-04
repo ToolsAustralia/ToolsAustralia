@@ -442,19 +442,15 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   })();
 
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
-    // Don't allow selecting current plan
-    if (isCurrentPlan(plan)) {
-      return;
-    }
-    setSelectedPlan(plan);
-  };
+    if (isCurrentPlan(plan)) return;
 
-  const handleConfirmSelection = () => {
-    // Only proceed if a plan is selected and it's not the current plan
-    if (selectedPlan && !isCurrentPlan(selectedPlan)) {
-      onPlanSelect(selectedPlan);
+    setSelectedPlan(plan);
+
+    // Auto-confirm: brief visual feedback then close (tap → glow → close)
+    setTimeout(() => {
+      onPlanSelect(plan);
       onClose();
-    }
+    }, 200);
   };
 
   const isSelectedPlan = (plan: LocalMembershipPlan) => {
@@ -575,10 +571,10 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" height="fixed" fixedHeight="h-[87dvh]">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" height="fixed" fixedHeight="h-[80dvh]">
       <ModalHeader title="Select Your Package" onClose={onClose} showLogo={true} />
 
-      <ModalContent padding="lg" className="!pb-28 sm:!pb-32">
+      <ModalContent padding="lg" className="">
         {/* Member Status Info */}
 
         {/* Toggle - Show when viewing one-time packages and user doesn't have access to additional packages */}
@@ -820,30 +816,6 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
           </div>
         )}
       </ModalContent>
-
-      {/* Fixed Confirm Selection Button */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 sm:p-4">
-        <Button
-          onClick={handleConfirmSelection}
-          variant="metallic"
-          fullWidth
-          size="md"
-          className="font-bold text-xs sm:text-sm"
-          disabled={!selectedPlan || isCurrentPlan(selectedPlan)}
-        >
-          {!selectedPlan || isCurrentPlan(selectedPlan) ? (
-            <>
-              <span className="sm:hidden">Select Plan</span>
-              <span className="hidden sm:inline">Select a Plan</span>
-            </>
-          ) : (
-            <>
-              <span className="sm:hidden">Confirm</span>
-              <span className="hidden sm:inline">Confirm Selection</span>
-            </>
-          )}
-        </Button>
-      </div>
     </ModalContainer>
   );
 };

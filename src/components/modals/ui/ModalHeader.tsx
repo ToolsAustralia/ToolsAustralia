@@ -6,6 +6,8 @@ import { X } from "lucide-react";
 
 export interface ModalHeaderProps {
   title: string;
+  /** When provided, renders instead of title (e.g. for "JOIN TOOLS AUSTRALIA" with styled parts) */
+  titleNode?: React.ReactNode;
   subtitle?: string;
   onClose: () => void;
   showLogo?: boolean;
@@ -20,6 +22,7 @@ export interface ModalHeaderProps {
 
 const ModalHeader: React.FC<ModalHeaderProps> = ({
   title,
+  titleNode,
   subtitle,
   onClose,
   showLogo = false,
@@ -66,7 +69,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
       )}
 
       {/* Title - px-12 keeps title clear of the close button; long titles wrap in the safe zone */}
-      <h2 className="text-center text-base sm:text-lg font-bold px-12">{title}</h2>
+      <h2 className="text-center text-base sm:text-lg font-bold px-12">{titleNode ?? title}</h2>
 
       {/* Subtitle */}
       {subtitle && <p className="text-center text-white/80 text-sm mt-1">{subtitle}</p>}

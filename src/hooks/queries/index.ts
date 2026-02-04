@@ -173,6 +173,9 @@ export {
   type UserMajorDrawStats,
 } from "./useMajorDrawQueries";
 
+// Winners (major draw winners - shared cache for homepage, promotions, modal)
+export { useMajorDrawWinners, type MajorDrawWinner } from "./useWinnersQueries";
+
 // Note: useMiniDrawPackages, usePurchaseMiniDraw and related types are not yet implemented
 
 // Subscription management hooks

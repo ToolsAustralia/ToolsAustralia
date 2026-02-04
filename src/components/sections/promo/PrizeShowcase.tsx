@@ -272,6 +272,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   
   // Toolbox type toggle state - initialize from activeSlug to prevent navigation issues
   const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
+  // Remember last non-cash toolbox so we can keep showing the power toolset options even when cash is selected
+  const [lastNonCashToolboxType, setLastNonCashToolboxType] = useState<"sidchrome" | "milwaukee">("milwaukee");
   
   // Update toolbox type based on current slug when it changes
   // This ensures the toggle reflects the current page's toolbox type
@@ -287,11 +289,21 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
         }
         return currentType;
       });
+
+      // Keep a sticky "last non-cash" value so the Step 2 toolset UI stays visible even on cash
+      if (typeFromSlug !== "cash") {
+        setLastNonCashToolboxType(typeFromSlug);
+      }
     }
   }, [activeSlug]);
   
   // Filter prizes based on selected toolbox type
   const filteredPrizes = filterPrizesByToolboxType(prizes, toolboxType);
+
+  // Step 2 ("Power Toolset") should remain visible even when cash is selected
+  const toolsetToolboxType: "sidchrome" | "milwaukee" =
+    toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
+  const toolsetPrizes = filterPrizesByToolboxType(prizes, toolsetToolboxType);
   
   // Find the index of the active prize in the filtered list for mobile navigation
   const activePrizeIndex = filteredPrizes.findIndex((p) => p.slug === activeSlug);
@@ -462,11 +474,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
       handleSelectPrize("cash-prize");
       return;
     }
-    
-    // Get default slug for the selected toolbox type
-    const defaultSlug = type === "sidchrome" ? "milwaukee-sidchrome" : "milwaukee-milwaukee";
-    // Always navigate to default when toolbox type changes (user clicked the toggle button)
-    handleSelectPrize(defaultSlug);
+
+    // Remember last non-cash toolbox type so Step 2 stays visible if cash is selected later
+    setLastNonCashToolboxType(type);
+
+    // IMPORTANT UX: Selecting a toolbox should NOT navigate.
+    // Navigation should only happen once a Power Toolset option is picked.
   };
 
   if (!activePrize) {
@@ -524,15 +537,15 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
           {prizes.length > 1 && (
             <div className="mt-4 sm:mt-6">
-              <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-lg sm:text-[32px] lg:text-agency-title leading-[1.08]">
-                Pick Your <span style={{ color: "#EE0000" }}>Toolset</span>
+              <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
+               Step 1: Pick your <span style={{ color: "#EE0000" }}>toolbox</span>
               </p>
               
               {/* Toolbox Type Toggle - Sidchrome and Milwaukee only */}
-              <div className="flex justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+              <div className="flex justify-center gap-3 sm:gap-4 mb-4">
                 <button
                   onClick={() => handleToolboxTypeChange("sidchrome")}
-                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-xl transition-all duration-200 border-2 ${
+                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
                     toolboxType === "sidchrome"
                       ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                       : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
@@ -543,7 +556,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 </button>
                 <button
                   onClick={() => handleToolboxTypeChange("milwaukee")}
-                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-xl transition-all duration-200 border-2 ${
+                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
                     toolboxType === "milwaukee"
                       ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                       : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
@@ -554,10 +567,13 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 </button>
               </div>
               
-              {/* Prize selection - 3-card grid when sidchrome or milwaukee */}
-              {toolboxType !== "cash" && (
-                  <div className={`grid ${filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 sm:gap-4 max-w-5xl mx-auto overflow-visible`}>
-                    {filteredPrizes.map((prizeOption) => {
+              <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
+                Step 2: Pick your <span style={{ color: "#EE0000" }}>Power Toolset</span>
+              </p>
+
+              {/* Prize selection - 3-card grid for the selected toolbox type (stay visible even when cash is selected) */}
+              <div className={`grid ${toolsetPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 sm:gap-4 max-w-5xl mx-auto overflow-visible`}>
+                    {toolsetPrizes.map((prizeOption) => {
                       const isActive = prizeOption.slug === activeSlug;
                       const brandColors = getPrizeBrandColors(prizeOption.slug);
                       const brandLogoPath = getBrandLogoPath(prizeOption.slug);
@@ -617,7 +633,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                           {/* Card content - line2 & line3 only (line1/toolbox removed - already in Pick Your Toolset) */}
                           <div className="relative z-10 w-full overflow-visible">
                             <div
-                              className={`font-acumin font-[950] text-xs sm:text-lg leading-[1.08] transition-colors duration-200 break-words text-center ${
+                              className={`font-acumin font-[950] text-[14px] sm:text-lg leading-[1.08] transition-colors duration-200 break-words text-center ${
                                 isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
                               }`}
                             >
@@ -629,28 +645,36 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                       );
                     })}
                   </div>
-              )}
 
-              {/* $10,000 Cash - long row button, bg image only when selected (like toolbox buttons) */}
-              <button
-                onClick={() => {
-                  handleToolboxTypeChange("cash");
-                  const cashPrize = prizes.find((p) => p.slug === "cash-prize");
-                  if (cashPrize) handleSelectPrize(cashPrize.slug);
-                }}
-                className={`mt-4 w-full max-w-5xl mx-auto py-2.5 sm:py-4 rounded-xl sm:rounded-2xl font-acumin font-[950] text-sm sm:text-2xl transition-all duration-200 border-2 relative overflow-hidden flex items-center justify-center ${
-                  toolboxType === "cash"
-                    ? "border-green-500 shadow-lg shadow-green-500/40 bg-cover bg-center"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600 hover:shadow-lg"
-                }`}
-                style={toolboxType === "cash" ? { backgroundImage: `url('/images/majordraws/cash-prize/cash-prize-10000.png')` } : undefined}
-                suppressHydrationWarning
-              >
-                {toolboxType === "cash" && (
-                  <div className="absolute inset-0 z-0 bg-gradient-to-br from-green-600/85 via-green-600/75 to-green-700/85" />
-                )}
-                <span className={`relative z-10 ${toolboxType === "cash" ? "text-white drop-shadow-lg" : ""}`}>$10,000 Cash</span>
-              </button>
+              {/* Cash option is a separate prize path (no toolbox/toolset) */}
+              <div className="mt-4 max-w-5xl mx-auto">
+                <div className="relative flex items-center justify-center my-6 sm:my-8">
+                  <div className="h-px w-full bg-gray-300" />
+                  <div className="absolute px-3 py-1 rounded-full bg-white border border-gray-200 text-[10px] sm:text-xs font-bold tracking-[0.22em] text-gray-600">
+                    OR
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    handleToolboxTypeChange("cash");
+                  }}
+                  className={`w-full py-2.5 sm:py-4 rounded-xl sm:rounded-2xl font-acumin font-[950] text-sm sm:text-2xl transition-all duration-200 border-2 relative overflow-hidden flex items-center justify-center ${
+                    toolboxType === "cash"
+                      ? "border-green-500 shadow-lg shadow-green-500/40 bg-cover bg-center"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600 hover:shadow-lg"
+                  }`}
+                  style={toolboxType === "cash" ? { backgroundImage: `url('/images/majordraws/cash-prize/cash-prize-10000.png')` } : undefined}
+                  suppressHydrationWarning
+                >
+                  {toolboxType === "cash" && (
+                    <div className="absolute inset-0 z-0 bg-gradient-to-br from-green-600/85 via-green-600/75 to-green-700/85" />
+                  )}
+                  <span className={`relative z-10 text-md sm:text-2xl ${toolboxType === "cash" ? "text-white drop-shadow-lg" : ""}`}>$10,000 cash</span>
+                </button>
+
+                
+              </div>
             </div>
           )}
         </div>

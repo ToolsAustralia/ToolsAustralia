@@ -607,10 +607,7 @@ const StripeCardForm = React.forwardRef<
     if (isStripeLoading) {
       return (
         <div className="space-y-0">
-          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-0">
-            <CreditCard className="w-4 h-4 text-red-600" />
-            Payment Details
-          </h4>
+          
           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50 mt-0">
             {/* Payment method tabs skeleton */}
             <div className="flex gap-2 mb-4">
@@ -643,10 +640,7 @@ const StripeCardForm = React.forwardRef<
 
     return (
       <div className="space-y-0">
-        <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-2">
-          <CreditCard className="w-4 h-4 text-red-600" />
-          Payment Details
-        </h4>
+        
         <div className="p-3 border border-gray-300 rounded-lg bg-white mt-0">
           <PaymentElement
             key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
@@ -881,39 +875,49 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                       display: "inline-flex",
                       alignItems: "center",
                     },
-                    // Match coupon code input field size on mobile
+                    // Uniform 44px height to match coupon input and purchase button
                     ".Input": {
-                      fontSize: "14px", // text-sm
-                      padding: "10px", // py-2 equivalent
-                      minHeight: "auto",
+                      fontSize: "14px",
+                      padding: "12px 10px",
+                      minHeight: "44px",
+                      boxSizing: "border-box",
                     },
                     ".Input--empty": {
                       fontSize: "14px",
+                      minHeight: "44px",
                     },
                     ".Input--focus": {
                       fontSize: "14px",
+                      minHeight: "44px",
                     },
                     ".Input--invalid": {
                       fontSize: "14px",
+                      minHeight: "44px",
                     },
-                    // Card number, expiration, and CVC inputs
+                    // Card number, expiration, and CVC inputs - 44px height
                     "input[data-elements-stable-field-name='cardNumber']": {
                       fontSize: "14px",
-                      padding: "8px",
+                      padding: "12px 10px",
+                      minHeight: "44px",
+                      boxSizing: "border-box",
                     },
                     "input[data-elements-stable-field-name='cardExpiry']": {
                       fontSize: "14px",
-                      padding: "8px",
+                      padding: "12px 10px",
+                      minHeight: "44px",
+                      boxSizing: "border-box",
                     },
                     "input[data-elements-stable-field-name='cardCvc']": {
                       fontSize: "14px",
-                      padding: "8px",
+                      padding: "12px 10px",
+                      minHeight: "44px",
+                      boxSizing: "border-box",
                     },
-                    // Input container
                     ".InputElement": {
                       fontSize: "14px",
-                      padding: "8px",
-                      minHeight: "auto",
+                      padding: "12px 10px",
+                      minHeight: "44px",
+                      boxSizing: "border-box",
                     },
                   },
                 },
@@ -1134,39 +1138,48 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                           display: "inline-flex",
                           alignItems: "center",
                         },
-                        // Match coupon code input field size on mobile
+                        // Uniform 44px height to match coupon input and purchase button
                         ".Input": {
-                          fontSize: "14px", // text-sm
-                          padding: "10px",
-                          minHeight: "auto",
+                          fontSize: "14px",
+                          padding: "12px 10px",
+                          minHeight: "44px",
+                          boxSizing: "border-box",
                         },
                         ".Input--empty": {
                           fontSize: "14px",
+                          minHeight: "44px",
                         },
                         ".Input--focus": {
                           fontSize: "14px",
+                          minHeight: "44px",
                         },
                         ".Input--invalid": {
                           fontSize: "14px",
+                          minHeight: "44px",
                         },
-                        // Card number, expiration, and CVC inputs
                         "input[data-elements-stable-field-name='cardNumber']": {
                           fontSize: "14px",
-                          padding: "8px",
+                          padding: "12px 10px",
+                          minHeight: "44px",
+                          boxSizing: "border-box",
                         },
                         "input[data-elements-stable-field-name='cardExpiry']": {
                           fontSize: "14px",
-                          padding: "8px",
+                          padding: "12px 10px",
+                          minHeight: "44px",
+                          boxSizing: "border-box",
                         },
                         "input[data-elements-stable-field-name='cardCvc']": {
                           fontSize: "14px",
-                          padding: "8px",
+                          padding: "12px 10px",
+                          minHeight: "44px",
+                          boxSizing: "border-box",
                         },
-                        // Input container
                         ".InputElement": {
                           fontSize: "14px",
-                          padding: "8px",
-                          minHeight: "auto",
+                          padding: "12px 10px",
+                          minHeight: "44px",
+                          boxSizing: "border-box",
                         },
                       },
                     },

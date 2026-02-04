@@ -78,6 +78,11 @@ export const queryKeys = {
     entries: (userId: string) => ["major-draw", "entries", userId] as const,
   },
 
+  // Winners (major draw winners list - shared cache for homepage, promotions, modal)
+  winners: {
+    majorDraws: ["winners", "major-draws"] as const,
+  },
+
   // Upsell queries
   upsell: {
     offers: (params: Record<string, unknown>) => ["upsell", "offers", params] as const,

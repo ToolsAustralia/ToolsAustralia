@@ -940,8 +940,8 @@ export default function MembershipSection({
                     );
                   })}
             </div>
-            {/* Entry accumulation chart - under package cards when membership selected */}
-            {activeTab === "membership" && (
+            {/* Entry accumulation chart - only visible when package inclusions is expanded */}
+            {activeTab === "membership" && isInclusionsExpanded && (
               <div className="mt-6 sm:mt-8 max-w-md mx-auto">
                 <VerticalAccumulationChart />
               </div>
@@ -1287,12 +1287,7 @@ export default function MembershipSection({
             </div>
           )}
           </div>
-          {/* Entry accumulation chart - at bottom of package cards when membership selected */}
-          {activeTab === "membership" && (
-            <div className="mt-8 pt-8 border-t border-slate-700/30 max-w-4xl mx-auto">
-              <VerticalAccumulationChart />
-            </div>
-          )}
+        
         </div>
       )}
 

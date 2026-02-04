@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { Check, Loader2 } from "lucide-react";
-import { top5Winners } from "@/data";
+import { Check, Loader2, MapPin } from "lucide-react";
 import PackageSelectionModal from "./PackageSelectionModal";
+import { formatWinnerName } from "@/utils/winner-name-formatter";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import ExistingAccountModal from "./ExistingAccountModal";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
@@ -46,7 +46,9 @@ import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
+import LatestWinnersBadge from "../ui/LatestWinnersBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -236,6 +238,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [showExistingAccountModal, setShowExistingAccountModal] = useState(false);
   const [existingAccountConflictField, setExistingAccountConflictField] = useState<"email" | "mobile">("email");
   const [existingAccountEmail, setExistingAccountEmail] = useState<string | undefined>(undefined);
+
+  // Major draw winners from shared cache (homepage/promotions/modal) - only fetches if not already loaded
+  const { data: majorDrawWinners = [], isLoading: majorDrawWinnersLoading } = useMajorDrawWinners();
+  const [currentWinnerSlideIndex, setCurrentWinnerSlideIndex] = useState(0);
+  const [isCarouselResetting, setIsCarouselResetting] = useState(false);
+  const winnerCount = majorDrawWinners.length;
+  const carouselSlides = winnerCount > 1 ? [...majorDrawWinners, ...majorDrawWinners] : majorDrawWinners;
+  const totalCarouselSlides = carouselSlides.length;
 
   // Track if package selection modal has been auto-opened from promotion page
   // This prevents the modal from auto-opening multiple times during the same session
@@ -473,6 +483,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   const [currentStep, setCurrentStep] = useState(1); // Start neutral, will be updated by useEffect based on auth
 
+  // Step 2 is only available when step 1 is complete (registered or authenticated)
+  const hasCompletedRegistration = isAuthenticated || guestUserData !== null;
+
   // Validate promo link when code is detected
   // This fetches bonus entries information to display encouraging text to users
   useEffect(() => {
@@ -522,6 +535,28 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
     validatePromoLink();
   }, [promoLinkCode, isOpen, activePlan]);
+
+  // Auto-rotate winner slide every 5 seconds, one direction only (always slide right)
+  useEffect(() => {
+    if (!isOpen || winnerCount <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentWinnerSlideIndex((prev) => (prev < winnerCount ? prev + 1 : 0));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isOpen, winnerCount]);
+
+  // When we land on the duplicate first slide (index === winnerCount), reset to 0 without animating
+  useEffect(() => {
+    if (winnerCount <= 1 || currentWinnerSlideIndex !== winnerCount) return;
+    const t = setTimeout(() => {
+      setIsCarouselResetting(true);
+      setCurrentWinnerSlideIndex(0);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setIsCarouselResetting(false));
+      });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [currentWinnerSlideIndex, winnerCount]);
 
   // Resolve billing details once so every Stripe call receives consistent data.
   const resolvedBillingDetails = React.useMemo(() => {
@@ -885,24 +920,48 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       }
     }
 
-    // One-time: ensure SetupIntent when Step 2 and no secrets yet
-    if (currentStep === 2 && hasCompletedRegistration && isActualPlan && !setupIntentClientSecret && !paymentIntentClientSecret && activePlan?.period !== "mo") {
-      if (!isCreatingSetupIntentRef.current) {
-        isCreatingSetupIntentRef.current = true;
-        createSetupIntent.mutate(undefined, {
-          onSuccess: (result) => {
-            if (result.success && result.client_secret) {
-              setSetupIntentClientSecret(result.client_secret);
-              setPaymentIntentClientSecret(null);
-              setCardFormError(null);
-            }
-            isCreatingSetupIntentRef.current = false;
+    // One-time: ensure PaymentIntent when Step 2 and no secrets yet (do not use SetupIntent for one-time)
+    if (
+      currentStep === 2 &&
+      hasCompletedRegistration &&
+      isActualPlan &&
+      !setupIntentClientSecret &&
+      !paymentIntentClientSecret &&
+      activePlan?.period !== "mo" &&
+      amountInCents > 0
+    ) {
+      if (!isCreatingPaymentIntentRef.current) {
+        const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        const packageName = promoEnhancedPlan?.name || activePlan?.name;
+        isCreatingPaymentIntentRef.current = true;
+        createPaymentIntent.mutate(
+          {
+            amount: amountInCents,
+            currency: "aud",
+            packageId: packageId || undefined,
+            packageName: packageName,
+            userEmail: isAuthenticated ? userData?.email : guestUserData?.email,
+            packageType: "one-time",
           },
-          onError: (error) => {
-            console.error("Failed to create SetupIntent on Step 2:", error);
-            isCreatingSetupIntentRef.current = false;
-          },
-        });
+          {
+            onSuccess: (result) => {
+              if (result.success && result.client_secret) {
+                setPaymentIntentClientSecret(result.client_secret);
+                if (result.payment_intent_id) {
+                  setPaymentIntentId(result.payment_intent_id);
+                }
+                setSetupIntentClientSecret(null);
+                setCardFormError(null);
+                lastPaymentIntentAmountRef.current = amountInCents;
+              }
+              isCreatingPaymentIntentRef.current = false;
+            },
+            onError: (error) => {
+              console.error("Failed to create PaymentIntent on Step 2 (one-time):", error);
+              isCreatingPaymentIntentRef.current = false;
+            },
+          }
+        );
       }
     }
 
@@ -1356,8 +1415,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     }
   };
 
+  /** Clickable step navigation: always allow going back to step 1; allow step 2 only when step 1 is complete (registered or authenticated). */
+  const handleStepClick = (step: 1 | 2) => {
+    if (step === 1) {
+      setCurrentStep(1);
+      return;
+    }
+    if (step === 2 && hasCompletedRegistration) {
+      handleRegistration()
+      setCurrentStep(2);
+    }
+  };
+
   const handleNextStep = () => {
     if (currentStep === 1) {
+      // Already complete (registered or authenticated): just go to step 2 — do not call register API again
+      if (hasCompletedRegistration) {
+        handleRegistration()
+        setCurrentStep(2);
+        return;
+      }
+
       // Validate personal details first
       const personalInfoValid = formData.firstName && formData.lastName && formData.email && formData.phone;
       const mobileValid = validateMobileNumber(formData.phone);
@@ -4461,50 +4539,115 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   // Loading and success screens are now handled by global LoadingContext
 
+  const promoMultiplier = promoEnhancedPlan?.metadata?.isPromoActive && typeof promoEnhancedPlan?.metadata?.promoMultiplier === "number"
+    ? (promoEnhancedPlan.metadata.promoMultiplier as number)
+    : 0;
+  const packageBadgeSrc = promoMultiplier >= 2 && promoMultiplier <= 10 && [2, 3, 5, 10].includes(promoMultiplier)
+    ? `/images/badge/X${promoMultiplier}.png`
+    : null;
+
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false}>
-      <ModalHeader title="" onClose={handleClose} showLogo={true} />
+      <ModalHeader
+        title=""
+        titleNode={
+          <>
+            JOIN <span className="text-red-200 font-bold">TOOLS AUSTRALIA</span>
+          </>
+        }
+        subtitle={
+          activePlan.period === "one-time"
+            ? "Get your name into the draw"
+            : "Get your name in every draw automatically"
+        }
+        onClose={handleClose}
+        showLogo={true}
+      />
 
       <ModalContent>
-        {/* Hide header on mobile for step 2 (payment step) */}
+        {/* Active promo for entries - bonus from link (below header, centered) */}
         <div className={`text-center ${currentStep === 2 ? "hidden sm:block" : ""}`}>
-          <h1 className="text-base sm:text-lg font-bold text-black mb-1">
-            JOIN <span className="text-[#ee0000]">TOOLS AUSTRALIA</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-gray-600">
-            {activePlan.period === "one-time"
-              ? "Get your name into the draw"
-              : "Get Your Name in EVERY Draw Automatically"}
-          </p>
-          {/* Dynamic promo text - show based on promo link applicability and current plan type */}
           {promoLinkInfo?.isValid &&
             promoLinkInfo.bonusEntries > 0 &&
-            // For subscription packages - check if promo applies to membership
             activePlan.period !== "one-time" &&
             promoLinkInfo.appliesToMembership && (
-              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold mt-1 animate-pulse">
-                🎁 Bonus: Get {promoLinkInfo.bonusEntries} Extra Entries
-                {promoLinkInfo.appliesToMembership && promoLinkInfo.appliesToOneTime
-                  ? " When You Purchase!"
-                  : " When You Purchase a Membership!"}
+              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse">
+                🎁 Active promo: Get {promoLinkInfo.bonusEntries} extra entries when you join
               </p>
             )}
-
-          {/* For one-time packages - check if promo applies to one-time */}
           {promoLinkInfo?.isValid &&
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period === "one-time" &&
             promoLinkInfo.appliesToOneTime && (
-              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold mt-1 animate-pulse">
-                🎁 Bonus: Get {promoLinkInfo.bonusEntries} Extra Entries
-                {promoLinkInfo.appliesToMembership && promoLinkInfo.appliesToOneTime
-                  ? " When You Purchase a One-Time Package!"
-                  : " With This Purchase!"}
+              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse">
+                🎁 Active promo: Get {promoLinkInfo.bonusEntries} extra entries with this purchase
               </p>
             )}
         </div>
-        <div className="w-full max-w-sm mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl">
-          <div className="bg-white rounded-lg sm:rounded-xl shadow-xl p-3 sm:p-6">
+
+        <div className="w-full max-w-sm mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl relative">
+          <div className="relative">
+            {/* Package badge - show when step 1 or step 2 is active */}
+            {packageBadgeSrc && (currentStep === 1 || currentStep === 2) && (
+  <div
+    className={`absolute -top-4 z-20 pointer-events-none
+      ${currentStep === 2 ? "-right-[12px]" : "-left-[12px]"}
+    `}
+  >
+    <Image
+      src={packageBadgeSrc}
+      alt={`${promoMultiplier}x bonus entries`}
+      width={72}
+      height={72}
+      className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
+    />
+  </div>
+)}
+            {/* 2-step indicator: Your Details | Billing Info - clickable; step 2 only when step 1 complete */}
+            <div className="grid grid-cols-2 gap-0 w-full mb-4 sm:mb-5 rounded-lg overflow-hidden border border-gray-200 divide-x divide-gray-200">
+              <button
+                type="button"
+                onClick={() => handleStepClick(1)}
+                className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
+                  currentStep === 1 ? "bg-[#ee0000] text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
+                }`}
+                aria-current={currentStep === 1 ? "step" : undefined}
+              >
+                <span
+                  className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
+                    currentStep === 1 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+                  }`}
+                >
+                  1
+                </span>
+                <span className="text-xs sm:text-sm whitespace-nowrap">Your Details</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => hasCompletedRegistration && handleStepClick(2)}
+                disabled={!hasCompletedRegistration}
+                className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors ${
+                  !hasCompletedRegistration
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-80"
+                    : currentStep === 2
+                      ? "bg-[#ee0000] text-white font-bold cursor-pointer"
+                      : "bg-gray-100 text-gray-500 font-medium cursor-pointer hover:bg-gray-200"
+                }`}
+                aria-current={currentStep === 2 ? "step" : undefined}
+                aria-disabled={!hasCompletedRegistration}
+                title={!hasCompletedRegistration ? "Complete your details first" : undefined}
+              >
+                <span
+                  className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
+                    currentStep === 2 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+                  }`}
+                >
+                  2
+                </span>
+                <span className="text-xs sm:text-sm whitespace-nowrap">Billing Info</span>
+              </button>
+            </div>
+
             {/* Step 1: Personal Details for new users */}
             {currentStep === 1 && (
               <div className="space-y-3 sm:space-y-4">
@@ -4519,18 +4662,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   name="firstName"
                   value={formData.firstName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange("firstName", e.target.value)}
-                  label="First Name"
                   placeholder="Enter your first name"
                   error={registrationErrors.firstName}
+                  className="h-11"
                 />
 
                 <Input
                   name="lastName"
                   value={formData.lastName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange("lastName", e.target.value)}
-                  label="Last Name"
                   placeholder="Enter your last name"
                   error={registrationErrors.lastName}
+                  className="h-11"
                 />
 
                 <Input
@@ -4538,9 +4681,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   name="email"
                   value={formData.email}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange("email", e.target.value)}
-                  label="Email"
                   placeholder="Enter your email address"
                   error={registrationErrors.email}
+                  className="h-11"
                 />
 
                 <div>
@@ -4563,15 +4706,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         handleInputChange("phone", formattedValue);
                       }
                     }}
-                    label="Phone Number"
+                   
                     placeholder="0412 345 678"
                     error={registrationErrors.mobile}
                     maxLength={getPhoneMaxLength(formData.phone)}
                     autoComplete="tel"
+                    className="h-11"
                   />
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                    Australian mobile number. We&apos;ll call this number if you win.
-                  </p>
+                
                   {formData.phone && !validateMobileNumber(formData.phone) && !registrationErrors.mobile && (
                     <p className="text-xs sm:text-sm text-red-500 mt-1">
                       Please enter a valid Australian mobile number
@@ -4582,22 +4724,31 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 <Button
                   type="button"
                   onClick={handleNextStep}
-                  disabled={Boolean(
-                    !formData.firstName ||
-                      !formData.lastName ||
-                      !formData.email ||
-                      formData.phone === "" ||
-                      !validateMobileNumber(formData.phone) ||
-                      isRegistering
-                  )}
+                  disabled={
+                    hasCompletedRegistration
+                      ? false
+                      : Boolean(
+                          !formData.firstName ||
+                            !formData.lastName ||
+                            !formData.email ||
+                            formData.phone === "" ||
+                            !validateMobileNumber(formData.phone) ||
+                            isRegistering
+                        )
+                  }
                   variant="primary"
                   fullWidth
                   size="lg"
                   loading={isRegistering}
-                  className="font-bold text-sm sm:text-base"
+                  className="h-11 !py-0 font-bold text-sm sm:text-base"
                 >
                   {isRegistering ? (
                     "Creating Account..."
+                  ) : hasCompletedRegistration ? (
+                    <>
+                      <span className="sm:hidden">Continue to Billing</span>
+                      <span className="hidden sm:inline">Continue to Billing</span>
+                    </>
                   ) : (
                     <>
                       <span className="sm:hidden">REGISTER</span>
@@ -4608,7 +4759,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               </div>
             )}
 
-            {/* Step 2: Payment Details */}
+            {/* Step 2: Billing Info */}
             {currentStep === 2 && (
               <div className="space-y-2 sm:space-y-3">
                 {/* Payment Method Selector - Always show for authenticated users */}
@@ -4670,10 +4821,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       {/* Show Bonus Applied section when promo link is active */}
                       {promoLinkInfo?.isValid && promoLinkInfo.bonusEntries > 0 ? (
                         <div className="flex gap-2">
-                          <div className="flex-1 px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl bg-gray-50 flex items-center text-sm sm:text-base text-gray-700">
+                          <div className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl bg-gray-50 flex items-center text-sm sm:text-base text-gray-700">
                             {promoLinkInfo.bonusEntries} extra entries applied
                           </div>
-                          <div className="bg-green-500 text-white px-2 sm:px-3 py-2 sm:py-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
+                          <div className="h-11 bg-green-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
                             <Check size={12} />
                             <span className="text-xs font-bold">APPLIED</span>
                           </div>
@@ -4695,16 +4846,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                   clearReferralCode();
                                 }
                               }}
-                              className="flex-1 px-2 sm:px-3 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base"
+                              className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base"
                               placeholder="Enter coupon code"
                             />
                             {couponApplied ? (
-                              <div className="bg-green-500 text-white px-2 sm:px-3 py-2 sm:py-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
+                              <div className="h-11 bg-green-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
                                 <Check size={12} />
                                 <span className="text-xs font-bold">APPLIED</span>
                               </div>
                             ) : showApplyingIndicator ? (
-                              <div className="flex items-center gap-2 text-xs text-gray-500 px-2 sm:px-3 py-2 sm:py-3">
+                              <div className="h-11 flex items-center gap-2 text-xs text-gray-500 px-2 sm:px-3">
                                 <Loader2 className="h-4 w-4 animate-spin" />
                                 <span>Applying...</span>
                               </div>
@@ -4713,7 +4864,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                 type="button"
                                 onClick={() => handleCouponApply("manual")}
                                 disabled={isApplyDisabled}
-                                className="bg-gray-500 text-white px-2 sm:px-3 py-2 sm:py-3 rounded-lg sm:rounded-xl hover:bg-gray-600 transition-colors text-xs sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="h-11 bg-gray-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl hover:bg-gray-600 transition-colors text-xs sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                               >
                                 Apply
                               </button>
@@ -4735,7 +4886,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   {/* Option A (wallet UX): when Google Pay or Apple Pay is selected, hide main Purchase and show instruction to click wallet button in form */}
                   {!activePlan || activePlan.id === "placeholder" ? (
                     // Payment Button Skeleton
-                    <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                    <div className="h-11 bg-gray-200 rounded-lg animate-pulse"></div>
                   ) : (paymentMethodTypeFromElement === "google_pay" || paymentMethodTypeFromElement === "googlePay" || paymentMethodTypeFromElement === "apple_pay" || paymentMethodTypeFromElement === "applePay") ? (
                     <div className="rounded-lg sm:rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4 text-center">
                       <p className="text-sm font-medium text-amber-900">
@@ -4755,7 +4906,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       fullWidth
                       size="lg"
                       loading={isSubmitting || createPaymentIntent.isPending || createSetupIntent.isPending}
-                      className="font-bold text-sm sm:text-base"
+                      className="h-11 !py-0 font-bold text-sm sm:text-base"
                     >
                       {isSubmitting ? (
                         "Processing..."
@@ -4949,37 +5100,96 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               </div>
             )}
 
-            {/* Winner Announcement Section */}
+            {/* Winner Announcement Section - Text inside image like LatestWinnerHero, no container */}
             <div className="mt-4 sm:mt-6">
-              <div className="flex justify-between w-full mb-3 sm:mb-4">
-                {/* Winner Images */}
-                {top5Winners.slice(0, 5).map((winner) => (
-                  <div
-                    key={winner.id}
-                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-[#ee0000] overflow-hidden flex-shrink-0"
-                  >
-                    <Image
-                      src={winner.image}
-                      alt={winner.name}
-                      width={70}
-                      height={70}
-                      className="w-full h-full object-cover"
-                    />
+              {majorDrawWinnersLoading ? (
+                <div className="flex flex-col items-center w-full">
+                  <div className="w-full aspect-[4/3] max-h-[14rem] sm:max-h-[18rem] rounded-lg bg-gray-200 animate-pulse" />
+                </div>
+              ) : majorDrawWinners.length === 0 ? null : (
+                <div className="flex flex-col items-center w-full overflow-hidden">
+                  
+                  <div className="relative w-full min-h-[14rem] sm:min-h-[18rem] overflow-hidden rounded-lg">
+                    <div
+                      className="flex"
+                      style={{
+                        width: `${totalCarouselSlides * 100}%`,
+                        transform: `translateX(-${(100 / totalCarouselSlides) * currentWinnerSlideIndex}%)`,
+                        transition: isCarouselResetting ? "none" : "transform 0.5s ease-out",
+                      }}
+                    >
+                      {carouselSlides.map((winner, idx) => {
+                        const displayImage =
+                          winner.imageUrl ||
+                          (winner.prize?.images?.[0]) ||
+                          "/images/placeholders/prize-placeholder.png";
+                        const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
+                        return (
+                          <div
+                            key={`${winner.id}-${idx}`}
+                            className="flex-shrink-0 relative aspect-[4/3] max-h-[14rem] sm:max-h-[18rem] w-full overflow-hidden rounded-lg"
+                            style={{ width: `${100 / totalCarouselSlides}%` }}
+                          >
+                            <Image
+                              src={displayImage}
+                              alt={displayName}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 100vw, 50vw"
+                            />
+                            <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-3 z-20 flex justify-center">
+                              <LatestWinnersBadge drawName={winner.drawName} size="small" className="sm:hidden" />
+                              <LatestWinnersBadge drawName={winner.drawName} size="large" className="hidden sm:inline-flex" />
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+                            <div className="absolute bottom-0 left-0 right-0 z-10 p-3 sm:p-4">
+                              <div className="bg-black/75 backdrop-blur-md rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-5 sm:py-4 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex items-center justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 flex-1 min-w-0">
+                                  <p className="text-base sm:text-xl font-bold font-['Poppins'] tracking-tight relative">
+                                    <span
+                                      className="absolute inset-0 bg-gradient-to-r from-yellow-400/30 via-white/40 to-yellow-400/30 bg-clip-text text-transparent blur-md opacity-60 animate-pulse"
+                                      aria-hidden
+                                    >
+                                      {displayName}
+                                    </span>
+                                    <span className="relative z-10 bg-gradient-to-r from-white via-yellow-50 via-white to-yellow-50 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)]">
+                                      {displayName}
+                                    </span>
+                                    <span
+                                      className="absolute inset-0 bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent blur-[2px] opacity-40 -z-0"
+                                      style={{ WebkitTextStroke: "1px rgba(255, 255, 255, 0.2)" } as React.CSSProperties}
+                                      aria-hidden
+                                    >
+                                      {displayName}
+                                    </span>
+                                  </p>
+                                  {winner.winnerState && (
+                                    <div className="flex items-center gap-1.5 sm:gap-2 relative z-10">
+                                      <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-300 flex-shrink-0" />
+                                      <span className="text-xs sm:text-sm text-gray-100">{winner.winnerState}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="flex-shrink-0 text-[10px] sm:text-xs font-bold text-white relative z-10">
+                                  {(winner.drawDate
+                                    ? new Date(winner.drawDate)
+                                    : new Date(winner.selectedDate)
+                                  ).toLocaleDateString("en-AU", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                ))}
-              </div>
-
-              <blockquote className="text-center ">
-                <p className="text-xs sm:text-sm text-gray-700 italic">
-                  &quot;We are on the hunt for our next lucky winner! will it be you?&quot; Good luck!
-                </p>
-              </blockquote>
-
-              <div className="text-center">
-                <p className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">
-                  - Tools Australia
-                </p>
-              </div>
+                
+                </div>
+              )}
             </div>
           </div>
         </div>
