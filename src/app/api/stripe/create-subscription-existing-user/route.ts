@@ -279,15 +279,14 @@ export async function POST(request: NextRequest) {
       ? existingUser.subscription!.lastMonthAccumulatedEntries
       : undefined;
 
+    // Omit pendingChange/previousSubscription – Mongoose rejects undefined for these subdocument paths
     existingUser.subscription = {
       packageId: membershipPackage._id,
-      pendingChange: undefined, // Initialize pendingChange field for subscription management
       isActive: subscription.status === "active", // ✅ Set based on Stripe subscription status
       startDate: new Date(),
       endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
       autoRenew: true,
       status: subscription.status, // Track subscription status
-      // ✅ PRESERVE: Keep lastMonthAccumulatedEntries for resubscription continuation
       lastMonthAccumulatedEntries: preservedLastMonthAccumulatedEntries,
     };
 
@@ -331,15 +330,27 @@ export async function POST(request: NextRequest) {
         const periodEnd = getSubscriptionPeriodEnd(subscriptionUpdated);
         const endDate = periodEnd != null ? new Date(periodEnd * 1000) : undefined;
 
-        existingUser.subscription = {
-          ...existingUser.subscription!,
-          isActive: subscriptionUpdated.status === "active",
-          status: subscriptionUpdated.status,
-          endDate,
+        const isActive = subscriptionUpdated.status === "active";
+        const newStatus = subscriptionUpdated.status;
+
+        // Update only the fields we need via $set – never touch previousSubscription/pendingChange so Mongoose never sees undefined
+        const updatePayload: Record<string, unknown> = {
+          "subscription.isActive": isActive,
+          "subscription.status": newStatus,
         };
-        existingUser.save().catch((err) => {
-          console.warn("Non-critical user save after invoice pay failed (webhook will handle):", err);
+        if (endDate !== undefined) {
+          updatePayload["subscription.endDate"] = endDate;
+        }
+        await User.updateOne({ _id: existingUser._id }, { $set: updatePayload }).catch((err) => {
+          console.warn("Non-critical user update after invoice pay failed (webhook will handle):", err);
         });
+
+        // Keep in-memory document in sync for the response (no full replace – only set updated fields)
+        existingUser.subscription!.isActive = isActive;
+        existingUser.subscription!.status = newStatus;
+        if (endDate !== undefined) {
+          existingUser.subscription!.endDate = endDate;
+        }
 
         return NextResponse.json({
           success: true,

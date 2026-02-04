@@ -3308,37 +3308,47 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
         if (activePlan.period === "mo") {
           // Subscription for existing user
-          // ✅ CRITICAL: Check if subscription was already created to prevent duplicate creation
-          if (subscriptionCreatedRef.current) {
+          // When paying with saved PM we must always call the API so the backend can charge the first invoice.
+          // Only reuse cached subscription when using Payment Element (no saved method) to avoid duplicate creation.
+          const payingWithSavedMethod = !!(useSavedPaymentMethod && selectedPaymentMethod);
+          const canReuseSubscription = subscriptionCreatedRef.current && !payingWithSavedMethod;
+
+          if (canReuseSubscription) {
             console.log(
-              "⚠️ Subscription already created, skipping duplicate creation:",
+              "⚠️ Subscription already created (Payment Element flow), reusing:",
               subscriptionCreatedRef.current
             );
-            // Return existing subscription data
             result = {
               success: true,
               data: {
                 subscriptionId: subscriptionCreatedRef.current,
                 clientSecret: paymentIntentClientSecret || undefined,
-                userId: userIdRef.current || undefined, // ✅ Include userId from ref if available (for consistency)
+                userId: userIdRef.current || undefined,
+              },
+              subscription: {
+                id: subscriptionCreatedRef.current,
+                status: "incomplete",
+                clientSecret: paymentIntentClientSecret || undefined,
               },
             };
           } else {
-            // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate subscription creation
+            // ✅ Always call API when paying with saved method; or create when no subscription exists yet
             const userEmail = userData?.email || "unknown";
             const idempotencyKey = `sub_${packageId}_${userEmail}_${Date.now()}`;
-
             const promoLinkCodeToSend = promoLinkCode || undefined;
+            const cancelPreviousSubscriptionId = previousSubscriptionToCancelRef.current ?? undefined;
+            if (previousSubscriptionToCancelRef.current) previousSubscriptionToCancelRef.current = null;
+
             result = await createSubscriptionExistingUser({
               packageId,
               paymentMethodId,
-              idempotencyKey, // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate creation
+              idempotencyKey,
+              cancelPreviousSubscriptionId,
               referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
               affiliateCode: affiliateCode || undefined,
               promoLinkCode: promoLinkCodeToSend,
             });
 
-            // ✅ Track subscription creation to prevent duplicates
             if (result?.success && result.subscription?.id) {
               subscriptionCreatedRef.current = result.subscription.id;
               console.log("✅ Subscription created and tracked:", result.subscription.id);
