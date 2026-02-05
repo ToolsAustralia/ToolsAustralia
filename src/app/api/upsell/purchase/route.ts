@@ -189,6 +189,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Upsell offer has expired" }, { status: 400 });
     }
 
+    // One purchase per appearance: block duplicate for same trigger (original purchase that showed this upsell)
+    const triggerId = validatedData.originalPurchaseContext?.paymentIntentId;
+    type UpsellWithTrigger = { offerId: string; triggeringPaymentIntentId?: string };
+    if (triggerId) {
+      const alreadyPurchasedForTrigger = (user.upsellPurchases as UpsellWithTrigger[] | undefined)?.some(
+        (p) => p.offerId === offer.id && p.triggeringPaymentIntentId === triggerId
+      );
+      if (alreadyPurchasedForTrigger) {
+        return NextResponse.json(
+          { error: "You have already purchased this upsell for this order." },
+          { status: 409 }
+        );
+      }
+    } else {
+      const alreadyPurchasedForOffer = user.upsellPurchases?.some((p) => p.offerId === offer.id);
+      if (alreadyPurchasedForOffer) {
+        return NextResponse.json(
+          { error: "You have already purchased this upsell." },
+          { status: 409 }
+        );
+      }
+    }
+
     // Ensure user has a Stripe customer ID
     if (!user.stripeCustomerId) {
       return NextResponse.json({ error: "User does not have a Stripe customer ID" }, { status: 400 });
@@ -433,7 +456,7 @@ async function handleOneClickPurchase(
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
   calculatedEntriesCount: number,
-  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw" }
+  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string }
 ) {
   try {
     if (!paymentMethodId) {
@@ -530,6 +553,10 @@ async function handleOneClickPurchase(
         // Store original package type for bonus entry promo checks
         ...(originalPurchaseContext?.packageType && {
           originalPackageType: originalPurchaseContext.packageType,
+        }),
+        // One purchase per appearance: tie upsell to the trigger (original purchase) for webhook storage
+        ...(originalPurchaseContext?.paymentIntentId && {
+          triggeringPaymentIntentId: originalPurchaseContext.paymentIntentId,
         }),
         ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
         ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),
@@ -661,7 +688,7 @@ async function handlePaymentIntentCreation(
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
   calculatedEntriesCount: number,
-  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw" },
+  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   request?: NextRequest // ✅ NEW: Add request parameter for error logging
 ) {
   try {
@@ -675,6 +702,10 @@ async function handlePaymentIntentCreation(
       // Store original package type for bonus entry promo checks
       ...(originalPurchaseContext?.packageType && {
         originalPackageType: originalPurchaseContext.packageType,
+      }),
+      // One purchase per appearance: tie upsell to the trigger (original purchase) for webhook storage
+      ...(originalPurchaseContext?.paymentIntentId && {
+        triggeringPaymentIntentId: originalPurchaseContext.paymentIntentId,
       }),
       ...(miniDrawInfo?.miniDrawId && { miniDrawId: miniDrawInfo.miniDrawId }),
       ...(miniDrawInfo?.miniDrawName && { miniDrawName: miniDrawInfo.miniDrawName }),

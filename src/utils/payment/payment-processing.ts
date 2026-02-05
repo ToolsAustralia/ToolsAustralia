@@ -41,6 +41,8 @@ type PaymentMetadata = {
   // ✅ A/B Testing: Experiment assignment stored in payment metadata
   experimentId?: string;
   variantId?: string;
+  /** Original purchase PaymentIntent id that triggered this upsell (one purchase per appearance) */
+  triggeringPaymentIntentId?: string;
 };
 interface UserDocument {
   _id: { toString: () => string };
@@ -99,6 +101,7 @@ interface UserDocument {
     entriesAdded: number;
     amountPaid: number;
     purchaseDate: Date;
+    triggeringPaymentIntentId?: string;
   }>;
 
   markModified: (path: string) => void;
@@ -920,7 +923,7 @@ async function grantBenefits(
   } else if (packageData.packageType === "membership") {
     await handleSubscriptionPackage(user, packageData);
   } else if (packageData.packageType === "upsell") {
-    await handleUpsellPackage(user, packageData, paymentIntentId);
+    await handleUpsellPackage(user, packageData, paymentIntentId, paymentMetadata);
   } else if (packageData.packageType === "mini-draw") {
     // console.log(`🎲 Processing mini-draw package: ${packageData.packageName}`);
     // Extract miniDrawId from paymentMetadata for package tracking
@@ -1582,7 +1585,8 @@ async function handleSubscriptionPackage(
 async function handleUpsellPackage(
   user: UserDocument,
   packageData: { packageId?: string; packageName?: string; entries: number; price: number },
-  paymentIntentId?: string
+  paymentIntentId?: string,
+  paymentMetadata?: PaymentMetadata
 ): Promise<void> {
   if (!packageData.packageId) return;
 
@@ -1592,6 +1596,9 @@ async function handleUpsellPackage(
     entriesAdded: packageData.entries,
     amountPaid: packageData.price,
     purchaseDate: new Date(),
+    ...(paymentMetadata?.triggeringPaymentIntentId && {
+      triggeringPaymentIntentId: paymentMetadata.triggeringPaymentIntentId,
+    }),
   };
 
   // ✅ CRITICAL FIX: Use atomic $push to prevent race condition duplicates
