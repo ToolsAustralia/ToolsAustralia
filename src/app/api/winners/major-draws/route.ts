@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
+import MajorDraw from "@/models/MajorDraw";
+
+// Ensure MajorDraw model is registered before populate (prevents MissingSchemaError)
+void MajorDraw;
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +20,7 @@ export async function GET(request: NextRequest) {
       .populate("userId", "firstName lastName state")
       .populate({
         path: "drawId",
-        model: "MajorDraw",
+        model: MajorDraw,
         select: "name prize drawDate",
       })
       .lean();

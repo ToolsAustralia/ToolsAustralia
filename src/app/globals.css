@@ -1371,6 +1371,40 @@
   }
 }
 
+/* Membership package Enter Now – same animation as promo-hero-cta-button (shimmer + hover), design unchanged */
+.membership-enter-cta-animation {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.membership-enter-cta-animation::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
+  opacity: 0.7;
+  transform: translateX(-130%);
+  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.membership-enter-cta-animation > * {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) and (min-width: 1024px) {
+  .membership-enter-cta-animation:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 22px 34px rgba(0, 0, 0, 0.35);
+  }
+}
+@media (hover: hover) and (max-width: 1023px) {
+  .membership-enter-cta-animation:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 22px 34px rgba(0, 0, 0, 0.35);
+  }
+}
+
 /* Hourglass flip animation - rotates 180 degrees in one direction with pause */
 @keyframes hourglass-flip {
   0% {

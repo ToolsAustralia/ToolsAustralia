@@ -4,10 +4,13 @@ import React from "react";
 import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPackageIcon } from "@/utils/images/package-icons";
+import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 
 interface PackageInclusionsExpandedProps {
   isExpanded: boolean;
   packages: LocalMembershipPlan[];
+  /** When true, shows the accumulation chart at the bottom (e.g. when toggle is on "Membership packs"). */
+  showAccumulationChart?: boolean;
 }
 
 /**
@@ -15,7 +18,7 @@ interface PackageInclusionsExpandedProps {
  * Inline expandable component displaying full package inclusions
  * for additional packages. Adapts to light and dark backgrounds (transparent/no background).
  */
-const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ isExpanded, packages }) => {
+const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ isExpanded, packages, showAccumulationChart = false }) => {
   // Helper function to get package color scheme - uses colors that work on both light and dark backgrounds
   const getPackageColorScheme = (planId: string) => {
     const normalizedId = planId.toLowerCase();
@@ -92,7 +95,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
   if (!isExpanded) return null;
 
   return (
-    <div className="w-full px-4 mt-4 mb-6" style={{ background: "transparent" }}>
+    <div className="w-full mt-4 mb-6" style={{ background: "transparent" }}>
       <div className="space-y-6">
         {packages.map((plan) => {
           const colorScheme = getPackageColorScheme(plan.id);
@@ -135,6 +138,12 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
           );
         })}
       </div>
+      {/* Entry accumulation chart - only when membership packs tab is active */}
+      {showAccumulationChart && (
+        <div className="mt-6 sm:mt-8 max-w-md mx-auto">
+          <VerticalAccumulationChart />
+        </div>
+      )}
     </div>
   );
 };

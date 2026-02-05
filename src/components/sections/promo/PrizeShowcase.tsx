@@ -214,6 +214,14 @@ const getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash
   return "sidchrome";
 };
 
+// Helper to get toolset (power toolset brand) from slug. Slug format: "{toolset}-{toolbox}"
+const getToolsetFromSlug = (slug: string): "milwaukee" | "dewalt" | "makita" | null => {
+  if (!slug || slug === "cash-prize") return null;
+  const toolset = slug.split("-")[0];
+  if (toolset === "milwaukee" || toolset === "dewalt" || toolset === "makita") return toolset;
+  return null;
+};
+
 // Helper function to filter prizes by toolbox type
 const filterPrizesByToolboxType = (prizes: PrizeCatalogEntry[], toolboxType: "sidchrome" | "milwaukee" | "cash") => {
   if (toolboxType === "cash") {
@@ -304,7 +312,20 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const toolsetToolboxType: "sidchrome" | "milwaukee" =
     toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
   const toolsetPrizes = filterPrizesByToolboxType(prizes, toolsetToolboxType);
-  
+
+  // Keep one toolset card visually selected when switching toolbox (URL may lag). Same toolset, current toolbox.
+  const effectiveSlugForToolsetGrid =
+    toolboxType === "cash" || !activeSlug
+      ? activeSlug
+      : toolsetPrizes.some((p) => p.slug === activeSlug)
+        ? activeSlug
+        : (() => {
+            const toolset = getToolsetFromSlug(activeSlug);
+            if (!toolset) return activeSlug;
+            const derived = `${toolset}-${toolsetToolboxType}`;
+            return toolsetPrizes.some((p) => p.slug === derived) ? derived : activeSlug;
+          })();
+
   // Find the index of the active prize in the filtered list for mobile navigation
   const activePrizeIndex = filteredPrizes.findIndex((p) => p.slug === activeSlug);
   
@@ -466,10 +487,10 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "cash") => {
     // Only navigate if the type is actually changing
     if (toolboxType === type) return;
-    
+
     setToolboxType(type);
     localStorage.setItem("prizeToolboxType", type);
-    
+
     if (type === "cash") {
       handleSelectPrize("cash-prize");
       return;
@@ -478,8 +499,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     // Remember last non-cash toolbox type so Step 2 stays visible if cash is selected later
     setLastNonCashToolboxType(type);
 
-    // IMPORTANT UX: Selecting a toolbox should NOT navigate.
-    // Navigation should only happen once a Power Toolset option is picked.
+    // Retain toolset selection when switching toolbox: e.g. Milwaukee + DeWalt -> Sidchrome toolbox -> Sidchrome + DeWalt
+    const currentToolset = getToolsetFromSlug(activeSlug ?? "");
+    if (currentToolset) {
+      const newSlug = `${currentToolset}-${type}` as const;
+      handleSelectPrize(newSlug);
+    }
   };
 
   if (!activePrize) {
@@ -538,7 +563,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
           {prizes.length > 1 && (
             <div className="mt-4 sm:mt-6">
               <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
-               Step 1: Pick your <span style={{ color: "#EE0000" }}>toolbox</span>
+               Pick your <span style={{ color: "#EE0000" }}>toolbox</span>
               </p>
               
               {/* Toolbox Type Toggle - Sidchrome and Milwaukee only */}
@@ -568,13 +593,13 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </div>
               
               <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
-                Step 2: Pick your <span style={{ color: "#EE0000" }}>Power Toolset</span>
+               Pick your <span style={{ color: "#EE0000" }}>Power Toolset</span>
               </p>
 
               {/* Prize selection - 3-card grid for the selected toolbox type (stay visible even when cash is selected) */}
               <div className={`grid ${toolsetPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 sm:gap-4 max-w-5xl mx-auto overflow-visible`}>
                     {toolsetPrizes.map((prizeOption) => {
-                      const isActive = prizeOption.slug === activeSlug;
+                      const isActive = prizeOption.slug === effectiveSlugForToolsetGrid;
                       const brandColors = getPrizeBrandColors(prizeOption.slug);
                       const brandLogoPath = getBrandLogoPath(prizeOption.slug);
                       const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
