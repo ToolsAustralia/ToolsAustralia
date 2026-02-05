@@ -571,7 +571,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" height="fixed" fixedHeight="h-[80dvh]">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="sm" height="fixed" fixedHeight="min-h-[80dvh]">
       <ModalHeader title="Select Your Package" onClose={onClose} showLogo={true} />
 
       <ModalContent padding="lg" className="">
@@ -809,12 +809,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
           })}
         </div>
 
-        {/* Chart Section - Only for Membership Packages */}
-        {activeTab === "membership" && (
-          <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-700/50">
-            <VerticalAccumulationChart selectedPackageId={selectedPlan?.id} />
-          </div>
-        )}
+       
       </ModalContent>
     </ModalContainer>
   );
