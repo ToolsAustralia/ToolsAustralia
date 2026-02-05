@@ -166,6 +166,8 @@ export interface IUser extends Document {
     entriesAdded: number;
     amountPaid: number;
     purchaseDate: Date;
+    /** Original purchase PaymentIntent id that triggered this upsell (one purchase per appearance) */
+    triggeringPaymentIntentId?: string;
   }>;
 
   // Upsell Interaction Tracking

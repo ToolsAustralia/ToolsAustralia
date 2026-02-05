@@ -898,6 +898,10 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
       // ✅ Pass original package type for bonus entry promo checks
       ...(originalPackageType && { originalPackageType: originalPackageType }),
       ...(miniDrawId && { miniDrawId: miniDrawId }), // Include miniDrawId if present
+      // One purchase per appearance: pass trigger id so handleUpsellPackage can store it
+      ...(paymentIntent.metadata.triggeringPaymentIntentId && {
+        triggeringPaymentIntentId: paymentIntent.metadata.triggeringPaymentIntentId,
+      }),
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,
       // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
