@@ -488,16 +488,20 @@ async function reverseSubscriptionPackage(user: IUser, originalEvent: IPaymentEv
     entriesToRemove = originalEvent.data.entries || 0;
     console.log(`📊 [REFUND] Initial subscription refund - removing ${entriesToRemove} entries`);
   } else if (originalBillingReason === "subscription_cycle") {
-    // Renewal - remove only the base entries for that month (not accumulated)
-    const packageId = user.subscription?.packageId;
-    if (packageId) {
-      const membershipPackage = getPackageById(packageId);
-      entriesToRemove = membershipPackage?.entriesPerMonth || 0;
-      console.log(`📊 [REFUND] Renewal refund - removing ${entriesToRemove} base entries for month`);
+    // Renewal - remove the exact entries granted for this invoice (from PaymentEvent)
+    // Prefer originalEvent.data.entries so we reverse exactly what was granted (handles promos correctly).
+    // Fallback to package entriesPerMonth only when data.entries is missing (e.g. legacy events).
+    const entriesFromEvent = originalEvent.data.entries ?? 0;
+    if (entriesFromEvent > 0) {
+      entriesToRemove = entriesFromEvent;
+      console.log(`📊 [REFUND] Renewal refund - removing ${entriesToRemove} entries from draw (from PaymentEvent)`);
     } else {
-      // Fallback: use original event entries if package not found
-      entriesToRemove = originalEvent.data.entries || 0;
-      console.warn(`⚠️ [REFUND] Package ID not found, using original event entries: ${entriesToRemove}`);
+      const packageId = originalEvent.packageId || user.subscription?.packageId;
+      const membershipPackage = packageId ? getPackageById(packageId) : undefined;
+      entriesToRemove = membershipPackage?.entriesPerMonth || 0;
+      console.log(
+        `📊 [REFUND] Renewal refund - no data.entries in event, using package entriesPerMonth: ${entriesToRemove}`
+      );
     }
   } else {
     // Fallback: use original event entries
