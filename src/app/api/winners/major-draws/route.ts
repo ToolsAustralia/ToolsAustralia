@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
 import MajorDraw from "@/models/MajorDraw";
+import User from "@/models/User";
 
-// Ensure MajorDraw model is registered before populate (prevents MissingSchemaError)
+// Ensure models are registered before populate (prevents MissingSchemaError)
 void MajorDraw;
+void User;
 
 export async function GET(request: NextRequest) {
   try {
