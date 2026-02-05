@@ -309,8 +309,18 @@ async function buildAdminUserProfile(userId: string) {
       }[]
     >();
 
+  // Option B: only count BenefitsGranted that have no matching RefundProcessed (same paymentIntentId)
+  const refundedPaymentIntentIds = new Set(
+    paymentEvents
+      .filter((e) => e.eventType === "RefundProcessed")
+      .map((e) => e.paymentIntentId)
+  );
   const totalSpent = paymentEvents
-    .filter((event) => event.eventType === "BenefitsGranted")
+    .filter(
+      (event) =>
+        event.eventType === "BenefitsGranted" &&
+        !refundedPaymentIntentIds.has(event.paymentIntentId)
+    )
     .reduce((sum, event) => sum + (event.data?.price || 0), 0);
 
   const totalOrders = orders.length;

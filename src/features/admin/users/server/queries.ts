@@ -748,16 +748,30 @@ export async function getUsers(filters: UserFilters) {
   // Get user IDs for additional data fetching
   const userIds = (users as Array<{ _id: { toString: () => string } }>).map((user) => user._id.toString());
 
-  // Fetch total spent for each user from PaymentEvent
-  const paymentEvents = await PaymentEvent.find({
-    userId: { $in: userIds },
-    eventType: "BenefitsGranted",
-  }).lean();
+  // Fetch BenefitsGranted and RefundProcessed for these users (Option B: only count non-refunded payments)
+  const [paymentEvents, refundEvents] = await Promise.all([
+    PaymentEvent.find({
+      userId: { $in: userIds },
+      eventType: "BenefitsGranted",
+    }).lean(),
+    PaymentEvent.find({
+      userId: { $in: userIds },
+      eventType: "RefundProcessed",
+    })
+      .select("userId paymentIntentId")
+      .lean(),
+  ]);
 
-  // Calculate total spent per user
+  const refundedKeys = new Set(
+    refundEvents.map((e) => `${e.userId.toString()}|${e.paymentIntentId}`)
+  );
+
+  // Calculate total spent per user (exclude BenefitsGranted that have a matching RefundProcessed)
   const userSpentMap = new Map<string, number>();
   paymentEvents.forEach((event) => {
     const userId = event.userId.toString();
+    const key = `${userId}|${event.paymentIntentId}`;
+    if (refundedKeys.has(key)) return;
     const currentSpent = userSpentMap.get(userId) || 0;
     userSpentMap.set(userId, currentSpent + (event.data?.price || 0));
   });
