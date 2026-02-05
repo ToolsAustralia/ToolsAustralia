@@ -17,7 +17,6 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
-import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -874,9 +873,9 @@ export default function MembershipSection({
                                     plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                                   let buttonText = "Enter Now";
                                   const buttonHeight = "h-[44px] sm:h-[48px]";
-                                  let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform lg:hover:scale-105 lg:hover:shadow-xl bg-gradient-to-r ${
+                                  let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform bg-gradient-to-r ${
                                     colorScheme.gradient
-                                  } text-white lg:hover:shadow-[0_0_20px_rgba(0,0,0,0.8)]`;
+                                  } text-white`;
 
                                   // past_due: show "Update payment" for subscription plans - route to my-account
                                   if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
@@ -898,12 +897,12 @@ export default function MembershipSection({
 
                                   return (
                                     <button
-                                      className={`${buttonClass} ${colorScheme.borderGlow}`}
+                                      className={`${buttonClass} ${colorScheme.borderGlow}${buttonText === "Enter Now" ? " membership-enter-cta-animation" : ""}`}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={hasActiveSubscription && hierarchy.isCurrent}
                                       suppressHydrationWarning
                                     >
-                                      {buttonText}
+                                      {buttonText === "Enter Now" ? <span className="relative z-10">{buttonText}</span> : buttonText}
                                     </button>
                                   );
                                 })()
@@ -915,12 +914,6 @@ export default function MembershipSection({
                     );
                   })}
             </div>
-            {/* Entry accumulation chart - only visible when package inclusions is expanded */}
-            {activeTab === "membership" && isInclusionsExpanded && (
-              <div className="mt-6 sm:mt-8 max-w-md mx-auto">
-                <VerticalAccumulationChart />
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1218,7 +1211,7 @@ export default function MembershipSection({
                               plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                             let buttonText = "Enter Now";
                             const buttonHeight = "h-[44px] sm:h-[48px]";
-                            let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform hover:scale-105 hover:shadow-xl bg-gradient-to-r ${colorScheme.gradient} text-white hover:shadow-[0_0_20px_rgba(0,0,0,0.8)]`;
+                            let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform bg-gradient-to-r ${colorScheme.gradient} text-white`;
 
                             // past_due: show "Update payment" for subscription plans - route to my-account
                             if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
@@ -1240,12 +1233,12 @@ export default function MembershipSection({
 
                             return (
                               <button
-                                className={`${buttonClass} ${colorScheme.borderGlow}`}
+                                className={`${buttonClass} ${colorScheme.borderGlow}${buttonText === "Enter Now" ? " membership-enter-cta-animation" : ""}`}
                                 onClick={() => handlePlanSelect(plan)}
                                 disabled={hasActiveSubscription && hierarchy.isCurrent}
                                 suppressHydrationWarning
                               >
-                                {buttonText}
+                                {buttonText === "Enter Now" ? <span className="relative z-10">{buttonText}</span> : buttonText}
                               </button>
                             );
                           })()
@@ -1285,7 +1278,7 @@ export default function MembershipSection({
             </button>
 
             {/* Package Inclusions Expanded Component - shows all currently displayed packages */}
-            <PackageInclusionsExpanded isExpanded={isInclusionsExpanded} packages={membershipPlans} />
+            <PackageInclusionsExpanded isExpanded={isInclusionsExpanded} packages={membershipPlans} showAccumulationChart={activeTab === "membership"} />
           </div>
         );
       })()}
