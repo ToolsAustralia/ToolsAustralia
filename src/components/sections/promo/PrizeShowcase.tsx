@@ -518,7 +518,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   return (
     <section 
       ref={prizeRef} 
-      className=" pb-8 sm:pb-12 relative"
+      className=" pb-2 sm:pb-12 relative"
       style={{ 
         scrollMarginTop: 0,
         // On mobile, prevent scroll snapping during navigation
@@ -752,7 +752,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 </div>
               )}
 
-              <div className="absolute top-4 right-4 z-20">
+              {/* <div className="absolute top-4 right-4 z-20">
                 <button
                   onClick={() => setIsSpecsModalOpen(true)}
                   suppressHydrationWarning
@@ -768,7 +768,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     </span>
                   </div>
                 </button>
-              </div>
+              </div> */}
             </div>
 
             {activePrize.gallery.length > 1 && (
@@ -854,7 +854,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className="font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
+                <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
@@ -918,8 +918,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </div>
             ) : (
               <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-4 shadow-2xl border-2 border-white/20 text-center">
-                <p className="text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
-                <p className="text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
+                <p className="font-agency text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
+                <p className="font-agency text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
                 
               </div>
             )}
@@ -931,7 +931,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className="font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
+                <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>

@@ -161,7 +161,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30 overflow-visible">
         <button
           onClick={handleEnterNow}
-          className="promo-hero-cta-button inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white backdrop-blur-lg"
+          className="promo-hero-cta-button font-agency inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white backdrop-blur-lg"
           style={{
             background: ctaStyle?.backgroundColor ?? "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)",
             ...(ctaStyle?.textColor && { color: ctaStyle.textColor }),
