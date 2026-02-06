@@ -32,8 +32,8 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     "default-src 'self'",
     "base-uri 'self'",
     "block-all-mixed-content",
-    // Network requests: Facebook (Pixel/CAPI), Stripe (payment/fraud), hCaptcha (fraud detection), Google Pay (payment manifest), Apple Pay (payment relay), Klaviyo (tracking/API/anonymous-login/forms), TikTok (pixel API), GTM/GA
-    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com https://www.googletagmanager.com https://www.google-analytics.com",
+    // Network requests: Facebook (Pixel/CAPI), Stripe (payment/fraud), hCaptcha (fraud detection), Google Pay (payment manifest), Apple Pay (payment relay), Klaviyo (tracking/API/anonymous-login/forms), TikTok (pixel API), GTM/GA, Hotjar (sessions/tracking)
+    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com https://www.googletagmanager.com https://www.google-analytics.com https://vc.hotjar.io https://*.hotjar.io https://*.hotjar.com",
     "font-src 'self' https: data: https://applepay.cdn-apple.com",
     // Form submissions: Facebook Pixel fallback tracking
     "form-action 'self' https://www.facebook.com",
