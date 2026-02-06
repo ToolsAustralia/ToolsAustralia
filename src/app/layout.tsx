@@ -96,6 +96,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           nonce={nonce}
         />
         <WebSiteJsonLd name="Tools Australia" url={siteUrl} nonce={nonce} />
+        {/* Contentsquare UX analytics - load in head for accurate tracking */}
+        <script src="https://t.contentsquare.net/uxa/80b94ffdd640f.js" async />
       </head>
       <body className={`${inter.className} antialiased`}>
         <GoogleTagManager
