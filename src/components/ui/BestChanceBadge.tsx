@@ -12,7 +12,7 @@ interface BestChanceBadgeProps {
 
 /**
  * BestChanceBadge Component
- * Premium badge indicating "BEST CHANCE" for boss and power packages
+ * Premium badge indicating "LAST CHANCE" for boss and power packages
  * Uses purple/violet gradient for premium feel with star icon
  */
 const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
@@ -96,14 +96,14 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
           }}
         />
 
-        {/* "BEST CHANCE" text */}
+        {/* "LAST CHANCE" text */}
         <span
           className="font-black whitespace-nowrap"
           style={{
             textShadow: "0 1px 2px rgba(0, 0, 0, 0.5), 0 0 8px rgba(255, 255, 255, 0.3)",
           }}
         >
-          BEST CHANCE
+          LAST CHANCE
         </span>
       </div>
 
