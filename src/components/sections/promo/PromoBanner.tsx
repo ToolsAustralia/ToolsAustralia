@@ -392,8 +392,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     if (variantConfig?.banner?.multiplier !== undefined) {
       return variantConfig.banner.multiplier;
     }
-    return effectiveEntry?.multiplier ?? null;
-  }, [variantConfig?.banner?.multiplier, effectiveEntry?.multiplier]);
+    // Fall back to alternating multiplier when there is no active promo scheduled/toggled
+    // (alternating applies when no active promo exists for the current tab).
+    return effectiveEntry?.multiplier ?? alternatingMultiplier ?? null;
+  }, [variantConfig?.banner?.multiplier, effectiveEntry?.multiplier, alternatingMultiplier]);
 
   const isNoPromo = multiplier === null && variantConfig?.banner?.multiplier === undefined;
 
@@ -423,7 +425,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return null;
   };
 
-  // Scheduled promo state: badge "BIG BONUS"/"ENDS TONIGHT" + right "PROMO ENDING"/countdown (split-test winner default)
+  // Scheduled promo state: badge "LAST CHANCE"/"ENDS TONIGHT" + right "PROMO ENDING"/countdown (split-test winner default)
   const scheduledPromoState = useMemo(() => {
     const hasScheduledPromo = effectiveEntry?.source === "scheduled" && effectiveEntry?.scheduledEndDate;
     if (!hasScheduledPromo) return { hasScheduledPromo: false as const, isUrgent: false };
@@ -444,9 +446,14 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     if (variantConfig?.banner?.badgeText?.trim()) {
       return variantConfig.banner.badgeText.trim();
     }
-    // Scheduled promo default: BIG BONUS (>=24h) or ENDS TONIGHT (<24h)
+    // One-time: when there is no scheduled promo configured, keep the winning urgency copy
+    // instead of falling back to the alternating default text.
+    if (activeTab === "one-time" && !scheduledPromoState.hasScheduledPromo) {
+      return "LAST CHANCE";
+    }
+    // Scheduled promo default: LAST CHANCE (>=24h) or ENDS TONIGHT (<24h) — AB test winner
     if (scheduledPromoState.hasScheduledPromo) {
-      return scheduledPromoState.isUrgent ? "ENDS TONIGHT" : "BIG BONUS";
+      return scheduledPromoState.isUrgent ? "ENDS TONIGHT" : "LAST CHANCE";
     }
     return resolveBadgeText({
       variantBadgeText: undefined, // Already checked above
@@ -455,12 +462,21 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       alternatingDefault,
       multiplier,
     });
-  }, [isNoPromo, scheduledPromoState, variantConfig?.banner?.badgeText, currentDraw?.drawDate, activeScheduledText, alternatingDefault, multiplier]);
+  }, [
+    isNoPromo,
+    activeTab,
+    scheduledPromoState,
+    variantConfig?.banner?.badgeText,
+    currentDraw?.drawDate,
+    activeScheduledText,
+    alternatingDefault,
+    multiplier,
+  ]);
 
   // Countdown display: variant config drives behaviour; default is limited_time_only
   const countdownDisplay = useMemo(() => {
     const drawStatus = getDrawDateStatus();
-    return resolveCountdownDisplay({
+    const resolved = resolveCountdownDisplay({
       countdownMode: variantConfig?.banner?.countdownMode ?? "limited_time_only",
       showCountdown: variantConfig?.banner?.showCountdown !== false,
       source: effectiveEntry?.source ?? "none",
@@ -469,6 +485,14 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       drawStatus,
       countdownLabel: variantConfig?.banner?.countdownLabel ?? undefined,
     });
+    
+    // One-time: when there is no scheduled promo configured, ensure the right-side label
+    // uses the winning copy instead of the legacy "LIMITED TIME ONLY" default.
+    if (activeTab === "one-time" && !scheduledPromoState.hasScheduledPromo && resolved.type === "static_urgency") {
+      return { ...resolved, label: "PROMO ENDING" };
+    }
+
+    return resolved;
   }, [
     variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
@@ -477,6 +501,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     effectiveEntry?.scheduledEndDate,
     effectiveEntry?.durationMs,
     currentDraw?.drawDate,
+    activeTab,
+    scheduledPromoState.hasScheduledPromo,
   ]);
 
   // Scheduled-end countdown ticker (when countdownDisplay.type === "scheduled_end")
