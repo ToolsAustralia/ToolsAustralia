@@ -20,6 +20,7 @@ import { resolveBadgeText } from "@/utils/promo-banner/resolve-badge-text";
 import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-banner/countdown-mode";
 import { NO_PROMO_BADGE, NO_PROMO_MAIN_LINE, NO_PROMO_RIGHT_LABEL } from "@/constants/promo-banner";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { UrgencyClockIcon } from "@/components/ui";
 
 // Helper function to get current timezone abbreviation (AEST or AEDT)
 const getTimezoneAbbr = (): string => {
@@ -765,8 +766,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3">
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
                         {promoEndingLabel}
+                        <UrgencyClockIcon className="text-white" size="md" />
                       </div>
                     </div>
                   </div>
@@ -777,8 +779,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3">
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap">
                         {countdownDisplay.label}
+                        <UrgencyClockIcon className="text-white" size="md" />
                       </div>
                     </div>
                   </div>
