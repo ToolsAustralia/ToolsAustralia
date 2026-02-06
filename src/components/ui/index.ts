@@ -1,3 +1,5 @@
+export { default as UrgencyClockIcon } from "./UrgencyClockIcon";
+export type { UrgencyClockIconProps } from "./UrgencyClockIcon";
 
 export { default as ProductCard } from "./ProductCard";
 export { default as MetallicButton } from "./MetallicButton";

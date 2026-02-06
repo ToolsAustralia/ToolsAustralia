@@ -16,6 +16,9 @@ declare global {
       track: (eventName: string, properties?: Record<string, unknown>) => void;
     };
     _klOnsite?: unknown[];
+
+    // Google Tag Manager dataLayer. Use lib/gtm.ts helpers instead of pushing directly.
+    dataLayer?: Record<string, unknown>[];
   }
 }
 

@@ -6,6 +6,7 @@ import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/StructuredDa
 import PixelTracker from "@/components/PixelTracker";
 import KlaviyoScriptLoader from "@/components/KlaviyoScriptLoader";
 import KlaviyoPageTracker from "@/components/KlaviyoPageTracker";
+import GoogleTagManager from "@/components/GoogleTagManager";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
@@ -97,6 +98,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <WebSiteJsonLd name="Tools Australia" url={siteUrl} nonce={nonce} />
       </head>
       <body className={`${inter.className} antialiased`}>
+        <GoogleTagManager
+          gtmId={process.env.NEXT_PUBLIC_GTM_ID}
+          disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_GTM_TESTING}
+          nonce={nonce}
+        />
         <TopLoadingBar />
         <PixelTracker
           facebookPixelId={process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID}

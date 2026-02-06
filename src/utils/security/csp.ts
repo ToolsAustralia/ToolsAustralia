@@ -23,23 +23,23 @@
  * const csp = buildContentSecurityPolicy(nonce);
  */
 export function buildContentSecurityPolicy(nonce?: string): string {
-  // Script sources: Facebook Pixel, Stripe.js, TikTok Pixel, hCaptcha (with wildcard for iframes), Apple Pay
+  // Script sources: Facebook Pixel, Stripe.js, TikTok Pixel, Klaviyo, GTM, hCaptcha, Apple Pay
   // Next.js inline script hashes allow runtime scripts that don't support nonces
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com`;
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "block-all-mixed-content",
-    // Network requests: Facebook (Pixel/CAPI), Stripe (payment/fraud), hCaptcha (fraud detection), Google Pay (payment manifest), Apple Pay (payment relay), Klaviyo (tracking/API/anonymous-login/forms), TikTok (pixel API)
-    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com",
+    // Network requests: Facebook (Pixel/CAPI), Stripe (payment/fraud), hCaptcha (fraud detection), Google Pay (payment manifest), Apple Pay (payment relay), Klaviyo (tracking/API/anonymous-login/forms), TikTok (pixel API), GTM/GA
+    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com https://www.googletagmanager.com https://www.google-analytics.com",
     "font-src 'self' https: data: https://applepay.cdn-apple.com",
     // Form submissions: Facebook Pixel fallback tracking
     "form-action 'self' https://www.facebook.com",
     "frame-ancestors 'self' https://pay.google.com https://js.stripe.com",
-    // Iframes: Stripe payment forms, Facebook widgets, hCaptcha fraud detection, Google Pay, Apple Pay, Klaviyo forms
-    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://*.google.com https://*.gstatic.com https://applepay.cdn-apple.com https://js.hcaptcha.com https://*.hcaptcha.com https://connect.facebook.net https://www.facebook.com https://static-forms.klaviyo.com https://vercel.live",
+    // Iframes: Stripe payment forms, Facebook widgets, hCaptcha fraud detection, Google Pay, Apple Pay, Klaviyo forms, GTM noscript
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://*.google.com https://*.gstatic.com https://applepay.cdn-apple.com https://js.hcaptcha.com https://*.hcaptcha.com https://connect.facebook.net https://www.facebook.com https://static-forms.klaviyo.com https://vercel.live https://www.googletagmanager.com",
 
     "img-src 'self' https: data: blob: https://q.stripe.com",
     "manifest-src 'self' https://pay.google.com",
