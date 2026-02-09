@@ -571,7 +571,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="sm" height="fixed" fixedHeight="min-h-[80dvh]">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="sm" height="fixed" fixedHeight="max-h-[80dvh]">
       <ModalHeader title="Select Your Package" onClose={onClose} showLogo={true} />
 
       <ModalContent padding="lg" className="">

@@ -148,17 +148,17 @@ export default function VerticalAccumulationChart({
         <div className="absolute top-2 sm:top-3 left-8 sm:left-10 right-0 flex items-center justify-center gap-4 sm:gap-8 z-20">
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
             <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
-              1st Month
+              Current Month
             </div>
           </div>
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
             <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
-              2nd Month
+              Next Month
             </div>
           </div>
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
             <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
-              3rd Month
+              Following Month
             </div>
           </div>
         </div>

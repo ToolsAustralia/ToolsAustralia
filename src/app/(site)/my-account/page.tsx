@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
@@ -35,6 +35,10 @@ import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
+import PackageDetailModal, {
+  type PackageDetailModalPackageData,
+  type SubscriptionAccumulationData,
+} from "@/components/modals/PackageDetailModal";
 import { getPackageById } from "@/data/membershipPackages";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -207,6 +211,25 @@ export default function MyAccountPage() {
   // State for accumulation tooltip
   const [showAccumulationTooltip, setShowAccumulationTooltip] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+
+  // Package detail modal (badge click)
+  const [packageDetailModalOpen, setPackageDetailModalOpen] = useState(false);
+  const [packageDetailModalData, setPackageDetailModalData] = useState<{
+    packageData: PackageDetailModalPackageData;
+    membershipType: "subscription" | "one-time";
+    accumulation: SubscriptionAccumulationData | null;
+  } | null>(null);
+
+  const searchParams = useSearchParams();
+  // Open Settings with Subscription tab when navigating from Header "Manage membership"
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (searchParams?.get("open") === "subscription") {
+      setOpenSettingsToSubscription(true);
+      setIsSettingsModalOpen(true);
+      window.history.replaceState({}, "", "/my-account");
+    }
+  }, [searchParams]);
 
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -904,6 +927,23 @@ export default function MyAccountPage() {
                                 packageData={membershipPackage}
                                 isActive={true}
                                 membershipType="subscription"
+                                onClick={() => {
+                                  const baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth ?? 0;
+                                  const accumulation: SubscriptionAccumulationData | null =
+                                    membershipPackage.type === "subscription" && baseEntries > 0 && userSubscription
+                                      ? {
+                                          entriesPerMonth: baseEntries,
+                                          lastMonthAccumulatedEntries:
+                                            userSubscription.lastMonthAccumulatedEntries ?? baseEntries,
+                                        }
+                                      : null;
+                                  setPackageDetailModalData({
+                                    packageData: membershipPackage as PackageDetailModalPackageData,
+                                    membershipType: "subscription",
+                                    accumulation,
+                                  });
+                                  setPackageDetailModalOpen(true);
+                                }}
                               />
                               {/* Show preserved benefits countdown */}
                               {user &&
@@ -933,24 +973,46 @@ export default function MyAccountPage() {
                             {displayOneTimeEntries}
                           </div>
                           <div className="text-xs text-white/70 uppercase tracking-wide">Packages</div>
-                          {/* Only show currently active one-time packages (not queued), icons only – same idea as partner discounts */}
-                          {(user.enrichedOneTimePackages ?? []).filter(
-                            (pkg) => pkg.isActive && pkg.packageData
-                          ).length > 0 && (
-                            <div className="flex flex-wrap justify-center gap-2 mt-2">
-                              {(user.enrichedOneTimePackages ?? [])
-                                .filter((pkg) => pkg.isActive && pkg.packageData)
-                                .map((pkg) => (
+                          {/* Only show one-time packages that have status "active" in user.partnerDiscountQueue */}
+                          {(() => {
+                            const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageName: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
+                            const activePackageIds = new Set(
+                              queue
+                                .filter(
+                                  (item) =>
+                                    item.status === "active" &&
+                                    ["one-time", "mini-draw", "upsell"].includes(item.packageType)
+                                )
+                                .map((item) => String(item.packageId))
+                            );
+                            const basePackages = (user.enrichedOneTimePackages ?? []).filter(
+                              (pkg) => pkg.isActive && pkg.packageData
+                            );
+                            const visiblePackages = basePackages.filter((pkg) =>
+                              activePackageIds.has(String(pkg.packageId))
+                            );
+                            return visiblePackages.length > 0 ? (
+                              <div className="flex flex-wrap justify-center gap-2 mt-2">
+                                {visiblePackages.map((pkg) => (
                                   <MembershipBadge
                                     key={String(pkg.packageId)}
                                     packageData={pkg.packageData}
                                     isActive={true}
                                     membershipType="one-time"
                                     iconOnly
+                                    onClick={() => {
+                                      setPackageDetailModalData({
+                                        packageData: pkg.packageData as PackageDetailModalPackageData,
+                                        membershipType: "one-time",
+                                        accumulation: null,
+                                      });
+                                      setPackageDetailModalOpen(true);
+                                    }}
                                   />
                                 ))}
-                            </div>
-                          )}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
 
@@ -1293,6 +1355,27 @@ export default function MyAccountPage() {
         user={user}
         membershipModal={membershipModal}
       />
+
+      {packageDetailModalData && (
+        <PackageDetailModal
+          isOpen={packageDetailModalOpen}
+          onClose={() => {
+            setPackageDetailModalOpen(false);
+            setPackageDetailModalData(null);
+          }}
+          packageData={packageDetailModalData.packageData}
+          membershipType={packageDetailModalData.membershipType}
+          accumulation={packageDetailModalData.accumulation}
+          hasActiveSubscription={hasActiveMembership}
+          hasAccessToAdditionalPackages={hasAccessToAdditionalPackages}
+          onOpenSettingsSubscription={() => {
+            setOpenSettingsToSubscription(true);
+            setIsSettingsModalOpen(true);
+          }}
+          onOpenMembershipModal={() => membershipModal.openModalWithPackageSelectionFirst()}
+          onOpenSpecialPackages={() => requestModal("special-packages", true)}
+        />
+      )}
 
       <ReferFriendModal
         isOpen={isReferFriendModalOpen}

@@ -546,7 +546,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         onClose={handleClose}
         size="md"
         height="fixed"
-        fixedHeight="h-[90dvh]"
+        fixedHeight="max-h-[95dvh]"
         closeOnBackdrop={false}
         className="flex flex-col"
       >

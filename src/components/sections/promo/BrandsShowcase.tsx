@@ -16,7 +16,7 @@ export default function BrandsShowcase() {
           </p>
         </div>
 
-        
+        {/* Brand Logos Section - CSS Marquee */}
         <div className="w-full relative z-10">
           <BrandScroller speed={800} speedMobile={400} />
         </div>

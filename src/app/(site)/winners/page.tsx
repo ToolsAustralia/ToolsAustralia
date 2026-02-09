@@ -7,6 +7,7 @@ import MembershipSection from "@/components/sections/MembershipSection";
 import WinnerCard, { type WinnerCardData } from "@/components/cards/WinnerCard";
 import WinnerFilterToggle from "@/components/filters/WinnerFilterToggle";
 import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection";
+import MetallicButton from "@/components/ui/MetallicButton";
 
 // Use WinnerCardData type from WinnerCard component
 type Winner = WinnerCardData;
@@ -165,6 +166,19 @@ export default function WinnersPage() {
               ))}
             </div>
           </>
+        ) : filter === "mini" ? (
+          <div className="text-center py-16">
+            <div className="text-gray-400 mb-6">
+              <Trophy className="w-20 h-20 mx-auto text-gray-300" />
+            </div>
+            <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3 font-['Poppins']">Be Our First Winner</h3>
+            <p className="text-base sm:text-lg text-gray-600 mb-6 max-w-md mx-auto font-['Inter']">
+              No mini draw winners yet—you could be the first! Join our mini draws for a chance to win amazing tools.
+            </p>
+            <MetallicButton href="/mini-draws" variant="primary" size="md" borderRadius="lg">
+              JOIN OUR MINIDRAWS
+            </MetallicButton>
+          </div>
         ) : (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full mb-4">
