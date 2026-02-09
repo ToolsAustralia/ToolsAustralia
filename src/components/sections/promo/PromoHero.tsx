@@ -110,12 +110,20 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       ref={heroRef}
       className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 h-[50vh] min-h-[430px] lg:h-[83vh] lg:min-h-0"
     >
-      {/* Background Banner Image with Ellipse Clip-Path */}
+      {/* Background Banner Image with Ellipse Clip-Path - clickable, same action as Enter Now */}
       {/* Responsive images: separate mobile and desktop paths for optimal performance */}
       <div
-        className="main-banner-image absolute inset-0 z-0"
-        role="img"
-        aria-label={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
+        className="main-banner-image absolute inset-0 z-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        role="button"
+        tabIndex={0}
+        aria-label={`Enter promo - ${resolvedMultiplier}x Entries Active`}
+        onClick={handleEnterNow}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleEnterNow();
+          }
+        }}
       >
         {/* Mobile Background */}
         <div className="lg:hidden absolute inset-0">

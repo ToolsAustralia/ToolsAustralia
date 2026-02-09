@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
@@ -17,6 +17,10 @@ import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
 import MetallicButton from "@/components/ui/MetallicButton";
 import MembershipBadge from "@/components/ui/MembershipBadge";
+import PackageDetailModal, {
+  type PackageDetailModalPackageData,
+  type SubscriptionAccumulationData,
+} from "@/components/modals/PackageDetailModal";
 import {
   Search,
   ShoppingCart,
@@ -83,7 +87,32 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
   const { requestModal } = useModalPriorityStore();
+  const router = useRouter();
   const { isAuthenticated: isAffiliateAuthenticated, affiliateData, loading: affiliateLoading } = useAffiliateAuth();
+
+  // Package detail modal (badge click)
+  const [packageDetailModalOpen, setPackageDetailModalOpen] = useState(false);
+  const [packageDetailModalData, setPackageDetailModalData] = useState<{
+    packageData: PackageDetailModalPackageData;
+    membershipType: "subscription" | "one-time";
+    accumulation: SubscriptionAccumulationData | null;
+  } | null>(null);
+
+  const openPackageDetailModal = useCallback(
+    (packageData: PackageDetailModalPackageData, membershipType: "subscription" | "one-time") => {
+      let accumulation: SubscriptionAccumulationData | null = null;
+      if (membershipType === "subscription" && packageData.entriesPerMonth != null) {
+        const sub = userData?.subscription as { lastMonthAccumulatedEntries?: number; packageId?: string } | undefined;
+        accumulation = {
+          entriesPerMonth: packageData.entriesPerMonth,
+          lastMonthAccumulatedEntries: sub?.lastMonthAccumulatedEntries ?? packageData.entriesPerMonth,
+        };
+      }
+      setPackageDetailModalData({ packageData, membershipType, accumulation });
+      setPackageDetailModalOpen(true);
+    },
+    [userData?.subscription]
+  );
   // Setup requirement check now handled through user data
   const checkSetupRequired = (userData: unknown) =>
     !(userData as { profileSetupCompleted?: boolean })?.profileSetupCompleted;
@@ -640,14 +669,33 @@ export default function Header({ isFixed = true }: HeaderProps) {
                                   packageData={userData.subscriptionPackageData}
                                   isActive={userData.subscription.isActive}
                                   membershipType="subscription"
+                                  onClick={() => {
+                                    setIsDesktopUserMenuOpen(false);
+                                    openPackageDetailModal(userData.subscriptionPackageData!, "subscription");
+                                  }}
                                 />
                               );
                             } else if (
                               userData.enrichedOneTimePackages &&
                               userData.enrichedOneTimePackages.length > 0
                             ) {
+                              const queue = (userData as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
+                              const activePackageIds = new Set(
+                                queue
+                                  .filter(
+                                    (item) =>
+                                      item.status === "active" &&
+                                      ["one-time", "mini-draw", "upsell"].includes(item.packageType)
+                                  )
+                                  .map((item) => String(item.packageId))
+                              );
                               const activePackage = userData.enrichedOneTimePackages
-                                .filter((pkg) => pkg.isActive)
+                                .filter(
+                                  (pkg) =>
+                                    pkg.isActive &&
+                                    pkg.packageData &&
+                                    activePackageIds.has(String(pkg.packageId))
+                                )
                                 .sort(
                                   (a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
                                 )[0];
@@ -657,6 +705,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                                     packageData={activePackage.packageData}
                                     isActive={activePackage.isActive}
                                     membershipType="one-time"
+                                    onClick={() => {
+                                      setIsDesktopUserMenuOpen(false);
+                                      openPackageDetailModal(activePackage.packageData!, "one-time");
+                                    }}
                                   />
                                 );
                               }
@@ -793,11 +845,27 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         packageData={userData.subscriptionPackageData}
                         isActive={userData.subscription.isActive}
                         membershipType="subscription"
+                        onClick={() => openPackageDetailModal(userData.subscriptionPackageData!, "subscription")}
                       />
                     );
                   } else if (userData.enrichedOneTimePackages && userData.enrichedOneTimePackages.length > 0) {
+                    const queue = (userData as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
+                    const activePackageIds = new Set(
+                      queue
+                        .filter(
+                          (item) =>
+                            item.status === "active" &&
+                            ["one-time", "mini-draw", "upsell"].includes(item.packageType)
+                        )
+                        .map((item) => String(item.packageId))
+                    );
                     const activePackage = userData.enrichedOneTimePackages
-                      .filter((pkg) => pkg.isActive)
+                      .filter(
+                        (pkg) =>
+                          pkg.isActive &&
+                          pkg.packageData &&
+                          activePackageIds.has(String(pkg.packageId))
+                      )
                       .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
                     if (activePackage?.packageData) {
                       return (
@@ -805,6 +873,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           packageData={activePackage.packageData}
                           isActive={activePackage.isActive}
                           membershipType="one-time"
+                          onClick={() => openPackageDetailModal(activePackage.packageData!, "one-time")}
                         />
                       );
                     }
@@ -1083,8 +1152,23 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             />
                           );
                         } else if (userData?.enrichedOneTimePackages && userData.enrichedOneTimePackages.length > 0) {
+                          const queue = (userData as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
+                          const activePackageIds = new Set(
+                            queue
+                              .filter(
+                                (item) =>
+                                  item.status === "active" &&
+                                  ["one-time", "mini-draw", "upsell"].includes(item.packageType)
+                              )
+                              .map((item) => String(item.packageId))
+                          );
                           const activePackage = userData.enrichedOneTimePackages
-                            .filter((pkg) => pkg.isActive)
+                            .filter(
+                              (pkg) =>
+                                pkg.isActive &&
+                                pkg.packageData &&
+                                activePackageIds.has(String(pkg.packageId))
+                            )
                             .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
                           if (activePackage && activePackage.packageData) {
                             return (
@@ -1530,6 +1614,25 @@ export default function Header({ isFixed = true }: HeaderProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Package detail modal (from badge click) */}
+      {packageDetailModalData && (
+        <PackageDetailModal
+          isOpen={packageDetailModalOpen}
+          onClose={() => {
+            setPackageDetailModalOpen(false);
+            setPackageDetailModalData(null);
+          }}
+          packageData={packageDetailModalData.packageData}
+          membershipType={packageDetailModalData.membershipType}
+          accumulation={packageDetailModalData.accumulation}
+          hasActiveSubscription={userData?.subscription?.isActive === true}
+          hasAccessToAdditionalPackages={userData?.subscription?.isActive === true}
+          onOpenSettingsSubscription={() => router.push("/my-account?open=subscription")}
+          onOpenMembershipModal={() => router.push("/membership")}
+          onOpenSpecialPackages={() => requestModal("special-packages", true)}
+        />
       )}
     </header>
   );

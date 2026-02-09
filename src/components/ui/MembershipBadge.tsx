@@ -116,6 +116,11 @@ interface MembershipBadgeProps {
    * Optional className to add to the badge
    */
   className?: string;
+  /**
+   * Optional click handler. When provided, the badge is rendered as a button (cursor-pointer, focus ring).
+   * Use to open PackageDetailModal or other package explainer.
+   */
+  onClick?: () => void;
 }
 
 /**
@@ -143,6 +148,7 @@ export default function MembershipBadge({
   membershipType,
   iconOnly = false,
   className = "",
+  onClick,
 }: MembershipBadgeProps) {
   // Don't render if not active or no package data
   if (!isActive || !packageData || !packageData.name) {
@@ -155,11 +161,27 @@ export default function MembershipBadge({
   // Get package icon
   const packageIcon = getPackageIcon(packageData.name, finalMembershipType);
 
+  const handleClick = onClick
+    ? (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onClick();
+      }
+    : undefined;
+
   // Icon-only: render just the icon (no text), e.g. for my-account one-time card
   if (iconOnly) {
     if (!packageIcon) return null;
+    const Wrapper = onClick ? "button" : "span";
     return (
-      <span className={`inline-flex items-center justify-center flex-shrink-0 ${className}`} title={packageData.name}>
+      <Wrapper
+        type={onClick ? "button" : undefined}
+        onClick={handleClick}
+        className={`inline-flex items-center justify-center flex-shrink-0 ${className} ${
+          onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded" : ""
+        }`}
+        title={packageData.name}
+        aria-label={onClick ? `View details for ${packageData.name}` : undefined}
+      >
         <Image
           src={packageIcon}
           alt={`${packageData.name} icon`}
@@ -167,7 +189,7 @@ export default function MembershipBadge({
           width={24}
           height={24}
         />
-      </span>
+      </Wrapper>
     );
   }
 
@@ -184,17 +206,23 @@ export default function MembershipBadge({
   const isPremiumPackage =
     packageData.name.toLowerCase().includes("boss") || packageData.name.toLowerCase().includes("power");
 
+  const Wrapper = onClick ? "button" : "span";
   return (
-    <span
+    <Wrapper
+      type={onClick ? "button" : undefined}
+      onClick={handleClick}
       className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-1 rounded-full shadow-lg relative overflow-hidden ${
         colorScheme.text
-      } ${className} ${isPremiumPackage ? "animate-pulse" : ""}`}
+      } ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
+        onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
+      }`}
       style={{
         border: `2px solid transparent`,
         backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
         backgroundOrigin: `border-box`,
         backgroundClip: `padding-box, border-box`,
       }}
+      aria-label={onClick ? `View details for ${packageData.name}` : undefined}
     >
       {/* Package Icon */}
       {packageIcon && (
@@ -211,6 +239,6 @@ export default function MembershipBadge({
 
       {/* Badge Text */}
       <span>{badgeText}</span>
-    </span>
+    </Wrapper>
   );
 }

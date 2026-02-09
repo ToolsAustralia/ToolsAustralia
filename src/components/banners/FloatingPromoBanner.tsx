@@ -160,16 +160,36 @@ const FloatingPromoBanner: React.FC = () => {
   // Determine if banner should be visible (considering scroll position)
   const shouldShowBanner = isVisible;
 
+  // Scroll to membership section on click (same as PromoBanner / FloatingGetEntriesButton)
+  const handleBannerClick = () => {
+    const membershipSection = document.getElementById("membership");
+    if (membershipSection) {
+      membershipSection.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  const handleBannerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleBannerClick();
+    }
+  };
+
   return (
     <AnimatePresence>
       {shouldShowBanner && (
         <motion.div
           key="floating-promo-banner"
+          role="button"
+          tabIndex={0}
+          aria-label="Scroll to membership and packages"
+          onClick={handleBannerClick}
+          onKeyDown={handleBannerKeyDown}
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="fixed bottom-0 left-0 right-0 z-[40] shadow-2xl border-t-2 border-yellow-300"
+          className="fixed bottom-0 left-0 right-0 z-[40] shadow-2xl border-t-2 border-yellow-300 cursor-pointer select-none"
           style={{
             background: `linear-gradient(135deg, #ef4444 0%, #dc2626 25%, #b91c1c 50%, #991b1b 75%, #ef4444 100%)`,
             boxShadow: `0 -10px 30px rgba(239, 68, 68, 0.7), 0 0 20px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3)`,

@@ -574,6 +574,21 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Use wrapper to prevent layout shift when banner becomes fixed
   const bgColorClass = "bg-black";
 
+  // Scroll to membership section on click (same pattern as FloatingGetEntriesButton → packages)
+  const handleBannerClick = () => {
+    const membershipSection = document.getElementById("membership");
+    if (membershipSection) {
+      membershipSection.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  const handleBannerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleBannerClick();
+    }
+  };
+
   return (
     <>
       {/* Spacer div to prevent layout shift when banner becomes fixed */}
@@ -589,13 +604,18 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
       <motion.div
         ref={bannerRef}
+        role="button"
+        tabIndex={0}
+        aria-label="Scroll to membership and packages"
+        onClick={handleBannerClick}
+        onKeyDown={handleBannerKeyDown}
         layout
         initial={{ opacity: 0 }}
         animate={{
           borderRadius: isScrolled ? "9999px" : "0px",
           opacity: 1,
         }}
-        className={` ${
+        className={`cursor-pointer select-none ${
           isScrolled
             ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
             : "relative w-full mt-0 z-30"
