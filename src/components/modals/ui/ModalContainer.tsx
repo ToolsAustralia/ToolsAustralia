@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalContainerProps {
   isOpen: boolean;
@@ -489,9 +490,9 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-2"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
@@ -524,6 +525,13 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       </div>
     </div>
   );
+
+  // Portal to document.body ensures modals always appear above page content
+  // (avoids stacking context issues from parent transforms, overflow, etc.)
+  if (typeof document !== "undefined" && document.body) {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 };
 
 export default ModalContainer;

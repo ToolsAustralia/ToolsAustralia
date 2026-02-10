@@ -3,6 +3,7 @@
 import React from "react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import HorizontalCountdown from "@/components/sections/HorizontalCountdown";
+import { SectionContainer } from "@/components/ui";
 
 export default function CountdownHero() {
   const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
@@ -10,12 +11,12 @@ export default function CountdownHero() {
   if (isLoading) {
     return (
       <section className="bg-gradient-to-br from-red-50 via-white to-red-50 py-12 sm:py-16 lg:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading major draw...</p>
           </div>
-        </div>
+        </SectionContainer>
       </section>
     );
   }
@@ -34,10 +35,10 @@ export default function CountdownHero() {
       <div className="absolute top-32 left-16 w-24 h-24 bg-red-500/5 rounded-full blur-2xl"></div>
       <div className="absolute bottom-32 right-20 w-20 h-20 bg-red-500/8 rounded-full blur-xl"></div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <SectionContainer className="relative">
         {/* Horizontal Countdown Component */}
         <HorizontalCountdown />
-      </div>
+      </SectionContainer>
     </section>
   );
 }

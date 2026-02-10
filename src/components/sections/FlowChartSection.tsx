@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import MetallicDivider from "@/components/ui/MetallicDivider";
+import { SectionContainer } from "@/components/ui";
 
 /**
  * FlowChartSection component displays the membership flow chart
@@ -15,7 +16,7 @@ export default function FlowChartSection() {
       <MetallicDivider height="h-[2px]" className="absolute top-0 left-0 right-0" />
 
       {/* Content Container */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <SectionContainer className="relative z-10 py-6 sm:py-8">
         {/* Flow Chart Image */}
         <div className="w-full flex justify-center items-center">
           <div className="relative w-full max-w-2xl">
@@ -29,7 +30,7 @@ export default function FlowChartSection() {
             />
           </div>
         </div>
-      </div>
+      </SectionContainer>
 
       {/* Metallic Divider at the bottom */}
       <MetallicDivider height="h-[2px]" className="absolute bottom-0 left-0 right-0" />

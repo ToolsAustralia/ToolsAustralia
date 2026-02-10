@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import HorizontalCountdown from "./HorizontalCountdown";
 import MetallicButton from "@/components/ui/MetallicButton";
 import BrandScroller from "@/components/ui/BrandScroller";
+import { SectionContainer } from "@/components/ui";
 
 export default function Hero() {
   const [isTopBarVisible, setIsTopBarVisible] = useState(true);
@@ -210,9 +211,9 @@ export default function Hero() {
 export function HorizontalCountdownSection() {
   return (
     <section className="bg-gradient-to-b from-gray-50 to-white pt-16 sm:pt-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <SectionContainer>
         <HorizontalCountdown />
-      </div>
+      </SectionContainer>
     </section>
   );
 }

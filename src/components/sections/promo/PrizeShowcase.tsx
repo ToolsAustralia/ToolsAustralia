@@ -18,6 +18,7 @@ import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
 import { useSearchParams, usePathname } from "next/navigation";
 import type { PrizeCatalogEntry } from "@/config/prizes";
+import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -528,7 +529,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
         } : {}),
       }}
     >
-      <div className={useParentContainer ? "relative z-10 w-full" : "w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10"}>
+      <div className={useParentContainer ? "relative z-0 w-full" : `${SECTION_CONTAINER_CLASSES} relative z-0`}>
         <div className="text-center mb-6 sm:mb-12">
           {/* First Prize Image - Conditionally displayed based on selected prize */}
           <div className="flex justify-center">
@@ -537,7 +538,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               alt="First Prize"
               width={800}
               height={200}
-              className="w-full max-w-4xl h-auto object-contain"
+              // add scale-150 h-[375px] if new 1stprize image is added
+              className="w-full max-w-4xl h-auto object-contain h-auto "
               priority
             />
           </div>

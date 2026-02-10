@@ -264,7 +264,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             period: "mo",
             features: [
               { text: "15 Free Accumulated Entries" },
-              { text: "5% Off Shop" },
+              // { text: "5% Off Shop" },
               { text: "100% Access to Partner Discounts" },
             ],
             buttonText: "Get Started",
@@ -279,7 +279,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             period: "mo",
             features: [
               { text: "40 Free Accumulated Entries" },
-              { text: "10% Off Shop" },
+              // { text: "10% Off Shop" },
               { text: "100% Access to Partner Discounts" },
             ],
             isPopular: true,
@@ -295,7 +295,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             period: "mo",
             features: [
               { text: "100 Free Accumulated Entries" },
-              { text: "20% Off Shop" },
+              // { text: "20% Off Shop" },
               { text: "100% Access to Partner Discounts" },
             ],
             buttonText: "Become Boss",

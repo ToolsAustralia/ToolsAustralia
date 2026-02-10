@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandler";
 import { CheckCircle } from "lucide-react";
+import { SectionContainer } from "@/components/ui";
 
 interface PurchaseSuccessClientProps {
   searchParams: {
@@ -15,7 +16,7 @@ interface PurchaseSuccessClientProps {
 export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessClientProps) {
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <SectionContainer variant="narrow" className="py-8">
         {/* Success Header */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -74,7 +75,7 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
             </li>
           </ul>
         </div>
-      </div>
+      </SectionContainer>
     </div>
   );
 }

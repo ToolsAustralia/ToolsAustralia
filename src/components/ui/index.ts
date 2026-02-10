@@ -12,3 +12,4 @@ export type { FAQItem } from "./FAQSection";
 export { default as MonthProjectionTooltip } from "./MonthProjectionTooltip";
 export type { MonthProjectionTooltipProps } from "./MonthProjectionTooltip";
 
+export { SectionContainer, SECTION_CONTAINER_CLASSES } from "./SectionContainer";

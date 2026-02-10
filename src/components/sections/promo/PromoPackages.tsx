@@ -2,6 +2,7 @@
 
 import MembershipSection from "@/components/sections/MembershipSection";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { SectionContainer } from "@/components/ui";
 
 export default function PromoPackages() {
   // Get variant config from context
@@ -14,13 +15,13 @@ export default function PromoPackages() {
     <>
       {/* Packages Section with scroll target */}
       <section id="packages" className="bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <MembershipSection 
             title="Choose Your Entry Package" 
             padding="py-4 sm:py-8"
             variantConfig={packagesConfig}
           />
-        </div>
+        </SectionContainer>
       </section>
     </>
   );

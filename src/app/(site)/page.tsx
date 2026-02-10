@@ -13,6 +13,7 @@ import LandingPageTrigger from "./components/LandingPageTrigger";
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
 import WinnerTestimoniesClient from "./components/WinnerTestimoniesClient";
+import { SectionContainer } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Tools Australia | Professional Tools, Mini Draws & Partner Deals",
@@ -55,25 +56,25 @@ export default function HomePage() {
       <FloatingCountdownBanner />
       <main className="w-full overflow-hidden">
         <Hero />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <MembershipSection padding="pt-8 pb-4" />
           <PrizeShowcase />
           {/* Latest Winner Hero Section */}
         <LatestWinnerHero className="mb-8" />
-        </div>
+        </SectionContainer>
 
         {/* Winner Testimonies Section - Client-side fetch */}
         <Suspense
           fallback={
             <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <SectionContainer>
                 <div className="text-center">
                   <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
                     Winner Testimonies
                   </div>
                   <div className="text-gray-500">Loading testimonies...</div>
                 </div>
-              </div>
+              </SectionContainer>
             </section>
           }
         >
@@ -84,14 +85,14 @@ export default function HomePage() {
         <Suspense
           fallback={
             <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <SectionContainer>
                 <div className="text-center">
                   <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
                     MINI DRAWS
                   </div>
                   <div className="text-gray-500">Loading mini draws...</div>
                 </div>
-              </div>
+              </SectionContainer>
             </section>
           }
         >
@@ -100,7 +101,7 @@ export default function HomePage() {
 
         {/* Keyword-rich internal linking block to guide crawlers and users toward priority brand pages */}
         <section className="bg-slate-950 py-12 text-gray-100">
-          <div className="max-w-7xl mx-auto flex flex-col gap-6 px-4 sm:px-6 lg:px-8">
+          <SectionContainer className="flex flex-col gap-6">
             <h2 className="text-2xl font-semibold text-white md:text-3xl">Trade-Ready Brands in One Place</h2>
             <p className="text-base text-gray-300 md:text-lg">
               Tools Australia curates professional-grade gear from trusted manufacturers so you can spec a full kit in
@@ -138,21 +139,21 @@ export default function HomePage() {
               </Link>{" "}
               to unlock deeper discounts and bonus giveaway entries every month.
             </p>
-          </div>
+          </SectionContainer>
         </section>
 
         {/* Best Sellers Section - Client-side fetch */}
         <Suspense
           fallback={
             <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <SectionContainer>
                 <div className="text-center">
                   <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
                     BEST SELLERS
                   </div>
                   <div className="text-gray-500">Loading products...</div>
                 </div>
-              </div>
+              </SectionContainer>
             </section>
           }
         >
@@ -163,23 +164,23 @@ export default function HomePage() {
         <Suspense
           fallback={
             <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <SectionContainer>
                 <div className="text-center">
                   <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
                     NEW ARRIVALS
                   </div>
                   <div className="text-gray-500">Loading products...</div>
                 </div>
-              </div>
+              </SectionContainer>
             </section>
           }
         >
           <HomeProducts sectionType="newarrivals" title="NEW ARRIVALS" />
         </Suspense>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <ProductCategories showBackground={false} />
-        </div>
+        </SectionContainer>
         {/* Customer Testimonials - Temporarily disabled (no real reviews yet) */}
         {/* <CustomerTestimonials /> */}
       </main>

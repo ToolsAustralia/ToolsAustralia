@@ -202,6 +202,8 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
             <PromoFAQs />
           </Suspense>
 
+          <BrandsShowcase />
+
           <Suspense fallback={<div className="min-h-[300px]" />}>
             <UnlockDiscounts />
           </Suspense>

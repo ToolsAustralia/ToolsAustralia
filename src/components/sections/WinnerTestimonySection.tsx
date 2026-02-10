@@ -4,6 +4,7 @@ import React from "react";
 import Image from "next/image";
 import { MessageSquare, Quote, Award, Calendar, Gift, MapPin } from "lucide-react";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { SectionContainer } from "@/components/ui";
 
 interface WinnerWithTestimony {
   id: string;
@@ -50,7 +51,7 @@ export default function WinnerTestimonySection({
   if (winnersWithTestimonies.length === 0) {
     return (
       <section className={`py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50 ${className}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <div className="text-center py-12">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full mb-4">
               <MessageSquare className="w-8 h-8 text-gray-500" />
@@ -62,14 +63,14 @@ export default function WinnerTestimonySection({
               Check back soon to read inspiring stories from our winners!
             </p>
           </div>
-        </div>
+        </SectionContainer>
       </section>
     );
   }
 
   return (
     <section className={`py-8 sm:py-12 lg:py-16 xl:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50 ${className}`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <SectionContainer>
         {/* Testimonies Grid - Premium Card Design */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 xl:gap-10">
           {winnersWithTestimonies.map((winner) => {
@@ -165,7 +166,7 @@ export default function WinnerTestimonySection({
             );
           })}
         </div>
-      </div>
+      </SectionContainer>
     </section>
   );
 }

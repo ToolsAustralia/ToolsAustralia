@@ -6,6 +6,7 @@ import { Trophy, Users, Gift, Lock, GaugeCircle } from "lucide-react";
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
 import Link from "next/link";
 import { getBrandMeta } from "@/utils/brand-utils";
+import { SectionContainer } from "@/components/ui";
 
 interface MiniDrawDetailClientProps {
   miniDraw: {
@@ -89,7 +90,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <SectionContainer className="py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">{miniDraw.name}</h1>
@@ -288,7 +289,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
             )}
           </div>
         </div>
-      </div>
+      </SectionContainer>
     </div>
   );
 }
