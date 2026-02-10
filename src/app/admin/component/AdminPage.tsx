@@ -882,8 +882,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
               {/* Detailed Revenue Breakdown - Expandable */}
               {dashboardStats && isRevenueBreakdownExpanded && (
-                <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6 transition-all duration-300 ease-in-out">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-5 lg:p-4 transition-all duration-300 ease-in-out">
+                  <div className="flex items-center justify-between mb-3 lg:mb-4">
                     <h3 className="text-base sm:text-lg font-bold text-gray-900">Revenue Breakdown</h3>
                     <button
                       onClick={() => setIsRevenueBreakdownExpanded(false)}
@@ -895,7 +895,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       </svg>
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-2">
                     <MetricCard
                       title={
                         <span className="block leading-tight">
@@ -906,6 +906,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       value={`$${getRevenueData(dashboardStats.revenue.breakdown.membershipPurchase).revenue.toLocaleString()}`}
                       icon={Package}
                       color="orange"
+                      valueClassName="text-lg sm:text-xl lg:text-lg xl:text-xl font-bold text-gray-900"
+                      className="lg:!p-4"
                       clickable={true}
                       onClick={() => handleRevenueCardClick("membership-purchase")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.membershipPurchase).purchaseCount}
@@ -922,6 +924,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       value={`$${getRevenueData(dashboardStats.revenue.breakdown.membershipRenewal).revenue.toLocaleString()}`}
                       icon={RefreshCw}
                       color="yellow"
+                      valueClassName="text-lg sm:text-xl lg:text-lg xl:text-xl font-bold text-gray-900"
+                      className="lg:!p-4"
                       clickable={true}
                       onClick={() => handleRevenueCardClick("membership-renewal")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.membershipRenewal).purchaseCount}
@@ -938,6 +942,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       value={`$${getRevenueData(dashboardStats.revenue.breakdown.oneTimePurchase).revenue.toLocaleString()}`}
                       icon={ShoppingCart}
                       color="blue"
+                      valueClassName="text-lg sm:text-xl lg:text-lg xl:text-xl font-bold text-gray-900"
+                      className="lg:!p-4"
                       clickable={true}
                       onClick={() => handleRevenueCardClick("one-time-purchase")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.oneTimePurchase).purchaseCount}
@@ -954,6 +960,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       value={`$${getRevenueData(dashboardStats.revenue.breakdown.additionalOneTimePurchase).revenue.toLocaleString()}`}
                       icon={ShoppingBag}
                       color="indigo"
+                      valueClassName="text-lg sm:text-xl lg:text-lg xl:text-xl font-bold text-gray-900"
+                      className="lg:!p-4"
                       clickable={true}
                       onClick={() => handleRevenueCardClick("additional-one-time")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.additionalOneTimePurchase).purchaseCount}
@@ -970,6 +978,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       value={`$${getRevenueData(dashboardStats.revenue.breakdown.miniDraw).revenue.toLocaleString()}`}
                       icon={Trophy}
                       color="purple"
+                      valueClassName="text-lg sm:text-xl lg:text-lg xl:text-xl font-bold text-gray-900"
+                      className="lg:!p-4"
                       clickable={true}
                       onClick={() => handleRevenueCardClick("mini-draw")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.miniDraw).purchaseCount}
@@ -981,6 +991,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       value={`$${getRevenueData(dashboardStats.revenue.breakdown.upsell).revenue.toLocaleString()}`}
                       icon={TrendingUp}
                       color="pink"
+                      valueClassName="text-lg sm:text-xl lg:text-lg xl:text-xl font-bold text-gray-900"
+                      className="lg:!p-4"
                       clickable={true}
                       onClick={() => handleRevenueCardClick("upsell")}
                       count={getRevenueData(dashboardStats.revenue.breakdown.upsell).purchaseCount}
