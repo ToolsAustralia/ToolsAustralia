@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Check, Gift, Star, Zap, AlertCircle } from "lucide-react";
+import { Z_INDEX } from "@/constants/z-index";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
 import { rewardsEnabled } from "@/config/featureFlags";
 
@@ -222,7 +223,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     }
 
     return (
-      <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
+      <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
         <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto p-4 sm:p-8 text-center animate-in zoom-in-95 duration-500">
           <div className="mb-4 sm:mb-6">
@@ -267,7 +268,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     const isTimeout = error.includes("taking longer than expected");
 
     return (
-      <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
+      <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
         <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto p-4 sm:p-8 text-center animate-in zoom-in-95 duration-500">
           <div className="mb-4 sm:mb-6">
@@ -310,7 +311,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
   // Show processing screen - using LoadingScreen design exactly
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
       <div className="absolute inset-0 bg-black/60" />
       <div className="relative bg-transparent rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md mx-auto p-8 sm:p-12 text-center">
         <div className="mb-6">

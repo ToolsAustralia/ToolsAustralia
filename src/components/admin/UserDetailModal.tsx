@@ -38,6 +38,7 @@ import { useAdminUpdateUser, useAdminUserActions, useAdminUserDetail } from "@/h
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import { Z_INDEX } from "@/constants/z-index";
 import ModalContent from "@/components/modals/ui/ModalContent";
 import Input from "@/components/modals/ui/Input";
 import Select from "@/components/modals/ui/Select";
@@ -589,7 +590,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90] p-4">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[90vh] flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ee0000] mx-auto mb-4"></div>
@@ -602,7 +603,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
   if (error || !user) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90] p-4">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[90vh] flex items-center justify-center">
           <div className="text-center">
             <div className="text-red-500 text-6xl mb-4">⚠️</div>
@@ -1087,7 +1088,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   return (
     <>
       {/* Main Modal */}
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-2 sm:p-4">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
         <div
           className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200/50 max-w-6xl w-full max-h-[90vh] overflow-hidden animate-fade-in"
           style={{
@@ -3048,7 +3049,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
       {/* Action Confirmation Modal */}
       {showActionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
             <h3 className="text-xl font-bold text-gray-900 mb-2">{showActionModal.title}</h3>
             <p className="text-gray-600 mb-6">{showActionModal.description}</p>
@@ -3092,7 +3093,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
       {/* Send Email Modal */}
       {showSendEmailModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-fade-in">
             <h3 className="text-xl font-bold text-gray-900 mb-2">Send Email</h3>
             <p className="text-gray-600 mb-6">Compose and send an email directly to the user.</p>
@@ -3142,7 +3143,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
       {/* Admin Set Password Modal */}
       {showAdminPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
             <h3 className="text-xl font-bold text-gray-900 mb-2">Set New Password</h3>
             <p className="text-gray-600 mb-6">

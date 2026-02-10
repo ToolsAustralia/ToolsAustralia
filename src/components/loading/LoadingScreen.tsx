@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { Z_INDEX } from "@/constants/z-index";
 
 interface LoadingScreenProps {
   title: string;
@@ -37,7 +38,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ title, subtitle, steps, i
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
       <div className="absolute inset-0 bg-black/60 " />
       <div className="relative bg-transparent  rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md mx-auto p-8 sm:p-12 text-center">
         <div className="mb-6">
