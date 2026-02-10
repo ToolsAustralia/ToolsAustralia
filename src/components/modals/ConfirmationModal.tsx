@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { AlertTriangle, CheckCircle, ArrowUp, ArrowDown, XCircle, Trash2 } from "lucide-react";
 import { Button } from "./ui";
+import { Z_INDEX } from "@/constants/z-index";
 
 export interface ConfirmationModalProps {
   isOpen: boolean;
@@ -117,7 +118,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto max-h-[90dvh] overflow-y-auto flex flex-col">
         {/* Header */}

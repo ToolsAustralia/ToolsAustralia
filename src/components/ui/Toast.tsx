@@ -32,6 +32,7 @@
 import React, { useState, useEffect, useContext, createContext, useCallback } from "react";
 import { CheckCircle, AlertCircle, XCircle, Info, X, Bug } from "lucide-react";
 import { ErrorContext } from "@/types/error-reporting";
+import { Z_INDEX } from "@/constants/z-index";
 
 export interface ToastProps {
   id?: string;
@@ -332,7 +333,7 @@ export const ToastContainer: React.FC<{
   const visibleToasts = toasts.slice(0, MAX_VISIBLE_TOASTS);
 
   return (
-    <div className="fixed top-1 right-1 sm:top-4 sm:right-4 z-[9999] pointer-events-none max-w-[calc(100vw-0.5rem)] sm:max-w-md">
+    <div className="fixed top-1 right-1 sm:top-4 sm:right-4 pointer-events-none max-w-[calc(100vw-0.5rem)] sm:max-w-md" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
       <div className="flex flex-col gap-1 sm:gap-2 pointer-events-auto">
         {visibleToasts.map((toast, index) => (
           <Toast

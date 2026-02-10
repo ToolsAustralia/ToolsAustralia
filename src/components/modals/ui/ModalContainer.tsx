@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Z_INDEX } from "@/constants/z-index";
 
 interface ModalContainerProps {
   isOpen: boolean;
@@ -17,6 +18,11 @@ interface ModalContainerProps {
    * When true (default), back button will close the modal instead.
    */
   preventBackButton?: boolean;
+  /**
+   * When true, uses a higher z-index so this modal appears above other modals.
+   * Use when opening a modal from within another modal (e.g. View User from Revenue Breakdown).
+   */
+  nested?: boolean;
 }
 
 const ModalContainer: React.FC<ModalContainerProps> = ({
@@ -29,6 +35,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   closeOnBackdrop = true,
   className = "",
   preventBackButton = true,
+  nested = false,
 }) => {
   // Track if we've pushed a history state for this modal instance
   const historyStatePushed = useRef(false);
@@ -490,9 +497,12 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
   if (!isOpen) return null;
 
+  const modalZIndex = nested ? Z_INDEX.MODAL_NESTED : Z_INDEX.MODAL_BASE;
+
   const modalContent = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-2"
+      className="fixed inset-0 flex items-center justify-center p-2"
+      style={{ zIndex: modalZIndex }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
