@@ -9,6 +9,7 @@ export interface MetricCardProps {
   subtitle?: string | React.ReactNode;
   icon: LucideIcon;
   color?: "red" | "emerald" | "blue" | "purple" | "yellow" | "indigo" | "orange" | "pink" | "green";
+  valueClassName?: string;
   trend?: {
     value: number;
     direction?: "up" | "down" | "neutral";
@@ -29,6 +30,7 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
   subtitle,
   icon: Icon,
   color = "blue",
+  valueClassName,
   trend,
   loading = false,
   "aria-label": ariaLabel,
@@ -115,7 +117,7 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         </div>
       </div>
       <div className="flex items-baseline justify-between">
-        <p className="text-xl sm:text-2xl font-bold text-gray-900">{displayValue}</p>
+        <p className={valueClassName ?? "text-xl sm:text-2xl font-bold text-gray-900"}>{displayValue}</p>
         {trend && trendDirection && (
           <div
             className={`text-xs font-semibold ${
