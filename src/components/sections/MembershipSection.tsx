@@ -633,7 +633,7 @@ export default function MembershipSection({
                   <div
                     key={plan.id}
                     className={`relative w-full ${
-                      isAdditionalPackage ? "h-[310px]" : "h-[275px]"
+                      isAdditionalPackage ? "h-[310px] sm:h-[360px]" : "h-[275px] sm:h-[325px]"
                     } rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 lg:hover:scale-105 lg:hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible ${
                           highlighted
                             ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105"

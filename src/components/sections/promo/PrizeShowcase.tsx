@@ -538,7 +538,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               alt="First Prize"
               width={800}
               height={200}
-              className="w-full max-w-4xl h-auto object-contain scale-150 h-[375px] sm:h-auto sm:scale-100"
+              // add scale-150 h-[375px] if new 1stprize image is added
+              className="w-full max-w-4xl h-auto object-contain h-auto "
               priority
             />
           </div>
