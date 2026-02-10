@@ -29,8 +29,6 @@ import {
   PauseCircle,
   Package,
   User,
-  Calendar,
-  DollarSign,
   Filter,
   ChevronUp,
   ChevronDown,
@@ -188,9 +186,7 @@ export default function UsersManagement() {
       filters.subscriptionStatus ||
       filters.autoRenew ||
       filters.membershipPackage ||
-      filters.role ||
-      filters.sortBy !== "createdAt" ||
-      filters.sortOrder !== "desc"
+      filters.role
     );
   }, [filters]);
 
@@ -491,16 +487,16 @@ export default function UsersManagement() {
 
       {/* Search and Filters - Elevated Design */}
       <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:gap-4">
-          {/* Search Bar - Enhanced */}
-          <div className="relative flex-1 group flex items-center gap-2">
-            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 lg:gap-4">
+          {/* Search Bar - Same row as filters, min-width prevents compression on laptop */}
+          <div className="relative flex-1 min-w-[200px] sm:min-w-[280px] group flex items-center gap-2">
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
             <input
               type="text"
               placeholder="Search users..."
               value={filters.search || ""}
               onChange={(e) => updateFilter("search", e.target.value)}
-              className="w-full pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400"
+              className="w-full min-w-0 pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400"
             />
             {/* Mobile Filter Toggle Button */}
             <button
@@ -582,23 +578,6 @@ export default function UsersManagement() {
                 onChange={(value) => updateFilter("role", value)}
                 placeholder="Roles"
                 active={!!filters.role}
-              />
-            </div>
-
-            {/* Sort By Filter */}
-            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
-              <Dropdown
-                options={[
-                  { value: "createdAt", label: "Date Joined", icon: Calendar },
-                  { value: "email", label: "Email", icon: Mail },
-                  { value: "lastLogin", label: "Last Login", icon: Clock },
-                  { value: "totalSpent", label: "Total Spent", icon: DollarSign },
-                  { value: "miniDrawCount", label: "Mini Draws", icon: Gift },
-                ]}
-                value={filters.sortBy || "createdAt"}
-                onChange={(value) => updateFilter("sortBy", value)}
-                placeholder="Sort By"
-                active={filters.sortBy !== "createdAt"}
               />
             </div>
 
