@@ -7,6 +7,7 @@ import { Check } from "lucide-react";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import { apprentice, tradie, foreman, boss, power, type PackageIconData } from "@/utils/images/package-icons";
+import { SectionContainer } from "@/components/ui";
 
 // Type alias for consistency
 type StaticImageData = PackageIconData;
@@ -355,7 +356,7 @@ export default function MembershipPackagesChart() {
       <MetallicDivider height="h-[2px]" className="absolute top-0 left-0 right-0" />
 
       {/* Content Container */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-12">
+      <SectionContainer className="relative z-10 py-4 sm:py-8 lg:py-12">
         {/* Section Title */}
         <div className="text-center mb-4 sm:mb-6 lg:mb-8">
           <h2 className="text-[20px] sm:text-[28px] lg:text-[32px] font-bold text-white mb-1 sm:mb-2 font-['Poppins']">
@@ -771,7 +772,7 @@ export default function MembershipPackagesChart() {
             </div>
           </div>
         </div>
-      </div>
+      </SectionContainer>
 
       {/* Metallic Divider at the bottom */}
       <MetallicDivider height="h-[2px]" className="absolute bottom-0 left-0 right-0" />

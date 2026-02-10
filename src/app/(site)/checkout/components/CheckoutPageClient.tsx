@@ -8,6 +8,7 @@ import OrderSummary from "./OrderSummary";
 import ShippingForm from "./ShippingForm";
 import PaymentMethod from "./PaymentMethod";
 import SecurityFeatures from "./SecurityFeatures";
+import { SectionContainer } from "@/components/ui";
 
 // Mock cart data - matches the header cart items
 const mockCartItems = [
@@ -232,7 +233,7 @@ export default function CheckoutPageClient() {
 
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <SectionContainer className="py-8">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Secure Checkout</h1>
@@ -496,7 +497,7 @@ export default function CheckoutPageClient() {
             </div>
           </div>
         </div>
-      </div>
+      </SectionContainer>
     </div>
   );
 }

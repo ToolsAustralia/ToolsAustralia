@@ -7,6 +7,7 @@ import MiniDrawsFilters from "./MiniDrawsFilters";
 import { Grid, List, Filter, X, Search } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import { type MiniDrawType as ReactQueryMiniDraw } from "@/types/mini-draw";
+import { SectionContainer } from "@/components/ui";
 
 // Mini draw type for ProductCard compatibility (entry-based system)
 interface MiniDrawForCard {
@@ -174,7 +175,7 @@ export default function MiniDrawsContent({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters - Desktop */}
         <div className="hidden lg:block w-80 flex-shrink-0">
@@ -469,6 +470,6 @@ export default function MiniDrawsContent({
           )}
         </div>
       </div>
-    </div>
+    </SectionContainer>
   );
 }

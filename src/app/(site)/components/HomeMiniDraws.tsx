@@ -4,6 +4,7 @@ import Link from "next/link";
 import ProductCard from "@/components/ui/ProductCard";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import { type MiniDrawType as ReactQueryMiniDraw } from "@/types/mini-draw";
+import { SectionContainer } from "@/components/ui";
 
 // Mini draw type for ProductCard compatibility (entry-based system)
 interface MiniDrawForCard {
@@ -77,14 +78,14 @@ export default function HomeMiniDraws() {
   if (isLoading) {
     return (
       <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <div className="text-center">
             <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
               MINI DRAWS
             </div>
             <div className="text-gray-500">Loading mini draws...</div>
           </div>
-        </div>
+        </SectionContainer>
       </section>
     );
   }
@@ -96,7 +97,7 @@ export default function HomeMiniDraws() {
 
   return (
     <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <SectionContainer>
         {/* Section Header */}
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">MINI DRAWS</h2>
@@ -118,7 +119,7 @@ export default function HomeMiniDraws() {
             View All Mini Draws →
           </Link>
         </div>
-      </div>
+      </SectionContainer>
     </section>
   );
 }

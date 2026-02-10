@@ -5,6 +5,7 @@ import { Clock, Calendar, Truck, Zap, Shield, IdCard } from "lucide-react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
+import { SectionContainer } from "@/components/ui";
 
 export default function GiveawayDetails() {
   const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
@@ -119,7 +120,7 @@ export default function GiveawayDetails() {
       ref={detailsRef}
       className="py-6 sm:py-12 lg:py-16 relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
     >
-      <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
+      <SectionContainer className="relative z-10">
         {/* Section Header */}
         <div className="text-center mb-3 sm:mb-8">
           <h2 className="text-xl sm:text-3xl lg:text-4xl font-bold font-['Poppins'] mb-4 drop-shadow-lg text-white">
@@ -162,7 +163,7 @@ export default function GiveawayDetails() {
             </div>
           ))}
         </div>
-      </div>
+      </SectionContainer>
     </section>
   );
 }

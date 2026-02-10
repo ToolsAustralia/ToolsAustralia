@@ -18,6 +18,7 @@ import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpe
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
+import { SectionContainer } from "@/components/ui";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
@@ -526,8 +527,8 @@ export default function MembershipSection({
   };
 
   return (
-    <section id="membership" className={`${padding} w-full overflow-visible`}>
-      <div className="w-full  sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto overflow-visible">
+    <section id="membership" className={`${padding} w-full overflow-visible relative z-10`}>
+      <SectionContainer className="overflow-visible">
         {/* Section Header */}
         <div className="text-center">
           <h2
@@ -916,7 +917,6 @@ export default function MembershipSection({
             </div>
           </div>
         )}
-      </div>
 
       {/* Desktop: Grid Layout */}
       {!loading && !error && (
@@ -1282,6 +1282,7 @@ export default function MembershipSection({
           </div>
         );
       })()}
+      </SectionContainer>
 
       {/* Signup Modal */}
       <MembershipModal

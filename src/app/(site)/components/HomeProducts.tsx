@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import ProductSection from "@/components/features/ProductSection";
 import { Product } from "@/types/product";
+import { SectionContainer } from "@/components/ui";
 
 interface HomeProductsProps {
   sectionType: "bestsellers" | "newarrivals" | "featured";
@@ -70,12 +71,12 @@ export default function HomeProducts({ sectionType, title }: HomeProductsProps) 
   if (loading) {
     return (
       <section className="pt-8 pb-4 bg-white w-full overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <div className="text-center">
             <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">{title}</div>
             <div className="text-gray-500">Loading products...</div>
           </div>
-        </div>
+        </SectionContainer>
       </section>
     );
   }
@@ -83,12 +84,12 @@ export default function HomeProducts({ sectionType, title }: HomeProductsProps) 
   if (error) {
     return (
       <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionContainer>
           <div className="text-center">
             <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">{title}</div>
             <div className="text-red-500">{error}</div>
           </div>
-        </div>
+        </SectionContainer>
       </section>
     );
   }

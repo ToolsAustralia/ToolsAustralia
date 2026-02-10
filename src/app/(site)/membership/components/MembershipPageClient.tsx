@@ -13,6 +13,7 @@ import MembershipPackagesChart from "@/components/sections/MembershipPackagesCha
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
+import { SectionContainer } from "@/components/ui";
 import MembershipModal from "@/components/modals/MembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -194,9 +195,9 @@ export default function MembershipPageClient() {
       </section>
 
       {/* Membership Sections */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <SectionContainer>
         <MembershipSection title="Ready to Join?" padding="py-16 sm:py-20" />
-      </div>
+      </SectionContainer>
       <FlowChartSection />
       <MembershipPackagesChart />
 

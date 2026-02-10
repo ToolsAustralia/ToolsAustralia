@@ -90,9 +90,9 @@ export default async function MajorGiveawayTermsPage() {
                   <dd>
                     <a
                       className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                      href="toolsaustralia.com.au"
+                      href="https://www.toolsaustralia.com.au"
                     >
-                      https:toolsaustralia.com.au
+                      https://www.toolsaustralia.com.au
                     </a>
                   </dd>
                 </dl>

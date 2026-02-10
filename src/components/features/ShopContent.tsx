@@ -7,6 +7,7 @@ import MetallicButton from "@/components/ui/MetallicButton";
 import { Grid, List, Filter, X, Search, Clock } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
+import { SectionContainer } from "@/components/ui";
 
 // Filter state interface
 interface FilterState {
@@ -150,7 +151,7 @@ export default function ShopContent({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ">
+    <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters - Desktop */}
         <div className="hidden lg:block w-80 flex-shrink-0">
@@ -420,6 +421,6 @@ export default function ShopContent({
           )}
         </div>
       </div>
-    </div>
+    </SectionContainer>
   );
 }
