@@ -13,9 +13,17 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
 import User from "@/models/User";
+import Winner from "@/models/Winner";
 import { stringify } from "csv-stringify/sync";
 import ExcelJS from "exceljs";
 import { formatDateInAEST } from "@/utils/common/timezone";
+
+/**
+ * Per terms (5.4 Repeat Winner Restriction): First Prize Winners cannot win another
+ * Tools Australia major giveaway for 10 months from date of win.
+ * We exclude these users from the export so they are not eligible for selection.
+ */
+const WINNER_EXCLUSION_MONTHS = 10;
 
 // Type for populated user data
 interface PopulatedUser {
@@ -90,6 +98,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Fetch First Prize winners from draws within last 10 months (per terms 5.4 - Repeat Winner Restriction)
+    // Use draw date (when draw occurred), not selectedDate (which can be delayed when admin records winner)
+    const tenMonthsAgo = new Date();
+    tenMonthsAgo.setMonth(tenMonthsAgo.getMonth() - WINNER_EXCLUSION_MONTHS);
+    const recentDraws = await MajorDraw.find({
+      drawDate: { $gte: tenMonthsAgo },
+    })
+      .select("_id")
+      .lean();
+    const recentDrawObjectIds = recentDraws.map((d) => d._id).filter(Boolean);
+    const recentMajorWinners = await Winner.find({
+      drawType: "major",
+      drawId: { $in: recentDrawObjectIds },
+    })
+      .select("userId")
+      .lean();
+    const excludedUserIds = new Set(
+      recentMajorWinners.map((w) => w.userId?.toString()).filter(Boolean)
+    );
+
     // Populate user details directly from entries field
     await majorDraw.populate({
       path: "entries.userId",
@@ -98,12 +126,17 @@ export async function GET(request: NextRequest) {
     });
 
     // Build export data from populated entries
-    // Filter out users with SA or ACT states
+    // Filter out: SA/ACT states (per eligibility); First Prize winners from last 10 months (per terms 5.4)
     const exportData = majorDraw.entries
       .filter((entry) => {
-        const user = entry.userId as unknown as PopulatedUser;
-        const stateAbbr = (user?.state || "").toUpperCase().trim();
-        // Exclude SA and ACT states
+        const raw = entry.userId as {
+          _id?: { toString(): string };
+          toString?: () => string;
+          state?: string;
+        } | null | undefined;
+        const userId = raw?._id?.toString?.() ?? raw?.toString?.();
+        if (userId && excludedUserIds.has(userId)) return false;
+        const stateAbbr = (raw?.state || "").toUpperCase().trim();
         return stateAbbr !== "SA" && stateAbbr !== "ACT";
       })
       .map((entry, index) => {
