@@ -651,8 +651,16 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="hidden lg:flex items-center gap-4">
                 {/* User Info with Stats - Clickable */}
                 <div className="relative desktop-user-menu-container">
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setIsDesktopUserMenuOpen(!isDesktopUserMenuOpen)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setIsDesktopUserMenuOpen(!isDesktopUserMenuOpen);
+                      }
+                    }}
                     className="flex items-center gap-3 text-right hover:bg-gray-50 rounded-lg px-3 py-2 transition-all duration-200 hover:scale-105 cursor-pointer"
                   >
                     <div>
@@ -730,7 +738,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           )}
                       </div>
                     </div>
-                  </button>
+                  </div>
 
                   {/* User Menu Dropdown */}
                   {isDesktopUserMenuOpen && (
