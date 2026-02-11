@@ -457,9 +457,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         // Refresh overview tab data
         await Promise.all([refetchStats(), refetchActivities(), refetchRevenue()]);
       } else if (selectedTab === "facebook-ads") {
-        // Invalidate and refetch Facebook Ads data
+        // Invalidate and refetch Facebook Ads + hourly breakdown so both update
         await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
         await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
+        await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
+        await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
       } else if (selectedTab === "users") {
         // Invalidate and refetch Users data
         await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });

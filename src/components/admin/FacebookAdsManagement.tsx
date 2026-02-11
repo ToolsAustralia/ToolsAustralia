@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import {
   DollarSign,
   TrendingUp,
@@ -15,16 +16,18 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import { useFacebookAdsInsights } from "@/hooks/queries/useFacebookAdsInsights";
+import { useFacebookAdsInsights, useHourlyInsights } from "@/hooks/queries/useFacebookAdsInsights";
 import type { DateRangeOption, InsightLevel } from "@/types/facebook-ads";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
-import { DailyBreakdownChart } from "./DailyBreakdownChart";
-import { useDailyMetrics } from "@/hooks/useDailyMetrics";
 import { DailyMetricsView } from "./metrics/DailyMetricsView";
+
+const AEST_TIMEZONE = "Australia/Sydney";
 
 /**
  * Facebook Ads Management Component
@@ -54,7 +57,7 @@ export default function FacebookAdsManagement() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
-  const [level, setLevel] = useState<InsightLevel>("adset");
+  const [level, setLevel] = useState<InsightLevel>("campaign");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   // View mode with URL persistence
@@ -82,24 +85,31 @@ export default function FacebookAdsManagement() {
     let urlStartDate = searchParams.get("startDate") || "";
     let urlEndDate = searchParams.get("endDate") || "";
 
+    // If "today" or "yesterday" is selected but no dates in URL, calculate and set them (for hourly breakdown)
+    if ((urlDateRange === "today" || urlDateRange === "yesterday") && (!urlStartDate || !urlEndDate)) {
+      const ref = urlDateRange === "yesterday" ? subDays(new Date(), 1) : new Date();
+      const calculatedStart = formatInTimeZone(ref, AEST_TIMEZONE, "yyyy-MM-dd");
+      const calculatedEnd = calculatedStart;
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("startDate", calculatedStart);
+      params.set("endDate", calculatedEnd);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      urlStartDate = calculatedStart;
+      urlEndDate = calculatedEnd;
+    }
+
     // If "all-time" is selected but no dates in URL, calculate and set them
     if (urlDateRange === "all-time" && (!urlStartDate || !urlEndDate)) {
       const today = new Date();
       const twoYearsAgo = new Date();
       twoYearsAgo.setFullYear(today.getFullYear() - 2);
-      const calculatedStart = twoYearsAgo.toISOString().split("T")[0];
-      const calculatedEnd = today.toISOString().split("T")[0];
+      const calculatedStart = formatInTimeZone(twoYearsAgo, AEST_TIMEZONE, "yyyy-MM-dd");
+      const calculatedEnd = formatInTimeZone(today, AEST_TIMEZONE, "yyyy-MM-dd");
       
-      // Update URL with calculated dates (only if they're different)
-      if (calculatedStart !== urlStartDate || calculatedEnd !== urlEndDate) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("startDate", calculatedStart);
-        params.set("endDate", calculatedEnd);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-        // Return early - let the next effect run handle the state update
-        return;
-      }
-      
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("startDate", calculatedStart);
+      params.set("endDate", calculatedEnd);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
       urlStartDate = calculatedStart;
       urlEndDate = calculatedEnd;
     }
@@ -169,6 +179,9 @@ export default function FacebookAdsManagement() {
   // Fetch insights data
   const { data, isLoading, error } = useFacebookAdsInsights(queryParams);
 
+  // Facebook-attributed conversions only (not all site purchases – you have Klaviyo, organic, etc.)
+  const displayConversions = data?.summary?.conversions ?? 0;
+
   // Format currency (AUD)
   // Note: API returns summary values in dollars, not cents
   const formatCurrency = (amount: number) => {
@@ -201,8 +214,16 @@ export default function FacebookAdsManagement() {
     let finalStart = start;
     let finalEnd = end;
 
-    // Handle draw-based date ranges
-    if (range === "current-draw" && drawDates?.currentDraw) {
+    // Handle today and yesterday - set dates in AEST so hourly breakdown works
+    if (range === "today") {
+      const now = new Date();
+      finalStart = formatInTimeZone(now, AEST_TIMEZONE, "yyyy-MM-dd");
+      finalEnd = finalStart;
+    } else if (range === "yesterday") {
+      const yesterday = subDays(new Date(), 1);
+      finalStart = formatInTimeZone(yesterday, AEST_TIMEZONE, "yyyy-MM-dd");
+      finalEnd = finalStart;
+    } else if (range === "current-draw" && drawDates?.currentDraw) {
       finalRange = range;
       finalStart = drawDates.currentDraw.startDate;
       finalEnd = drawDates.currentDraw.endDate;
@@ -216,8 +237,8 @@ export default function FacebookAdsManagement() {
       const today = new Date();
       const twoYearsAgo = new Date();
       twoYearsAgo.setFullYear(today.getFullYear() - 2);
-      finalStart = twoYearsAgo.toISOString().split("T")[0];
-      finalEnd = today.toISOString().split("T")[0];
+      finalStart = formatInTimeZone(twoYearsAgo, AEST_TIMEZONE, "yyyy-MM-dd");
+      finalEnd = formatInTimeZone(today, AEST_TIMEZONE, "yyyy-MM-dd");
     }
 
     // Update state immediately for responsive UI
@@ -416,29 +437,301 @@ export default function FacebookAdsManagement() {
 
   const { summary } = data;
 
-  // Component for daily breakdown section
-  function DailyBreakdownSection({ startDate, endDate }: { startDate: Date; endDate: Date }) {
-    const { data: dailyMetrics, isLoading: dailyLoading } = useDailyMetrics({
+  // Component for hourly breakdown table – Facebook data only
+  function HourlyBreakdownSection({ startDate, endDate }: { startDate: string; endDate: string }) {
+    const [hourlySortColumn, setHourlySortColumn] = useState<string>("spend");
+    const [hourlySortDirection, setHourlySortDirection] = useState<"asc" | "desc">("desc");
+    const [hourlyColumnsExpanded, setHourlyColumnsExpanded] = useState(false);
+
+    const { data: hourlyData, isLoading: hourlyLoading, error: hourlyError } = useHourlyInsights({
       startDate,
       endDate,
-      enabled: dateRangeOption === "custom" && !!startDate && !!endDate,
+      enabled: !!startDate && !!endDate,
     });
 
-    if (!dailyMetrics || dailyMetrics.length === 0) {
-      return null;
+    const handleHourlySort = (column: string) => {
+      if (hourlySortColumn === column) {
+        setHourlySortDirection(hourlySortDirection === "asc" ? "desc" : "asc");
+      } else {
+        setHourlySortColumn(column);
+        setHourlySortDirection("desc");
+      }
+    };
+
+    const sortedHourlyData = useMemo(() => {
+      if (!hourlyData?.hourly) return [];
+      const sorted = [...hourlyData.hourly];
+      sorted.sort((a, b) => {
+        let aValue: number;
+        let bValue: number;
+        switch (hourlySortColumn) {
+          case "hour":
+            aValue = a.hour;
+            bValue = b.hour;
+            break;
+          case "spend":
+            aValue = a.spend;
+            bValue = b.spend;
+            break;
+          case "impressions":
+            aValue = a.impressions;
+            bValue = b.impressions;
+            break;
+          case "clicks":
+            aValue = a.clicks;
+            bValue = b.clicks;
+            break;
+          case "ctr":
+            aValue = a.ctr;
+            bValue = b.ctr;
+            break;
+          case "cpc":
+            aValue = a.cpc;
+            bValue = b.cpc;
+            break;
+          case "revenue":
+            aValue = a.revenue;
+            bValue = b.revenue;
+            break;
+          case "conversions":
+            aValue = a.conversions;
+            bValue = b.conversions;
+            break;
+          case "roas":
+            aValue = a.roas;
+            bValue = b.roas;
+            break;
+          case "profit":
+            aValue = a.profit;
+            bValue = b.profit;
+            break;
+          default:
+            return 0;
+        }
+        return hourlySortDirection === "asc" ? aValue - bValue : bValue - aValue;
+      });
+      return sorted;
+    }, [hourlyData, hourlySortColumn, hourlySortDirection]);
+
+    const hourlyTotals = useMemo(() => {
+      if (!hourlyData?.hourly?.length) return null;
+      const t = hourlyData.hourly.reduce(
+        (acc, h) => ({
+          spend: acc.spend + h.spend,
+          impressions: acc.impressions + h.impressions,
+          clicks: acc.clicks + h.clicks,
+          revenue: acc.revenue + h.revenue,
+          conversions: acc.conversions + h.conversions,
+          profit: acc.profit + h.profit,
+        }),
+        { spend: 0, impressions: 0, clicks: 0, revenue: 0, conversions: 0, profit: 0 }
+      );
+      return {
+        ...t,
+        ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
+        cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+        roas: t.spend > 0 ? t.revenue / t.spend : 0,
+      };
+    }, [hourlyData]);
+
+    const getHourlySortIcon = (column: string) => {
+      if (hourlySortColumn !== column) return <ArrowUpDown className="w-3 h-3 ml-1 text-gray-400" />;
+      return hourlySortDirection === "asc" ? (
+        <ArrowUp className="w-3 h-3 ml-1 text-gray-700" />
+      ) : (
+        <ArrowDown className="w-3 h-3 ml-1 text-gray-700" />
+      );
+    };
+
+    if (hourlyLoading) {
+      return (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-12 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      );
     }
 
-    return <DailyBreakdownChart metrics={dailyMetrics} loading={dailyLoading} />;
+    if (hourlyError) {
+      return (
+        <div className="bg-white rounded-xl shadow-lg border-2 border-yellow-200 p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <AlertTriangle className="w-5 h-5 text-yellow-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Hourly Data Unavailable</h3>
+          </div>
+          <p className="text-sm text-gray-600">Unable to load hourly breakdown. {hourlyError.message}</p>
+        </div>
+      );
+    }
+
+    if (!hourlyData?.hourly || hourlyData.hourly.length === 0) return null;
+
+    return (
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6 overflow-hidden">
+        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-1">
+          Hourly Breakdown (All Hours)
+        </h3>
+        
+        <button
+          type="button"
+          onClick={() => setHourlyColumnsExpanded((v) => !v)}
+          className="sm:hidden flex items-center gap-1.5 mb-2 text-xs font-medium text-gray-600 hover:text-gray-900"
+        >
+          {hourlyColumnsExpanded ? (
+            <>
+              <ChevronUp className="w-4 h-4" /> Show fewer columns
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-4 h-4" /> Show more columns (Impressions, Clicks, CTR, CPC, Profit)
+            </>
+          )}
+        </button>
+        <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
+          <table className="w-full min-w-[700px]">
+            <thead>
+              <tr className="border-b-2 border-gray-200 bg-gray-50">
+                <th
+                  className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleHourlySort("hour")}
+                >
+                  <div className="flex items-center">Hour{getHourlySortIcon("hour")}</div>
+                </th>
+                <th
+                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleHourlySort("spend")}
+                >
+                  <div className="flex items-center justify-end">Spend{getHourlySortIcon("spend")}</div>
+                </th>
+                <th
+                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  onClick={() => handleHourlySort("impressions")}
+                >
+                  <div className="flex items-center justify-end">Impressions{getHourlySortIcon("impressions")}</div>
+                </th>
+                <th
+                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  onClick={() => handleHourlySort("clicks")}
+                >
+                  <div className="flex items-center justify-end">Clicks{getHourlySortIcon("clicks")}</div>
+                </th>
+                <th
+                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  onClick={() => handleHourlySort("ctr")}
+                >
+                  <div className="flex items-center justify-end">CTR{getHourlySortIcon("ctr")}</div>
+                </th>
+                <th
+                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  onClick={() => handleHourlySort("cpc")}
+                >
+                  <div className="flex items-center justify-end">CPC{getHourlySortIcon("cpc")}</div>
+                </th>
+                <th
+                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleHourlySort("revenue")}
+                >
+                  <div className="flex items-center justify-end">Revenue (all traffic){getHourlySortIcon("revenue")}</div>
+                </th>
+                <th
+                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleHourlySort("conversions")}
+                >
+                  <div className="flex items-center justify-end">Conversions (all traffic){getHourlySortIcon("conversions")}</div>
+                </th>
+                <th
+                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleHourlySort("roas")}
+                >
+                  <div className="flex items-center justify-end">ROAS{getHourlySortIcon("roas")}</div>
+                </th>
+                <th
+                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  onClick={() => handleHourlySort("profit")}
+                >
+                  <div className="flex items-center justify-end">Profit{getHourlySortIcon("profit")}</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedHourlyData.map((hour) => (
+                <tr key={hour.hour} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium">{hour.label}</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hour.spend)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hour.impressions)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hour.clicks)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatPercentage(hour.ctr)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatCurrency(hour.cpc)}</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">{formatCurrency(hour.revenue)}</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{hour.conversions}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.roas >= 2 ? "text-emerald-600" : hour.roas >= 1 ? "text-gray-900" : "text-red-600"}`}>
+                    {formatROAS(hour.roas)}
+                  </td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.profit >= 0 ? "text-emerald-600" : "text-red-600"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
+                    {formatCurrency(hour.profit)}
+                  </td>
+                </tr>
+              ))}
+              {hourlyTotals && (
+                <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900">Total</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hourlyTotals.spend)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hourlyTotals.impressions)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hourlyTotals.clicks)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatPercentage(hourlyTotals.ctr)}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatCurrency(hourlyTotals.cpc)}</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hourlyTotals.revenue)}</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{hourlyTotals.conversions}</td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.roas >= 1 ? "text-emerald-600" : "text-red-600"}`}>
+                    {formatROAS(hourlyTotals.roas)}
+                  </td>
+                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.profit >= 0 ? "text-emerald-600" : "text-red-600"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
+                    {formatCurrency(hourlyTotals.profit)}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4 sm:space-y-6 min-w-0">
-      {/* Header with Controls - Matching Dashboard Overview */}
-      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 min-w-0">
-        <h2 className="hidden sm:block text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
-          Facebook Ads Performance
-        </h2>
-        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 min-w-0 max-w-full">
+      {/* Header with Controls - View Level on top for easier toggling */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 min-w-0 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <h2 className="hidden sm:block text-sm sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
+            Facebook Ads Performance
+          </h2>
+         
+        </div>
+        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 min-w-0 max-w-full flex-wrap">
+          {/* View Level - Top for easier toggling, default Campaign */}
+          {viewMode === "ads" && (
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+              <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
+                View Level:
+              </label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value as InsightLevel)}
+                className="px-2.5 sm:px-3 py-1.5 sm:py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm bg-white font-semibold text-gray-900 shadow-sm hover:border-gray-400 transition-all duration-200 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpolyline points=%226 9 12 15 18 9%22%3E%3C/polyline%3E%3C/svg%3E')] bg-no-repeat bg-right pr-7 sm:pr-8 min-w-[100px] sm:min-w-[140px]"
+                style={{
+                  backgroundPosition: "right 0.5rem center",
+                  backgroundSize: "0.75em 0.75em",
+                }}
+              >
+                <option value="campaign">Campaign</option>
+                <option value="adset">Ad Set</option>
+              </select>
+            </div>
+          )}
           {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
           <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg p-1 flex-shrink-0">
             <button
@@ -524,48 +817,30 @@ export default function FacebookAdsManagement() {
         <MetricCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
       </div>
 
-      {/* Conversions */}
+      {/* Conversions - Facebook-attributed only (not all site purchases) */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
         <div className="flex items-center justify-between mb-2 sm:mb-4">
           <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Conversions</h3>
           <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
         </div>
-        <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatNumber(summary.conversions)}</div>
-        <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">Total purchases from Facebook ads</p>
+        <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatNumber(displayConversions)}</div>
+        <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">Facebook-attributed purchases only</p>
       </div>
 
-      {/* Daily Breakdown - Show for custom date ranges */}
-      {dateRangeOption === "custom" && startDate && endDate && (
-        <DailyBreakdownSection startDate={new Date(startDate)} endDate={new Date(endDate)} />
+      {/* Hourly Breakdown - Show when date range is available */}
+      {startDate && endDate && (
+        <HourlyBreakdownSection startDate={startDate} endDate={endDate} />
       )}
 
-      {/* Breakdown Table (for Campaign/Ad Set levels) */}
+      {/* Breakdown Table (for Campaign/Ad Set levels) - View Level is in header */}
       {data.breakdown && data.breakdown.length > 0 && (
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6 overflow-hidden">
-          <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4 min-w-0">
-            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 flex-1 min-w-0 truncate">
-              {level === "campaign" ? "Campaign Breakdown" : "Ad Set Breakdown"}
-            </h3>
-
-            {/* View Level Dropdown - Compact Styling */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-              <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
-                View Level:
-              </label>
-              <select
-                value={level}
-                onChange={(e) => setLevel(e.target.value as InsightLevel)}
-                className="px-2.5 sm:px-3 py-1.5 sm:py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm bg-white font-semibold text-gray-900 shadow-sm hover:border-gray-400 transition-all duration-200 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpolyline points=%226 9 12 15 18 9%22%3E%3C/polyline%3E%3C/svg%3E')] bg-no-repeat bg-right pr-7 sm:pr-8 min-w-[100px] sm:min-w-[140px]"
-                style={{
-                  backgroundPosition: "right 0.5rem center",
-                  backgroundSize: "0.75em 0.75em",
-                }}
-              >
-                <option value="campaign">Campaign</option>
-                <option value="adset">Ad Set</option>
-              </select>
-            </div>
-          </div>
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-1">
+            {level === "campaign" ? "Campaign Breakdown" : "Ad Set Breakdown"}
+          </h3>
+          <p className="text-xs text-gray-500 mb-3 sm:mb-4">
+            All metrics from Facebook (matches Conversions card above).
+          </p>
           <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
             <table className="w-full min-w-[600px]">
               <thead>

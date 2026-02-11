@@ -244,6 +244,137 @@ export function getTodayDateRange(): { since: string; until: string } {
   };
 }
 
+/**
+ * Hourly insight data from Facebook API (with hourly breakdown)
+ */
+export interface HourlyInsightData {
+  hour: number; // 0-23
+  hourLabel: string; // e.g. "00:00:00 - 00:59:59"
+  spend: number; // in cents
+  impressions: number;
+  clicks: number;
+}
+
+/**
+ * Fetch hourly insights from Facebook Marketing API
+ * Returns spend, impressions, and clicks aggregated by hour of day (AEST timezone)
+ * Note: Purchase/conversions are NOT available with hourly breakdown (off-Meta restriction)
+ *
+ * @param adAccountId - Facebook ad account ID (format: act_123456789)
+ * @param accessToken - Facebook access token
+ * @param dateRange - Date range for insights
+ * @returns Array of 24 hourly insights (0-23), one per hour
+ */
+export async function fetchFacebookInsightsHourly(
+  adAccountId: string,
+  accessToken: string,
+  dateRange: { since: string; until: string }
+): Promise<HourlyInsightData[]> {
+  const apiVersion = "v21.0";
+  const baseUrl = `https://graph.facebook.com/${apiVersion}/${adAccountId}/insights`;
+
+  // Build query parameters with hourly breakdown
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    fields: "spend,impressions,clicks", // Only on-Meta metrics work with hourly breakdown
+    time_range: JSON.stringify({
+      since: dateRange.since,
+      until: dateRange.until,
+    }),
+    level: "account",
+    breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
+    action_attribution_windows: JSON.stringify(["7d_click"]),
+  });
+
+  const url = `${baseUrl}?${params.toString()}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorData: FacebookApiError = await response.json().catch(() => ({
+        error: {
+          message: `HTTP ${response.status}: ${response.statusText}`,
+          type: "HTTPError",
+          code: response.status,
+        },
+      }));
+
+      if (response.status === 401) {
+        throw new Error("Facebook access token expired or invalid. Please update the token.");
+      }
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After");
+        throw new Error(
+          `Rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : "Please try again later."}`
+        );
+      }
+
+      throw new Error(errorData.error?.message || `Facebook API error: ${response.statusText}`);
+    }
+
+    const data: {
+      data: Array<{
+        spend?: string;
+        impressions?: string;
+        clicks?: string;
+        hourly_stats_aggregated_by_advertiser_time_zone?: string;
+      }>;
+    } = await response.json();
+
+    // Initialize array with 24 hours (0-23), all zeros
+    const hourlyData: HourlyInsightData[] = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      hourLabel: `${String(hour).padStart(2, "0")}:00:00 - ${String(hour).padStart(2, "0")}:59:59`,
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+    }));
+
+    // Parse and populate data from Facebook response
+    if (data.data && data.data.length > 0) {
+      for (const item of data.data) {
+        const hourLabel = item.hourly_stats_aggregated_by_advertiser_time_zone;
+        if (!hourLabel) continue;
+
+        // Extract hour from label (e.g. "00:00:00 - 00:59:59" -> 0)
+        const hourMatch = hourLabel.match(/^(\d{2}):/);
+        if (!hourMatch) continue;
+
+        const hour = parseInt(hourMatch[1], 10);
+        if (hour < 0 || hour > 23) continue;
+
+        // Parse metrics (Facebook returns as strings)
+        const spend = parseFloat(item.spend || "0") * 100; // Convert dollars to cents
+        const impressions = parseInt(item.impressions || "0", 10);
+        const clicks = parseInt(item.clicks || "0", 10);
+
+        // Update the corresponding hour
+        hourlyData[hour] = {
+          hour,
+          hourLabel,
+          spend,
+          impressions,
+          clicks,
+        };
+      }
+    }
+
+    return hourlyData;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("Failed to fetch Facebook hourly insights: Unknown error");
+  }
+}
+
 
 
 
