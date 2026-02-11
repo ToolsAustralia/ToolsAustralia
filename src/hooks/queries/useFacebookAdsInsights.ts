@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { FacebookAdsInsightsResponse, DateRangeOption, InsightLevel } from "@/types/facebook-ads";
+import type { FacebookAdsInsightsResponse, DateRangeOption, InsightLevel, HourlyInsightsResponse } from "@/types/facebook-ads";
 
 /**
  * React Query hook for fetching Facebook Ads insights
@@ -64,11 +64,70 @@ export function useFacebookAdsInsights(params: {
 
       return result.data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes - matches cache TTL
+    staleTime: 1 * 60 * 1000, // 1 minute - consider data stale so refetch happens sooner
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
-    refetchOnWindowFocus: false, // Don't refetch on window focus for admin
-    retry: 2, // Retry failed requests twice
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    refetchOnWindowFocus: true, // Refetch when returning to tab so latest purchases show up
+    refetchInterval: 2 * 60 * 1000, // Auto-refresh every 2 minutes while tab is open
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+}
+
+/**
+ * React Query hook for fetching hourly Facebook Ads insights
+ * Combines Facebook hourly data (spend, impressions, clicks) with PaymentEvent data (revenue, conversions)
+ *
+ * @param params - Query parameters for fetching hourly insights
+ * @returns React Query result with hourly insights data
+ */
+export function useHourlyInsights(params: {
+  startDate?: string; // YYYY-MM-DD format
+  endDate?: string; // YYYY-MM-DD format
+  enabled?: boolean; // Whether to run the query
+}) {
+  const { startDate, endDate, enabled = true } = params;
+
+  return useQuery<HourlyInsightsResponse["data"]>({
+    queryKey: ["admin", "facebook-ads", "hourly-insights", startDate, endDate],
+    queryFn: async (): Promise<HourlyInsightsResponse["data"]> => {
+      if (!startDate || !endDate) {
+        throw new Error("startDate and endDate are required");
+      }
+
+      // Build query string
+      const searchParams = new URLSearchParams();
+      searchParams.append("startDate", startDate);
+      searchParams.append("endDate", endDate);
+
+      const response = await fetch(`/api/admin/facebook-ads/hourly-insights?${searchParams.toString()}`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({
+          error: `HTTP ${response.status}: ${response.statusText}`,
+        }));
+
+        throw new Error(errorData.error || errorData.details || `Failed to fetch hourly insights: ${response.statusText}`);
+      }
+
+      const result: HourlyInsightsResponse = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || result.details || "Failed to fetch hourly insights");
+      }
+
+      if (!result.data) {
+        throw new Error("No data returned from API");
+      }
+
+      return result.data;
+    },
+    enabled: enabled && !!startDate && !!endDate,
+    staleTime: 1 * 60 * 1000, // 1 minute - so conversions from your DB update sooner
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true, // Refetch when returning to tab
+    refetchInterval: 2 * 60 * 1000, // Auto-refresh every 2 minutes
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
 

@@ -175,3 +175,41 @@ export interface DateRangeState {
   startDate?: Date;
   endDate?: Date;
 }
+
+/**
+ * Hourly insight item (combining Facebook and PaymentEvent data)
+ */
+export interface HourlyInsightItem {
+  hour: number; // 0-23
+  label: string; // e.g. "12:00 AM", "1:00 PM"
+  spend: number; // in dollars (from Facebook)
+  impressions: number; // from Facebook
+  clicks: number; // from Facebook
+  revenue: number; // in dollars (from PaymentEvent)
+  conversions: number; // count (from PaymentEvent)
+  profit: number; // revenue - spend
+  roas: number; // revenue / spend (or 0 if spend is 0)
+  ctr: number; // click-through rate
+  cpc: number; // cost per click
+}
+
+/**
+ * API response for hourly insights
+ * totalConversions and totalRevenue are the single source of truth from your records (PaymentEvent) for the date range.
+ */
+export interface HourlyInsightsResponse {
+  success: boolean;
+  data?: {
+    hourly: HourlyInsightItem[];
+    /** Total conversions in the period (from PaymentEvent). Matches sum of hourly breakdown. */
+    totalConversions: number;
+    /** Total revenue in the period in dollars (from PaymentEvent). Matches sum of hourly breakdown. */
+    totalRevenue: number;
+    dateRange: {
+      start: string;
+      end: string;
+    };
+  };
+  error?: string;
+  details?: string;
+}

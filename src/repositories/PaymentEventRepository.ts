@@ -130,5 +130,81 @@ export class PaymentEventRepository {
 
     return breakdown;
   }
+
+  /**
+   * Aggregate revenue and conversions by hour of day (AEST timezone).
+   * Only includes purchases (excludes membership renewals): one-time, upsell, mini-draw,
+   * and membership initial purchases; excludes packageType "membership" with data.billingReason "subscription_cycle".
+   *
+   * @param startDate - Start date (inclusive)
+   * @param endDate - End date (inclusive)
+   * @returns Array of 24 hourly aggregations (hour 0-23)
+   */
+  async aggregateRevenueAndCountByHourOfDay(
+    startDate: Date,
+    endDate: Date
+  ): Promise<{ hour: number; revenue: number; conversions: number }[]> {
+    const AEST_TIMEZONE = "Australia/Sydney";
+
+    const result = await PaymentEvent.aggregate([
+      {
+        $match: {
+          eventType: "BenefitsGranted",
+          timestamp: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+          // Exclude membership renewals; only count purchases (one-time, upsell, mini-draw, initial membership)
+          $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+        },
+      },
+      {
+        $project: {
+          // Convert timestamp to AEST and extract hour (0-23)
+          hour: {
+            $hour: {
+              date: "$timestamp",
+              timezone: AEST_TIMEZONE,
+            },
+          },
+          price: { $ifNull: ["$data.price", 0] },
+        },
+      },
+      {
+        $group: {
+          _id: "$hour",
+          revenue: { $sum: "$price" },
+          conversions: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+    ]).exec();
+
+    // Initialize all 24 hours with zeros
+    const hourlyData: { hour: number; revenue: number; conversions: number }[] = Array.from(
+      { length: 24 },
+      (_, hour) => ({
+        hour,
+        revenue: 0,
+        conversions: 0,
+      })
+    );
+
+    // Populate with actual data
+    result.forEach((item) => {
+      const hour = item._id;
+      if (hour >= 0 && hour < 24) {
+        hourlyData[hour] = {
+          hour,
+          revenue: item.revenue,
+          conversions: item.conversions,
+        };
+      }
+    });
+
+    return hourlyData;
+  }
 }
 
