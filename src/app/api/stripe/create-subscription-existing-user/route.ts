@@ -73,6 +73,9 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     const requestContext = extractRequestContext(request);
+    const capiEventSourceUrl =
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
 
     // console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
 
@@ -214,10 +217,11 @@ export async function POST(request: NextRequest) {
       ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-                                                                ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+      ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
       ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
       ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
     };
 

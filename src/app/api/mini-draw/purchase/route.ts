@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
+    const capiEventSourceUrl =
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
 
     // Parse and validate request body
     const body = await request.json();
@@ -218,7 +221,8 @@ export async function POST(request: NextRequest) {
         miniDrawPackage,
         validatedData.miniDrawId,
         validatedData.paymentMethodId,
-        requestContext
+        requestContext,
+        capiEventSourceUrl
       );
     } else {
       if (!user.stripeCustomerId) {
@@ -231,7 +235,8 @@ export async function POST(request: NextRequest) {
         validatedData.miniDrawId,
         validatedData.paymentMethodId,
         requestContext,
-        request // ✅ Pass request for error logging
+        request, // ✅ Pass request for error logging
+        capiEventSourceUrl
       );
     }
   } catch (error) {
@@ -280,7 +285,8 @@ async function handleOneClickPurchase(
   },
   miniDrawId: string,
   paymentMethodId: string,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined
+  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  capiEventSourceUrl?: string
 ) {
   try {
     // console.log("🎯 handleOneClickPurchase called with:", {
@@ -432,6 +438,7 @@ async function handleOneClickPurchase(
           ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
           ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+          ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         },
       });
 
@@ -563,10 +570,18 @@ async function handlePaymentIntentCreation(
   miniDrawId: string,
   paymentMethodId: string | undefined,
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
-  request?: NextRequest // ✅ NEW: Add request parameter for error logging
+  request?: NextRequest, // ✅ Pass request for error logging
+  capiEventSourceUrl?: string
 ) {
   try {
     const shouldConfirm = !!paymentMethodId;
+
+    const eventSourceUrl =
+      capiEventSourceUrl ??
+      (request
+        ? request.headers.get("referer") ??
+          (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+        : undefined);
 
     // ✅ Use centralized PaymentIntent configuration with 3DS support
     const paymentIntentConfig = createPaymentIntentConfig({
@@ -590,6 +605,7 @@ async function handlePaymentIntentCreation(
         ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
         ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(eventSourceUrl ? { capi_event_source_url: eventSourceUrl } : {}),
       },
     });
 

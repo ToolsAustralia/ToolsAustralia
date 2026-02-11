@@ -73,21 +73,27 @@ async function markEventProcessed(paymentIntentId: string): Promise<void> {
  * Extract request context from payment intent metadata for Facebook CAPI
  * This context was stored by API routes when creating payment intents
  */
-function extractRequestContextFromMetadata(
-  metadata: Stripe.Metadata
-): { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined {
+function extractRequestContextFromMetadata(metadata: Stripe.Metadata): {
+  client_ip_address?: string;
+  client_user_agent?: string;
+  fbc?: string;
+  fbp?: string;
+  event_source_url?: string;
+} | undefined {
   const clientIp = metadata.capi_client_ip;
   const userAgent = metadata.capi_user_agent;
   const fbc = metadata.capi_fbc;
   const fbp = metadata.capi_fbp;
+  const eventSourceUrl = metadata.capi_event_source_url;
 
-  // Only return context if at least one field is present
-  if (clientIp || userAgent || fbc || fbp) {
+  // Return context if at least one CAPI field is present (event_source_url alone is valid)
+  if (clientIp || userAgent || fbc || fbp || eventSourceUrl) {
     return {
       ...(clientIp && { client_ip_address: clientIp }),
       ...(userAgent && { client_user_agent: userAgent }),
       ...(fbc && { fbc }),
       ...(fbp && { fbp }),
+      ...(eventSourceUrl && { event_source_url: eventSourceUrl }),
     };
   }
 
@@ -2990,17 +2996,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Get subscription ID - check if this is an upgrade scenario
     let subscriptionId = user.stripeSubscriptionId;
 
+    // Resolve subscription ID from invoice when expanded (for new subscriptions user may not have stripeSubscriptionId yet)
+    const invoiceSubscription = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
+      .subscription;
+    const invoiceSubscriptionId =
+      typeof invoiceSubscription === "string" ? invoiceSubscription : (invoiceSubscription as Stripe.Subscription)?.id;
+
     // For upgrades, check if the invoice is for a new subscription with pending change
     // This handles BOTH old pattern (create new subscription) and new pattern (update subscription)
     if (user.subscription?.pendingChange?.stripeSubscriptionId) {
-      const invoiceSubscriptionId = (() => {
-        const subscriptionField = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
-          .subscription;
-        return typeof subscriptionField === "string"
-          ? subscriptionField
-          : (subscriptionField as Stripe.Subscription)?.id;
-      })();
-
       // If this invoice is for the pending change subscription OR current subscription with proration, use that
       if (invoiceSubscriptionId === user.subscription.pendingChange.stripeSubscriptionId) {
         subscriptionId = invoiceSubscriptionId;
@@ -3014,14 +3018,25 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       }
     }
 
+    // For subscription_create, user may not have stripeSubscriptionId saved yet; use invoice's subscription
+    if (!subscriptionId && invoiceSubscriptionId) {
+      subscriptionId = invoiceSubscriptionId;
+      webhookLog("info", `Using subscription ID from invoice: ${subscriptionId}`);
+    }
+
     if (!subscriptionId) {
       webhookLog("warn", `No subscription ID found for user: ${user.email}`);
       return;
     }
 
-    let subscription;
+    // Use expanded subscription from invoice when available (includes CAPI metadata set at creation)
+    let subscription: Stripe.Subscription;
     try {
-      subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      if (typeof invoiceSubscription === "object" && invoiceSubscription !== null && "metadata" in invoiceSubscription) {
+        subscription = invoiceSubscription as Stripe.Subscription;
+      } else {
+        subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      }
 
       // Update payment intent description for recurring payments
       const invoiceWithPaymentIntent = expandedInvoice as Stripe.Invoice & {
@@ -3201,11 +3216,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // This ensures entries route correctly during freeze period
     const paymentTimestamp = expandedInvoice.status_transitions?.paid_at || expandedInvoice.created;
 
-    // Extract request context from invoice metadata (if available)
+    // Extract request context from subscription or invoice metadata (if available)
+    // For new subscriptions, CAPI metadata is set on the subscription at creation; invoice may not have it
     // Note: For subscription renewals, original request context may not be available
-    const requestContext = expandedInvoice.metadata
-      ? extractRequestContextFromMetadata(expandedInvoice.metadata)
-      : undefined;
+    const requestContext =
+      (subscription?.metadata ? extractRequestContextFromMetadata(subscription.metadata) : undefined) ??
+      (expandedInvoice.metadata ? extractRequestContextFromMetadata(expandedInvoice.metadata) : undefined);
 
     // ✅ CRITICAL: Retrieve promoLinkCode, affiliateCode, and A/B testing assignment from metadata
     // For subscriptions, check subscription metadata FIRST (most reliable)

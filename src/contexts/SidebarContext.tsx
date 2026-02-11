@@ -10,6 +10,14 @@ interface SidebarContextType {
   isAnySidebarOpen: boolean;
 }
 
+const defaultSidebarContext: SidebarContextType = {
+  isMobileMenuOpen: false,
+  setIsMobileMenuOpen: () => {},
+  isCartOpen: false,
+  setIsCartOpen: () => {},
+  isAnySidebarOpen: false,
+};
+
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
@@ -33,10 +41,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useSidebar() {
+export function useSidebar(): SidebarContextType {
   const context = useContext(SidebarContext);
-  if (context === undefined) {
-    throw new Error("useSidebar must be used within a SidebarProvider");
-  }
-  return context;
+  return context ?? defaultSidebarContext;
 }

@@ -5,6 +5,7 @@ import { Check, Gift, Star, Zap, AlertCircle } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { trackFacebookEvent } from "@/components/FacebookPixel";
 
 interface PaymentProcessingScreenProps {
   paymentIntentId: string;
@@ -34,6 +35,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const onSuccessCalledRef = useRef(false); // Guard to prevent duplicate onSuccess calls
+  const pixelPurchaseFiredRef = useRef(false); // Fire Pixel Purchase once per payment (same eventID as CAPI for deduplication)
   const shouldSkipPolling = paymentIntentId === "processing_upgrade";
   const shouldPoll = isVisible && !!paymentIntentId && !shouldSkipPolling;
 
@@ -195,6 +197,18 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   }, [isProcessing, paymentIntentId, error, onSuccess]);
 
   if (!isVisible) return null;
+
+  // Fire Pixel Purchase once when success is shown (same eventID as CAPI for event coverage and deduplication)
+  if (status?.processed && status.data && paymentIntentId && !shouldSkipPolling && !pixelPurchaseFiredRef.current) {
+    pixelPurchaseFiredRef.current = true;
+    const value = status.data.points ?? 0;
+    trackFacebookEvent("Purchase", {
+      value,
+      currency: "AUD",
+      order_id: paymentIntentId,
+      eventID: paymentIntentId,
+    });
+  }
 
   // Show success screen if payment is processed - using SuccessScreen design
   if (status?.processed && status.data) {

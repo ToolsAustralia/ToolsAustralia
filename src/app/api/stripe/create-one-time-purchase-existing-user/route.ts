@@ -25,6 +25,7 @@ import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import mongoose from "mongoose";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -85,6 +86,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = createOneTimePurchaseExistingUserSchema.parse(body);
     const normalizedAffiliateCode = validatedData.affiliateCode?.trim().toUpperCase();
+
+    // Extract request context for Facebook CAPI (webhook will use for match quality)
+    const requestContext = extractRequestContext(request);
+    const capiEventSourceUrl =
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
 
     // console.log(`🛒 Creating one-time purchase for existing user: ${session.user.id}`);
 
@@ -390,6 +397,12 @@ export async function POST(request: NextRequest) {
           experimentId: experimentAssignment.experimentId,
           variantId: experimentAssignment.variantId,
         }),
+        // Store request context for Facebook CAPI (webhook will extract and use)
+        ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       },
     });
 

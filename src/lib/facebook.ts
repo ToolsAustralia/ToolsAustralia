@@ -12,6 +12,7 @@ export interface FacebookEvent {
     st?: string; // state hash
     zp?: string; // zip code hash
     country?: string; // country code
+    external_id?: string; // hashed external ID (recommended for matching)
     client_ip_address?: string;
     client_user_agent?: string;
     fbc?: string; // Facebook click ID

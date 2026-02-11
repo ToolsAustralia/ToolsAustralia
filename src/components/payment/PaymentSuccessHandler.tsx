@@ -7,9 +7,10 @@
 
 "use client";
 
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { use3DSRedirectHandler, type PaymentStatus } from "@/hooks/use3DSRedirectHandler";
 import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { trackFacebookEvent } from "@/components/FacebookPixel";
 
 export interface PaymentSuccessHandlerProps {
   /**
@@ -55,6 +56,25 @@ export function PaymentSuccessHandler({
   onStatusChange,
 }: PaymentSuccessHandlerProps) {
   const { paymentStatus, paymentIntent, isLoading, error } = use3DSRedirectHandler();
+  const pixelPurchaseFiredRef = useRef(false);
+
+  // Fire Pixel Purchase once when 3DS redirect success (same eventID as CAPI for deduplication)
+  useEffect(() => {
+    if (
+      paymentStatus === "succeeded" &&
+      paymentIntent?.id &&
+      !pixelPurchaseFiredRef.current
+    ) {
+      pixelPurchaseFiredRef.current = true;
+      const amount = paymentIntent.amount ?? 0;
+      trackFacebookEvent("Purchase", {
+        value: amount / 100,
+        currency: (paymentIntent.currency ?? "aud").toUpperCase(),
+        order_id: paymentIntent.id,
+        eventID: paymentIntent.id,
+      });
+    }
+  }, [paymentStatus, paymentIntent?.id, paymentIntent?.amount, paymentIntent?.currency]);
 
   // Notify parent of status changes
   React.useEffect(() => {
