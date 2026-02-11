@@ -522,10 +522,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => clearInterval(timer);
   }, [countdownDisplay.type, countdownDisplay.endMs, countdownDisplay.useDays]);
 
-  // Memoize font size calculation (narrow = 360px and below for smaller badge)
+  // Memoize font size calculation (smaller badge only when narrow AND scrolled/rounded)
   const fontSize = useMemo(
-    () => calculateFontSize(badgeText, isMobile, isNarrow),
-    [badgeText, isMobile, isNarrow]
+    () => calculateFontSize(badgeText, isMobile, isNarrow && isScrolled),
+    [badgeText, isMobile, isNarrow, isScrolled]
   );
 
   // Mark content as ready once all data is loaded and font size is calculated
@@ -643,7 +643,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
           opacity: { duration: 0.35, ease: "easeOut" },
         }}
       >
-        <motion.div className="min-h-16 sm:min-h-20 pt-2 pb-1.5 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 max-[360px]:px-2 max-[360px]:pt-1.5 max-[360px]:pb-1 relative overflow-hidden">
+        <motion.div
+          className={`min-h-16 sm:min-h-20 pt-2 pb-1.5 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden ${isScrolled ? "max-[360px]:px-3 max-[360px]:pt-2 max-[360px]:pb-1.5" : ""}`}
+        >
           {/* Main Content */}
           <div className="relative z-10 flex items-center justify-between w-full">
             {/* Left Side - Vertical Stack Layout */}
@@ -674,7 +676,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ duration: 0.3, ease: "easeOut" }}
-                      className="relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 max-[360px]:px-1.5 max-[360px]:py-0.5 rounded-full flex items-center justify-center overflow-hidden"
+                      className={`relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden ${isScrolled ? "max-[360px]:px-2 max-[360px]:py-0.5" : ""}`}
                       style={{
                         background: `linear-gradient(135deg, 
                         #ffd700 0%, 
@@ -740,7 +742,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   ) : (
                     // Placeholder to maintain layout - invisible but maintains space
                     <div
-                      className="relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 max-[360px]:px-1.5 max-[360px]:py-0.5 rounded-full flex items-center justify-center overflow-hidden opacity-0"
+                      className={`relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden opacity-0 ${isScrolled ? "max-[360px]:px-2 max-[360px]:py-0.5" : ""}`}
                       style={{ fontSize: fontSize }}
                       aria-hidden="true"
                     >
@@ -763,7 +765,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     className="w-full"
                     suppressHydrationWarning
                   >
-                    <span className="font-black uppercase text-[16px] sm:text-[18px] max-[360px]:text-[12px] tracking-wide ps-1.5 max-[360px]:ps-1 whitespace-nowrap">
+                    <span
+                      className={`font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5 ${isScrolled ? "max-[360px]:text-[14px] max-[360px]:ps-1 whitespace-nowrap" : ""}`}
+                    >
                       {isNoPromo ? (
                         <span className="text-white">{NO_PROMO_MAIN_LINE}</span>
                       ) : (
@@ -777,7 +781,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   </motion.div>
                 ) : (
                   <div className="w-full opacity-0" aria-hidden="true">
-                    <span className="font-black uppercase text-[16px] sm:text-[18px] max-[360px]:text-[12px] tracking-wide ps-1.5 max-[360px]:ps-1 whitespace-nowrap">
+                    <span
+                      className={`font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5 ${isScrolled ? "max-[360px]:text-[14px] max-[360px]:ps-1 whitespace-nowrap" : ""}`}
+                    >
                       <span className="text-white">GET </span>
                       <span className="text-red-500">10X</span>
                       <span className="text-white"> ENTRIES</span>
@@ -797,8 +803,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               if (isNoPromo) {
                 return (
                   <div className="flex items-center justify-center">
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 max-[360px]:px-2 max-[360px]:py-1.5">
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base max-[360px]:text-xs whitespace-nowrap">
+                    <div
+                      className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                    >
+                      <div
+                        className={`text-white font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                      >
                         {NO_PROMO_RIGHT_LABEL}
                       </div>
                     </div>
@@ -817,8 +827,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 const promoEndingLabel = variantConfig?.banner?.countdownLabel?.trim() || "PROMO ENDING";
                 return (
                   <div className="flex items-center justify-center">
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 max-[360px]:px-2 max-[360px]:py-1.5">
-                      <div className="flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base max-[360px]:text-xs whitespace-nowrap">
+                    <div
+                      className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                    >
+                      <div
+                        className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                      >
                         {promoEndingLabel}
                         <UrgencyClockIcon className="text-white" size="md" />
                       </div>
@@ -830,8 +844,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               if (countdownDisplay.type === "static_urgency" && countdownDisplay.label) {
                 return (
                   <div className="flex items-center justify-center">
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 max-[360px]:px-2 max-[360px]:py-1.5">
-                      <div className="flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base max-[360px]:text-xs whitespace-nowrap">
+                    <div
+                      className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                    >
+                      <div
+                        className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                      >
                         {countdownDisplay.label}
                         <UrgencyClockIcon className="text-white" size="md" />
                       </div>

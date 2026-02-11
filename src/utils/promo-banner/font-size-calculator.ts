@@ -13,7 +13,7 @@ const REFERENCE_LENGTH = 16;
 const SCALE_FACTOR = 0.9; // Slight reduction for longer texts
 const MIN_MOBILE = 8;
 const MAX_MOBILE = 14;
-const MAX_MOBILE_NARROW = 11; // 360px and below
+const MAX_MOBILE_NARROW = 13; // 360px and below when scrolled (rounded banner)
 const MIN_DESKTOP = 10;
 const MAX_DESKTOP = 20;
 
