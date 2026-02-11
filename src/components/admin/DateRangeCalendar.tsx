@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDay, addMonths, subMonths, isBefore, isAfter, startOfDay } from "date-fns";
 
@@ -36,7 +36,14 @@ export default function DateRangeCalendar({
     return addMonths(startDate || new Date(), 1);
   });
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  // Detect mobile after mount to avoid hydration mismatch (SSR and first paint use desktop layout)
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // Day names
   const dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];

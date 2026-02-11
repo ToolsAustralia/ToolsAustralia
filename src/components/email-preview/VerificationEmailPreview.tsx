@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 /**
  * Verification Email Preview Component
@@ -9,10 +9,13 @@ import React from "react";
  * for development purposes.
  */
 const VerificationEmailPreview: React.FC = () => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Mock data for the verification email
   const mockUserName = "John Smith";
   const mockVerificationCode = "ABC123";
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const baseUrl = mounted && typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
   // Generate the email HTML using the same template from lib/email.ts
   const emailHtml = `
@@ -271,12 +274,18 @@ const VerificationEmailPreview: React.FC = () => {
         </span>
       </div>
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-        <iframe
-          title="Email Verification Preview"
-          srcDoc={emailHtml}
-          className="h-[1000px] w-full border-0"
-          sandbox="allow-same-origin"
-        />
+        {!mounted ? (
+          <div className="h-[1000px] w-full flex items-center justify-center text-gray-500">
+            Loading preview...
+          </div>
+        ) : (
+          <iframe
+            title="Email Verification Preview"
+            srcDoc={emailHtml}
+            className="h-[1000px] w-full border-0"
+            sandbox="allow-same-origin"
+          />
+        )}
       </div>
     </div>
   );

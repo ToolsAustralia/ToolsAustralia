@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useId } from "react";
 
 interface DiagonalPatternOverlayProps {
   className?: string;
@@ -24,11 +24,11 @@ export default function DiagonalPatternOverlay({
   rotation = -15,
   topOffset = "0",
 }: DiagonalPatternOverlayProps) {
-  // Create a custom diagonal pattern SVG
-  const createDiagonalPattern = () => {
-    const patternId = `diagonal-pattern-${Math.random().toString(36).substr(2, 9)}`;
+  const id = useId();
+  const patternId = `diagonal-pattern-${id.replace(/:/g, "")}`;
 
-    return (
+  // Create a custom diagonal pattern SVG (stable id for hydration)
+  const createDiagonalPattern = () => (
       <svg
         width="100%"
         height="100%"
@@ -51,8 +51,7 @@ export default function DiagonalPatternOverlay({
         </defs>
         <rect width="100%" height="100%" fill={`url(#${patternId})`} />
       </svg>
-    );
-  };
+  );
 
   return (
     <div className={`absolute left-0 right-0 bottom-0 pointer-events-none ${className}`} style={{ top: topOffset }}>

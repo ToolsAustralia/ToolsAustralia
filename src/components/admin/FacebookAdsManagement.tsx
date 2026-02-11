@@ -449,8 +449,8 @@ export default function FacebookAdsManagement() {
     breakdown: FacebookAdsBreakdownItem[];
     breakdownLevel: InsightLevel;
   }) {
-    const [hourlySortColumn, setHourlySortColumn] = useState<string>("spend");
-    const [hourlySortDirection, setHourlySortDirection] = useState<"asc" | "desc">("desc");
+    const [hourlySortColumn, setHourlySortColumn] = useState<string>("hour");
+    const [hourlySortDirection, setHourlySortDirection] = useState<"asc" | "desc">("asc");
     const [hourlyColumnsExpanded, setHourlyColumnsExpanded] = useState(false);
     // Filter: empty = all; non-empty = selected campaigns/ad sets only
     const [selectedFilterIds, setSelectedFilterIds] = useState<Set<string>>(new Set());
