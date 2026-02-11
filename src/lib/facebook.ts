@@ -158,7 +158,7 @@ export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEvent
     ...(userData.fn && { fn: userData.fn }),
     ...(userData.ln && { ln: userData.ln }),
     ...(userData.st && { st: userData.st }),
-    ...(userData.country && { country: userData.country.toUpperCase().substring(0, 2) }),
+    ...(userData.country && { country: userData.country }),
     ...(userData.client_ip_address && { client_ip_address: userData.client_ip_address }),
     ...(userData.client_user_agent && { client_user_agent: userData.client_user_agent }),
     ...(userData.fbc && { fbc: userData.fbc }),
