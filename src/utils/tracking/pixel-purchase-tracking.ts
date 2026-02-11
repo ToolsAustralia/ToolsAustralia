@@ -11,7 +11,12 @@
 import { trackFacebookEvent } from "@/components/FacebookPixel";
 import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
-import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
+import {
+  sendFacebookEvent,
+  FacebookEvent,
+  buildFacebookPurchaseEventDev,
+  sendFacebookPurchaseEventDev,
+} from "@/lib/facebook";
 import {
   generateEventID,
   prepareUserData,
@@ -118,7 +123,6 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
 
     // Use orderId as event_id for Purchase (deterministic; enables Pixel+CAPI deduplication if Pixel is added later)
     const eventID = orderId;
-    const eventTime = Math.floor(Date.now() / 1000); // Unix timestamp
 
     // Track Conversions API (server-side) - CRITICAL for accurate revenue tracking
     // Browser pixel removed - using CAPI-only approach per documentation
@@ -208,49 +212,46 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       if (fbc) userData.fbc = fbc;
       if (fbp) userData.fbp = fbp;
 
-      // Meta requires event_source_url (and recommends client_user_agent) for action_source "website"
+      // Meta requires event_source_url for action_source "website"
+      // buildFacebookPurchaseEventDev uses fallback (https://example.com/dev-checkout) when localhost
       const resolvedEventSourceUrl =
         requestContext?.event_source_url ??
         eventSourceUrl ??
         (typeof window !== "undefined" ? getEventSourceURL() : undefined) ??
         getServerEventSourceUrlFallback();
 
-      // Avoid sending invalid website events (Meta returns 100 "Invalid parameter" without required fields)
-      if (!resolvedEventSourceUrl) {
+      // Build validated Purchase event (handles localhost fallback, value/currency validation)
+      const facebookEvent = buildFacebookPurchaseEventDev({
+        value,
+        currency,
+        eventId: eventID,
+        userData: {
+          ...(userData as Record<string, string>),
+          client_ip_address: clientIp,
+          client_user_agent: userAgent || "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
+          ...(fbc && { fbc }),
+          ...(fbp && { fbp }),
+        },
+        eventSourceUrl: resolvedEventSourceUrl ?? undefined,
+        customData: {
+          value,
+          currency,
+          order_id: orderId,
+          content_ids: content_ids || (packageId ? [packageId] : []),
+          content_type: content_type || getContentType(packageType),
+          num_items: num_items ?? 1,
+        },
+      });
+
+      if (facebookEvent) {
+        // Uses test_event_code in dev, never throws
+        capiSuccess = await sendFacebookPurchaseEventDev(facebookEvent);
+      } else {
         if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {
           console.warn(
-            `⚠️ [Facebook CAPI] Skipping Purchase event: missing event_source_url (required for action_source=website). OrderId: ${orderId}`
+            `⚠️ [Facebook CAPI] Skipping Purchase event: validation failed (value/currency). OrderId: ${orderId}, value: ${value}, currency: ${currency}`
           );
         }
-        // capiSuccess stays false; continue to experiment/TikTok/Klaviyo tracking
-      } else {
-        // Create Facebook Conversions API event
-        const facebookEvent: FacebookEvent = {
-          event_name: "Purchase",
-          event_time: eventTime,
-          event_id: eventID, // Critical for deduplication
-          action_source: "website",
-          user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
-          custom_data: {
-            currency,
-            value,
-            order_id: orderId,
-            content_type: content_type || getContentType(packageType),
-            content_ids: content_ids || (packageId ? [packageId] : []),
-            num_items: num_items || 1,
-            content_name: packageName,
-            // A/B Testing metadata (if provided)
-            ...(experimentId && { experiment_id: experimentId }),
-            ...(variantId && { variant_id: variantId }),
-          },
-          event_source_url: resolvedEventSourceUrl,
-        };
-
-        // Get test event code if in development
-        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-        // Send to Conversions API
-        capiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       }
     } catch (apiError) {
       if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {

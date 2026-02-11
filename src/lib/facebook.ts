@@ -61,9 +61,192 @@ export interface FacebookPixelEvent {
 
 import crypto from "crypto";
 
-// Hash function for PII data (required by Facebook)
+/** SHA256 hash for PII - Meta requires lowercase, trimmed input before hashing */
 export function hashData(data: string): string {
   return crypto.createHash("sha256").update(data.toLowerCase().trim()).digest("hex");
+}
+
+/** Remove undefined, null, and invalid values from object (recursive for nested) */
+export function removeUndefinedAndInvalidFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === "number" && (Number.isNaN(value) || !Number.isFinite(value))) continue;
+    if (typeof value === "object" && !Array.isArray(value) && value !== null) {
+      const cleaned = removeUndefinedAndInvalidFields(value as Record<string, unknown>);
+      if (Object.keys(cleaned).length > 0) result[key] = cleaned;
+    } else {
+      result[key] = value;
+    }
+  }
+  return result as Partial<T>;
+}
+
+/** Whether current env suggests localhost/dev (no public URL) */
+function isLocalhostOrMissingUrl(): boolean {
+  const base =
+    process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
+  if (!base) return true;
+  const url = base.startsWith("http") ? base : `https://${base}`;
+  return url.includes("localhost") || url.includes("127.0.0.1");
+}
+
+/** Fallback event_source_url for localhost - Meta rejects invalid URLs (error 100) */
+const DEV_CHECKOUT_FALLBACK_URL = "https://example.com/dev-checkout";
+
+export interface BuildFacebookPurchaseEventParams {
+  value: number;
+  currency: string;
+  eventId: string;
+  userData: {
+    em?: string;
+    ph?: string;
+    fn?: string;
+    ln?: string;
+    external_id?: string;
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+    country?: string;
+  };
+  eventSourceUrl?: string;
+  customData?: {
+    value: number;
+    currency: string;
+    order_id?: string;
+    content_ids?: string[];
+    content_type?: string;
+    num_items?: number;
+  };
+}
+
+/**
+ * Build a validated Facebook Purchase event for CAPI (dev-friendly).
+ * Ensures payload is always valid even on localhost.
+ * Returns null if validation fails (value <= 0, invalid currency).
+ */
+export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEventParams): FacebookEvent | null {
+  const { value, currency, eventId, userData, eventSourceUrl, customData } = params;
+
+  // Validate value (number, > 0)
+  const numValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numValue) || numValue <= 0) {
+    return null;
+  }
+
+  // Validate currency (non-empty string, 3 chars typical)
+  const safeCurrency = typeof currency === "string" && currency.trim().length > 0
+    ? currency.trim().toUpperCase()
+    : "AUD";
+  if (!safeCurrency) return null;
+
+  const eventTime = Math.floor(Date.now() / 1000);
+
+  // event_source_url: required for action_source=website. Use fallback on localhost.
+  let resolvedEventSourceUrl = eventSourceUrl?.trim();
+  if (!resolvedEventSourceUrl || resolvedEventSourceUrl.length === 0) {
+    resolvedEventSourceUrl = isLocalhostOrMissingUrl() ? DEV_CHECKOUT_FALLBACK_URL : undefined;
+  }
+  if (!resolvedEventSourceUrl) return null;
+
+  // user_data: must have at least client_user_agent for website events; ensure not empty
+  const u: FacebookEvent["user_data"] = {
+    ...(userData.em && { em: userData.em }),
+    ...(userData.ph && { ph: userData.ph }),
+    ...(userData.client_ip_address && { client_ip_address: userData.client_ip_address }),
+    ...(userData.client_user_agent && { client_user_agent: userData.client_user_agent }),
+    ...(userData.fbc && { fbc: userData.fbc }),
+    ...(userData.fbp && { fbp: userData.fbp }),
+    ...(userData.external_id && { external_id: userData.external_id }),
+  };
+  if (Object.keys(u).length === 0) {
+    u.client_user_agent = userData.client_user_agent || "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)";
+  }
+
+  return {
+    event_name: "Purchase",
+    event_time: eventTime,
+    action_source: "website",
+    event_id: eventId,
+    event_source_url: resolvedEventSourceUrl,
+    user_data: u,
+    custom_data: {
+      value: numValue,
+      currency: safeCurrency,
+      ...(customData?.order_id && { order_id: customData.order_id }),
+      ...(customData?.content_ids && customData.content_ids.length > 0 && { content_ids: customData.content_ids }),
+      ...(customData?.content_type && { content_type: customData.content_type }),
+      ...(customData?.num_items != null && { num_items: customData.num_items }),
+    },
+  };
+}
+
+/**
+ * Send Facebook Purchase event with dev-friendly behavior.
+ * - Uses test_event_code in development for Events Manager testing
+ * - Logs full payload and Meta response in development
+ * - Never throws; returns false on error
+ */
+export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promise<boolean> {
+  const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
+  const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
+
+  if (!accessToken || !pixelId) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[Facebook CAPI] Skipped: FACEBOOK_ACCESS_TOKEN or NEXT_PUBLIC_FACEBOOK_PIXEL_ID not set");
+    }
+    return false;
+  }
+
+  const isDev = process.env.NODE_ENV === "development";
+  const testEventCode = isDev ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+
+  // Remove undefined/invalid fields (Meta rejects with error 100)
+  const sanitizedEvent = removeUndefinedAndInvalidFields(event as unknown as Record<string, unknown>) as unknown as FacebookEvent;
+  const requestBody: { data: FacebookEvent[]; access_token: string; test_event_code?: string } = {
+    data: [sanitizedEvent],
+    access_token: accessToken,
+  };
+  if (testEventCode) requestBody.test_event_code = testEventCode;
+
+  const url = `https://graph.facebook.com/v18.0/${pixelId}/events`;
+
+  try {
+    if (isDev) {
+      console.log("[Facebook CAPI Dev] Sending payload:", JSON.stringify(requestBody, null, 2));
+    }
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await response.text();
+
+    if (isDev) {
+      console.log("[Facebook CAPI Dev] Response:", response.status, responseText);
+    }
+
+    if (!response.ok) {
+      let errMsg = "Unknown error";
+      try {
+        const errJson = JSON.parse(responseText);
+        errMsg = errJson.error?.message || responseText;
+        console.error("[Facebook CAPI] Error:", errJson.error?.code, errMsg, errJson.error?.error_data);
+      } catch {
+        errMsg = responseText;
+      }
+      console.error(`[Facebook CAPI] Request failed (${response.status}):`, errMsg);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("[Facebook CAPI] Network/parse error:", err instanceof Error ? err.message : String(err));
+    return false;
+  }
 }
 
 // Send event to Facebook Conversions API
@@ -110,21 +293,28 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
       const errorText = await response.text();
       let errorMessage = "Unknown error";
       let errorCode: string | undefined;
+      let errorSubcode: string | undefined;
+      let errorData: unknown;
 
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.error?.message || errorText;
         errorCode = errorJson.error?.code?.toString();
+        errorSubcode = errorJson.error?.error_subcode?.toString();
+        errorData = errorJson.error?.error_data;
       } catch {
         errorMessage = errorText;
       }
 
-      console.error(`❌ Facebook Conversions API error (${errorCode || "unknown"}):`, {
+      const logPayload: Record<string, unknown> = {
         message: errorMessage,
         event_name: event.event_name,
         event_id: event.event_id,
         pixel_id: pixelId,
-      });
+      };
+      if (errorSubcode) logPayload.error_subcode = errorSubcode;
+      if (errorData && typeof errorData === "object") logPayload.error_data = errorData;
+      console.error(`❌ Facebook Conversions API error (${errorCode || "unknown"}):`, logPayload);
       return false;
     }
 
