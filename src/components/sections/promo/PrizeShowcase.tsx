@@ -522,8 +522,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
       className=" pb-2 sm:pb-12 relative"
       style={{ 
         scrollMarginTop: 0,
-        // On mobile, prevent scroll snapping during navigation
-        ...(typeof window !== 'undefined' && window.innerWidth < 640 && isNavigating ? {
+        // On mobile, prevent scroll snapping during navigation (gated by isMounted to avoid hydration mismatch)
+        ...(isMounted && typeof window !== 'undefined' && window.innerWidth < 640 && isNavigating ? {
           scrollSnapAlign: 'none',
           scrollSnapStop: 'normal',
         } : {}),
