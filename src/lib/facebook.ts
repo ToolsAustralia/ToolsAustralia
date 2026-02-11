@@ -103,6 +103,7 @@ export interface BuildFacebookPurchaseEventParams {
     ph?: string;
     fn?: string;
     ln?: string;
+    st?: string;
     external_id?: string;
     client_ip_address?: string;
     client_user_agent?: string;
@@ -154,6 +155,10 @@ export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEvent
   const u: FacebookEvent["user_data"] = {
     ...(userData.em && { em: userData.em }),
     ...(userData.ph && { ph: userData.ph }),
+    ...(userData.fn && { fn: userData.fn }),
+    ...(userData.ln && { ln: userData.ln }),
+    ...(userData.st && { st: userData.st }),
+    ...(userData.country && { country: userData.country.toUpperCase().substring(0, 2) }),
     ...(userData.client_ip_address && { client_ip_address: userData.client_ip_address }),
     ...(userData.client_user_agent && { client_user_agent: userData.client_user_agent }),
     ...(userData.fbc && { fbc: userData.fbc }),

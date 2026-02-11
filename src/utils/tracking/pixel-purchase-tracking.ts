@@ -155,15 +155,14 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
     
     try {
       // Prepare user data with hashing (include externalId for Meta matching)
+      // Country defaults to "AU" for Tools Australia when not provided
       const userData = prepareUserData({
         email: userEmail,
         phone: userPhone,
         firstName: userFirstName,
         lastName: userLastName,
-        city: userCity,
         state: userState,
-        zipCode: userZipCode,
-        country: userCountry,
+        country: userCountry || "AU",
         ...(userId && { externalId: userId }),
       });
 
