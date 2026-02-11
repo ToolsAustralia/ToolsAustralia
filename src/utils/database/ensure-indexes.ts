@@ -3,11 +3,17 @@
  *
  * Mongoose only creates indexes when models are first compiled.
  * This utility manually ensures critical indexes exist in the database.
+ * Also drops redundant indexes (prefixes of compound indexes) per MongoDB Atlas recommendations.
  */
 
 import PaymentEvent from "@/models/PaymentEvent";
 import User from "@/models/User";
 import Order from "@/models/Order";
+import ErrorReport from "@/models/ErrorReport";
+import Winner from "@/models/Winner";
+import ExperimentEvent from "@/models/ab-testing/ExperimentEvent";
+import Experiment from "@/models/ab-testing/Experiment";
+import VariantAssignment from "@/models/ab-testing/VariantAssignment";
 import connectDB from "@/lib/mongodb";
 
 // ✅ CRITICAL: Singleton pattern - only run index creation once per server instance
@@ -36,12 +42,44 @@ async function ensureCriticalIndexes(): Promise<void> {
   try {
     await connectDB();
 
+    await dropRedundantIndexes();
     await ensurePaymentEventIndexes();
     await ensureUserIndexes();
     await ensureOrderIndexes();
   } catch (error) {
     console.error("❌ Failed to ensure indexes:", error);
     throw error;
+  }
+}
+
+/** Drop redundant indexes per MongoDB Atlas recommendations (prefixes of compound indexes) */
+async function dropRedundantIndexes(): Promise<void> {
+  const toDrop: { collection: typeof User.collection; indexName: string }[] = [
+    { collection: PaymentEvent.collection, indexName: "userId_1" },
+    { collection: ErrorReport.collection, indexName: "userId_1" },
+    { collection: ErrorReport.collection, indexName: "guestEmail_1" },
+    { collection: ErrorReport.collection, indexName: "status_1" },
+    { collection: ErrorReport.collection, indexName: "category_1" },
+    { collection: ErrorReport.collection, indexName: "severity_1" },
+    { collection: ErrorReport.collection, indexName: "autoLogged_1" },
+    { collection: Winner.collection, indexName: "drawId_1" },
+    { collection: Winner.collection, indexName: "drawType_1" },
+    { collection: ExperimentEvent.collection, indexName: "experimentId_1" },
+    { collection: Experiment.collection, indexName: "status_1" },
+    { collection: VariantAssignment.collection, indexName: "experimentId_1" },
+  ];
+
+  for (const { collection, indexName } of toDrop) {
+    try {
+      await collection.dropIndex(indexName);
+      // console.log(`✅ Dropped redundant index ${collection.collectionName}.${indexName}`);
+    } catch (error: unknown) {
+      const err = error as { code?: number };
+      if (err.code !== 27) {
+        // Code 27 = index doesn't exist, which is fine
+        console.warn(`⚠️  Could not drop index ${collection.collectionName}.${indexName}:`, err);
+      }
+    }
   }
 }
 
@@ -124,6 +162,15 @@ async function ensurePaymentEventIndexes(): Promise<void> {
 async function ensureUserIndexes(): Promise<void> {
   // console.log("🔍 Ensuring User indexes are created...");
   await ensureIndex(User.collection, { stripeCustomerId: 1 }, { sparse: true });
+  // MongoDB Atlas recommended: compound index for subscription-related queries
+  await ensureIndex(User.collection, {
+    isActive: 1,
+    "subscription.lastUpgradeDate": -1,
+    "subscription.lastDowngradeDate": -1,
+    "subscription.cancelledAt": -1,
+  });
+  // MongoDB Atlas recommended: compound index for active users sorted by creation date
+  await ensureIndex(User.collection, { isActive: 1, createdAt: -1 });
   // console.log("✅ User indexes ensured");
 }
 

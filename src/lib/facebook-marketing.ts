@@ -375,6 +375,156 @@ export async function fetchFacebookInsightsHourly(
   }
 }
 
+export type HourlyFilterLevel = "campaign" | "adset";
+
+/**
+ * Fetch hourly insights for a single campaign or ad set by ID.
+ * Calls {entity_id}/insights directly for accurate per-entity data.
+ */
+async function fetchHourlyInsightsForEntity(
+  entityId: string,
+  accessToken: string,
+  dateRange: { since: string; until: string },
+  apiVersion: string = "v21.0"
+): Promise<HourlyInsightData[]> {
+  const baseUrl = `https://graph.facebook.com/${apiVersion}/${entityId}/insights`;
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    fields: "spend,impressions,clicks",
+    time_range: JSON.stringify({
+      since: dateRange.since,
+      until: dateRange.until,
+    }),
+    breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
+    action_attribution_windows: JSON.stringify(["7d_click"]),
+  });
+
+  const response = await fetch(`${baseUrl}?${params.toString()}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!response.ok) {
+    const errorData: FacebookApiError = await response.json().catch(() => ({
+      error: {
+        message: `HTTP ${response.status}: ${response.statusText}`,
+        type: "HTTPError",
+        code: response.status,
+      },
+    }));
+
+    if (response.status === 401) {
+      throw new Error("Facebook access token expired or invalid. Please update the token.");
+    }
+
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("Retry-After");
+      throw new Error(
+        `Rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : "Please try again later."}`
+      );
+    }
+
+    throw new Error(errorData.error?.message || `Facebook API error: ${response.statusText}`);
+  }
+
+  const data: {
+    data: Array<{
+      spend?: string;
+      impressions?: string;
+      clicks?: string;
+      hourly_stats_aggregated_by_advertiser_time_zone?: string;
+    }>;
+  } = await response.json();
+
+  const hourlyData: HourlyInsightData[] = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    hourLabel: `${String(hour).padStart(2, "0")}:00:00 - ${String(hour).padStart(2, "0")}:59:59`,
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+  }));
+
+  if (data.data && data.data.length > 0) {
+    for (const item of data.data) {
+      const hourLabel = item.hourly_stats_aggregated_by_advertiser_time_zone;
+      if (!hourLabel) continue;
+
+      const hourMatch = hourLabel.match(/^(\d{2}):/);
+      if (!hourMatch) continue;
+
+      const hour = parseInt(hourMatch[1], 10);
+      if (hour < 0 || hour > 23) continue;
+
+      const spend = parseFloat(item.spend || "0") * 100;
+      const impressions = parseInt(item.impressions || "0", 10);
+      const clicks = parseInt(item.clicks || "0", 10);
+
+      hourlyData[hour].spend += spend;
+      hourlyData[hour].impressions += impressions;
+      hourlyData[hour].clicks += clicks;
+    }
+  }
+
+  return hourlyData;
+}
+
+/**
+ * Fetch hourly insights filtered by specific campaign or ad set IDs.
+ * When filterIds is empty, falls back to account-level (all).
+ * Uses per-entity API calls ({entity_id}/insights) for accurate data when filtering.
+ *
+ * @param adAccountId - Facebook ad account ID (format: act_123456789)
+ * @param accessToken - Facebook access token
+ * @param dateRange - Date range for insights
+ * @param options - Filter options: level (campaign|adset) and filterIds (array of IDs)
+ */
+export async function fetchFacebookInsightsHourlyFiltered(
+  adAccountId: string,
+  accessToken: string,
+  dateRange: { since: string; until: string },
+  options: { level: HourlyFilterLevel; filterIds: string[] }
+): Promise<HourlyInsightData[]> {
+  const { level, filterIds } = options;
+
+  // No filter or select all: use account-level
+  if (!filterIds || filterIds.length === 0) {
+    return fetchFacebookInsightsHourly(adAccountId, accessToken, dateRange);
+  }
+
+  const apiVersion = "v21.0";
+
+  // Fetch hourly insights for each entity directly (campaign_id/insights or adset_id/insights)
+  // This ensures accurate data without pagination/filtering issues
+  const results = await Promise.allSettled(
+    filterIds.map((entityId) =>
+      fetchHourlyInsightsForEntity(entityId.trim(), accessToken, dateRange, apiVersion)
+    )
+  );
+
+  // Aggregate across all successful entities by hour (skip failed ones)
+  const hourlyData: HourlyInsightData[] = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    hourLabel: `${String(hour).padStart(2, "0")}:00:00 - ${String(hour).padStart(2, "0")}:59:59`,
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+  }));
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      const entityHourly = result.value;
+      for (let h = 0; h < 24; h++) {
+        hourlyData[h].spend += entityHourly[h].spend;
+        hourlyData[h].impressions += entityHourly[h].impressions;
+        hourlyData[h].clicks += entityHourly[h].clicks;
+      }
+    }
+    // Silently skip rejected (e.g. deleted/inaccessible entity)
+  }
+
+  return hourlyData;
+}
+
 
 
 

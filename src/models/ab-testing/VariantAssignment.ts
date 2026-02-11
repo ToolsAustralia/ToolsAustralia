@@ -73,7 +73,7 @@ VariantAssignmentSchema.pre("save", function (next) {
 });
 
 // Indexes for efficient queries
-VariantAssignmentSchema.index({ experimentId: 1 });
+// Note: experimentId_1 removed - redundant with compound indexes experimentId_1_userId_1, etc.
 VariantAssignmentSchema.index({ userId: 1 });
 VariantAssignmentSchema.index({ anonymousId: 1 });
 VariantAssignmentSchema.index({ experimentId: 1, userId: 1 });

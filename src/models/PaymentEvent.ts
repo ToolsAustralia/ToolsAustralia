@@ -58,7 +58,7 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true, // For fast user lookups
+      // No index: true - redundant with compound index userId_1_timestamp_-1
     },
     packageType: {
       type: String,

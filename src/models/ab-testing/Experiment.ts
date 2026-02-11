@@ -143,7 +143,7 @@ const ExperimentSchema = new Schema<IExperiment>(
 );
 
 // Indexes for efficient queries
-ExperimentSchema.index({ status: 1 });
+// Note: status_1 removed - redundant with compound indexes status_1_archived_1, status_1_startDate_1_endDate_1
 ExperimentSchema.index({ slugTargets: 1 });
 ExperimentSchema.index({ startDate: 1 });
 ExperimentSchema.index({ endDate: 1 });

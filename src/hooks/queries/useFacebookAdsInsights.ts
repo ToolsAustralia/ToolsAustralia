@@ -84,11 +84,13 @@ export function useHourlyInsights(params: {
   startDate?: string; // YYYY-MM-DD format
   endDate?: string; // YYYY-MM-DD format
   enabled?: boolean; // Whether to run the query
+  filterLevel?: "campaign" | "adset"; // Filter by campaign or ad set
+  filterIds?: string[]; // IDs to filter (empty = all)
 }) {
-  const { startDate, endDate, enabled = true } = params;
+  const { startDate, endDate, enabled = true, filterLevel, filterIds } = params;
 
   return useQuery<HourlyInsightsResponse["data"]>({
-    queryKey: ["admin", "facebook-ads", "hourly-insights", startDate, endDate],
+    queryKey: ["admin", "facebook-ads", "hourly-insights", startDate, endDate, filterLevel, filterIds],
     queryFn: async (): Promise<HourlyInsightsResponse["data"]> => {
       if (!startDate || !endDate) {
         throw new Error("startDate and endDate are required");
@@ -98,6 +100,10 @@ export function useHourlyInsights(params: {
       const searchParams = new URLSearchParams();
       searchParams.append("startDate", startDate);
       searchParams.append("endDate", endDate);
+      if (filterLevel && filterIds && filterIds.length > 0) {
+        searchParams.append("filterLevel", filterLevel);
+        searchParams.append("filterIds", filterIds.join(","));
+      }
 
       const response = await fetch(`/api/admin/facebook-ads/hourly-insights?${searchParams.toString()}`);
 

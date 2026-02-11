@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
-import { fetchFacebookInsightsHourly } from "@/lib/facebook-marketing";
+import { fetchFacebookInsightsHourly, fetchFacebookInsightsHourlyFiltered } from "@/lib/facebook-marketing";
 import { PaymentEventRepository } from "@/repositories/PaymentEventRepository";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import type { HourlyInsightsResponse, HourlyInsightItem } from "@/types/facebook-ads";
@@ -14,6 +14,8 @@ import type { HourlyInsightsResponse, HourlyInsightItem } from "@/types/facebook
 const hourlyInsightsQuerySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
+  filterLevel: z.enum(["campaign", "adset"]).optional(),
+  filterIds: z.string().optional(), // Comma-separated IDs, e.g. "id1,id2,id3"
 });
 
 /**
@@ -95,15 +97,32 @@ export async function GET(request: NextRequest) {
     const endOfRangeAEST = createAESTDateAsUTC(endYear, endMonth, endDay, 23, 59);
     endOfRangeAEST.setUTCSeconds(59, 999);
 
-    console.log(`📊 [Hourly Insights] ${validatedQuery.startDate} to ${validatedQuery.endDate} (AEST)`);
+    const filterLevel = validatedQuery.filterLevel;
+    const filterIds = validatedQuery.filterIds
+      ? validatedQuery.filterIds.split(",").map((id) => id.trim()).filter(Boolean)
+      : [];
+
+    console.log(
+      `📊 [Hourly Insights] ${validatedQuery.startDate} to ${validatedQuery.endDate} (AEST)${filterIds.length ? `, filter: ${filterLevel} [${filterIds.length} ids]` : ""}`
+    );
 
     // Fetch Facebook hourly (spend, impressions, clicks)
     let fbHourlyData;
     try {
-      fbHourlyData = await fetchFacebookInsightsHourly(adAccountId, accessToken, {
-        since: validatedQuery.startDate,
-        until: validatedQuery.endDate,
-      });
+      if (filterLevel && filterIds.length > 0) {
+        fbHourlyData = await fetchFacebookInsightsHourlyFiltered(adAccountId, accessToken, {
+          since: validatedQuery.startDate,
+          until: validatedQuery.endDate,
+        }, {
+          level: filterLevel,
+          filterIds,
+        });
+      } else {
+        fbHourlyData = await fetchFacebookInsightsHourly(adAccountId, accessToken, {
+          since: validatedQuery.startDate,
+          until: validatedQuery.endDate,
+        });
+      }
     } catch (error) {
       console.error("❌ Error fetching Facebook hourly insights:", error);
       return NextResponse.json(
