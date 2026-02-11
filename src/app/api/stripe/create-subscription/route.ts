@@ -102,6 +102,9 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     const requestContext = extractRequestContext(request);
+    const capiEventSourceUrl =
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
     // console.log("📋 Request body received:", { ...body, password: "[HIDDEN]" });
 
     // console.log("✅ Validating request data...");
@@ -441,6 +444,7 @@ export async function POST(request: NextRequest) {
       ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
       ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
     };
 

@@ -47,6 +47,10 @@ type PaymentMetadata = {
 interface UserDocument {
   _id: { toString: () => string };
   email: string;
+  firstName?: string;
+  lastName?: string;
+  mobile?: string;
+  state?: string;
   stripeSubscriptionId?: string;
   accumulatedEntries?: number;
   rewardsPoints?: number;
@@ -131,6 +135,7 @@ export async function processPaymentBenefits(
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    event_source_url?: string;
   },
   billingReason?: string // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
@@ -208,6 +213,7 @@ async function processPaymentBenefitsInternal(
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    event_source_url?: string;
   },
   billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
@@ -885,6 +891,7 @@ async function grantBenefits(
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    event_source_url?: string;
   },
   billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
 ): Promise<void> {
@@ -1187,7 +1194,7 @@ async function grantBenefits(
         }
       }
 
-      await trackPixelPurchase({
+      const pixelTracked = await trackPixelPurchase({
         value: packageData.price,
         currency: "AUD",
         orderId: paymentIntentId || `order-${Date.now()}`,
@@ -1196,6 +1203,11 @@ async function grantBenefits(
         packageName: packageData.packageName,
         userId: user._id.toString(),
         userEmail: user.email,
+        userPhone: user.mobile,
+        userFirstName: user.firstName,
+        userLastName: user.lastName,
+        userState: user.state,
+        userCountry: "AU",
         entriesAdded: packageData.entries,
         pointsEarned: packageData.points,
         paymentIntentId: paymentIntentId,
@@ -1217,7 +1229,7 @@ async function grantBenefits(
           variantId: experimentAssignment.variantId,
         }),
       });
-      
+
       // ✅ ADD: Log if experiment assignment was passed to trackPixelPurchase
       if (experimentAssignment) {
         console.log(`✅ [A/B Testing] Passing experiment assignment to trackPixelPurchase:`, {
@@ -1233,8 +1245,12 @@ async function grantBenefits(
           userId: user._id.toString(),
         });
       }
-      
-      console.log(`✅ [Facebook Tracking] Successfully tracked purchase: ${trackingId} (${packageData.packageType})`);
+
+      if (pixelTracked) {
+        console.log(`✅ [Facebook Tracking] Successfully tracked purchase: ${trackingId} (${packageData.packageType})`);
+      } else {
+        console.warn(`⚠️ [Facebook Tracking] CAPI did not accept Purchase event: ${trackingId} (${packageData.packageType})`);
+      }
     } catch (_pixelError) {
       console.error(`❌ [Facebook Tracking] Failed to track purchase ${trackingId}:`, _pixelError);
       // Don't throw - pixel tracking should not break purchase flow

@@ -11,7 +11,12 @@
 import { trackFacebookEvent } from "@/components/FacebookPixel";
 import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
-import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
+import {
+  sendFacebookEvent,
+  FacebookEvent,
+  buildFacebookPurchaseEventDev,
+  sendFacebookPurchaseEventDev,
+} from "@/lib/facebook";
 import {
   generateEventID,
   prepareUserData,
@@ -52,6 +57,7 @@ export interface PixelPurchaseParams {
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    event_source_url?: string;
   };
   // Alternative: Direct parameters (for flexibility)
   clientIpAddress?: string;
@@ -62,12 +68,24 @@ export interface PixelPurchaseParams {
   anonymousId?: string; // Anonymous ID for A/B testing tracking (for users who visited before logging in)
 }
 
+/** Server-side fallback for event_source_url when not in request context (Meta requires it for website events). */
+function getServerEventSourceUrlFallback(): string | undefined {
+  const base =
+    typeof process !== "undefined"
+      ? process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+      : undefined;
+  if (!base) return undefined;
+  const url = base.startsWith("http") ? base : `https://${base}`;
+  return `${url.replace(/\/$/, "")}/shop`;
+}
+
 /**
  * Track purchase event via Conversions API (CAPI-only)
  * Browser pixel removed - using server-side CAPI for accurate revenue tracking
  * Includes EventID deduplication for reliable conversion tracking
+ * @returns true if the event was successfully sent to CAPI, false otherwise
  */
-export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<void> {
+export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<boolean> {
   try {
     const {
       value,
@@ -103,13 +121,13 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       anonymousId,
     } = params;
 
-    // Generate unique event ID for deduplication
-    const eventID = generateEventID("purchase", orderId);
-    const eventTime = Math.floor(Date.now() / 1000); // Unix timestamp
+    // Use orderId as event_id for Purchase (deterministic; enables Pixel+CAPI deduplication if Pixel is added later)
+    const eventID = orderId;
 
     // Track Conversions API (server-side) - CRITICAL for accurate revenue tracking
     // Browser pixel removed - using CAPI-only approach per documentation
-    
+    let capiSuccess = false;
+
     // Prepare common parameters for TikTok/Klaviyo tracking (client-side only)
     const commonParams = {
       eventID, // Include eventID for TikTok tracking
@@ -136,16 +154,16 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
     };
     
     try {
-      // Prepare user data with hashing
+      // Prepare user data with hashing (include externalId for Meta matching)
+      // Country defaults to "AU" for Tools Australia when not provided
       const userData = prepareUserData({
         email: userEmail,
         phone: userPhone,
         firstName: userFirstName,
         lastName: userLastName,
-        city: userCity,
         state: userState,
-        zipCode: userZipCode,
-        country: userCountry,
+        country: userCountry || "AU",
+        ...(userId && { externalId: userId }),
       });
 
       // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract
@@ -173,7 +191,13 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       // Extract IP address and user agent - CRITICAL for Event Match Quality
       // Prioritize requestContext, then direct parameters
       const clientIp = requestContext?.client_ip_address || clientIpAddress;
-      const userAgent = requestContext?.client_user_agent || clientUserAgent;
+      let userAgent = requestContext?.client_user_agent || clientUserAgent;
+
+      // Meta requires client_user_agent for website events. When sending from server (e.g. webhook)
+      // without request context, use a placeholder so the event is accepted (match quality may be lower).
+      if (!userAgent && typeof window === "undefined") {
+        userAgent = "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)";
+      }
 
       // Add IP address and user agent to user data (required by Meta for optimal match quality)
       if (clientIp) {
@@ -187,41 +211,51 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
       if (fbc) userData.fbc = fbc;
       if (fbp) userData.fbp = fbp;
 
-      // Create Facebook Conversions API event
-      const facebookEvent: FacebookEvent = {
-        event_name: "Purchase",
-        event_time: eventTime,
-        event_id: eventID, // Critical for deduplication
-        action_source: "website",
-        user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
-        custom_data: {
-          currency,
-          value,
-          order_id: orderId,
-          content_type: content_type || getContentType(packageType),
-          content_ids: content_ids || (packageId ? [packageId] : []),
-          num_items: num_items || 1,
-          content_name: packageName,
-          // A/B Testing metadata (if provided)
-          ...(experimentId && { experiment_id: experimentId }),
-          ...(variantId && { variant_id: variantId }),
+      // Meta requires event_source_url for action_source "website"
+      // buildFacebookPurchaseEventDev uses fallback (https://example.com/dev-checkout) when localhost
+      const resolvedEventSourceUrl =
+        requestContext?.event_source_url ??
+        eventSourceUrl ??
+        (typeof window !== "undefined" ? getEventSourceURL() : undefined) ??
+        getServerEventSourceUrlFallback();
+
+      // Build validated Purchase event (handles localhost fallback, value/currency validation)
+      const facebookEvent = buildFacebookPurchaseEventDev({
+        value,
+        currency,
+        eventId: eventID,
+        userData: {
+          ...(userData as Record<string, string>),
+          client_ip_address: clientIp,
+          client_user_agent: userAgent || "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
+          ...(fbc && { fbc }),
+          ...(fbp && { fbp }),
         },
-        event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
-      };
+        eventSourceUrl: resolvedEventSourceUrl ?? undefined,
+        customData: {
+          value,
+          currency,
+          order_id: orderId,
+          content_ids: content_ids || (packageId ? [packageId] : []),
+          content_type: content_type || getContentType(packageType),
+          num_items: num_items ?? 1,
+        },
+      });
 
-      // Get test event code if in development
-      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-      // Send to Conversions API
-      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
-      if (apiSuccess) {
-        // console.log(`📘 Facebook Conversions API: Purchase tracked - $${value} ${currency} (EventID: ${eventID})`);
+      if (facebookEvent) {
+        // Uses test_event_code in dev, never throws
+        capiSuccess = await sendFacebookPurchaseEventDev(facebookEvent);
       } else {
-        // console.warn(`⚠️ Facebook Conversions API: Failed to send Purchase event (EventID: ${eventID})`);
+        if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {
+          console.warn(
+            `⚠️ [Facebook CAPI] Skipping Purchase event: validation failed (value/currency). OrderId: ${orderId}, value: ${value}, currency: ${currency}`
+          );
+        }
       }
     } catch (apiError) {
-      // console.error("❌ Error sending to Facebook Conversions API:", apiError);
-      // Don't throw - continue with browser pixel tracking
+      if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {
+        console.error("❌ [Facebook CAPI] Error sending Purchase event:", apiError);
+      }
     }
 
     // ✅ Track purchase as experiment event (for A/B testing analytics)
@@ -390,9 +424,12 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<v
         }
       }
     }
+
+    return capiSuccess;
   } catch (error) {
     console.error("❌ Error tracking pixel purchase:", error);
     // Don't throw - pixel tracking should not break purchase flow
+    return false;
   }
 }
 
@@ -422,6 +459,7 @@ export async function trackPixelSubscription(
       client_user_agent?: string;
       fbc?: string;
       fbp?: string;
+      event_source_url?: string;
     };
     clientIpAddress?: string;
     clientUserAgent?: string;
@@ -519,7 +557,10 @@ export async function trackPixelSubscription(
           content_ids: [packageId],
           content_name: packageName,
         },
-        event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
+        event_source_url:
+          requestContext?.event_source_url ??
+          eventSourceUrl ??
+          (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
       // Get test event code if in development
@@ -768,6 +809,7 @@ export async function trackPixelPaymentFailed(params: {
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    event_source_url?: string;
   };
   clientIpAddress?: string;
   clientUserAgent?: string;
@@ -872,7 +914,10 @@ export async function trackPixelPaymentFailed(params: {
           content_type: packageType ? getContentType(packageType) : "product",
           ...(packageName && { content_name: packageName }),
         },
-        event_source_url: eventSourceUrl || (typeof window !== "undefined" ? getEventSourceURL() : undefined),
+        event_source_url:
+          requestContext?.event_source_url ??
+          eventSourceUrl ??
+          (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
       // Get test event code if in development

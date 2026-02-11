@@ -160,6 +160,9 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
+    const capiEventSourceUrl =
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
 
     // Get the authenticated user session
     const session = await getServerSession(authOptions);
@@ -407,7 +410,8 @@ export async function POST(request: NextRequest) {
         miniDrawInfo,
         requestContext,
         calculatedEntriesCount,
-        validatedData.originalPurchaseContext
+        validatedData.originalPurchaseContext,
+        capiEventSourceUrl
       );
     } else {
       // Create payment intent for manual confirmation
@@ -419,7 +423,8 @@ export async function POST(request: NextRequest) {
         requestContext,
         calculatedEntriesCount,
         validatedData.originalPurchaseContext,
-        request // ✅ Pass request for error logging
+        request, // ✅ Pass request for error logging
+        capiEventSourceUrl
       );
     }
   } catch (error) {
@@ -456,7 +461,8 @@ async function handleOneClickPurchase(
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
   calculatedEntriesCount: number,
-  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string }
+  originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
+  capiEventSourceUrl?: string
 ) {
   try {
     if (!paymentMethodId) {
@@ -565,6 +571,7 @@ async function handleOneClickPurchase(
         ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
         ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       };
 
       // Log metadata for debugging
@@ -689,9 +696,18 @@ async function handlePaymentIntentCreation(
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
   calculatedEntriesCount: number,
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
-  request?: NextRequest // ✅ NEW: Add request parameter for error logging
+  request?: NextRequest, // ✅ Pass request for error logging
+  capiEventSourceUrl?: string
 ) {
   try {
+    // Derive event source URL for CAPI if not passed (e.g. from request)
+    const eventSourceUrl =
+      capiEventSourceUrl ??
+      (request
+        ? request.headers.get("referer") ??
+          (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+        : undefined);
+
     // Prepare metadata with original package type
     const paymentMetadata = {
       type: "upsell",
@@ -714,6 +730,7 @@ async function handlePaymentIntentCreation(
       ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
       ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      ...(eventSourceUrl ? { capi_event_source_url: eventSourceUrl } : {}),
     };
 
     // Log metadata for debugging

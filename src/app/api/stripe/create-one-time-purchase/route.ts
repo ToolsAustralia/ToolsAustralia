@@ -95,6 +95,9 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
+    const capiEventSourceUrl =
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
 
     const body = await request.json();
     requestBody = body; // Store for error logging
@@ -504,6 +507,7 @@ export async function POST(request: NextRequest) {
         ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
         ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       };
 
       console.log(`📋 Updated metadata:`, updatedMetadata);
@@ -634,6 +638,7 @@ export async function POST(request: NextRequest) {
           ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
           ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+          ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         },
       });
 

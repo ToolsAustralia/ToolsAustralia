@@ -105,10 +105,16 @@ export function prepareUserData(userData?: {
   state?: string;
   zipCode?: string;
   country?: string;
+  externalId?: string;
 }): Record<string, string> {
   const hashedData: Record<string, string> = {};
 
   if (!userData) return hashedData;
+
+  // Hash external ID (recommended by Meta for matching; same normalization as other hashed fields)
+  if (userData.externalId) {
+    hashedData.external_id = hashData(String(userData.externalId).toLowerCase().trim());
+  }
 
   // Hash email (required format: lowercase, trimmed, SHA-256)
   if (userData.email) {
