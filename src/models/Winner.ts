@@ -36,13 +36,13 @@ const WinnerSchema = new Schema<IWinner>(
     drawId: {
       type: Schema.Types.ObjectId,
       required: true,
-      index: true,
+      // No index: true - redundant with compound index drawId_1_cycle_-1
     },
     drawType: {
       type: String,
       required: true,
       enum: ["mini", "major"],
-      index: true,
+      // No index: true - redundant with compound index drawType_1_createdAt_-1
     },
     userId: {
       type: Schema.Types.ObjectId,

@@ -44,7 +44,7 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      index: true,
+      // No index: true - redundant with compound index userId_1_createdAt_-1
     },
     userEmail: {
       type: String,
@@ -58,7 +58,7 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
       trim: true,
       lowercase: true,
       maxlength: [255, "Email cannot be more than 255 characters"],
-      index: true, // Indexed for filtering and searching
+      // No index: true - redundant with compound index guestEmail_1_createdAt_-1
     },
     isAuthenticated: {
       type: Boolean,
@@ -87,17 +87,17 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
     category: {
       type: String,
       enum: ["payment", "network", "api", "system", "recovery"],
-      index: true, // Indexed for filtering
+      // No index: true - redundant with compound indexes category_1_createdAt_-1, category_1_severity_1_createdAt_-1
     },
     severity: {
       type: String,
       enum: ["critical", "high", "medium"],
-      index: true, // Indexed for filtering
+      // No index: true - redundant with compound index severity_1_createdAt_-1
     },
     autoLogged: {
       type: Boolean,
       default: false,
-      index: true, // Indexed for filtering
+      // No index: true - redundant with compound index autoLogged_1_createdAt_-1
     },
 
     // Request/Response information
@@ -175,7 +175,7 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
       enum: ["new", "investigating", "resolved", "dismissed"],
       default: "new",
       required: true,
-      index: true,
+      // No index: true - redundant with compound index status_1_createdAt_-1
     },
     adminNotes: {
       type: String,

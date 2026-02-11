@@ -63,7 +63,7 @@ const ExperimentEventSchema = new Schema<IExperimentEvent>(
 );
 
 // Indexes for efficient analytics queries
-ExperimentEventSchema.index({ experimentId: 1 });
+// Note: experimentId_1 removed - redundant with compound indexes experimentId_1_timestamp_1, etc.
 ExperimentEventSchema.index({ variantId: 1 });
 ExperimentEventSchema.index({ eventType: 1 });
 ExperimentEventSchema.index({ timestamp: 1 });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { format, subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
@@ -19,12 +19,14 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import Checkbox from "@/components/modals/ui/Checkbox";
 import { useFacebookAdsInsights, useHourlyInsights } from "@/hooks/queries/useFacebookAdsInsights";
-import type { DateRangeOption, InsightLevel } from "@/types/facebook-ads";
+import type { DateRangeOption, InsightLevel, FacebookAdsBreakdownItem } from "@/types/facebook-ads";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
+import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { DailyMetricsView } from "./metrics/DailyMetricsView";
 
 const AEST_TIMEZONE = "Australia/Sydney";
@@ -98,12 +100,11 @@ export default function FacebookAdsManagement() {
       urlEndDate = calculatedEnd;
     }
 
-    // If "all-time" is selected but no dates in URL, calculate and set them
+    // If "all-time" is selected but no dates in URL, calculate and set them (website launch → today)
     if (urlDateRange === "all-time" && (!urlStartDate || !urlEndDate)) {
+      const launchDate = getWebsiteLaunchDateUTC();
       const today = new Date();
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(today.getFullYear() - 2);
-      const calculatedStart = formatInTimeZone(twoYearsAgo, AEST_TIMEZONE, "yyyy-MM-dd");
+      const calculatedStart = formatInTimeZone(launchDate, AEST_TIMEZONE, "yyyy-MM-dd");
       const calculatedEnd = formatInTimeZone(today, AEST_TIMEZONE, "yyyy-MM-dd");
       
       const params = new URLSearchParams(searchParams.toString());
@@ -232,12 +233,11 @@ export default function FacebookAdsManagement() {
       finalStart = drawDates.lastDraw.startDate;
       finalEnd = drawDates.lastDraw.endDate;
     } else if (range === "all-time") {
-      // Handle "all-time" by converting to "custom" with 2 years range
+      // Handle "all-time": website launch date → today
       finalRange = "all-time"; // Keep as "all-time" in URL for UI
+      const launchDate = getWebsiteLaunchDateUTC();
       const today = new Date();
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(today.getFullYear() - 2);
-      finalStart = formatInTimeZone(twoYearsAgo, AEST_TIMEZONE, "yyyy-MM-dd");
+      finalStart = formatInTimeZone(launchDate, AEST_TIMEZONE, "yyyy-MM-dd");
       finalEnd = formatInTimeZone(today, AEST_TIMEZONE, "yyyy-MM-dd");
     }
 
@@ -438,16 +438,95 @@ export default function FacebookAdsManagement() {
   const { summary } = data;
 
   // Component for hourly breakdown table – Facebook data only
-  function HourlyBreakdownSection({ startDate, endDate }: { startDate: string; endDate: string }) {
+  function HourlyBreakdownSection({
+    startDate,
+    endDate,
+    breakdown,
+    breakdownLevel,
+  }: {
+    startDate: string;
+    endDate: string;
+    breakdown: FacebookAdsBreakdownItem[];
+    breakdownLevel: InsightLevel;
+  }) {
     const [hourlySortColumn, setHourlySortColumn] = useState<string>("spend");
     const [hourlySortDirection, setHourlySortDirection] = useState<"asc" | "desc">("desc");
     const [hourlyColumnsExpanded, setHourlyColumnsExpanded] = useState(false);
+    // Filter: empty = all; non-empty = selected campaigns/ad sets only
+    const [selectedFilterIds, setSelectedFilterIds] = useState<Set<string>>(new Set());
+    // Pending selection (only applied when user clicks Apply)
+    const [pendingFilterIds, setPendingFilterIds] = useState<Set<string>>(new Set());
+    const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+    const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+    const filterLevel: "campaign" | "adset" | undefined =
+      breakdownLevel === "campaign" ? "campaign" : breakdownLevel === "adset" ? "adset" : "campaign";
+
+    // Reset filter when switching between campaign/ad set level
+    useEffect(() => {
+      setSelectedFilterIds(new Set());
+      setPendingFilterIds(new Set());
+    }, [breakdownLevel]);
+
+    // Close filter dropdown when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+          setFilterDropdownOpen(false);
+        }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Pass filter only when some (but not all) are selected; "all" or "none" = account-level
+    const filterIds =
+      selectedFilterIds.size > 0 && selectedFilterIds.size < breakdown.length
+        ? Array.from(selectedFilterIds)
+        : undefined;
 
     const { data: hourlyData, isLoading: hourlyLoading, error: hourlyError } = useHourlyInsights({
       startDate,
       endDate,
       enabled: !!startDate && !!endDate,
+      filterLevel: filterLevel,
+      filterIds,
     });
+
+    const allIds = useMemo(
+      () =>
+        breakdown
+          .map((b) => (breakdownLevel === "campaign" ? b.campaignId ?? "" : b.adsetId ?? ""))
+          .filter(Boolean),
+      [breakdown, breakdownLevel]
+    );
+
+    const handleOpenDropdown = () => {
+      setPendingFilterIds(new Set(selectedFilterIds));
+      setFilterDropdownOpen(true);
+    };
+
+    const handleApplyFilter = () => {
+      setSelectedFilterIds(new Set(pendingFilterIds));
+      setFilterDropdownOpen(false);
+    };
+
+    const handleSelectAllInDropdown = () => {
+      if (pendingFilterIds.size === allIds.length) {
+        setPendingFilterIds(new Set());
+      } else {
+        setPendingFilterIds(new Set(allIds));
+      }
+    };
+
+    const handleTogglePendingItem = (id: string, checked: boolean) => {
+      setPendingFilterIds((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    };
 
     const handleHourlySort = (column: string) => {
       if (hourlySortColumn === column) {
@@ -570,11 +649,97 @@ export default function FacebookAdsManagement() {
 
     if (!hourlyData?.hourly || hourlyData.hourly.length === 0) return null;
 
+    const someSelected = selectedFilterIds.size > 0;
+    const filterLabel =
+      breakdownLevel === "campaign"
+        ? "Campaign"
+        : "Ad Set";
+    const pendingAllSelected = pendingFilterIds.size === allIds.length && allIds.length > 0;
+
     return (
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6 overflow-hidden">
-        <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-1">
-          Hourly Breakdown (All Hours)
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-3">
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-900">
+            Hourly Breakdown{filterIds ? ` (${selectedFilterIds.size} ${filterLabel}${selectedFilterIds.size === 1 ? "" : "s"} selected)` : " (All)"}
+          </h3>
+          {breakdown.length > 0 && (
+            <div className="relative" ref={filterDropdownRef}>
+              <button
+                type="button"
+                onClick={() => (filterDropdownOpen ? setFilterDropdownOpen(false) : handleOpenDropdown())}
+                className={`
+                  inline-flex items-center justify-between gap-2 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200
+                  focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
+                  ${filterDropdownOpen ? "ring-2 ring-red-500 border-transparent" : "border-gray-300 bg-white hover:border-gray-400"}
+                `}
+                aria-expanded={filterDropdownOpen}
+              >
+                <span className="truncate max-w-[140px] sm:max-w-[180px]">
+                  {someSelected ? `${selectedFilterIds.size} selected` : "Filter by " + filterLabel}
+                </span>
+                <ChevronDown
+                  className="flex-shrink-0 w-4 h-4 text-gray-400 transition-transform duration-200"
+                  style={{ transform: filterDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+                />
+              </button>
+              {filterDropdownOpen && (
+                <div
+                  className="absolute right-0 mt-1 min-w-[260px] max-h-[320px] overflow-hidden bg-white border-2 border-gray-300 rounded-lg shadow-lg z-50 flex flex-col"
+                  style={{
+                    touchAction: "pan-y",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-200">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllInDropdown}
+                      className="text-xs sm:text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                    >
+                      {pendingAllSelected ? "Clear all" : "Select all"}
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto max-h-[220px] py-2">
+                    {breakdown.map((item) => {
+                      const id = breakdownLevel === "campaign" ? item.campaignId : item.adsetId;
+                      const name = breakdownLevel === "campaign" ? item.campaignName : item.adsetName;
+                      const displayName = name || id || "Unknown";
+                      if (!id) return null;
+                      return (
+                        <div key={id} className="px-3 py-1.5">
+                          <Checkbox
+                            id={`hourly-filter-${id}`}
+                            checked={pendingFilterIds.has(id)}
+                            onChange={(e) => handleTogglePendingItem(id, e.target.checked)}
+                            label={displayName}
+                            className="text-xs sm:text-sm"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-end gap-2 px-3 py-2 border-t border-gray-200 bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => setFilterDropdownOpen(false)}
+                      className="px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyFilter}
+                      className="px-3 py-1.5 text-xs sm:text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+       
         
         <button
           type="button"
@@ -829,7 +994,12 @@ export default function FacebookAdsManagement() {
 
       {/* Hourly Breakdown - Show when date range is available */}
       {startDate && endDate && (
-        <HourlyBreakdownSection startDate={startDate} endDate={endDate} />
+        <HourlyBreakdownSection
+          startDate={startDate}
+          endDate={endDate}
+          breakdown={data.breakdown ?? []}
+          breakdownLevel={level}
+        />
       )}
 
       {/* Breakdown Table (for Campaign/Ad Set levels) - View Level is in header */}

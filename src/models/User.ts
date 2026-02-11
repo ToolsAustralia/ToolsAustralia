@@ -994,6 +994,15 @@ UserSchema.pre("save", function (next) {
 UserSchema.index({ role: 1 });
 UserSchema.index({ "subscription.isActive": 1 });
 UserSchema.index({ isActive: 1 });
+// MongoDB Atlas recommended: compound index for subscription-related queries
+UserSchema.index({
+  isActive: 1,
+  "subscription.lastUpgradeDate": -1,
+  "subscription.lastDowngradeDate": -1,
+  "subscription.cancelledAt": -1,
+});
+// MongoDB Atlas recommended: compound index for active users sorted by creation date
+UserSchema.index({ isActive: 1, createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 // ✅ OPTION 1: Major Draw Entries index removed - using single source of truth
