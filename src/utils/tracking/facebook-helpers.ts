@@ -155,9 +155,10 @@ export function prepareUserData(userData?: {
     hashedData.zp = hashData(userData.zipCode);
   }
 
-  // Country (not hashed, just country code)
+  // Country (hashed per Meta - all user params except client_user_agent, fbc, fbp must be SHA256)
   if (userData.country) {
-    hashedData.country = userData.country.toUpperCase();
+    const countryCode = userData.country.toUpperCase().replace(/^([A-Z]{2}).*/, "$1");
+    if (countryCode) hashedData.country = hashData(countryCode.toLowerCase());
   }
 
   return hashedData;
