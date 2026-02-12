@@ -7,6 +7,7 @@ import PromoBanner from "@/components/sections/promo/PromoBanner";
 import PromoHero from "@/components/sections/promo/PromoHero";
 import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
 import FloatingGetEntriesButton from "@/components/sections/promo/FloatingGetEntriesButton";
+import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 
 // Lazy load below-fold components for better performance
 const PromoPackages = dynamic(() => import("@/components/sections/promo/PromoPackages"), {
@@ -210,6 +211,9 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         </main>
 
         <FloatingGetEntriesButton />
+        <Suspense fallback={null}>
+          <PromotionsAccountButton />
+        </Suspense>
       </div>
       </VariantAssignmentWrapper>
     </>

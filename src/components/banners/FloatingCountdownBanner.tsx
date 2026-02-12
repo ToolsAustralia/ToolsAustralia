@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Lock } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
@@ -14,6 +14,7 @@ interface FloatingCountdownBannerProps {
 const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ className = "" }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false); // For hover/click override
   const [isDismissed, setIsDismissed] = useState(false);
@@ -27,6 +28,8 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
   const [isExpired, setIsExpired] = useState(false);
   const [drawName, setDrawName] = useState<string | null>(null);
   const [nextDrawName, setNextDrawName] = useState<string | null>(null);
+  const [isVisibleOnScroll, setIsVisibleOnScroll] = useState(false); // For my-account: hide at top, show when scrolled
+  const [isAtBottom, setIsAtBottom] = useState(false); // For my-account: hide at bottom
 
   const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
   const { data: nextDraw } = useNextDraw();
@@ -96,14 +99,34 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
     }
   }, [currentMajorDraw, nextDraw, gatesClosed]);
 
-  // Scroll detection - collapse at 200px
+  // On my-account: hide at top, only show when user has scrolled
+  const isMyAccountPage = pathname === "/my-account";
+  const topScrollThreshold = 150;
+
+  // Scroll detection - collapse at 200px, and on my-account hide at top/bottom
   useEffect(() => {
     const handleScroll = () => {
-      setIsCollapsed(window.scrollY > 200);
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      const scrollBottom = scrollY + windowHeight;
+      const bottomThreshold = 100;
+      const atBottom = scrollBottom >= documentHeight - bottomThreshold;
+
+      setIsCollapsed(scrollY > 200);
+
+      if (isMyAccountPage) {
+        setIsVisibleOnScroll(scrollY >= topScrollThreshold);
+        setIsAtBottom(atBottom);
+      } else {
+        setIsVisibleOnScroll(true); // Always visible on other pages
+        setIsAtBottom(false);
+      }
     };
+    handleScroll(); // Initial check
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isMyAccountPage]);
 
   // Dismiss handler
   const handleDismiss = (e: React.MouseEvent) => {
@@ -125,6 +148,11 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
 
   // Don't render if dismissed or not ready
   if (isDismissed || !isReady) {
+    return null;
+  }
+
+  // On my-account: hide at top or at bottom
+  if (isMyAccountPage && (!isVisibleOnScroll || isAtBottom)) {
     return null;
   }
 
@@ -181,7 +209,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                   {/* Text - Only title, no subtitle */}
                   <div className="text-center">
                     <h3 className="text-sm sm:text-base font-bold text-white font-['Poppins'] leading-tight">
-                      {gatesClosed ? "GATES CLOSED" : "WIN PROFESSIONAL TOOLS!"}
+                      {gatesClosed ? "GATES CLOSED" : "WIN THE BEST TRADIE SETUP"}
                     </h3>
                   </div>
                 </div>
@@ -196,10 +224,10 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                           <Lock className="w-4 h-4 text-yellow-400 flex-shrink-0" />
                         )}
                         <h3 className="text-sm sm:text-base font-bold text-white font-['Poppins'] leading-tight break-words">
-                          {gatesClosed ? "GATES CLOSED" : "WIN PROFESSIONAL TOOLS!"}
+                          {gatesClosed ? "GATES CLOSED" : "WIN THE BEST TRADIE SETUP"}
                         </h3>
                       </div>
-                      <p className="text-xs text-yellow-400">
+                      <p className="text-sm sm:text-base font-semibold text-yellow-400">
                         {gatesClosed 
                           ? (nextDrawName ? `Next Draw: ${nextDrawName}` : "Come back when the next draw opens")
                           : (drawName || "UNTIL NEXT LIVE DRAW")
@@ -287,14 +315,13 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                         <div className={`w-3 h-3 ${gatesClosed ? "bg-yellow-400" : "bg-green-400"} rounded-full animate-pulse`}></div>
                         <div className={`absolute inset-0 w-3 h-3 ${gatesClosed ? "bg-yellow-400" : "bg-green-400"} rounded-full animate-ping opacity-75`}></div>
                       </div>
-                      {gatesClosed && <Lock className="w-3 h-3 text-yellow-400" />}
-                      <h3 className="text-sm font-bold text-white font-['Poppins']">
-                        {gatesClosed ? "GATES CLOSED" : "WIN PROFESSIONAL TOOLS!"}
-                      </h3>
+                      {gatesClosed && <Lock className="w-3 h-3 text-yellow-400 flex-shrink-0" />}
+                      <p className="text-sm sm:text-base font-semibold text-yellow-400 font-['Poppins']">
+                        {gatesClosed
+                          ? (nextDrawName ? `Next Draw: ${nextDrawName}` : "Come back when the next draw opens")
+                          : (drawName || "UNTIL NEXT LIVE DRAW")}
+                      </p>
                     </div>
-                    {gatesClosed && nextDrawName && (
-                      <p className="text-xs text-yellow-400 mb-2">Next Draw: {nextDrawName}</p>
-                    )}
 
                     {isExpired ? (
                       <div className="text-center">

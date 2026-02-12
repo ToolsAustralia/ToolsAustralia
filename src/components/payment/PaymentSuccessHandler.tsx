@@ -69,6 +69,12 @@ export function PaymentSuccessHandler({
       const value = amountCents / 100;
       if (value > 0) {
         pixelPurchaseFiredRef.current = true;
+        console.log("📘 [Meta Pixel] Purchase fired (3DS redirect success)", {
+          eventId: paymentIntent.id,
+          value,
+          currency: (paymentIntent.currency ?? "aud").toUpperCase(),
+          source: "PaymentSuccessHandler",
+        });
         trackPurchaseWithEventId(
           value,
           (paymentIntent.currency ?? "aud").toUpperCase(),
