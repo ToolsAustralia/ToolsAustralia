@@ -87,6 +87,7 @@ const config: Config = {
         "border-glow-purple": "border-glow-purple 2s ease-in-out infinite",
         "border-glow-gold": "border-glow-gold 2s ease-in-out infinite",
         "border-glow-orange": "border-glow-orange 2s ease-in-out infinite",
+        "badge-pulse": "badgePulse 1.5s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -96,6 +97,19 @@ const config: Config = {
         slideUp: {
           "0%": { transform: "translateY(20px)", opacity: "0" },
           "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+        lineExpand: {
+          "0%": { opacity: "0", transform: "scaleX(0.3)" },
+          "60%": { opacity: "1", transform: "scaleX(1)" },
+          "100%": { opacity: "1", transform: "scaleX(1)" },
+        },
+        fadeSlideUp: {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        badgePulse: {
+          "0%, 100%": { transform: "scale(1)", boxShadow: "0 0 12px rgba(238, 0, 0, 0.5)" },
+          "50%": { transform: "scale(1.05)", boxShadow: "0 0 20px rgba(238, 0, 0, 0.8)" },
         },
       },
     },

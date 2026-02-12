@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Gift, Zap, CheckCircle, CreditCard, Sparkles } from "lucide-react";
+import Image from "next/image";
+import { Gift, Zap, CheckCircle, CreditCard, Sparkles, Check } from "lucide-react";
 import { useUserContext } from "@/contexts/UserContext";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,12 +17,88 @@ import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
-import { ModalContainer, ModalHeader, ModalContent, Button, Input } from "./ui";
+import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { usePromoLink } from "@/hooks/usePromoLink";
+import { getPackageIcon } from "@/utils/images/package-icons";
+
+// Helper functions for package card styling (matched to PackageSelectionModal)
+const getGradientColor = (gradient: string) => {
+  if (gradient.includes("yellow-4") || gradient.includes("yellow-400")) return "#fbbf24";
+  if (gradient.includes("blue-6") || gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6";
+  if (gradient.includes("emerald") || gradient.includes("green-5") || gradient.includes("green-500")) return "#10b981";
+  if (gradient.includes("gray-3") || gradient.includes("slate-4") || gradient.includes("gray-400")) return "#94a3b8";
+  if (gradient.includes("orange-6") || gradient.includes("orange-5") || gradient.includes("orange-500"))
+    return "#f97316";
+  return "#6b7280";
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const getPackageColorScheme = (planId: string) => {
+  if (planId.includes("apprentice")) {
+    return {
+      gradient: "from-gray-300 via-slate-400 to-gray-500",
+      glow: "drop-shadow-[0_0_12px_rgba(148,163,184,0.52)]",
+      text: "text-gray-300",
+      border: "border-gray-400/40",
+      shadow: "shadow-gray-400/20",
+      hoverShadow: "hover:shadow-gray-400/40",
+    };
+  } else if (planId.includes("tradie")) {
+    return {
+      gradient: "from-blue-600 via-blue-500 to-cyan-600",
+      glow: "drop-shadow-[0_0_12px_rgba(59,130,246,0.65)]",
+      text: "text-blue-400",
+      border: "border-blue-500/50",
+      shadow: "shadow-blue-500/30",
+      hoverShadow: "hover:shadow-blue-500/50",
+    };
+  } else if (planId.includes("foreman")) {
+    return {
+      gradient: "from-emerald-400 via-emerald-500 to-green-500",
+      glow: "drop-shadow-[0_0_15px_rgba(16,185,129,0.78)]",
+      text: "text-emerald-400",
+      border: "border-emerald-500/50",
+      shadow: "shadow-emerald-500/30",
+      hoverShadow: "hover:shadow-emerald-500/50",
+    };
+  } else if (planId.includes("boss")) {
+    return {
+      gradient: "from-yellow-400 via-amber-500 to-yellow-600",
+      glow: "drop-shadow-[0_0_12px_rgba(251,191,36,0.65)]",
+      text: "text-yellow-400",
+      border: "border-yellow-400/50",
+      shadow: "shadow-yellow-400/30",
+      hoverShadow: "hover:shadow-yellow-400/50",
+    };
+  } else if (planId.includes("power")) {
+    return {
+      gradient: "from-orange-600 via-red-500 to-orange-700",
+      glow: "drop-shadow-[0_0_12px_rgba(251,146,60,0.65)]",
+      text: "text-orange-400",
+      border: "border-orange-500/50",
+      shadow: "shadow-orange-500/30",
+      hoverShadow: "hover:shadow-orange-500/50",
+    };
+  }
+  return {
+    gradient: "from-slate-600 via-gray-700 to-slate-800",
+    glow: "drop-shadow-[0_0_12px_rgba(100,116,139,0.65)]",
+    text: "text-gray-400",
+    border: "border-gray-500/50",
+    shadow: "shadow-gray-500/30",
+    hoverShadow: "hover:shadow-gray-500/50",
+  };
+};
 
 /**
  * SpecialPackagesModalProps Interface
@@ -546,113 +623,177 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         onClose={handleClose}
         size="md"
         height="fixed"
-        fixedHeight="max-h-[95dvh]"
+        fixedHeight="max-h-[90dvh]"
         closeOnBackdrop={false}
-        className="flex flex-col"
+        className="flex flex-col sm:max-w-xl "
       >
-        <ModalHeader title="" onClose={handleClose} showLogo={true} logoSize="sm" />
+        <ModalHeader title="" onClose={handleClose} showLogo={true} logoSize="sm" accent="none" />
 
         {/* Congratulations Section - Below Header (hidden when package is selected) */}
         {!selectedPackage && (
-          <div className="bg-white text-gray-800 p-2 sm:p-3 text-center border-b border-gray-200">
+          <div className="bg-white text-gray-800 p-2 sm:p-3 text-center">
             <h2 className="text-green-600 text-xs sm:text-sm font-bold mb-1">
               CONGRATULATIONS{userData?.firstName ? ` ${userData.firstName.toUpperCase()}` : ""}!
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600 mb-2">
-              You are currently in the draw and entitled to <span className="text-green-600 font-bold">50% OFF</span>{" "}
-              today!
+            <p className="text-xs sm:text-sm text-gray-600 mb-3">
+              you are entitled to{" "}
+              <span className="font-bold bg-gradient-to-r from-[#ee0000] via-[#ff4444] to-[#ee0000] bg-clip-text text-transparent drop-shadow-[0_0_6px_rgba(238,0,0,0.5)]">$50 off</span>{" "}
+              today
             </p>
 
-            {/* Banner */}
-            <div className="bg-black rounded-lg p-1.5 sm:p-2 flex items-center justify-center gap-1 sm:gap-1.5 mx-auto w-fit">
-              <Zap className="w-3 h-3 sm:w-3 sm:h-3 text-yellow-400" />
-              <span className="text-white font-bold text-xs">SPECIAL PACKAGES ACTIVATED</span>
+            {/* Divider-style: ----- icon special packages activated ----- */}
+            <div className="flex w-full items-center justify-center gap-2 sm:gap-3 text-gray-400">
+              <span
+                className="h-px min-w-[40px] flex-1 origin-right animate-[lineExpand_0.7s_ease-out_forwards] bg-gradient-to-r from-transparent via-gray-300 to-gray-400"
+                style={{ animationDelay: "0.1s" }}
+              />
+              <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 animate-[fadeSlideUp_0.5s_ease-out_forwards] opacity-0" style={{ animationDelay: "0.35s" }}>
+                <Zap className="w-3.5 h-3.5 shrink-0 text-amber-500 sm:w-4 sm:h-4 animate-[pulse_2s_ease-in-out_infinite]" style={{ animationDelay: "1s" }} />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 sm:text-xs">
+                  Special Packages Activated
+                </span>
+              </div>
+              <span
+                className="h-px min-w-[40px] flex-1 origin-left animate-[lineExpand_0.7s_ease-out_forwards] bg-gradient-to-r from-gray-400 via-gray-300 to-transparent"
+                style={{ animationDelay: "0.1s" }}
+              />
             </div>
           </div>
         )}
 
         <ModalContent scrollbar="metallic" padding="none" className="flex flex-col p-3 sm:p-6">
-          {/* Package List */}
+          {/* Package List - Styled to match PackageSelectionModal */}
           <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
-            {packagesWithPromo.map((pkg) => (
-              <div
-                key={pkg._id}
-                className={`relative bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-lg p-2 sm:p-3 cursor-pointer transition-all duration-200 shadow-md hover:shadow-lg ${
-                  selectedPackage?._id === pkg._id ? "ring-2 ring-red-500 shadow-xl scale-[1.02]" : "hover:scale-[1.01]"
-                }`}
-                onClick={() => handlePackageSelect(pkg)}
-              >
-                {/* Selection Indicator */}
-                {selectedPackage?._id === pkg._id && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
-                    <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 sm:gap-3">
-                  {/* Package Name - Left */}
-                  <div className="text-xs sm:text-sm text-black font-semibold">{pkg.name}</div>
-
-                  {/* Main Entries Display - Center */}
-                  <div className="text-center min-w-[60px] sm:min-w-[80px]">
-                    <div
-                      className={`text-base sm:text-lg font-bold ${
-                        selectedPackage?._id === pkg._id ? "text-green-600" : "text-black"
-                      }`}
-                    >
-                      {pkg.totalEntries || 0}
+            {packagesWithPromo.map((pkg) => {
+              const colorScheme = getPackageColorScheme(pkg._id || "");
+              const isSelected = selectedPackage?._id === pkg._id;
+              return (
+                <div
+                  key={pkg._id}
+                  className={`relative rounded-2xl p-2.5 sm:p-4 transition-[box-shadow,border-color] duration-300 cursor-pointer ${
+                    isSelected ? "shadow-2xl" : "shadow-[0_0_15px_rgba(0,0,0,0.4)] hover:shadow-[0_0_25px_rgba(0,0,0,0.6)]"
+                  }`}
+                  style={{
+                    /* Consistent 2px border prevents layout shift/wobbling on selection */
+                    border: `2px solid ${isSelected ? getGradientColor(colorScheme.gradient) : "transparent"}`,
+                    backgroundImage: isSelected
+                      ? `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${hexToRgba(
+                          getGradientColor(colorScheme.gradient),
+                          0.8
+                        )}, ${hexToRgba(getGradientColor(colorScheme.gradient), 0.5)})`
+                      : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${getGradientColor(
+                          colorScheme.gradient
+                        )}, transparent)`,
+                    backgroundOrigin: `border-box`,
+                    backgroundClip: `padding-box, border-box`,
+                    boxShadow: isSelected
+                      ? `0 0 20px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.6)}, 0 0 40px ${hexToRgba(
+                          getGradientColor(colorScheme.gradient),
+                          0.4
+                        )}, 0 0 60px rgba(251, 191, 36, 0.3), 0 0 0 4px rgba(251, 191, 36, 0.2)`
+                      : `0 0 15px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.4)}, 0 0 30px ${hexToRgba(
+                          getGradientColor(colorScheme.gradient),
+                          0.2
+                        )}`,
+                  }}
+                  onClick={() => handlePackageSelect(pkg)}
+                >
+                  {/* Selection Indicator */}
+                  {isSelected && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-yellow-400 text-black rounded-full flex items-center justify-center shadow-lg">
+                      <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     </div>
-                    <div className="text-xs font-bold text-black">ENTRIES</div>
-                  </div>
+                  )}
 
-                  {/* Divider - Fixed position */}
-                  <div className="w-px h-8 sm:h-10 bg-black/20"></div>
+                  {/* Package Icon - Centered at top */}
+                  {getPackageIcon(pkg._id) && (
+                    <div className="absolute -top-4 sm:-top-5 left-1/2 transform -translate-x-1/2 z-20">
+                      <div className="w-8 h-8 sm:w-12 sm:h-12 relative">
+                        <Image
+                          src={getPackageIcon(pkg._id)!}
+                          alt={`${pkg.name} icon`}
+                          fill
+                          sizes="(max-width: 640px) 32px, 48px"
+                          className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                        />
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Right Side - Price and Button */}
-                  <div className="flex items-center justify-end gap-2 sm:gap-3">
-                    {/* Main Price Display */}
-                    <div className="text-base sm:text-lg font-bold text-black">${pkg.price}</div>
+                  <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
+                    {/* Package Name - Left, two rows (same row as entries & price) */}
+                    <div className={`min-w-0 text-xs sm:text-sm font-semibold ${colorScheme.text} leading-tight`}>
+                      {(() => {
+                        const parts = pkg.name.split(" ");
+                        if (parts[0]?.toLowerCase() === "additional" && parts.length > 1) {
+                          return (
+                            <>
+                              <span className="block">additional</span>
+                              <span className="block">{parts.slice(1).join(" ")}</span>
+                            </>
+                          );
+                        }
+                        return <span>{pkg.name}</span>;
+                      })()}
+                    </div>
 
-                    {/* Select Button */}
-                    <Button
-                      onClick={() => handlePackageSelect(pkg)}
-                      variant={selectedPackage?._id === pkg._id ? "primary" : "secondary"}
-                      size="sm"
-                      className="flex-shrink-0 text-xs px-2 sm:px-3"
-                    >
-                      {selectedPackage?._id === pkg._id ? "✓" : "SELECT"}
-                    </Button>
+                    {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
+                    <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
+                      <div
+                        className={`text-base sm:text-lg font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
+                      >
+                        {pkg.totalEntries || 0}
+                      </div>
+                      <div className={`text-xs font-bold ${colorScheme.text}`}>ENTRIES</div>
+                    </div>
+
+                    {/* Right Side - Price and Button */}
+                    <div className="flex items-center justify-end gap-2 sm:gap-2">
+                      <div className="text-base sm:text-lg font-bold text-slate-200">${pkg.price}</div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePackageSelect(pkg);
+                        }}
+                        className={`min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center ${
+                          isSelected
+                            ? "bg-yellow-400 text-black shadow-md"
+                            : "bg-yellow-400/90 text-black hover:bg-yellow-400"
+                        }`}
+                      >
+                        {isSelected ? "✓" : "SELECT"}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* Coupon Code Input */}
-          <div className="mb-3 sm:mb-4">
-            <div className="flex gap-1.5 sm:gap-2">
-              <Input
+          {/* Coupon Code Input - Matches MembershipModal exactly for full width */}
+          <div className="mb-3 sm:mb-4 w-full">
+            <div className="flex gap-2 w-full">
+              <input
                 type="text"
                 value={couponCode}
                 onChange={(e) => setCouponCode(e.target.value)}
                 placeholder="Enter coupon code"
-                className="flex-1 text-xs sm:text-sm"
+                className="flex-1 min-w-0 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base"
               />
               {couponApplied ? (
-                <div className="bg-green-500 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center gap-1 sm:gap-2">
-                  <CheckCircle size={14} className="sm:w-4 sm:h-4" />
-                  <span className="text-xs sm:text-sm font-bold">APPLIED</span>
+                <div className="h-11 bg-green-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                  <Check size={12} />
+                  <span className="text-xs font-bold">APPLIED</span>
                 </div>
               ) : (
-                <Button
+                <button
                   type="button"
                   onClick={handleCouponApply}
-                  variant="secondary"
-                  size="sm"
-                  className="text-xs px-3 sm:px-4"
+                  className="h-11 bg-gray-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl hover:bg-gray-600 transition-colors text-xs sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
                 >
                   Apply
-                </Button>
+                </button>
               )}
             </div>
           </div>
@@ -675,10 +816,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                   <span>Select Pack</span>
                 </div>
               ) : defaultPaymentMethod ? (
-                <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                <div className="flex items-center justify-center gap-3 sm:gap-4">
                   <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
                   <span className="text-xs sm:text-sm">Buy Now - ${selectedPackage.price}</span>
-                  <div className="flex items-center gap-1 ml-1 sm:ml-2 bg-white/20 rounded px-1.5 sm:px-2 py-0.5 sm:py-1">
+                  <div className="flex items-center gap-1.5 bg-white/20 rounded px-2 sm:px-3 py-1 sm:py-1.5">
                     <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     <span className="text-xs">•••• {defaultPaymentMethod.card?.last4}</span>
                   </div>
@@ -688,55 +829,40 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
               )}
             </Button>
 
-            {/* Select Different Payment Method Button (DISABLED) */}
-            {/* <Button
-              onClick={handleCardSelection}
-              disabled={!selectedPackage}
-              variant="secondary"
-              fullWidth
-              size="sm"
-              className="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm py-2"
-            >
-              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Select different payment method</span>
-              <span className="sm:hidden">Select Payment</span>
-            </Button> */}
-
-            {/* Maybe Later Button */}
-            <div className="text-center">
-              <Button
-                onClick={handleClose}
-                variant="ghost"
-                size="sm"
-                className="text-gray-500 hover:text-gray-700 text-xs sm:text-sm"
-              >
-                Maybe Later
-              </Button>
-            </div>
           </div>
 
-          {/* Additional Benefits - Only shown when package is selected */}
-          {selectedPackage && (
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm mb-3 sm:mb-4">
-              <h4 className="text-xs sm:text-sm font-bold text-gray-900 mb-2 sm:mb-3">
-                {selectedPackage.name} Benefits:
-              </h4>
-              <div className="space-y-1.5 sm:space-y-2">
-                <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600">
-                  <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" />
-                  <span>{selectedPackage.totalEntries || 0} Free Entries</span>
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600">
-                  <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-orange-500" />
-                  <span>{selectedPackage.partnerDiscountDays || 0} Days Partner Discounts</span>
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600">
-                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                  <span>100% Partner Discounts Available</span>
+          {/* Additional Benefits - Only shown when package is selected (matches package card design) */}
+          {selectedPackage && (() => {
+            const colorScheme = getPackageColorScheme(selectedPackage._id || "");
+            return (
+              <div
+                className="rounded-2xl p-3 sm:p-4 shadow-[0_0_15px_rgba(0,0,0,0.4)] my-3 sm:my-4"
+                style={{
+                  border: `2px solid ${getGradientColor(colorScheme.gradient)}`,
+                  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+                  boxShadow: `0 0 15px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.4)}, 0 0 30px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.2)}`,
+                }}
+              >
+                <h4 className={`text-xs sm:text-sm font-bold mb-2 sm:mb-3 ${colorScheme.text}`}>
+                  {selectedPackage.name} Benefits
+                </h4>
+                <div className="space-y-2 sm:space-y-2.5">
+                  <div className={`flex items-center gap-2 sm:gap-3 text-xs sm:text-sm ${colorScheme.text}`}>
+                    <Gift className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${colorScheme.text}`} />
+                    <span>{selectedPackage.totalEntries || 0} Free Entries</span>
+                  </div>
+                  <div className={`flex items-center gap-2 sm:gap-3 text-xs sm:text-sm ${colorScheme.text}`}>
+                    <Zap className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${colorScheme.text}`} />
+                    <span>{selectedPackage.partnerDiscountDays || 0} Days Partner Discounts</span>
+                  </div>
+                  <div className={`flex items-center gap-2 sm:gap-3 text-xs sm:text-sm ${colorScheme.text}`}>
+                    <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${colorScheme.text}`} />
+                    <span>100% Partner Discounts Available</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Trust Indicators */}
           <div className="pt-3 sm:pt-4 border-t border-gray-200 mt-4 sm:mt-6">

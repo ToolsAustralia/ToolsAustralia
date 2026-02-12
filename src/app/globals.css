@@ -1371,6 +1371,42 @@
   }
 }
 
+/* Get More Entries – shimmer like Enter Now, clipped to button only (badge stays visible) */
+.get-more-entries-cta {
+  position: relative;
+  overflow: visible;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+/* Shimmer lives inside clipped container so it doesn't bleed across the page */
+.get-more-entries-shimmer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.get-more-entries-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
+  opacity: 0.7;
+  transform: translateX(-130%);
+  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.get-more-entries-cta > *:not([class*="absolute"]):not(.get-more-entries-shimmer) {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) {
+  .get-more-entries-cta:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.3), 0 0 40px rgba(234, 179, 8, 0.5);
+  }
+}
+
 /* Membership package Enter Now – same animation as promo-hero-cta-button (shimmer + hover), design unchanged */
 .membership-enter-cta-animation {
   position: relative;

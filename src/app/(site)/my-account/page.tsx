@@ -30,7 +30,7 @@ import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/member
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { hasSeenExplainer, markExplainerSeen } from "@/utils/subscription-explainer-storage";
 import { formatRenewalDate, getFallbackRenewalDate } from "@/utils/dates/month-helpers";
-import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft } from "lucide-react";
+import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Zap } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
@@ -39,6 +39,7 @@ import PackageDetailModal, {
   type PackageDetailModalPackageData,
   type SubscriptionAccumulationData,
 } from "@/components/modals/PackageDetailModal";
+import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import { getPackageById } from "@/data/membershipPackages";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -724,23 +725,27 @@ export default function MyAccountPage() {
                   {hasAccessToAdditionalPackages && (
                     <button
                       onClick={() => {
-                        // Use openEntryFlow hook which handles gate checking and modal opening
                         openEntryFlow();
                       }}
-                      className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                      className="group relative get-more-entries-cta bg-gradient-to-br from-amber-400 via-yellow-400 to-amber-500 text-black px-6 py-3 rounded-xl font-bold shadow-[0_4px_20px_rgba(0,0,0,0.25),0_0_30px_rgba(234,179,8,0.4)]"
                     >
+                      <div className="get-more-entries-shimmer rounded-xl" aria-hidden="true" />
+                      {/* 50% OFF animating badge - rounded container, no visible rect */}
+                      <div className="absolute -top-4 -right-4 z-20">
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white animate-badge-pulse"
+                          style={{
+                            background: "linear-gradient(135deg, #dc2626 0%, #ea580c 40%, #dc2626 70%, #b91c1c 100%)",
+                            boxShadow: "0 0 12px rgba(238,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25)",
+                          }}
+                        >
+                          50% OFF
+                        </span>
+                      </div>
                       <span className="relative z-10 flex items-center justify-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                          />
-                        </svg>
+                        <Zap className="w-4 h-4" />
                         Get More Entries
                       </span>
-                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-orange-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     </button>
                   )}
                 </div>
@@ -1099,20 +1104,25 @@ export default function MyAccountPage() {
                         // Use openEntryFlow hook which handles gate checking and modal opening
                         openEntryFlow();
                       }}
-                      className="group relative bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-4 py-2 rounded-lg font-bold hover:from-yellow-500 hover:to-orange-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl w-full"
+                      className="group relative get-more-entries-cta bg-gradient-to-br from-amber-400 via-yellow-400 to-amber-500 text-black px-4 py-3 rounded-xl font-bold shadow-[0_4px_20px_rgba(0,0,0,0.25),0_0_30px_rgba(234,179,8,0.4)] w-full"
                     >
+                      <div className="get-more-entries-shimmer rounded-xl" aria-hidden="true" />
+                      {/* 50% OFF animating badge - rounded container, no visible rect */}
+                      <div className="absolute -top-2 -right-1 z-20">
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white animate-badge-pulse"
+                          style={{
+                            background: "linear-gradient(135deg, #dc2626 0%, #ea580c 40%, #dc2626 70%, #b91c1c 100%)",
+                            boxShadow: "0 0 12px rgba(238,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25)",
+                          }}
+                        >
+                          50% OFF
+                        </span>
+                      </div>
                       <span className="relative z-10 flex items-center justify-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                          />
-                        </svg>
+                        <Zap className="w-4 h-4" />
                         Get More Entries
                       </span>
-                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-orange-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     </button>
                   )}
                 </div>
@@ -1396,6 +1406,9 @@ export default function MyAccountPage() {
       {showAccumulationTooltip && (
         <div className="fixed inset-0 z-[9998]" onClick={() => setShowAccumulationTooltip(false)} />
       )}
+
+      {/* Floating countdown banner - links back to promotions page */}
+      <FloatingCountdownBanner />
     </div>
   );
 }

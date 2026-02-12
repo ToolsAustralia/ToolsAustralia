@@ -52,6 +52,9 @@ const FloatingPromoBanner: React.FC = () => {
   // Check if we're on a competition terms page
   const isCompetitionTermsPage = pathname === "/competition-term-majordraw";
 
+  // On my-account page: hide at top and bottom, only show when user has scrolled
+  const isMyAccountPage = pathname === "/my-account";
+
   // Listen for tab changes from MembershipSection
   useEffect(() => {
     const handleTabChange = (event: CustomEvent<{ activeTab: "membership" | "one-time" }>) => {
@@ -84,24 +87,25 @@ const FloatingPromoBanner: React.FC = () => {
         const bottomThreshold = 100;
         const isAtBottom = scrollBottom >= documentHeight - bottomThreshold;
 
-        // Determine scroll direction
+        // On my-account: also hide when at top (within 150px)
+        const topThreshold = 150;
+        const isAtTop = scrollTop < topThreshold;
+
         const currentScrollY = window.scrollY;
         const isScrollingUp = currentScrollY < lastScrollY.current;
 
-        // Update visibility based on scroll position and direction
-        if (isAtBottom) {
-          // Hide banner when at the bottom of the page
-          setIsVisible(false);
+        if (isMyAccountPage) {
+          // My-account: only show when user has scrolled past top AND not at bottom
+          setIsVisible(!isAtTop && !isAtBottom);
         } else {
-          // Show banner when:
-          // - User is scrolling up (regardless of position)
-          // - User is not at the bottom of the page
-          if (isScrollingUp || !isAtBottom) {
-            setIsVisible(true);
+          // Other pages: hide at bottom, show when scrolled up or not at bottom
+          if (isAtBottom) {
+            setIsVisible(false);
+          } else {
+            setIsVisible(isScrollingUp || !isAtBottom);
           }
         }
 
-        // Update last scroll position
         lastScrollY.current = currentScrollY;
       }, 10); // Small debounce for smooth performance
     };
@@ -118,7 +122,7 @@ const FloatingPromoBanner: React.FC = () => {
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, []);
+  }, [isMyAccountPage]);
 
   // Effective multiplier for current context (scheduled, toggle, or alternating)
   const activeMultiplier =
