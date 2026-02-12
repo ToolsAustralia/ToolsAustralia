@@ -203,12 +203,15 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     const value = status.data.price;
     if (typeof value === "number" && value > 0) {
       pixelPurchaseFiredRef.current = true;
-      trackPurchaseWithEventId(
+      const currency = status.data.currency ?? "AUD";
+      console.log("📘 [Meta Pixel] Purchase fired (in-modal success)", {
+        eventId: paymentIntentId,
         value,
-        status.data.currency ?? "AUD",
-        paymentIntentId,
-        paymentIntentId
-      );
+        currency,
+        source: "PaymentProcessingScreen",
+        packageType,
+      });
+      trackPurchaseWithEventId(value, currency, paymentIntentId, paymentIntentId);
     }
   }
 
