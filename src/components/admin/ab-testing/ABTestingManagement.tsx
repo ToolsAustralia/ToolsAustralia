@@ -180,7 +180,7 @@ export default function ABTestingManagement() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b-2 border-gray-200">
+              <thead className="sticky top-0 z-10 bg-gray-50 border-b-2 border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
                 <tr>
                   <th className="px-3 sm:px-4 lg:px-6 py-2 sm:py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                     Name

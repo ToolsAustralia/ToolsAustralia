@@ -72,40 +72,52 @@ export async function fetchFacebookInsights(
   const url = `${baseUrl}?${params.toString()}`;
 
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const allInsights: FacebookInsightData[] = [];
+    let nextUrl: string | null = url;
 
-    if (!response.ok) {
-      const errorData: FacebookApiError = await response.json().catch(() => ({
-        error: {
-          message: `HTTP ${response.status}: ${response.statusText}`,
-          type: "HTTPError",
-          code: response.status,
+    // Paginate through all results so summary totals match across Campaign/Ad Set/Ad levels
+    while (nextUrl) {
+      const response = await fetch(nextUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }));
+      });
 
-      // Handle specific error codes
-      if (response.status === 401) {
-        throw new Error("Facebook access token expired or invalid. Please update the token.");
+      if (!response.ok) {
+        const errorData: FacebookApiError = await response.json().catch(() => ({
+          error: {
+            message: `HTTP ${response.status}: ${response.statusText}`,
+            type: "HTTPError",
+            code: response.status,
+          },
+        }));
+
+        // Handle specific error codes
+        if (response.status === 401) {
+          throw new Error("Facebook access token expired or invalid. Please update the token.");
+        }
+
+        if (response.status === 429) {
+          const retryAfter = response.headers.get("Retry-After");
+          throw new Error(
+            `Rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : "Please try again later."}`
+          );
+        }
+
+        throw new Error(errorData.error?.message || `Facebook API error: ${response.statusText}`);
       }
 
-      if (response.status === 429) {
-        const retryAfter = response.headers.get("Retry-After");
-        throw new Error(
-          `Rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : "Please try again later."}`
-        );
+      const data: FacebookInsightsResponse = await response.json();
+
+      if (data.data && data.data.length > 0) {
+        allInsights.push(...data.data);
       }
 
-      throw new Error(errorData.error?.message || `Facebook API error: ${response.statusText}`);
+      nextUrl = data.paging?.next ?? null;
     }
 
-    const data: FacebookInsightsResponse = await response.json();
-
-    if (!data.data || data.data.length === 0) {
+    if (allInsights.length === 0) {
       // Return empty metrics if no data
       return [
         {
@@ -125,7 +137,7 @@ export async function fetchFacebookInsights(
     }
 
     // Process each insight data point with breakdown information
-    return data.data.map((insight) => ({
+    return allInsights.map((insight) => ({
       metrics: processInsightData(insight),
       breakdown: extractBreakdown(insight),
     }));
@@ -375,7 +387,7 @@ export async function fetchFacebookInsightsHourly(
   }
 }
 
-export type HourlyFilterLevel = "campaign" | "adset";
+export type HourlyFilterLevel = "campaign" | "adset" | "ad";
 
 /**
  * Fetch hourly insights for a single campaign or ad set by ID.

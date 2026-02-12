@@ -10,7 +10,7 @@
 import React, { useRef, useEffect } from "react";
 import { use3DSRedirectHandler, type PaymentStatus } from "@/hooks/use3DSRedirectHandler";
 import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import { trackFacebookEvent } from "@/components/FacebookPixel";
+import { trackPurchaseWithEventId } from "@/components/FacebookPixel";
 
 export interface PaymentSuccessHandlerProps {
   /**
@@ -65,14 +65,17 @@ export function PaymentSuccessHandler({
       paymentIntent?.id &&
       !pixelPurchaseFiredRef.current
     ) {
-      pixelPurchaseFiredRef.current = true;
-      const amount = paymentIntent.amount ?? 0;
-      trackFacebookEvent("Purchase", {
-        value: amount / 100,
-        currency: (paymentIntent.currency ?? "aud").toUpperCase(),
-        order_id: paymentIntent.id,
-        eventID: paymentIntent.id,
-      });
+      const amountCents = paymentIntent.amount ?? 0;
+      const value = amountCents / 100;
+      if (value > 0) {
+        pixelPurchaseFiredRef.current = true;
+        trackPurchaseWithEventId(
+          value,
+          (paymentIntent.currency ?? "aud").toUpperCase(),
+          paymentIntent.id,
+          paymentIntent.id
+        );
+      }
     }
   }, [paymentStatus, paymentIntent?.id, paymentIntent?.amount, paymentIntent?.currency]);
 

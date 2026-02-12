@@ -127,6 +127,8 @@ export interface FacebookAdsBreakdownItem {
   campaignName?: string;
   adsetId?: string;
   adsetName?: string;
+  adId?: string;
+  adName?: string;
   spend: number;
   revenue: number;
   profit: number;

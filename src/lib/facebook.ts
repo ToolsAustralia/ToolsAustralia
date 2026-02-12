@@ -254,6 +254,34 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
   }
 }
 
+/** Fallback client_user_agent - Meta requires it for website events to avoid _missing_event */
+const CAPI_USER_AGENT_FALLBACK = "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)";
+
+/**
+ * Ensure website events have required user_data and event_source_url (Meta rejects with _missing_event otherwise)
+ */
+function ensureWebsiteEventValid(event: FacebookEvent): FacebookEvent {
+  if (event.action_source !== "website") return event;
+
+  const userData = { ...event.user_data };
+
+  // Meta requires client_user_agent for website events - empty user_data causes _missing_event
+  if (!userData.client_user_agent || userData.client_user_agent.trim() === "") {
+    userData.client_user_agent = CAPI_USER_AGENT_FALLBACK;
+  }
+
+  // Meta requires event_source_url for website events
+  const eventSourceUrl =
+    event.event_source_url?.trim() ||
+    (isLocalhostOrMissingUrl() ? DEV_CHECKOUT_FALLBACK_URL : "https://example.com/");
+
+  return {
+    ...event,
+    user_data: userData,
+    event_source_url: eventSourceUrl,
+  };
+}
+
 // Send event to Facebook Conversions API
 export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: string): Promise<boolean> {
   try {
@@ -271,13 +299,16 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
       return false;
     }
 
+    // Ensure website events have required params to avoid Meta _missing_event error
+    const sanitizedEvent = ensureWebsiteEventValid(event);
+
     // Build request body
     const requestBody: {
       data: FacebookEvent[];
       access_token: string;
       test_event_code?: string;
     } = {
-      data: [event],
+      data: [sanitizedEvent],
       access_token: accessToken,
     };
 

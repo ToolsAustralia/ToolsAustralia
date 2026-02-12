@@ -110,7 +110,7 @@ export function RevenueBreakdown({ metrics }: RevenueBreakdownProps) {
           {/* Package Breakdown Table */}
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
                 <tr className="border-b-2 border-gray-200 bg-gray-50">
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Package Type</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Count</th>

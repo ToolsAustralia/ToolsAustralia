@@ -152,9 +152,9 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b-2 border-gray-200 bg-gray-50">
+            <tr className="border-b-2 border-gray-200">
               <th
-                className="text-left py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-left py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                 onClick={() => handleSort("date")}
               >
                 <div className="flex items-center">
@@ -163,7 +163,7 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
                 </div>
               </th>
               <th
-                className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                 onClick={() => handleSort("adSpend")}
               >
                 <div className="flex items-center justify-end">
@@ -172,7 +172,7 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
                 </div>
               </th>
               <th
-                className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                 onClick={() => handleSort("revenue")}
               >
                 <div className="flex items-center justify-end">
@@ -181,7 +181,7 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
                 </div>
               </th>
               <th
-                className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                 onClick={() => handleSort("salesCount")}
               >
                 <div className="flex items-center justify-end">
@@ -190,7 +190,7 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
                 </div>
               </th>
               <th
-                className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                 onClick={() => handleSort("profit")}
               >
                 <div className="flex items-center justify-end">
@@ -199,7 +199,7 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
                 </div>
               </th>
               <th
-                className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                 onClick={() => handleSort("roas")}
               >
                 <div className="flex items-center justify-end">
@@ -208,7 +208,7 @@ export function DailyMetricsTable({ metrics, loading = false }: DailyMetricsTabl
                 </div>
               </th>
               <th
-                className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                 onClick={() => handleSort("conversions")}
               >
                 <div className="flex items-center justify-end">

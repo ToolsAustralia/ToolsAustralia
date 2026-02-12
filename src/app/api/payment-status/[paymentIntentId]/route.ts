@@ -14,6 +14,8 @@ type PaymentStatusPayload =
         packageName?: string;
         entries?: number;
         points?: number;
+        price?: number;
+        currency?: string;
         processedBy: string;
         timestamp: string;
       };
@@ -74,6 +76,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           packageName: paymentEvent.packageName,
           entries: paymentEvent.data?.entries,
           points: paymentEvent.data?.points,
+          price: paymentEvent.data?.price,
+          currency: "AUD",
           processedBy: paymentEvent.processedBy,
           timestamp:
             paymentEvent.timestamp instanceof Date ? paymentEvent.timestamp.toISOString() : new Date().toISOString(),

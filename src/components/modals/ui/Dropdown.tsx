@@ -273,7 +273,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           id="dropdown-options"
           ref={optionsRef}
           data-dropdown-list
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+          className="absolute z-50 w-full min-w-[220px] mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
           style={{
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",
@@ -311,7 +311,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                 >
                   <span className="flex items-center gap-2 flex-1 min-w-0">
                     {IconComponent && <IconComponent className="w-4 h-4 flex-shrink-0" />}
-                    <span className="truncate">{option.label}</span>
+                    <span className="whitespace-nowrap">{option.label}</span>
                   </span>
                   {option.value === value && <Check className="w-4 h-4 text-red-600 flex-shrink-0" />}
                 </button>

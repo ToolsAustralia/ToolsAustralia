@@ -14,8 +14,7 @@ import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
 import {
   generateEventID,
   prepareUserData,
-  extractFBCFromRequest,
-  extractFBPFromRequest,
+  extractRequestContext,
 } from "@/utils/tracking/facebook-helpers";
 import { extractUTMParams } from "@/utils/tracking/utm-helpers";
 import { parseReferrer } from "@/utils/tracking/referrer-helpers";
@@ -242,13 +241,14 @@ export async function POST(request: NextRequest) {
               phone: existingUser.mobile,
               firstName: existingUser.firstName,
               lastName: existingUser.lastName,
+              externalId: existingUser._id.toString(),
             });
 
-            const fbc = extractFBCFromRequest(request);
-            const fbp = extractFBPFromRequest(request);
-
-            if (fbc) userData.fbc = fbc;
-            if (fbp) userData.fbp = fbp;
+            const ctx = extractRequestContext(request);
+            if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+            if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+            if (ctx.fbc) userData.fbc = ctx.fbc;
+            if (ctx.fbp) userData.fbp = ctx.fbp;
 
             const facebookEvent: FacebookEvent = {
               event_name: "CompleteRegistration",
@@ -363,11 +363,13 @@ export async function POST(request: NextRequest) {
           phone: existingUser.mobile,
           firstName: existingUser.firstName,
           lastName: existingUser.lastName,
+          externalId: existingUser._id.toString(),
         });
-        const fbc = extractFBCFromRequest(request);
-        const fbp = extractFBPFromRequest(request);
-        if (fbc) userData.fbc = fbc;
-        if (fbp) userData.fbp = fbp;
+        const ctx = extractRequestContext(request);
+        if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+        if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+        if (ctx.fbc) userData.fbc = ctx.fbc;
+        if (ctx.fbp) userData.fbp = ctx.fbp;
 
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
@@ -451,11 +453,13 @@ export async function POST(request: NextRequest) {
           phone: existingUser.mobile,
           firstName: existingUser.firstName,
           lastName: existingUser.lastName,
+          externalId: existingUser._id.toString(),
         });
-        const fbc = extractFBCFromRequest(request);
-        const fbp = extractFBPFromRequest(request);
-        if (fbc) userData.fbc = fbc;
-        if (fbp) userData.fbp = fbp;
+        const ctx = extractRequestContext(request);
+        if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+        if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+        if (ctx.fbc) userData.fbc = ctx.fbc;
+        if (ctx.fbp) userData.fbp = ctx.fbp;
 
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
@@ -612,14 +616,15 @@ export async function POST(request: NextRequest) {
           phone: newUser.mobile,
           firstName: newUser.firstName,
           lastName: newUser.lastName,
+          externalId: newUser._id.toString(),
         });
 
-        // Extract fbc and fbp from request for better match quality
-        const fbc = extractFBCFromRequest(request);
-        const fbp = extractFBPFromRequest(request);
-
-        if (fbc) userData.fbc = fbc;
-        if (fbp) userData.fbp = fbp;
+        // Extract IP, user agent, click ID (fbc), and fbp from request for better match quality
+        const ctx = extractRequestContext(request);
+        if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+        if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+        if (ctx.fbc) userData.fbc = ctx.fbc;
+        if (ctx.fbp) userData.fbp = ctx.fbp;
 
         // Extract UTM parameters and referrer information for enhanced tracking
         const requestUrl = request.url;

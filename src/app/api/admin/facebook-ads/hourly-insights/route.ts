@@ -14,7 +14,7 @@ import type { HourlyInsightsResponse, HourlyInsightItem } from "@/types/facebook
 const hourlyInsightsQuerySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
-  filterLevel: z.enum(["campaign", "adset"]).optional(),
+  filterLevel: z.enum(["campaign", "adset", "ad"]).optional(),
   filterIds: z.string().optional(), // Comma-separated IDs, e.g. "id1,id2,id3"
 });
 
