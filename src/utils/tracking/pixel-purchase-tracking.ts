@@ -16,6 +16,7 @@ import {
   FacebookEvent,
   buildFacebookPurchaseEventDev,
   sendFacebookPurchaseEventDev,
+  getFacebookTestEventCode,
 } from "@/lib/facebook";
 import {
   generateEventID,
@@ -563,9 +564,7 @@ export async function trackPixelSubscription(
           (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
-      // Get test event code if in development
-      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
+      const testEventCode = getFacebookTestEventCode();
       const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
         // console.log(

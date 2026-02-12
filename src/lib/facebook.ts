@@ -61,6 +61,18 @@ export interface FacebookPixelEvent {
 
 import crypto from "crypto";
 
+/**
+ * Get Facebook test event code when testing is enabled.
+ * Use test events when NODE_ENV is development OR FACEBOOK_USE_TEST_EVENTS is "true".
+ * FACEBOOK_USE_TEST_EVENTS allows test events in Vercel staging (where NODE_ENV is production).
+ */
+export function getFacebookTestEventCode(): string | undefined {
+  const useTestEvents =
+    process.env.NODE_ENV === "development" ||
+    process.env.FACEBOOK_USE_TEST_EVENTS === "true";
+  return useTestEvents ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+}
+
 /** SHA256 hash for PII - Meta requires lowercase, trimmed input before hashing */
 export function hashData(data: string): string {
   return crypto.createHash("sha256").update(data.toLowerCase().trim()).digest("hex");
@@ -205,7 +217,7 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
   }
 
   const isDev = process.env.NODE_ENV === "development";
-  const testEventCode = isDev ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+  const testEventCode = getFacebookTestEventCode();
 
   // Remove undefined/invalid fields (Meta rejects with error 100)
   const sanitizedEvent = removeUndefinedAndInvalidFields(event as unknown as Record<string, unknown>) as unknown as FacebookEvent;

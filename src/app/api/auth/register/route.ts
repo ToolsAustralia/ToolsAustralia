@@ -10,7 +10,7 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
 // TikTok Pixel tracking disabled for now - client-side only
 // import { trackTikTokEvent } from "@/components/TikTokPixel";
-import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
+import { sendFacebookEvent, FacebookEvent, getFacebookTestEventCode } from "@/lib/facebook";
 import {
   generateEventID,
   prepareUserData,
@@ -259,10 +259,7 @@ export async function POST(request: NextRequest) {
               event_source_url: request.headers.get("referer") || undefined,
             };
 
-            const testEventCode =
-              process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-            const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
+            const apiSuccess = await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
             if (apiSuccess) {
               // console.log(
               //   `📘 Facebook Conversions API: Registration update tracked for ${existingUser.email} (EventID: ${eventID})`
@@ -379,8 +376,7 @@ export async function POST(request: NextRequest) {
           user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
           event_source_url: request.headers.get("referer") || undefined,
         };
-        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-        await sendFacebookEvent(facebookEvent, testEventCode);
+        await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
       } catch (pixelError) {
         console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
       }
@@ -469,8 +465,7 @@ export async function POST(request: NextRequest) {
           user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
           event_source_url: request.headers.get("referer") || undefined,
         };
-        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-        await sendFacebookEvent(facebookEvent, testEventCode);
+        await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
       } catch (pixelError) {
         console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
       }
@@ -675,10 +670,7 @@ export async function POST(request: NextRequest) {
           custom_data: customData,
         };
 
-        // Get test event code if in development
-        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-        const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
+        const apiSuccess = await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
         if (apiSuccess) {
           // console.log(`📘 Facebook Conversions API: Registration tracked for ${newUser.email} (EventID: ${eventID})`);
         } else {
