@@ -22,7 +22,7 @@ const insightsQuerySchema = z.object({
   dateRange: z.enum(["today", "yesterday", "custom"]).default("today"),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  level: z.enum(["account", "campaign", "adset"]).default("account"),
+  level: z.enum(["account", "campaign", "adset", "ad"]).default("account"),
   refresh: z.string().optional(),
 });
 
@@ -35,14 +35,14 @@ const insightsQuerySchema = z.object({
  * - Admin-only access with session validation
  * - Query parameter validation with Zod
  * - Direct Facebook API calls (cached by React Query on frontend)
- * - Support for account/campaign/adset level breakdowns
+ * - Support for account/campaign/adset/ad level breakdowns
  * - Real-time and custom date range support
  *
  * Query Parameters:
  * - dateRange: 'today' | 'yesterday' | 'custom' (default: 'today')
  * - startDate: ISO date string (required if dateRange === 'custom')
  * - endDate: ISO date string (required if dateRange === 'custom')
- * - level: 'account' | 'campaign' | 'adset' (default: 'account')
+ * - level: 'account' | 'campaign' | 'adset' | 'ad' (default: 'account')
  * - refresh: boolean (default: false) - Force refresh, bypass cache
  */
 export async function GET(request: NextRequest) {
@@ -295,7 +295,7 @@ export async function GET(request: NextRequest) {
 
         metrics = aggregated;
 
-        // Create breakdown items for each campaign/adset
+        // Create breakdown items for each campaign/adset/ad
         // Convert from cents to dollars for display
         breakdownItems = insightsData.map((item) => {
           // Calculate individual item ROAS (revenue/spend, both in cents)
@@ -307,6 +307,8 @@ export async function GET(request: NextRequest) {
             campaignName: item.breakdown?.campaignName,
             adsetId: item.breakdown?.adsetId,
             adsetName: item.breakdown?.adsetName,
+            adId: item.breakdown?.adId,
+            adName: item.breakdown?.adName,
             spend: item.metrics.spend / 100, // Convert cents to dollars
             revenue: item.metrics.revenue / 100, // Convert cents to dollars
             profit: item.metrics.profit / 100, // Convert cents to dollars

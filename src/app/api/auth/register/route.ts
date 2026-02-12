@@ -10,12 +10,11 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
 // TikTok Pixel tracking disabled for now - client-side only
 // import { trackTikTokEvent } from "@/components/TikTokPixel";
-import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
+import { sendFacebookEvent, FacebookEvent, getFacebookTestEventCode } from "@/lib/facebook";
 import {
   generateEventID,
   prepareUserData,
-  extractFBCFromRequest,
-  extractFBPFromRequest,
+  extractRequestContext,
 } from "@/utils/tracking/facebook-helpers";
 import { extractUTMParams } from "@/utils/tracking/utm-helpers";
 import { parseReferrer } from "@/utils/tracking/referrer-helpers";
@@ -242,13 +241,14 @@ export async function POST(request: NextRequest) {
               phone: existingUser.mobile,
               firstName: existingUser.firstName,
               lastName: existingUser.lastName,
+              externalId: existingUser._id.toString(),
             });
 
-            const fbc = extractFBCFromRequest(request);
-            const fbp = extractFBPFromRequest(request);
-
-            if (fbc) userData.fbc = fbc;
-            if (fbp) userData.fbp = fbp;
+            const ctx = extractRequestContext(request);
+            if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+            if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+            if (ctx.fbc) userData.fbc = ctx.fbc;
+            if (ctx.fbp) userData.fbp = ctx.fbp;
 
             const facebookEvent: FacebookEvent = {
               event_name: "CompleteRegistration",
@@ -259,10 +259,7 @@ export async function POST(request: NextRequest) {
               event_source_url: request.headers.get("referer") || undefined,
             };
 
-            const testEventCode =
-              process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-            const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
+            const apiSuccess = await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
             if (apiSuccess) {
               // console.log(
               //   `📘 Facebook Conversions API: Registration update tracked for ${existingUser.email} (EventID: ${eventID})`
@@ -363,11 +360,13 @@ export async function POST(request: NextRequest) {
           phone: existingUser.mobile,
           firstName: existingUser.firstName,
           lastName: existingUser.lastName,
+          externalId: existingUser._id.toString(),
         });
-        const fbc = extractFBCFromRequest(request);
-        const fbp = extractFBPFromRequest(request);
-        if (fbc) userData.fbc = fbc;
-        if (fbp) userData.fbp = fbp;
+        const ctx = extractRequestContext(request);
+        if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+        if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+        if (ctx.fbc) userData.fbc = ctx.fbc;
+        if (ctx.fbp) userData.fbp = ctx.fbp;
 
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
@@ -377,8 +376,7 @@ export async function POST(request: NextRequest) {
           user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
           event_source_url: request.headers.get("referer") || undefined,
         };
-        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-        await sendFacebookEvent(facebookEvent, testEventCode);
+        await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
       } catch (pixelError) {
         console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
       }
@@ -451,11 +449,13 @@ export async function POST(request: NextRequest) {
           phone: existingUser.mobile,
           firstName: existingUser.firstName,
           lastName: existingUser.lastName,
+          externalId: existingUser._id.toString(),
         });
-        const fbc = extractFBCFromRequest(request);
-        const fbp = extractFBPFromRequest(request);
-        if (fbc) userData.fbc = fbc;
-        if (fbp) userData.fbp = fbp;
+        const ctx = extractRequestContext(request);
+        if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+        if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+        if (ctx.fbc) userData.fbc = ctx.fbc;
+        if (ctx.fbp) userData.fbp = ctx.fbp;
 
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
@@ -465,8 +465,7 @@ export async function POST(request: NextRequest) {
           user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
           event_source_url: request.headers.get("referer") || undefined,
         };
-        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-        await sendFacebookEvent(facebookEvent, testEventCode);
+        await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
       } catch (pixelError) {
         console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
       }
@@ -612,14 +611,15 @@ export async function POST(request: NextRequest) {
           phone: newUser.mobile,
           firstName: newUser.firstName,
           lastName: newUser.lastName,
+          externalId: newUser._id.toString(),
         });
 
-        // Extract fbc and fbp from request for better match quality
-        const fbc = extractFBCFromRequest(request);
-        const fbp = extractFBPFromRequest(request);
-
-        if (fbc) userData.fbc = fbc;
-        if (fbp) userData.fbp = fbp;
+        // Extract IP, user agent, click ID (fbc), and fbp from request for better match quality
+        const ctx = extractRequestContext(request);
+        if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
+        if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+        if (ctx.fbc) userData.fbc = ctx.fbc;
+        if (ctx.fbp) userData.fbp = ctx.fbp;
 
         // Extract UTM parameters and referrer information for enhanced tracking
         const requestUrl = request.url;
@@ -670,10 +670,7 @@ export async function POST(request: NextRequest) {
           custom_data: customData,
         };
 
-        // Get test event code if in development
-        const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-        const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
+        const apiSuccess = await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
         if (apiSuccess) {
           // console.log(`📘 Facebook Conversions API: Registration tracked for ${newUser.email} (EventID: ${eventID})`);
         } else {

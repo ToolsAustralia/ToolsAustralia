@@ -54,6 +54,8 @@ export interface PaymentStatusResponse {
     packageName?: string;
     entries?: number;
     points?: number;
+    price?: number;
+    currency?: string;
     processedBy?: string;
     timestamp?: string;
     message?: string;

@@ -97,12 +97,8 @@ export async function POST(request: NextRequest) {
       action_source: validatedData.action_source,
     };
 
-    // Get test event code from environment if in development
-    const testEventCode =
-      process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-    // Send event to Facebook
-    const success = await sendFacebookEvent(facebookEvent, testEventCode);
+    const { getFacebookTestEventCode } = await import("@/lib/facebook");
+    const success = await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
 
     if (success) {
       return NextResponse.json(

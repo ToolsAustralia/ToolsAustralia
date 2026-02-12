@@ -18,8 +18,14 @@ import {
   ArrowDown,
   ChevronDown,
   ChevronUp,
+  Search,
+  Layers,
+  BarChart2,
+  LayoutList,
+  Image,
 } from "lucide-react";
 import Checkbox from "@/components/modals/ui/Checkbox";
+import Dropdown from "@/components/modals/ui/Dropdown";
 import { useFacebookAdsInsights, useHourlyInsights } from "@/hooks/queries/useFacebookAdsInsights";
 import type { DateRangeOption, InsightLevel, FacebookAdsBreakdownItem } from "@/types/facebook-ads";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
@@ -330,6 +336,12 @@ export default function FacebookAdsManagement() {
       return data?.breakdown || [];
     }
 
+    const getItemName = (a: FacebookAdsBreakdownItem) => {
+      if (level === "campaign") return a.campaignName || a.campaignId || "";
+      if (level === "adset") return a.adsetName || a.adsetId || "";
+      return a.adName || a.adId || "";
+    };
+
     const sorted = [...data.breakdown];
     sorted.sort((a, b) => {
       let aValue: number | string;
@@ -337,8 +349,8 @@ export default function FacebookAdsManagement() {
 
       switch (sortColumn) {
         case "name":
-          aValue = level === "campaign" ? a.campaignName || a.campaignId || "" : a.adsetName || a.adsetId || "";
-          bValue = level === "campaign" ? b.campaignName || b.campaignId || "" : b.adsetName || b.adsetId || "";
+          aValue = getItemName(a);
+          bValue = getItemName(b);
           break;
         case "spend":
           aValue = a.spend;
@@ -375,6 +387,42 @@ export default function FacebookAdsManagement() {
 
     return sorted;
   }, [data?.breakdown, sortColumn, sortDirection, level]);
+
+  // Group ad sets by campaign
+  const groupedAdsets = useMemo(() => {
+    if (!sortedBreakdown.length || level !== "adset") return null;
+    const groups: Record<string, { campaignName: string; items: FacebookAdsBreakdownItem[] }> = {};
+    for (const item of sortedBreakdown) {
+      const cid = item.campaignId ?? "";
+      if (!groups[cid]) {
+        groups[cid] = { campaignName: item.campaignName || "Unknown Campaign", items: [] };
+      }
+      groups[cid].items.push(item);
+    }
+    return Object.entries(groups).map(([cid, g]) => ({ campaignId: cid, campaignName: g.campaignName, items: g.items }));
+  }, [sortedBreakdown, level]);
+
+  // Group ads by campaign > ad set
+  const groupedAds = useMemo(() => {
+    if (!sortedBreakdown.length || level !== "ad") return null;
+    const groups: Record<string, { campaignName: string; adSets: Record<string, { adsetName: string; items: FacebookAdsBreakdownItem[] }> }> = {};
+    for (const item of sortedBreakdown) {
+      const cid = item.campaignId ?? "";
+      const aid = item.adsetId ?? "";
+      if (!groups[cid]) {
+        groups[cid] = { campaignName: item.campaignName || "Unknown Campaign", adSets: {} };
+      }
+      if (!groups[cid].adSets[aid]) {
+        groups[cid].adSets[aid] = { adsetName: item.adsetName || "Unknown Ad Set", items: [] };
+      }
+      groups[cid].adSets[aid].items.push(item);
+    }
+    return Object.entries(groups).map(([cid, g]) => ({
+      campaignId: cid,
+      campaignName: g.campaignName,
+      adSets: Object.entries(g.adSets).map(([aid, a]) => ({ adsetId: aid, adsetName: a.adsetName, items: a.items })),
+    }));
+  }, [sortedBreakdown, level]);
 
   // Get sort icon for column header
   const getSortIcon = (column: string) => {
@@ -443,11 +491,13 @@ export default function FacebookAdsManagement() {
     endDate,
     breakdown,
     breakdownLevel,
+    showFilter = true,
   }: {
     startDate: string;
     endDate: string;
     breakdown: FacebookAdsBreakdownItem[];
     breakdownLevel: InsightLevel;
+    showFilter?: boolean;
   }) {
     const [hourlySortColumn, setHourlySortColumn] = useState<string>("hour");
     const [hourlySortDirection, setHourlySortDirection] = useState<"asc" | "desc">("asc");
@@ -457,16 +507,39 @@ export default function FacebookAdsManagement() {
     // Pending selection (only applied when user clicks Apply)
     const [pendingFilterIds, setPendingFilterIds] = useState<Set<string>>(new Set());
     const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+    const [dropdownSearchQuery, setDropdownSearchQuery] = useState("");
     const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-    const filterLevel: "campaign" | "adset" | undefined =
-      breakdownLevel === "campaign" ? "campaign" : breakdownLevel === "adset" ? "adset" : "campaign";
+    const filterLevel: "campaign" | "adset" | "ad" | undefined =
+      breakdownLevel === "campaign"
+        ? "campaign"
+        : breakdownLevel === "adset"
+          ? "adset"
+          : breakdownLevel === "ad"
+            ? "ad"
+            : undefined;
 
     // Reset filter when switching between campaign/ad set level
     useEffect(() => {
       setSelectedFilterIds(new Set());
       setPendingFilterIds(new Set());
+      setDropdownSearchQuery("");
     }, [breakdownLevel]);
+
+    // Filter breakdown items by search query
+    const filteredBreakdownForDropdown = useMemo(() => {
+      const q = dropdownSearchQuery.trim().toLowerCase();
+      if (!q) return breakdown;
+      return breakdown.filter((item) => {
+        const name =
+          breakdownLevel === "campaign"
+            ? item.campaignName || item.campaignId || ""
+            : breakdownLevel === "adset"
+              ? item.adsetName || item.adsetId || ""
+              : item.adName || item.adId || "";
+        return name.toLowerCase().includes(q);
+      });
+    }, [breakdown, breakdownLevel, dropdownSearchQuery]);
 
     // Close filter dropdown when clicking outside
     useEffect(() => {
@@ -479,11 +552,33 @@ export default function FacebookAdsManagement() {
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // Pass filter only when some (but not all) are selected; "all" or "none" = account-level
-    const filterIds =
-      selectedFilterIds.size > 0 && selectedFilterIds.size < breakdown.length
-        ? Array.from(selectedFilterIds)
-        : undefined;
+    const allIds = useMemo(
+      () =>
+        breakdown
+          .map((b) =>
+            breakdownLevel === "campaign"
+              ? b.campaignId ?? ""
+              : breakdownLevel === "adset"
+                ? b.adsetId ?? ""
+                : breakdownLevel === "ad"
+                  ? b.adId ?? ""
+                  : ""
+          )
+          .filter(Boolean),
+      [breakdown, breakdownLevel]
+    );
+
+    // Pass level-specific IDs so hourly matches the breakdown table:
+    // - No filter or all selected: use allIds (all campaigns or all ad sets at this level)
+    // - Subset selected: use selectedFilterIds
+    // - Empty breakdown: undefined = account-level
+    const filterIds = useMemo(() => {
+      if (allIds.length === 0) return undefined;
+      if (selectedFilterIds.size === 0 || selectedFilterIds.size === allIds.length) {
+        return allIds;
+      }
+      return Array.from(selectedFilterIds);
+    }, [allIds, selectedFilterIds]);
 
     const { data: hourlyData, isLoading: hourlyLoading, error: hourlyError } = useHourlyInsights({
       startDate,
@@ -492,14 +587,6 @@ export default function FacebookAdsManagement() {
       filterLevel: filterLevel,
       filterIds,
     });
-
-    const allIds = useMemo(
-      () =>
-        breakdown
-          .map((b) => (breakdownLevel === "campaign" ? b.campaignId ?? "" : b.adsetId ?? ""))
-          .filter(Boolean),
-      [breakdown, breakdownLevel]
-    );
 
     const handleOpenDropdown = () => {
       setPendingFilterIds(new Set(selectedFilterIds));
@@ -653,17 +740,35 @@ export default function FacebookAdsManagement() {
     const filterLabel =
       breakdownLevel === "campaign"
         ? "Campaign"
-        : "Ad Set";
+        : breakdownLevel === "adset"
+          ? "Ad Set"
+          : "Ad";
     const pendingAllSelected = pendingFilterIds.size === allIds.length && allIds.length > 0;
 
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-3">
           <h3 className="text-sm sm:text-lg font-semibold text-gray-900">
-            Hourly Breakdown{filterIds ? ` (${selectedFilterIds.size} ${filterLabel}${selectedFilterIds.size === 1 ? "" : "s"} selected)` : " (All)"}
+            Hourly Breakdown{showFilter && filterIds ? (filterIds.length === allIds.length ? " (All)" : ` (${filterIds.length} ${filterLabel}${filterIds.length === 1 ? "" : "s"} selected)`) : " (Account)"}
           </h3>
-          {breakdown.length > 0 && (
-            <div className="relative" ref={filterDropdownRef}>
+          <div className="flex flex-row items-center justify-between sm:justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setHourlyColumnsExpanded((v) => !v)}
+              className="sm:hidden flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900"
+            >
+              {hourlyColumnsExpanded ? (
+                <>
+                  <ChevronUp className="w-4 h-4" /> Show fewer columns
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4" /> Show more columns
+                </>
+              )}
+            </button>
+            {showFilter && breakdown.length > 0 && (
+            <div className="relative ml-auto sm:ml-0" ref={filterDropdownRef}>
               <button
                 type="button"
                 onClick={() => (filterDropdownOpen ? setFilterDropdownOpen(false) : handleOpenDropdown())}
@@ -684,39 +789,67 @@ export default function FacebookAdsManagement() {
               </button>
               {filterDropdownOpen && (
                 <div
-                  className="absolute right-0 mt-1 min-w-[260px] max-h-[320px] overflow-hidden bg-white border-2 border-gray-300 rounded-lg shadow-lg z-50 flex flex-col"
+                  className="absolute right-0 mt-1 min-w-[280px] min-h-[320px] max-h-[480px] overflow-hidden bg-white border-2 border-gray-300 rounded-lg shadow-lg z-50 flex flex-col"
                   style={{
                     touchAction: "pan-y",
                     WebkitOverflowScrolling: "touch",
                   }}
                 >
-                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-200">
+                  <div className="flex items-center gap-2 px-2 py-2 border-b border-gray-200 shrink-0">
+                    <div className="relative flex-1 min-w-0">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                      <input
+                        type="text"
+                        value={dropdownSearchQuery}
+                        onChange={(e) => setDropdownSearchQuery(e.target.value)}
+                        placeholder={`Search ${filterLabel}s...`}
+                        className="w-full pl-6 pr-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-red-500/30 focus:border-red-500"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={handleSelectAllInDropdown}
-                      className="text-xs sm:text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                      className="text-xs font-medium text-gray-700 hover:text-red-600 transition-colors whitespace-nowrap shrink-0"
                     >
                       {pendingAllSelected ? "Clear all" : "Select all"}
                     </button>
                   </div>
-                  <div className="overflow-y-auto max-h-[220px] py-2">
-                    {breakdown.map((item) => {
-                      const id = breakdownLevel === "campaign" ? item.campaignId : item.adsetId;
-                      const name = breakdownLevel === "campaign" ? item.campaignName : item.adsetName;
-                      const displayName = name || id || "Unknown";
-                      if (!id) return null;
-                      return (
-                        <div key={id} className="px-3 py-1.5">
-                          <Checkbox
-                            id={`hourly-filter-${id}`}
-                            checked={pendingFilterIds.has(id)}
-                            onChange={(e) => handleTogglePendingItem(id, e.target.checked)}
-                            label={displayName}
-                            className="text-xs sm:text-sm"
-                          />
-                        </div>
-                      );
-                    })}
+                  <div className="overflow-y-auto flex-1 min-h-0 max-h-[320px] py-2">
+                    {filteredBreakdownForDropdown.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs sm:text-sm text-gray-500">
+                        {dropdownSearchQuery.trim()
+                          ? `No ${filterLabel}s match "${dropdownSearchQuery}"`
+                          : `No ${filterLabel}s available`}
+                      </div>
+                    ) : (
+                      filteredBreakdownForDropdown.map((item) => {
+                        const id =
+                          breakdownLevel === "campaign"
+                            ? item.campaignId
+                            : breakdownLevel === "adset"
+                              ? item.adsetId
+                              : item.adId;
+                        const name =
+                          breakdownLevel === "campaign"
+                            ? item.campaignName
+                            : breakdownLevel === "adset"
+                              ? item.adsetName
+                              : item.adName;
+                        const displayName = name || id || "Unknown";
+                        if (!id) return null;
+                        return (
+                          <div key={id} className="px-3 py-1.5">
+                            <Checkbox
+                              id={`hourly-filter-${id}`}
+                              checked={pendingFilterIds.has(id)}
+                              onChange={(e) => handleTogglePendingItem(id, e.target.checked)}
+                              label={displayName}
+                              className="text-xs sm:text-sm"
+                            />
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                   <div className="flex justify-end gap-2 px-3 py-2 border-t border-gray-200 bg-gray-50">
                     <button
@@ -737,126 +870,110 @@ export default function FacebookAdsManagement() {
                 </div>
               )}
             </div>
-          )}
+            )}
+          </div>
         </div>
-       
-        
-        <button
-          type="button"
-          onClick={() => setHourlyColumnsExpanded((v) => !v)}
-          className="sm:hidden flex items-center gap-1.5 mb-2 text-xs font-medium text-gray-600 hover:text-gray-900"
-        >
-          {hourlyColumnsExpanded ? (
-            <>
-              <ChevronUp className="w-4 h-4" /> Show fewer columns
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-4 h-4" /> Show more columns (Impressions, Clicks, CTR, CPC, Profit)
-            </>
-          )}
-        </button>
-        <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
-          <table className="w-full min-w-[700px]">
+        <div className="-mx-3 sm:mx-0 px-3 sm:px-0 overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
+          <table className="w-full min-w-[300px] sm:min-w-[700px]">
             <thead>
-              <tr className="border-b-2 border-gray-200 bg-gray-50">
+              <tr className="border-b-2 border-gray-200">
                 <th
-                  className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-left py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                   onClick={() => handleHourlySort("hour")}
                 >
                   <div className="flex items-center">Hour{getHourlySortIcon("hour")}</div>
                 </th>
                 <th
-                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                   onClick={() => handleHourlySort("spend")}
                 >
                   <div className="flex items-center justify-end">Spend{getHourlySortIcon("spend")}</div>
                 </th>
                 <th
-                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={`sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                   onClick={() => handleHourlySort("impressions")}
                 >
                   <div className="flex items-center justify-end">Impressions{getHourlySortIcon("impressions")}</div>
                 </th>
                 <th
-                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={`sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                   onClick={() => handleHourlySort("clicks")}
                 >
                   <div className="flex items-center justify-end">Clicks{getHourlySortIcon("clicks")}</div>
                 </th>
                 <th
-                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={`sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                   onClick={() => handleHourlySort("ctr")}
                 >
                   <div className="flex items-center justify-end">CTR{getHourlySortIcon("ctr")}</div>
                 </th>
                 <th
-                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={`sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                   onClick={() => handleHourlySort("cpc")}
                 >
                   <div className="flex items-center justify-end">CPC{getHourlySortIcon("cpc")}</div>
                 </th>
                 <th
-                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                   onClick={() => handleHourlySort("revenue")}
                 >
-                  <div className="flex items-center justify-end">Revenue (all traffic){getHourlySortIcon("revenue")}</div>
+                  <div className="flex items-center justify-end" title="Revenue">Rev{getHourlySortIcon("revenue")}</div>
                 </th>
                 <th
-                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                  onClick={() => handleHourlySort("conversions")}
+                  className={`sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  onClick={() => handleHourlySort("profit")}
                 >
-                  <div className="flex items-center justify-end">Conversions (all traffic){getHourlySortIcon("conversions")}</div>
+                  <div className="flex items-center justify-end">Profit{getHourlySortIcon("profit")}</div>
                 </th>
                 <th
-                  className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                   onClick={() => handleHourlySort("roas")}
                 >
                   <div className="flex items-center justify-end">ROAS{getHourlySortIcon("roas")}</div>
                 </th>
                 <th
-                  className={`text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
-                  onClick={() => handleHourlySort("profit")}
+                  className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleHourlySort("conversions")}
                 >
-                  <div className="flex items-center justify-end">Profit{getHourlySortIcon("profit")}</div>
+                  <div className="flex items-center justify-end" title="Conversions">Conv{getHourlySortIcon("conversions")}</div>
                 </th>
               </tr>
             </thead>
             <tbody>
               {sortedHourlyData.map((hour) => (
                 <tr key={hour.hour} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium">{hour.label}</td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hour.spend)}</td>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium">{hour.label}</td>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hour.spend)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hour.impressions)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hour.clicks)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatPercentage(hour.ctr)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatCurrency(hour.cpc)}</td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">{formatCurrency(hour.revenue)}</td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{hour.conversions}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.roas >= 2 ? "text-emerald-600" : hour.roas >= 1 ? "text-gray-900" : "text-red-600"}`}>
-                    {formatROAS(hour.roas)}
-                  </td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.profit >= 0 ? "text-emerald-600" : "text-red-600"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">{formatCurrency(hour.revenue)}</td>
+                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.profit >= 0 ? "text-emerald-600" : "text-red-600"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
                     {formatCurrency(hour.profit)}
                   </td>
+                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.roas >= 2 ? "text-emerald-600" : hour.roas >= 1 ? "text-gray-900" : "text-red-600"}`}>
+                    {formatROAS(hour.roas)}
+                  </td>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{hour.conversions}</td>
                 </tr>
               ))}
               {hourlyTotals && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900">Total</td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hourlyTotals.spend)}</td>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900">Total</td>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hourlyTotals.spend)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hourlyTotals.impressions)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hourlyTotals.clicks)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatPercentage(hourlyTotals.ctr)}</td>
                   <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatCurrency(hourlyTotals.cpc)}</td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hourlyTotals.revenue)}</td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{hourlyTotals.conversions}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.roas >= 1 ? "text-emerald-600" : "text-red-600"}`}>
-                    {formatROAS(hourlyTotals.roas)}
-                  </td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.profit >= 0 ? "text-emerald-600" : "text-red-600"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{formatCurrency(hourlyTotals.revenue)}</td>
+                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.profit >= 0 ? "text-emerald-600" : "text-red-600"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
                     {formatCurrency(hourlyTotals.profit)}
                   </td>
+                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.roas >= 1 ? "text-emerald-600" : "text-red-600"}`}>
+                    {formatROAS(hourlyTotals.roas)}
+                  </td>
+                  <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">{hourlyTotals.conversions}</td>
                 </tr>
               )}
             </tbody>
@@ -879,22 +996,22 @@ export default function FacebookAdsManagement() {
         <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 min-w-0 max-w-full flex-wrap">
           {/* View Level - Top for easier toggling, default Campaign */}
           {viewMode === "ads" && (
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-[200px] sm:min-w-[240px]">
               <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
                 View Level:
               </label>
-              <select
+              <Dropdown
+                options={[
+                  { value: "account", label: "Account", icon: Layers },
+                  { value: "campaign", label: "Campaign", icon: BarChart2 },
+                  { value: "adset", label: "Ad Set", icon: LayoutList },
+                  { value: "ad", label: "Ad", icon: Image },
+                ]}
                 value={level}
-                onChange={(e) => setLevel(e.target.value as InsightLevel)}
-                className="px-2.5 sm:px-3 py-1.5 sm:py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-xs sm:text-sm bg-white font-semibold text-gray-900 shadow-sm hover:border-gray-400 transition-all duration-200 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpolyline points=%226 9 12 15 18 9%22%3E%3C/polyline%3E%3C/svg%3E')] bg-no-repeat bg-right pr-7 sm:pr-8 min-w-[100px] sm:min-w-[140px]"
-                style={{
-                  backgroundPosition: "right 0.5rem center",
-                  backgroundSize: "0.75em 0.75em",
-                }}
-              >
-                <option value="campaign">Campaign</option>
-                <option value="adset">Ad Set</option>
-              </select>
+                onChange={(value) => setLevel(value as InsightLevel)}
+                placeholder="View Level"
+                compact
+              />
             </div>
           )}
           {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
@@ -992,40 +1109,47 @@ export default function FacebookAdsManagement() {
         <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">Facebook-attributed purchases only</p>
       </div>
 
-      {/* Hourly Breakdown - Show when date range is available */}
+      {/* Hourly Breakdown - Show when date range is available (Account level shows account totals) */}
       {startDate && endDate && (
         <HourlyBreakdownSection
           startDate={startDate}
           endDate={endDate}
           breakdown={data.breakdown ?? []}
           breakdownLevel={level}
+          showFilter={level !== "account"}
         />
       )}
 
-      {/* Breakdown Table (for Campaign/Ad Set levels) - View Level is in header */}
-      {data.breakdown && data.breakdown.length > 0 && (
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6 overflow-hidden">
+      {/* Breakdown Table (for Campaign/Ad Set/Ad levels) - hidden for Account */}
+      {data.breakdown && data.breakdown.length > 0 && level !== "account" && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
           <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-1">
-            {level === "campaign" ? "Campaign Breakdown" : "Ad Set Breakdown"}
+            {level === "campaign" ? "Campaign Breakdown" : level === "adset" ? "Ad Set Breakdown" : "Ad Breakdown"}
           </h3>
           <p className="text-xs text-gray-500 mb-3 sm:mb-4">
-            All metrics from Facebook (matches Conversions card above).
+            {level === "adset" || level === "ad"
+              ? "Grouped by campaign. All metrics from Facebook (matches Conversions card above)."
+              : "All metrics from Facebook (matches Conversions card above)."}
           </p>
-          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
-            <table className="w-full min-w-[600px]">
+          <div className="-mx-3 sm:mx-0 px-3 sm:px-0 overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
+            <table className="w-full min-w-[300px] sm:min-w-[600px]">
               <thead>
-                <tr className="border-b-2 border-gray-200 bg-gray-50">
+                <tr className="border-b-2 border-gray-200">
                   <th
-                    className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-left py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                     onClick={() => handleSort("name")}
                   >
-                    <div className="flex items-center">
-                      {level === "campaign" ? "Campaign" : "Ad Set"}
+                    <div className="flex items-center truncate">
+                      {level === "campaign"
+                        ? "Campaign"
+                        : level === "adset"
+                          ? "Ad Set"
+                          : "Ad"}
                       {getSortIcon("name")}
                     </div>
                   </th>
                   <th
-                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                     onClick={() => handleSort("spend")}
                   >
                     <div className="flex items-center justify-end">
@@ -1034,16 +1158,16 @@ export default function FacebookAdsManagement() {
                     </div>
                   </th>
                   <th
-                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                     onClick={() => handleSort("revenue")}
                   >
-                    <div className="flex items-center justify-end">
-                      Revenue
+                    <div className="flex items-center justify-end" title="Revenue">
+                      Rev
                       {getSortIcon("revenue")}
                     </div>
                   </th>
                   <th
-                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                     onClick={() => handleSort("profit")}
                   >
                     <div className="flex items-center justify-end">
@@ -1052,7 +1176,7 @@ export default function FacebookAdsManagement() {
                     </div>
                   </th>
                   <th
-                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                     onClick={() => handleSort("roas")}
                   >
                     <div className="flex items-center justify-end">
@@ -1061,48 +1185,136 @@ export default function FacebookAdsManagement() {
                     </div>
                   </th>
                   <th
-                    className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                     onClick={() => handleSort("conversions")}
                   >
-                    <div className="flex items-center justify-end">
-                      Conversions
+                    <div className="flex items-center justify-end" title="Conversions">
+                      Conv
                       {getSortIcon("conversions")}
                     </div>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedBreakdown.map((item, index) => (
-                  <tr
-                    key={index}
-                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors even:bg-gray-50/30"
-                  >
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium">
-                      {level === "campaign"
-                        ? item.campaignName || item.campaignId || "Unknown Campaign"
-                        : item.adsetName || item.adsetId || "Unknown Ad Set"}
-                    </td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                {groupedAdsets ? (
+                    groupedAdsets.map((group) => (
+                      <React.Fragment key={group.campaignId}>
+                        <tr className="bg-gray-100 border-b border-gray-200">
+                          <td colSpan={6} className="py-1.5 px-0.5 sm:py-2.5 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+                            📁 {group.campaignName}
+                          </td>
+                        </tr>
+                        {group.items.map((item, idx) => (
+                          <tr
+                            key={item.adsetId ?? idx}
+                            className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium pl-4 sm:pl-8">
+                              {item.adsetName || item.adsetId || "Unknown Ad Set"}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                              {formatCurrency(item.spend)}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                              {formatCurrency(item.revenue)}
+                            </td>
+                            <td
+                              className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${
+                                item.profit >= 0 ? "text-green-600" : "text-red-600"
+                              }`}
+                            >
+                              {formatCurrency(item.profit)}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                              {formatROAS(item.roas)}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
+                              {formatNumber(item.conversions)}
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))
+                ) : groupedAds ? (
+                    groupedAds.map((group) => (
+                      <React.Fragment key={group.campaignId}>
+                        <tr className="bg-gray-100 border-b border-gray-200">
+                          <td colSpan={6} className="py-1.5 px-0.5 sm:py-2.5 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+                            📁 {group.campaignName}
+                          </td>
+                        </tr>
+                        {group.adSets.map((adSetGroup) => (
+                          <React.Fragment key={adSetGroup.adsetId}>
+                            <tr className="bg-gray-50/80 border-b border-gray-200">
+                              <td colSpan={6} className="py-1 px-0.5 sm:py-2 sm:px-4 text-xs sm:text-xs font-medium text-gray-600 pl-4 sm:pl-8">
+                                ↳ {adSetGroup.adsetName}
+                              </td>
+                            </tr>
+                            {adSetGroup.items.map((item, idx) => (
+                              <tr
+                                key={item.adId ?? idx}
+                                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                              >
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium pl-6 sm:pl-12">
+                                  {item.adName || item.adId || "Unknown Ad"}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                                  {formatCurrency(item.spend)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                                  {formatCurrency(item.revenue)}
+                                </td>
+                                <td
+                                  className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${
+                                    item.profit >= 0 ? "text-green-600" : "text-red-600"
+                                  }`}
+                                >
+                                  {formatCurrency(item.profit)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                                  {formatROAS(item.roas)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
+                                  {formatNumber(item.conversions)}
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
+                        ))}
+                      </React.Fragment>
+                    ))
+                ) : (
+                  sortedBreakdown.map((item, index) => (
+                    <tr
+                      key={index}
+                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors even:bg-gray-50/30"
+                    >
+                      <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium">
+                        {level === "campaign"
+                          ? item.campaignName || item.campaignId || "Unknown Campaign"
+                          : item.adsetName || item.adsetId || "Unknown Ad Set"}
+                      </td>
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
                       {formatCurrency(item.spend)}
                     </td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
                       {formatCurrency(item.revenue)}
                     </td>
                     <td
-                      className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${
+                      className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${
                         item.profit >= 0 ? "text-green-600" : "text-red-600"
                       }`}
                     >
                       {formatCurrency(item.profit)}
                     </td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
                       {formatROAS(item.roas)}
                     </td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
                       {formatNumber(item.conversions)}
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
@@ -1123,33 +1335,6 @@ export default function FacebookAdsManagement() {
         </>
       )}
 
-      {/* Floating View Toggle Buttons - Mobile Only */}
-      <div className="fixed bottom-6 right-6 z-50 sm:hidden">
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={() => handleViewModeChange("ads")}
-            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
-              viewMode === "ads"
-                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
-                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
-            }`}
-            aria-label="Ads View"
-          >
-            Ads
-          </button>
-          <button
-            onClick={() => handleViewModeChange("metrics")}
-            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
-              viewMode === "metrics"
-                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
-                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
-            }`}
-            aria-label="Metrics View"
-          >
-            Metrics
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

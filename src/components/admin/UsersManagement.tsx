@@ -8,10 +8,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Eye,
   Users,
-  Mail,
-  Key,
   Trophy,
   AlertTriangle,
   CheckCircle,
@@ -36,7 +33,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
-import { useAdminUsers, useAdminUserActions } from "@/hooks/queries/useAdminQueries";
+import { useAdminUsers } from "@/hooks/queries/useAdminQueries";
 import UserDetailModal from "./UserDetailModal";
 import UserExportModal from "./UserExportModal";
 import ChargePastDueModal from "./ChargePastDueModal";
@@ -116,8 +113,6 @@ export default function UsersManagement() {
 
   // Fetch users data
   const { data: usersData, isLoading, error, refetch } = useAdminUsers(queryFilters);
-
-  const userActions = useAdminUserActions();
 
   // Get stats from API response
   const stats = useMemo(() => {
@@ -231,26 +226,6 @@ export default function UsersManagement() {
   const handleUserClick = (user: AdminUserListItem) => {
     setSelectedUserId(user.id);
     setIsDetailModalOpen(true);
-  };
-
-  // Handle quick actions
-  const handleQuickAction = async (action: string, userId: string) => {
-    try {
-      await userActions.mutateAsync({
-        userId,
-        actionData: {
-          action: action as
-            | "resend_verification"
-            | "reset_password"
-            | "toggle_status"
-            | "add_note"
-            | "resend_sms_verification",
-        },
-      });
-      refetch(); // Refresh the user list
-    } catch (error) {
-      console.error("Quick action failed:", error);
-    }
   };
 
   // Format currency
@@ -624,7 +599,7 @@ export default function UsersManagement() {
       )}
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100">
         {isLoading ? (
           // Enhanced Loading skeleton
           <div className="p-4 sm:p-6">
@@ -675,10 +650,10 @@ export default function UsersManagement() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b-2 border-gray-200">
-                  <tr>
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
                     <th
-                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("createdAt")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -686,11 +661,11 @@ export default function UsersManagement() {
                         {getSortIcon("createdAt")}
                       </div>
                     </th>
-                    <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Subscription
                     </th>
                     <th
-                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("totalSpent")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -699,7 +674,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
+                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
                       onClick={() => handleSort("majorDrawEntries")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -708,7 +683,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("miniDrawCount")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -717,7 +692,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("lastLogin")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -725,11 +700,8 @@ export default function UsersManagement() {
                         {getSortIcon("lastLogin")}
                       </div>
                     </th>
-                    <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
+                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
                       Status
-                    </th>
-                    <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -843,40 +815,6 @@ export default function UsersManagement() {
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden sm:table-cell">
                           {getUserStatusBadge(user)}
                         </td>
-                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium">
-                          <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUserClick(user);
-                              }}
-                              className="text-red-600 hover:text-red-700 transition-colors p-1 sm:p-1.5 hover:bg-red-50 rounded"
-                              title="View Details"
-                            >
-                              <Eye className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickAction("resend_verification", user.id);
-                              }}
-                              className="text-blue-600 hover:text-blue-700 transition-colors p-1 sm:p-1.5 hover:bg-blue-50 rounded"
-                              title="Resend Verification"
-                            >
-                              <Mail className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickAction("reset_password", user.id);
-                              }}
-                              className="text-yellow-600 hover:text-yellow-700 transition-colors p-1 sm:p-1.5 hover:bg-yellow-50 rounded"
-                              title="Reset Password"
-                            >
-                              <Key className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
-                            </button>
-                          </div>
-                        </td>
                       </tr>
                     );
                   })}
@@ -984,33 +922,6 @@ export default function UsersManagement() {
         totalUsers={usersData?.pagination.totalCount}
       />
 
-      {/* Floating View Toggle Buttons - Mobile Only */}
-      <div className="fixed bottom-6 right-6 z-50 sm:hidden">
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={() => handleViewModeChange("users")}
-            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
-              viewMode === "users"
-                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
-                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
-            }`}
-            aria-label="Users View"
-          >
-            Users
-          </button>
-          <button
-            onClick={() => handleViewModeChange("metrics")}
-            className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-sm font-semibold transition-all ${
-              viewMode === "metrics"
-                ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-red-500/50"
-                : "bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200"
-            }`}
-            aria-label="Metrics View"
-          >
-            Metrics
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

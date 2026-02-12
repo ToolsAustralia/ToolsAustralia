@@ -16,6 +16,7 @@ import {
   FacebookEvent,
   buildFacebookPurchaseEventDev,
   sendFacebookPurchaseEventDev,
+  getFacebookTestEventCode,
 } from "@/lib/facebook";
 import {
   generateEventID,
@@ -563,9 +564,7 @@ export async function trackPixelSubscription(
           (typeof window !== "undefined" ? getEventSourceURL() : undefined),
       };
 
-      // Get test event code if in development
-      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
+      const testEventCode = getFacebookTestEventCode();
       const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
       if (apiSuccess) {
         // console.log(
@@ -777,169 +776,6 @@ export async function trackPixelCancellation(params: {
     // console.log(`📱 TikTok Pixel: Cancellation tracked - ${packageName}`);
   } catch (error) {
     // console.error("❌ Error tracking pixel cancellation:", error);
-  }
-}
-
-/**
- * Track payment failed events
- * Helps identify and retarget users with failed payment attempts
- */
-export async function trackPixelPaymentFailed(params: {
-  value: number;
-  currency: string;
-  paymentIntentId: string;
-  orderId?: string;
-  packageId?: string;
-  packageName?: string;
-  packageType?: "membership" | "one-time" | "mini-draw" | "upsell";
-  userId?: string;
-  userEmail?: string;
-  userPhone?: string;
-  userFirstName?: string;
-  userLastName?: string;
-  errorMessage?: string;
-  errorCode?: string;
-  failureReason?: string;
-  eventSourceUrl?: string;
-  fbc?: string; // Facebook Click ID (for server-side tracking)
-  fbp?: string; // Facebook Browser ID (for server-side tracking)
-  // NEW: Optional request context for improved match quality (backward compatible)
-  requestContext?: {
-    client_ip_address?: string;
-    client_user_agent?: string;
-    fbc?: string;
-    fbp?: string;
-    event_source_url?: string;
-  };
-  clientIpAddress?: string;
-  clientUserAgent?: string;
-}): Promise<void> {
-  try {
-    const {
-      value,
-      currency,
-      paymentIntentId,
-      orderId,
-      packageId,
-      packageName,
-      packageType,
-      userId,
-      userEmail,
-      userPhone,
-      userFirstName,
-      userLastName,
-      errorMessage,
-      errorCode,
-      failureReason,
-      eventSourceUrl,
-      fbc: providedFbc,
-      fbp: providedFbp,
-      requestContext,
-      clientIpAddress,
-      clientUserAgent,
-    } = params;
-
-    // Generate unique event ID for deduplication
-    const eventID = generateEventID("payment_failed", paymentIntentId);
-    const eventTime = Math.floor(Date.now() / 1000);
-
-    // Prepare common parameters for browser pixel
-    const commonParams = {
-      eventID,
-      value,
-      currency,
-      payment_intent_id: paymentIntentId,
-      ...(orderId && { order_id: orderId }),
-      ...(packageId && { content_ids: [packageId] }),
-      content_type: packageType ? getContentType(packageType) : "product",
-      ...(packageName && { package_name: packageName }),
-      ...(errorMessage && { error_message: errorMessage }),
-      ...(errorCode && { error_code: errorCode }),
-      ...(failureReason && { failure_reason: failureReason }),
-      user_id: userId,
-      user_email: userEmail,
-      platform: "tools-australia",
-    };
-
-    // 1. Track Browser Pixel (if in browser context)
-    if (typeof window !== "undefined") {
-      trackFacebookEvent("PaymentFailed", commonParams);
-      // console.log(`📘 Facebook Pixel (Browser): Payment failed tracked - $${value} ${currency}`);
-    }
-
-    // 2. Track Conversions API (server-side)
-    try {
-      const userData = prepareUserData({
-        email: userEmail,
-        phone: userPhone,
-        firstName: userFirstName,
-        lastName: userLastName,
-      });
-
-      // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract
-      let fbc = requestContext?.fbc || providedFbc;
-      let fbp = requestContext?.fbp || providedFbp;
-
-      if (typeof window !== "undefined") {
-        if (!fbc) fbc = getFBCFromURL();
-        if (!fbp) fbp = getFBPFromCookie();
-      }
-
-      // Extract IP address and user agent - CRITICAL for Event Match Quality
-      const clientIp = requestContext?.client_ip_address || clientIpAddress;
-      const userAgent = requestContext?.client_user_agent || clientUserAgent;
-
-      // Add IP address and user agent to user data (required by Meta for optimal match quality)
-      if (clientIp) {
-        userData.client_ip_address = clientIp;
-      }
-      if (userAgent) {
-        userData.client_user_agent = userAgent;
-      }
-
-      if (fbc) userData.fbc = fbc;
-      if (fbp) userData.fbp = fbp;
-
-      const facebookEvent: FacebookEvent = {
-        event_name: "PaymentFailed",
-        event_time: eventTime,
-        event_id: eventID,
-        action_source: "website",
-        user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
-        custom_data: {
-          currency,
-          value,
-          ...(orderId && { order_id: orderId }),
-          ...(packageId && { content_ids: [packageId] }),
-          content_type: packageType ? getContentType(packageType) : "product",
-          ...(packageName && { content_name: packageName }),
-        },
-        event_source_url:
-          requestContext?.event_source_url ??
-          eventSourceUrl ??
-          (typeof window !== "undefined" ? getEventSourceURL() : undefined),
-      };
-
-      // Get test event code if in development
-      const testEventCode = process.env.NODE_ENV === "development" ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
-
-      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
-      if (apiSuccess) {
-        // console.log(
-        //   `📘 Facebook Conversions API: Payment failed tracked - $${value} ${currency} (EventID: ${eventID})`
-        // );
-      } else {
-        // console.warn(`⚠️ Facebook Conversions API: Failed to send PaymentFailed event (EventID: ${eventID})`);
-      }
-    } catch (apiError) {
-      // console.error("❌ Error sending PaymentFailed to Facebook Conversions API:", apiError);
-    }
-
-    // 3. Track TikTok Pixel
-    await trackTikTokEvent("PaymentFailed", commonParams);
-    // console.log(`📱 TikTok Pixel: Payment failed tracked - $${value} ${currency}`);
-  } catch (error) {
-    // console.error("❌ Error tracking pixel payment failed:", error);
   }
 }
 

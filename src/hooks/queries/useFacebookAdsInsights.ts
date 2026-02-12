@@ -84,7 +84,7 @@ export function useHourlyInsights(params: {
   startDate?: string; // YYYY-MM-DD format
   endDate?: string; // YYYY-MM-DD format
   enabled?: boolean; // Whether to run the query
-  filterLevel?: "campaign" | "adset"; // Filter by campaign or ad set
+  filterLevel?: "campaign" | "adset" | "ad"; // Filter by campaign, ad set, or ad
   filterIds?: string[]; // IDs to filter (empty = all)
 }) {
   const { startDate, endDate, enabled = true, filterLevel, filterIds } = params;

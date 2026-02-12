@@ -31,7 +31,7 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
-import { trackPixelPaymentFailed, trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
+import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
 /**
@@ -1383,28 +1383,6 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
     // ✅ NON-CRITICAL: Update Klaviyo profile to reflect failed payment status (fire-and-forget)
     executeBackgroundJob("Klaviyo profile sync after payment failure", async () => {
       await ensureUserProfileSynced(user);
-    });
-
-    // ✅ NON-CRITICAL: Track payment failure to Facebook Pixel (server-side) (fire-and-forget)
-    executeBackgroundJob("Facebook pixel payment failure tracking", async () => {
-      await trackPixelPaymentFailed({
-        value: amount,
-        currency: paymentIntent.currency.toUpperCase() || "AUD",
-        paymentIntentId: paymentIntent.id,
-        orderId: order?.orderId,
-        packageId,
-        packageName,
-        packageType: paymentType as "membership" | "one-time" | "mini-draw" | "upsell" | undefined,
-        userId: user._id.toString(),
-        userEmail: user.email,
-        userPhone: user.mobile,
-        userFirstName: user.firstName,
-        userLastName: user.lastName,
-        errorMessage: failureReason,
-        errorCode: failureCode,
-        failureReason: failureMessage || failureReason,
-      });
-      webhookLog("info", `✅ Payment failure tracked to Facebook Pixel for: ${user.email}`);
     });
 
     webhookLog("info", `✅ Payment failure tracked to Klaviyo for: ${user.email}`);
@@ -2845,68 +2823,6 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     // ✅ NON-CRITICAL: Update Klaviyo profile to reflect failed payment status (fire-and-forget)
     executeBackgroundJob("Klaviyo profile sync after invoice payment failed", async () => {
       await ensureUserProfileSynced(user);
-    });
-
-    // ✅ NON-CRITICAL: Track payment failure to Facebook Pixel (server-side) (fire-and-forget)
-    // ✅ BEST PRACTICE: Use improved error extraction (same as Klaviyo event)
-    executeBackgroundJob("Facebook pixel invoice payment failure tracking", async () => {
-      // Get payment intent ID (simplified version for pixel tracking)
-      const invoiceWithPaymentIntent = invoice as Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent };
-      let pixelPaymentIntentId: string = "unknown";
-      
-      if (invoiceWithPaymentIntent.payment_intent) {
-        pixelPaymentIntentId = typeof invoiceWithPaymentIntent.payment_intent === "string"
-          ? invoiceWithPaymentIntent.payment_intent
-          : invoiceWithPaymentIntent.payment_intent?.id || "unknown";
-      }
-      
-      if (pixelPaymentIntentId === "unknown") {
-        pixelPaymentIntentId = invoice.id || "unknown";
-      }
-
-      const amount = (invoice.amount_due || 0) / 100; // Convert cents to dollars
-      const packageId = user.subscription?.packageId || "unknown";
-      
-      // ✅ BEST PRACTICE: Extract error details from PaymentIntent (same improved logic as Klaviyo event)
-      let pixelFailureReason = invoice.last_finalization_error?.message || "Payment declined";
-      let pixelFailureCode = invoice.last_finalization_error?.code || "";
-      let pixelFailureMessage = "";
-      
-      // Try to get error details from PaymentIntent if available
-      if (pixelPaymentIntentId && pixelPaymentIntentId !== "unknown" && pixelPaymentIntentId !== invoice.id) {
-        try {
-          const paymentIntent = await stripe.paymentIntents.retrieve(pixelPaymentIntentId);
-          const lastPaymentError = paymentIntent.last_payment_error;
-          if (lastPaymentError) {
-            pixelFailureReason = lastPaymentError.message || invoice.last_finalization_error?.message || "Payment declined";
-            pixelFailureCode = lastPaymentError.code || invoice.last_finalization_error?.code || "";
-            const declineCode = lastPaymentError.decline_code || "";
-            pixelFailureMessage = pixelFailureCode && declineCode 
-              ? `${pixelFailureCode}:${declineCode}` 
-              : pixelFailureCode || declineCode || "";
-          }
-        } catch (error) {
-          webhookLog("warn", `Could not retrieve PaymentIntent for Facebook Pixel error details: ${error}`);
-        }
-      }
-      
-      await trackPixelPaymentFailed({
-        value: amount,
-        currency: invoice.currency.toUpperCase() || "AUD",
-        paymentIntentId: pixelPaymentIntentId,
-        packageId,
-        packageName: "Subscription",
-        packageType: "membership",
-        userId: user._id.toString(),
-        userEmail: user.email,
-        userPhone: user.mobile,
-        userFirstName: user.firstName,
-        userLastName: user.lastName,
-        errorMessage: pixelFailureReason, // Use improved failureReason from PaymentIntent
-        errorCode: pixelFailureCode, // Use improved failureCode from PaymentIntent
-        failureReason: pixelFailureMessage || pixelFailureReason, // Use failureMessage (code:decline_code) or fallback to failureReason
-      });
-      webhookLog("info", `✅ Invoice payment failure tracked to Facebook Pixel with improved error details`);
     });
 
     webhookLog("info", `✅ Invoice payment failure tracked to Klaviyo`);
