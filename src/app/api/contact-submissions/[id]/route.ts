@@ -138,6 +138,49 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 /**
+ * PATCH /api/contact-submissions/[id]
+ * Mark a contact submission as read (admin only)
+ */
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = paramsSchema.parse(await params);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid submission ID" }, { status: 400 });
+    }
+
+    const submission = await ContactSubmission.findByIdAndUpdate(
+      id,
+      { readAt: new Date() },
+      { new: true }
+    );
+
+    if (!submission) {
+      return NextResponse.json({ error: "Contact submission not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Contact submission marked as read",
+      data: submission,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
+    }
+    console.error("Error marking contact submission as read:", error);
+    return NextResponse.json({ error: "Failed to mark contact submission as read" }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/contact-submissions/[id]
  * Delete a specific contact submission (admin only)
  */

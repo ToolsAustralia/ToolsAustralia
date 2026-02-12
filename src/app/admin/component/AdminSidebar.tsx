@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -156,6 +156,31 @@ export default function AdminSidebar({
 }: AdminSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [unviewedCount, setUnviewedCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnviewed = async () => {
+      try {
+        const res = await fetch("/api/admin/submissions/unviewed-count");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data) {
+            setUnviewedCount(data.data.total || 0);
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+    fetchUnviewed();
+    const interval = setInterval(fetchUnviewed, 60000); // Refresh every minute
+    const onSubmissionsUpdated = () => fetchUnviewed();
+    window.addEventListener("admin-submissions-updated", onSubmissionsUpdated);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("admin-submissions-updated", onSubmissionsUpdated);
+    };
+  }, []);
 
   const handleSignOut = () => {
     // Clear localStorage when signing out
@@ -246,10 +271,15 @@ export default function AdminSidebar({
                     : "text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white"
                 }`}
               >
-                <Icon className={`w-5 h-5 ${isActive ? "text-white" : "text-gray-500"}`} />
-                <div className="flex-1">
+                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? "text-white" : "text-gray-500"}`} />
+                <div className="flex-1 min-w-0">
                   <div className={`font-medium ${isActive ? "text-white" : "text-gray-900"}`}>{tab.label}</div>
                 </div>
+                {tab.id === "submissions" && unviewedCount > 0 && (
+                  <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
+                    {unviewedCount > 99 ? "99+" : unviewedCount}
+                  </span>
+                )}
               </button>
             );
           })}

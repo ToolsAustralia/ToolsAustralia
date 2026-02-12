@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
+import { AdminUserModalProvider } from "@/contexts/AdminUserModalContext";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +15,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="h-screen-dvh overflow-hidden">
-      <Suspense fallback={
-        <div className="min-h-screen-svh flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
-        </div>
-      }>
-        {children}
-      </Suspense>
+      <AdminUserModalProvider>
+        <Suspense fallback={
+          <div className="min-h-screen-svh flex items-center justify-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+          </div>
+        }>
+          {children}
+        </Suspense>
+      </AdminUserModalProvider>
     </div>
   );
 }

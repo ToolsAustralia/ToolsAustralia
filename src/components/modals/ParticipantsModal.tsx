@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 
 // Types for participant data
 interface Participant {
@@ -64,6 +65,7 @@ interface ParticipantsModalProps {
 }
 
 export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorDrawName }: ParticipantsModalProps) {
+  const { openUserModal } = useAdminUserModal();
   const [searchQuery, setSearchQuery] = useState("");
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -242,7 +244,16 @@ export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorD
                 {participants.map((participant) => (
                   <div
                     key={participant.userId}
-                    className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all duration-200"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openUserModal(participant.userId)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openUserModal(participant.userId);
+                      }
+                    }}
+                    className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
                   >
                     {/* Mobile View */}
                     <div className="md:hidden space-y-3">

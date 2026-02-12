@@ -765,7 +765,10 @@ function MiniDrawCard({
             <h3 className="text-2xl font-bold text-gray-900">{draw.name}</h3>
             {statusBadge}
           </div>
-          <p className="text-gray-600">{draw.description}</p>
+          <div
+            className="text-gray-600 [&_p]:my-0"
+            dangerouslySetInnerHTML={{ __html: draw.description || "" }}
+          />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-2">
               <Trophy className="w-4 h-4 text-red-600" />

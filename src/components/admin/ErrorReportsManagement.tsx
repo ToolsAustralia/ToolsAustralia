@@ -47,6 +47,7 @@ import { format } from "date-fns";
 import ErrorReportsAnalytics from "./ErrorReportsAnalytics";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import Dropdown from "@/components/modals/ui/Dropdown";
+import ClickableUserDisplay from "./ClickableUserDisplay";
 
 interface ErrorReportsResponse {
   reports: IErrorReport[];
@@ -176,11 +177,15 @@ function ErrorReportDetailModal({
               <label className="block text-sm font-medium text-gray-700 mb-2">User</label>
               <div className="px-3 py-2 bg-gray-50 rounded-lg">
                 {report.isAuthenticated ? (
-                  <span className="text-sm">
-                    {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                      ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
-                      : report.userEmail || "Unknown"}
-                  </span>
+                  <ClickableUserDisplay
+                    displayText={
+                      typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
+                        ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                        : report.userEmail || "Unknown"
+                    }
+                    userId={typeof report.userId === "string" ? report.userId : null}
+                    className="text-sm"
+                  />
                 ) : (
                   <span className="text-sm text-gray-500">
                     {report.userEmail || report.guestEmail ? (
@@ -1079,11 +1084,14 @@ export default function ErrorReportsManagement() {
                               </td>
                               <td className="px-4 py-3 text-sm text-gray-600">
                                 {report.isAuthenticated ? (
-                                  <span>
-                                    {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                                      ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
-                                      : report.userEmail || "Unknown"}
-                                  </span>
+                                  <ClickableUserDisplay
+                                    displayText={
+                                      typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
+                                        ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                        : report.userEmail || "Unknown"
+                                    }
+                                    userId={typeof report.userId === "string" ? report.userId : null}
+                                  />
                                 ) : (
                                   <span>
                                     {report.userEmail || report.guestEmail ? (
@@ -1183,11 +1191,14 @@ export default function ErrorReportsManagement() {
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
                             {report.isAuthenticated ? (
-                              <span>
-                                {typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                                  ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
-                                  : report.userEmail || "Unknown"}
-                              </span>
+                              <ClickableUserDisplay
+                                displayText={
+                                  typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
+                                    ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                    : report.userEmail || "Unknown"
+                                }
+                                userId={typeof report.userId === "string" ? report.userId : null}
+                              />
                             ) : (
                               <span>
                                 {report.userEmail || report.guestEmail ? (

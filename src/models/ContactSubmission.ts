@@ -18,6 +18,7 @@ export interface IContactSubmission extends Document {
   // Status and Processing
   status: 'new' | 'in_progress' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
+  readAt?: Date;
   assignedTo?: mongoose.Types.ObjectId;
   adminNotes?: string;
   response?: string;
@@ -84,6 +85,9 @@ const ContactSubmissionSchema = new Schema<IContactSubmission>({
     type: String,
     enum: ['low', 'medium', 'high', 'urgent'],
     default: 'medium',
+  },
+  readAt: {
+    type: Date,
   },
   assignedTo: {
     type: Schema.Types.ObjectId,

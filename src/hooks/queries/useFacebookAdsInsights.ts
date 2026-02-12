@@ -20,25 +20,29 @@ export function useFacebookAdsInsights(params: {
   endDate?: string;
   level: InsightLevel;
   refresh?: boolean;
+  enabled?: boolean;
 }) {
+  const { enabled = true, ...apiParams } = params;
+
   return useQuery<FacebookAdsInsightsResponse["data"]>({
-    queryKey: ["admin", "facebook-ads", "insights", params],
+    queryKey: ["admin", "facebook-ads", "insights", apiParams],
+    enabled,
     queryFn: async (): Promise<FacebookAdsInsightsResponse["data"]> => {
       // Build query string
       const searchParams = new URLSearchParams();
-      searchParams.append("dateRange", params.dateRange);
-      searchParams.append("level", params.level);
+      searchParams.append("dateRange", apiParams.dateRange);
+      searchParams.append("level", apiParams.level);
 
-      if (params.dateRange === "custom") {
-        if (params.startDate) {
-          searchParams.append("startDate", params.startDate);
+      if (apiParams.dateRange === "custom") {
+        if (apiParams.startDate) {
+          searchParams.append("startDate", apiParams.startDate);
         }
-        if (params.endDate) {
-          searchParams.append("endDate", params.endDate);
+        if (apiParams.endDate) {
+          searchParams.append("endDate", apiParams.endDate);
         }
       }
 
-      if (params.refresh) {
+      if (apiParams.refresh) {
         searchParams.append("refresh", "true");
       }
 
@@ -96,16 +100,26 @@ export function useHourlyInsights(params: {
         throw new Error("startDate and endDate are required");
       }
 
-      // Build query string
-      const searchParams = new URLSearchParams();
-      searchParams.append("startDate", startDate);
-      searchParams.append("endDate", endDate);
-      if (filterLevel && filterIds && filterIds.length > 0) {
-        searchParams.append("filterLevel", filterLevel);
-        searchParams.append("filterIds", filterIds.join(","));
-      }
+      // Use POST when filterIds present to avoid HTTP 431 (Request Header Fields Too Large)
+      const usePost = filterLevel && filterIds && filterIds.length > 0;
 
-      const response = await fetch(`/api/admin/facebook-ads/hourly-insights?${searchParams.toString()}`);
+      let response: Response;
+      if (usePost) {
+        response = await fetch("/api/admin/facebook-ads/hourly-insights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ startDate, endDate, filterLevel, filterIds }),
+        });
+      } else {
+        const searchParams = new URLSearchParams();
+        searchParams.append("startDate", startDate);
+        searchParams.append("endDate", endDate);
+        if (filterLevel && filterIds && filterIds.length > 0) {
+          searchParams.append("filterLevel", filterLevel);
+          searchParams.append("filterIds", filterIds.join(","));
+        }
+        response = await fetch(`/api/admin/facebook-ads/hourly-insights?${searchParams.toString()}`);
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({
