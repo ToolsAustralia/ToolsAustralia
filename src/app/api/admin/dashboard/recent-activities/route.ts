@@ -21,6 +21,7 @@ export interface RecentActivity {
     | "system_alert"
     | "membership_upgrade";
   user: string;
+  userId?: string;
   action: string;
   time: string;
   status: "success" | "info" | "warning" | "error";
@@ -99,6 +100,7 @@ export async function GET() {
         id: `signup-${user._id}`,
         type: "user_signup",
         user: `${user.firstName} ${user.lastName}`,
+        userId: user._id.toString(),
         action,
         time: timeAgo,
         status: "success",
@@ -211,6 +213,7 @@ export async function GET() {
         id: `payment-${payment._id}`,
         type,
         user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+        userId: payment.userId ? (payment.userId as mongoose.Types.ObjectId).toString() : undefined,
         action,
         time: timeAgo,
         status: "success",
@@ -253,6 +256,7 @@ export async function GET() {
           id: `upgrade-${user._id}-${user.subscription.lastUpgradeDate.getTime()}`,
           type: "membership_upgrade",
           user: `${user.firstName} ${user.lastName}`,
+          userId: user._id.toString(),
           action: `Upgraded subscription from ${previousPackageName} to ${currentPackageName}`,
           time: timeAgo,
           status: "success",
@@ -274,6 +278,7 @@ export async function GET() {
           id: `downgrade-${user._id}-${user.subscription.lastDowngradeDate.getTime()}`,
           type: "membership_upgrade",
           user: `${user.firstName} ${user.lastName}`,
+          userId: user._id.toString(),
           action: `Downgraded subscription from ${previousPackageName} to ${currentPackageName}`,
           time: timeAgo,
           status: "info",
@@ -295,6 +300,7 @@ export async function GET() {
           id: `cancel-${user._id}-${user.subscription.cancelledAt.getTime()}`,
           type: "membership_upgrade",
           user: `${user.firstName} ${user.lastName}`,
+          userId: user._id.toString(),
           action: `Cancelled ${packageName} membership`,
           time: timeAgo,
           status: "warning",

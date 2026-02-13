@@ -557,7 +557,10 @@ export default function UpcomingDraws() {
                         )}
                       </div>
 
-                      <p className="text-gray-600 mb-3">{draw.description}</p>
+                      <div
+                        className="text-gray-600 mb-3 [&_p]:my-0"
+                        dangerouslySetInnerHTML={{ __html: draw.description || "" }}
+                      />
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div className="flex items-center gap-2 text-sm text-gray-600">

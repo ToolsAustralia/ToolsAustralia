@@ -34,8 +34,8 @@ import {
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
 import { useAdminUsers } from "@/hooks/queries/useAdminQueries";
-import UserDetailModal from "./UserDetailModal";
 import UserExportModal from "./UserExportModal";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import ChargePastDueModal from "./ChargePastDueModal";
 import KlaviyoSyncButton from "@/features/admin/users/components/KlaviyoSyncButton";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -68,8 +68,7 @@ export default function UsersManagement() {
     sortOrder: "desc",
   });
 
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const { openUserModal } = useAdminUserModal();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false); // Mobile filter collapse state
@@ -224,8 +223,7 @@ export default function UsersManagement() {
 
   // Handle user row click
   const handleUserClick = (user: AdminUserListItem) => {
-    setSelectedUserId(user.id);
-    setIsDetailModalOpen(true);
+    openUserModal(user.id);
   };
 
   // Format currency
@@ -877,16 +875,6 @@ export default function UsersManagement() {
       </div>
         </>
       )}
-
-      {/* User Detail Modal */}
-      <UserDetailModal
-        userId={selectedUserId}
-        isOpen={isDetailModalOpen}
-        onCloseAction={() => {
-          setIsDetailModalOpen(false);
-          setSelectedUserId(null);
-        }}
-      />
 
       {/* User Export Modal */}
       {/* Charge Past Due Modal */}

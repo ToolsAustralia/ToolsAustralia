@@ -117,21 +117,6 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                       </div>
                     )}
 
-                    {/* Winner Information - Bottom of Image (All Screen Sizes) */}
-                    {draw.winner && (
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/60 to-transparent p-3 sm:p-4 rounded-b-xl sm:rounded-b-2xl">
-                        <div className="text-white">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Award className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                            <span className="text-xs sm:text-sm font-semibold text-red-400">Winner</span>
-                          </div>
-                          <p className="text-base sm:text-lg font-bold mb-1">{formatWinnerNameFromString(draw.winner.name)}</p>
-                          <div className="flex items-center justify-end text-xs sm:text-sm">
-                            <span>{formatDate(draw.winner.selectedDate)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -151,9 +136,10 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                       {draw.name}
                     </h3>
 
-                    <p className="text-gray-600 text-sm sm:text-base lg:text-lg leading-relaxed mb-4 sm:mb-6">
-                      {draw.description}
-                    </p>
+                    <div
+                      className="text-gray-600 text-sm sm:text-base lg:text-lg leading-relaxed mb-4 sm:mb-6 [&_p]:my-0"
+                      dangerouslySetInnerHTML={{ __html: draw.description || "" }}
+                    />
 
                     {/* Draw Stats */}
                     <div className="grid grid-cols-2 gap-2 sm:gap-4">
@@ -164,7 +150,7 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
                         </div>
                         <p className="text-sm sm:text-lg font-bold text-gray-900">{formatDate(draw.drawDate)}</p>
                       </div>
-                        {draw.winner && (
+                      {draw.winner && (
                         <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
                           <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
                             <Award className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />

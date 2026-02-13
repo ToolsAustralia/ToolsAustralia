@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { X, Copy, Check, Edit2, Trash2, Save, AlertTriangle } from "lucide-react";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
+import ClickableUserDisplay from "./ClickableUserDisplay";
 
 interface AffiliateDetail {
   affiliate: {
@@ -75,6 +77,7 @@ export default function AffiliateDetailModal({
   onClose,
   onUpdate,
 }: AffiliateDetailModalProps) {
+  const { openUserModal } = useAdminUserModal();
   const [data, setData] = useState<AffiliateDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -601,7 +604,19 @@ export default function AffiliateDetailModal({
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {data.referredUsers.map((user) => (
-                          <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                          <tr
+                            key={user.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openUserModal(user.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                openUserModal(user.id);
+                              }
+                            }}
+                            className="hover:bg-gray-50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-inset"
+                          >
                             <td className="px-4 py-3 whitespace-nowrap">
                               <div className="font-medium text-gray-900">
                                 {user.firstName} {user.lastName}
@@ -639,10 +654,12 @@ export default function AffiliateDetailModal({
                         <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 whitespace-nowrap">
                             {commission.referredUser ? (
-                              <div>
-                                <div className="font-medium text-gray-900">{commission.referredUser.name || "N/A"}</div>
-                                <div className="text-xs text-gray-500">{commission.referredUser.email}</div>
-                              </div>
+                              <ClickableUserDisplay
+                                displayText={commission.referredUser.name || "N/A"}
+                                subtext={commission.referredUser.email}
+                                userId={commission.referredUser.id ?? null}
+                                className="text-sm"
+                              />
                             ) : (
                               <span className="text-gray-400">N/A</span>
                             )}

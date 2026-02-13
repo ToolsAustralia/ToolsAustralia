@@ -33,8 +33,10 @@ import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
+import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
-import UserDetailModal from "@/components/admin/UserDetailModal";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
+import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 import type { RevenueCategory, RevenueBreakdownItem } from "@/hooks/queries/useAdminQueries";
 import type { TrendData } from "@/types/admin/trend-types";
 import Image from "next/image";
@@ -84,8 +86,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isMobile, setIsMobile] = useState(false);
   const [isRevenueDetailModalOpen, setIsRevenueDetailModalOpen] = useState(false);
   const [selectedRevenueCategory, setSelectedRevenueCategory] = useState<RevenueCategory | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [isUserDetailModalOpen, setIsUserDetailModalOpen] = useState(false);
+  const { openUserModal } = useAdminUserModal();
 
   // State for date filter - synced with URL params
   const [dateRange, setDateRange] = useState<DateRange>("today");
@@ -1132,7 +1133,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-gray-900 leading-tight">{activity.action}</p>
                           <div className="flex items-center space-x-1 mt-0.5">
-                            <span className="text-xs text-gray-500">{activity.user}</span>
+                            <ClickableUserDisplay
+                              displayText={activity.user}
+                              userId={activity.userId ?? null}
+                              className="text-xs text-gray-500"
+                            />
                             <span className="text-xs text-gray-400">•</span>
                             <span className="text-xs text-gray-500">{activity.time}</span>
                           </div>
@@ -1283,6 +1288,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         </div>
       )}
 
+      {/* Floating notification for unviewed submissions (exclude submissions page) */}
+      {selectedTab !== "submissions" && (
+        <UnviewedSubmissionsNotification
+          onViewSubmissions={() => router.push("/admin/submissions")}
+        />
+      )}
+
       {/* Revenue Detail Modal */}
       <RevenueDetailModal
         isOpen={isRevenueDetailModalOpen}
@@ -1291,20 +1303,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         dateRange={dateRange}
         startDate={customStartDate || undefined}
         endDate={customEndDate || undefined}
-        onUserClick={(userId) => {
-          setSelectedUserId(userId);
-          setIsUserDetailModalOpen(true);
-        }}
-      />
-
-      {/* User Detail Modal */}
-      <UserDetailModal
-        userId={selectedUserId}
-        isOpen={isUserDetailModalOpen}
-        onCloseAction={() => {
-          setIsUserDetailModalOpen(false);
-          setSelectedUserId(null);
-        }}
+        onUserClick={openUserModal}
       />
     </div>
   );

@@ -24,6 +24,7 @@ import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/mod
 import WinnerEditModal from "@/components/modals/WinnerEditModal";
 import ExportModal from "@/components/modals/ExportModal";
 import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
+import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 
 // Import MajorDrawData type from modal
 type MajorDrawData = {
@@ -684,7 +685,10 @@ export default function DrawResults() {
                         </div>
                       </div>
 
-                      <p className="text-gray-600 mb-3">{draw.description}</p>
+                      <div
+                        className="text-gray-600 mb-3 [&_p]:my-0"
+                        dangerouslySetInnerHTML={{ __html: draw.description || "" }}
+                      />
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -707,20 +711,18 @@ export default function DrawResults() {
                             <Trophy className="w-4 h-4 text-green-600" />
                             <span className="text-sm font-medium text-green-800">Winner Details</span>
                           </div>
-                          <p className="text-sm text-green-700">
-                            {draw.winner.userDetails ? (
-                              <>
-                                {draw.winner.userDetails.firstName} {draw.winner.userDetails.lastName}(
-                                {draw.winner.userDetails.email})
-                              </>
-                            ) : (
-                              `User ID: ${draw.winner.userId}`
-                            )}
-                          </p>
-                          <p className="text-xs text-green-600">
-                            Entry #{draw.winner.entryNumber} • {formatDate(draw.winner.selectedDate)} •
-                            {draw.winner.selectionMethod === "manual" ? "Manual" : "Government App"}
-                          </p>
+                          <div className="text-sm text-green-700">
+                            <ClickableUserDisplay
+                              displayText={
+                                draw.winner.userDetails
+                                  ? `${draw.winner.userDetails.firstName} ${draw.winner.userDetails.lastName} (${draw.winner.userDetails.email})`
+                                  : `User ID: ${draw.winner.userId}`
+                              }
+                              userId={draw.winner.userId}
+                              subtext={`Entry #${draw.winner.entryNumber} • ${formatDate(draw.winner.selectedDate)} • ${draw.winner.selectionMethod === "manual" ? "Manual" : "Government App"}`}
+                              className="text-green-700 hover:text-green-800"
+                            />
+                          </div>
                         </div>
                       )}
                     </div>

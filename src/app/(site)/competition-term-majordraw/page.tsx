@@ -1,12 +1,48 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
+import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 
 export const metadata: Metadata = {
   title: "Major Giveaway Competition Terms | Tools Australia",
   description:
     "Trade promotion terms for the Tools Australia Major Giveaway, including eligibility, prize options, entry rules, and regulatory details.",
 };
+
+export const revalidate = 60; // ISR: refresh every 60s so dates update with active draw
+
+/**
+ * Derive "Major Giveaway February 2026" from draw name + draw date.
+ * Handles formats like "February Draw", "December 2025 Draw", etc.
+ */
+function getGiveawayTitle(drawName: string | undefined, drawDate: Date | string | null | undefined): string {
+  const year = drawDate ? new Date(drawDate).getFullYear() : new Date().getFullYear();
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthMatch = drawName?.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i);
+  const month = monthMatch ? monthMatch[1] : monthNames[new Date().getMonth()];
+  return `Tools Australia – Major Giveaway ${month} ${year}`;
+}
+
+/**
+ * Format date for promotion period (e.g. "27 November 2025 at 8:00 pm AEDT")
+ * Uses Australia/Sydney timezone so AEDT/AEST is correct.
+ */
+function formatPromotionDate(date: Date | string | null | undefined): string {
+  if (!date) return "TBA";
+  const d = new Date(date);
+  const formatted = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Sydney",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  }).format(d);
+  // "27 November 2025, 8:00 pm AEDT" -> "27 November 2025 at 8:00 pm AEDT"
+  return formatted.replace(", ", " at ");
+}
 
 export default async function MajorGiveawayTermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
@@ -52,9 +88,39 @@ export default async function MajorGiveawayTermsPage() {
     },
     {
       title: "Option 4",
+      items: [
+        "Milwaukee 56\" High Capacity Combination Tool Storage (48228559)",
+        "Milwaukee M18 FUEL™ 13 Piece Power Pack 13B4 (M18FPP13B4564B)",
+        "$5,000 cash (tax free)",
+      ],
+    },
+    {
+      title: "Option 5",
+      items: [
+        "Milwaukee 56\" High Capacity Combination Tool Storage (48228559)",
+        "DeWalt 18V XR 14 Piece Kit - 2X 5Ah & 2X FLEXVOLT® 9Ah (DCZ1401P2X2-XE)",
+        "$5,000 cash (tax free)",
+      ],
+    },
+    {
+      title: "Option 6",
+      items: [
+        "Milwaukee 56\" High Capacity Combination Tool Storage (48228559)",
+        "Makita 18V Brushless 15 Piece Combo Kit (DLX1514TX1)",
+        "$5,000 cash (tax free)",
+      ],
+    },
+    {
+      title: "Option 7",
       items: ["$10,000 AUD cash"],
     },
   ];
+
+  const majorDraw = await getCurrentMajorDrawServer().catch(() => null);
+  const giveawayTitle = getGiveawayTitle(majorDraw?.name, majorDraw?.drawDate ?? majorDraw?.activationDate ?? null);
+  const commencesDate = formatPromotionDate(majorDraw?.activationDate);
+  const closesDate = formatPromotionDate(majorDraw?.freezeEntriesAt ?? majorDraw?.drawDate);
+  const drawDateFormatted = formatPromotionDate(majorDraw?.drawDate);
 
   return (
     <>
@@ -70,7 +136,7 @@ export default async function MajorGiveawayTermsPage() {
           <header className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-red-500">Trade Promotion Terms</p>
             <h1 className="text-3xl font-bold text-white sm:text-4xl">
-              Tools Australia – Major Giveaway December 2025
+              {giveawayTitle}
             </h1>
             <p className="text-gray-300">
               Authorised under NSW License TP/04720. Notification Number: NTP/15640. These terms outline participation rules, prize details, compliance,
@@ -115,8 +181,8 @@ export default async function MajorGiveawayTermsPage() {
               <div>
                 <h3 className="text-xl font-semibold text-white">3. Promotion Period</h3>
                 <ul className="list-inside list-disc space-y-1 text-gray-300">
-                  <li>Commences: 27 November 2025 at 8:00pm AEDT</li>
-                  <li>Closes: 27 December 2025 at 8:00pm AEDT</li>
+                  <li>Commences: {commencesDate}</li>
+                  <li>Closes: {closesDate}</li>
                 </ul>
               </div>
 
@@ -274,7 +340,7 @@ export default async function MajorGiveawayTermsPage() {
               <div>
                 <h3 className="text-xl font-semibold text-white">2. Draw Procedure</h3>
                 <ul className="list-inside list-disc space-y-2">
-                  <li>Draw occurs 27 December 2025 at 8:30pm AEDT.</li>
+                  <li>Draw occurs {drawDateFormatted}.</li>
                   <li>Conducted electronically via a certified random draw system.</li>
                   <li>Location: Promoter’s registered address or another approved venue.</li>
                 </ul>

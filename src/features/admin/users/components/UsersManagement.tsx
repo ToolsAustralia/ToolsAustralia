@@ -15,7 +15,7 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { Users, CreditCard, CheckCircle, Shield } from "lucide-react";
 import UserFiltersComponent from "./UserFilters";
 import UserList from "./UserList";
-import UserDetailModal from "@/components/admin/UserDetailModal";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import KlaviyoSyncButton from "./KlaviyoSyncButton";
 
 /**
@@ -35,8 +35,7 @@ export default function UsersManagement() {
     sortOrder: "desc",
   });
 
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const { openUserModal } = useAdminUserModal();
 
   // Debounced search to avoid excessive API calls
   const debouncedSearch = useDebounce(filters.search || "", 300);
@@ -133,8 +132,7 @@ export default function UsersManagement() {
 
   // Handle user row click
   const handleUserClick = (user: AdminUserListItem) => {
-    setSelectedUserId(user.id);
-    setIsDetailModalOpen(true);
+    openUserModal(user.id);
   };
 
   // Handle quick actions
@@ -236,15 +234,6 @@ export default function UsersManagement() {
         onRefetch={refetch}
       />
 
-      {/* User Detail Modal */}
-      <UserDetailModal
-        userId={selectedUserId}
-        isOpen={isDetailModalOpen}
-        onCloseAction={() => {
-          setIsDetailModalOpen(false);
-          setSelectedUserId(null);
-        }}
-      />
     </div>
   );
 }

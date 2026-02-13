@@ -728,7 +728,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                         if (parts[0]?.toLowerCase() === "additional" && parts.length > 1) {
                           return (
                             <>
-                              <span className="block">additional</span>
+                              <span className="block">Additional</span>
                               <span className="block">{parts.slice(1).join(" ")}</span>
                             </>
                           );

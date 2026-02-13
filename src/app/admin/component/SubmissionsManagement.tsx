@@ -1,8 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Search, Eye, Building, MessageSquare } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
+import { Search, Building, MessageSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { formatDateInAEST } from "@/utils/common/timezone";
+
+const ITEMS_PER_PAGE = 10;
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
 
 interface PartnerApplication {
   _id: string;
@@ -17,6 +27,7 @@ interface PartnerApplication {
   status: "pending" | "under_review" | "approved" | "rejected" | "contacted";
   adminNotes?: string;
   submittedAt: string;
+  readAt?: string | null;
   reviewedBy?: {
     name: string;
     email: string;
@@ -35,6 +46,7 @@ interface ContactSubmission {
   status: "new" | "in_progress" | "resolved" | "closed";
   priority: "low" | "medium" | "high" | "urgent";
   submittedAt: string;
+  readAt?: string | null;
   assignedTo?: {
     name: string;
     email: string;
@@ -51,48 +63,112 @@ export default function SubmissionsManagement() {
   const [activeTab, setActiveTab] = useState<"partner" | "contact">("partner");
   const [partnerApplications, setPartnerApplications] = useState<PartnerApplication[]>([]);
   const [contactSubmissions, setContactSubmissions] = useState<ContactSubmission[]>([]);
+  const [partnerPagination, setPartnerPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: ITEMS_PER_PAGE,
+    total: 0,
+    pages: 0,
+  });
+  const [contactPagination, setContactPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: ITEMS_PER_PAGE,
+    total: 0,
+    pages: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [readFilter, setReadFilter] = useState<string>("all");
   const [selectedItem, setSelectedItem] = useState<PartnerApplication | ContactSubmission | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingNotes, setEditingNotes] = useState("");
   const [editingStatus, setEditingStatus] = useState("");
 
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
   // Fetch partner applications
-  const fetchPartnerApplications = async () => {
-    try {
-      const response = await fetch("/api/partner-applications");
-      if (response.ok) {
-        const data = await response.json();
-        setPartnerApplications(data.data.applications || []);
+  const fetchPartnerApplications = useCallback(
+    async (page: number = 1) => {
+      try {
+        const params = new URLSearchParams({
+          page: String(page),
+          limit: String(ITEMS_PER_PAGE),
+          ...(statusFilter !== "all" && { status: statusFilter }),
+          ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }),
+        });
+        const response = await fetch(`/api/partner-applications?${params}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPartnerApplications(data.data.applications || []);
+          setPartnerPagination(data.data.pagination || { page: 1, limit: ITEMS_PER_PAGE, total: 0, pages: 0 });
+        }
+      } catch (error) {
+        console.error("Error fetching partner applications:", error);
       }
-    } catch (error) {
-      console.error("Error fetching partner applications:", error);
-    }
-  };
+    },
+    [statusFilter, debouncedSearch]
+  );
 
   // Fetch contact submissions
-  const fetchContactSubmissions = async () => {
-    try {
-      const response = await fetch("/api/contact-submissions");
-      if (response.ok) {
-        const data = await response.json();
-        setContactSubmissions(data.data.submissions || []);
+  const fetchContactSubmissions = useCallback(
+    async (page: number = 1) => {
+      try {
+        const params = new URLSearchParams({
+          page: String(page),
+          limit: String(ITEMS_PER_PAGE),
+          ...(readFilter !== "all" && { readFilter }),
+          ...(debouncedSearch.trim() && { search: debouncedSearch.trim() }),
+        });
+        const response = await fetch(`/api/contact-submissions?${params}`);
+        if (response.ok) {
+          const data = await response.json();
+          setContactSubmissions(data.data.submissions || []);
+          setContactPagination(data.data.pagination || { page: 1, limit: ITEMS_PER_PAGE, total: 0, pages: 0 });
+        }
+      } catch (error) {
+        console.error("Error fetching contact submissions:", error);
       }
+    },
+    [readFilter, debouncedSearch]
+  );
+
+  // Mark submission as read when viewed
+  const markAsRead = async (item: PartnerApplication | ContactSubmission) => {
+    const endpoint =
+      activeTab === "partner"
+        ? `/api/partner-applications/${item._id}`
+        : `/api/contact-submissions/${item._id}`;
+    try {
+      await fetch(endpoint, { method: "PATCH" });
+      if (activeTab === "partner") {
+        await fetchPartnerApplications(partnerPagination.page);
+      } else {
+        await fetchContactSubmissions(contactPagination.page);
+      }
+      window.dispatchEvent(new Event("admin-submissions-updated"));
     } catch (error) {
-      console.error("Error fetching contact submissions:", error);
+      console.error("Error marking as read:", error);
     }
   };
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      await Promise.all([fetchPartnerApplications(), fetchContactSubmissions()]);
+      await Promise.all([fetchPartnerApplications(1), fetchContactSubmissions(1)]);
       setLoading(false);
     };
     fetchData();
-  }, []);
+  }, [fetchPartnerApplications, fetchContactSubmissions]);
+
+  const goToPage = async (tab: "partner" | "contact", page: number) => {
+    setLoading(true);
+    if (tab === "partner") {
+      await fetchPartnerApplications(page);
+    } else {
+      await fetchContactSubmissions(page);
+    }
+    setLoading(false);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -115,29 +191,19 @@ export default function SubmissionsManagement() {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "urgent":
-        return "bg-red-100 text-red-800";
-      case "high":
-        return "bg-orange-100 text-orange-800";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800";
-      case "low":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
   const handleViewDetails = (item: PartnerApplication | ContactSubmission) => {
     setSelectedItem(item);
     setEditingNotes("adminNotes" in item ? item.adminNotes || "" : "");
-    setEditingStatus(item.status);
+    setEditingStatus("status" in item ? item.status : "");
     setShowModal(true);
+    // Mark as read when viewed (if not already read)
+    const isRead = "readAt" in item && item.readAt;
+    if (!isRead) {
+      markAsRead(item);
+    }
   };
 
-  const handleUpdateStatus = async () => {
+  const handleUpdate = async () => {
     if (!selectedItem) return;
 
     try {
@@ -146,55 +212,33 @@ export default function SubmissionsManagement() {
           ? `/api/partner-applications/${selectedItem._id}`
           : `/api/contact-submissions/${selectedItem._id}`;
 
+      const body =
+        activeTab === "partner"
+          ? { status: editingStatus, adminNotes: editingNotes }
+          : { adminNotes: editingNotes };
+
       const response = await fetch(endpoint, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          status: editingStatus,
-          adminNotes: editingNotes,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (response.ok) {
-        // Refresh data
         if (activeTab === "partner") {
-          await fetchPartnerApplications();
+          await fetchPartnerApplications(partnerPagination.page);
         } else {
-          await fetchContactSubmissions();
+          await fetchContactSubmissions(contactPagination.page);
         }
+        window.dispatchEvent(new Event("admin-submissions-updated"));
         setShowModal(false);
         setSelectedItem(null);
       }
     } catch (error) {
-      console.error("Error updating status:", error);
+      console.error("Error updating:", error);
     }
   };
-
-  const filteredPartnerApplications = partnerApplications.filter((app) => {
-    const matchesSearch =
-      app.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.email.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === "all" || app.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  const filteredContactSubmissions = contactSubmissions.filter((submission) => {
-    const matchesSearch =
-      submission.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      submission.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      submission.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      submission.subject.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
 
   if (loading) {
     return (
@@ -220,7 +264,7 @@ export default function SubmissionsManagement() {
               }`}
             >
               <Building className="w-4 h-4 inline mr-2" />
-              Partner Applications ({partnerApplications.length})
+              Partner Applications ({partnerPagination.total})
             </button>
             <button
               onClick={() => setActiveTab("contact")}
@@ -231,7 +275,7 @@ export default function SubmissionsManagement() {
               }`}
             >
               <MessageSquare className="w-4 h-4 inline mr-2" />
-              Contact Submissions ({contactSubmissions.length})
+              Contact Submissions ({contactPagination.total})
             </button>
           </nav>
         </div>
@@ -251,29 +295,30 @@ export default function SubmissionsManagement() {
             </div>
           </div>
           <div className="sm:w-48">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-            >
-              <option value="all">All Status</option>
-              {activeTab === "partner" ? (
-                <>
-                  <option value="pending">Pending</option>
-                  <option value="under_review">Under Review</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="contacted">Contacted</option>
-                </>
-              ) : (
-                <>
-                  <option value="new">New</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
-                </>
-              )}
-            </select>
+            {activeTab === "partner" ? (
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="under_review">Under Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="contacted">Contacted</option>
+              </select>
+            ) : (
+              <select
+                value={readFilter}
+                onChange={(e) => setReadFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              >
+                <option value="all">All</option>
+                <option value="unread">Unread</option>
+                <option value="read">Read</option>
+              </select>
+            )}
           </div>
         </div>
       </div>
@@ -281,6 +326,13 @@ export default function SubmissionsManagement() {
       {/* Content */}
       {activeTab === "partner" ? (
         <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
+          <div className="px-4 py-2 border-b border-gray-200">
+            <p className="text-xs sm:text-sm text-gray-600">
+              {partnerPagination.total > 0
+                ? `Showing ${(partnerPagination.page - 1) * partnerPagination.limit + 1} to ${Math.min(partnerPagination.page * partnerPagination.limit, partnerPagination.total)} of ${partnerPagination.total} partner applications`
+                : "No partner applications"}
+            </p>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -295,16 +347,20 @@ export default function SubmissionsManagement() {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Submitted
+                    Read
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    Submitted
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPartnerApplications.map((app) => (
-                  <tr key={app._id} className="hover:bg-gray-50">
+                {partnerApplications.map((app) => (
+                  <tr
+                    key={app._id}
+                    onClick={() => handleViewDetails(app)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
@@ -327,22 +383,78 @@ export default function SubmissionsManagement() {
                         {app.status.replace("_", " ")}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          app.readAt ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                        }`}
+                      >
+                        {app.readAt ? "Read" : "Unread"}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDateInAEST(new Date(app.submittedAt), "dd MMM yyyy")}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button onClick={() => handleViewDetails(app)} className="text-red-600 hover:text-red-900 mr-3">
-                        <Eye className="w-4 h-4" />
-                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {partnerPagination.pages > 1 && (
+            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <button
+                    onClick={() => goToPage("partner", 1)}
+                    disabled={partnerPagination.page <= 1}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="First page"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => goToPage("partner", partnerPagination.page - 1)}
+                    disabled={partnerPagination.page <= 1}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+                <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                  Page {partnerPagination.page} of {partnerPagination.pages}
+                </span>
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <button
+                    onClick={() => goToPage("partner", partnerPagination.page + 1)}
+                    disabled={partnerPagination.page >= partnerPagination.pages}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => goToPage("partner", partnerPagination.pages)}
+                    disabled={partnerPagination.page >= partnerPagination.pages}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Last page"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
+          <div className="px-4 py-2 border-b border-gray-200">
+            <p className="text-xs sm:text-sm text-gray-600">
+              {contactPagination.total > 0
+                ? `Showing ${(contactPagination.page - 1) * contactPagination.limit + 1} to ${Math.min(contactPagination.page * contactPagination.limit, contactPagination.total)} of ${contactPagination.total} contact submissions`
+                : "No contact submissions"}
+            </p>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -354,22 +466,20 @@ export default function SubmissionsManagement() {
                     Subject
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Priority
+                    Read
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Submitted
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredContactSubmissions.map((submission) => (
-                  <tr key={submission._id} className="hover:bg-gray-50">
+                {contactSubmissions.map((submission) => (
+                  <tr
+                    key={submission._id}
+                    onClick={() => handleViewDetails(submission)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
@@ -387,38 +497,66 @@ export default function SubmissionsManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                          submission.status
-                        )}`}
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          submission.readAt ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                        }`}
                       >
-                        {submission.status.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(
-                          submission.priority
-                        )}`}
-                      >
-                        {submission.priority}
+                        {submission.readAt ? "Read" : "Unread"}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDateInAEST(new Date(submission.submittedAt), "dd MMM yyyy")}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleViewDetails(submission)}
-                        className="text-red-600 hover:text-red-900 mr-3"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {contactPagination.pages > 1 && (
+            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <button
+                    onClick={() => goToPage("contact", 1)}
+                    disabled={contactPagination.page <= 1}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="First page"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => goToPage("contact", contactPagination.page - 1)}
+                    disabled={contactPagination.page <= 1}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+                <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                  Page {contactPagination.page} of {contactPagination.pages}
+                </span>
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <button
+                    onClick={() => goToPage("contact", contactPagination.page + 1)}
+                    disabled={contactPagination.page >= contactPagination.pages}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => goToPage("contact", contactPagination.pages)}
+                    disabled={contactPagination.page >= contactPagination.pages}
+                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Last page"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -431,7 +569,13 @@ export default function SubmissionsManagement() {
                 <h3 className="text-lg font-semibold">
                   {activeTab === "partner" ? "Partner Application Details" : "Contact Submission Details"}
                 </h3>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setSelectedItem(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
                   ×
                 </button>
               </div>
@@ -512,35 +656,28 @@ export default function SubmissionsManagement() {
                   </div>
                 )}
 
-                {/* Status Management */}
+                {/* Status Management (partner only) / Admin Notes */}
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Status Management</h4>
+                  <h4 className="font-medium text-gray-900 mb-2">
+                    {activeTab === "partner" ? "Status Management" : "Admin Notes"}
+                  </h4>
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                      <select
-                        value={editingStatus}
-                        onChange={(e) => setEditingStatus(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                      >
-                        {activeTab === "partner" ? (
-                          <>
-                            <option value="pending">Pending</option>
-                            <option value="under_review">Under Review</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
-                            <option value="contacted">Contacted</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="new">New</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="resolved">Resolved</option>
-                            <option value="closed">Closed</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
+                    {activeTab === "partner" && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select
+                          value={editingStatus}
+                          onChange={(e) => setEditingStatus(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="under_review">Under Review</option>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="contacted">Contacted</option>
+                        </select>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Admin Notes</label>
                       <textarea
@@ -557,16 +694,19 @@ export default function SubmissionsManagement() {
 
               <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setSelectedItem(null);
+                  }}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-all duration-200"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleUpdateStatus}
+                  onClick={handleUpdate}
                   className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
-                  Update Status
+                  {activeTab === "partner" ? "Update Status" : "Update Notes"}
                 </button>
               </div>
             </div>

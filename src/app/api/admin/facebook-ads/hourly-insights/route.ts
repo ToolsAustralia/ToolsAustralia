@@ -9,7 +9,7 @@ import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import type { HourlyInsightsResponse, HourlyInsightItem } from "@/types/facebook-ads";
 
 /**
- * Query parameters validation schema
+ * Query parameters validation schema (for GET: URL params; for POST: body)
  */
 const hourlyInsightsQuerySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
@@ -19,7 +19,31 @@ const hourlyInsightsQuerySchema = z.object({
 });
 
 /**
+ * Parse and validate query from GET params or POST body
+ */
+async function parseAndValidate(request: NextRequest) {
+  let query: Record<string, string>;
+  if (request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const filterLevel = ["campaign", "adset", "ad"].includes(body.filterLevel) ? body.filterLevel : undefined;
+    const filterIds = Array.isArray(body.filterIds) ? body.filterIds.join(",") : body.filterIds ?? "";
+    query = {
+      startDate: String(body.startDate ?? ""),
+      endDate: String(body.endDate ?? ""),
+      ...(filterLevel && { filterLevel }),
+      ...(filterIds && { filterIds }),
+    };
+  } else {
+    const { searchParams } = new URL(request.url);
+    query = Object.fromEntries(searchParams.entries());
+  }
+  return hourlyInsightsQuerySchema.parse(query);
+}
+
+/**
  * GET /api/admin/facebook-ads/hourly-insights
+ * POST /api/admin/facebook-ads/hourly-insights (use when filterIds is large to avoid HTTP 431)
+ *
  * Fetch hourly ad performance: Facebook (spend, impressions, clicks) + your site (revenue, conversions).
  *
  * - Spend, impressions, clicks: from Facebook Marketing API (advertiser time zone).
@@ -27,11 +51,18 @@ const hourlyInsightsQuerySchema = z.object({
  *   excludes membership renewals) for the selected date range in AEST; includes all traffic.
  * - Date range is interpreted as calendar days in Australia/Sydney (AEST/AEDT).
  *
- * Query Parameters:
- * - startDate: YYYY-MM-DD (required)
- * - endDate: YYYY-MM-DD (required)
+ * GET Query Parameters: startDate, endDate, filterLevel?, filterIds? (comma-separated)
+ * POST Body: { startDate, endDate, filterLevel?, filterIds?: string[] }
  */
 export async function GET(request: NextRequest) {
+  return handleHourlyInsights(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleHourlyInsights(request);
+}
+
+async function handleHourlyInsights(request: NextRequest) {
   try {
     await connectDB();
 
@@ -41,13 +72,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get and validate query parameters
-    const { searchParams } = new URL(request.url);
-    const query = Object.fromEntries(searchParams.entries());
-
     let validatedQuery;
     try {
-      validatedQuery = hourlyInsightsQuerySchema.parse(query);
+      validatedQuery = await parseAndValidate(request);
     } catch (validationError) {
       return NextResponse.json(
         {

@@ -433,7 +433,10 @@ export default function MajorDrawManagement() {
                 {getStatusBadge()}
               </div>
               <h3 className="text-2xl font-bold mb-2 font-['Poppins']">{majorDraw.name}</h3>
-              <p className="text-red-100 text-sm">{majorDraw.description || "Monthly Major Draw"}</p>
+              <div
+                className="text-red-100 text-sm [&_p]:my-0 [&_p]:text-red-100"
+                dangerouslySetInnerHTML={{ __html: majorDraw.description || "Monthly Major Draw" }}
+              />
             </div>
           </div>
 

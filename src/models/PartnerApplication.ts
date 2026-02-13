@@ -21,6 +21,7 @@ export interface IPartnerApplication extends Document {
 
   // Status and Processing
   status: "pending" | "under_review" | "approved" | "rejected" | "contacted";
+  readAt?: Date;
   adminNotes?: string;
   reviewedBy?: mongoose.Types.ObjectId;
   reviewedAt?: Date;
@@ -106,6 +107,9 @@ const PartnerApplicationSchema = new Schema<IPartnerApplication>(
       type: String,
       enum: ["pending", "under_review", "approved", "rejected", "contacted"],
       default: "pending",
+    },
+    readAt: {
+      type: Date,
     },
     adminNotes: {
       type: String,

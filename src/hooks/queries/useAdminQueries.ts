@@ -22,6 +22,7 @@ export interface RecentActivity {
     | "system_alert"
     | "membership_upgrade";
   user: string;
+  userId?: string;
   action: string;
   time: string;
   status: "success" | "info" | "warning" | "error";

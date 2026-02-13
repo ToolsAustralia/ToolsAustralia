@@ -18,6 +18,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { AdminUser } from "@/types/admin";
+import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 
 interface ActivityLogItem {
   id: string;
@@ -30,6 +31,7 @@ interface ActivityLogItem {
     | "system_alert"
     | "membership_upgrade";
   user: string;
+  userId?: string;
   action: string;
   time: string;
   status: "success" | "info" | "warning" | "error";
@@ -242,7 +244,11 @@ function ActivityLogContent() {
                               {activity.action}
                             </p>
                             <div className="flex items-center space-x-2 mt-1.5 flex-wrap">
-                              <span className="text-xs sm:text-sm text-gray-600 font-medium">{activity.user}</span>
+                              <ClickableUserDisplay
+                                displayText={activity.user}
+                                userId={activity.userId ?? null}
+                                className="text-xs sm:text-sm text-gray-600 font-medium"
+                              />
                               <span className="text-xs text-gray-400">•</span>
                               <span className="text-xs sm:text-sm text-gray-500">{activity.time}</span>
                               {activity.amount && (

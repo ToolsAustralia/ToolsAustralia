@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const priority = searchParams.get("priority");
     const subject = searchParams.get("subject");
+    const search = searchParams.get("search");
+    const readFilter = searchParams.get("readFilter");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const sortBy = searchParams.get("sortBy") || "submittedAt";
@@ -66,6 +68,23 @@ export async function GET(request: NextRequest) {
     }
     if (subject) {
       query.subject = subject;
+    }
+    if (readFilter === "unread") {
+      query.$or = [{ readAt: null }, { readAt: { $exists: false } }];
+    } else if (readFilter === "read") {
+      query.readAt = { $exists: true, $ne: null };
+    }
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      query.$and = query.$and || [];
+      (query.$and as object[]).push({
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          { email: searchRegex },
+          { subject: searchRegex },
+        ],
+      });
     }
 
     // Build sort object

@@ -836,6 +836,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
             <button
               onClick={() => setIsSpecsModalOpen(true)}
+              suppressHydrationWarning
               className="w-full relative overflow-hidden rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm transition-all duration-300 hover:border-gray-600 hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)] group text-left"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none group-hover:from-white/10"></div>

@@ -9,6 +9,7 @@ import {
   TrendingUp,
   BarChart3,
   AlertTriangle,
+  Check,
   CheckCircle,
   Eye,
   MousePointerClick,
@@ -157,6 +158,7 @@ export default function FacebookAdsManagement() {
       endDate?: string;
       level: InsightLevel;
       refresh?: boolean;
+      enabled?: boolean;
     } = {
       dateRange: dateRangeOption,
       level,
@@ -164,8 +166,15 @@ export default function FacebookAdsManagement() {
 
     // Include dates for custom ranges (including converted draw-based ranges)
     if (dateRangeOption === "custom") {
+      // For all-time: always compute dates inline (don't rely on async state)
+      if (dateRange === "all-time") {
+        const launchDate = getWebsiteLaunchDateUTC();
+        const today = new Date();
+        params.startDate = formatInTimeZone(launchDate, AEST_TIMEZONE, "yyyy-MM-dd");
+        params.endDate = formatInTimeZone(today, AEST_TIMEZONE, "yyyy-MM-dd");
+      }
       // For draw-based ranges, ensure dates are available
-      if ((dateRange === "current-draw" || dateRange === "last-draw") && drawDates) {
+      else if ((dateRange === "current-draw" || dateRange === "last-draw") && drawDates) {
         if (dateRange === "current-draw" && drawDates.currentDraw) {
           params.startDate = drawDates.currentDraw.startDate;
           params.endDate = drawDates.currentDraw.endDate;
@@ -174,10 +183,15 @@ export default function FacebookAdsManagement() {
           params.endDate = drawDates.lastDraw.endDate;
         }
       } else if (startDate && endDate) {
-        // For regular custom ranges or all-time (which has dates in state)
+        // For regular custom ranges (from modal)
         params.startDate = startDate;
         params.endDate = endDate;
       }
+
+      // Only run query when we have valid dates (avoid 400 from API)
+      params.enabled = !!(params.startDate && params.endDate);
+    } else {
+      params.enabled = true; // today/yesterday always valid
     }
 
     return params;
@@ -424,6 +438,21 @@ export default function FacebookAdsManagement() {
     }));
   }, [sortedBreakdown, level]);
 
+  // Breakdown table totals (sum of all rows)
+  const breakdownTotals = useMemo(() => {
+    if (!sortedBreakdown.length) return null;
+    const t = sortedBreakdown.reduce(
+      (acc, item) => ({
+        spend: acc.spend + item.spend,
+        revenue: acc.revenue + item.revenue,
+        profit: acc.profit + item.profit,
+        conversions: acc.conversions + item.conversions,
+      }),
+      { spend: 0, revenue: 0, profit: 0, conversions: 0 }
+    );
+    return { ...t, roas: t.spend > 0 ? t.revenue / t.spend : 0 };
+  }, [sortedBreakdown]);
+
   // Get sort icon for column header
   const getSortIcon = (column: string) => {
     if (sortColumn !== column) {
@@ -436,8 +465,8 @@ export default function FacebookAdsManagement() {
     );
   };
 
-  // Loading skeleton
-  if (isLoading) {
+  // Loading skeleton (also when query disabled waiting for params, e.g. draw dates)
+  if (isLoading || queryParams.enabled === false) {
     return (
       <div className="space-y-4 sm:space-y-6">
         {/* Summary Cards Skeleton */}
@@ -541,6 +570,62 @@ export default function FacebookAdsManagement() {
       });
     }, [breakdown, breakdownLevel, dropdownSearchQuery]);
 
+    // Group filtered items for hierarchical display: Campaign > Ad Set > Ad
+    const groupedForFilterDropdown = useMemo(() => {
+      if (breakdownLevel === "campaign") {
+        return filteredBreakdownForDropdown.map((item) => ({
+          type: "campaign" as const,
+          campaignId: item.campaignId ?? "",
+          campaignName: item.campaignName || "Unknown Campaign",
+          items: [item],
+        }));
+      }
+      if (breakdownLevel === "adset") {
+        const byCampaign: Record<string, { campaignName: string; adSets: { adsetId: string; adsetName: string; items: FacebookAdsBreakdownItem[] }[] }> = {};
+        for (const item of filteredBreakdownForDropdown) {
+          const cid = item.campaignId ?? "";
+          if (!byCampaign[cid]) {
+            byCampaign[cid] = { campaignName: item.campaignName || "Unknown Campaign", adSets: [] };
+          }
+          const aid = item.adsetId ?? "";
+          const existing = byCampaign[cid].adSets.find((a) => a.adsetId === aid);
+          if (existing) existing.items.push(item);
+          else byCampaign[cid].adSets.push({ adsetId: aid, adsetName: item.adsetName || "Unknown Ad Set", items: [item] });
+        }
+        return Object.entries(byCampaign).map(([cid, g]) => ({
+          type: "adset" as const,
+          campaignId: cid,
+          campaignName: g.campaignName,
+          adSets: g.adSets,
+        }));
+      }
+      // Ad level: Campaign > Ad Set > Ad
+      const byCampaign: Record<
+        string,
+        {
+          campaignName: string;
+          adSets: Record<string, { adsetName: string; ads: FacebookAdsBreakdownItem[] }>;
+        }
+      > = {};
+      for (const item of filteredBreakdownForDropdown) {
+        const cid = item.campaignId ?? "";
+        if (!byCampaign[cid]) {
+          byCampaign[cid] = { campaignName: item.campaignName || "Unknown Campaign", adSets: {} };
+        }
+        const aid = item.adsetId ?? "";
+        if (!byCampaign[cid].adSets[aid]) {
+          byCampaign[cid].adSets[aid] = { adsetName: item.adsetName || "Unknown Ad Set", ads: [] };
+        }
+        byCampaign[cid].adSets[aid].ads.push(item);
+      }
+      return Object.entries(byCampaign).map(([cid, g]) => ({
+        type: "ad" as const,
+        campaignId: cid,
+        campaignName: g.campaignName,
+        adSets: Object.entries(g.adSets).map(([aid, a]) => ({ adsetId: aid, adsetName: a.adsetName, ads: a.ads })),
+      }));
+    }, [breakdownLevel, filteredBreakdownForDropdown]);
+
     // Close filter dropdown when clicking outside
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -611,6 +696,22 @@ export default function FacebookAdsManagement() {
         const next = new Set(prev);
         if (checked) next.add(id);
         else next.delete(id);
+        return next;
+      });
+    };
+
+    // Toggle all items in a group: select all if any unselected, deselect all if all selected
+    const handleToggleGroup = (ids: string[]) => {
+      const validIds = ids.filter(Boolean);
+      if (validIds.length === 0) return;
+      setPendingFilterIds((prev) => {
+        const allSelected = validIds.every((id) => prev.has(id));
+        const next = new Set(prev);
+        if (allSelected) {
+          validIds.forEach((id) => next.delete(id));
+        } else {
+          validIds.forEach((id) => next.add(id));
+        }
         return next;
       });
     };
@@ -815,37 +916,133 @@ export default function FacebookAdsManagement() {
                     </button>
                   </div>
                   <div className="overflow-y-auto flex-1 min-h-0 max-h-[320px] py-2">
-                    {filteredBreakdownForDropdown.length === 0 ? (
+                    {groupedForFilterDropdown.length === 0 ? (
                       <div className="px-3 py-4 text-center text-xs sm:text-sm text-gray-500">
                         {dropdownSearchQuery.trim()
                           ? `No ${filterLabel}s match "${dropdownSearchQuery}"`
                           : `No ${filterLabel}s available`}
                       </div>
                     ) : (
-                      filteredBreakdownForDropdown.map((item) => {
-                        const id =
-                          breakdownLevel === "campaign"
-                            ? item.campaignId
-                            : breakdownLevel === "adset"
-                              ? item.adsetId
-                              : item.adId;
-                        const name =
-                          breakdownLevel === "campaign"
-                            ? item.campaignName
-                            : breakdownLevel === "adset"
-                              ? item.adsetName
-                              : item.adName;
-                        const displayName = name || id || "Unknown";
-                        if (!id) return null;
+                      groupedForFilterDropdown.map((group) => {
+                        if (group.type === "campaign") {
+                          return (
+                            <div key={group.campaignId} className="border-b border-gray-100 last:border-b-0">
+                              {group.items.map((item) => {
+                                const id = item.campaignId ?? "";
+                                const displayName = item.campaignName || id || "Unknown";
+                                if (!id) return null;
+                                return (
+                                  <div key={id} className="px-3 py-1.5">
+                                    <Checkbox
+                                      id={`hourly-filter-${id}`}
+                                      checked={pendingFilterIds.has(id)}
+                                      onChange={(e) => handleTogglePendingItem(id, e.target.checked)}
+                                      label={displayName}
+                                      className="text-xs sm:text-sm"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        if (group.type === "adset") {
+                          const campaignAdsetIds = group.adSets.flatMap((a) => a.items.map((i) => i.adsetId ?? "").filter(Boolean));
+                          const allSelected = campaignAdsetIds.length > 0 && campaignAdsetIds.every((id) => pendingFilterIds.has(id));
+                          return (
+                            <div key={group.campaignId} className="border-b border-gray-100 last:border-b-0">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleGroup(campaignAdsetIds)}
+                                className="w-full px-3 py-1.5 mt-1 bg-gray-50 text-xs font-semibold text-gray-600 truncate text-left hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+                              >
+                                <span
+                                  className={`inline-flex w-4 h-4 shrink-0 items-center justify-center rounded border-2 ${
+                                    allSelected ? "bg-red-600 border-red-600" : "border-gray-300"
+                                  }`}
+                                >
+                                  {allSelected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                                </span>
+                                {group.campaignName}
+                              </button>
+                              {group.adSets.map((adset) =>
+                                adset.items.map((item) => {
+                                  const id = item.adsetId ?? "";
+                                  const displayName = item.adsetName || id || "Unknown";
+                                  if (!id) return null;
+                                  return (
+                                    <div key={id} className="pl-6 pr-3 py-1">
+                                      <Checkbox
+                                        id={`hourly-filter-${id}`}
+                                        checked={pendingFilterIds.has(id)}
+                                        onChange={(e) => handleTogglePendingItem(id, e.target.checked)}
+                                        label={displayName}
+                                        className="text-xs sm:text-sm"
+                                      />
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          );
+                        }
+                        // Ad level: Campaign > Ad Set > Ad
+                        const campaignAdIds = group.adSets.flatMap((a) => a.ads.map((i) => i.adId ?? "").filter(Boolean));
+                        const campaignAllSelected = campaignAdIds.length > 0 && campaignAdIds.every((id) => pendingFilterIds.has(id));
                         return (
-                          <div key={id} className="px-3 py-1.5">
-                            <Checkbox
-                              id={`hourly-filter-${id}`}
-                              checked={pendingFilterIds.has(id)}
-                              onChange={(e) => handleTogglePendingItem(id, e.target.checked)}
-                              label={displayName}
-                              className="text-xs sm:text-sm"
-                            />
+                          <div key={group.campaignId} className="border-b border-gray-100 last:border-b-0">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleGroup(campaignAdIds)}
+                              className="w-full px-3 py-1 mt-1 bg-gray-50 text-xs font-semibold text-gray-600 truncate text-left hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+                            >
+                              <span
+                                className={`inline-flex w-4 h-4 shrink-0 items-center justify-center rounded border-2 ${
+                                  campaignAllSelected ? "bg-red-600 border-red-600" : "border-gray-300"
+                                }`}
+                              >
+                                {campaignAllSelected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                              </span>
+                              {group.campaignName}
+                            </button>
+                            {group.adSets.map((adset) => {
+                              const adsetAdIds = adset.ads.map((i) => i.adId ?? "").filter(Boolean);
+                              const adsetAllSelected = adsetAdIds.length > 0 && adsetAdIds.every((id) => pendingFilterIds.has(id));
+                              return (
+                              <div key={adset.adsetId}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleGroup(adsetAdIds)}
+                                  className="w-full pl-4 py-0.5 text-xs font-medium text-gray-500 truncate text-left hover:bg-gray-50/80 cursor-pointer flex items-center gap-2"
+                                >
+                                  <span
+                                    className={`inline-flex w-3.5 h-3.5 shrink-0 items-center justify-center rounded border-2 ${
+                                      adsetAllSelected ? "bg-red-600 border-red-600" : "border-gray-300"
+                                    }`}
+                                  >
+                                    {adsetAllSelected && <Check className="w-2 h-2 text-white" strokeWidth={3} />}
+                                  </span>
+                                  {adset.adsetName}
+                                </button>
+                                {adset.ads.map((item) => {
+                                  const id = item.adId ?? "";
+                                  const displayName = item.adName || id || "Unknown";
+                                  if (!id) return null;
+                                  return (
+                                    <div key={id} className="pl-8 pr-3 py-0.5">
+                                      <Checkbox
+                                        id={`hourly-filter-${id}`}
+                                        checked={pendingFilterIds.has(id)}
+                                        onChange={(e) => handleTogglePendingItem(id, e.target.checked)}
+                                        label={displayName}
+                                        className="text-xs sm:text-sm"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                            })}
                           </div>
                         );
                       })
@@ -1315,6 +1512,30 @@ export default function FacebookAdsManagement() {
                     </td>
                   </tr>
                 )))}
+                {breakdownTotals && (
+                  <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900">Total</td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatCurrency(breakdownTotals.spend)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatCurrency(breakdownTotals.revenue)}
+                    </td>
+                    <td
+                      className={`py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${
+                        breakdownTotals.profit >= 0 ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {formatCurrency(breakdownTotals.profit)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatROAS(breakdownTotals.roas)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatNumber(breakdownTotals.conversions)}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

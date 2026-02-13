@@ -53,6 +53,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const search = searchParams.get("search");
+    const readFilter = searchParams.get("readFilter");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const sortBy = searchParams.get("sortBy") || "submittedAt";
@@ -62,6 +64,23 @@ export async function GET(request: NextRequest) {
     const query: Record<string, unknown> = {};
     if (status) {
       query.status = status;
+    }
+    if (readFilter === "unread") {
+      query.$or = [{ readAt: null }, { readAt: { $exists: false } }];
+    } else if (readFilter === "read") {
+      query.readAt = { $exists: true, $ne: null };
+    }
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      query.$and = query.$and || [];
+      (query.$and as object[]).push({
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          { email: searchRegex },
+          { businessName: searchRegex },
+        ],
+      });
     }
 
     // Build sort object
