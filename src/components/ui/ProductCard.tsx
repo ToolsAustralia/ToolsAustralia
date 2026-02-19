@@ -123,22 +123,14 @@ export default function ProductCard({
   const [localErrorState, setLocalErrorState] = useState<Record<string, boolean>>({});
 
   /**
-   * Calculate user's entry count for this specific minidraw
-   * Uses miniDrawParticipation as the single source of truth (includes packages + upsells)
-   * Falls back to old calculation for backward compatibility
+   * Calculate user's entry count for this specific minidraw.
+   * Mini draw eligibility is package-only: only purchased mini pack entries count (no member entries).
    */
   const getUserEntryCount = (): number => {
     if (!isMiniDraw || !isAuthenticated || !userData) return 0;
 
-    // Get lastMonthAccumulatedEntries from subscription (applies to all minidraws)
-    const userSubscription = userData.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-    const lastMonthAccumulatedEntries = userSubscription?.lastMonthAccumulatedEntries || 0;
-
-    // Get current minidraw ID (handle both string and ObjectId formats)
-    // Use String() to safely convert both string and ObjectId types to string
     const currentMiniDrawId = String(product._id || "");
 
-    // Type assertion to access miniDrawParticipation (may not be in UserData type)
     const userWithParticipation = userData as unknown as {
       miniDrawParticipation?: Array<{
         miniDrawId: string | { toString(): string } | { _id: string | { toString(): string } };
@@ -147,19 +139,15 @@ export default function ProductCard({
       }>;
     };
 
-    // Try to find participation entry for this specific minidraw (single source of truth)
     const participationEntry = userWithParticipation?.miniDrawParticipation?.find((p) => {
-      // Handle different ID formats (string, ObjectId, etc.)
       const pkgMiniDrawId = p.miniDrawId;
       if (typeof pkgMiniDrawId === "string") {
         return pkgMiniDrawId === currentMiniDrawId;
       }
       if (pkgMiniDrawId && typeof pkgMiniDrawId === "object") {
-        // Check if it has toString method (ObjectId-like)
         if ("toString" in pkgMiniDrawId && typeof pkgMiniDrawId.toString === "function") {
           return pkgMiniDrawId.toString() === currentMiniDrawId;
         }
-        // Check if it has _id property
         if ("_id" in pkgMiniDrawId) {
           const idValue = (pkgMiniDrawId as { _id: unknown })._id;
           if (typeof idValue === "string") {
@@ -173,14 +161,10 @@ export default function ProductCard({
       return false;
     });
 
-    // If participation entry exists, use it (includes packages + upsells)
     if (participationEntry && participationEntry.totalEntries > 0) {
-      // Total entries = lastMonthAccumulatedEntries (for all) + participationEntries (for this specific minidraw)
-      return lastMonthAccumulatedEntries + participationEntry.totalEntries;
+      return participationEntry.totalEntries;
     }
 
-    // Fallback to old calculation for backward compatibility (if participation entry doesn't exist)
-    // Sum active minidraw package entries ONLY for this specific minidraw
     const userMiniDrawPackages = (
       userData as {
         miniDrawPackages?: Array<{
@@ -193,24 +177,18 @@ export default function ProductCard({
     const activeMiniDrawPackageEntries =
       userMiniDrawPackages?.reduce((sum, pkg) => {
         if (!pkg.isActive) return sum;
-
-        // Check if this package belongs to the current minidraw
         const pkgMiniDrawId = pkg.miniDrawId
           ? typeof pkg.miniDrawId === "string"
             ? pkg.miniDrawId
             : pkg.miniDrawId.toString()
           : null;
-
-        // Only count entries if miniDrawId matches (or if miniDrawId is null/undefined for backward compatibility, skip it)
         if (pkgMiniDrawId && pkgMiniDrawId === currentMiniDrawId) {
           return sum + (pkg.entriesGranted || 0);
         }
-
         return sum;
       }, 0) || 0;
 
-    // Total entries = lastMonthAccumulatedEntries (for all) + activeMiniDrawPackageEntries (for this specific minidraw)
-    return lastMonthAccumulatedEntries + activeMiniDrawPackageEntries;
+    return activeMiniDrawPackageEntries;
   };
 
   const getProductData = (): NormalizedProductData => {

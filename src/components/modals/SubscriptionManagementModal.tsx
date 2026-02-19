@@ -255,7 +255,6 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             }`,
           },
           { text: "100% Access to Partner Discounts" },
-          { text: "Mini Draws" },
         ],
         buttonText: "Get Started",
         buttonStyle: "secondary",
@@ -819,50 +818,23 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     // For first feature (Free Accumulated Entries), show current entries user has OR renewal entries if failed renewal
                     const isFirstFeature = index === 0;
                     const isEntriesFeature = featureLower.includes("entries");
-                    const isMiniDrawsFeature = featureLower.includes("mini draw") || featureLower.includes("minidraw");
-                    
                     let displayText = featureText;
-                    
-                    // For Plan Benefits display:
-                    // - If subscription is past_due (failed renewal): Show renewal entries (what they'll get/are losing)
-                    // - Otherwise: Show current accumulated entries (what they currently have)
-                    if ((isFirstFeature && isEntriesFeature) || isMiniDrawsFeature) {
-                      if (activeSubscription && membershipPackage && user.subscription) {
-                        // Get base entries from membershipPackage
-                        const baseEntries = 
-                          (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth ?? 
-                          (membershipPackage as { metadata?: { entriesCount?: number } }).metadata?.entriesCount ?? 
-                          (membershipPackage as { metadata?: { originalEntries?: number } }).metadata?.originalEntries ??
-                          15;
-                        
-                        const subscriptionWithEntries = user.subscription as {
-                          lastMonthAccumulatedEntries?: number;
-                        };
-                        const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? baseEntries;
-                        
-                        // Check if subscription is past_due (failed renewal)
-                        // In this case, show renewal entries (what they'll get when they resolve payment)
-                        if (hasFailed) {
-                          const renewalCalculation = calculateRenewalEntries(baseEntries, lastMonthAccumulated);
-                          const renewalEntries = renewalCalculation.entriesToGrant; // What user will get on renewal
-                          
-                          if (isFirstFeature && isEntriesFeature) {
-                            // Replace the number in the feature text with renewal entries (+baseEntries)
-                            displayText = featureText.replace(/\d+/, renewalEntries.toString());
-                          } else if (isMiniDrawsFeature) {
-                            // Show same renewal entries for minidraws
-                            displayText = `${renewalEntries} Free Entries for All Mini Draws`;
-                          }
-                        } else {
-                          // Show current accumulated entries (what they currently have)
-                          if (isFirstFeature && isEntriesFeature) {
-                            // Replace the number in the feature text with current accumulated entries
-                            displayText = featureText.replace(/\d+/, lastMonthAccumulated.toString());
-                          } else if (isMiniDrawsFeature) {
-                            // Show same current entries for minidraws
-                            displayText = `${lastMonthAccumulated} Free Entries for All Mini Draws`;
-                          }
-                        }
+
+                    // Plan benefits: only replace entry count for the entries feature (Major Giveaway). Mini draws are not included in membership.
+                    if (isFirstFeature && isEntriesFeature && activeSubscription && membershipPackage && user.subscription) {
+                      const baseEntries =
+                        (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth ??
+                        (membershipPackage as { metadata?: { entriesCount?: number } }).metadata?.entriesCount ??
+                        (membershipPackage as { metadata?: { originalEntries?: number } }).metadata?.originalEntries ??
+                        15;
+                      const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number };
+                      const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? baseEntries;
+
+                      if (hasFailed) {
+                        const renewalCalculation = calculateRenewalEntries(baseEntries, lastMonthAccumulated);
+                        displayText = featureText.replace(/\d+/, renewalCalculation.entriesToGrant.toString());
+                      } else {
+                        displayText = featureText.replace(/\d+/, lastMonthAccumulated.toString());
                       }
                     }
                     
@@ -995,7 +967,6 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                             <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">{upgrade.description}</p>
                             <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500">
                               <span>{totalEntriesAfterUpgrade} Free Accumulated Entries</span>
-                              <span>{totalEntriesAfterUpgrade} Free Entries for All Mini Draws</span>
                               <span>{upgrade.partnerDiscountDays} days partner access</span>
                             </div>
                           </div>
@@ -1054,7 +1025,6 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                             <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">{downgrade.description}</p>
                             <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500">
                               <span>{downgradeEntries} Free Accumulated Entries</span>
-                              <span>{downgradeEntries} Free Entries for All Mini Draws</span>
                               <span>{downgrade.partnerDiscountDays} days partner access</span>
                             </div>
                           </div>

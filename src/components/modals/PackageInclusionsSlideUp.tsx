@@ -122,15 +122,15 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
                 <h3 className={`text-xl sm:text-2xl font-bold ${colorScheme.text}`}>{plan.name}</h3>
               </div>
 
-              {/* Features List - Vertical bullet points */}
+              {/* Features List - Vertical bullet points (dash aligned to text baseline on mobile) */}
               <ul className="space-y-2.5 pl-4 sm:pl-6">
                 {plan.features.map((feature, index) => (
                   <li
                     key={index}
-                    className={`flex items-start gap-3 ${colorScheme.feature} text-sm sm:text-base leading-relaxed`}
+                    className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.feature} text-sm sm:text-base leading-relaxed`}
                   >
-                    <span className={`${colorScheme.bullet} mt-1.5 font-bold flex-shrink-0`}>-</span>
-                    <span className="flex-1">{feature.text}</span>
+                    <span className={`${colorScheme.bullet} font-bold flex-shrink-0`}>-</span>
+                    <span className="flex-1 min-w-0">{feature.text}</span>
                   </li>
                 ))}
               </ul>

@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
 import Image from "next/image";
+import { Package, Ticket, Trophy } from "lucide-react";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
 import MembershipSection from "@/components/sections/MembershipSection";
@@ -11,7 +12,7 @@ import { ProductCardSkeleton, Skeleton } from "@/components/loading/SkeletonLoad
 export const metadata: Metadata = {
   title: "Mini Draws | Tools Australia",
   description:
-    "Activate your Tools Australia membership to unlock mini draw entry packages and go after premium prizes.",
+    "Purchase mini packs to enter mini draws and go after premium prizes. Only mini pack purchases count toward mini draw entries.",
 };
 
 export default async function MiniDrawsPage() {
@@ -99,35 +100,43 @@ export default async function MiniDrawsPage() {
         <MiniDrawsContent initialMiniDraws={[]} totalMiniDraws={0} />
       </Suspense>
 
-      {/* How It Works Section */}
+      {/* How It Works Section - matches draw-results "How Winners Are Selected" layout */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* This copy mirrors the actual membership-gated entry flow used in the mini draw components */}
-        <section className="bg-white rounded-lg shadow-sm border p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">How Mini Draws Work</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-blue-600">1</span>
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-200/50 px-6 py-4">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 font-['Poppins'] mb-3">
+              How Mini Draws Work
+            </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Purchase a mini pack, join active draws, and check the results when we announce winners.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">
+            <div className="text-center group">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-600 to-red-700 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform duration-300 shadow-lg">
+                <Package className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Activate Membership</h3>
-              <p className="text-gray-600">
-                Become a member to unlock access to mini draws and exclusive entry packages.
+              <h3 className="text-lg font-bold text-gray-900 mb-3 font-['Poppins']">Purchase a Mini Pack</h3>
+              <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                Buy a mini pack to get entries in active mini draws.
               </p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-green-600">2</span>
+            <div className="text-center group">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-600 to-red-700 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform duration-300 shadow-lg">
+                <Ticket className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Join Mini Draws</h3>
-              <p className="text-gray-600">Browse active draws and purchase the entry packages that suit your goals.</p>
+              <h3 className="text-lg font-bold text-gray-900 mb-3 font-['Poppins']">Join Mini Draws</h3>
+              <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                Browse active draws and purchase the entry packages that suit your goals.
+              </p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-purple-600">3</span>
+            <div className="text-center group">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-600 to-red-700 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform duration-300 shadow-lg">
+                <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Track Winners</h3>
-              <p className="text-gray-600">
-                We announce winners when each draw closes—check the results page to see who took home the prize.
+              <h3 className="text-lg font-bold text-gray-900 mb-3 font-['Poppins']">Track Winners</h3>
+              <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                Check the <a href="/draw-results" className="text-red-600 hover:underline">results page</a> to see who took home the prize.
               </p>
             </div>
           </div>

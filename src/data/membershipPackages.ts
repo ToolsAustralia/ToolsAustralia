@@ -70,12 +70,11 @@ export const membershipPackages: StaticMembershipPackage[] = [
     name: "Tradie",
     type: "subscription",
     price: 20,
-    description: "Perfect for tradies getting started with mini draws",
+    description: "Perfect for tradies getting started",
     features: [
       "15 Free Accumulated Entries",
       // "5% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
-      "Mini Draws",
     ],
     entriesPerMonth: 15,
     shopDiscountPercent: 5,
@@ -97,7 +96,6 @@ export const membershipPackages: StaticMembershipPackage[] = [
       "40 Free Accumulated Entries",
       // "10% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
-      "Mini Draws",
     ],
     entriesPerMonth: 40,
     shopDiscountPercent: 10,
@@ -119,7 +117,6 @@ export const membershipPackages: StaticMembershipPackage[] = [
       "100 Free Accumulated Entries",
       // "20% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
-      "Mini Draws",
     ],
     entriesPerMonth: 100,
     shopDiscountPercent: 20,

@@ -64,7 +64,7 @@ export default async function TermsPage() {
                 </a>
               </span>
               <span className="font-semibold text-white">Last Updated:</span>
-              <span>03/02/2026</span>
+              <span>25/11/2025</span>
             </div>
           </section>
 
@@ -116,7 +116,7 @@ export default async function TermsPage() {
                 <ul className="list-inside list-disc space-y-2">
                   <li>Recurring monthly billing available in three tiers: Tradie, Foreman, and Boss</li>
                   <li>
-                    Provide monthly accumulated entries into both Major Giveaway Competitions and Mini Draw Competitions
+                    Provide monthly accumulated entries into Major Giveaway Competitions
                   </li>
                   <li>Ongoing access to member discounts and benefits</li>
                   <li>&quot;Per giveaway&quot; means per calendar month</li>
@@ -130,8 +130,8 @@ export default async function TermsPage() {
             <p className="text-gray-300">
               <strong>Important:</strong> One-Time Packages provide entries to both Major Giveaway and Mini Draw
               competitions for the specified period. Membership Packages provide ongoing monthly entries that apply to
-              both Major Giveaway and Mini Draw competitions. Purchase confirmations clearly specify the number of
-              entries and applicable competition periods.
+              only Major Giveaway competitions. Purchase confirmations clearly specify the number of entries and
+              applicable competition periods.
             </p>
           </section>
 
@@ -149,7 +149,8 @@ export default async function TermsPage() {
               </li>
               <li>
                 <strong>Billing Exception:</strong> If your billing cycle falls on the 25th, 26th, or 27th of any given
-                month, you will be charged on the 24th instead to ensure eligibility for the upcoming monthly giveaway.
+                month, you will be charged on the 24th instead. This is to give you sufficient time to sort out your
+                payment and ensure eligibility for the upcoming monthly giveaway.
               </li>
             </ul>
           </section>
@@ -169,8 +170,7 @@ export default async function TermsPage() {
                     period
                   </li>
                   <li>
-                    Membership Packages: Monthly accumulated entries apply to both Major Giveaway and Mini Draw
-                    competitions
+                    Membership Packages: Monthly accumulated entries apply to Major Giveaway competitions
                   </li>
                   <li>
                     Additional entries may be offered via promotions, referrals, or free entry methods
@@ -182,11 +182,11 @@ export default async function TermsPage() {
                 <ul className="list-inside list-disc space-y-2">
                   <li>Entry limits specified in each competition&apos;s terms and conditions</li>
                   <li>
-                    Mini Draws have a threshold based on One-Time Package entries sold. Once the specified number is
-                    reached, the Mini Draw closes to new One-Time Package purchases and the draw is conducted.
+                    Mini Draws have a threshold based on One-Time Package entries sold. Once the specified number of
+                    One-Time Package entries are sold, the Mini Draw closes to new One-Time Package purchases and the
+                    draw is conducted.
                   </li>
-                  <li>Member entries are automatically included in Mini Draws and do not count toward that threshold.</li>
-                  <li>Maximum entries per member may apply as specified in competition-specific terms</li>
+                  <li>Maximum entries per member may apply as specified in competition-specific terms.</li>
                 </ul>
               </div>
               <div>
@@ -249,9 +249,7 @@ export default async function TermsPage() {
                   <li>Each competition has separate terms and conditions</li>
                   <li>Review competition-specific terms in addition to these general terms</li>
                   <li>
-                    Mini Draws have specific One-Time Package entry thresholds and closure conditions. All active
-                    Membership Package holders automatically receive their member entries regardless of the One-Time
-                    Package threshold.
+                    Mini Draws have specific One-Time Package entry thresholds and closure conditions.
                   </li>
                 </ul>
               </div>
@@ -305,7 +303,8 @@ export default async function TermsPage() {
                     </a>
                   </li>
                   <li>
-                    Restoration applies only to standard monthly accumulated entries, not promotional or bonus entries
+                    Restoration applies only to standard monthly accumulated entries for Major Giveaway competitions,
+                    and specifically excludes Mini Draw entries, promotional entries, or bonus entries.
                   </li>
                   <li>One-Time Package entries are not eligible for restoration</li>
                   <li>Entry restoration is processed within 48 hours of approval</li>
@@ -495,7 +494,10 @@ export default async function TermsPage() {
                 Any disputes arising out of or relating to these Terms are subject to the non-exclusive jurisdiction of
                 the courts of Victoria.
               </li>
-              <li>Where possible, resolve disputes directly with Tools Australia before commencing legal action.</li>
+              <li>
+                Where possible, disputes should be resolved through direct communication with Tools Australia before
+                commencing legal proceedings.
+              </li>
             </ul>
           </section>
 
@@ -521,8 +523,8 @@ export default async function TermsPage() {
                 the specified period
               </li>
               <li>
-                You understand Membership Package entries are accumulated monthly and apply to both Major Giveaway and
-                Mini Draw competitions
+                You understand Membership Package entries are accumulated monthly and apply exclusively to Major
+                Giveaway competitions.
               </li>
               <li>You are responsible for maintaining accurate contact details</li>
             </ul>

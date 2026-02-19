@@ -2,9 +2,8 @@
 
 import React from "react";
 import Image from "next/image";
-import { Trophy, Users, Gift, Lock, GaugeCircle } from "lucide-react";
+import { Trophy, Users, Gift, GaugeCircle } from "lucide-react";
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
-import Link from "next/link";
 import { getBrandMeta } from "@/utils/brand-utils";
 import { SectionContainer } from "@/components/ui";
 
@@ -55,8 +54,6 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
   const isActive = miniDraw.status === "active";
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
   const showPackages = isActive && !isSoldOut;
-  const hasActiveMembership = miniDraw.hasActiveMembership ?? false;
-  const showMembershipWarning = false; // ✅ AUTHENTICATION-ONLY: No membership warning needed
   const brandMeta = getBrandMeta(miniDraw.brandId);
   const brandLabel = brandMeta?.name ?? "Mini Draw";
   const brandBadgeClass = brandMeta
@@ -105,27 +102,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
             {getStatusBadge()}
           </div>
 
-          {/* Membership Required Warning */}
-          {showMembershipWarning && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg mb-4">
-              <div className="flex items-start gap-3">
-                <Lock className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-yellow-800 mb-1">Membership Required</h3>
-                  <p className="text-yellow-700 mb-3">
-                    You need an active membership to participate in this mini draw. Join now to get access to exclusive
-                    draws and prizes!
-                  </p>
-                  <Link
-                    href="/membership"
-                    className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
-                  >
-                    Get Membership
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Mini draw entry is package-only; no membership required. */}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -253,30 +230,12 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
               </p>
             </div>
 
-            {showPackages && hasActiveMembership && (
+            {showPackages && (
               <MiniDrawPackages
                 miniDrawId={miniDraw._id}
                 minimumEntries={miniDraw.minimumEntries}
                 totalEntries={miniDraw.totalEntries}
               />
-            )}
-
-            {showPackages && !hasActiveMembership && (
-              <div className="bg-gray-50 rounded-xl shadow-lg p-6 border-2 border-gray-200">
-                <div className="flex items-center gap-3 mb-4">
-                  <Lock className="w-6 h-6 text-gray-600" />
-                  <h3 className="text-lg font-bold text-gray-900">Membership Required</h3>
-                </div>
-                <p className="text-gray-600 mb-4">
-                  You need an active membership to purchase entries for this mini draw.
-                </p>
-                <Link
-                  href="/membership"
-                  className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors w-full text-center"
-                >
-                  Get Membership
-                </Link>
-              </div>
             )}
 
             {!showPackages && !isCompleted && !isCancelled && (
