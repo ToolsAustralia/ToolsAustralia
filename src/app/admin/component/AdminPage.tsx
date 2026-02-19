@@ -295,8 +295,12 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   // Fetch membership by package (card + breakdown section use this)
   const { data: membershipByPackageData, isLoading: membershipByPackageLoading } = useMembershipByPackage();
 
-  // Upcoming Stripe renewals (Stripe API)
-  const { data: upcomingRenewalsData, isLoading: upcomingRenewalsLoading } = useUpcomingRenewals(upcomingRenewalsRange);
+  // Upcoming renewals (DB-first, paginated)
+  const { data: upcomingRenewalsData, isLoading: upcomingRenewalsLoading } = useUpcomingRenewals(
+    upcomingRenewalsRange,
+    upcomingRenewalsPage,
+    UPCOMING_RENEWALS_PAGE_SIZE
+  );
 
   // Handle mobile sidebar close with animation
   const handleCloseMobileSidebar = () => {
@@ -1160,7 +1164,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                     <div className="flex items-center gap-2">
                       {upcomingRenewalsData && !upcomingRenewalsLoading && (
                         <span className="text-xs text-gray-500">
-                          {upcomingRenewalsData.renewals.length} in window
+                          {upcomingRenewalsData.total} in window
                         </span>
                       )}
                       {isUpcomingRenewalsExpanded ? (
@@ -1173,7 +1177,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {isUpcomingRenewalsExpanded && (
                     <>
                       <p className="text-sm text-gray-600 mt-2 mb-3">
-                        Subscriptions renewing today, in the next 3/7 days, or by the 27th (5:30pm AEST).
+                        Subscriptions renewing today, in the next 3/7 days, or by the 27th (8pm AEST/AEDT).
                       </p>
                       <div className="flex flex-wrap gap-2 mb-4">
                         {([0, 3, 7, 27] as const).map((days) => (
@@ -1194,16 +1198,17 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           </button>
                         ))}
                       </div>
-                      {upcomingRenewalsData && upcomingRenewalsData.renewals.length > 0 && (
+                      {upcomingRenewalsData && upcomingRenewalsData.total > 0 && (
                         <div className="mb-3 text-sm text-gray-700">
                           <span className="font-semibold">
                             Total expected revenue:{" "}
                             $
-                            {upcomingRenewalsData.renewals
-                              .reduce((s, r) => s + (r.amountCents ?? 0) / 100, 0)
-                              .toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {(upcomingRenewalsData.totalRevenue ?? 0).toLocaleString("en-AU", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
                           </span>
-                          {" "}({upcomingRenewalsData.renewals.length} renewals)
+                          {" "}({upcomingRenewalsData.total} renewals)
                         </div>
                       )}
                       {upcomingRenewalsLoading && !upcomingRenewalsData && (
@@ -1214,19 +1219,20 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       )}
                       {upcomingRenewalsData && (
                         <div className="overflow-x-auto">
-                          {upcomingRenewalsData.renewals.length === 0 ? (
+                          {upcomingRenewalsData.total === 0 ? (
                             <p className="text-sm text-gray-500 py-4">No renewals in this window.</p>
                           ) : (
                             <>
-                              {upcomingRenewalsData.renewals.length > UPCOMING_RENEWALS_PAGE_SIZE && (
+                              {upcomingRenewalsData.total > UPCOMING_RENEWALS_PAGE_SIZE && (
                                 <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 mb-2">
                                   <p>
-                                    Showing {(upcomingRenewalsPage - 1) * UPCOMING_RENEWALS_PAGE_SIZE + 1} to{" "}
+                                    Showing{" "}
+                                    {(upcomingRenewalsPage - 1) * UPCOMING_RENEWALS_PAGE_SIZE + 1} to{" "}
                                     {Math.min(
                                       upcomingRenewalsPage * UPCOMING_RENEWALS_PAGE_SIZE,
-                                      upcomingRenewalsData.renewals.length
+                                      upcomingRenewalsData.total
                                     )}{" "}
-                                    of {upcomingRenewalsData.renewals.length} renewals
+                                    of {upcomingRenewalsData.total} renewals
                                   </p>
                                 </div>
                               )}
@@ -1240,12 +1246,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {upcomingRenewalsData.renewals
-                                    .slice(
-                                      (upcomingRenewalsPage - 1) * UPCOMING_RENEWALS_PAGE_SIZE,
-                                      upcomingRenewalsPage * UPCOMING_RENEWALS_PAGE_SIZE
-                                    )
-                                    .map((r) => (
+                                  {upcomingRenewalsData.renewals.map((r) => (
                                       <tr key={r.subscriptionId} className="border-t border-gray-200 hover:bg-gray-50">
                                         <td className="p-2">
                                           <span className="font-medium text-gray-900">
@@ -1272,9 +1273,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                                     ))}
                                 </tbody>
                               </table>
-                              {upcomingRenewalsData.renewals.length > UPCOMING_RENEWALS_PAGE_SIZE && (() => {
-                                const totalRenewals = upcomingRenewalsData.renewals.length;
-                                const totalPages = Math.ceil(totalRenewals / UPCOMING_RENEWALS_PAGE_SIZE);
+                              {upcomingRenewalsData.total > UPCOMING_RENEWALS_PAGE_SIZE && (() => {
+                                const totalPages = Math.ceil(upcomingRenewalsData.total / UPCOMING_RENEWALS_PAGE_SIZE);
                                 const hasPrevPage = upcomingRenewalsPage > 1;
                                 const hasNextPage = upcomingRenewalsPage < totalPages;
                                 return (

@@ -186,6 +186,10 @@ export interface UpcomingRenewalItem {
 
 export interface UpcomingRenewalsData {
   renewals: UpcomingRenewalItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalRevenue: number;
 }
 
 // Types for revenue details
@@ -499,13 +503,14 @@ export function useMembershipByPackage() {
 }
 
 /**
- * Hook to fetch upcoming Stripe subscription renewals (Stripe API, no built-in report)
+ * Hook to fetch upcoming subscription renewals (DB-first, paginated)
  */
-export function useUpcomingRenewals(range: UpcomingRenewalsRange = 7) {
+export function useUpcomingRenewals(range: UpcomingRenewalsRange = 7, page: number = 1, limit: number = 50) {
   return useQuery<UpcomingRenewalsData>({
-    queryKey: ["admin", "upcoming-renewals", range],
+    queryKey: ["admin", "upcoming-renewals", range, page, limit],
     queryFn: async (): Promise<UpcomingRenewalsData> => {
-      const response = await fetch(`/api/admin/dashboard/upcoming-renewals?range=${range}`);
+      const params = new URLSearchParams({ range: String(range), page: String(page), limit: String(limit) });
+      const response = await fetch(`/api/admin/dashboard/upcoming-renewals?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch upcoming renewals");

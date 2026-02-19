@@ -974,9 +974,9 @@ export default function MyAccountPage() {
                             );
                             return visiblePackages.length > 0 ? (
                               <div className="flex flex-wrap justify-center gap-2 mt-2">
-                                {visiblePackages.map((pkg) => (
+                                {visiblePackages.map((pkg, index) => (
                                   <MembershipBadge
-                                    key={String(pkg.packageId)}
+                                    key={`${String(pkg.packageId)}-${index}`}
                                     packageData={pkg.packageData}
                                     isActive={true}
                                     membershipType="one-time"
