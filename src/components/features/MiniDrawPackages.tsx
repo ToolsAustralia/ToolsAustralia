@@ -46,11 +46,7 @@ export default function MiniDrawPackages({
   const calculateUserEntryCount = (): number => {
     if (!isAuthenticated || !userData) return userEntryCount || 0;
 
-    // Get lastMonthAccumulatedEntries from subscription (applies to all minidraws)
-    const userSubscription = userData.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-    const lastMonthAccumulatedEntries = userSubscription?.lastMonthAccumulatedEntries || 0;
-
-    // Get current minidraw ID for comparison (normalize to string)
+    // Mini draw eligibility is package-only: only purchased mini pack entries count (no member entries).
     const currentMiniDrawId = miniDrawId;
 
     // Type assertion to access miniDrawParticipation (may not be in UserData type)
@@ -88,14 +84,12 @@ export default function MiniDrawPackages({
       return false;
     });
 
-    // If participation entry exists, use it (includes packages + upsells)
+    // If participation entry exists, use it (packages + upsells only; no member entries)
     if (participationEntry && participationEntry.totalEntries > 0) {
-      // Total entries = lastMonthAccumulatedEntries (for all) + participationEntries (for this specific minidraw)
-      return lastMonthAccumulatedEntries + participationEntry.totalEntries;
+      return participationEntry.totalEntries;
     }
 
-    // Fallback to old calculation for backward compatibility (if participation entry doesn't exist)
-    // Sum active minidraw package entries ONLY for this specific minidraw
+    // Fallback: sum active minidraw package entries for this specific minidraw only
     const userMiniDrawPackages = (
       userData as {
         miniDrawPackages?: Array<{
@@ -109,14 +103,12 @@ export default function MiniDrawPackages({
       userMiniDrawPackages?.reduce((sum, pkg) => {
         if (!pkg.isActive) return sum;
 
-        // Check if this package belongs to the current minidraw
         const pkgMiniDrawId = pkg.miniDrawId
           ? typeof pkg.miniDrawId === "string"
             ? pkg.miniDrawId
             : pkg.miniDrawId.toString()
           : null;
 
-        // Only count entries if miniDrawId matches (skip if null/undefined for backward compatibility)
         if (pkgMiniDrawId && pkgMiniDrawId === currentMiniDrawId) {
           return sum + (pkg.entriesGranted || 0);
         }
@@ -124,8 +116,7 @@ export default function MiniDrawPackages({
         return sum;
       }, 0) || 0;
 
-    // Total entries = lastMonthAccumulatedEntries (for all) + activeMiniDrawPackageEntries (for this specific minidraw)
-    return lastMonthAccumulatedEntries + activeMiniDrawPackageEntries;
+    return activeMiniDrawPackageEntries;
   };
 
   const calculatedUserEntryCount = calculateUserEntryCount();

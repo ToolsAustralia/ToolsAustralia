@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check } from "lucide-react";
 import MembershipModal from "@/components/modals/MembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
@@ -528,7 +528,7 @@ export default function MembershipSection({
 
   return (
     <section id="membership" className={`${padding} w-full overflow-visible relative z-10`}>
-      <SectionContainer className="overflow-visible">
+  
         {/* Section Header */}
         <div className="text-center">
           <h2
@@ -1271,10 +1271,13 @@ export default function MembershipSection({
           <div className="lg:hidden mt-8 sm:mt-10">
             <button
               onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
-              className="font-poppins w-full py-3 px-4 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 rounded-2xl text-white font-semibold text-sm sm:text-base shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] border border-slate-700 flex items-center justify-center gap-2"
-              >
+              className={`font-poppins w-full py-3 px-4 rounded-2xl text-white font-semibold text-sm sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
+                isInclusionsExpanded
+                  ? "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-600 border-slate-500 hover:shadow-xl"
+                  : "bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-slate-700 hover:shadow-xl"
+              }`}
+            >
               <span>Click here to see full package inclusion</span>
-              {isInclusionsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
             </button>
 
             {/* Package Inclusions Expanded Component - shows all currently displayed packages */}
@@ -1282,7 +1285,7 @@ export default function MembershipSection({
           </div>
         );
       })()}
-      </SectionContainer>
+   
 
       {/* Signup Modal */}
       <MembershipModal

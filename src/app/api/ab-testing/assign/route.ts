@@ -22,7 +22,22 @@ const assignRequestSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body: unknown;
+    try {
+      const text = await request.text();
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid or empty JSON body. Expected { experimentId, slug }." },
+        { status: 400 }
+      );
+    }
+    if (body === null || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Request body must be a JSON object with experimentId and slug." },
+        { status: 400 }
+      );
+    }
     const validatedData = assignRequestSchema.parse(body);
 
     // Get session (if logged in)

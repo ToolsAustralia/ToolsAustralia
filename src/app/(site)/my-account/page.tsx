@@ -40,7 +40,6 @@ import PackageDetailModal, {
   type SubscriptionAccumulationData,
 } from "@/components/modals/PackageDetailModal";
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
-import { getPackageById } from "@/data/membershipPackages";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -512,31 +511,8 @@ export default function MyAccountPage() {
   // Membership card shows subscription package only (never one-time). One-time badges go in One-time card.
   const membershipPackage = user.subscriptionPackageData ?? null;
 
-  /**
-   * Check if user has active membership that includes "Mini Draws" feature
-   * This determines if user is automatically entered in all minidraws
-   */
-  const checkMembershipIncludesMiniDraws = (): boolean => {
-    // Check if user has active subscription
-    if (!user.subscription?.isActive || !user.subscription?.packageId) {
-      return false;
-    }
-
-    // Get package details
-    const packageId = user.subscription.packageId.toString();
-    const packageData = getPackageById(packageId);
-
-    if (!packageData) {
-      return false;
-    }
-
-    // Check if package features include "Mini Draws"
-    const includesMiniDraws = packageData.features.some((feature) => feature.toLowerCase().includes("mini draw"));
-
-    return includesMiniDraws;
-  };
-
-  const hasMembershipWithMiniDraws = checkMembershipIncludesMiniDraws();
+  // Mini draw eligibility is package-only: user is "entered" only if they have purchased mini pack entries
+  const hasMiniPackEntries = userParticipatingMiniDrawIds.size > 0;
 
   // Calculate draw status and timing information (needed early for displayMembershipEntries)
   const isCompleted = currentMajorDraw?.status === "completed";
@@ -1168,8 +1144,8 @@ export default function MyAccountPage() {
             {/* Membership Info Banner */}
             {!miniDrawsLoading && activeMiniDraws.length > 0 && (
               <div className="mb-8">
-                {hasMembershipWithMiniDraws ? (
-                  // Success Banner - User has membership with minidraws
+                {hasMiniPackEntries ? (
+                  // Success Banner - User has purchased mini pack entries
                   <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border-2 border-gray-700 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
                     <div className="flex items-start gap-3 sm:gap-4">
                       <div className="flex-shrink-0">
@@ -1179,18 +1155,17 @@ export default function MyAccountPage() {
                       </div>
                       <div className="flex-1">
                         <h3 className="text-base sm:text-xl font-bold text-white mb-1">
-                          You&apos;re Automatically Entered!
+                          You&apos;re Entered!
                         </h3>
                         <p className="text-xs sm:text-base text-gray-300">
-                          With your active membership, you&apos;re automatically entered in all mini draws. Your entries
-                          are calculated from your membership benefits plus any additional minidraw packages you&apos;ve
-                          purchased.
+                          You have entries in active mini draws from your mini pack purchases. Only purchased mini pack
+                          entries count toward mini draws—membership entries apply to the Major Giveaway only.
                         </p>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  // CTA Banner - User doesn't have membership with minidraws
+                  // CTA Banner - User has no mini pack entries yet
                   <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border-2 border-gray-700 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
                     <div className="flex items-start gap-3 sm:gap-4 mb-4">
                       <div className="flex-shrink-0">
@@ -1199,96 +1174,25 @@ export default function MyAccountPage() {
                         </div>
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-base sm:text-xl font-bold text-white mb-1">Get Your Name in Every Draw</h3>
+                        <h3 className="text-base sm:text-xl font-bold text-white mb-1">Get Your Name in the Draw</h3>
                         <p className="text-xs sm:text-base text-gray-300">
-                          Subscribe to a membership package and automatically enter all mini draws! Your membership
-                          entries will be added to every active minidraw.
+                          Purchase a mini pack to enter active mini draws. Only mini pack purchases count toward mini
+                          draw entries—membership applies to the Major Giveaway only.
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                      <button
-                        onClick={() => {
-                          // Get Tradie package for default selection
-                          const getTradiePackage = (): LocalMembershipPlan => {
-                            const targetPackageId = "tradie-subscription";
-                            const packageData = subscriptionPackages.find((pkg) => pkg.id === targetPackageId);
-
-                            if (!packageData) {
-                              // Fallback if package not found
-                              const baseEntries = 15; // Tradie subscription has 15 entries per month
-                              const promoEntries = baseEntries * membershipPromoMultiplier;
-
-                              return {
-                                id: targetPackageId,
-                                name: "Tradie",
-                                price: 20,
-                                period: "mo",
-                                features: [
-                                  {
-                                    text: `${promoEntries} Free Accumulated Entries${
-                                      membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
-                                    }`,
-                                  },
-                                  { text: "100% Access to Partner Discounts" },
-                                  { text: "Mini Draws" },
-                                ],
-                                buttonText: "Get Started",
-                                buttonStyle: "secondary",
-                                isMemberOnly: false,
-                                metadata: {
-                                  entriesCount: promoEntries,
-                                  promoMultiplier: membershipPromoMultiplier,
-                                  originalEntries: baseEntries,
-                                  isPromoActive: membershipPromoMultiplier > 1,
-                                },
-                              };
-                            }
-
-                            const localPlan = convertToLocalPlan(packageData);
-
-                            // Apply promo multiplier if active
-                            if (membershipPromoMultiplier <= 1) {
-                              return localPlan;
-                            }
-
-                            const originalEntries = localPlan.metadata?.entriesCount ?? 0;
-                            const promoEntries = originalEntries * membershipPromoMultiplier;
-
-                            return {
-                              ...localPlan,
-                              features: localPlan.features.map((feature) => {
-                                if (feature.text.toLowerCase().includes("entries")) {
-                                  return {
-                                    ...feature,
-                                    text: feature.text.replace(/\d+/, promoEntries.toString()),
-                                  };
-                                }
-                                return feature;
-                              }),
-                              metadata: {
-                                ...localPlan.metadata,
-                                entriesCount: promoEntries,
-                                originalEntries,
-                                promoMultiplier: membershipPromoMultiplier,
-                                isPromoActive: true,
-                              },
-                            };
-                          };
-
-                          const tradiePlan = getTradiePackage();
-                          membershipModal.setSelectedPlan(tradiePlan);
-                          membershipModal.openModal();
-                        }}
-                        className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl"
+                      <Link
+                        href="/mini-draws"
+                        className="inline-block flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl text-center"
                       >
-                        Get Your Name in Every Draw
-                      </button>
+                        Browse Mini Packs
+                      </Link>
                       <button
                         onClick={() => membershipModal.openModalWithPackageSelectionFirst()}
                         className="flex-1 bg-white border-2 border-blue-600 text-blue-700 hover:bg-blue-50 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
                       >
-                        Subscribe to Membership Package
+                        Subscribe for Major Giveaway
                       </button>
                     </div>
                   </div>
@@ -1309,12 +1213,12 @@ export default function MyAccountPage() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2">
-                      {hasMembershipWithMiniDraws ? "Increase Your Chances of Winning" : "Explore More Mini Draws"}
+                      {hasMiniPackEntries ? "Increase Your Chances of Winning" : "Explore Mini Draws"}
                     </h3>
                     <p className="text-sm text-gray-600">
-                      {hasMembershipWithMiniDraws
-                        ? "Purchase additional entries to boost your odds!"
-                        : "Join these exciting mini draws"}
+                      {hasMiniPackEntries
+                        ? "Purchase more mini packs to boost your odds!"
+                        : "Purchase a mini pack to enter these draws"}
                     </p>
                   </div>
                   <Link

@@ -43,7 +43,7 @@ const faqs: FAQItem[] = [
     id: "7",
     question: "What if I'm already a member?",
     answer:
-      "Great! As a member, you accumulate member entries with your subscription AND you can purchase additional packages to get more entries for even more chances to win. Member packages often have better value too!",
+      "As a member, you accumulate entries for the Major Giveaway with your subscription. For mini draws, only mini pack purchases count—you can buy mini packs to enter. You can also purchase one-time or other packages for more chances in the major draw.",
   },
   {
     id: "8",
