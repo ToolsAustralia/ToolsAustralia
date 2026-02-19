@@ -23,6 +23,7 @@ import {
   useRevenueBreakdown,
   useProjectedIncome,
   useMembershipByPackage,
+  useUpcomingRenewals,
   useMajorDrawsForDateRange,
   useCurrentAndLastDrawDates,
 } from "@/hooks/queries/useAdminQueries";
@@ -35,9 +36,10 @@ import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManageme
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
+import MembershipByPackageDetailModal from "@/components/modals/MembershipByPackageDetailModal";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
-import type { RevenueCategory, RevenueBreakdownItem } from "@/hooks/queries/useAdminQueries";
+import type { RevenueCategory, RevenueBreakdownItem, UpcomingRenewalsRange } from "@/hooks/queries/useAdminQueries";
 import type { TrendData } from "@/types/admin/trend-types";
 import Image from "next/image";
 import { getPackageIcon } from "@/utils/images/package-icons";
@@ -63,6 +65,10 @@ import {
   ShoppingBag,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   UserX,
 } from "lucide-react";
 
@@ -86,7 +92,18 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isMobile, setIsMobile] = useState(false);
   const [isRevenueDetailModalOpen, setIsRevenueDetailModalOpen] = useState(false);
   const [selectedRevenueCategory, setSelectedRevenueCategory] = useState<RevenueCategory | null>(null);
+  const [membershipModalPackage, setMembershipModalPackage] = useState<{
+    packageId: string;
+    packageName: string;
+    initialStatusFilter?: "active" | "past_due" | "cancelled";
+  } | null>(null);
+  const [isMembershipByPackageModalOpen, setIsMembershipByPackageModalOpen] = useState(false);
+  const [upcomingRenewalsRange, setUpcomingRenewalsRange] = useState<UpcomingRenewalsRange>(7);
+  const [isUpcomingRenewalsExpanded, setIsUpcomingRenewalsExpanded] = useState(true);
+  const [upcomingRenewalsPage, setUpcomingRenewalsPage] = useState(1);
   const { openUserModal } = useAdminUserModal();
+
+  const UPCOMING_RENEWALS_PAGE_SIZE = 15;
 
   // State for date filter - synced with URL params
   const [dateRange, setDateRange] = useState<DateRange>("today");
@@ -281,6 +298,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
   // Fetch membership by package for breakdown
   const { data: membershipByPackageData, isLoading: membershipByPackageLoading } = useMembershipByPackage();
+
+  // Upcoming Stripe renewals (Stripe API)
+  const { data: upcomingRenewalsData, isLoading: upcomingRenewalsLoading } = useUpcomingRenewals(upcomingRenewalsRange);
 
   // Handle mobile sidebar close with animation
   const handleCloseMobileSidebar = () => {
@@ -772,14 +792,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                             )}
                           </span>
                         }
-                        color="purple"
+                        color="red"
                         loading={projectedIncomeLoading}
                       />
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {isMembershipByPackageExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-purple-600" />
+                          <ChevronUp className="w-4 h-4 text-red-600" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 text-purple-600" />
+                          <ChevronDown className="w-4 h-4 text-red-600" />
                         )}
                       </div>
                     </div>
@@ -1021,6 +1041,64 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       </svg>
                     </button>
                   </div>
+
+                  {(projectedIncomeLoading || membershipByPackageLoading) && (
+                    <div className="flex items-center justify-center py-6 text-gray-500">
+                      <RefreshCw className="w-8 h-8 animate-spin mr-2" />
+                      <span>Loading projected income & membership breakdown…</span>
+                    </div>
+                  )}
+
+                  {/* Summary: overall Active and Past due (from membership by package) */}
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMembershipModalPackage({ packageId: "all", packageName: "All", initialStatusFilter: "active" });
+                          setIsMembershipByPackageModalOpen(true);
+                        }}
+                        className="text-left hover:underline focus:outline-none focus:ring-1 focus:ring-red-300 rounded"
+                      >
+                        Active:{" "}
+                        <span className="font-semibold text-gray-900">
+                          {(membershipByPackageData?.summary?.totalActiveCount ?? 0).toLocaleString()} users
+                        </span>
+                        {" · "}
+                        <span className="font-semibold text-gray-900">
+                          $
+                          {(membershipByPackageData?.summary?.totalActiveRevenue ?? 0).toLocaleString("en-AU", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          total income
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMembershipModalPackage({ packageId: "all", packageName: "All", initialStatusFilter: "past_due" });
+                          setIsMembershipByPackageModalOpen(true);
+                        }}
+                        className="text-left hover:underline focus:outline-none focus:ring-1 focus:ring-red-300 rounded"
+                      >
+                        Past due:{" "}
+                        <span className="font-semibold text-gray-900">
+                          {(membershipByPackageData?.summary?.totalPastDueCount ?? 0).toLocaleString()} users
+                        </span>
+                        {" · "}
+                        <span className="font-semibold text-amber-700">
+                          $
+                          {(membershipByPackageData?.summary?.totalPastDueRevenue ?? 0).toLocaleString("en-AU", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                        
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
                   {membershipByPackageLoading ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {[1, 2, 3].map((i) => (
@@ -1038,36 +1116,234 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       ))}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {membershipByPackageData?.packages.map((pkg) => {
-                        const packageIcon = getPackageIcon(pkg.packageId);
-                        return (
-                          <div
-                            key={pkg.packageId}
-                            className="border-2 border-gray-200 rounded-lg p-4 flex items-center gap-3 hover:border-purple-200 transition-colors"
-                          >
-                            {packageIcon ? (
-                              <Image
-                                src={packageIcon}
-                                alt={pkg.packageName}
-                                width={48}
-                                height={48}
-                                className="flex-shrink-0 rounded"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded flex items-center justify-center bg-gray-100 flex-shrink-0">
-                                <Package className="w-6 h-6 text-gray-400" />
+                    <div className="flex flex-col sm:flex-row gap-4 items-stretch">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+                        {membershipByPackageData?.packages.map((pkg) => {
+                          const packageIcon = getPackageIcon(pkg.packageId);
+                          return (
+                            <button
+                              key={pkg.packageId}
+                              type="button"
+                              onClick={() => {
+                                setMembershipModalPackage({ packageId: pkg.packageId, packageName: pkg.packageName });
+                                setIsMembershipByPackageModalOpen(true);
+                              }}
+                              className="border-2 border-gray-200 rounded-lg p-4 flex items-center gap-3 hover:border-red-200 transition-colors text-left cursor-pointer w-full"
+                            >
+                              {packageIcon ? (
+                                <Image
+                                  src={packageIcon}
+                                  alt={pkg.packageName}
+                                  width={48}
+                                  height={48}
+                                  className="flex-shrink-0 rounded"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded flex items-center justify-center bg-gray-100 flex-shrink-0">
+                                  <Package className="w-6 h-6 text-gray-400" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-gray-900 truncate">{pkg.packageName}</p>
+                                <p className="text-sm text-gray-600">Active: {pkg.activeCount.toLocaleString()}</p>
+                                <p className="text-sm text-red-600">Cancelled: {pkg.cancelledCount.toLocaleString()}</p>
+                                <p className="text-sm text-amber-700">Past due: {(pkg.pastDueCount ?? 0).toLocaleString()}</p>
                               </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="font-semibold text-gray-900 truncate">{pkg.packageName}</p>
-                              <p className="text-sm text-gray-600">Active: {pkg.activeCount.toLocaleString()}</p>
-                              <p className="text-sm text-red-600">Cancelled: {pkg.cancelledCount.toLocaleString()}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
+                            </button>
+                          );
+                        })}
+                      </div>
+                     
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Upcoming renewals - collapsible section */}
+              {dashboardStats && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6 transition-all duration-300 ease-in-out">
+                  <div
+                    onClick={() => setIsUpcomingRenewalsExpanded(!isUpcomingRenewalsExpanded)}
+                    className="flex items-center justify-between cursor-pointer group"
+                  >
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900">Upcoming renewals</h3>
+                    <div className="flex items-center gap-2">
+                      {upcomingRenewalsData && !upcomingRenewalsLoading && (
+                        <span className="text-xs text-gray-500">
+                          {upcomingRenewalsData.renewals.length} in window
+                        </span>
+                      )}
+                      {isUpcomingRenewalsExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-red-600" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-red-600" />
+                      )}
+                    </div>
+                  </div>
+                  {isUpcomingRenewalsExpanded && (
+                    <>
+                      <p className="text-sm text-gray-600 mt-2 mb-3">
+                        Subscriptions renewing today, in the next 3/7/30 days, or by the 27th (5:30pm AEST).
+                      </p>
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {([0, 3, 7, 27, 30] as const).map((days) => (
+                          <button
+                            key={days}
+                            type="button"
+                            onClick={() => {
+                              setUpcomingRenewalsRange(days);
+                              setUpcomingRenewalsPage(1);
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                              upcomingRenewalsRange === days
+                                ? "bg-red-600 text-white"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
+                          >
+                            {days === 0 ? "Today" : days === 27 ? "27th" : `${days} days`}
+                          </button>
+                        ))}
+                      </div>
+                      {upcomingRenewalsData && upcomingRenewalsData.renewals.length > 0 && (
+                        <div className="mb-3 text-sm text-gray-700">
+                          <span className="font-semibold">
+                            Total expected revenue:{" "}
+                            $
+                            {upcomingRenewalsData.renewals
+                              .reduce((s, r) => s + (r.amountCents ?? 0) / 100, 0)
+                              .toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          {" "}({upcomingRenewalsData.renewals.length} renewals)
+                        </div>
+                      )}
+                      {upcomingRenewalsLoading && !upcomingRenewalsData && (
+                        <div className="flex items-center justify-center py-8 text-gray-500">
+                          <RefreshCw className="w-8 h-8 animate-spin mr-2" />
+                          Loading renewals…
+                        </div>
+                      )}
+                      {upcomingRenewalsData && (
+                        <div className="overflow-x-auto">
+                          {upcomingRenewalsData.renewals.length === 0 ? (
+                            <p className="text-sm text-gray-500 py-4">No renewals in this window.</p>
+                          ) : (
+                            <>
+                              {upcomingRenewalsData.renewals.length > UPCOMING_RENEWALS_PAGE_SIZE && (
+                                <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 mb-2">
+                                  <p>
+                                    Showing {(upcomingRenewalsPage - 1) * UPCOMING_RENEWALS_PAGE_SIZE + 1} to{" "}
+                                    {Math.min(
+                                      upcomingRenewalsPage * UPCOMING_RENEWALS_PAGE_SIZE,
+                                      upcomingRenewalsData.renewals.length
+                                    )}{" "}
+                                    of {upcomingRenewalsData.renewals.length} renewals
+                                  </p>
+                                </div>
+                              )}
+                              <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="text-left p-2 font-semibold text-gray-700">Customer</th>
+                                    <th className="text-left p-2 font-semibold text-gray-700">Amount</th>
+                                    <th className="text-left p-2 font-semibold text-gray-700">Renewal date</th>
+                                    <th className="text-right p-2 font-semibold text-gray-700">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {upcomingRenewalsData.renewals
+                                    .slice(
+                                      (upcomingRenewalsPage - 1) * UPCOMING_RENEWALS_PAGE_SIZE,
+                                      upcomingRenewalsPage * UPCOMING_RENEWALS_PAGE_SIZE
+                                    )
+                                    .map((r) => (
+                                      <tr key={r.subscriptionId} className="border-t border-gray-200 hover:bg-gray-50">
+                                        <td className="p-2">
+                                          <span className="font-medium text-gray-900">
+                                            {r.customerName || r.customerEmail || r.customerId}
+                                          </span>
+                                          {r.customerEmail && r.customerName && (
+                                            <span className="block text-xs text-gray-500">{r.customerEmail}</span>
+                                          )}
+                                        </td>
+                                        <td className="p-2 text-gray-700">{r.amountFormatted}</td>
+                                        <td className="p-2 text-gray-600">{r.renewalDateFormatted}</td>
+                                        <td className="p-2 text-right">
+                                          {r.userId && (
+                                            <button
+                                              type="button"
+                                              onClick={() => openUserModal(r.userId!)}
+                                              className="text-red-600 font-semibold hover:text-red-700 text-xs"
+                                            >
+                                              View user
+                                            </button>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                              {upcomingRenewalsData.renewals.length > UPCOMING_RENEWALS_PAGE_SIZE && (() => {
+                                const totalRenewals = upcomingRenewalsData.renewals.length;
+                                const totalPages = Math.ceil(totalRenewals / UPCOMING_RENEWALS_PAGE_SIZE);
+                                const hasPrevPage = upcomingRenewalsPage > 1;
+                                const hasNextPage = upcomingRenewalsPage < totalPages;
+                                return (
+                                  <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200">
+                                    <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
+                                      <div className="flex items-center gap-1 sm:gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setUpcomingRenewalsPage(1)}
+                                          disabled={!hasPrevPage}
+                                          className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          aria-label="First page"
+                                        >
+                                          <ChevronsLeft className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setUpcomingRenewalsPage((p) => Math.max(1, p - 1))}
+                                          disabled={!hasPrevPage}
+                                          className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          aria-label="Previous page"
+                                        >
+                                          <ChevronLeft className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                                          Page {upcomingRenewalsPage} of {totalPages}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1 sm:gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setUpcomingRenewalsPage((p) => Math.min(totalPages, p + 1))}
+                                          disabled={!hasNextPage}
+                                          className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          aria-label="Next page"
+                                        >
+                                          <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setUpcomingRenewalsPage(totalPages)}
+                                          disabled={!hasNextPage}
+                                          className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          aria-label="Last page"
+                                        >
+                                          <ChevronsRight className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1303,6 +1579,19 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         dateRange={dateRange}
         startDate={customStartDate || undefined}
         endDate={customEndDate || undefined}
+        onUserClick={openUserModal}
+      />
+
+      {/* Membership by Package Detail Modal */}
+      <MembershipByPackageDetailModal
+        isOpen={isMembershipByPackageModalOpen}
+        onClose={() => {
+          setIsMembershipByPackageModalOpen(false);
+          setMembershipModalPackage(null);
+        }}
+        packageId={membershipModalPackage?.packageId ?? ""}
+        packageName={membershipModalPackage?.packageName ?? ""}
+        initialStatusFilter={membershipModalPackage?.initialStatusFilter}
         onUserClick={openUserModal}
       />
     </div>

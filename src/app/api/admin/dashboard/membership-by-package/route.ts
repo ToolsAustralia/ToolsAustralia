@@ -14,10 +14,11 @@ const SUBSCRIPTION_PACKAGE_IDS = [
 
 /**
  * GET /api/admin/dashboard/membership-by-package
- * Get membership counts per subscription package (active vs cancelled)
+ * Get membership counts per subscription package (active, cancelled, past_due) and revenue
  *
  * Returns:
- * - packages: [{ packageId, packageName, activeCount, cancelledCount }]
+ * - packages: [{ packageId, packageName, activeCount, cancelledCount, pastDueCount, activeRevenue, pastDueRevenue }]
+ * - summary: { totalActiveCount, totalPastDueCount, totalActiveRevenue, totalPastDueRevenue }
  */
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       isActive: true,
     };
 
-    const [activeResults, cancelledResults] = await Promise.all([
+    const [activeResults, cancelledResults, pastDueResults] = await Promise.all([
       User.aggregate([
         { $match: { ...baseMatch, ...getActiveSubscriptionFilter(false) } },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
@@ -49,6 +50,16 @@ export async function GET(request: NextRequest) {
         },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
       ]),
+      User.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            "subscription.status": "past_due",
+            "subscription.packageId": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
     ]);
 
     const activeByPackage = Object.fromEntries(
@@ -57,20 +68,48 @@ export async function GET(request: NextRequest) {
     const cancelledByPackage = Object.fromEntries(
       cancelledResults.map((r) => [r._id, r.count])
     );
+    const pastDueByPackage = Object.fromEntries(
+      pastDueResults.map((r) => [r._id, r.count])
+    );
+
+    let totalActiveCount = 0;
+    let totalPastDueCount = 0;
+    let totalActiveRevenue = 0;
+    let totalPastDueRevenue = 0;
 
     const packages = SUBSCRIPTION_PACKAGE_IDS.map((packageId) => {
       const pkg = getPackageById(packageId);
+      const price = pkg?.price ?? 0;
+      const activeCount = activeByPackage[packageId] ?? 0;
+      const pastDueCount = pastDueByPackage[packageId] ?? 0;
+      const activeRevenue = Math.round(activeCount * price * 100) / 100;
+      const pastDueRevenue = Math.round(pastDueCount * price * 100) / 100;
+      totalActiveCount += activeCount;
+      totalPastDueCount += pastDueCount;
+      totalActiveRevenue += activeRevenue;
+      totalPastDueRevenue += pastDueRevenue;
       return {
         packageId,
         packageName: pkg?.name ?? packageId,
-        activeCount: activeByPackage[packageId] ?? 0,
+        activeCount,
         cancelledCount: cancelledByPackage[packageId] ?? 0,
+        pastDueCount,
+        activeRevenue,
+        pastDueRevenue,
       };
     });
 
     return NextResponse.json({
       success: true,
-      data: { packages },
+      data: {
+        packages,
+        summary: {
+          totalActiveCount,
+          totalPastDueCount,
+          totalActiveRevenue: Math.round(totalActiveRevenue * 100) / 100,
+          totalPastDueRevenue: Math.round(totalPastDueRevenue * 100) / 100,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching membership by package:", error);
