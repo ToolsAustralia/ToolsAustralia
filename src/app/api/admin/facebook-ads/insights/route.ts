@@ -267,6 +267,7 @@ export async function GET(request: NextRequest) {
             impressions: acc.impressions + item.metrics.impressions,
             clicks: acc.clicks + item.metrics.clicks,
             conversions: acc.conversions + item.metrics.conversions,
+            landingPageView: acc.landingPageView + item.metrics.landingPageView,
             profit: acc.profit + item.metrics.profit,
             roas: 0, // Will calculate below
             ctr: 0, // Will calculate below
@@ -278,6 +279,7 @@ export async function GET(request: NextRequest) {
             impressions: 0,
             clicks: 0,
             conversions: 0,
+            landingPageView: 0,
             profit: 0,
             roas: 0,
             ctr: 0,
@@ -316,6 +318,7 @@ export async function GET(request: NextRequest) {
             conversions: item.metrics.conversions,
             impressions: item.metrics.impressions,
             clicks: item.metrics.clicks,
+            landingPageView: item.metrics.landingPageView,
             ctr: item.metrics.ctr, // Already a percentage
             cpc: item.metrics.cpc / 100, // Convert cents to dollars
           };
@@ -329,6 +332,7 @@ export async function GET(request: NextRequest) {
         impressions: 0,
         clicks: 0,
         conversions: 0,
+        landingPageView: 0,
         profit: 0,
         roas: 0,
         ctr: 0,
@@ -346,6 +350,7 @@ export async function GET(request: NextRequest) {
       conversions: metrics.conversions, // Count, no conversion needed
       impressions: metrics.impressions, // Count, no conversion needed
       clicks: metrics.clicks, // Count, no conversion needed
+      landingPageView: metrics.landingPageView, // Count, no conversion needed
       ctr: metrics.ctr, // Percentage, already calculated correctly
       cpc: metrics.cpc / 100, // Convert cents to dollars
     };
@@ -360,6 +365,7 @@ export async function GET(request: NextRequest) {
       conversions: summary.conversions,
       impressions: summary.impressions.toLocaleString(),
       clicks: summary.clicks.toLocaleString(),
+      landingPageView: summary.landingPageView.toLocaleString(),
       dateRange: `${dateRange.since} to ${dateRange.until}`,
     });
 
