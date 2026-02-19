@@ -265,6 +265,29 @@ export function createAESTDateAsUTC(
 }
 
 /**
+ * Get window "today through 27th" in AEST: start = midnight today, end = 28th 00:00 (end of 27th).
+ * Used for "renewing today through 27th" in admin upcoming renewals and projected income.
+ */
+export function getTodayThrough27thWindowUTC(): { startUTC: Date; endUTC: Date } {
+  const startUTC = getStartOfTodayInAEST();
+  const now = new Date();
+  const year = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+  const month = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+  const day = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
+  let anchorYear = year;
+  let anchorMonth = month;
+  if (day >= 27) {
+    anchorMonth += 1;
+    if (anchorMonth > 12) {
+      anchorMonth = 1;
+      anchorYear += 1;
+    }
+  }
+  const endUTC = createAESTDateAsUTC(anchorYear, anchorMonth, 28, 0, 0);
+  return { startUTC, endUTC };
+}
+
+/**
  * Calculate freeze time (30 minutes before draw date)
  * @param drawDateUTC - Draw date in UTC
  * @returns Freeze time in UTC (30 minutes before draw)

@@ -139,10 +139,21 @@ export interface MembershipByPackageItem {
   packageName: string;
   activeCount: number;
   cancelledCount: number;
+  pastDueCount: number;
+  activeRevenue: number;
+  pastDueRevenue: number;
+}
+
+export interface MembershipByPackageSummary {
+  totalActiveCount: number;
+  totalPastDueCount: number;
+  totalActiveRevenue: number;
+  totalPastDueRevenue: number;
 }
 
 export interface MembershipByPackageData {
   packages: MembershipByPackageItem[];
+  summary: MembershipByPackageSummary;
 }
 
 // Types for projected income
@@ -151,6 +162,30 @@ export interface ProjectedIncomeData {
   activeSubscriptions: number;
   nextMonthStart: string;
   nextMonthEnd: string;
+  renewingOn27thCount: number;
+  renewingOn27thRevenue: number;
+  renewingOn27thDate: string;
+  pastDueCount: number;
+  pastDueRevenue: number;
+}
+
+// Types for upcoming Stripe renewals
+export type UpcomingRenewalsRange = 0 | 3 | 7 | 27 | 30; // 0 = today, 27 = renewing today through 27th
+
+export interface UpcomingRenewalItem {
+  subscriptionId: string;
+  customerId: string;
+  customerEmail?: string;
+  customerName?: string;
+  userId?: string;
+  renewalDate: string;
+  renewalDateFormatted: string;
+  amountCents: number;
+  amountFormatted: string;
+}
+
+export interface UpcomingRenewalsData {
+  renewals: UpcomingRenewalItem[];
 }
 
 // Types for revenue details
@@ -464,6 +499,33 @@ export function useMembershipByPackage() {
 }
 
 /**
+ * Hook to fetch upcoming Stripe subscription renewals (Stripe API, no built-in report)
+ */
+export function useUpcomingRenewals(range: UpcomingRenewalsRange = 7) {
+  return useQuery<UpcomingRenewalsData>({
+    queryKey: ["admin", "upcoming-renewals", range],
+    queryFn: async (): Promise<UpcomingRenewalsData> => {
+      const response = await fetch(`/api/admin/dashboard/upcoming-renewals?range=${range}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch upcoming renewals");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch upcoming renewals");
+      }
+
+      return result.data;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+/**
  * Hook to fetch detailed revenue data for a specific category
  * @param category - Revenue category to fetch details for
  * @param dateRange - Date range filter
@@ -526,8 +588,13 @@ export function useRevenueDetails(
 
 /**
  * Hook to fetch paginated list of users with search and filtering
+ * @param filters - UserFilters (membershipPackage, subscriptionStatus, autoRenew, page, limit, search, etc.)
+ * @param options - Optional { enabled } to conditionally run the query (e.g. when modal is open)
  */
-export function useAdminUsers(filters: UserFilters = {}) {
+export function useAdminUsers(
+  filters: UserFilters = {},
+  options?: { enabled?: boolean }
+) {
   return useQuery<AdminUsersResponse["data"]>({
     queryKey: ["admin", "users", "list", filters],
     queryFn: async (): Promise<AdminUsersResponse["data"]> => {
@@ -554,6 +621,7 @@ export function useAdminUsers(filters: UserFilters = {}) {
 
       return result.data;
     },
+    enabled: options?.enabled !== false,
     staleTime: 2 * 60 * 1000, // 2 minutes - user list can be slightly stale
     gcTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
