@@ -9,14 +9,15 @@ import { getActiveSubscriptionFilter } from "@/utils/admin/userFilterBuilder";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { formatDateInAEST, getNextMidnightAEST, getTodayThrough27thWindowUTC } from "@/utils/common/timezone";
 
-const VALID_RANGES = [0, 3, 7, 27, 30] as const; // 27 = renewing today through 27th (5:30pm AEST)
+const VALID_RANGES = [0, 3, 7, 27] as const; // 27 = renewing today through 27th (5:30pm AEST)
 
 /**
- * GET /api/admin/dashboard/upcoming-renewals?range=3|7|30
- * Lists upcoming renewals in the next N days from:
- * 1) Stripe API (active subscriptions with current_period_end in range)
- * 2) Our DB (users with subscription.endDate in range who will renew)
- * Merged so admins see all expected renewals even if Stripe list is empty or out of sync.
+ * GET /api/admin/dashboard/upcoming-renewals?range=0|3|7|27
+ * Lists upcoming renewals in the selected window. Accurate counts and revenue by:
+ * - Using the same range [rangeStart, rangeEnd) for Stripe (period_end) and DB (endDate)
+ * - Merging: Stripe list + DB users with endDate in range + DB users without endDate (Stripe fallback)
+ * - Deduplicating by userId so the same subscription appears once
+ * - Sorting by renewal date for consistent display; amounts from Stripe upcoming invoice or plan price
  */
 export async function GET(request: NextRequest) {
   try {
@@ -39,9 +40,11 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     let rangeStart: Date;
     let rangeEnd: Date;
+    // Range boundaries (inclusive start, exclusive end) for accurate filtering:
+    // 0 = from now until end of today AEST; 3/7 = from now until now + N days; 27 = today through 27th AEST
     if (range === 0) {
       rangeStart = now;
-      rangeEnd = getNextMidnightAEST(); // "Today": from now until end of today AEST
+      rangeEnd = getNextMidnightAEST(); // end of today AEST (exclusive)
     } else if (range === 27) {
       const window = getTodayThrough27thWindowUTC();
       rangeStart = window.startUTC;
@@ -171,15 +174,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Will-renew users without endDate in our DB: get renewal date from Stripe so we still show them
-    const userIdsNow = new Set(renewals.map((r) => r.userId).filter(Boolean));
+    // Will-renew users whose endDate is not in [rangeStart, rangeEnd]: get period end from Stripe to see if they belong in window
+    const userIdsInList = new Set(renewals.map((r) => r.userId).filter(Boolean));
     const dbUsersNoEndDate = await User.find({
       ...getActiveSubscriptionFilter(),
       stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
       $or: [
         { "subscription.endDate": { $exists: false } },
         { "subscription.endDate": null },
-        { "subscription.endDate": { $lt: now } },
+        { "subscription.endDate": { $lt: rangeStart } },
         { "subscription.endDate": { $gt: rangeEnd } },
       ],
     })
@@ -188,7 +191,7 @@ export async function GET(request: NextRequest) {
 
     for (const u of dbUsersNoEndDate) {
       const uid = (u._id as { toString: () => string }).toString();
-      if (userIdsNow.has(uid)) continue;
+      if (userIdsInList.has(uid)) continue;
 
       const subId = u.stripeSubscriptionId as string;
       if (!subId) continue;
@@ -232,7 +235,7 @@ export async function GET(request: NextRequest) {
           amountCents,
           amountFormatted: new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(amountCents / 100),
         });
-        userIdsNow.add(uid);
+        userIdsInList.add(uid);
       } catch {
         // Stripe fetch failed for this sub, skip
       }

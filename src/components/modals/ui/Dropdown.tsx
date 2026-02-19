@@ -207,7 +207,7 @@ const Dropdown: React.FC<DropdownProps> = ({
   };
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
+    <div className={`relative ${isOpen ? "z-[100]" : ""} ${className}`} ref={dropdownRef}>
       {/* Label */}
       {label && (
         <label className="block text-sm font-medium text-gray-700 mb-2">

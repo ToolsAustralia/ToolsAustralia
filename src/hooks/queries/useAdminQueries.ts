@@ -170,7 +170,7 @@ export interface ProjectedIncomeData {
 }
 
 // Types for upcoming Stripe renewals
-export type UpcomingRenewalsRange = 0 | 3 | 7 | 27 | 30; // 0 = today, 27 = renewing today through 27th
+export type UpcomingRenewalsRange = 0 | 3 | 7 | 27; // 0 = today, 27 = renewing today through 27th
 
 export interface UpcomingRenewalItem {
   subscriptionId: string;
