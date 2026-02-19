@@ -127,6 +127,7 @@ export async function fetchFacebookInsights(
             impressions: 0,
             clicks: 0,
             conversions: 0,
+            landingPageView: 0,
             profit: 0,
             roas: 0,
             ctr: 0,
@@ -193,6 +194,18 @@ function processInsightData(insight: FacebookInsightData): ProcessedInsightMetri
     }
   }
 
+  // Extract landing page view count from actions (same 7d_click attribution as other actions)
+  let landingPageView = 0;
+  if (insight.actions) {
+    const lpvActions = insight.actions.filter(
+      (action) =>
+        action.action_type === "landing_page_view" || action.action_type?.startsWith("landing_page_view.")
+    );
+    if (lpvActions.length > 0) {
+      landingPageView = lpvActions.reduce((sum, action) => sum + parseInt(action.value || "0", 10), 0);
+    }
+  }
+
   // Calculate derived metrics
   const profit = revenue - spend;
   const roas = spend > 0 ? revenue / spend : 0;
@@ -205,6 +218,7 @@ function processInsightData(insight: FacebookInsightData): ProcessedInsightMetri
     impressions,
     clicks,
     conversions,
+    landingPageView,
     profit,
     roas,
     ctr,

@@ -24,6 +24,7 @@ import {
   BarChart2,
   LayoutList,
   Image,
+  ExternalLink,
 } from "lucide-react";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import Dropdown from "@/components/modals/ui/Dropdown";
@@ -386,6 +387,26 @@ export default function FacebookAdsManagement() {
           aValue = a.conversions;
           bValue = b.conversions;
           break;
+        case "impressions":
+          aValue = a.impressions;
+          bValue = b.impressions;
+          break;
+        case "clicks":
+          aValue = a.clicks;
+          bValue = b.clicks;
+          break;
+        case "ctr":
+          aValue = a.ctr;
+          bValue = b.ctr;
+          break;
+        case "cpc":
+          aValue = a.cpc;
+          bValue = b.cpc;
+          break;
+        case "landingPageView":
+          aValue = a.landingPageView ?? 0;
+          bValue = b.landingPageView ?? 0;
+          break;
         default:
           return 0;
       }
@@ -447,10 +468,18 @@ export default function FacebookAdsManagement() {
         revenue: acc.revenue + item.revenue,
         profit: acc.profit + item.profit,
         conversions: acc.conversions + item.conversions,
+        impressions: acc.impressions + item.impressions,
+        clicks: acc.clicks + item.clicks,
+        landingPageView: acc.landingPageView + (item.landingPageView ?? 0),
       }),
-      { spend: 0, revenue: 0, profit: 0, conversions: 0 }
+      { spend: 0, revenue: 0, profit: 0, conversions: 0, impressions: 0, clicks: 0, landingPageView: 0 }
     );
-    return { ...t, roas: t.spend > 0 ? t.revenue / t.spend : 0 };
+    return {
+      ...t,
+      roas: t.spend > 0 ? t.revenue / t.spend : 0,
+      ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
+      cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+    };
   }, [sortedBreakdown]);
 
   // Get sort icon for column header
@@ -1291,7 +1320,7 @@ export default function FacebookAdsManagement() {
       {/* Additional Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard title="Impressions" value={formatNumber(summary.impressions)} icon={Eye} color="blue" />
-        <MetricCard title="Clicks" value={formatNumber(summary.clicks)} icon={MousePointerClick} color="indigo" />
+        <MetricCard title="Landing Page Views" value={formatNumber(summary.landingPageView ?? 0)} icon={ExternalLink} color="indigo" subtitle="Viewed landing page after click" />
         <MetricCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
         <MetricCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
       </div>
@@ -1329,7 +1358,7 @@ export default function FacebookAdsManagement() {
               : "All metrics from Facebook (matches Conversions card above)."}
           </p>
           <div className="-mx-3 sm:mx-0 px-3 sm:px-0 overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: "touch" }}>
-            <table className="w-full min-w-[300px] sm:min-w-[600px]">
+            <table className="w-full min-w-[300px] sm:min-w-[900px]">
               <thead>
                 <tr className="border-b-2 border-gray-200">
                   <th
@@ -1390,6 +1419,36 @@ export default function FacebookAdsManagement() {
                       {getSortIcon("conversions")}
                     </div>
                   </th>
+                  <th
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("impressions")}
+                  >
+                    <div className="flex items-center justify-end">Impr{getSortIcon("impressions")}</div>
+                  </th>
+                  <th
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("clicks")}
+                  >
+                    <div className="flex items-center justify-end">Clicks{getSortIcon("clicks")}</div>
+                  </th>
+                  <th
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("ctr")}
+                  >
+                    <div className="flex items-center justify-end">CTR{getSortIcon("ctr")}</div>
+                  </th>
+                  <th
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("cpc")}
+                  >
+                    <div className="flex items-center justify-end">CPC{getSortIcon("cpc")}</div>
+                  </th>
+                  <th
+                    className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={() => handleSort("landingPageView")}
+                  >
+                    <div className="flex items-center justify-end" title="Landing page views">LPV{getSortIcon("landingPageView")}</div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1397,7 +1456,7 @@ export default function FacebookAdsManagement() {
                     groupedAdsets.map((group) => (
                       <React.Fragment key={group.campaignId}>
                         <tr className="bg-gray-100 border-b border-gray-200">
-                          <td colSpan={6} className="py-1.5 px-0.5 sm:py-2.5 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+                          <td colSpan={11} className="py-1.5 px-0.5 sm:py-2.5 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
                             📁 {group.campaignName}
                           </td>
                         </tr>
@@ -1428,6 +1487,21 @@ export default function FacebookAdsManagement() {
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
                               {formatNumber(item.conversions)}
                             </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                              {formatNumber(item.impressions)}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                              {formatNumber(item.clicks)}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                              {formatPercentage(item.ctr)}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                              {formatCurrency(item.cpc)}
+                            </td>
+                            <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                              {formatNumber(item.landingPageView ?? 0)}
+                            </td>
                           </tr>
                         ))}
                       </React.Fragment>
@@ -1436,14 +1510,14 @@ export default function FacebookAdsManagement() {
                     groupedAds.map((group) => (
                       <React.Fragment key={group.campaignId}>
                         <tr className="bg-gray-100 border-b border-gray-200">
-                          <td colSpan={6} className="py-1.5 px-0.5 sm:py-2.5 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+                          <td colSpan={11} className="py-1.5 px-0.5 sm:py-2.5 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
                             📁 {group.campaignName}
                           </td>
                         </tr>
                         {group.adSets.map((adSetGroup) => (
                           <React.Fragment key={adSetGroup.adsetId}>
                             <tr className="bg-gray-50/80 border-b border-gray-200">
-                              <td colSpan={6} className="py-1 px-0.5 sm:py-2 sm:px-4 text-xs sm:text-xs font-medium text-gray-600 pl-4 sm:pl-8">
+                              <td colSpan={11} className="py-1 px-0.5 sm:py-2 sm:px-4 text-xs sm:text-xs font-medium text-gray-600 pl-4 sm:pl-8">
                                 ↳ {adSetGroup.adsetName}
                               </td>
                             </tr>
@@ -1473,6 +1547,21 @@ export default function FacebookAdsManagement() {
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
                                   {formatNumber(item.conversions)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                                  {formatNumber(item.impressions)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                                  {formatNumber(item.clicks)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                                  {formatPercentage(item.ctr)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                                  {formatCurrency(item.cpc)}
+                                </td>
+                                <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                                  {formatNumber(item.landingPageView ?? 0)}
                                 </td>
                               </tr>
                             ))}
@@ -1510,6 +1599,21 @@ export default function FacebookAdsManagement() {
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-medium">
                       {formatNumber(item.conversions)}
                     </td>
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatNumber(item.impressions)}
+                    </td>
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatNumber(item.clicks)}
+                    </td>
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatPercentage(item.ctr)}
+                    </td>
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatCurrency(item.cpc)}
+                    </td>
+                    <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatNumber(item.landingPageView ?? 0)}
+                    </td>
                   </tr>
                 )))}
                 {breakdownTotals && (
@@ -1533,6 +1637,21 @@ export default function FacebookAdsManagement() {
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
                       {formatNumber(breakdownTotals.conversions)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatNumber(breakdownTotals.impressions)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatNumber(breakdownTotals.clicks)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatPercentage(breakdownTotals.ctr)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatCurrency(breakdownTotals.cpc)}
+                    </td>
+                    <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+                      {formatNumber(breakdownTotals.landingPageView ?? 0)}
                     </td>
                   </tr>
                 )}

@@ -85,6 +85,7 @@ export interface ProcessedInsightMetrics {
   impressions: number;
   clicks: number;
   conversions: number;
+  landingPageView: number;
   profit: number;
   roas: number;
   ctr: number; // Click-through rate
@@ -114,6 +115,7 @@ export interface FacebookAdsSummary {
   conversions: number;
   impressions: number;
   clicks: number;
+  landingPageView: number;
   ctr: number;
   cpc: number;
 }
@@ -136,6 +138,7 @@ export interface FacebookAdsBreakdownItem {
   conversions: number;
   impressions: number;
   clicks: number;
+  landingPageView: number;
   ctr: number;
   cpc: number;
 }
@@ -187,6 +190,8 @@ export interface HourlyInsightItem {
   spend: number; // in dollars (from Facebook)
   impressions: number; // from Facebook
   clicks: number; // from Facebook
+  /** Landing page views; null when not available by hour (Meta API limitation) */
+  landingPageView: number | null;
   revenue: number; // in dollars (from PaymentEvent)
   conversions: number; // count (from PaymentEvent)
   profit: number; // revenue - spend
