@@ -16,6 +16,11 @@ const SUBSCRIPTION_PACKAGE_IDS = [
  * GET /api/admin/dashboard/membership-by-package
  * Get membership counts per subscription package (active, cancelled, past_due) and revenue
  *
+ * Counts are mutually exclusive:
+ * - Active: will renew (status active, autoRenew not false)
+ * - Cancelled: scheduled to cancel (status active, autoRenew false, has endDate) — excludes past_due
+ * - Past due: payment failed (status past_due), regardless of autoRenew
+ *
  * Returns:
  * - packages: [{ packageId, packageName, activeCount, cancelledCount, pastDueCount, activeRevenue, pastDueRevenue }]
  * - summary: { totalActiveCount, totalPastDueCount, totalActiveRevenue, totalPastDueRevenue }
@@ -35,21 +40,24 @@ export async function GET(request: NextRequest) {
     };
 
     const [activeResults, cancelledResults, pastDueResults] = await Promise.all([
+      // Active = will renew (status active, autoRenew not false)
       User.aggregate([
         { $match: { ...baseMatch, ...getActiveSubscriptionFilter(false) } },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
       ]),
+      // Cancelled = scheduled to cancel (active only; past_due users go in past_due bucket)
       User.aggregate([
         {
           $match: {
             ...baseMatch,
-            "subscription.endDate": { $exists: true, $ne: null },
+            "subscription.status": "active",
             "subscription.autoRenew": false,
-            "subscription.status": { $in: ["active", "past_due"] },
+            "subscription.endDate": { $exists: true, $ne: null },
           },
         },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
       ]),
+      // Past due = payment failed (all past_due regardless of autoRenew)
       User.aggregate([
         {
           $match: {

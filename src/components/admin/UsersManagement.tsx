@@ -458,8 +458,8 @@ export default function UsersManagement() {
         />
       </div>
 
-      {/* Search and Filters - Elevated Design */}
-      <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
+      {/* Search and Filters - Elevated Design - z-20 so dropdowns appear above the sticky table header */}
+      <div className="relative z-20 bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 lg:gap-4">
           {/* Search Bar - Same row as filters, min-width prevents compression on laptop */}
           <div className="relative flex-1 min-w-[200px] sm:min-w-[280px] group flex items-center gap-2">
@@ -596,8 +596,8 @@ export default function UsersManagement() {
         </div>
       )}
 
-      {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100">
+      {/* Users Table - z-10 so it stays below the filter bar (z-20) when dropdowns are open */}
+      <div className="relative z-10 bg-white rounded-xl shadow-lg border border-gray-100">
         {isLoading ? (
           // Enhanced Loading skeleton
           <div className="p-4 sm:p-6">
@@ -646,12 +646,12 @@ export default function UsersManagement() {
         ) : (
           // Enhanced Users table
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto relative">
               <table className="w-full">
                 <thead>
                   <tr className="border-b-2 border-gray-200">
                     <th
-                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("createdAt")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -659,11 +659,11 @@ export default function UsersManagement() {
                         {getSortIcon("createdAt")}
                       </div>
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    <th className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Subscription
                     </th>
                     <th
-                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("totalSpent")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -672,7 +672,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
+                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
                       onClick={() => handleSort("majorDrawEntries")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -681,7 +681,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("miniDrawCount")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -690,7 +690,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("lastLogin")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -698,7 +698,7 @@ export default function UsersManagement() {
                         {getSortIcon("lastLogin")}
                       </div>
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
+                    <th className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
                       Status
                     </th>
                   </tr>

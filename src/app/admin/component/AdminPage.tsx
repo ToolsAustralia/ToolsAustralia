@@ -21,7 +21,6 @@ import {
   useAdminDashboardStats,
   useRecentActivities,
   useRevenueBreakdown,
-  useProjectedIncome,
   useMembershipByPackage,
   useUpcomingRenewals,
   useMajorDrawsForDateRange,
@@ -98,7 +97,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     initialStatusFilter?: "active" | "past_due" | "cancelled";
   } | null>(null);
   const [isMembershipByPackageModalOpen, setIsMembershipByPackageModalOpen] = useState(false);
-  const [upcomingRenewalsRange, setUpcomingRenewalsRange] = useState<UpcomingRenewalsRange>(7);
+  const [upcomingRenewalsRange, setUpcomingRenewalsRange] = useState<UpcomingRenewalsRange>(27);
   const [isUpcomingRenewalsExpanded, setIsUpcomingRenewalsExpanded] = useState(true);
   const [upcomingRenewalsPage, setUpcomingRenewalsPage] = useState(1);
   const { openUserModal } = useAdminUserModal();
@@ -293,10 +292,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   // We still need refetchRevenue for the refresh button
   const { refetch: refetchRevenue } = useRevenueBreakdown();
 
-  // Fetch projected income for next month
-  const { data: projectedIncome, isLoading: projectedIncomeLoading } = useProjectedIncome();
-
-  // Fetch membership by package for breakdown
+  // Fetch membership by package (card + breakdown section use this)
   const { data: membershipByPackageData, isLoading: membershipByPackageLoading } = useMembershipByPackage();
 
   // Upcoming Stripe renewals (Stripe API)
@@ -772,28 +768,22 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                       className="cursor-pointer group relative"
                     >
                       <MetricCard
-                        title="Projected Income"
-                        value={`$${(projectedIncome?.projectedIncome || 0).toLocaleString("en-AU", {
+                        title="Membership Revenue"
+                        value={`$${(membershipByPackageData?.summary?.totalActiveRevenue ?? 0).toLocaleString("en-AU", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}`}
                         icon={TrendingUp}
                         subtitle={
                           <span className="text-xs">
-                            {(
-                              (projectedIncome?.activeSubscriptions ??
-                                dashboardStats?.users?.activeSubscriptions ??
-                                0) +
-                              (dashboardStats?.users?.totalScheduledCancellation ?? 0)
-                            ).toLocaleString()}{" "}
-                            memberships
-                            {dashboardStats?.users?.totalScheduledCancellation != null && (
-                              <> · {dashboardStats.users.totalScheduledCancellation.toLocaleString()} cancelled</>
+                            {(membershipByPackageData?.summary?.totalActiveCount ?? 0).toLocaleString()} active members
+                            {(membershipByPackageData?.summary?.totalPastDueCount ?? 0) > 0 && (
+                              <> · {(membershipByPackageData?.summary?.totalPastDueCount ?? 0).toLocaleString()} past due</>
                             )}
                           </span>
                         }
                         color="red"
-                        loading={projectedIncomeLoading}
+                        loading={membershipByPackageLoading}
                       />
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {isMembershipByPackageExpanded ? (
@@ -1042,10 +1032,10 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                     </button>
                   </div>
 
-                  {(projectedIncomeLoading || membershipByPackageLoading) && (
+                  {membershipByPackageLoading && (
                     <div className="flex items-center justify-center py-6 text-gray-500">
                       <RefreshCw className="w-8 h-8 animate-spin mr-2" />
-                      <span>Loading projected income & membership breakdown…</span>
+                      <span>Loading membership breakdown…</span>
                     </div>
                   )}
 
@@ -1183,10 +1173,10 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {isUpcomingRenewalsExpanded && (
                     <>
                       <p className="text-sm text-gray-600 mt-2 mb-3">
-                        Subscriptions renewing today, in the next 3/7/30 days, or by the 27th (5:30pm AEST).
+                        Subscriptions renewing today, in the next 3/7 days, or by the 27th (5:30pm AEST).
                       </p>
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {([0, 3, 7, 27, 30] as const).map((days) => (
+                        {([0, 3, 7, 27] as const).map((days) => (
                           <button
                             key={days}
                             type="button"
