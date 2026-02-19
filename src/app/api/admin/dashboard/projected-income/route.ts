@@ -7,14 +7,12 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getActiveSubscriptionFilter } from "@/utils/admin/userFilterBuilder";
 import { createAESTDateAsUTC, getStartOfTodayInAEST } from "@/utils/common/timezone";
 import { formatInTimeZone } from "date-fns-tz";
-import { stripe } from "@/lib/stripe";
-import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
 /**
  * Get the next 27th in AEST: if today (AEST) is before the 27th, use this month's 27th; else next month's 27th.
- * endUTC = 28th 00:00 AEST (end of 27th).
+ * endUTC = 27th 20:00 AEST (8pm AEST/AEDT).
  */
 function getNext27thEndUTC(): { endUTC: Date; renewingOn27thDate: Date } {
   const now = new Date();
@@ -32,14 +30,13 @@ function getNext27thEndUTC(): { endUTC: Date; renewingOn27thDate: Date } {
     }
   }
 
-  const startUTC = createAESTDateAsUTC(anchorYear, anchorMonth, 27, 0, 0);
-  const endUTC = createAESTDateAsUTC(anchorYear, anchorMonth, 28, 0, 0);
-  return { endUTC, renewingOn27thDate: startUTC };
+  const renewingOn27thDate = createAESTDateAsUTC(anchorYear, anchorMonth, 27, 0, 0);
+  const endUTC = createAESTDateAsUTC(anchorYear, anchorMonth, 27, 20, 0);
+  return { endUTC, renewingOn27thDate };
 }
 
 /**
- * Window for "renewing today through 27th": from start of today (midnight AEST) through end of 27th (28th 00:00 AEST).
- * This correctly includes users renewing today and on the current/next month's 27th (e.g. 5:30pm AEST).
+ * Window for "renewing today through 27th": from start of today (midnight AEST) through 27th 8pm AEST/AEDT.
  */
 function getTodayThrough27thWindowInUTC(): { startUTC: Date; endUTC: Date; renewingOn27thDate: Date } {
   const startUTC = getStartOfTodayInAEST();
@@ -89,15 +86,13 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Renewals from today through the 27th (AEST): start of today (midnight AEST) through end of 27th (28th 00:00 AEST).
-    // This includes users renewing today and on the current/next month's 27th (e.g. 5:30pm AEST).
+    // Renewals from today through the 27th: start of today (midnight AEST) through 27th 8pm AEST/AEDT.
     const { startUTC, endUTC, renewingOn27thDate } = getTodayThrough27thWindowInUTC();
     const renewingOn27thUsers = await User.find({
       ...getActiveSubscriptionFilter(),
       "subscription.endDate": { $gte: startUTC, $lt: endUTC },
     }).select("subscription.packageId subscription.autoRenew");
 
-    const userIdsInWindowFromDb = new Set(renewingOn27thUsers.map((u) => u._id.toString()));
     let renewingOn27thCount = 0;
     let renewingOn27thRevenue = 0;
     renewingOn27thUsers.forEach((user) => {
@@ -111,44 +106,6 @@ export async function GET(request: NextRequest) {
         }
       }
     });
-
-    // Will-renew users without endDate in window: get period end from Stripe and count if in [today, 27th]
-    const startSec = Math.floor(startUTC.getTime() / 1000);
-    const endSec = Math.floor(endUTC.getTime() / 1000);
-    const usersMaybeInWindow = await User.find({
-      ...getActiveSubscriptionFilter(),
-      stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
-      $or: [
-        { "subscription.endDate": { $exists: false } },
-        { "subscription.endDate": null },
-        { "subscription.endDate": { $lt: startUTC } },
-        { "subscription.endDate": { $gte: endUTC } },
-      ],
-    })
-      .select("_id subscription.packageId subscription.autoRenew stripeSubscriptionId")
-      .lean();
-
-    for (const u of usersMaybeInWindow) {
-      if (u.subscription?.autoRenew === false) continue;
-      if (userIdsInWindowFromDb.has((u._id as { toString: () => string }).toString())) continue;
-      const subId = u.stripeSubscriptionId as string;
-      if (!subId) continue;
-      try {
-        const sub = await stripe.subscriptions.retrieve(subId);
-        const periodEndSec = getSubscriptionPeriodEnd(sub);
-        if (periodEndSec == null || periodEndSec < startSec || periodEndSec >= endSec) continue;
-        const packageId = u.subscription?.packageId as string | undefined;
-        if (!packageId) continue;
-        const pkg = getPackageById(packageId);
-        if (pkg?.price) {
-          renewingOn27thRevenue += pkg.price;
-          renewingOn27thCount++;
-          userIdsInWindowFromDb.add((u._id as { toString: () => string }).toString());
-        }
-      } catch {
-        // Stripe fetch failed, skip
-      }
-    }
 
     // Past due: count and optional revenue (at-risk)
     const pastDueUsers = await User.find({

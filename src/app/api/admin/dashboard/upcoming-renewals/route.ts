@@ -3,21 +3,18 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { stripe } from "@/lib/stripe";
 import { getPackageById } from "@/data/membershipPackages";
 import { getActiveSubscriptionFilter } from "@/utils/admin/userFilterBuilder";
-import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { formatDateInAEST, getNextMidnightAEST, getTodayThrough27thWindowUTC } from "@/utils/common/timezone";
 
-const VALID_RANGES = [0, 3, 7, 27] as const; // 27 = renewing today through 27th (5:30pm AEST)
+const VALID_RANGES = [0, 3, 7, 27] as const; // 27 = renewing today through 27th (8pm AEST/AEDT)
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
 
 /**
- * GET /api/admin/dashboard/upcoming-renewals?range=0|3|7|27
- * Lists upcoming renewals in the selected window. Accurate counts and revenue by:
- * - Using the same range [rangeStart, rangeEnd) for Stripe (period_end) and DB (endDate)
- * - Merging: Stripe list + DB users with endDate in range + DB users without endDate (Stripe fallback)
- * - Deduplicating by userId so the same subscription appears once
- * - Sorting by renewal date for consistent display; amounts from Stripe upcoming invoice or plan price
+ * GET /api/admin/dashboard/upcoming-renewals?range=0|3|7|27&page=1&limit=50
+ * Lists upcoming renewals in the selected window. DB-first: queries User by subscription.endDate in range.
+ * Returns paginated list with total count; amounts from package price.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -37,14 +34,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const pageParam = request.nextUrl.searchParams.get("page");
+    const page = Math.max(1, parseInt(pageParam || "1", 10));
+    const limitParam = request.nextUrl.searchParams.get("limit");
+    const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(limitParam || String(DEFAULT_LIMIT), 10)));
+
     const now = new Date();
     let rangeStart: Date;
     let rangeEnd: Date;
-    // Range boundaries (inclusive start, exclusive end) for accurate filtering:
-    // 0 = from now until end of today AEST; 3/7 = from now until now + N days; 27 = today through 27th AEST
     if (range === 0) {
       rangeStart = now;
-      rangeEnd = getNextMidnightAEST(); // end of today AEST (exclusive)
+      rangeEnd = getNextMidnightAEST();
     } else if (range === 27) {
       const window = getTodayThrough27thWindowUTC();
       rangeStart = window.startUTC;
@@ -53,115 +53,47 @@ export async function GET(request: NextRequest) {
       rangeStart = now;
       rangeEnd = new Date(now.getTime() + range * 24 * 60 * 60 * 1000);
     }
-    const nowSec = Math.floor(rangeStart.getTime() / 1000);
-    const endSec = Math.floor(rangeEnd.getTime() / 1000);
 
-    const renewals: Array<{
-      subscriptionId: string;
-      customerId: string;
-      customerEmail?: string;
-      customerName?: string;
-      userId?: string;
-      renewalDate: string;
-      renewalDateFormatted: string;
-      amountCents: number;
-      amountFormatted: string;
-    }> = [];
+    const filter = {
+      ...getActiveSubscriptionFilter(),
+      "subscription.endDate": { $gte: rangeStart, $lt: rangeEnd },
+    };
 
-    for await (const sub of stripe.subscriptions.list({
-      status: "active",
-      limit: 100,
-      expand: ["data.customer"],
-    })) {
-      const periodEndSec = getSubscriptionPeriodEnd(sub);
-      if (periodEndSec == null || !Number.isFinite(periodEndSec)) continue;
-      if (periodEndSec < nowSec || periodEndSec > endSec) continue;
-      const periodEndMs = periodEndSec * 1000;
+    const [total, totalRevenueResult, users] = await Promise.all([
+      User.countDocuments(filter),
+      User.find(filter).select("subscription.packageId").lean(),
+      User.find(filter)
+        .select("_id firstName lastName email stripeCustomerId stripeSubscriptionId subscription.packageId subscription.endDate")
+        .sort({ "subscription.endDate": 1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+    ]);
 
-      const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-      if (!customerId) continue;
-
-      let customerEmail: string | undefined;
-      let customerName: string | undefined;
-      const customer = sub.customer;
-      if (customer && typeof customer === "object" && "email" in customer) {
-        customerEmail = customer.email ?? undefined;
-        customerName = customer.name ?? undefined;
-      }
-
-      let amountCents = 0;
-      try {
-        const upcoming = await (stripe.invoices as unknown as { retrieveUpcoming: (opts: { subscription: string }) => Promise<{ amount_due?: number }> }).retrieveUpcoming({
-          subscription: sub.id,
-        });
-        amountCents = upcoming.amount_due ?? 0;
-      } catch {
-        if (sub.items?.data?.length) {
-          amountCents = sub.items.data.reduce((sum, item) => sum + (item.plan?.amount ?? item.price?.unit_amount ?? 0) * (item.quantity ?? 1), 0);
-        }
-      }
-
-      const renewalDate = new Date(periodEndMs);
-      const renewalDateValid = Number.isFinite(renewalDate.getTime());
-      let renewalDateFormatted = "—";
-      if (renewalDateValid) {
-        try {
-          renewalDateFormatted = formatDateInAEST(renewalDate, "MMM d, yyyy h:mm a");
-        } catch {
-          // formatter can throw for out-of-range or invalid dates
-        }
-      }
-
-      let userId: string | undefined;
-      const user = await User.findOne({ stripeCustomerId: customerId }).select("_id").lean();
-      if (user) userId = user._id.toString();
-
-      renewals.push({
-        subscriptionId: sub.id,
-        customerId,
-        customerEmail,
-        customerName,
-        userId,
-        renewalDate: renewalDateValid ? renewalDate.toISOString() : "",
-        renewalDateFormatted,
-        amountCents,
-        amountFormatted: new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(amountCents / 100),
-      });
+    let totalRevenue = 0;
+    for (const u of totalRevenueResult) {
+      const packageId = u.subscription?.packageId as string | undefined;
+      const pkg = packageId ? getPackageById(packageId) : undefined;
+      if (pkg?.price != null) totalRevenue += pkg.price;
     }
 
-    const userIdsFromStripe = new Set(renewals.map((r) => r.userId).filter(Boolean));
-
-    // DB users with endDate in range (will renew)
-    const dbUsersWithEndDate = await User.find({
-      ...getActiveSubscriptionFilter(),
-      "subscription.endDate": { $gte: rangeStart, $lte: rangeEnd },
-    })
-      .select("_id firstName lastName email stripeCustomerId stripeSubscriptionId subscription.packageId subscription.endDate")
-      .lean();
-
-    for (const u of dbUsersWithEndDate) {
-      const uid = (u._id as { toString: () => string }).toString();
-      if (userIdsFromStripe.has(uid)) continue;
-
+    const renewals = users.map((u) => {
       const endDate = u.subscription?.endDate as Date | undefined;
-      if (!endDate) continue;
-
-      const renewalDate = new Date(endDate);
-      const renewalDateValid = Number.isFinite(renewalDate.getTime());
+      const renewalDate = endDate ? new Date(endDate) : new Date(0);
+      const renewalDateValid = endDate && Number.isFinite(renewalDate.getTime());
       let renewalDateFormatted = "—";
-      if (renewalDateValid) {
+      if (renewalDateValid && endDate) {
         try {
-          renewalDateFormatted = formatDateInAEST(renewalDate, "MMM d, yyyy h:mm a");
+          renewalDateFormatted = formatDateInAEST(endDate, "MMM d, yyyy h:mm a");
         } catch {
           // ignore
         }
       }
-
       const packageId = u.subscription?.packageId as string | undefined;
       const pkg = packageId ? getPackageById(packageId) : undefined;
       const amountCents = pkg?.price != null ? Math.round(pkg.price * 100) : 0;
-
-      renewals.push({
+      const uid = (u._id as { toString: () => string }).toString();
+      return {
         subscriptionId: (u.stripeSubscriptionId as string) || "",
         customerId: (u.stripeCustomerId as string) || "",
         customerEmail: u.email as string,
@@ -171,85 +103,12 @@ export async function GET(request: NextRequest) {
         renewalDateFormatted,
         amountCents,
         amountFormatted: new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(amountCents / 100),
-      });
-    }
-
-    // Will-renew users whose endDate is not in [rangeStart, rangeEnd]: get period end from Stripe to see if they belong in window
-    const userIdsInList = new Set(renewals.map((r) => r.userId).filter(Boolean));
-    const dbUsersNoEndDate = await User.find({
-      ...getActiveSubscriptionFilter(),
-      stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
-      $or: [
-        { "subscription.endDate": { $exists: false } },
-        { "subscription.endDate": null },
-        { "subscription.endDate": { $lt: rangeStart } },
-        { "subscription.endDate": { $gt: rangeEnd } },
-      ],
-    })
-      .select("_id firstName lastName email stripeCustomerId stripeSubscriptionId subscription.packageId")
-      .lean();
-
-    for (const u of dbUsersNoEndDate) {
-      const uid = (u._id as { toString: () => string }).toString();
-      if (userIdsInList.has(uid)) continue;
-
-      const subId = u.stripeSubscriptionId as string;
-      if (!subId) continue;
-
-      try {
-        const sub = await stripe.subscriptions.retrieve(subId);
-        const periodEndSec = getSubscriptionPeriodEnd(sub);
-        if (periodEndSec == null || !Number.isFinite(periodEndSec)) continue;
-        if (periodEndSec < nowSec || periodEndSec > endSec) continue;
-        const periodEndMs = periodEndSec * 1000;
-
-        const renewalDate = new Date(periodEndMs);
-        const renewalDateValid = Number.isFinite(renewalDate.getTime());
-        let renewalDateFormatted = "—";
-        if (renewalDateValid) {
-          try {
-            renewalDateFormatted = formatDateInAEST(renewalDate, "MMM d, yyyy h:mm a");
-          } catch {
-            // ignore
-          }
-        }
-
-        let amountCents = 0;
-        try {
-          const upcoming = await (stripe.invoices as unknown as { retrieveUpcoming: (opts: { subscription: string }) => Promise<{ amount_due?: number }> }).retrieveUpcoming({ subscription: subId });
-          amountCents = upcoming.amount_due ?? 0;
-        } catch {
-          const pkg =
-            u.subscription?.packageId != null ? getPackageById(String(u.subscription.packageId)) : undefined;
-          amountCents = pkg?.price != null ? Math.round(pkg.price * 100) : 0;
-        }
-
-        renewals.push({
-          subscriptionId: subId,
-          customerId: (u.stripeCustomerId as string) || "",
-          customerEmail: u.email as string,
-          customerName: [u.firstName, u.lastName].filter(Boolean).join(" ") || undefined,
-          userId: uid,
-          renewalDate: renewalDateValid ? renewalDate.toISOString() : "",
-          renewalDateFormatted,
-          amountCents,
-          amountFormatted: new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(amountCents / 100),
-        });
-        userIdsInList.add(uid);
-      } catch {
-        // Stripe fetch failed for this sub, skip
-      }
-    }
-
-    renewals.sort((a, b) => {
-      const ta = a.renewalDate ? new Date(a.renewalDate).getTime() : 0;
-      const tb = b.renewalDate ? new Date(b.renewalDate).getTime() : 0;
-      return Number.isFinite(ta) && Number.isFinite(tb) ? ta - tb : 0;
+      };
     });
 
     return NextResponse.json({
       success: true,
-      data: { renewals },
+      data: { renewals, total, page, limit, totalRevenue: Math.round(totalRevenue * 100) / 100 },
     });
   } catch (error) {
     console.error("Error fetching upcoming renewals:", error);

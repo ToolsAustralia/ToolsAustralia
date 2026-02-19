@@ -265,7 +265,7 @@ export function createAESTDateAsUTC(
 }
 
 /**
- * Get window "today through 27th" in AEST: start = midnight today, end = 28th 00:00 (end of 27th).
+ * Get window "today through 27th" in AEST: start = midnight today, end = 27th 20:00 (8pm AEST/AEDT).
  * Used for "renewing today through 27th" in admin upcoming renewals and projected income.
  */
 export function getTodayThrough27thWindowUTC(): { startUTC: Date; endUTC: Date } {
@@ -283,7 +283,7 @@ export function getTodayThrough27thWindowUTC(): { startUTC: Date; endUTC: Date }
       anchorYear += 1;
     }
   }
-  const endUTC = createAESTDateAsUTC(anchorYear, anchorMonth, 28, 0, 0);
+  const endUTC = createAESTDateAsUTC(anchorYear, anchorMonth, 27, 20, 0);
   return { startUTC, endUTC };
 }
 
