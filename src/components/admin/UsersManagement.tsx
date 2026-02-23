@@ -43,6 +43,7 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { UserMetricsView } from "./metrics/UserMetricsView";
 import { membershipPackages } from "@/data/membershipPackages";
 import { getPackageIconByName } from "@/utils/images/package-icons";
+import { getPackageColorScheme, getGradientColor } from "@/features/admin/users/utils/userHelpers";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 import Dropdown from "@/components/modals/ui/Dropdown";
 
@@ -248,64 +249,6 @@ export default function UsersManagement() {
     if (!packageName) return null;
     // Try subscription first, then one-time as fallback
     return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
-  };
-
-  // Get package color scheme (matching PartnerDiscountQueue logic)
-  const getPackageColorScheme = (packageName?: string | null) => {
-    if (!packageName) return null;
-    const lowerName = packageName.toLowerCase();
-
-    if (lowerName.includes("apprentice")) {
-      return {
-        gradient: "from-gray-300 via-slate-400 to-gray-500",
-        text: "text-gray-300",
-        border: "border-gray-400/40",
-      };
-    } else if (lowerName.includes("tradie")) {
-      return {
-        gradient: "from-blue-500 via-blue-600 to-blue-700",
-        text: "text-blue-400",
-        border: "border-blue-500/50",
-      };
-    } else if (lowerName.includes("foreman")) {
-      return {
-        gradient: "from-green-500 via-green-600 to-green-700",
-        text: "text-green-300",
-        border: "border-green-500/50",
-      };
-    } else if (lowerName.includes("boss")) {
-      return {
-        gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-        text: "text-yellow-400",
-        border: "border-yellow-400/50",
-      };
-    } else if (lowerName.includes("power")) {
-      return {
-        gradient: "from-orange-600 via-red-500 to-orange-700",
-        text: "text-orange-400",
-        border: "border-orange-500/50",
-      };
-    }
-
-    // Default fallback
-    return {
-      gradient: "from-slate-600 via-gray-700 to-slate-800",
-      text: "text-gray-400",
-      border: "border-gray-500/50",
-    };
-  };
-
-  // Helper function to extract gradient color for border (matching PartnerDiscountQueue)
-  const getGradientColor = (gradient: string): string => {
-    if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
-    if (gradient.includes("blue")) return "#3b82f6";
-    if (gradient.includes("purple")) return "#9333ea";
-    if (gradient.includes("orange")) return "#f97316";
-    if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
-    if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
-    if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
-    if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
-    return "#6b7280";
   };
 
   // Get subscription status badge

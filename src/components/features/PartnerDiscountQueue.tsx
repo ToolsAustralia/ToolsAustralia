@@ -18,6 +18,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package } from "lucide-react";
 import Image from "next/image";
 import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
+import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -306,63 +307,6 @@ export default function PartnerDiscountQueue({
     return getPackageIconByName(packageName, membershipType);
   };
 
-  // Helper function to get package color scheme (matching MembershipBadge)
-  const getPackageColorScheme = (packageName: string) => {
-    const lowerName = packageName.toLowerCase();
-
-    if (lowerName.includes("apprentice")) {
-      return {
-        gradient: "from-gray-300 via-slate-400 to-gray-500",
-        text: "text-gray-300",
-        border: "border-gray-400/40",
-      };
-    } else if (lowerName.includes("tradie")) {
-      return {
-        gradient: "from-blue-500 via-blue-600 to-blue-700",
-        text: "text-blue-400",
-        border: "border-blue-500/50",
-      };
-    } else if (lowerName.includes("foreman")) {
-      return {
-        gradient: "from-green-500 via-green-600 to-green-700",
-        text: "text-green-300",
-        border: "border-green-500/50",
-      };
-    } else if (lowerName.includes("boss")) {
-      return {
-        gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-        text: "text-yellow-400",
-        border: "border-yellow-400/50",
-      };
-    } else if (lowerName.includes("power")) {
-      return {
-        gradient: "from-orange-600 via-red-500 to-orange-700",
-        text: "text-orange-400",
-        border: "border-orange-500/50",
-      };
-    }
-
-    // Default fallback
-    return {
-      gradient: "from-slate-600 via-gray-700 to-slate-800",
-      text: "text-gray-400",
-      border: "border-gray-500/50",
-    };
-  };
-
-  // Helper function to extract gradient color for border
-  const getGradientColor = (gradient: string): string => {
-    if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
-    if (gradient.includes("blue")) return "#3b82f6";
-    if (gradient.includes("purple")) return "#9333ea";
-    if (gradient.includes("orange")) return "#f97316";
-    if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
-    if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
-    if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
-    if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
-    return "#6b7280";
-  };
-
   // Get badge color based on package type and name
   const getPackageBadgeColor = (type: string, packageName?: string) => {
     if (!packageName) {
@@ -507,7 +451,7 @@ export default function PartnerDiscountQueue({
               const packageName = summary.subscriptionBenefits.packageName;
               const packageIcon = getPackageIconImage(packageName, "subscription");
               const colorScheme = getPackageColorScheme(packageName);
-              const borderGradientColor = getGradientColor(colorScheme.gradient);
+              const borderGradientColor = colorScheme.accentHex;
               const isPremiumPackage =
                 packageName.toLowerCase().includes("boss") || packageName.toLowerCase().includes("power");
 

@@ -1205,13 +1205,13 @@
 
 /* Additional border glow keyframes to match membership card themes */
 @keyframes border-glow-silver {
-  /* Silver border glow for Apprentice */
+  /* Silver border glow for Apprentice - brighter */
   0%,
   100% {
-    box-shadow: 0 0 10px rgba(148, 163, 184, 0.4); /* slate-400 */
+    box-shadow: 0 0 12px rgba(203, 213, 225, 0.5);
   }
   50% {
-    box-shadow: 0 0 20px rgba(148, 163, 184, 0.75);
+    box-shadow: 0 0 24px rgba(203, 213, 225, 0.85);
   }
 }
 
@@ -1269,6 +1269,56 @@
 
 .animate-border-glow-orange {
   animation: border-glow-orange 2s ease-in-out infinite;
+}
+
+.animate-border-glow-blue {
+  animation: border-glow-blue 2s ease-in-out infinite;
+}
+
+/* Brand-specific border glow animations */
+@keyframes border-glow-ryobi {
+  0%, 100% { box-shadow: 0 0 12px rgba(227, 230, 27, 0.45); }
+  50% { box-shadow: 0 0 22px rgba(227, 230, 27, 0.75); }
+}
+.animate-border-glow-ryobi {
+  animation: border-glow-ryobi 2s ease-in-out infinite;
+}
+
+@keyframes border-glow-makita {
+  0%, 100% { box-shadow: 0 0 12px rgba(45, 212, 191, 0.5); }
+  50% { box-shadow: 0 0 24px rgba(45, 212, 191, 0.9); }
+}
+.animate-border-glow-makita {
+  animation: border-glow-makita 2s ease-in-out infinite;
+}
+
+@keyframes border-glow-dewalt {
+  0%, 100% { box-shadow: 0 0 12px rgba(245, 213, 71, 0.5); }
+  50% { box-shadow: 0 0 24px rgba(245, 213, 71, 0.9); }
+}
+.animate-border-glow-dewalt {
+  animation: border-glow-dewalt 2s ease-in-out infinite;
+}
+
+@keyframes border-glow-milwaukee {
+  0%, 100% { box-shadow: 0 0 14px rgba(255, 107, 107, 0.55); }
+  50% { box-shadow: 0 0 28px rgba(255, 107, 107, 0.95); }
+}
+.animate-border-glow-milwaukee {
+  animation: border-glow-milwaukee 2s ease-in-out infinite;
+}
+
+/* Metallic silver Enter Now button - same prominent glow for all packs */
+@keyframes border-glow-metallic {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 0 15px rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 25px rgba(255, 255, 255, 0.8);
+  }
+}
+.animate-border-glow-metallic {
+  animation: border-glow-metallic 2s ease-in-out infinite;
 }
 
 /* Expanding and fading pulse animation for Enter Now button in PromoHero */
@@ -1407,18 +1457,18 @@
   }
 }
 
-/* Membership package Enter Now – same animation as promo-hero-cta-button (shimmer + hover), design unchanged */
+/* Membership package Enter Now – premium solid CTA with subtle shimmer */
 .membership-enter-cta-animation {
   position: relative;
   overflow: hidden;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .membership-enter-cta-animation::before {
   content: "";
   position: absolute;
   inset: -40%;
-  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
-  opacity: 0.7;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%);
+  opacity: 0.5;
   transform: translateX(-130%);
   animation: cta-shimmer-pass 4.5s ease-in-out infinite;
   pointer-events: none;
@@ -1428,16 +1478,10 @@
   position: relative;
   z-index: 1;
 }
-@media (hover: hover) and (min-width: 1024px) {
+@media (hover: hover) {
   .membership-enter-cta-animation:hover {
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 22px 34px rgba(0, 0, 0, 0.35);
-  }
-}
-@media (hover: hover) and (max-width: 1023px) {
-  .membership-enter-cta-animation:hover {
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 22px 34px rgba(0, 0, 0, 0.35);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   }
 }
 

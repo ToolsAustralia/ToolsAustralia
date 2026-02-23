@@ -21,6 +21,10 @@ import { getPackageIcon } from "@/utils/images/package-icons";
 import { SectionContainer } from "@/components/ui";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import {
+  getPackageColorScheme,
+  getPackageGlowColor,
+} from "@/utils/package-colors/packageColorScheme";
 
 interface MembershipSectionProps {
   title?: string;
@@ -29,131 +33,6 @@ interface MembershipSectionProps {
   onPlanSelect?: (plan: LocalMembershipPlan) => void;
   variantConfig?: VariantConfig["packages"]; // Optional variant config for packages
 }
-
-// Helper function to extract gradient colors for rounded borders
-const getGradientColor = (gradient: string) => {
-  if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
-  if (gradient.includes("blue")) return "#3b82f6";
-  if (gradient.includes("purple")) return "#9333ea";
-  if (gradient.includes("orange")) return "#f97316";
-  if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
-  if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
-  if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
-  if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
-  return "#6b7280";
-};
-
-// Helper function to get package glow colors for inside glow
-const getPackageGlowColor = (planId: string) => {
-  if (planId.includes("apprentice")) {
-    return "from-gray-400/10 via-gray-400/2.5 to-transparent"; // Silver
-  } else if (planId.includes("tradie")) {
-    return "from-blue-500/10 via-blue-500/2.5 to-transparent"; // Blue
-  } else if (planId.includes("foreman")) {
-    return "from-green-500/10 via-green-500/2.5 to-transparent"; // Green
-  } else if (planId.includes("boss")) {
-    return "from-yellow-500/10 via-yellow-500/2.5 to-transparent"; // Gold
-  } else if (planId.includes("power")) {
-    return "from-orange-500/10 via-orange-500/2.5 to-transparent"; // Orange
-  }
-  return "from-gray-500/10 via-gray-500/2.5 to-transparent"; // Default
-};
-
-// Helper function to get package color scheme
-const getPackageColorScheme = (planId: string) => {
-  if (planId.includes("apprentice")) {
-    return {
-      gradient: "from-gray-300 via-slate-400 to-gray-500",
-      glow: "animate-glow-pulse-silver",
-      text: "text-gray-300",
-      border: "border-gray-400/40",
-      shadow: "shadow-gray-400/20",
-      hoverShadow: "hover:shadow-gray-400/40",
-      borderGlow: "animate-border-glow-silver",
-      badgeStyle: {
-        background: "linear-gradient(135deg, #d1d5db 0%, #94a3b8 25%, #6b7280 50%, #4b5563 75%, #d1d5db 100%)",
-        boxShadow: "0 0 25px rgba(148, 163, 184, 0.6), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-        border: "1px solid rgba(148, 163, 184, 0.8)",
-      },
-    };
-  } else if (planId.includes("tradie")) {
-    return {
-      gradient: "from-blue-500 via-blue-600 to-blue-700",
-      glow: "animate-glow-pulse-blue",
-      text: "text-blue-400",
-      border: "border-blue-500/50",
-      shadow: "shadow-blue-500/30",
-      hoverShadow: "hover:shadow-blue-500/50",
-      borderGlow: "animate-border-glow-blue",
-      badgeStyle: {
-        background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 25%, #1d4ed8 50%, #1e40af 75%, #3b82f6 100%)",
-        boxShadow: "0 0 25px rgba(59, 130, 246, 0.8), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-        border: "1px solid rgba(147, 197, 253, 0.8)",
-      },
-    };
-  } else if (planId.includes("foreman")) {
-    return {
-      gradient: "from-green-500 via-green-600 to-green-700",
-      glow: "animate-glow-pulse-green",
-      text: "text-green-300",
-      border: "border-green-500/50",
-      shadow: "shadow-green-500/30",
-      hoverShadow: "hover:shadow-green-500/50",
-      borderGlow: "animate-border-glow-green",
-      badgeStyle: {
-        background: "linear-gradient(135deg, #22c55e 0%, #16a34a 25%, #15803d 50%, #166534 75%, #22c55e 100%)",
-        boxShadow: "0 0 25px rgba(34, 197, 94, 0.8), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-        border: "1px solid rgba(134, 239, 172, 0.8)",
-      },
-    };
-  } else if (planId.includes("boss")) {
-    return {
-      gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-      glow: "animate-glow-pulse-gold",
-      text: "text-yellow-400",
-      border: "border-yellow-400/50",
-      shadow: "shadow-yellow-400/30",
-      hoverShadow: "hover:shadow-yellow-400/50",
-      borderGlow: "animate-border-glow-gold",
-      badgeStyle: {
-        background: "linear-gradient(135deg, #facc15 0%, #eab308 25%, #ca8a04 50%, #a16207 75%, #facc15 100%)",
-        boxShadow: "0 0 25px rgba(234, 179, 8, 0.8), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-        border: "1px solid rgba(253, 224, 71, 0.8)",
-      },
-    };
-  } else if (planId.includes("power")) {
-    return {
-      gradient: "from-orange-600 via-red-500 to-orange-700",
-      glow: "animate-glow-pulse-orange",
-      text: "text-orange-400",
-      border: "border-orange-500/50",
-      shadow: "shadow-orange-500/30",
-      hoverShadow: "hover:shadow-orange-500/50",
-      borderGlow: "animate-border-glow-orange",
-      badgeStyle: {
-        background: "linear-gradient(135deg, #ea580c 0%, #ee0000 25%, #dc2626 50%, #b91c1c 75%, #ea580c 100%)",
-        boxShadow: "0 0 25px rgba(239, 68, 68, 0.8), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-        border: "1px solid rgba(251, 146, 60, 0.8)",
-      },
-    };
-  }
-
-  // Default fallback
-  return {
-    gradient: "from-slate-600 via-gray-700 to-slate-800",
-    glow: "drop-shadow-[0_0_10px_rgba(100,116,139,0.5)]",
-    text: "text-gray-400",
-    border: "border-gray-500/50",
-    shadow: "shadow-gray-500/30",
-    hoverShadow: "hover:shadow-gray-500/50",
-    borderGlow: "animate-border-glow-blue",
-    badgeStyle: {
-      background: "linear-gradient(135deg, #64748b 0%, #475569 25%, #334155 50%, #1e293b 75%, #64748b 100%)",
-      boxShadow: "0 0 25px rgba(100, 116, 139, 0.6), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-      border: "1px solid rgba(148, 163, 184, 0.8)",
-    },
-  };
-};
 
 export default function MembershipSection({
   title = "CHOOSE YOUR PACKAGE",
@@ -610,7 +489,7 @@ export default function MembershipSection({
         {/* Mobile/Tablet: Vertical Stack Layout */}
         {!loading && !error && (
           <div className="lg:hidden overflow-visible ">
-            <div className="grid grid-cols-1 gap-6 sm:gap-14 max-w-md mx-auto overflow-visible">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-md mx-auto overflow-visible">
               {membershipPlans.map((plan, index) => {
                 const colorScheme = getPackageColorScheme(plan.id);
                 const highlighted = isHighlighted(plan.id);
@@ -620,20 +499,21 @@ export default function MembershipSection({
                   <div
                     key={plan.id}
                     className={`relative w-full ${
-                      isAdditionalPackage ? "h-[310px] sm:h-[360px]" : "h-[275px] sm:h-[325px]"
-                    } rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 lg:hover:scale-105 lg:hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible ${
-                          highlighted
-                            ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105"
-                            : isCurrentSubscription(plan)
-                            ? "ring-4 ring-green-400 ring-opacity-60 shadow-green-500/30"
-                            : plan.isPopular
-                            ? "ring-4 ring-gray-400 ring-opacity-60 shadow-gray-500/30"
-                            : ""
-                        }`}
+                      isAdditionalPackage ? "h-[270px] sm:h-[360px]" : "h-[255px] sm:h-[345px]"
+                    } rounded-3xl transition-all duration-300 lg:hover:scale-105 overflow-visible ${highlighted ? "scale-105" : ""}`}
+                    style={
+                      highlighted
+                        ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
+                        : isCurrentSubscription(plan)
+                        ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
+                        : plan.isPopular
+                        ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
+                        : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
+                    }
                       >
-                        {/* Promo Badge - Pin overlay at top-left, outside card */}
+                        {/* Promo Badge - Pin overlay at top-right, outside card */}
                         {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
-                          <div className="absolute -top-6 -left-6 z-30">
+                          <div className="absolute -top-6 -right-8 z-30">
                             <Image
                               src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
                               alt={`${plan.metadata.promoMultiplier}x entries`}
@@ -643,16 +523,83 @@ export default function MembershipSection({
                             />
                           </div>
                         )}
-                        {/* Card Background with Rounded Gradient Border */}
+                        {/* Best Chance, Popular and Current Badges - Top Left (inside card) */}
+                        {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
+                        {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                          <div className="absolute top-1.5 left-1.5 z-20">
+                            <BestChanceBadge size="medium" />
+                          </div>
+                        )}
+
+                        {/* Popular and Current Plan Badges - Top Left - Only show if not boss/power */}
+                        {!(plan.id.includes("boss") || plan.id.includes("power")) && (
+                          <div className="absolute top-2 left-2 z-20 flex flex-col gap-1 items-start">
+                            {/* Current Plan Badge - Highest Priority - Same styling as Popular */}
+                            {isCurrentSubscription(plan) && (
+                              <div
+                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
+                                style={colorScheme.badgeStyle}
+                              >
+                                {/* Subtle static highlight - no shimmer */}
+                                <div
+                                  className="absolute inset-0 pointer-events-none"
+                                  style={{
+                                    background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
+                                  }}
+                                />
+                                {/* Content - white text for contrast */}
+                                <div className="relative z-10 flex items-center text-white">
+                                  <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
+                                    CURRENT
+                                  </span>
+                                </div>
+                                <div
+                                  className="absolute inset-0 rounded-full pointer-events-none"
+                                  style={{
+                                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
+                                    border: "1px solid rgba(255, 255, 255, 0.4)",
+                                  }}
+                                />
+                              </div>
+                            )}
+                            {/* Popular Badge - Show only if not current plan - Theme matches package */}
+                            {plan.isPopular && !isCurrentSubscription(plan) && (
+                              <div
+                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
+                                style={colorScheme.badgeStyle}
+                              >
+                                {/* Subtle static highlight - no shimmer */}
+                                <div
+                                  className="absolute inset-0 pointer-events-none"
+                                  style={{
+                                    background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
+                                  }}
+                                />
+                                {/* Content - white text for contrast on package-themed gradient */}
+                                <div className="relative z-10 flex items-center text-white">
+                                  <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
+                                    POPULAR
+                                  </span>
+                                </div>
+                                <div
+                                  className="absolute inset-0 rounded-full pointer-events-none"
+                                  style={{
+                                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
+                                    border: "1px solid rgba(255, 255, 255, 0.4)",
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Card Background - Brand gradient */}
                         <div
                           className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
                           style={{
-                            border: `2px solid transparent`,
-                            backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${getGradientColor(
-                              colorScheme.gradient
-                            )}, transparent)`,
+                            border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity}`,
+                            background: colorScheme.bgGradient,
                             backgroundOrigin: `border-box`,
-                            backgroundClip: `padding-box, border-box`,
                           }}
                         >
                           {/* Inside Glow - Whole Card with Margin */}
@@ -661,57 +608,6 @@ export default function MembershipSection({
                               plan.id
                             )} pointer-events-none rounded-2xl z-0`}
                           ></div>
-                          {/* Badges - Top Right Corner (Popular and Current Plan) */}
-                          {/* Best Chance Badge - Top Right (for boss/power packages) - Theme matches package */}
-                          {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                            <div className="absolute top-1.5 right-1.5 z-20">
-                              <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} />
-                            </div>
-                          )}
-
-                          {/* Popular and Current Plan Badges - Top Right - Only show if not boss/power */}
-                          {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                            <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
-                              {/* Current Plan Badge - Highest Priority */}
-                              {isCurrentSubscription(plan) && (
-                                <div
-                                  className={`bg-gradient-to-r from-green-500 via-green-600 to-green-700 text-white ${
-                                    "px-2 py-1 text-[8px]"
-                                  } rounded-full font-bold shadow-lg shadow-green-500/50 border border-green-400`}
-                                >
-                                  CURRENT
-                                </div>
-                              )}
-                              {/* Popular Badge - Show only if not current plan - Theme matches package */}
-                              {plan.isPopular && !isCurrentSubscription(plan) && (
-                                <div
-                                  className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
-                                  style={colorScheme.badgeStyle}
-                                >
-                                  {/* Subtle static highlight - no shimmer */}
-                                  <div
-                                    className="absolute inset-0 pointer-events-none"
-                                    style={{
-                                      background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                                    }}
-                                  />
-                                  {/* Content - white text for contrast on package-themed gradient */}
-                                  <div className="relative z-10 flex items-center text-white">
-                                    <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                                      POPULAR
-                                    </span>
-                                  </div>
-                                  <div
-                                    className="absolute inset-0 rounded-full pointer-events-none"
-                                    style={{
-                                      background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                                      border: "1px solid rgba(255, 255, 255, 0.4)",
-                                    }}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          )}
 
                           {/* Package Icon - Centered at top */}
                           {getPackageIcon(plan.id) && (
@@ -744,7 +640,7 @@ export default function MembershipSection({
 
                                 return (
                                   <h3
-                                    className={`font-poppins text-[18px] sm:text-[24px] font-bold mb-0 ${colorScheme.text} leading-tight`}
+                                    className={`font-poppins text-[16px] sm:text-[20px] font-bold mb-0 ${colorScheme.text} leading-tight`}
                                   >
                                     {isAdditionalPackage ? (
                                       <>
@@ -759,7 +655,7 @@ export default function MembershipSection({
                               })()}
                               {plan.subtitle && (
                                 <p
-                                  className="font-poppins text-[13px] sm:text-[16px] font-medium mb-0.5 text-white/80"
+                                  className={`font-poppins text-[13px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textMuted}`}
                                 >
                                   {plan.subtitle}
                                 </p>
@@ -783,26 +679,26 @@ export default function MembershipSection({
                                     <div className={`font-poppins ${colorScheme.text} text-center`}>
                                       {hasMultiplier ? (
                                         <div className="flex items-center justify-center gap-1.5">
-                                          <span className="text-[24px] sm:text-[32px] font-bold line-through opacity-40 text-slate-400">
+                                          <span className={`text-[18px] sm:text-[24px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
                                             {originalEntries}
                                           </span>
-                                          <span className="text-[20px] sm:text-[24px] font-bold text-yellow-400">
+                                          <span className={`text-[16px] sm:text-[18px] font-bold ${colorScheme.entriesText}`}>
                                             →
                                           </span>
                                           <span
-                                            className={`text-[40px] sm:text-[48px] font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
+                                            className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.entriesText}`}
                                           >
                                             {displayEntries}
                                           </span>
                                         </div>
                                       ) : (
                                         <span
-                                          className={`text-[40px] sm:text-[48px] font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
+                                          className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.entriesText}`}
                                         >
                                           {entriesNumber}
                                         </span>
                                       )}
-                                      <div className={`text-[16px] sm:text-[20px] ${colorScheme.text} mt-0`}>
+                                      <div className={`text-[12px] sm:text-[14px] ${colorScheme.textMuted} mt-0`}>
                                         Free Entries
                                       </div>
                                     </div>
@@ -818,17 +714,17 @@ export default function MembershipSection({
                             {/* Price Badge - Centered, width fits content */}
                             <div className="flex-1 min-h-0 overflow-visible flex justify-center mb-2">
                               <div className="pb-0.5">
-                                <div className="w-fit bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 backdrop-blur-sm px-2.5 py-1 rounded-2xl border border-slate-600/50 shadow-lg shadow-black/30">
+                                <div className={`w-fit ${colorScheme.priceBadgeBg} backdrop-blur-sm px-2.5 py-1 rounded-2xl border border-white/30 shadow-[0_4px_16px_rgba(255,255,255,0.25)]`}>
                                   <div className="flex items-baseline gap-1 justify-center">
-                                    <div className="font-poppins font-bold text-xl sm:text-2xl bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent">
+                                    <div className={`font-poppins font-bold text-base sm:text-lg ${colorScheme.priceText}`}>
                                       ${plan.price}
                                     </div>
                                     {plan.period !== "one-time" ? (
-                                      <div className="font-poppins font-semibold text-md sm:text-xs text-slate-200/90">
+                                      <div className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textMuted}`}>
                                         Per Giveaway
                                       </div>
                                     ) : (
-                                      <div className="font-poppins font-semibold text-md sm:text-xs text-slate-200/90">
+                                      <div className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textMuted}`}>
                                         One Time Payment
                                       </div>
                                     )}
@@ -843,7 +739,7 @@ export default function MembershipSection({
                               {isCurrentSubscription(plan) ? (
                                 <button
                                   disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[16px] sm:text-[18px] bg-green-600 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
+                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[16px] sm:text-[18px] bg-gradient-to-r ${colorScheme.gradient} text-white cursor-not-allowed opacity-90 ${colorScheme.borderGlow}`}
                                 >
                                   Current Plan
                                 </button>
@@ -861,9 +757,7 @@ export default function MembershipSection({
                                     plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                                   let buttonText = "Enter Now";
                                   const buttonHeight = "h-[44px] sm:h-[48px]";
-                                  let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform bg-gradient-to-r ${
-                                    colorScheme.gradient
-                                  } text-white`;
+                                  let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
 
                                   // past_due: show "Update payment" for subscription plans - route to my-account
                                   if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
@@ -879,13 +773,13 @@ export default function MembershipSection({
                                       buttonClass += " bg-transparent text-white hover:bg-red-600 hover:text-white";
                                     } else if (hierarchy.isUpgrade) {
                                       buttonText = `Upgrade to ${plan.name}`;
-                                      buttonClass += " bg-blue-600 text-white hover:bg-blue-700";
+                                      buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
                                     }
                                   }
 
                                   return (
                                     <button
-                                      className={`${buttonClass} ${colorScheme.borderGlow}${buttonText === "Enter Now" ? " membership-enter-cta-animation" : ""}`}
+                                      className={`${buttonClass} ${buttonText === "Enter Now" ? ` ${colorScheme.borderGlow} membership-enter-cta-animation` : colorScheme.borderGlow}`}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={hasActiveSubscription && hierarchy.isCurrent}
                                       suppressHydrationWarning
@@ -909,36 +803,107 @@ export default function MembershipSection({
       {!loading && !error && (
         <div className="hidden lg:block overflow-visible">
           <div
-            className={`grid gap-6 sm:gap-8 overflow-visible pt-8 ${
+            className={`grid gap-3 sm:gap-4 overflow-visible pt-8 ${
               activeTab === "membership"
                 ? "max-w-7xl mx-auto grid-cols-3 w-full"
-                : "max-w-7xl mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5 justify-items-center"
+                : "max-w-[96rem] mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5"
             }`}
           >
             {membershipPlans.length > 0 ? (
               membershipPlans.map((plan) => {
               const colorScheme = getPackageColorScheme(plan.id);
               const highlighted = isHighlighted(plan.id);
+              const isAdditionalPackage =
+                plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
               return (
                 <div
                   key={plan.id}
-                  className={`relative h-[350px] rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible isolate ${
+                  className={`relative ${isAdditionalPackage ? "h-[350px]" : "h-[320px]"} rounded-3xl transition-all duration-300 overflow-visible isolate ${
                     activeTab === "membership"
                       ? "w-full min-w-0"
-                      : "w-[290px] max-w-[320px] justify-self-center"
-                  } ${
+                      : "w-full min-w-0 max-w-[320px] justify-self-center"
+                  } ${highlighted ? "scale-105" : ""}`}
+                  style={
                     highlighted
-                      ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105"
+                      ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
                       : isCurrentSubscription(plan)
-                      ? "ring-4 ring-green-400 ring-opacity-60 shadow-green-500/30"
+                      ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
                       : plan.isPopular
-                      ? "ring-4 ring-gray-400 ring-opacity-60 shadow-gray-500/30"
-                      : ""
-                  }`}
+                      ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
+                      : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
+                  }
                 >
-                  {/* Promo Badge - Pin overlay at top-left, outside card */}
+                  {/* Best Chance, Popular and Current Badges - Top Left (inside card) */}
+                  {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
+                  {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                    <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left">
+                      <BestChanceBadge size="medium" />
+                    </div>
+                  )}
+
+                  {/* Popular and Current Plan Badges - Top Left - Only show if not boss/power */}
+                  {!(plan.id.includes("boss") || plan.id.includes("power")) && (
+                    <div className="absolute top-2 left-2 z-20 flex flex-col gap-1 items-start">
+                      {/* Current Plan Badge - Highest Priority - Same styling as Popular */}
+                      {isCurrentSubscription(plan) && (
+                        <div
+                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-xs"
+                          style={colorScheme.badgeStyle}
+                        >
+                          {/* Subtle static highlight - no shimmer */}
+                          <div
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                              background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
+                            }}
+                          />
+                          <div className="relative z-10 flex items-center gap-1 text-white">
+                            <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
+                              CURRENT
+                            </span>
+                          </div>
+                          <div
+                            className="absolute inset-0 rounded-full pointer-events-none"
+                            style={{
+                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
+                              border: "1px solid rgba(255, 255, 255, 0.4)",
+                            }}
+                          />
+                        </div>
+                      )}
+                      {/* Popular Badge - Show only if not current plan - Theme matches package */}
+                      {plan.isPopular && !isCurrentSubscription(plan) && (
+                        <div
+                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-xs"
+                          style={colorScheme.badgeStyle}
+                        >
+                          {/* Subtle static highlight - no shimmer */}
+                          <div
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                              background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
+                            }}
+                          />
+                          <div className="relative z-10 flex items-center gap-1 text-white">
+                            <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
+                              POPULAR
+                            </span>
+                          </div>
+                          <div
+                            className="absolute inset-0 rounded-full pointer-events-none"
+                            style={{
+                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
+                              border: "1px solid rgba(255, 255, 255, 0.4)",
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Promo Badge - Pin overlay at top-right, outside card */}
                   {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
-                    <div className="absolute -top-6 -left-6 z-30">
+                    <div className="absolute -top-10 -right-8 z-30">
                       <Image
                         src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
                         alt={`${plan.metadata.promoMultiplier}x entries`}
@@ -951,7 +916,7 @@ export default function MembershipSection({
                   {/* Package Icon - Centered at top */}
                   {getPackageIcon(plan.id) && (
                     <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 z-20">
-                      <div className={`w-24 h-24 relative ${plan.id.includes("boss") ? "scale-110" : ""}`}>
+                      <div className={`w-24 h-24 relative ${activeTab === "one-time" ? "scale-[0.8]" : plan.id.includes("boss") ? "scale-110" : ""}`}>
                         <Image
                           src={getPackageIcon(plan.id)!}
                           alt={`${plan.name} icon`}
@@ -963,64 +928,15 @@ export default function MembershipSection({
                     </div>
                   )}
 
-                  {/* Card Background with Rounded Gradient Border */}
+                  {/* Card Background - Brand gradient */}
                   <div
                     className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
                     style={{
-                      border: `2px solid transparent`,
-                      backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${getGradientColor(
-                        colorScheme.gradient
-                      )}, transparent)`,
+                      border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity}`,
+                      background: colorScheme.bgGradient,
                       backgroundOrigin: `border-box`,
-                      backgroundClip: `padding-box, border-box`,
                     }}
                   >
-                    {/* Badges - Top Right Corner (Popular and Current Plan, Best Chance) */}
-                    {/* Best Chance Badge - Top Right (for boss/power packages) - Theme matches package */}
-                    {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                      <div className="absolute top-1.5 right-1.5 z-10">
-                        <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} />
-                      </div>
-                    )}
-
-                    {/* Popular and Current Plan Badges - Top Right - Only show if not boss/power */}
-                    {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                      <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
-                        {/* Current Plan Badge - Highest Priority */}
-                        {isCurrentSubscription(plan) && (
-                          <div className="bg-gradient-to-r from-green-500 via-green-600 to-green-700 text-white px-2 py-1 rounded-full font-bold text-[8px] shadow-lg shadow-green-500/50 border border-green-400">
-                            CURRENT
-                          </div>
-                        )}
-                        {/* Popular Badge - Show only if not current plan - Theme matches package */}
-                        {plan.isPopular && !isCurrentSubscription(plan) && (
-                          <div
-                            className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-xs"
-                            style={colorScheme.badgeStyle}
-                          >
-                            {/* Subtle static highlight - no shimmer */}
-                            <div
-                              className="absolute inset-0 pointer-events-none"
-                              style={{
-                                background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                              }}
-                            />
-                            <div className="relative z-10 flex items-center gap-1 text-white">
-                              <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                                POPULAR
-                              </span>
-                            </div>
-                            <div
-                              className="absolute inset-0 rounded-full pointer-events-none"
-                              style={{
-                                background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                                border: "1px solid rgba(255, 255, 255, 0.4)",
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
                     <div className="h-full flex flex-col pt-10 relative px-4 py-2">
                       {/* Inside Glow - Whole Card with Margin */}
                       <div
@@ -1039,7 +955,7 @@ export default function MembershipSection({
 
                           return (
                             <h3
-                              className={`font-poppins font-bold text-[20px] sm:text-[24px] mb-2 ${colorScheme.text} leading-tight`}
+                              className={`font-poppins font-bold text-[16px] sm:text-[20px] mb-2 ${colorScheme.text} leading-tight`}
                             >
                               {isAdditionalPackage ? (
                                 <>
@@ -1053,7 +969,7 @@ export default function MembershipSection({
                           );
                         })()}
                         {plan.subtitle && (
-                          <p className={`font-poppins text-[12px] sm:text-[14px] font-medium mb-4 text-white/80`}>{plan.subtitle}</p>
+                          <p className={`font-poppins text-[12px] sm:text-[14px] font-medium mb-4 ${colorScheme.textMuted}`}>{plan.subtitle}</p>
                         )}
 
                         {/* Entries - Main Focus */}
@@ -1082,24 +998,24 @@ export default function MembershipSection({
                                 <div className={`font-poppins ${colorScheme.text}`}>
                                   {hasMultiplier ? (
                                     <div className="flex items-center justify-center gap-2">
-                                      <span className="text-[20px] sm:text-[24px] font-bold line-through opacity-40 text-slate-400">
+                                      <span className={`text-[16px] sm:text-[18px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
                                         {originalEntries}
                                       </span>
-                                      <span className="text-[18px] sm:text-[20px] font-bold text-yellow-400">→</span>
+                                      <span className={`text-[14px] sm:text-[16px] font-bold ${colorScheme.entriesText}`}>→</span>
                                       <span
-                                        className={`text-[36px] sm:text-[44px] font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
+                                        className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.entriesText}`}
                                       >
                                         {displayEntries}
                                       </span>
                                     </div>
                                   ) : (
                                     <span
-                                      className={`text-[36px] sm:text-[44px] font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
+                                      className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.entriesText}`}
                                     >
                                       {entriesNumber}
                                     </span>
                                   )}
-                                  <div className={`text-[16px] sm:text-[20px] ${colorScheme.text} mt-1`}>
+                                  <div className={`text-[12px] sm:text-[14px] ${colorScheme.textMuted} mt-1`}>
                                     Free Entries
                                   </div>
                                 </div>
@@ -1117,17 +1033,17 @@ export default function MembershipSection({
                       <div className="flex-1 lg:flex-initial overflow-visible space-y-3 sm:space-y-3 mb-4 sm:mb-0 lg:mb-2">
                         {/* Price Badge - Inside Features Section */}
                         <div className="pb-4 sm:pb-0 flex justify-center">
-                          <div className="font-poppins w-fit bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 backdrop-blur-sm px-3 py-2 rounded-2xl border border-slate-600/50 shadow-lg shadow-black/30">
+                          <div className={`font-poppins w-fit ${colorScheme.priceBadgeBg} backdrop-blur-sm px-3 py-2 rounded-2xl border border-white/30 shadow-[0_4px_16px_rgba(255,255,255,0.25)]`}>
                             <div className="flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0">
-                              <div className="text-lg sm:text-xl lg:text-2xl font-bold bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent">
+                              <div className={`text-base sm:text-lg lg:text-xl font-bold ${colorScheme.priceText}`}>
                                 ${plan.price}
                               </div>
                               {plan.period !== "one-time" ? (
-                                <div className="text-sm lg:text-base font-semibold text-slate-200/90">
+                                <div className={`text-xs lg:text-sm font-semibold ${colorScheme.textMuted}`}>
                                   Per Giveaway
                                 </div>
                               ) : (
-                                <div className="text-sm lg:text-base font-semibold text-slate-200/90">One Time Payment</div>
+                                <div className={`text-xs lg:text-sm font-semibold ${colorScheme.textMuted}`}>One Time Payment</div>
                               )}
                             </div>
                           </div>
@@ -1140,7 +1056,7 @@ export default function MembershipSection({
                         {isCurrentSubscription(plan) ? (
                           <button
                             disabled
-                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-green-600 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
+                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-gradient-to-r ${colorScheme.gradient} text-white cursor-not-allowed opacity-90 ${colorScheme.borderGlow}`}
                           >
                             Current Plan
                           </button>
@@ -1158,7 +1074,7 @@ export default function MembershipSection({
                               plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                             let buttonText = "Enter Now";
                             const buttonHeight = "h-[44px] sm:h-[48px]";
-                            let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform bg-gradient-to-r ${colorScheme.gradient} text-white`;
+                            let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
 
                             // past_due: show "Update payment" for subscription plans - route to my-account
                             if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
@@ -1174,13 +1090,13 @@ export default function MembershipSection({
                                 buttonClass += " bg-transparent text-white hover:bg-red-600 hover:text-white";
                               } else if (hierarchy.isUpgrade) {
                                 buttonText = `Upgrade to ${plan.name}`;
-                                buttonClass += " bg-blue-600 text-white hover:bg-blue-700";
+                                buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
                               }
                             }
 
                             return (
                               <button
-                                className={`${buttonClass} ${colorScheme.borderGlow}${buttonText === "Enter Now" ? " membership-enter-cta-animation" : ""}`}
+                                className={`${buttonClass} ${buttonText === "Enter Now" ? ` ${colorScheme.borderGlow} membership-enter-cta-animation` : colorScheme.borderGlow}`}
                                 onClick={() => handlePlanSelect(plan)}
                                 disabled={hasActiveSubscription && hierarchy.isCurrent}
                                 suppressHydrationWarning

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
+import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 
 interface PackageInclusionsExpandedProps {
   isExpanded: boolean;
@@ -19,48 +20,6 @@ interface PackageInclusionsExpandedProps {
  * for additional packages. Adapts to light and dark backgrounds (transparent/no background).
  */
 const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ isExpanded, packages, showAccumulationChart = false }) => {
-  // Helper function to get package color scheme - uses colors that work on both light and dark backgrounds
-  const getPackageColorScheme = (planId: string) => {
-    const normalizedId = planId.toLowerCase();
-
-    if (normalizedId.includes("apprentice")) {
-      return {
-        text: "text-gray-600",
-        bullet: "text-gray-500",
-        feature: "text-gray-700", // Works on both backgrounds with good contrast
-      };
-    } else if (normalizedId.includes("tradie")) {
-      return {
-        text: "text-blue-600",
-        bullet: "text-blue-500",
-        feature: "text-gray-700",
-      };
-    } else if (normalizedId.includes("foreman")) {
-      return {
-        text: "text-green-600",
-        bullet: "text-green-500",
-        feature: "text-gray-700",
-      };
-    } else if (normalizedId.includes("boss")) {
-      return {
-        text: "text-yellow-600",
-        bullet: "text-yellow-500",
-        feature: "text-gray-700",
-      };
-    } else if (normalizedId.includes("power")) {
-      return {
-        text: "text-orange-600",
-        bullet: "text-orange-500",
-        feature: "text-gray-700",
-      };
-    }
-    return {
-      text: "text-gray-600",
-      bullet: "text-gray-500",
-      feature: "text-gray-700",
-    };
-  };
-
   // Helper to get package icon - uses centralized utility with fallback logic
   const getPackageIconLocal = (planId: string) => {
     // Try direct lookup first using centralized utility
@@ -116,7 +75,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
               />
             </div>
           )}
-          <h3 className={`text-xl sm:text-2xl font-bold ${colorScheme.text}`}>{plan.name}</h3>
+          <h3 className={`text-xl sm:text-2xl font-bold ${colorScheme.textOnLight ?? colorScheme.text}`}>{plan.name}</h3>
         </div>
 
         {/* Features List - Vertical bullet points (dash aligned to text baseline on mobile) */}
@@ -124,10 +83,10 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
           {plan.features.map((feature, index) => (
             <li
               key={index}
-              className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.feature} text-sm sm:text-base leading-relaxed`}
+              className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.textOnLight ?? colorScheme.text} text-sm sm:text-base leading-relaxed`}
             >
-              <span className={`${colorScheme.bullet} font-bold flex-shrink-0`}>-</span>
-              <span className="flex-1 min-w-0">{feature.text}</span>
+              <span className={`${colorScheme.textOnLight ?? colorScheme.text} font-bold flex-shrink-0`}>-</span>
+              <span className={`flex-1 min-w-0 ${colorScheme.textOnLight ?? colorScheme.text}`}>{feature.text}</span>
             </li>
           ))}
         </ul>

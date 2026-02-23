@@ -1,6 +1,7 @@
 "use client";
 
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 
 /** When set (e.g. in my-account explainer), chart shows user's actual accumulation from lastMonthAccumulatedEntries; multiplier is not applied and promo badge is hidden. */
 export interface UserAccumulationInput {
@@ -35,35 +36,14 @@ const packages = [
   },
 ];
 
-// Helper function to get package color scheme - matching PackageSelectionModal colors
-const getPackageColorScheme = (packageId: string) => {
-  if (packageId.includes("tradie")) {
-    return {
-      barColor: "bg-gradient-to-t from-blue-600 via-blue-500 to-cyan-600",
-      barColorLight: "bg-gradient-to-t from-blue-500 via-blue-400 to-cyan-500",
-      text: "text-blue-400",
-      border: "border-blue-500/50",
-    };
-  } else if (packageId.includes("foreman")) {
-    return {
-      barColor: "bg-gradient-to-t from-emerald-400 via-emerald-500 to-green-500",
-      barColorLight: "bg-gradient-to-t from-emerald-300 via-emerald-400 to-green-400",
-      text: "text-emerald-400",
-      border: "border-emerald-500/50",
-    };
-  } else if (packageId.includes("boss")) {
-    return {
-      barColor: "bg-gradient-to-t from-yellow-400 via-amber-500 to-yellow-600",
-      barColorLight: "bg-gradient-to-t from-yellow-300 via-amber-400 to-yellow-500",
-      text: "text-yellow-400",
-      border: "border-yellow-400/50",
-    };
-  }
+// Map shared color scheme to chart-specific format (vertical bars)
+const getChartColorScheme = (packageId: string) => {
+  const scheme = getPackageColorScheme(packageId);
   return {
-    barColor: "bg-gradient-to-t from-slate-500 via-gray-600 to-slate-700",
-    barColorLight: "bg-gradient-to-t from-slate-400 via-gray-500 to-slate-600",
-    text: "text-gray-400",
-    border: "border-gray-500/50",
+    barColor: scheme.barColorVertical ?? scheme.barColor ?? "bg-gradient-to-t from-slate-500 via-gray-600 to-slate-700",
+    barColorLight: scheme.barColorLightVertical ?? scheme.barColorLight ?? "bg-gradient-to-t from-slate-400 via-gray-500 to-slate-600",
+    text: scheme.text,
+    border: scheme.border,
   };
 };
 
@@ -106,7 +86,7 @@ export default function VerticalAccumulationChart({
               userAccumulation.lastMonthAccumulatedEntries + 2 * userAccumulation.baseEntriesPerMonth,
           }
         : calculateAccumulation(pkg.baseEntries, useUserData ? 1 : promoMultiplier);
-    const colorScheme = getPackageColorScheme(pkg.id);
+    const colorScheme = getChartColorScheme(pkg.id);
 
     return {
       ...pkg,
