@@ -736,7 +736,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
                     const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
                     const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp") ? "scale-150" : "";
-                    const translateClass = isMilwaukeeSetMilwaukeeTb ? "translate-y-[8%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
+                    const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[5%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                     const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                     return (
                     <SwiperSlide key={`${image.src}-${index}`}>
@@ -764,7 +764,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   const isMakitaUpward = isMakitaSetHero || firstSrc.includes("makita.webp");
                   const isMilwaukeeUpward = (isMilwaukeeSetHero || firstSrc.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
                   const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set")) && firstSrc.endsWith(".webp") ? "scale-150" : "";
-                  const translateClass = isMilwaukeeSetMilwaukeeTb ? "translate-y-[8%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
+                  const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                   return (
                 <div className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden">
@@ -820,10 +820,10 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
                   const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
                   const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp") ? "scale-150" : "";
-                  const translateClass = isMilwaukeeSetMilwaukeeTb ? "translate-y-[8%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
+                  const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                   return (
-                  <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-16 sm:!w-24 sm:!h-24">
+                  <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-[42px] sm:!w-24 sm:!h-16">
                     <div 
                       className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer"
                       style={{
