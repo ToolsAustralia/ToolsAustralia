@@ -711,6 +711,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             <div 
               className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden"
               style={{
+                backgroundColor: "#EEEEEC",
                 borderColor: getBrandBorderColor(activeSlug || "milwaukee-milwaukee"),
                 boxShadow: `0 0 20px ${getBrandGlowColor(activeSlug || "milwaukee-milwaukee")}, 0 8px 32px rgba(0,0,0,0.4)`,
               }}
@@ -726,32 +727,58 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   spaceBetween={0}
                   slidesPerView={1}
                 >
-                  {activePrize.gallery.map((image, index) => (
+                  {activePrize.gallery.map((image, index) => {
+                    const src = image.src.toLowerCase();
+                    const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
+                    const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
+                    const isMilwaukeeSetMilwaukeeTb = src.includes("milwaukeeset-milwaukeetb");
+                    const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
+                    const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
+                    const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
+                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp") ? "scale-150" : "";
+                    const translateClass = isMilwaukeeSetMilwaukeeTb ? "translate-y-[8%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
+                    const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
+                    return (
                     <SwiperSlide key={`${image.src}-${index}`}>
-                      <div className="relative aspect-square lg:aspect-[4/3]">
+                      <div className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden">
                         <Image
                           src={image.src}
                           alt={image.alt || `Prize view ${index + 1}`}
                           fill
-                          className="object-contain"
+                          className={`object-contain ${scaleClass} ${translateClass}`}
+                          style={objectPosition}
                           priority={index === 0}
                           sizes="(max-width: 1024px) 100vw, 50vw"
                         />
                       </div>
                     </SwiperSlide>
-                  ))}
+                  );})}
                 </Swiper>
               ) : (
-                <div className="relative aspect-square lg:aspect-[4/3]">
+                (() => {
+                  const firstSrc = (activePrize.gallery[0]?.src ?? "").toLowerCase();
+                  const isMakitaSetHero = firstSrc.includes("makitaset-") && firstSrc.endsWith(".webp");
+                  const isMilwaukeeSetHero = firstSrc.includes("milwaukeeset-") && firstSrc.endsWith(".webp");
+                  const isMilwaukeeSetMilwaukeeTb = firstSrc.includes("milwaukeeset-milwaukeetb");
+                  const isDewaltSetSidchrome = firstSrc.includes("dewaltset-sidchrome");
+                  const isMakitaUpward = isMakitaSetHero || firstSrc.includes("makita.webp");
+                  const isMilwaukeeUpward = (isMilwaukeeSetHero || firstSrc.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
+                  const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set")) && firstSrc.endsWith(".webp") ? "scale-150" : "";
+                  const translateClass = isMilwaukeeSetMilwaukeeTb ? "translate-y-[8%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
+                  const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
+                  return (
+                <div className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden">
                   <Image
                     src={activePrize.gallery[0]?.src || "/images/grand-draw.jpg"}
                     alt={activePrize.gallery[0]?.alt || "Prize view"}
                     fill
-                    className="object-contain"
+                    className={`object-contain ${scaleClass} ${translateClass}`}
+                    style={objectPosition}
                     priority
                     sizes="(max-width: 1024px) 100vw, 50vw"
                   />
                 </div>
+              );})()
               )}
 
               {/* <div className="absolute top-4 right-4 z-20">
@@ -784,11 +811,23 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 className="thumbs-swiper"
                 data-brand-slug={activeSlug}
               >
-                {activePrize.gallery.map((image, index) => (
+                {activePrize.gallery.map((image, index) => {
+                  const src = image.src.toLowerCase();
+                  const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
+                  const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
+                  const isMilwaukeeSetMilwaukeeTb = src.includes("milwaukeeset-milwaukeetb");
+                  const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
+                  const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
+                  const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
+                  const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp") ? "scale-150" : "";
+                  const translateClass = isMilwaukeeSetMilwaukeeTb ? "translate-y-[8%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
+                  const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
+                  return (
                   <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-16 sm:!w-24 sm:!h-24">
                     <div 
                       className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer"
                       style={{
+                        backgroundColor: "#EEEEEC",
                         borderColor: getBrandGlowColor(activeSlug || "milwaukee-milwaukee"),
                       }}
                     >
@@ -796,12 +835,13 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                         src={image.src}
                         alt={image.alt || `Prize thumbnail ${index + 1}`}
                         fill
-                        className="object-contain"
+                        className={`object-contain ${scaleClass} ${translateClass}`}
+                        style={objectPosition}
                         sizes="64px"
                       />
                     </div>
                   </SwiperSlide>
-                ))}
+                );})}
               </Swiper>
             )}
 
