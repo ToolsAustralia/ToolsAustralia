@@ -10,6 +10,7 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
@@ -415,41 +416,40 @@ export default function MembershipSection({
     const convertedPlans = apiPlans.map(convertToLocalPlan);
 
     // Apply resolved multiplier to packages (includes alternating multiplier if no active promo)
+    // For one-time: use membership multiplier when plan is member-only and user is a member
+    const isMember = hasActiveSubscription;
     const finalPlans = convertedPlans.map((plan) => {
-      // Check if this is a one-time package
       if (effectiveTab === "one-time" && plan.period === "one-time") {
-        // Only apply multiplier if it exists and is greater than 1
-        if (resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
-        const originalEntries = plan.metadata?.entriesCount || 0;
-          const promoEntries = originalEntries * resolvedOneTimeMultiplier;
+        const effectiveType = getEffectivePromoType(plan.id, "one-time", isMember);
+        const resolvedMultiplier =
+          effectiveType === "membership-packages" ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
+        if (resolvedMultiplier !== null && resolvedMultiplier > 1) {
+          const originalEntries = plan.metadata?.entriesCount || 0;
+          const promoEntries = originalEntries * resolvedMultiplier;
 
-          // Update features array to show multiplied entries
           const updatedFeatures = plan.features.map((feature) => {
-            // Check if this feature mentions entries
             if (feature.text.includes("Entries") || feature.text.includes("entries")) {
-              // Extract the number from the feature text
               const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
               if (match) {
                 const originalNumber = parseInt(match[1]);
-                const newNumber = originalNumber * resolvedOneTimeMultiplier;
-                // Replace the number in the feature text
+                const newNumber = originalNumber * resolvedMultiplier;
                 return { text: feature.text.replace(originalNumber.toString(), newNumber.toString()) };
               }
             }
             return feature;
           });
 
-        return {
-          ...plan,
-            features: updatedFeatures, // Update features to show multiplied entries
-          metadata: {
-            ...plan.metadata,
-            entriesCount: promoEntries,
-            originalEntries,
-              promoMultiplier: resolvedOneTimeMultiplier,
-              isPromoActive: (resolvedOneTimeMultiplier ?? 1) > 1,
-          },
-        };
+          return {
+            ...plan,
+            features: updatedFeatures,
+            metadata: {
+              ...plan.metadata,
+              entriesCount: promoEntries,
+              originalEntries,
+              promoMultiplier: resolvedMultiplier,
+              isPromoActive: (resolvedMultiplier ?? 1) > 1,
+            },
+          };
         }
       }
 
@@ -584,11 +584,15 @@ export default function MembershipSection({
                   }`}
                 >
                   One-Time
-                  {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
-                  {/* Show badge if there's an active promo OR an alternating multiplier */}
-                  {isMounted && activeTab === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
-                    <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
-                  )}
+                  {/* Multiplier Badge: one-time multiplier for regular packages, membership for member-only when user has access */}
+                  {isMounted && activeTab === "one-time" &&
+                    (hasAccessToAdditionalPackages
+                      ? resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
+                          <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
+                        )
+                      : resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
+                          <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
+                        ))}
                 </button>
                 <button
                   onClick={() => {

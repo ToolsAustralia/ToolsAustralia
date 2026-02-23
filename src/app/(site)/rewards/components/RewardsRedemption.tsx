@@ -2,7 +2,7 @@
 
 import { Package, Star, Check, Loader2 } from "lucide-react";
 import { UserData } from "@/hooks/queries/useUserQueries";
-import { getOneTimePackages, getPackagesWithPromo } from "@/data/membershipPackages";
+import { getOneTimePackages, applyPromoToPackage } from "@/data/membershipPackages";
 import { getMiniDrawPackages, getMiniPackagesWithPromo } from "@/data/miniDrawPackages";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/components/ui/Toast";
@@ -46,24 +46,29 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
 
   // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
-  // Valid promo multipliers for one-time packages (must match getPackagesWithPromo signature)
-  const isValidOneTimeMultiplier = (n: number): n is 2 | 3 | 5 | 10 =>
+  const isValidMultiplier = (n: number): n is 2 | 3 | 5 | 10 =>
     n === 2 || n === 3 || n === 5 || n === 10;
 
-  // Get available packages for redemption with effective promo applied
+  // Apply correct promo per package: membership multiplier for member-only, one-time for regular
   const allOneTimePackages = useMemo(() => {
     const packages = getOneTimePackages();
-    if (resolvedOneTimeMultiplier != null && isValidOneTimeMultiplier(resolvedOneTimeMultiplier)) {
-      return getPackagesWithPromo(packages, resolvedOneTimeMultiplier, "one-time-packages");
-    }
-    return packages;
-  }, [resolvedOneTimeMultiplier]);
+    return packages.map((pkg) => {
+      if (pkg.isMemberOnly && resolvedMembershipMultiplier != null && isValidMultiplier(resolvedMembershipMultiplier)) {
+        return applyPromoToPackage(pkg, resolvedMembershipMultiplier);
+      }
+      if (!pkg.isMemberOnly && resolvedOneTimeMultiplier != null && isValidMultiplier(resolvedOneTimeMultiplier)) {
+        return applyPromoToPackage(pkg, resolvedOneTimeMultiplier);
+      }
+      return pkg;
+    });
+  }, [resolvedOneTimeMultiplier, resolvedMembershipMultiplier]);
 
   const miniDrawPackages = useMemo(() => {
     const packages = getMiniDrawPackages();
-    if (resolvedMiniMultiplier != null && isValidOneTimeMultiplier(resolvedMiniMultiplier)) {
+    if (resolvedMiniMultiplier != null && isValidMultiplier(resolvedMiniMultiplier)) {
       return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
     }
     return packages;

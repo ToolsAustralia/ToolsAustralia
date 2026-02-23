@@ -48,9 +48,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
     // For users without access: Use Tradie subscription package
-    // For users with access: Use additional-apprentice-pack (one-time package) - lowest additional package
+    // For users with access: Use additional-apprentice-pack (member-only one-time) — use membership promo
     if (hasAccess) {
-      const promoMultiplier = oneTimePromoMultiplier;
+      const promoMultiplier = membershipPromoMultiplier;
       // Member path: Use additional-apprentice-pack one-time package (lowest price/entry option)
       const targetPackageId = "additional-apprentice-pack";
 

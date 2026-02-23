@@ -3,7 +3,7 @@
 ## Overview
 
 The Upsell Image Selector system dynamically selects promotional images for upsell offers based on:
-- Active promo multiplier (2x, 3x, 5x for one-time Plus/Upgrade; 2x, 3x, 5x, 10x for membership Package images; 2X Package images upcoming)
+- Active promo multiplier (2x, 3x, 5x, 10x for one-time Plus/Upgrade; 2x, 3x, 5x, 10x for membership Package images; 2X Package images upcoming)
 - Package type (membership vs one-time vs mini-draw)
 - Upsell category (subscription-plus, one-time-plus, additional-upgrade)
 
@@ -213,7 +213,7 @@ getUpsellImagePath({ offerId, packageType, promoMultiplier, category })
 1. Extract packageName from offerId
 2. Map category to imageCategory
 3. Check membership 10X (early return if match)
-4. Check one-time 2X/3X/5X
+4. Check one-time 2X/3X/5X/10X
 5. Fallback to base images
     ↓
 getPromoImagePath(multiplier, packageName, imageCategory)
@@ -257,8 +257,8 @@ public/images/upsells/
 | Package Type | Category | Multiplier | Filename Pattern | Example |
 |-------------|----------|------------|------------------|---------|
 | Membership | subscription-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Package.png` | `3X Boss Package.png`, `5X Tradie Package.png`, `10X Foreman Package.png` (2X upcoming) |
-| One-time | one-time-plus | 2, 3, 5 | `{multiplier}X {Package} Plus.png` | `2X Tradie Plus.png` |
-| One-time | additional-upgrade | 2, 3, 5 | `{multiplier}x {Package} Upgrade.png` | `2x Tradie Upgrade.png` |
+| One-time | one-time-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Plus.png` | `2X Tradie Plus.png`, `10X Boss Plus.png` |
+| One-time | additional-upgrade | 2, 3, 5, 10 | `{multiplier}x {Package} Upgrade.png` | `2x Tradie Upgrade.png`, `10X Boss Upgrade.png` |
 
 **Note**: Upgrades use lowercase `x`, Plus/Package use uppercase `X`.
 

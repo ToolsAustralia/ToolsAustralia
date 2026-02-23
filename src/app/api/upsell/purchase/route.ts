@@ -12,6 +12,7 @@ import {
   calculateUpsellEntriesFromContext,
   getPackageBaseEntries,
 } from "@/utils/payment/upsell-entries-calculator";
+import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
 import Promo from "@/models/Promo";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { getBaseUrl } from "@/utils/url/get-base-url";
@@ -307,9 +308,17 @@ export async function POST(request: NextRequest) {
             );
           } else {
             // Fall back to querying current active promo (for backward compatibility or when context is missing)
-            promoMultiplier = await getActivePromoMultiplier(inferredPackageType);
+            // ✅ CRITICAL: For additional-upgrade upsells, member-only packages (e.g. additional-power-pack)
+            // use membership promo (10x), not one-time promo (3x). Use effective promo type based on triggering package.
+            const effectivePromoType =
+              inferredPackageType === "one-time" &&
+              triggeringPackageId &&
+              isMemberOnlyPackageById(triggeringPackageId)
+                ? "membership"
+                : inferredPackageType;
+            promoMultiplier = await getActivePromoMultiplier(effectivePromoType);
             console.log(
-              `ℹ️ No stored multiplier found, using current active promo multiplier for ${inferredPackageType}: ${promoMultiplier}x`
+              `ℹ️ No stored multiplier found, using current active promo multiplier for ${effectivePromoType} (triggeringPackage: ${triggeringPackageId}, isMemberOnly: ${triggeringPackageId ? isMemberOnlyPackageById(triggeringPackageId) : "N/A"}): ${promoMultiplier}x`
             );
           }
 

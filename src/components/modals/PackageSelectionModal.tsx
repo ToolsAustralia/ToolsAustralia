@@ -10,6 +10,7 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 import { useUserData } from "@/hooks/queries";
 import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoBadge from "@/components/ui/PromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
@@ -172,40 +173,40 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
       const showingMembership =
         activeTab === "membership" || (activeTab === "one-time" && oneTimeSubTab === "membership");
 
-      // Check if this is a one-time package (use resolved multiplier)
-      if (showingOneTime && plan.period === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
-        // Apply resolved multiplier to entries (includes alternating if no active promo)
-        const originalEntries = plan.metadata?.entriesCount || 0;
-        const promoMultiplier = resolvedOneTimeMultiplier;
-        const promoEntries = originalEntries * promoMultiplier;
+      // One-time packages: use membership multiplier for member-only packages when user is a member
+      if (showingOneTime && plan.period === "one-time") {
+        const effectiveType = getEffectivePromoType(plan.id, "one-time", isMember);
+        const resolvedMultiplier =
+          effectiveType === "membership-packages" ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
+        if (resolvedMultiplier !== null && resolvedMultiplier > 1) {
+          const originalEntries = plan.metadata?.entriesCount || 0;
+          const promoMultiplier = resolvedMultiplier;
+          const promoEntries = originalEntries * promoMultiplier;
 
-        // Update features to show promo effect
-        const updatedFeatures = plan.features.map((feature) => {
-          // Check if this feature mentions entries
-          if (feature.text.includes("Entries") || feature.text.includes("entries")) {
-            // Extract the number from the feature text
-            const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
-            if (match) {
-              const originalNumber = parseInt(match[1]);
-              const newNumber = originalNumber * promoMultiplier;
-              // Replace the number in the feature text
-              return { text: feature.text.replace(originalNumber.toString(), newNumber.toString()) };
+          const updatedFeatures = plan.features.map((feature) => {
+            if (feature.text.includes("Entries") || feature.text.includes("entries")) {
+              const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
+              if (match) {
+                const originalNumber = parseInt(match[1]);
+                const newNumber = originalNumber * promoMultiplier;
+                return { text: feature.text.replace(originalNumber.toString(), newNumber.toString()) };
+              }
             }
-          }
-          return feature;
-        });
+            return feature;
+          });
 
-        return {
-          ...plan,
-          features: updatedFeatures,
-          metadata: {
-            ...plan.metadata,
-            entriesCount: promoEntries,
-            originalEntries,
-            promoMultiplier,
-            isPromoActive: (resolvedOneTimeMultiplier ?? 1) > 1,
-          },
-        };
+          return {
+            ...plan,
+            features: updatedFeatures,
+            metadata: {
+              ...plan.metadata,
+              entriesCount: promoEntries,
+              originalEntries,
+              promoMultiplier,
+              isPromoActive: (resolvedMultiplier ?? 1) > 1,
+            },
+          };
+        }
       }
 
       // Check if this is a subscription package (use resolved multiplier)

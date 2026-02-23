@@ -137,36 +137,27 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   // Get promo link code from URL/sessionStorage (for bonus entries)
   const { promoCode: promoLinkCode } = usePromoLink();
 
-  // Get resolved multiplier (includes scheduled, toggle, and alternating)
-  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  // Member-only packages use membership promo multiplier (modal is for users with access)
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
 
-  // Get packages with promo applied (same logic as MembershipSection)
-  // Uses resolved multiplier which includes alternating multipliers
-  // CRITICAL: Only depends on resolvedOneTimeMultiplier, not oneTimePromo
-  // This ensures alternating multipliers work seamlessly when active promos are disabled
+  // Get packages with promo applied - use membership multiplier for member-only packages
   const packagesWithPromo = React.useMemo(() => {
-    // Apply resolved multiplier to packages (includes alternating if no active promo)
     return packages.map((pkg) => {
-      // Check if this is a one-time package and multiplier is greater than 1
-      if (pkg.type === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
+      if (pkg.type === "one-time" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1) {
         const originalEntries = pkg.totalEntries || 0;
-        const promoEntries = originalEntries * resolvedOneTimeMultiplier;
+        const promoEntries = originalEntries * resolvedMembershipMultiplier;
 
         return {
           ...pkg,
           totalEntries: promoEntries,
-          originalEntries, // Store original for display purposes
-          promoMultiplier: resolvedOneTimeMultiplier,
-          isPromoActive: (resolvedOneTimeMultiplier ?? 1) > 1,
+          originalEntries,
+          promoMultiplier: resolvedMembershipMultiplier,
+          isPromoActive: (resolvedMembershipMultiplier ?? 1) > 1,
         };
       }
-
-      // Return package unchanged if no multiplier applies
       return pkg;
     });
-    // IMPORTANT: Only depend on resolvedOneTimeMultiplier for calculation
-    // oneTimePromo is only used for isPromoActive flag (display), not for calculation
-  }, [packages, resolvedOneTimeMultiplier]);
+  }, [packages, resolvedMembershipMultiplier]);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();
@@ -340,7 +331,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       // ✅ FIX: Get the multiplier that was actually applied during the original purchase
       // Find the package in packagesWithPromo to get the promoMultiplier that was applied
       const packageWithPromo = packagesWithPromo.find((p) => p._id === selectedPackage._id);
-      const appliedMultiplier = packageWithPromo?.promoMultiplier ?? resolvedOneTimeMultiplier ?? 1;
+      const appliedMultiplier = packageWithPromo?.promoMultiplier ?? resolvedMembershipMultiplier ?? 1;
 
       // Create context object in local variable to pass directly (avoids closure issue)
       contextToPass = {

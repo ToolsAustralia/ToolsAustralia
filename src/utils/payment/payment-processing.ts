@@ -575,11 +575,11 @@ async function checkAndApplyBonusEntryPromo(
     promoLinkCode?: string;
     originalPackageType?: "membership" | "one-time" | "mini-draw";
   },
-  user?: UserDocument
+  user?: UserDocument,
+  packageId?: string
 ): Promise<number> {
   try {
     // ✅ For upsells, use the original package type for promo checks
-    // Upsells should inherit the promo multiplier from the original package (membership/one-time)
     let effectivePackageType: "membership" | "one-time" | "mini-draw" = packageType as
       | "membership"
       | "one-time"
@@ -592,11 +592,19 @@ async function checkAndApplyBonusEntryPromo(
           `✅ Upsell using original package type for bonus entry promo: ${effectivePackageType}`
         );
       } else {
-        // No original package type available - upsells don't get bonus entry promos
         console.log(
           `ℹ️ Upsell without originalPackageType in metadata - bonus entry promos will not apply`
         );
         return 0;
+      }
+    }
+
+    // Member-only one-time: use membership promo type for bonus entry lookup
+    if (packageType === "one-time" && packageId && user) {
+      const pkg = getPackageById(packageId);
+      const isMember = (user as { subscription?: { isActive?: boolean } })?.subscription?.isActive === true;
+      if (pkg?.isMemberOnly && isMember) {
+        effectivePackageType = "membership";
       }
     }
 
@@ -691,7 +699,8 @@ async function checkAndApplyBonusEntryPromo(
 async function checkAndApplyPromoLink(
   user: UserDocument,
   packageType: "one-time" | "membership" | "upsell" | "mini-draw",
-  paymentMetadata?: PaymentMetadata
+  paymentMetadata?: PaymentMetadata,
+  packageId?: string
 ): Promise<number> {
   try {
     // Get promo link code from payment metadata
@@ -734,9 +743,15 @@ async function checkAndApplyPromoLink(
       return 0;
     }
 
-    // Check if promo link applies to this package type
-    const isMembershipPurchase = packageType === "membership";
-    const isOneTimePurchase = packageType === "one-time";
+    // Member-only one-time counts as membership for promo link applicability
+    const isMember = (user as { subscription?: { isActive?: boolean } })?.subscription?.isActive === true;
+    const memberOnlyOneTime =
+      packageType === "one-time" &&
+      !!packageId &&
+      !!getPackageById(packageId)?.isMemberOnly &&
+      isMember;
+    const isMembershipPurchase = packageType === "membership" || memberOnlyOneTime;
+    const isOneTimePurchase = packageType === "one-time" && !memberOnlyOneTime;
 
     // Promo links don't apply to mini-draw or upsell packages
     if (packageType === "mini-draw" || packageType === "upsell") {
@@ -960,7 +975,12 @@ async function grantBenefits(
   // This happens after regular entries are granted
   // Bonus entry promos are date-based and can apply simultaneously with promo links
   try {
-    const bonusEntries = await checkAndApplyBonusEntryPromo(packageData.packageType, paymentMetadata, user);
+    const bonusEntries = await checkAndApplyBonusEntryPromo(
+      packageData.packageType,
+      paymentMetadata,
+      user,
+      packageData.packageId
+    );
 
     if (bonusEntries > 0) {
       console.log(`🎁 [BONUS ENTRY PROMO] Processing bonus entries from date-based promo:`, {
@@ -1048,7 +1068,12 @@ async function grantBenefits(
   // This happens after regular bonus entry promos
   // Promo links are checked separately and can apply simultaneously with bonus entry promos
   try {
-    const promoLinkEntries = await checkAndApplyPromoLink(user, packageData.packageType, paymentMetadata);
+    const promoLinkEntries = await checkAndApplyPromoLink(
+      user,
+      packageData.packageType,
+      paymentMetadata,
+      packageData.packageId
+    );
 
     if (promoLinkEntries > 0) {
       console.log(`🎁 [PROMO LINK] Processing ${promoLinkEntries} bonus entries from promo link:`, {

@@ -16,6 +16,7 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
 import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 
@@ -623,7 +624,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
    *
    * Logic:
    * - If no promo active (null): Use base images from /images/upsells/
-   * - If 2x/3x/5x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} Plus.png or {multiplier}x {Package} Upgrade.png
+   * - If 2x/3x/5x/10x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} Plus.png or {multiplier}x {Package} Upgrade.png
    * - If 2x/3x/5x/10x promo active (membership packages): Use /images/upsells/active-promo/{multiplier}X {Package} Package.png (e.g. 3X Boss Package.png, 5X Tradie Package.png; 2X upcoming)
    * - Falls back to base images if promo-specific image is unavailable
    */
@@ -653,12 +654,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       packageType = "one-time";
     }
 
-    // Get resolved multiplier for the package type (includes alternating if no active promo)
+    // Get resolved multiplier: member-only one-time uses membership promo
     let promoMultiplier: number | null = null;
     if (packageType === "membership") {
       promoMultiplier = resolvedMembershipMultiplier;
     } else if (packageType === "one-time") {
-      promoMultiplier = resolvedOneTimeMultiplier;
+      const packageId = originalPurchaseContext?.packageId;
+      promoMultiplier =
+        packageId && isMemberOnlyPackageById(packageId) ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
     } else if (packageType === "mini-draw") {
       promoMultiplier = resolvedMiniMultiplier;
     }
