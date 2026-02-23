@@ -110,7 +110,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Activation date must be before draw date" }, { status: 400 });
     }
 
-    if (freezeEntriesAt && drawDate && freezeEntriesAt >= drawDate) {
+    // Only validate freeze when we're NOT updating drawDate (freeze gets recomputed when drawDate changes)
+    if (!updateData.drawDate && freezeEntriesAt && drawDate && freezeEntriesAt >= drawDate) {
       return NextResponse.json({ error: "Freeze entries date must be before draw date" }, { status: 400 });
     }
 

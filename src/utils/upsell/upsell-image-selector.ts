@@ -2,7 +2,7 @@
  * Upsell Image Selector Utility
  *
  * Dynamically selects upsell promotional images based on:
- * - Active promo multiplier (2x, 3x, 5x, 10x for membership Package images; 2x, 3x, 5x for one-time Plus/Upgrade)
+ * - Active promo multiplier (2x, 3x, 5x, 10x for membership Package images; 2x, 3x, 5x, 10x for one-time Plus/Upgrade)
  * - Package type (membership vs one-time)
  * - Upsell category (Pack vs Upgrade vs Package)
  *
@@ -246,8 +246,8 @@ export function getUpsellImagePath(params: UpsellImageParams): string {
     return `/images/upsells/${baseImageName}`;
   }
 
-  // Handle one-time packages with 2x, 3x, or 5x promo
-  if (packageType === "one-time" && (promoMultiplier === 2 || promoMultiplier === 3 || promoMultiplier === 5)) {
+  // Handle one-time packages with 2x, 3x, 5x, or 10x promo
+  if (packageType === "one-time" && (promoMultiplier === 2 || promoMultiplier === 3 || promoMultiplier === 5 || promoMultiplier === 10)) {
     // Check if this is a mini-pack (they don't have promo images, use base)
     if (offerId.startsWith("mini-pack-")) {
       const baseImageName = getBaseImagePath(offerId);

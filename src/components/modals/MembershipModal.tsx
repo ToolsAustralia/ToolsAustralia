@@ -42,6 +42,7 @@ import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePaymentIntent } from "@/hooks/usePaymentIntent";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
@@ -298,11 +299,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
-
-  // ✅ FIX: stripePromise is now initialized at module level (line ~18) to prevent endless API calls
+  const { userData: userDataForPromo, isMember: isMemberForPromo } = useUserContext();
 
   // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
   // Apply promo multiplier to activePlan if applicable
@@ -401,9 +402,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       };
     };
 
-    // Use resolved multiplier (includes alternating if no active promo)
-    if (activePlan.period === "one-time" && resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1) {
-      return applyMultiplier(resolvedOneTimeMultiplier);
+    // One-time: use membership multiplier for member-only packages when user is a member
+    if (activePlan.period === "one-time") {
+      const effectiveType = getEffectivePromoType(activePlan.id, "one-time", isMemberForPromo ?? false);
+      const multiplier =
+        effectiveType === "membership-packages" ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
+      if (multiplier !== null && multiplier > 1) {
+        return applyMultiplier(multiplier);
+      }
     }
 
     if (activePlan.id.startsWith("mini-pack-") && resolvedMiniMultiplier !== null && resolvedMiniMultiplier > 1) {
@@ -411,7 +417,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     }
 
     return activePlan;
-  }, [activePlan, resolvedOneTimeMultiplier, resolvedMiniMultiplier]);
+  }, [activePlan, resolvedOneTimeMultiplier, resolvedMembershipMultiplier, resolvedMiniMultiplier, isMemberForPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { trackInitiateCheckout } = usePixelTracking();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
@@ -2307,10 +2313,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 : typeof multiplierFromMetadata === "string" 
                 ? parseFloat(multiplierFromMetadata) 
                 : undefined;
+              const effectiveOneTimeMultiplier =
+                packageType === "one-time"
+                  ? (getEffectivePromoType(activePlan.id, "one-time", isMember ?? false) === "membership-packages"
+                      ? resolvedMembershipMultiplier
+                      : resolvedOneTimeMultiplier)
+                  : null;
               const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
                 ? multiplierValue
-                : (packageType === "one-time" ? resolvedOneTimeMultiplier : null)
-                ?? 1;
+                : effectiveOneTimeMultiplier ?? 1;
 
               // Create context object in local variable to pass directly (avoids closure issue)
               contextToPass = {
@@ -2469,9 +2480,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           : typeof multiplierFromMetadata === "string" 
           ? parseFloat(multiplierFromMetadata) 
           : undefined;
+        const effectiveOneTimeMultiplier =
+          getEffectivePromoType(activePlan.id, "one-time", isMember ?? false) === "membership-packages"
+            ? resolvedMembershipMultiplier
+            : resolvedOneTimeMultiplier;
         const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
           ? multiplierValue
-          : resolvedOneTimeMultiplier ?? 1;
+          : effectiveOneTimeMultiplier ?? 1;
 
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {

@@ -987,10 +987,18 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     return;
   }
 
-  // Get active promo multiplier for one-time packages
-  const promoMultiplier = await getActivePromoMultiplier("one-time");
+  // Member-only one-time packages use membership promo when purchaser is a member
+  const pkg = packageId ? getPackageById(packageId) : undefined;
+  const userWithSub = await User.findById(user._id).select("subscription").lean();
+  const isMember = userWithSub?.subscription?.isActive === true;
+  const useMembershipMultiplier = !!(pkg?.isMemberOnly && isMember);
+  const effectiveType = useMembershipMultiplier ? "membership" : "one-time";
+  const promoMultiplier = await getActivePromoMultiplier(effectiveType);
   const finalEntriesCount = entriesCount * promoMultiplier;
 
+  if (useMembershipMultiplier) {
+    webhookLog("info", `Member-only one-time package ${packageId} for member: using membership multiplier`);
+  }
   webhookLog(
     "info",
     `One-time package ${packageId}: ${entriesCount} base entries × ${promoMultiplier} = ${finalEntriesCount} final entries`
