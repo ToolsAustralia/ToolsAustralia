@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Check } from "lucide-react";
 import MembershipModal from "@/components/modals/MembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
@@ -164,8 +163,7 @@ export default function MembershipSection({
   variantConfig,
 }: MembershipSectionProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  
+
   // Get variant config from context for A/B testing (membershipModal config)
   const { variantConfig: contextVariantConfig } = useVariantContext();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
@@ -176,11 +174,6 @@ export default function MembershipSection({
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  // Determine pricing suffix based on current page
-  // Home page (/) and membership page (/membership) show "/mo", all other pages show "Per Giveaway"
-  // Default to false (show "Per Giveaway") during SSR to match client-side behavior on non-home pages
-  const isHomeOrMembershipPage = isMounted && (pathname === "/" || pathname === "/membership");
 
   // Fetch membership data from API
   const { subscriptionPackages, oneTimePackages, loading, error } = useMemberships();
@@ -529,36 +522,26 @@ export default function MembershipSection({
   return (
     <section id="membership" className={`${padding} w-full overflow-visible relative z-10`}>
   
-        {/* Section Header */}
-        <div className="text-center">
-          <h2
-            className={`font-agency font-black uppercase text-[20px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} mb-2 sm:mb-3 lg:mb-4`}
-          >
-            {(() => {
-              const displayTitle = hasAccessToAdditionalPackages ? "GET MORE ENTRIES 50% OFF" : title;
-              // Highlight key words in red (#EE0000) - applies to all pages using MembershipSection
-              const highlightRegex = /(50%|PACKAGE|WINNER|MEMBERSHIP|JOIN|PREMIUM|ODDS|ENTRIES|TOOLKIT)/gi;
-              const parts = displayTitle.split(highlightRegex);
-              const matchRegex = /^(50%|PACKAGE|WINNER|MEMBERSHIP|JOIN|PREMIUM|ODDS|ENTRIES|TOOLKIT)$/i;
-              if (parts.length > 1) {
-                return (
-                  <>
-                    {parts.map((part, i) =>
-                      matchRegex.test(part) ? (
-                        <span key={i} style={{ color: "#EE0000" }}>
-                          {part}
-                        </span>
-                      ) : (
-                        <React.Fragment key={i}>{part}</React.Fragment>
-                      )
-                    )}
-                  </>
-                );
-              }
-              return displayTitle;
-            })()}
-          </h2>
-        </div>
+        {/* Section Header - Promo-based: only show title when active promo */}
+        {(() => {
+          const effectiveMultiplier =
+            activeTab === "membership"
+              ? resolvedMembershipMultiplier
+              : hasAccessToAdditionalPackages && hasActiveSubscription
+                ? resolvedMembershipMultiplier
+                : resolvedOneTimeMultiplier;
+          const hasActivePromo = effectiveMultiplier !== null && effectiveMultiplier > 1;
+          if (!hasActivePromo) return null;
+          return (
+            <div className="text-center">
+              <h2
+                className={`font-agency font-black uppercase text-[20px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} mb-2 sm:mb-3 lg:mb-4`}
+              >
+                <span style={{ color: "#EE0000" }}>{effectiveMultiplier}X PROMO</span> ACTIVATED
+              </h2>
+            </div>
+          );
+        })()}
 
         {/* Toggle - Always show One-Time and Membership Packs so user can switch between both */}
         <div className="flex justify-center mb-4 ">
@@ -584,9 +567,9 @@ export default function MembershipSection({
                   }`}
                 >
                   One-Time
-                  {/* Multiplier Badge: one-time multiplier for regular packages, membership for member-only when user has access */}
+                  {/* Multiplier Badge: one-time multiplier for non-members; membership multiplier only when user is a member with access */}
                   {isMounted && activeTab === "one-time" &&
-                    (hasAccessToAdditionalPackages
+                    (hasAccessToAdditionalPackages && hasActiveSubscription
                       ? resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
                           <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
                         )
@@ -836,13 +819,13 @@ export default function MembershipSection({
                             <div className="flex-1 min-h-0 overflow-visible flex justify-center mb-2">
                               <div className="pb-0.5">
                                 <div className="w-fit bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 backdrop-blur-sm px-2.5 py-1 rounded-2xl border border-slate-600/50 shadow-lg shadow-black/30">
-                                  <div className="flex items-baseline gap-1">
+                                  <div className="flex items-baseline gap-1 justify-center">
                                     <div className="font-poppins font-bold text-xl sm:text-2xl bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent">
                                       ${plan.price}
                                     </div>
                                     {plan.period !== "one-time" ? (
                                       <div className="font-poppins font-semibold text-md sm:text-xs text-slate-200/90">
-                                        {isHomeOrMembershipPage ? `/${plan.period}` : " Per Giveaway"}
+                                        Per Giveaway
                                       </div>
                                     ) : (
                                       <div className="font-poppins font-semibold text-md sm:text-xs text-slate-200/90">
@@ -926,10 +909,10 @@ export default function MembershipSection({
       {!loading && !error && (
         <div className="hidden lg:block overflow-visible">
           <div
-            className={`grid gap-4 sm:gap-5 justify-items-center overflow-visible pt-8 ${
+            className={`grid gap-6 sm:gap-8 overflow-visible pt-8 ${
               activeTab === "membership"
-                ? "max-w-5xl mx-auto grid-cols-3 justify-center"
-                : "max-w-7xl mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5"
+                ? "max-w-7xl mx-auto grid-cols-3 w-full"
+                : "max-w-7xl mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5 justify-items-center"
             }`}
           >
             {membershipPlans.length > 0 ? (
@@ -939,7 +922,11 @@ export default function MembershipSection({
               return (
                 <div
                   key={plan.id}
-                  className={`relative w-[290px] max-w-[320px] h-[520px] rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible isolate ${
+                  className={`relative h-[350px] rounded-3xl shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-visible isolate ${
+                    activeTab === "membership"
+                      ? "w-full min-w-0"
+                      : "w-[290px] max-w-[320px] justify-self-center"
+                  } ${
                     highlighted
                       ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-yellow-500/50 scale-105"
                       : isCurrentSubscription(plan)
@@ -1070,7 +1057,7 @@ export default function MembershipSection({
                         )}
 
                         {/* Entries - Main Focus */}
-                        <div className="mb-4">
+                        <div className="mb-4 lg:mb-2">
                           {(() => {
                             // Extract entries from features
                             const entriesFeature = plan.features.find(
@@ -1124,76 +1111,32 @@ export default function MembershipSection({
                       </div>
 
                       {/* Horizontal Divider */}
-                      <div className="w-full p-[0.5px] bg-white mb-4 rounded-full"></div>
+                      <div className="w-full p-[0.5px] bg-white mb-4 lg:mb-2 rounded-full"></div>
 
-                      {/* Features List - Flexible height with max height */}
-                      <div className="flex-1 overflow-visible space-y-3 sm:space-y-4 mb-6 pb-[80px]">
+                      {/* Features List - Tick marks hidden on desktop (see "View package inclusions" below) */}
+                      <div className="flex-1 lg:flex-initial overflow-visible space-y-3 sm:space-y-3 mb-4 sm:mb-0 lg:mb-2">
                         {/* Price Badge - Inside Features Section */}
-                        <div className="pb-2">
-                          <div className="font-poppins bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 backdrop-blur-sm px-3 py-2 rounded-2xl border border-slate-600/50 shadow-lg shadow-black/30">
-                            <div className="flex items-baseline gap-1">
-                              <div className="text-lg sm:text-xl font-bold bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent">
+                        <div className="pb-4 sm:pb-0 flex justify-center">
+                          <div className="font-poppins w-fit bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 backdrop-blur-sm px-3 py-2 rounded-2xl border border-slate-600/50 shadow-lg shadow-black/30">
+                            <div className="flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0">
+                              <div className="text-lg sm:text-xl lg:text-2xl font-bold bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 bg-clip-text text-transparent">
                                 ${plan.price}
                               </div>
                               {plan.period !== "one-time" ? (
-                                <div className="text-sm font-semibold text-slate-200/90">
-                                  {isHomeOrMembershipPage ? `/${plan.period}` : " Per Giveaway"}
+                                <div className="text-sm lg:text-base font-semibold text-slate-200/90">
+                                  Per Giveaway
                                 </div>
                               ) : (
-                                <div className="text-sm font-semibold text-slate-200/90">One Time Payment</div>
+                                <div className="text-sm lg:text-base font-semibold text-slate-200/90">One Time Payment</div>
                               )}
                             </div>
                           </div>
                         </div>
-                        {plan.features.map((feature, index) => {
-                          // Check if this feature mentions entries and we have promo data
-                          const isPromoActive = plan.metadata?.isPromoActive;
-                          const originalEntries = plan.metadata?.originalEntries;
-
-                          if (
-                            isPromoActive &&
-                            originalEntries &&
-                            (feature.text.includes("Entries") || feature.text.includes("entries"))
-                          ) {
-                            // Replace the multiplied number with original number in the feature text
-                            const match = feature.text.match(/(\d+)\s*(Free\s+)?(Accumulated\s+)?Entries/i);
-                            if (match) {
-                              const multipliedNumber = parseInt(match[1]);
-                              const originalNumber = originalEntries;
-                              const updatedText = feature.text.replace(
-                                multipliedNumber.toString(),
-                                originalNumber.toString()
-                              );
-
-                              return (
-                                <div key={index} className="flex items-start gap-3">
-                                  <div className="flex-shrink-0 mt-1">
-                                    <Check className={`h-4 w-4 ${colorScheme.text}`} />
-                                  </div>
-                                  <span className={`font-poppins text-[12px] sm:text-[14px] leading-relaxed text-white/90`}>
-                                    {updatedText}
-                                  </span>
-                                </div>
-                              );
-                            }
-                          }
-
-                          // Default feature display
-                          return (
-                            <div key={index} className="flex items-start gap-3">
-                              <div className="flex-shrink-0 mt-1">
-                                <Check className={`h-4 w-4 ${colorScheme.text}`} />
-                              </div>
-                              <span className={`font-poppins text-[12px] sm:text-[14px] leading-relaxed text-white/90`}>
-                                {feature.text}
-                              </span>
-                            </div>
-                          );
-                        })}
+                        {/* Tick marks hidden on desktop - see "Click here to see full package inclusion" below */}
                       </div>
 
-                      {/* Action Button - Fixed position at bottom */}
-                      <div className="absolute -bottom-8 left-2 right-2 h-[60px] sm:h-[70px] flex items-end">
+                      {/* Action Button - Inside card at bottom */}
+                      <div className="flex-shrink-0 pt-2 lg:pt-0">
                         {isCurrentSubscription(plan) ? (
                           <button
                             disabled
@@ -1265,15 +1208,16 @@ export default function MembershipSection({
 
       
 
-      {/* Toggle Button for Package Inclusions - Mobile Only, All Packages */}
+      {/* Toggle Button for Package Inclusions - All screen sizes (mobile and desktop) */}
       {(() => {
         const shouldShowToggle = membershipPlans.length > 0 && !loading && !error;
 
         if (!shouldShowToggle) return null;
 
         return (
-          <div className="lg:hidden mt-8 sm:mt-10">
+          <div className="mt-8 sm:mt-10">
             <button
+              suppressHydrationWarning
               onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
               className={`font-poppins w-full py-3 px-4 rounded-2xl text-white font-semibold text-sm sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
                 isInclusionsExpanded

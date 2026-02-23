@@ -94,50 +94,72 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
 
   if (!isExpanded) return null;
 
+  const renderPackageCard = (plan: LocalMembershipPlan) => {
+    const colorScheme = getPackageColorScheme(plan.id);
+    const packageIcon = getPackageIconLocal(plan.id);
+
+    return (
+      <div
+        key={plan.id}
+        className="space-y-3 rounded-2xl border border-gray-200 bg-white/95 shadow-[0_4px_20px_rgba(15,23,42,0.08)] p-4 sm:p-5 backdrop-blur-sm"
+      >
+        {/* Package Name with Icon */}
+        <div className="flex items-center gap-3">
+          {packageIcon && (
+            <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 relative">
+              <Image
+                src={packageIcon}
+                alt={plan.name}
+                fill
+                className="object-contain"
+                sizes="(max-width: 640px) 40px, 48px"
+              />
+            </div>
+          )}
+          <h3 className={`text-xl sm:text-2xl font-bold ${colorScheme.text}`}>{plan.name}</h3>
+        </div>
+
+        {/* Features List - Vertical bullet points (dash aligned to text baseline on mobile) */}
+        <ul className="space-y-2.5 pl-4 sm:pl-6">
+          {plan.features.map((feature, index) => (
+            <li
+              key={index}
+              className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.feature} text-sm sm:text-base leading-relaxed`}
+            >
+              <span className={`${colorScheme.bullet} font-bold flex-shrink-0`}>-</span>
+              <span className="flex-1 min-w-0">{feature.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  // Membership packs: 3 cards - maximize width on desktop
+  const isMembershipLayout = showAccumulationChart && packages.length <= 3;
+  // One-time: 5 cards - 3 on first row, 2 centered on second row
+  const isOneTimeLayout = !showAccumulationChart && packages.length === 5;
+
   return (
     <div className="w-full mt-4 mb-6" style={{ background: "transparent" }}>
-      <div className="space-y-6">
-        {packages.map((plan) => {
-          const colorScheme = getPackageColorScheme(plan.id);
-          const packageIcon = getPackageIconLocal(plan.id);
-
-          return (
-            <div
-              key={plan.id}
-              className="space-y-3 rounded-2xl border border-gray-200 bg-white/95 shadow-[0_4px_20px_rgba(15,23,42,0.08)] p-4 sm:p-5 backdrop-blur-sm"
-            >
-              {/* Package Name with Icon */}
-              <div className="flex items-center gap-3">
-                {packageIcon && (
-                  <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 relative">
-                    <Image
-                      src={packageIcon}
-                      alt={plan.name}
-                      fill
-                      className="object-contain"
-                      sizes="(max-width: 640px) 40px, 48px"
-                    />
-                  </div>
-                )}
-                <h3 className={`text-xl sm:text-2xl font-bold ${colorScheme.text}`}>{plan.name}</h3>
-              </div>
-
-              {/* Features List - Vertical bullet points (dash aligned to text baseline on mobile) */}
-              <ul className="space-y-2.5 pl-4 sm:pl-6">
-                {plan.features.map((feature, index) => (
-                  <li
-                    key={index}
-                    className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.feature} text-sm sm:text-base leading-relaxed`}
-                  >
-                    <span className={`${colorScheme.bullet} font-bold flex-shrink-0`}>-</span>
-                    <span className="flex-1 min-w-0">{feature.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
+      {isMembershipLayout ? (
+        /* Membership: 3 cards - full-width grid on desktop */
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-4 w-full">
+          {packages.map((plan) => renderPackageCard(plan))}
+        </div>
+      ) : isOneTimeLayout ? (
+        /* One-time: 3 on row 1, 2 centered on row 2 (desktop only) */
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-4 w-full">
+          {packages.slice(0, 3).map((plan) => renderPackageCard(plan))}
+          <div className="flex flex-col gap-6 lg:col-span-3 lg:flex-row lg:justify-center lg:gap-4">
+            {packages.slice(3, 5).map((plan) => renderPackageCard(plan))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6 lg:flex-row lg:flex-nowrap lg:gap-4">
+          {packages.map((plan) => renderPackageCard(plan))}
+        </div>
+      )}
       {/* Entry accumulation chart - only when membership packs tab is active */}
       {showAccumulationChart && (
         <div className="mt-6 sm:mt-8 max-w-md mx-auto">

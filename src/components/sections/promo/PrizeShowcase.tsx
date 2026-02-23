@@ -568,19 +568,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                Pick your <span style={{ color: "#EE0000" }}>toolbox</span>
               </p>
               
-              {/* Toolbox Type Toggle - Sidchrome and Milwaukee only */}
+              {/* Toolbox Type Toggle - Milwaukee (left) and Sidchrome (right) */}
               <div className="flex justify-center gap-3 sm:gap-4 mb-4">
-                <button
-                  onClick={() => handleToolboxTypeChange("sidchrome")}
-                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
-                    toolboxType === "sidchrome"
-                      ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
-                  }`}
-                  suppressHydrationWarning
-                >
-                  Sidchrome Toolbox
-                </button>
                 <button
                   onClick={() => handleToolboxTypeChange("milwaukee")}
                   className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
@@ -591,6 +580,17 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   suppressHydrationWarning
                 >
                   Milwaukee Toolbox
+                </button>
+                <button
+                  onClick={() => handleToolboxTypeChange("sidchrome")}
+                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
+                    toolboxType === "sidchrome"
+                      ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
+                  }`}
+                  suppressHydrationWarning
+                >
+                  Sidchrome Toolbox
                 </button>
               </div>
               
