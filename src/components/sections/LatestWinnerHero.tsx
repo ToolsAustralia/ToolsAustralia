@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Trophy, MapPin, Gift, ChevronLeft, ChevronRight } from "lucide-react";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import type { WinnerSummary } from "@/types/winner";
 interface LatestWinnerHeroProps {
@@ -12,6 +13,7 @@ interface LatestWinnerHeroProps {
 }
 
 export default function LatestWinnerHero({ className = "", contentWrapperClassName }: LatestWinnerHeroProps) {
+  const theme = usePromoTheme();
   const [winners, setWinners] = useState<WinnerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -77,7 +79,7 @@ export default function LatestWinnerHero({ className = "", contentWrapperClassNa
         {/* Section Header */}
         <div className="text-center mb-6 sm:mb-8 lg:mb-10">
           <div className="inline-flex items-center gap-1.5 sm:gap-3 mb-1 sm:mb-4 relative">
-            <div className="p-1.5 sm:p-3 bg-gradient-to-br from-[#ee0000] via-red-600 to-red-700 rounded-lg sm:rounded-xl shadow-lg shadow-red-500/50 relative z-10">
+            <div className="p-1.5 sm:p-3 rounded-lg sm:rounded-xl shadow-lg relative z-10" style={{ background: theme.gradient, boxShadow: `0 0 20px ${theme.shadowRgba}` }}>
               <Trophy className="w-4 h-4 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
             </div>
             <h2 className="text-2xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent font-['Poppins'] relative z-10">
@@ -130,7 +132,7 @@ export default function LatestWinnerHero({ className = "", contentWrapperClassNa
 
                     {/* Draw name badge - top left, no animation */}
                     <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-20">
-                      <div className="bg-gradient-to-r from-[#ee0000] via-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold shadow-lg flex items-center gap-1.5 ring-2 ring-white/50">
+                      <div className="text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold shadow-lg flex items-center gap-1.5 ring-2 ring-white/50" style={{ background: theme.gradient }}>
                         <span>{winner.drawName}</span>
                       </div>
                     </div>
@@ -242,7 +244,7 @@ export default function LatestWinnerHero({ className = "", contentWrapperClassNa
                         </div>
                       )}
                       <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-20">
-                        <div className="bg-gradient-to-r from-[#ee0000] via-red-600 to-red-700 text-white px-5 py-2.5 rounded-xl text-base font-bold shadow-lg ring-2 ring-white/50">
+                        <div className="text-white px-5 py-2.5 rounded-xl text-base font-bold shadow-lg ring-2 ring-white/50" style={{ background: theme.gradient }}>
                           {winner.drawName}
                         </div>
                       </div>
@@ -287,14 +289,18 @@ export default function LatestWinnerHero({ className = "", contentWrapperClassNa
             <>
               <button
                 onClick={(e) => { e.preventDefault(); goToSlide(activeIndex - 1); }}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 xl:-translate-x-4 z-30 w-12 h-12 xl:w-14 xl:h-14 rounded-full bg-white/90 hover:bg-white shadow-lg border border-gray-200 flex items-center justify-center text-gray-700 hover:text-[#ee0000] transition-colors"
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 xl:-translate-x-4 z-30 w-12 h-12 xl:w-14 xl:h-14 rounded-full bg-white/90 hover:bg-white shadow-lg border border-gray-200 flex items-center justify-center text-gray-700 transition-colors [&:hover]:text-inherit"
+                onMouseEnter={(e) => (e.currentTarget.style.color = theme.primary)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "")}
                 aria-label="Previous winner"
               >
                 <ChevronLeft className="w-6 h-6 xl:w-7 xl:h-7" />
               </button>
               <button
                 onClick={(e) => { e.preventDefault(); goToSlide(activeIndex + 1); }}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 xl:translate-x-4 z-30 w-12 h-12 xl:w-14 xl:h-14 rounded-full bg-white/90 hover:bg-white shadow-lg border border-gray-200 flex items-center justify-center text-gray-700 hover:text-[#ee0000] transition-colors"
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 xl:translate-x-4 z-30 w-12 h-12 xl:w-14 xl:h-14 rounded-full bg-white/90 hover:bg-white shadow-lg border border-gray-200 flex items-center justify-center text-gray-700 transition-colors"
+                onMouseEnter={(e) => (e.currentTarget.style.color = theme.primary)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "")}
                 aria-label="Next winner"
               >
                 <ChevronRight className="w-6 h-6 xl:w-7 xl:h-7" />
@@ -307,8 +313,9 @@ export default function LatestWinnerHero({ className = "", contentWrapperClassNa
                     key={i}
                     onClick={(e) => { e.preventDefault(); goToSlide(i); }}
                     className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                      i === activeIndex ? "bg-[#ee0000] w-8" : "bg-gray-300 hover:bg-gray-400"
+                      i === activeIndex ? "w-8" : "bg-gray-300 hover:bg-gray-400"
                     }`}
+                    style={i === activeIndex ? { backgroundColor: theme.primary } : undefined}
                     aria-label={`Go to winner ${i + 1}`}
                   />
                 ))}

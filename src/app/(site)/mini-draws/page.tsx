@@ -144,7 +144,7 @@ export default async function MiniDrawsPage() {
       </div>
 
       {/* Membership Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-0">
         <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="pt-8 pb-32" titleColor="" />
       </div>
     </div>

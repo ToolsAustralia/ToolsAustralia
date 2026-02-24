@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 interface HexagonalPromoBadgeProps {
   multiplier: 2 | 3 | 5 | 10;
@@ -14,6 +15,7 @@ interface HexagonalPromoBadgeProps {
  * Used on package cards in the upper left corner
  */
 const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, size = "medium", className = "" }) => {
+  const theme = usePromoTheme();
   // Size configurations - Octagonal shape (8 sides)
   const sizeConfig = {
     xs: {
@@ -57,7 +59,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
         className="absolute inset-0 animate-pulse"
         style={{
           clipPath: config.clipPath,
-          background: `radial-gradient(circle at center, rgba(239, 68, 68, 0.6) 0%, rgba(220, 38, 38, 0.4) 40%, rgba(185, 28, 28, 0.2) 70%, transparent 100%)`,
+          background: `radial-gradient(circle at center, ${theme.shadowRgba} 0%, ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.4)")} 40%, ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.2)")} 70%, transparent 100%)`,
           filter: "blur(4px)",
           transform: "scale(1.2)",
           zIndex: 0,
@@ -69,11 +71,11 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
         className="relative flex items-center justify-center h-full"
         style={{
           clipPath: config.clipPath,
-          background: `radial-gradient(circle at 30% 30%, #ff6b35 0%, #f7931e 15%, #ee0000 30%, #dc2626 50%, #b91c1c 70%, #991b1b 100%)`,
+          background: `radial-gradient(circle at 30% 30%, ${theme.primary} 0%, ${theme.primary}ee 15%, ${theme.primary} 30%, ${theme.primary}dd 50%, ${theme.primary}bb 70%, ${theme.primary}99 100%)`,
           boxShadow: `
-            0 0 30px rgba(239, 68, 68, 0.9),
-            0 0 60px rgba(220, 38, 38, 0.6),
-            0 0 90px rgba(185, 28, 28, 0.3),
+            0 0 30px ${theme.hoverShadowRgba},
+            0 0 60px ${theme.shadowRgba},
+            0 0 90px ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.3)")},
             0 4px 20px rgba(0, 0, 0, 0.5),
             inset 0 2px 4px rgba(255, 255, 255, 0.3),
             inset 0 -2px 4px rgba(0, 0, 0, 0.3)
@@ -119,11 +121,11 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
           className="absolute inset-0"
           style={{
             clipPath: config.clipPath,
-            border: "2px solid rgba(255, 200, 100, 0.8)",
+            border: `2px solid ${theme.borderRgba}`,
             boxShadow: `
               inset 0 0 10px rgba(255, 255, 255, 0.3),
-              0 0 15px rgba(255, 200, 100, 0.6),
-              0 0 25px rgba(239, 68, 68, 0.4)
+              0 0 15px ${theme.borderRgba},
+              0 0 25px ${theme.shadowRgba}
             `,
             zIndex: 3,
           }}

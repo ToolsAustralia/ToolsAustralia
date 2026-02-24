@@ -1,5 +1,6 @@
 // Export all Zustand stores from a single location
 export { useModalPriorityStore } from "./useModalPriorityStore";
+export { usePromoThemeStore, usePromoTheme } from "./usePromoThemeStore";
 // Individual modal stores removed - using unified modal priority system
 
 // Re-export types for convenience

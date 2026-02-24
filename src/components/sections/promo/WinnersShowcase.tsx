@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Trophy, MapPin, Calendar, Award } from "lucide-react";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
@@ -19,6 +20,7 @@ export default function WinnersShowcase({
 }: WinnersShowcaseProps) {
   const winnersRef = useScrollAnimation();
   const { data: winners = [], isLoading: loading } = useMajorDrawWinners();
+  const theme = usePromoTheme();
   // Show first 8 in grid (same as before); data is shared with homepage/modal cache
   const displayWinners = winners.slice(0, 8);
 
@@ -28,16 +30,17 @@ export default function WinnersShowcase({
     <section
       ref={winnersRef}
       className={`py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative ${className}`}
+      style={{ ["--winner-card-hover-shadow" as string]: `0 16px 48px ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.3)")}` }}
     >
       {/* Background Pattern Overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 pointer-events-none"></div>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(238,0,0,0.1),transparent_50%)] pointer-events-none"></div>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 50% 50%, ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.08)")}, transparent 50%)` }}></div>
 
       <div className="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10">
         {/* Section Header */}
         <div className="text-center mb-10 sm:mb-14">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-br from-[#ee0000] to-red-700 rounded-xl shadow-lg">
+            <div className="p-3 rounded-xl shadow-lg" style={{ background: `linear-gradient(135deg, ${theme.primaryLight} 0%, ${theme.primary} 50%, ${theme.primaryDark} 100%)` }}>
               <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
             {title && (
@@ -83,7 +86,7 @@ export default function WinnersShowcase({
               return (
                 <div
                   key={winner.id}
-                  className="group relative bg-gradient-to-br from-slate-700/90 via-slate-600/90 to-slate-700/90 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-500/40 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:shadow-[0_16px_48px_rgba(238,0,0,0.3)] transition-all duration-300 hover:-translate-y-1"
+                  className="group relative bg-gradient-to-br from-slate-700/90 via-slate-600/90 to-slate-700/90 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-500/40 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:[box-shadow:var(--winner-card-hover-shadow)] transition-all duration-300 hover:-translate-y-1"
                 >
                   {/* Shine Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10"></div>
@@ -103,7 +106,7 @@ export default function WinnersShowcase({
                     {/* Prize Value Badge */}
                     {winner.prize.value > 0 && (
                       <div className="absolute top-3 right-3 z-20">
-                        <div className="bg-gradient-to-r from-[#ee0000] to-red-700 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border border-red-400/30">
+                        <div className="text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg" style={{ background: theme.gradient, border: `1px solid ${theme.borderRgba}` }}>
                           ${winner.prize.value.toLocaleString()}
                         </div>
                       </div>
@@ -145,9 +148,9 @@ export default function WinnersShowcase({
                     </div>
 
                     {/* Draw Name Badge */}
-                    <div className="bg-gradient-to-r from-[#ee0000]/20 to-red-700/20 rounded-lg p-2 border border-[#ee0000]/30">
+                    <div className="rounded-lg p-2" style={{ background: `linear-gradient(to right, ${theme.primary}20, ${theme.primaryDark}20)`, border: `1px solid ${theme.borderRgba}` }}>
                       <div className="flex items-center gap-2">
-                        <Award className="w-4 h-4 text-[#ee0000] flex-shrink-0" />
+                        <Award className="w-4 h-4 flex-shrink-0" style={{ color: theme.primary }} />
                         <span className="text-xs font-semibold text-white font-['Poppins'] line-clamp-1">
                           {winner.drawName}
                         </span>
@@ -168,7 +171,7 @@ export default function WinnersShowcase({
 
               <div className="p-8 sm:p-10 relative z-10 text-center">
                 <div className="flex justify-center mb-6">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-[#ee0000] to-red-700 rounded-full flex items-center justify-center shadow-lg">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center shadow-lg" style={{ background: `linear-gradient(135deg, ${theme.primaryLight} 0%, ${theme.primary} 50%, ${theme.primaryDark} 100%)` }}>
                     <Trophy className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
                   </div>
                 </div>

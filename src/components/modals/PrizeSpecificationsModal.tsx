@@ -78,7 +78,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
         {items.map((item, index) => (
           <li key={index} className="flex items-start gap-2 sm:gap-3">
             <div className="flex-shrink-0 mt-0.5">
-              <Check className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+              <Check className={`h-4 w-4 sm:h-5 sm:w-5 ${brandColors?.checkmarkColor ?? "text-red-600"}`} />
             </div>
             <span className="text-xs sm:text-sm text-gray-700 leading-relaxed font-['Inter']">{item}</span>
           </li>
@@ -153,7 +153,9 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
                         ? brandColors
                           ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-lg ${brandColors.shadowColor}`
                           : "bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white border-red-500 shadow-lg shadow-red-500/40"
-                        : "bg-gray-100 text-gray-700 border-gray-200 hover:border-red-400 hover:text-red-600"
+                        : brandColors
+                          ? `bg-gray-100 text-gray-700 border-gray-200 ${brandColors.hoverBorderColor} ${brandColors.hoverTextColor}`
+                          : "bg-gray-100 text-gray-700 border-gray-200 hover:border-red-400 hover:text-red-600"
                     }`}
                   >
                     {section.label}

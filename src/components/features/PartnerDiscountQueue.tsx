@@ -18,6 +18,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package } from "lucide-react";
 import Image from "next/image";
 import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
+import {
+  getMembershipSectionColorScheme,
+  derivePlanIdFromPackage,
+  getCardBorderStyle,
+} from "@/utils/package-colors/packageColorScheme";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -306,63 +311,6 @@ export default function PartnerDiscountQueue({
     return getPackageIconByName(packageName, membershipType);
   };
 
-  // Helper function to get package color scheme (matching MembershipBadge)
-  const getPackageColorScheme = (packageName: string) => {
-    const lowerName = packageName.toLowerCase();
-
-    if (lowerName.includes("apprentice")) {
-      return {
-        gradient: "from-gray-300 via-slate-400 to-gray-500",
-        text: "text-gray-300",
-        border: "border-gray-400/40",
-      };
-    } else if (lowerName.includes("tradie")) {
-      return {
-        gradient: "from-blue-500 via-blue-600 to-blue-700",
-        text: "text-blue-400",
-        border: "border-blue-500/50",
-      };
-    } else if (lowerName.includes("foreman")) {
-      return {
-        gradient: "from-green-500 via-green-600 to-green-700",
-        text: "text-green-300",
-        border: "border-green-500/50",
-      };
-    } else if (lowerName.includes("boss")) {
-      return {
-        gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-        text: "text-yellow-400",
-        border: "border-yellow-400/50",
-      };
-    } else if (lowerName.includes("power")) {
-      return {
-        gradient: "from-orange-600 via-red-500 to-orange-700",
-        text: "text-orange-400",
-        border: "border-orange-500/50",
-      };
-    }
-
-    // Default fallback
-    return {
-      gradient: "from-slate-600 via-gray-700 to-slate-800",
-      text: "text-gray-400",
-      border: "border-gray-500/50",
-    };
-  };
-
-  // Helper function to extract gradient color for border
-  const getGradientColor = (gradient: string): string => {
-    if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
-    if (gradient.includes("blue")) return "#3b82f6";
-    if (gradient.includes("purple")) return "#9333ea";
-    if (gradient.includes("orange")) return "#f97316";
-    if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
-    if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
-    if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
-    if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
-    return "#6b7280";
-  };
-
   // Get badge color based on package type and name
   const getPackageBadgeColor = (type: string, packageName?: string) => {
     if (!packageName) {
@@ -478,9 +426,29 @@ export default function PartnerDiscountQueue({
     setIsExpanded((prev) => !prev);
   };
 
+  // Package theme for icon and card border (subscription uses membership tab colors, e.g. Boss → black/gold)
+  const packageTheme =
+    summary.isActiveSubscription && summary.subscriptionBenefits
+      ? (() => {
+          const packageData = {
+            name: summary.subscriptionBenefits.packageName,
+            type: "subscription" as const,
+          };
+          const planId = derivePlanIdFromPackage(packageData, "subscription");
+          return getMembershipSectionColorScheme(planId, true);
+        })()
+      : null;
+
+  const cardBorderStyle = packageTheme
+    ? packageTheme.cardBorderGradient
+      ? getCardBorderStyle(packageTheme, "linear-gradient(135deg, #050607 0%, #0f1117 50%, #030304 100%)")
+      : { borderColor: `${packageTheme.accentHex}80`, borderWidth: 1 }
+    : undefined;
+
   return (
     <div
       className={`relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white ${className}`}
+      style={cardBorderStyle}
     >
       {/* Premium Background Effects */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 opacity-40"></div>
@@ -502,31 +470,40 @@ export default function PartnerDiscountQueue({
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          {summary.isActiveSubscription && summary.subscriptionBenefits ? (
+          {summary.isActiveSubscription && summary.subscriptionBenefits && packageTheme ? (
             (() => {
               const packageName = summary.subscriptionBenefits.packageName;
               const packageIcon = getPackageIconImage(packageName, "subscription");
-              const colorScheme = getPackageColorScheme(packageName);
-              const borderGradientColor = getGradientColor(colorScheme.gradient);
+              const badgeStyle = packageTheme.badgeStyle ?? {};
               const isPremiumPackage =
                 packageName.toLowerCase().includes("boss") || packageName.toLowerCase().includes("power");
 
               if (!packageIcon) return null;
+
+              const iconStyle = packageTheme.cardBorderGradient
+                ? {
+                    ...getCardBorderStyle(packageTheme, badgeStyle.background ?? "#0a0a0a"),
+                    padding: "8px",
+                    minWidth: "48px",
+                    minHeight: "48px",
+                    boxShadow: badgeStyle.boxShadow ?? `0 0 12px rgba(212,175,55,0.4)`,
+                  }
+                : badgeStyle.background
+                ? { ...badgeStyle, padding: "8px", minWidth: "48px", minHeight: "48px" }
+                : {
+                    border: `2px solid ${packageTheme.accentHex}`,
+                    boxShadow: `0 0 12px ${packageTheme.accentHex}66`,
+                    padding: "8px",
+                    minWidth: "48px",
+                    minHeight: "48px",
+                  };
 
               return (
                 <span
                   className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden ${
                     isOptimisticUpdate ? "animate-pulse" : ""
                   } ${isPremiumPackage ? "animate-pulse" : ""}`}
-                  style={{
-                    border: `2px solid transparent`,
-                    backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
-                    backgroundOrigin: `border-box`,
-                    backgroundClip: `padding-box, border-box`,
-                    padding: "8px",
-                    minWidth: "48px",
-                    minHeight: "48px",
-                  }}
+                  style={iconStyle}
                 >
                   <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
                     <Image

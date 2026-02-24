@@ -14,6 +14,7 @@ export interface PrizeBrandColors {
   subtitleTextColor: string; // Text color with opacity for subtitle
   checkmarkColor: string;
   hoverBorderColor: string;
+  hoverTextColor: string; // Hover text color for inactive states (e.g. hover:text-amber-600)
 }
 
 /**
@@ -31,6 +32,7 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
         subtitleTextColor: "text-white/90",
         checkmarkColor: "text-red-600",
         hoverBorderColor: "hover:border-red-500",
+        hoverTextColor: "hover:text-red-600",
       };
     case "dewalt-sidchrome":
       return {
@@ -41,17 +43,19 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
         subtitleTextColor: "text-black/90",
         checkmarkColor: "text-yellow-600",
         hoverBorderColor: "hover:border-amber-500",
+        hoverTextColor: "hover:text-amber-600",
       };
     case "makita-sidchrome":
       return {
-        // Using custom Makita brand colors: #008C95 (light) and #007577 (dark)
-        gradient: "from-makita-500 via-makita-600 to-makita-700", // Makita cyan gradient
+        // Makita #009EA8 (extracted from reference imagery)
+        gradient: "from-makita-500 via-makita-600 to-makita-700",
         borderColor: "border-makita-500", // Primary Makita cyan border
         shadowColor: "shadow-makita-500/40", // Makita cyan shadow
         textColor: "text-white",
         subtitleTextColor: "text-white/90",
         checkmarkColor: "text-makita-500", // Makita cyan checkmark
         hoverBorderColor: "hover:border-makita-400", // Darker Makita teal on hover
+        hoverTextColor: "hover:text-makita-500",
       };
     case "milwaukee-milwaukee":
       return {
@@ -62,6 +66,7 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
         subtitleTextColor: "text-white/90",
         checkmarkColor: "text-red-600",
         hoverBorderColor: "hover:border-red-500",
+        hoverTextColor: "hover:text-red-600",
       };
     case "dewalt-milwaukee":
       return {
@@ -72,17 +77,19 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
         subtitleTextColor: "text-black/90",
         checkmarkColor: "text-yellow-600",
         hoverBorderColor: "hover:border-amber-500",
+        hoverTextColor: "hover:text-amber-600",
       };
     case "makita-milwaukee":
       return {
-        // Using custom Makita brand colors: #008C95 (light) and #007577 (dark)
-        gradient: "from-makita-500 via-makita-600 to-makita-700", // Makita cyan gradient
+        // Makita #009EA8 (extracted from reference imagery)
+        gradient: "from-makita-500 via-makita-600 to-makita-700",
         borderColor: "border-makita-600", // Darker Makita cyan border
         shadowColor: "shadow-makita-500/40", // Makita cyan shadow
         textColor: "text-white",
         subtitleTextColor: "text-white/90",
         checkmarkColor: "text-makita-500", // Makita cyan checkmark
         hoverBorderColor: "hover:border-makita-500", // Makita teal on hover
+        hoverTextColor: "hover:text-makita-500",
       };
     case "cash-prize":
       return {
@@ -93,6 +100,7 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
         subtitleTextColor: "text-white/90",
         checkmarkColor: "text-green-600",
         hoverBorderColor: "hover:border-green-400",
+        hoverTextColor: "hover:text-green-600",
       };
     default:
       // Fallback to red for unknown prizes
@@ -104,6 +112,7 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
         subtitleTextColor: "text-white/90",
         checkmarkColor: "text-red-600",
         hoverBorderColor: "hover:border-red-500",
+        hoverTextColor: "hover:text-red-600",
       };
   }
 }
@@ -117,13 +126,13 @@ export function getBrandBorderColor(slug: PrizeSlug): string {
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
-      return "rgb(185, 28, 28)"; // red-700 - darker red
+      return "rgb(200, 16, 46)"; // Milwaukee #C8102E
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
-      return "rgb(217, 119, 6)"; // amber-600 - darker yellow/amber
+      return "rgb(229, 160, 0)"; // DeWalt #E5A000
     case "makita-sidchrome":
     case "makita-milwaukee":
-      return "rgb(0, 117, 119)"; // Makita teal darker (#007577) - darker teal
+      return "rgb(0, 160, 170)"; // Makita #00A0AA
     case "cash-prize":
       return "rgb(22, 163, 74)"; // green-600 - darker green
     default:
@@ -139,13 +148,13 @@ export function getBrandGlowColor(slug: PrizeSlug): string {
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
-      return "rgba(239, 68, 68, 0.6)"; // red-500
+      return "rgba(200, 16, 46, 0.6)"; // Milwaukee #C8102E
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
-      return "rgba(234, 179, 8, 0.6)"; // yellow-500/amber
+      return "rgba(253, 184, 19, 0.6)"; // DeWalt #FDB813
     case "makita-sidchrome":
     case "makita-milwaukee":
-      return "rgba(0, 140, 149, 0.6)"; // Makita teal (#008C95)
+      return "rgba(0, 184, 194, 0.6)"; // Makita #00B8C2
     case "cash-prize":
       return "rgba(34, 197, 94, 0.6)"; // green-500
     default:

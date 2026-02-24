@@ -7,6 +7,7 @@ import MetallicDivider from "@/components/ui/MetallicDivider";
 import BrandScroller from "@/components/ui/BrandScroller";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
+import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import MembershipSection from "@/components/sections/MembershipSection";
 import FlowChartSection from "@/components/sections/FlowChartSection";
 import MembershipPackagesChart from "@/components/sections/MembershipPackagesChart";
@@ -30,6 +31,30 @@ export default function MembershipPageClient() {
   const hasPartnerDiscountAccess = hasActivePartnerDiscountAccess(
     (userData as unknown as import("@/models/User").IUser) ?? null
   );
+
+  // Package theme when user has partner discount access
+  let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
+  if (hasPartnerDiscountAccess && userData) {
+    if (userData.subscription?.isActive && userData.subscriptionPackageData) {
+      const planId = derivePlanIdFromPackage(userData.subscriptionPackageData, "subscription");
+      packageTheme = getLandingPageThemeFromPlanId(planId, true);
+    } else if (userData.enrichedOneTimePackages?.length) {
+      const queue = (userData as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
+      const activeIds = new Set(
+        queue
+          .filter((i) => i.status === "active" && ["one-time", "mini-draw", "upsell"].includes(i.packageType))
+          .map((i) => String(i.packageId))
+      );
+      const pkg = userData.enrichedOneTimePackages
+        .filter((p) => p.isActive && p.packageData && activeIds.has(String(p.packageId)))
+        .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
+      if (pkg?.packageData) {
+        const planId = derivePlanIdFromPackage(pkg.packageData, "one-time");
+        packageTheme = getLandingPageThemeFromPlanId(planId, false);
+      }
+    }
+  }
+
   const { subscriptionPackages } = useMemberships();
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
@@ -211,6 +236,7 @@ export default function MembershipPageClient() {
             ? "Access exclusive discounts from Australia's top tool brands"
             : "Get instant access to exclusive discounts from Australia's top tool brands"
         }
+        packageTheme={packageTheme}
       />
 
       {/* Membership Modal */}

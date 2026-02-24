@@ -8,6 +8,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import { apprentice, tradie, foreman, boss, power, type PackageIconData } from "@/utils/images/package-icons";
 import { SectionContainer } from "@/components/ui";
+import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 
 // Type alias for consistency
 type StaticImageData = PackageIconData;
@@ -29,58 +30,6 @@ interface PackageData {
   icon: StaticImageData;
   description?: string;
 }
-
-// Helper function to get package color scheme (reused from MembershipSection pattern)
-const getPackageColorScheme = (packageId: string) => {
-  if (packageId.includes("apprentice")) {
-    return {
-      gradient: "from-gray-300 via-slate-400 to-gray-500",
-      text: "text-gray-300",
-      barColor: "bg-gradient-to-r from-gray-300 via-gray-400 to-gray-500",
-      barColorLight: "bg-gradient-to-r from-gray-200 via-gray-300 to-gray-400",
-      border: "border-gray-400/40",
-    };
-  } else if (packageId.includes("tradie") || packageId === "tradie") {
-    return {
-      gradient: "from-blue-500 via-blue-600 to-blue-700",
-      text: "text-blue-400",
-      barColor: "bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600",
-      barColorLight: "bg-gradient-to-r from-blue-300 via-blue-400 to-blue-500",
-      border: "border-blue-500/50",
-    };
-  } else if (packageId.includes("foreman") || packageId === "foreman") {
-    return {
-      gradient: "from-green-500 via-green-600 to-green-700",
-      text: "text-green-300",
-      barColor: "bg-gradient-to-r from-green-400 via-green-500 to-green-600",
-      barColorLight: "bg-gradient-to-r from-green-300 via-green-400 to-green-500",
-      border: "border-green-500/50",
-    };
-  } else if (packageId.includes("boss") || packageId === "boss") {
-    return {
-      gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-      text: "text-yellow-400",
-      barColor: "bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500",
-      barColorLight: "bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-400",
-      border: "border-yellow-400/50",
-    };
-  } else if (packageId.includes("power")) {
-    return {
-      gradient: "from-orange-600 via-red-500 to-orange-700",
-      text: "text-orange-400",
-      barColor: "bg-gradient-to-r from-orange-500 via-red-400 to-orange-600",
-      barColorLight: "bg-gradient-to-r from-orange-400 via-red-300 to-orange-500",
-      border: "border-orange-500/50",
-    };
-  }
-  return {
-    gradient: "from-slate-600 via-gray-700 to-slate-800",
-    text: "text-gray-400",
-    barColor: "bg-gradient-to-r from-slate-500 via-gray-600 to-slate-700",
-    barColorLight: "bg-gradient-to-r from-slate-400 via-gray-500 to-slate-600",
-    border: "border-gray-500/50",
-  };
-};
 
 // Package data - Subscriptions
 const subscriptionPackages: PackageData[] = [

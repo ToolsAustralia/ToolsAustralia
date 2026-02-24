@@ -16,6 +16,7 @@ interface MetallicAccordionProps {
   defaultExpandedId?: string;
   className?: string;
   iconColor?: string;
+  iconColorHex?: string;
 }
 
 // Helper function to get icon color based on variant
@@ -59,6 +60,7 @@ export default function MetallicAccordion({
   defaultExpandedId,
   className = "",
   iconColor,
+  iconColorHex,
 }: MetallicAccordionProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(
     defaultExpandedId ? new Set([defaultExpandedId]) : new Set()
@@ -88,7 +90,8 @@ export default function MetallicAccordion({
     }
   };
 
-  const iconColorClass = getIconColor(variant, iconColor);
+  const iconColorClass = iconColorHex ? undefined : getIconColor(variant, iconColor);
+  const iconStyle = iconColorHex ? { color: iconColorHex } : undefined;
   const hoverShadowClass = getHoverShadowColor(variant);
 
   return (
@@ -117,10 +120,14 @@ export default function MetallicAccordion({
               </span>
               <div className="flex-shrink-0">
                 {isExpanded ? (
-                  <ChevronUp className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColorClass} transition-transform duration-300`} />
+                  <ChevronUp
+                    className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColorClass ?? ""} transition-transform duration-300`}
+                    style={iconStyle}
+                  />
                 ) : (
                   <ChevronDown
-                    className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColorClass} transition-transform duration-300`}
+                    className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColorClass ?? ""} transition-transform duration-300`}
+                    style={iconStyle}
                   />
                 )}
               </div>

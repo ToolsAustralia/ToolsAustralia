@@ -24,80 +24,14 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { getPackageIcon } from "@/utils/images/package-icons";
-
-// Helper functions for package card styling (matched to PackageSelectionModal)
-const getGradientColor = (gradient: string) => {
-  if (gradient.includes("yellow-4") || gradient.includes("yellow-400")) return "#fbbf24";
-  if (gradient.includes("blue-6") || gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6";
-  if (gradient.includes("emerald") || gradient.includes("green-5") || gradient.includes("green-500")) return "#10b981";
-  if (gradient.includes("gray-3") || gradient.includes("slate-4") || gradient.includes("gray-400")) return "#94a3b8";
-  if (gradient.includes("orange-6") || gradient.includes("orange-5") || gradient.includes("orange-500"))
-    return "#f97316";
-  return "#6b7280";
-};
+import { getMembershipSectionColorScheme, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 const hexToRgba = (hex: string, alpha: number) => {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
-const getPackageColorScheme = (planId: string) => {
-  if (planId.includes("apprentice")) {
-    return {
-      gradient: "from-gray-300 via-slate-400 to-gray-500",
-      glow: "drop-shadow-[0_0_12px_rgba(148,163,184,0.52)]",
-      text: "text-gray-300",
-      border: "border-gray-400/40",
-      shadow: "shadow-gray-400/20",
-      hoverShadow: "hover:shadow-gray-400/40",
-    };
-  } else if (planId.includes("tradie")) {
-    return {
-      gradient: "from-blue-600 via-blue-500 to-cyan-600",
-      glow: "drop-shadow-[0_0_12px_rgba(59,130,246,0.65)]",
-      text: "text-blue-400",
-      border: "border-blue-500/50",
-      shadow: "shadow-blue-500/30",
-      hoverShadow: "hover:shadow-blue-500/50",
-    };
-  } else if (planId.includes("foreman")) {
-    return {
-      gradient: "from-emerald-400 via-emerald-500 to-green-500",
-      glow: "drop-shadow-[0_0_15px_rgba(16,185,129,0.78)]",
-      text: "text-emerald-400",
-      border: "border-emerald-500/50",
-      shadow: "shadow-emerald-500/30",
-      hoverShadow: "hover:shadow-emerald-500/50",
-    };
-  } else if (planId.includes("boss")) {
-    return {
-      gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-      glow: "drop-shadow-[0_0_12px_rgba(251,191,36,0.65)]",
-      text: "text-yellow-400",
-      border: "border-yellow-400/50",
-      shadow: "shadow-yellow-400/30",
-      hoverShadow: "hover:shadow-yellow-400/50",
-    };
-  } else if (planId.includes("power")) {
-    return {
-      gradient: "from-orange-600 via-red-500 to-orange-700",
-      glow: "drop-shadow-[0_0_12px_rgba(251,146,60,0.65)]",
-      text: "text-orange-400",
-      border: "border-orange-500/50",
-      shadow: "shadow-orange-500/30",
-      hoverShadow: "hover:shadow-orange-500/50",
-    };
-  }
-  return {
-    gradient: "from-slate-600 via-gray-700 to-slate-800",
-    glow: "drop-shadow-[0_0_12px_rgba(100,116,139,0.65)]",
-    text: "text-gray-400",
-    border: "border-gray-500/50",
-    shadow: "shadow-gray-500/30",
-    hoverShadow: "hover:shadow-gray-500/50",
-  };
 };
 
 /**
@@ -116,6 +50,26 @@ export interface SpecialPackagesModalProps {
  * Displays additional one-time packages for users with active subscriptions OR current draw entries
  * Features package selection with one-click purchase using saved payment methods
  */
+const SpecialPackages50OffText: React.FC = () => {
+  const theme = usePromoTheme();
+  const r = parseInt(theme.primary.slice(1, 3), 16);
+  const g = parseInt(theme.primary.slice(3, 5), 16);
+  const b = parseInt(theme.primary.slice(5, 7), 16);
+  return (
+    <span
+      className="font-bold bg-clip-text text-transparent"
+      style={{
+        backgroundImage: `linear-gradient(to right, ${theme.primary}, #ff4444, ${theme.primary})`,
+        WebkitBackgroundClip: "text",
+        backgroundClip: "text",
+        filter: `drop-shadow(0 0 6px rgba(${r},${g},${b},0.5))`,
+      }}
+    >
+      $50 off
+    </span>
+  );
+};
+
 const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onClose, packages, onPackageSelect }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<StaticMembershipPackage | null>(null);
@@ -628,7 +582,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
             </h2>
             <p className="text-xs sm:text-sm text-gray-600 mb-3">
               you are entitled to{" "}
-              <span className="font-bold bg-gradient-to-r from-[#ee0000] via-[#ff4444] to-[#ee0000] bg-clip-text text-transparent drop-shadow-[0_0_6px_rgba(238,0,0,0.5)]">$50 off</span>{" "}
+              <SpecialPackages50OffText />
               today
             </p>
 
@@ -653,45 +607,34 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         )}
 
         <ModalContent scrollbar="metallic" padding="none" className="flex flex-col p-3 sm:p-6">
-          {/* Package List - Styled to match PackageSelectionModal */}
+          {/* Package List - Styled to match PackageSelectionModal (uses package color scheme) */}
           <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
             {packagesWithPromo.map((pkg) => {
-              const colorScheme = getPackageColorScheme(pkg._id || "");
+              const colorScheme = getMembershipSectionColorScheme(pkg._id || "", false);
               const isSelected = selectedPackage?._id === pkg._id;
+              // Use solid accent color for card text - textGradientStyle with backgroundClip can make nested text invisible on dark cards
+              const cardTextStyle = { color: colorScheme.accentHex };
+              const selectTextClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+              const cardInnerBg = "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)";
               return (
                 <div
                   key={pkg._id}
-                  className={`relative rounded-2xl p-2.5 sm:p-4 transition-[box-shadow,border-color] duration-300 cursor-pointer ${
-                    isSelected ? "shadow-2xl" : "shadow-[0_0_15px_rgba(0,0,0,0.4)] hover:shadow-[0_0_25px_rgba(0,0,0,0.6)]"
-                  }`}
+                  className="relative rounded-2xl p-2.5 sm:p-4 transition-all duration-300 cursor-pointer"
                   style={{
-                    /* Consistent 2px border prevents layout shift/wobbling on selection */
-                    border: `2px solid ${isSelected ? getGradientColor(colorScheme.gradient) : "transparent"}`,
-                    backgroundImage: isSelected
-                      ? `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${hexToRgba(
-                          getGradientColor(colorScheme.gradient),
-                          0.8
-                        )}, ${hexToRgba(getGradientColor(colorScheme.gradient), 0.5)})`
-                      : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${getGradientColor(
-                          colorScheme.gradient
-                        )}, transparent)`,
-                    backgroundOrigin: `border-box`,
-                    backgroundClip: `padding-box, border-box`,
+                    ...getCardBorderStyle(colorScheme, cardInnerBg),
+                    ...(!colorScheme.cardBorderGradient && { background: cardInnerBg }),
                     boxShadow: isSelected
-                      ? `0 0 20px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.6)}, 0 0 40px ${hexToRgba(
-                          getGradientColor(colorScheme.gradient),
-                          0.4
-                        )}, 0 0 60px rgba(251, 191, 36, 0.3), 0 0 0 4px rgba(251, 191, 36, 0.2)`
-                      : `0 0 15px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.4)}, 0 0 30px ${hexToRgba(
-                          getGradientColor(colorScheme.gradient),
-                          0.2
-                        )}`,
+                      ? `0 0 0 2px rgba(255,255,255,0.5), 0 0 24px ${hexToRgba(colorScheme.accentHex, 0.5)}, 0 8px 32px ${hexToRgba(colorScheme.accentHex, 0.2)}`
+                      : `0 0 15px ${hexToRgba(colorScheme.accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
                   }}
                   onClick={() => handlePackageSelect(pkg)}
                 >
                   {/* Selection Indicator */}
                   {isSelected && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-yellow-400 text-black rounded-full flex items-center justify-center shadow-lg">
+                    <div
+                      className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 text-white rounded-full flex items-center justify-center shadow-lg"
+                      style={colorScheme.badgeStyle}
+                    >
                       <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                     </div>
                   )}
@@ -705,7 +648,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                           alt={`${pkg.name} icon`}
                           fill
                           sizes="(max-width: 640px) 32px, 48px"
-                          className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                          className={`w-full h-full object-contain opacity-90 ${colorScheme.glow}`}
                         />
                       </div>
                     </div>
@@ -713,7 +656,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
                   <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
                     {/* Package Name - Left, two rows (same row as entries & price) */}
-                    <div className={`min-w-0 text-xs sm:text-sm font-semibold ${colorScheme.text} leading-tight`}>
+                    <div className="min-w-0 text-xs sm:text-sm font-semibold leading-tight" style={cardTextStyle}>
                       {(() => {
                         const parts = pkg.name.split(" ");
                         if (parts[0]?.toLowerCase() === "additional" && parts.length > 1) {
@@ -729,31 +672,26 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                     </div>
 
                     {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
-                    <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
-                      <div
-                        className={`text-base sm:text-lg font-bold bg-gradient-to-r ${colorScheme.gradient} bg-clip-text text-transparent`}
-                      >
+                    <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]" style={cardTextStyle}>
+                      <div className="text-base sm:text-lg font-bold">
                         {pkg.totalEntries || 0}
                       </div>
-                      <div className={`text-xs font-bold ${colorScheme.text}`}>ENTRIES</div>
+                      <div className="text-xs font-bold opacity-90">ENTRIES</div>
                     </div>
 
-                    {/* Right Side - Price and Button */}
+                    {/* Right Side - Price and SELECT button (same style as Enter Now) */}
                     <div className="flex items-center justify-end gap-2 sm:gap-2">
-                      <div className="text-base sm:text-lg font-bold text-slate-200">${pkg.price}</div>
+                      <div className="text-base sm:text-lg font-bold" style={cardTextStyle}>${pkg.price}</div>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handlePackageSelect(pkg);
                         }}
-                        className={`min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center ${
-                          isSelected
-                            ? "bg-yellow-400 text-black shadow-md"
-                            : "bg-yellow-400/90 text-black hover:bg-yellow-400"
-                        }`}
+                        className={`min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90 ${selectTextClass} ${colorScheme.borderGlow} ${isSelected ? "shadow-md" : ""}`}
+                        style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
                       >
-                        {isSelected ? "✓" : "SELECT"}
+                        <span style={colorScheme.textGradientStyle ?? undefined}>{isSelected ? "✓" : "SELECT"}</span>
                       </button>
                     </div>
                   </div>
@@ -791,63 +729,84 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
           {/* Action Buttons */}
           <div className="space-y-2 sm:space-y-3">
-            {/* Buy Button */}
-            <Button
-              onClick={() => selectedPackage && handlePurchase(selectedPackage)}
-              disabled={isProcessing || !selectedPackage || !defaultPaymentMethod}
-              variant="metallic"
-              fullWidth
-              size="md"
-              loading={isProcessing}
-              className="font-bold text-sm sm:text-base py-2 sm:py-3"
-            >
-              {!selectedPackage ? (
+            {/* Buy Button - uses package badgeStyle when package selected (same as Enter Now) */}
+            {selectedPackage ? (() => {
+              const colorScheme = getMembershipSectionColorScheme(selectedPackage._id || "", false);
+              const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+              const buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
+              return (
+                <button
+                  type="button"
+                  onClick={() => defaultPaymentMethod && handlePurchase(selectedPackage)}
+                  disabled={isProcessing || !defaultPaymentMethod}
+                  className={`font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden`}
+                  style={buttonStyle}
+                >
+                  {isProcessing ? (
+                    <span className="relative z-10">Processing...</span>
+                  ) : defaultPaymentMethod ? (
+                    <>
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 relative z-10" style={colorScheme.textGradientStyle ? { color: colorScheme.accentHex } : undefined} />
+                      <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                        Buy Now - ${selectedPackage.price}
+                      </span>
+                      <div className="flex items-center gap-1.5 bg-white/20 rounded px-2 sm:px-3 py-1 sm:py-1.5 relative z-10">
+                        <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" style={colorScheme.textGradientStyle ? { color: colorScheme.accentHex } : { color: "inherit" }} />
+                        <span className="text-xs" style={colorScheme.textGradientStyle ?? undefined}>
+                          •••• {defaultPaymentMethod.card?.last4}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <span className="relative z-10">No Payment Method</span>
+                  )}
+                </button>
+              );
+            })() : (
+              <Button
+                disabled
+                variant="secondary"
+                fullWidth
+                size="md"
+                className="font-bold text-sm sm:text-base py-2 sm:py-3 opacity-75 cursor-not-allowed"
+              >
                 <div className="flex items-center justify-center gap-1.5 sm:gap-2">
                   <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
                   <span>Select Pack</span>
                 </div>
-              ) : defaultPaymentMethod ? (
-                <div className="flex items-center justify-center gap-3 sm:gap-4">
-                  <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="text-xs sm:text-sm">Buy Now - ${selectedPackage.price}</span>
-                  <div className="flex items-center gap-1.5 bg-white/20 rounded px-2 sm:px-3 py-1 sm:py-1.5">
-                    <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                    <span className="text-xs">•••• {defaultPaymentMethod.card?.last4}</span>
-                  </div>
-                </div>
-              ) : (
-                "No Payment Method"
-              )}
-            </Button>
+              </Button>
+            )}
 
           </div>
 
-          {/* Additional Benefits - Only shown when package is selected (matches package card design) */}
+          {/* Additional Benefits - Only shown when package is selected (uses package color scheme) */}
           {selectedPackage && (() => {
-            const colorScheme = getPackageColorScheme(selectedPackage._id || "");
+            const colorScheme = getMembershipSectionColorScheme(selectedPackage._id || "", false);
+            // Use solid accent color - gradient styles (packageInclusionTextStyle/textGradientStyle) can make text invisible on dark card backgrounds
+            const benefitsTextStyle = { color: colorScheme.accentHex };
             return (
               <div
-                className="rounded-2xl p-3 sm:p-4 shadow-[0_0_15px_rgba(0,0,0,0.4)] my-3 sm:my-4"
+                className="rounded-2xl p-3 sm:p-4 my-3 sm:my-4"
                 style={{
-                  border: `2px solid ${getGradientColor(colorScheme.gradient)}`,
-                  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
-                  boxShadow: `0 0 15px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.4)}, 0 0 30px ${hexToRgba(getGradientColor(colorScheme.gradient), 0.2)}`,
+                  ...getCardBorderStyle(colorScheme, "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)"),
+                  ...(!colorScheme.cardBorderGradient && { background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }),
+                  boxShadow: `0 0 15px ${hexToRgba(colorScheme.accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
                 }}
               >
-                <h4 className={`text-xs sm:text-sm font-bold mb-2 sm:mb-3 ${colorScheme.text}`}>
+                <h4 className="text-xs sm:text-sm font-bold mb-2 sm:mb-3" style={benefitsTextStyle}>
                   {selectedPackage.name} Benefits
                 </h4>
                 <div className="space-y-2 sm:space-y-2.5">
-                  <div className={`flex items-center gap-2 sm:gap-3 text-xs sm:text-sm ${colorScheme.text}`}>
-                    <Gift className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${colorScheme.text}`} />
+                  <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>
+                    <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
                     <span>{selectedPackage.totalEntries || 0} Free Entries</span>
                   </div>
-                  <div className={`flex items-center gap-2 sm:gap-3 text-xs sm:text-sm ${colorScheme.text}`}>
-                    <Zap className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${colorScheme.text}`} />
+                  <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>
+                    <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
                     <span>{selectedPackage.partnerDiscountDays || 0} Days Partner Discounts</span>
                   </div>
-                  <div className={`flex items-center gap-2 sm:gap-3 text-xs sm:text-sm ${colorScheme.text}`}>
-                    <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${colorScheme.text}`} />
+                  <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>
+                    <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
                     <span>100% Partner Discounts Available</span>
                   </div>
                 </div>

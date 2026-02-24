@@ -28,6 +28,7 @@ import {
   getBrandBorderColor,
   getBrandGlowColor,
 } from "@/utils/prize-brand-colors";
+import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
 
 interface MajorDrawSectionProps {
@@ -192,6 +193,8 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const pendingEntries = ((currentUserStats as unknown as Record<string, unknown>)?.pendingEntries as number) || 0;
   const userHasEntries = (currentUserStats?.totalEntries ?? 0) + (pendingEntries > 0 ? pendingEntries : 0) > 0;
   const primaryCtaLabel = userHasEntries ? "Get More Entries" : "Enter Now";
+  const effectivePlan = membershipModal.selectedPlan || getHeavyDutyPack();
+  const ctaColorScheme = getMembershipSectionColorScheme(effectivePlan.id, effectivePlan.period !== "one-time");
 
   // Note: We now use API data directly which already provides current draw specific entries
 
@@ -1081,13 +1084,15 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => openEntryFlow()}
-                className="promo-hero-cta-button relative w-full overflow-visible rounded-full group"
+                className={`promo-hero-cta-button relative w-full overflow-visible rounded-full group ${ctaColorScheme.borderGlow} membership-enter-cta-animation`}
+                style={ctaColorScheme.enterNowButtonStyle ?? ctaColorScheme.badgeStyle}
               >
-                <div className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }} />
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                <div className="relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full">
-                  <Zap className="w-5 h-5 text-white" />
-                  <span className="font-bold text-base text-white drop-shadow-lg">{primaryCtaLabel}</span>
+                <div className={`relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full ${ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white")}`}>
+                  <Zap className="w-5 h-5" style={ctaColorScheme.textGradientStyle ? undefined : { color: "white" }} />
+                  <span className="font-bold text-base drop-shadow-lg" style={ctaColorScheme.textGradientStyle ?? undefined}>
+                    {primaryCtaLabel}
+                  </span>
                 </div>
               </button>
 
@@ -1426,13 +1431,15 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               <div className="flex flex-col gap-3 border-t border-gray-200 pt-4">
                 <button
                   onClick={() => openEntryFlow()}
-                  className="promo-hero-cta-button relative w-full overflow-visible rounded-full group"
+                  className={`promo-hero-cta-button relative w-full overflow-visible rounded-full group ${ctaColorScheme.borderGlow} membership-enter-cta-animation`}
+                  style={ctaColorScheme.enterNowButtonStyle ?? ctaColorScheme.badgeStyle}
                 >
-                  <div className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }} />
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                  <div className="relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full">
-                    <Zap className="w-5 h-5 text-white" />
-                    <span className="font-bold text-lg text-white drop-shadow-lg">{primaryCtaLabel}</span>
+                  <div className={`relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full ${ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white")}`}>
+                    <Zap className="w-5 h-5" style={ctaColorScheme.textGradientStyle ? undefined : { color: "white" }} />
+                    <span className="font-bold text-lg drop-shadow-lg" style={ctaColorScheme.textGradientStyle ?? undefined}>
+                      {primaryCtaLabel}
+                    </span>
                   </div>
                 </button>
 
