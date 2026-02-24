@@ -2,9 +2,22 @@
  * Brand color mapping utility for prize toggles
  * Maps prize slugs to their corresponding brand gradient classes
  * Used in PrizeShowcase component
+ * Milwaukee uses Tools Australia brand red (#ee0000) for site consistency
  */
 
 import type { PrizeSlug } from "@/config/prizes";
+
+// Tools Australia brand red (matches site nav, login, AdminSidebar)
+const TOOLS_AUSTRALIA_RED = {
+  gradient: "from-[#d40000] via-[#ee0000] to-[#ff4444]",
+  borderColor: "border-[#ee0000]",
+  shadowColor: "shadow-[0_0_20px_rgba(238,0,0,0.4)]",
+  textColor: "text-white",
+  subtitleTextColor: "text-white/90",
+  checkmarkColor: "text-[#ee0000]",
+  hoverBorderColor: "hover:border-[#ff4444]",
+  hoverTextColor: "hover:text-[#ee0000]",
+} as const;
 
 export interface PrizeBrandColors {
   gradient: string;
@@ -24,16 +37,7 @@ export interface PrizeBrandColors {
 export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
   switch (slug) {
     case "milwaukee-sidchrome":
-      return {
-        gradient: "from-red-600 via-red-500 to-red-700",
-        borderColor: "border-red-600",
-        shadowColor: "shadow-red-500/40",
-        textColor: "text-white",
-        subtitleTextColor: "text-white/90",
-        checkmarkColor: "text-red-600",
-        hoverBorderColor: "hover:border-red-500",
-        hoverTextColor: "hover:text-red-600",
-      };
+      return { ...TOOLS_AUSTRALIA_RED };
     case "dewalt-sidchrome":
       return {
         gradient: "from-yellow-500 via-yellow-600 to-amber-600",
@@ -58,16 +62,7 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
         hoverTextColor: "hover:text-makita-500",
       };
     case "milwaukee-milwaukee":
-      return {
-        gradient: "from-red-600 via-red-500 to-red-700",
-        borderColor: "border-red-600",
-        shadowColor: "shadow-red-500/40",
-        textColor: "text-white",
-        subtitleTextColor: "text-white/90",
-        checkmarkColor: "text-red-600",
-        hoverBorderColor: "hover:border-red-500",
-        hoverTextColor: "hover:text-red-600",
-      };
+      return { ...TOOLS_AUSTRALIA_RED };
     case "dewalt-milwaukee":
       return {
         gradient: "from-yellow-500 via-yellow-600 to-amber-600",
@@ -126,7 +121,7 @@ export function getBrandBorderColor(slug: PrizeSlug): string {
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
-      return "rgb(200, 16, 46)"; // Milwaukee #C8102E
+      return "rgb(238, 0, 0)"; // Tools Australia #ee0000
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
       return "rgb(229, 160, 0)"; // DeWalt #E5A000
@@ -148,7 +143,7 @@ export function getBrandGlowColor(slug: PrizeSlug): string {
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
-      return "rgba(200, 16, 46, 0.6)"; // Milwaukee #C8102E
+      return "rgba(238, 0, 0, 0.6)"; // Tools Australia #ee0000
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
       return "rgba(253, 184, 19, 0.6)"; // DeWalt #FDB813

@@ -69,6 +69,8 @@ export interface PackageColorScheme {
   enterNowButtonTextClass?: string;
   /** Dominant hex for borders/glows */
   accentHex: string;
+  /** Lighter accent for use on dark backgrounds (e.g. PackageSelectionModal) - when set, modal uses this for text */
+  accentHexLight?: string;
   /** Solid text color for large entry numbers (high contrast, no gradient) */
   entriesText: string;
   /** Hex opacity for card border (e.g. "CC" for 80%) - used as accentHex + this */
@@ -88,6 +90,8 @@ export interface PackageColorScheme {
   packageInclusionTextStyle?: Record<string, string | number>;
   /** Optional gradient for card/icon borders - matches text gradient theme (e.g. black theme golden gradient) */
   cardBorderGradient?: string;
+  /** Use white text for Change button in Selected Package (dewalt, ryobi, kincrome) */
+  changeButtonTextWhite?: boolean;
 }
 
 /** Map plan ID (from API) to color key - one-time tab default mapping */
@@ -291,9 +295,28 @@ const LANDING_PAGE_BRAND: Record<COLOR_KEYS, { primary: string; primaryLight: st
   "mint-green": { primary: "#66DD99", primaryLight: "#88E8B3", primaryDark: "#22AA55" },
 };
 
+// Tools Australia brand red (matches site nav, login, AdminSidebar: #ee0000)
+const TOOLS_AUSTRALIA_RED = {
+  primary: "#ee0000",
+  primaryLight: "#ff4444",
+  primaryDark: "#d40000",
+  shadowRgba: "rgba(238, 0, 0, 0.6)",
+  hoverShadowRgba: "rgba(238, 0, 0, 0.8)",
+  borderRgba: "rgba(238, 0, 0, 0.6)",
+  gradient: "linear-gradient(90deg, #ee0000 0%, #ff4444 50%, #ee0000 100%)",
+  gradientSolid: "linear-gradient(135deg, #d40000 0%, #ee0000 40%, #ff4444 50%, #ee0000 60%, #d40000 100%)",
+  gradientRich: "linear-gradient(135deg, #ee0000 0%, #ff4444 25%, #ee0000 50%, #ff4444 75%, #ee0000 100%)",
+  badgeStyle: {
+    background: "#ee0000",
+    boxShadow: "0 0 40px rgba(238, 0, 0, 0.6), 0 4px 20px rgba(238, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
+    border: "1px solid rgba(238, 0, 0, 0.8)",
+  },
+} as const;
+
 /**
  * Get landing page theme derived from prize slug.
  * Use when the whole promotions landing page should match the prize brand (e.g. dewalt-milwaukee → DeWalt colors).
+ * Milwaukee uses Tools Australia brand red for site consistency.
  * Includes primaryLight/primaryDark for richer, more creative gradients and accents.
  */
 export function getLandingPageThemeFromSlug(slug: string): {
@@ -309,6 +332,13 @@ export function getLandingPageThemeFromSlug(slug: string): {
   badgeStyle: PackageColorScheme["badgeStyle"];
   accentHex: string;
 } {
+  // Milwaukee pages use Tools Australia brand red
+  if (slug === "milwaukee-milwaukee" || slug === "milwaukee-sidchrome") {
+    return {
+      ...TOOLS_AUSTRALIA_RED,
+      accentHex: TOOLS_AUSTRALIA_RED.primary,
+    };
+  }
   const colorKey = slugToPromoTierPlanId(slug);
   const scheme = getPackageColorScheme(colorKey);
   const brand = LANDING_PAGE_BRAND[colorKey] ?? LANDING_PAGE_BRAND["milwaukee-red"];
@@ -337,21 +367,12 @@ function hexToRgbaValues(hex: string): [number, number, number] {
 
 /**
  * Get promo primary theme for generic CTAs when no slug context exists.
- * Uses Power Pack Milwaukee as the default for urgency/action.
+ * Uses Tools Australia brand red for urgency/action.
  */
 export function getPromoPrimaryTheme() {
-  const brand = LANDING_PAGE_BRAND["milwaukee-red"];
   return {
-    primary: brand.primary,
-    primaryLight: brand.primaryLight,
-    primaryDark: brand.primaryDark,
-    gradient: `linear-gradient(90deg, ${brand.primary} 0%, ${brand.primaryLight} 50%, ${brand.primary} 100%)`,
-    gradientSolid: `linear-gradient(90deg, ${brand.primaryDark} 0%, ${brand.primary} 50%, ${brand.primaryDark} 100%)`,
-    gradientRich: `linear-gradient(135deg, ${brand.primary} 0%, ${brand.primaryLight} 25%, ${brand.primary} 50%, ${brand.primaryLight} 75%, ${brand.primary} 100%)`,
-    shadowRgba: "rgba(200, 16, 46, 0.6)",
-    hoverShadowRgba: "rgba(200, 16, 46, 0.8)",
-    borderRgba: "rgba(200, 16, 46, 0.4)",
-    accentHex: brand.primary,
+    ...TOOLS_AUSTRALIA_RED,
+    accentHex: TOOLS_AUSTRALIA_RED.primary,
   };
 }
 
@@ -557,6 +578,8 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
       border: "1px solid rgba(58, 110, 197, 0.95)",
     },
     accentHex: BRAND_GRADIENTS["kincrome-blue"].primary,
+    accentHexLight: "#4B9EFF",
+    changeButtonTextWhite: true,
     entriesText: "text-white",
     cardBorderOpacity: "CC",
     barColor: "bg-gradient-to-r from-[#2A62B6] via-[#4A7ED4] to-[#2A62B6]",
@@ -591,6 +614,7 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     },
     enterNowButtonTextClass: "text-black",
     accentHex: BRAND_GRADIENTS["ryobi-green"].primary,
+    changeButtonTextWhite: true,
     entriesText: "text-black",
     cardBorderOpacity: "CC",
     barColor: "bg-gradient-to-r from-[#E0FF00] via-[#EBFF33] to-[#E0FF00]",
@@ -648,17 +672,17 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
   "dewalt-yellow": {
     bgGradient: BRAND_GRADIENTS["dewalt-yellow"].bg,
     gradient: "from-[#FDB813] via-[#FFC933] to-[#FDB813]",
-    text: "text-white",
-    textMuted: "text-white/90",
+    text: "text-black",
+    textMuted: "text-black/80",
     textOnLight: "text-[#5c4000]",
     featureOnLight: "text-gray-700",
-    priceText: "text-white",
+    priceText: "text-black",
     priceBadgeBg: "bg-white/25 backdrop-blur-sm",
     priceBadgeBorder: "border-2 border-[#FFC933]",
     buttonBg: "bg-[#FDB813] hover:bg-[#E5A000] active:scale-[0.98] border-2 border-[#000000]",
     buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
     buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,0,0,0.25)]",
-    buttonText: "text-white",
+    buttonText: "text-black",
     glow: "drop-shadow-[0_0_18px_rgba(253,184,19,0.8)]",
     border: "border-[#FDB813]/55",
     shadow: "shadow-[#FDB813]/45",
@@ -670,7 +694,9 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
       border: "1px solid rgba(255, 201, 51, 0.95)",
     },
     accentHex: BRAND_GRADIENTS["dewalt-yellow"].primary,
-    entriesText: "text-white",
+    changeButtonTextWhite: true,
+    enterNowButtonTextClass: "text-black",
+    entriesText: "text-black",
     cardBorderOpacity: "CC",
     barColor: "bg-gradient-to-r from-[#FDB813] via-[#FFC933] to-[#FDB813]",
     barColorLight: "bg-gradient-to-r from-[#FFC933] via-[#FDB813] to-[#FFC933]",

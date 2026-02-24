@@ -417,7 +417,7 @@ export default function MembershipSection({
           return (
             <div className="text-center">
               <h2
-                className={`font-agency font-black uppercase text-[20px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} mb-2 sm:mb-3 lg:mb-4`}
+                className={`font-agency font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} mb-2 sm:mb-3 lg:mb-4`}
               >
                 <span style={{ color: theme.primary }}>{effectiveMultiplier}X PROMO</span> ACTIVATED
               </h2>
@@ -442,7 +442,7 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                     activeTab === "one-time"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
                       : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
@@ -472,7 +472,7 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                     activeTab === "membership"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
                       : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
@@ -502,7 +502,7 @@ export default function MembershipSection({
                   <div
                     key={plan.id}
                     className={`relative w-full ${
-                      isAdditionalPackage ? "h-[270px] sm:h-[360px]" : "h-[255px] sm:h-[345px]"
+                      isAdditionalPackage ? "h-[300px] sm:h-[370px]" : "h-[275px] sm:h-[355px]"
                     } rounded-3xl transition-all duration-300 lg:hover:scale-105 overflow-visible ${highlighted ? "scale-105" : ""}`}
                     style={
                       highlighted
@@ -540,7 +540,7 @@ export default function MembershipSection({
                             {/* Current Plan Badge - Highest Priority - Same styling as Popular */}
                             {isCurrentSubscription(plan) && (
                               <div
-                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
+                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[11px]"
                                 style={colorScheme.badgeStyle}
                               >
                                 {/* Subtle static highlight - no shimmer */}
@@ -568,7 +568,7 @@ export default function MembershipSection({
                             {/* Popular Badge - Show only if not current plan - Theme matches package */}
                             {plan.isPopular && !isCurrentSubscription(plan) && (
                               <div
-                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
+                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[11px]"
                                 style={colorScheme.badgeStyle}
                               >
                                 {/* Subtle static highlight - no shimmer */}
@@ -645,7 +645,7 @@ export default function MembershipSection({
 
                                 return (
                                   <h3
-                                    className={`font-poppins text-[16px] sm:text-[20px] font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
+                                    className={`font-poppins text-[19px] sm:text-[20px] font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
                                     style={colorScheme.textGradientStyle}
                                   >
                                     {isAdditionalPackage ? (
@@ -661,7 +661,7 @@ export default function MembershipSection({
                               })()}
                               {plan.subtitle && (
                                 <p
-                                  className={`font-poppins text-[13px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                  className={`font-poppins text-[14px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
                                   style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                 >
                                   {plan.subtitle}
@@ -686,17 +686,17 @@ export default function MembershipSection({
                                     <div className={`font-poppins ${colorScheme.textGradientStyle ? "" : colorScheme.text} text-center`}>
                                       {hasMultiplier ? (
                                         <div className="flex items-center justify-center gap-1.5">
-                                          <span className={`text-[18px] sm:text-[24px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
+                                          <span className={`text-[22px] sm:text-[24px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
                                             {originalEntries}
                                           </span>
                                           <span
-                                            className={`text-[16px] sm:text-[18px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                            className={`text-[19px] sm:text-[18px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
                                             style={colorScheme.textGradientStyle}
                                           >
                                             →
                                           </span>
                                           <span
-                                            className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                            className={`text-[34px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
                                             style={colorScheme.textGradientStyle}
                                           >
                                             {displayEntries}
@@ -704,14 +704,14 @@ export default function MembershipSection({
                                         </div>
                                       ) : (
                                         <span
-                                          className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                          className={`text-[34px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
                                           style={colorScheme.textGradientStyle}
                                         >
                                           {entriesNumber}
                                         </span>
                                       )}
                                       <div
-                                        className={`text-[12px] sm:text-[14px] mt-0 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                        className={`text-[17px] sm:text-[18px] font-semibold mt-0 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
                                         style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                       >
                                         Free Entries
@@ -732,21 +732,21 @@ export default function MembershipSection({
                                 <div className="w-fit backdrop-blur-sm px-2.5 py-1 rounded-2xl overflow-hidden" style={colorScheme.badgeStyle}>
                                   <div className="flex items-baseline gap-1 justify-center">
                                     <div
-                                      className={`font-poppins font-bold text-base sm:text-lg ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
+                                      className={`font-poppins font-bold text-[20px] sm:text-lg ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
                                       style={colorScheme.textGradientStyle}
                                     >
                                       ${plan.price}
                                     </div>
                                     {plan.period !== "one-time" ? (
                                       <div
-                                        className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                        className={`font-poppins font-semibold text-[14px] sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
                                         style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                       >
                                         Per Giveaway
                                       </div>
                                     ) : (
                                       <div
-                                        className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                        className={`font-poppins font-semibold text-[14px] sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
                                         style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                       >
                                         One Time Payment
@@ -763,7 +763,7 @@ export default function MembershipSection({
                               {isCurrentSubscription(plan) ? (
                                 <button
                                   disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`}
+                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`}
                                   style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
                                 >
                                   <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
@@ -773,7 +773,7 @@ export default function MembershipSection({
                               ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                                 <button
                                   disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[16px] sm:text-[18px] bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
+                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[14px] sm:text-[18px] bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
                                 >
                                   Subscription or Entries Required
                                 </button>
@@ -784,7 +784,7 @@ export default function MembershipSection({
                                     plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                                   let buttonText = "Enter Now";
                                   const buttonHeight = "h-[44px] sm:h-[48px]";
-                                  const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform`;
+                                  const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] transition-all duration-300 transform`;
                                   let buttonClass = `${baseLayout} ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
                                   let buttonStyle: React.CSSProperties | undefined;
                                   const isEnterNow = (t: string) => t === "Enter Now";
@@ -1079,7 +1079,7 @@ export default function MembershipSection({
                                     </span>
                                   )}
                                   <div
-                                    className={`text-[12px] sm:text-[14px] mt-1 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                    className={`text-[17px] sm:text-[18px] font-semibold mt-1 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
                                     style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                   >
                                     Free Entries
@@ -1235,7 +1235,7 @@ export default function MembershipSection({
             <button
               suppressHydrationWarning
               onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
-              className={`font-poppins w-full py-3 px-4 rounded-2xl text-white font-semibold text-sm sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
+              className={`font-poppins w-full py-3 px-4 rounded-2xl text-white font-semibold text-[15px] sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
                 isInclusionsExpanded
                   ? "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-600 border-slate-500 hover:shadow-xl"
                   : "bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-slate-700 hover:shadow-xl"
