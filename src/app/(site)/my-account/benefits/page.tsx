@@ -10,6 +10,7 @@ import { useMyAccountData } from "@/hooks/queries";
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
+import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import MembershipModal from "@/components/modals/MembershipModal";
 
@@ -63,6 +64,27 @@ function PartnerBenefitsContent() {
 
   const { user } = accountData;
   const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
+
+  // Package theme when user has access
+  let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
+  if (hasAccess && user) {
+    if (user.subscription?.isActive && user.subscriptionPackageData) {
+      const planId = derivePlanIdFromPackage(user.subscriptionPackageData, "subscription");
+      packageTheme = getLandingPageThemeFromPlanId(planId, true);
+    } else if (user.enrichedOneTimePackages?.length) {
+      const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
+      const activeIds = new Set(
+        queue.filter((i) => i.status === "active" && ["one-time", "mini-draw", "upsell"].includes(i.packageType)).map((i) => String(i.packageId))
+      );
+      const pkg = user.enrichedOneTimePackages
+        .filter((p) => p.isActive && p.packageData && activeIds.has(String(p.packageId)))
+        .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
+      if (pkg?.packageData) {
+        const planId = derivePlanIdFromPackage(pkg.packageData, "one-time");
+        packageTheme = getLandingPageThemeFromPlanId(planId, false);
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen-svh w-full bg-gray-50">
@@ -122,6 +144,7 @@ function PartnerBenefitsContent() {
                 ? "Flash your code or mention Tools Australia to redeem partner deals instantly."
                 : "Subscriptions and one-time packages both unlock our partner network. Choose what suits you best."
             }
+            packageTheme={packageTheme}
           />
         </div>
       </section>

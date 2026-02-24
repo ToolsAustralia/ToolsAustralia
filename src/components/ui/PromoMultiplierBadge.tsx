@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 interface PromoMultiplierBadgeProps {
   multiplier: 2 | 3 | 5 | 10;
@@ -21,13 +22,15 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
   className = "",
   showPromoText = true,
 }) => {
+  const theme = usePromoTheme();
   return (
     <div className={`absolute -top-1.5 -right-1.5 z-10 ${className}`}>
       <div
-        className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide rounded-full shadow-lg relative overflow-hidden border border-red-400/50"
+        className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide rounded-full shadow-lg relative overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, #dc2626 0%, #ea580c 25%, #dc2626 50%, #b91c1c 75%, #dc2626 100%)`,
-          boxShadow: `0 0 20px rgba(220, 38, 38, 0.8), 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4)`,
+          background: `linear-gradient(135deg, ${theme.primaryLight} 0%, ${theme.primary} 25%, ${theme.primaryDark} 50%, ${theme.primary} 75%, ${theme.primaryLight} 100%)`,
+          boxShadow: `0 0 20px ${theme.shadowRgba}, 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4)`,
+          border: `1px solid ${theme.borderRgba}`,
         }}
       >
         {/* Subtle static highlight - no shimmer/light shine effect */}

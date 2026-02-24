@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, LayoutDashboard, Gift, Home } from "lucide-react";
@@ -21,6 +22,7 @@ const MENU_ITEMS = [
  */
 export default function PromotionsAccountButton() {
   const { isAuthenticated, loading } = useUserContext();
+  const theme = usePromoTheme();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -65,15 +67,15 @@ export default function PromotionsAccountButton() {
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
             className="flex items-center gap-2 pr-2"
           >
-            <div className="flex flex-col w-fit rounded-xl py-2 px-2 shadow-2xl border border-red-500/50 overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+            <div className="flex flex-col w-fit rounded-xl py-2 px-2 shadow-2xl overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black" style={{ border: `1px solid ${theme.borderRgba}` }}>
               {MENU_ITEMS.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}
                   onClick={() => setIsOpen(false)}
-                  className="group flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-white/90 hover:bg-red-600/30 hover:text-white transition-all duration-200 font-['Poppins'] whitespace-nowrap"
+                  className="group flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-white/90 hover:bg-[rgba(211,47,47,0.3)] hover:text-white transition-all duration-200 font-['Poppins'] whitespace-nowrap"
                 >
-                  <Icon className="h-4 w-4 min-w-4 min-h-4 shrink-0 text-red-400 group-hover:text-red-300 transition-colors" />
+                  <Icon className="h-4 w-4 min-w-4 min-h-4 shrink-0 transition-colors" style={{ color: theme.primary }} />
                   {label}
                 </Link>
               ))}
@@ -87,11 +89,15 @@ export default function PromotionsAccountButton() {
         onClick={() => setIsOpen(!isOpen)}
         aria-label={isOpen ? "Close menu" : "Open menu"}
         aria-expanded={isOpen}
-        className="group relative flex items-center justify-center w-12 h-12 rounded-full font-extrabold text-sm tracking-wide text-white border border-white/20 backdrop-blur-lg transition-all duration-300 bg-gradient-to-br from-red-600 via-red-700 to-red-800 shadow-[0_0_30px_rgba(220,38,38,0.4)] hover:shadow-[0_0_45px_rgba(239,68,68,0.5)] shrink-0"
+        className="group relative flex items-center justify-center w-12 h-12 rounded-full font-extrabold text-sm tracking-wide text-white border border-white/20 backdrop-blur-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(211,47,47,0.5)] shrink-0"
+        style={{
+          background: theme.gradient,
+          boxShadow: `0 0 30px ${theme.shadowRgba}`,
+        }}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.97 }}
       >
-        <span className="absolute inset-0 rounded-full border border-red-400/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ border: `1px solid ${theme.borderRgba}` }} />
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}

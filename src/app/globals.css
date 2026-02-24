@@ -60,6 +60,13 @@
     background-size: 20px 20px;
   }
 
+  /* Makita circuit-board style pattern - thin traces and pads */
+  .pattern-circuit-makita {
+    background-image: url("data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='0.5' stroke-opacity='0.06'%3E%3Cpath d='M0 12h12M12 0v12M24 12h12M36 24h12M12 24v12M24 36h12M12 24h12M24 12v12'/%3E%3Ccircle cx='12' cy='12' r='1.5' fill='%23ffffff' fill-opacity='0.08'/%3E%3Ccircle cx='24' cy='24' r='1.5' fill='%23ffffff' fill-opacity='0.08'/%3E%3Ccircle cx='36' cy='36' r='1.5' fill='%23ffffff' fill-opacity='0.08'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 48px 48px;
+    background-repeat: repeat;
+  }
+
   .clip-card-left {
     -webkit-clip-path: polygon(0% 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%); /* Safari < 15.4 support */
     clip-path: polygon(0% 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%);
@@ -965,14 +972,14 @@
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev {
-  color: #008c95;
+  color: #00a0aa;
 }
 
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev:hover,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev:hover {
-  color: #007577;
+  color: #0b7e88;
 }
 
 .main-swiper .swiper-button-next:active,
@@ -1012,13 +1019,13 @@
 /* Makita Pagination (Teal/Cyan) */
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(0, 140, 149, 0.3);
+  border: 2px solid rgba(0, 160, 170, 0.3);
 }
 
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet-active,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet-active {
-  background: #008c95;
-  box-shadow: 0 0 20px rgba(0, 140, 149, 0.6);
+  background: #00a0aa;
+  box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
 }
 
 /* Thumbnail Swiper - Default/Milwaukee (Red) */
@@ -1037,8 +1044,8 @@
 /* Makita Thumbnails (Teal/Cyan) */
 .thumbs-swiper[data-brand-slug="makita-sidchrome"] .swiper-slide-thumb-active > div,
 .thumbs-swiper[data-brand-slug="makita-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #008c95 !important;
-  box-shadow: 0 0 20px rgba(0, 140, 149, 0.6);
+  border-color: #00a0aa !important;
+  box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
 }
 
 /* Brand-specific glow utilities */
@@ -1051,7 +1058,7 @@
 }
 
 .glow-makita {
-  box-shadow: 0 0 20px rgba(0, 140, 149, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 20px rgba(0, 197, 207, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .glow-green {
@@ -1203,15 +1210,21 @@
   }
 }
 
+/* Membership card gradient - uses CSS variable to avoid React shorthand/longhand conflict */
+.membership-card-gradient {
+  background-image: var(--membership-card-bg, linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%));
+  background-origin: border-box;
+}
+
 /* Additional border glow keyframes to match membership card themes */
 @keyframes border-glow-silver {
-  /* Silver border glow for Apprentice - brighter */
+  /* Kincrome blue #2A62B6 - from reference imagery */
   0%,
   100% {
-    box-shadow: 0 0 12px rgba(203, 213, 225, 0.5);
+    box-shadow: 0 0 12px rgba(42, 98, 182, 0.5);
   }
   50% {
-    box-shadow: 0 0 24px rgba(203, 213, 225, 0.85);
+    box-shadow: 0 0 24px rgba(42, 98, 182, 0.85);
   }
 }
 
@@ -1277,32 +1290,32 @@
 
 /* Brand-specific border glow animations */
 @keyframes border-glow-ryobi {
-  0%, 100% { box-shadow: 0 0 12px rgba(227, 230, 27, 0.45); }
-  50% { box-shadow: 0 0 22px rgba(227, 230, 27, 0.75); }
+  0%, 100% { box-shadow: 0 0 12px rgba(224, 255, 0, 0.45); }
+  50% { box-shadow: 0 0 22px rgba(224, 255, 0, 0.75); }
 }
 .animate-border-glow-ryobi {
   animation: border-glow-ryobi 2s ease-in-out infinite;
 }
 
 @keyframes border-glow-makita {
-  0%, 100% { box-shadow: 0 0 12px rgba(45, 212, 191, 0.5); }
-  50% { box-shadow: 0 0 24px rgba(45, 212, 191, 0.9); }
+  0%, 100% { box-shadow: 0 0 16px rgba(0, 197, 207, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 32px rgba(0, 197, 207, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.7); }
 }
 .animate-border-glow-makita {
   animation: border-glow-makita 2s ease-in-out infinite;
 }
 
 @keyframes border-glow-dewalt {
-  0%, 100% { box-shadow: 0 0 12px rgba(245, 213, 71, 0.5); }
-  50% { box-shadow: 0 0 24px rgba(245, 213, 71, 0.9); }
+  0%, 100% { box-shadow: 0 0 12px rgba(253, 184, 19, 0.5); }
+  50% { box-shadow: 0 0 24px rgba(253, 184, 19, 0.9); }
 }
 .animate-border-glow-dewalt {
   animation: border-glow-dewalt 2s ease-in-out infinite;
 }
 
 @keyframes border-glow-milwaukee {
-  0%, 100% { box-shadow: 0 0 14px rgba(255, 107, 107, 0.55); }
-  50% { box-shadow: 0 0 28px rgba(255, 107, 107, 0.95); }
+  0%, 100% { box-shadow: 0 0 14px rgba(200, 16, 46, 0.55); }
+  50% { box-shadow: 0 0 28px rgba(200, 16, 46, 0.95); }
 }
 .animate-border-glow-milwaukee {
   animation: border-glow-milwaukee 2s ease-in-out infinite;
@@ -1457,7 +1470,7 @@
   }
 }
 
-/* Membership package Enter Now – premium solid CTA with subtle shimmer */
+/* Membership package Enter Now – premium solid CTA with strong shimmer */
 .membership-enter-cta-animation {
   position: relative;
   overflow: hidden;
@@ -1467,8 +1480,8 @@
   content: "";
   position: absolute;
   inset: -40%;
-  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%);
-  opacity: 0.5;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  opacity: 1;
   transform: translateX(-130%);
   animation: cta-shimmer-pass 4.5s ease-in-out infinite;
   pointer-events: none;

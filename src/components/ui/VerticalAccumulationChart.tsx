@@ -1,7 +1,7 @@
 "use client";
 
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 
 /** When set (e.g. in my-account explainer), chart shows user's actual accumulation from lastMonthAccumulatedEntries; multiplier is not applied and promo badge is hidden. */
 export interface UserAccumulationInput {
@@ -36,14 +36,17 @@ const packages = [
   },
 ];
 
-// Map shared color scheme to chart-specific format (vertical bars)
+// Map MembershipSection package colors to chart format (vertical bars)
+// Uses membership tab mapping: tradie=Kincrome, foreman=Ryobi, boss=Black
+// barGradientCss uses inline styles because Tailwind doesn't scan utils/ for arbitrary classes
 const getChartColorScheme = (packageId: string) => {
-  const scheme = getPackageColorScheme(packageId);
+  const scheme = getMembershipSectionColorScheme(packageId, true);
   return {
-    barColor: scheme.barColorVertical ?? scheme.barColor ?? "bg-gradient-to-t from-slate-500 via-gray-600 to-slate-700",
-    barColorLight: scheme.barColorLightVertical ?? scheme.barColorLight ?? "bg-gradient-to-t from-slate-400 via-gray-500 to-slate-600",
+    barGradientCss:
+      scheme.barGradientCss ?? "linear-gradient(to top, #475569 0%, #64748b 50%, #475569 100%)",
     text: scheme.text,
     border: scheme.border,
+    accentHex: scheme.accentHex,
   };
 };
 
@@ -167,14 +170,17 @@ export default function VerticalAccumulationChart({
                   return (
                     <div key={`${pkg.id}-month1`} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
-                        className={`w-full ${pkg.colorScheme.barColorLight} rounded-t relative border-2 ${
-                          pkg.colorScheme.border
-                        } ${
+                        className={`w-full rounded-t relative border-2 ${
                           pkg.isSelected
                             ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
                             : ""
                         }`}
-                        style={{ height: `${barHeight}%`, minHeight: "20px" }}
+                        style={{
+                          height: `${barHeight}%`,
+                          minHeight: "20px",
+                          background: pkg.colorScheme.barGradientCss,
+                          borderColor: `${pkg.colorScheme.accentHex}80`,
+                        }}
                       >
                         {/* Value Label on Bar */}
                         <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
@@ -195,14 +201,17 @@ export default function VerticalAccumulationChart({
                   return (
                     <div key={`${pkg.id}-month2`} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
-                        className={`w-full ${pkg.colorScheme.barColorLight} rounded-t relative border-2 ${
-                          pkg.colorScheme.border
-                        } ${
+                        className={`w-full rounded-t relative border-2 ${
                           pkg.isSelected
                             ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
                             : ""
                         }`}
-                        style={{ height: `${barHeight}%`, minHeight: "20px" }}
+                        style={{
+                          height: `${barHeight}%`,
+                          minHeight: "20px",
+                          background: pkg.colorScheme.barGradientCss,
+                          borderColor: `${pkg.colorScheme.accentHex}80`,
+                        }}
                       >
                         {/* Value Label on Bar */}
                         <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
@@ -223,14 +232,17 @@ export default function VerticalAccumulationChart({
                   return (
                     <div key={`${pkg.id}-month3`} className="flex-1 flex flex-col items-center justify-end h-full">
                       <div
-                        className={`w-full ${pkg.colorScheme.barColorLight} rounded-t relative border-2 ${
-                          pkg.colorScheme.border
-                        } ${
+                        className={`w-full rounded-t relative border-2 ${
                           pkg.isSelected
                             ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
                             : ""
                         }`}
-                        style={{ height: `${barHeight}%`, minHeight: "20px" }}
+                        style={{
+                          height: `${barHeight}%`,
+                          minHeight: "20px",
+                          background: pkg.colorScheme.barGradientCss,
+                          borderColor: `${pkg.colorScheme.accentHex}80`,
+                        }}
                       >
                         {/* Value Label on Bar */}
                         <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
@@ -252,14 +264,14 @@ export default function VerticalAccumulationChart({
             {packageData.map((pkg) => (
               <div key={pkg.id} className={`flex items-center gap-1.5 sm:gap-2 ${pkg.isSelected ? "scale-110" : ""}`}>
                 <div
-                  className={`w-3 h-3 sm:w-4 sm:h-4 rounded ${pkg.colorScheme.barColorLight} ${
-                    pkg.isSelected ? "ring-2 ring-yellow-400" : ""
-                  }`}
+                  className={`w-3 h-3 sm:w-4 sm:h-4 rounded ${pkg.isSelected ? "ring-2 ring-yellow-400" : ""}`}
+                  style={{ background: pkg.colorScheme.barGradientCss }}
                 ></div>
                 <span
                   className={`text-[10px] sm:text-[12px] font-semibold font-['Poppins'] ${
-                    pkg.isSelected ? "text-yellow-400" : pkg.colorScheme.text
+                    pkg.isSelected ? "text-yellow-400" : ""
                   }`}
+                  style={pkg.isSelected ? undefined : { color: pkg.colorScheme.accentHex }}
                 >
                   {pkg.name}
                 </span>

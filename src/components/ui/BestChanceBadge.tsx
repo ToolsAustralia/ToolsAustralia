@@ -2,12 +2,16 @@
 
 import React from "react";
 import { Star } from "lucide-react";
+import type { PackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 
 interface BestChanceBadgeProps {
   size?: "xs" | "small" | "medium" | "large";
   className?: string;
   /** Optional package-themed styles to match the card (background, boxShadow, border) */
   badgeStyle?: { background: string; boxShadow: string; border: string };
+  /** Optional color scheme for gradient border (e.g. black theme golden gradient) */
+  colorScheme?: PackageColorScheme;
 }
 
 /**
@@ -19,6 +23,7 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
   size = "medium",
   className = "",
   badgeStyle: customBadgeStyle,
+  colorScheme,
 }) => {
   // Size configurations
   const sizeConfig = {
@@ -51,7 +56,19 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
     boxShadow: "0 0 25px rgba(210, 6, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
     border: "2px solid rgba(255, 255, 255, 0.4)",
   };
-  const style = customBadgeStyle ?? defaultStyle;
+  const baseStyle = customBadgeStyle ?? defaultStyle;
+
+  const containerStyle =
+    colorScheme?.cardBorderGradient && customBadgeStyle
+      ? {
+          ...getCardBorderStyle(colorScheme, customBadgeStyle.background),
+          boxShadow: customBadgeStyle.boxShadow,
+        }
+      : {
+          background: baseStyle.background,
+          boxShadow: baseStyle.boxShadow,
+          border: baseStyle.border,
+        };
 
   return (
     <div
@@ -63,11 +80,7 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
         relative overflow-hidden
         ${className}
       `}
-      style={{
-        background: style.background,
-        boxShadow: style.boxShadow,
-        border: style.border,
-      }}
+      style={containerStyle}
     >
       {/* Subtle static highlight - no shimmer */}
       <div

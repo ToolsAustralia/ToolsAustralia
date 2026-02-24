@@ -5,7 +5,7 @@ import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 
 interface PackageInclusionsExpandedProps {
   isExpanded: boolean;
@@ -54,15 +54,19 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
   if (!isExpanded) return null;
 
   const renderPackageCard = (plan: LocalMembershipPlan) => {
-    const colorScheme = getPackageColorScheme(plan.id);
+    const colorScheme = getMembershipSectionColorScheme(plan.id, showAccumulationChart);
     const packageIcon = getPackageIconLocal(plan.id);
 
     return (
       <div
         key={plan.id}
-        className="space-y-3 rounded-2xl border border-gray-200 bg-white/95 shadow-[0_4px_20px_rgba(15,23,42,0.08)] p-4 sm:p-5 backdrop-blur-sm"
+        className="space-y-3 rounded-2xl shadow-[0_4px_20px_rgba(15,23,42,0.08)] p-4 sm:p-5 backdrop-blur-sm"
+        style={{
+          border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
+          backgroundColor: "rgba(255,255,255,0.95)",
+        }}
       >
-        {/* Package Name with Icon */}
+        {/* Package Name with Icon - uses package accent color */}
         <div className="flex items-center gap-3">
           {packageIcon && (
             <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 relative">
@@ -75,7 +79,12 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
               />
             </div>
           )}
-          <h3 className={`text-xl sm:text-2xl font-bold ${colorScheme.textOnLight ?? colorScheme.text}`}>{plan.name}</h3>
+          <h3
+            className="text-xl sm:text-2xl font-bold"
+            style={colorScheme.packageInclusionTextStyle ?? colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+          >
+            {plan.name}
+          </h3>
         </div>
 
         {/* Features List - Vertical bullet points (dash aligned to text baseline on mobile) */}

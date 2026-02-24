@@ -17,6 +17,7 @@ import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
 import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
+import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
@@ -53,10 +54,34 @@ type PendingEntriesData = {
 };
 
 // Partner Discounts Section Component
-// Conditionally renders UnlockDiscounts based on user's partner discount access
+// Conditionally renders UnlockDiscounts based on user's partner discount access.
+// When user has a package, applies that package's theme to gradient text and Enter to Unlock button.
 function PartnerDiscountsSection({ user }: { user: import("@/hooks/queries/useUserQueries").UserData }) {
   // Check if user has active partner discount access
   const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
+
+  // Derive package theme when user has access (subscription first, then one-time)
+  let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
+  if (hasAccess) {
+    if (user?.subscription?.isActive && user.subscriptionPackageData) {
+      const planId = derivePlanIdFromPackage(user.subscriptionPackageData, "subscription");
+      packageTheme = getLandingPageThemeFromPlanId(planId, true);
+    } else if (user?.enrichedOneTimePackages?.length) {
+      const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
+      const activeIds = new Set(
+        queue
+          .filter((i) => i.status === "active" && ["one-time", "mini-draw", "upsell"].includes(i.packageType))
+          .map((i) => String(i.packageId))
+      );
+      const pkg = user.enrichedOneTimePackages
+        .filter((p) => p.isActive && p.packageData && activeIds.has(String(p.packageId)))
+        .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
+      if (pkg?.packageData) {
+        const planId = derivePlanIdFromPackage(pkg.packageData, "one-time");
+        packageTheme = getLandingPageThemeFromPlanId(planId, false);
+      }
+    }
+  }
 
   return (
     <UnlockDiscounts
@@ -68,6 +93,7 @@ function PartnerDiscountsSection({ user }: { user: import("@/hooks/queries/useUs
           ? "Access exclusive discounts from Australia's top tool brands"
           : "Get instant access to exclusive discounts from Australia's top tool brands"
       }
+      packageTheme={packageTheme}
     />
   );
 }

@@ -12,6 +12,7 @@ import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
 import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { DrawDateStatus } from "@/utils/promo/promo-hero-types";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 interface PromoHeroProps {
   initialPromo?: ServerPromo | null;
@@ -91,6 +92,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   
   // Get CTA style from variant config
   const ctaStyle = variantConfig?.hero?.ctaStyle;
+  const theme = usePromoTheme();
 
   // Show loading state only if major draw is loading (not variant - variant loads in background)
   if (isLoading) {
@@ -171,7 +173,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
           onClick={handleEnterNow}
           className="promo-hero-cta-button font-agency inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white backdrop-blur-lg"
           style={{
-            background: ctaStyle?.backgroundColor ?? "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)",
+            background: ctaStyle?.backgroundColor ?? theme.gradient,
             ...(ctaStyle?.textColor && { color: ctaStyle.textColor }),
           }}
           suppressHydrationWarning

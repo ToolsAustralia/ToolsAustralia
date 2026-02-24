@@ -22,9 +22,11 @@ import { SectionContainer } from "@/components/ui";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import {
-  getPackageColorScheme,
-  getPackageGlowColor,
+  getMembershipSectionColorScheme,
+  getMembershipSectionGlowColor,
+  getCardBorderStyle,
 } from "@/utils/package-colors/packageColorScheme";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 interface MembershipSectionProps {
   title?: string;
@@ -42,6 +44,7 @@ export default function MembershipSection({
   variantConfig,
 }: MembershipSectionProps) {
   const router = useRouter();
+  const theme = usePromoTheme();
 
   // Get variant config from context for A/B testing (membershipModal config)
   const { variantConfig: contextVariantConfig } = useVariantContext();
@@ -416,7 +419,7 @@ export default function MembershipSection({
               <h2
                 className={`font-agency font-black uppercase text-[20px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} mb-2 sm:mb-3 lg:mb-4`}
               >
-                <span style={{ color: "#EE0000" }}>{effectiveMultiplier}X PROMO</span> ACTIVATED
+                <span style={{ color: theme.primary }}>{effectiveMultiplier}X PROMO</span> ACTIVATED
               </h2>
             </div>
           );
@@ -491,7 +494,7 @@ export default function MembershipSection({
           <div className="lg:hidden overflow-visible ">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-md mx-auto overflow-visible">
               {membershipPlans.map((plan, index) => {
-                const colorScheme = getPackageColorScheme(plan.id);
+                const colorScheme = getMembershipSectionColorScheme(plan.id, activeTab === "membership");
                 const highlighted = isHighlighted(plan.id);
                 const isAdditionalPackage =
                   plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
@@ -527,7 +530,7 @@ export default function MembershipSection({
                         {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
                         {(plan.id.includes("boss") || plan.id.includes("power")) && (
                           <div className="absolute top-1.5 left-1.5 z-20">
-                            <BestChanceBadge size="medium" />
+                            <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                           </div>
                         )}
 
@@ -595,17 +598,19 @@ export default function MembershipSection({
 
                         {/* Card Background - Brand gradient */}
                         <div
-                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
-                          style={{
-                            border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity}`,
-                            background: colorScheme.bgGradient,
-                            backgroundOrigin: `border-box`,
-                          }}
+                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative membership-card-gradient`}
+                          style={
+                            {
+                              "--membership-card-bg": colorScheme.bgGradient,
+                              ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
+                            } as React.CSSProperties
+                          }
                         >
                           {/* Inside Glow - Whole Card with Margin */}
                           <div
-                            className={`absolute inset-2 sm:inset-0.5 bg-gradient-to-t ${getPackageGlowColor(
-                              plan.id
+                            className={`absolute inset-2 sm:inset-0.5 bg-gradient-to-t ${getMembershipSectionGlowColor(
+                              plan.id,
+                              activeTab === "membership"
                             )} pointer-events-none rounded-2xl z-0`}
                           ></div>
 
@@ -640,7 +645,8 @@ export default function MembershipSection({
 
                                 return (
                                   <h3
-                                    className={`font-poppins text-[16px] sm:text-[20px] font-bold mb-0 ${colorScheme.text} leading-tight`}
+                                    className={`font-poppins text-[16px] sm:text-[20px] font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
+                                    style={colorScheme.textGradientStyle}
                                   >
                                     {isAdditionalPackage ? (
                                       <>
@@ -655,7 +661,8 @@ export default function MembershipSection({
                               })()}
                               {plan.subtitle && (
                                 <p
-                                  className={`font-poppins text-[13px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textMuted}`}
+                                  className={`font-poppins text-[13px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                 >
                                   {plan.subtitle}
                                 </p>
@@ -676,29 +683,37 @@ export default function MembershipSection({
                                   const displayEntries = hasMultiplier ? plan.metadata?.entriesCount || parseInt(entriesNumber) : parseInt(entriesNumber);
 
                                   return (
-                                    <div className={`font-poppins ${colorScheme.text} text-center`}>
+                                    <div className={`font-poppins ${colorScheme.textGradientStyle ? "" : colorScheme.text} text-center`}>
                                       {hasMultiplier ? (
                                         <div className="flex items-center justify-center gap-1.5">
                                           <span className={`text-[18px] sm:text-[24px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
                                             {originalEntries}
                                           </span>
-                                          <span className={`text-[16px] sm:text-[18px] font-bold ${colorScheme.entriesText}`}>
+                                          <span
+                                            className={`text-[16px] sm:text-[18px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                            style={colorScheme.textGradientStyle}
+                                          >
                                             →
                                           </span>
                                           <span
-                                            className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.entriesText}`}
+                                            className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                            style={colorScheme.textGradientStyle}
                                           >
                                             {displayEntries}
                                           </span>
                                         </div>
                                       ) : (
                                         <span
-                                          className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.entriesText}`}
+                                          className={`text-[28px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                          style={colorScheme.textGradientStyle}
                                         >
                                           {entriesNumber}
                                         </span>
                                       )}
-                                      <div className={`text-[12px] sm:text-[14px] ${colorScheme.textMuted} mt-0`}>
+                                      <div
+                                        className={`text-[12px] sm:text-[14px] mt-0 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
+                                      >
                                         Free Entries
                                       </div>
                                     </div>
@@ -711,20 +726,29 @@ export default function MembershipSection({
                             {/* Horizontal Divider */}
                             <div className="w-full p-[0.25px] bg-white/80 mb-2"></div>
 
-                            {/* Price Badge - Centered, width fits content */}
-                            <div className="flex-1 min-h-0 overflow-visible flex justify-center mb-2">
+                            {/* Price Badge - CTA style (distinct from prize badges) */}
+                            <div className="flex-1 min-h-0 overflow-visible flex justify-center my-2">
                               <div className="pb-0.5">
-                                <div className={`w-fit ${colorScheme.priceBadgeBg} backdrop-blur-sm px-2.5 py-1 rounded-2xl border border-white/30 shadow-[0_4px_16px_rgba(255,255,255,0.25)]`}>
+                                <div className="w-fit backdrop-blur-sm px-2.5 py-1 rounded-2xl overflow-hidden" style={colorScheme.badgeStyle}>
                                   <div className="flex items-baseline gap-1 justify-center">
-                                    <div className={`font-poppins font-bold text-base sm:text-lg ${colorScheme.priceText}`}>
+                                    <div
+                                      className={`font-poppins font-bold text-base sm:text-lg ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
+                                      style={colorScheme.textGradientStyle}
+                                    >
                                       ${plan.price}
                                     </div>
                                     {plan.period !== "one-time" ? (
-                                      <div className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textMuted}`}>
+                                      <div
+                                        className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
+                                      >
                                         Per Giveaway
                                       </div>
                                     ) : (
-                                      <div className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textMuted}`}>
+                                      <div
+                                        className={`font-poppins font-semibold text-xs sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
+                                      >
                                         One Time Payment
                                       </div>
                                     )}
@@ -739,9 +763,12 @@ export default function MembershipSection({
                               {isCurrentSubscription(plan) ? (
                                 <button
                                   disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[16px] sm:text-[18px] bg-gradient-to-r ${colorScheme.gradient} text-white cursor-not-allowed opacity-90 ${colorScheme.borderGlow}`}
+                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`}
+                                  style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
                                 >
-                                  Current Plan
+                                  <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                    Current Plan
+                                  </span>
                                 </button>
                               ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                                 <button
@@ -757,7 +784,12 @@ export default function MembershipSection({
                                     plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                                   let buttonText = "Enter Now";
                                   const buttonHeight = "h-[44px] sm:h-[48px]";
-                                  let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
+                                  const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[15px] sm:text-[17px] transition-all duration-300 transform`;
+                                  let buttonClass = `${baseLayout} ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
+                                  let buttonStyle: React.CSSProperties | undefined;
+                                  const isEnterNow = (t: string) => t === "Enter Now";
+                                  const usesBadgeStyle = (t: string) =>
+                                    t === "Enter Now" || t === "Current Plan" || t.startsWith("Downgrade to ");
 
                                   // past_due: show "Update payment" for subscription plans - route to my-account
                                   if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
@@ -766,25 +798,41 @@ export default function MembershipSection({
                                   } else if (hasActiveSubscription && activeTab === "membership") {
                                     if (hierarchy.isCurrent) {
                                       buttonText = "Current Plan";
-                                      buttonClass +=
-                                        " bg-green-600 text-white cursor-default lg:hover:scale-100 lg:hover:shadow-none";
+                                      const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+                                      buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`;
+                                      buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
                                     } else if (hierarchy.isDowngrade) {
                                       buttonText = `Downgrade to ${plan.name}`;
-                                      buttonClass += " bg-transparent text-white hover:bg-red-600 hover:text-white";
+                                      const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+                                      buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
+                                      buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
                                     } else if (hierarchy.isUpgrade) {
                                       buttonText = `Upgrade to ${plan.name}`;
                                       buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
                                     }
+                                  } else if (isEnterNow(buttonText)) {
+                                    const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+                                    buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
+                                    buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
+                                  } else {
+                                    buttonClass += ` ${colorScheme.borderGlow}`;
                                   }
 
                                   return (
                                     <button
-                                      className={`${buttonClass} ${buttonText === "Enter Now" ? ` ${colorScheme.borderGlow} membership-enter-cta-animation` : colorScheme.borderGlow}`}
+                                      className={buttonClass}
+                                      style={buttonStyle}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={hasActiveSubscription && hierarchy.isCurrent}
                                       suppressHydrationWarning
                                     >
-                                      {buttonText === "Enter Now" ? <span className="relative z-10">{buttonText}</span> : buttonText}
+                                      {usesBadgeStyle(buttonText) ? (
+                                        <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                          {buttonText}
+                                        </span>
+                                      ) : (
+                                        buttonText
+                                      )}
                                     </button>
                                   );
                                 })()
@@ -811,7 +859,7 @@ export default function MembershipSection({
           >
             {membershipPlans.length > 0 ? (
               membershipPlans.map((plan) => {
-              const colorScheme = getPackageColorScheme(plan.id);
+              const colorScheme = getMembershipSectionColorScheme(plan.id, activeTab === "membership");
               const highlighted = isHighlighted(plan.id);
               const isAdditionalPackage =
                 plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
@@ -837,7 +885,7 @@ export default function MembershipSection({
                   {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
                   {(plan.id.includes("boss") || plan.id.includes("power")) && (
                     <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left">
-                      <BestChanceBadge size="medium" />
+                      <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                     </div>
                   )}
 
@@ -930,18 +978,20 @@ export default function MembershipSection({
 
                   {/* Card Background - Brand gradient */}
                   <div
-                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
-                    style={{
-                      border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity}`,
-                      background: colorScheme.bgGradient,
-                      backgroundOrigin: `border-box`,
-                    }}
+                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative membership-card-gradient`}
+                    style={
+                      {
+                        "--membership-card-bg": colorScheme.bgGradient,
+                        ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
+                      } as React.CSSProperties
+                    }
                   >
                     <div className="h-full flex flex-col pt-10 relative px-4 py-2">
                       {/* Inside Glow - Whole Card with Margin */}
                       <div
-                        className={`absolute inset-0.5 bg-gradient-to-t ${getPackageGlowColor(
-                          plan.id
+                        className={`absolute inset-0.5 bg-gradient-to-t ${getMembershipSectionGlowColor(
+                          plan.id,
+                          activeTab === "membership"
                         )} pointer-events-none rounded-2xl z-0`}
                       ></div>
                       {/* Plan Header - Centered */}
@@ -955,7 +1005,8 @@ export default function MembershipSection({
 
                           return (
                             <h3
-                              className={`font-poppins font-bold text-[16px] sm:text-[20px] mb-2 ${colorScheme.text} leading-tight`}
+                              className={`font-poppins font-bold text-[16px] sm:text-[20px] mb-2 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
+                              style={colorScheme.textGradientStyle}
                             >
                               {isAdditionalPackage ? (
                                 <>
@@ -969,7 +1020,12 @@ export default function MembershipSection({
                           );
                         })()}
                         {plan.subtitle && (
-                          <p className={`font-poppins text-[12px] sm:text-[14px] font-medium mb-4 ${colorScheme.textMuted}`}>{plan.subtitle}</p>
+                          <p
+                            className={`font-poppins text-[12px] sm:text-[14px] font-medium mb-4 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                            style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
+                          >
+                            {plan.subtitle}
+                          </p>
                         )}
 
                         {/* Entries - Main Focus */}
@@ -995,27 +1051,37 @@ export default function MembershipSection({
                                 : parseInt(entriesNumber);
 
                               return (
-                                <div className={`font-poppins ${colorScheme.text}`}>
+                                <div className={`font-poppins ${colorScheme.textGradientStyle ? "" : colorScheme.text}`}>
                                   {hasMultiplier ? (
                                     <div className="flex items-center justify-center gap-2">
                                       <span className={`text-[16px] sm:text-[18px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
                                         {originalEntries}
                                       </span>
-                                      <span className={`text-[14px] sm:text-[16px] font-bold ${colorScheme.entriesText}`}>→</span>
                                       <span
-                                        className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.entriesText}`}
+                                        className={`text-[14px] sm:text-[16px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                        style={colorScheme.textGradientStyle}
+                                      >
+                                        →
+                                      </span>
+                                      <span
+                                        className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                        style={colorScheme.textGradientStyle}
                                       >
                                         {displayEntries}
                                       </span>
                                     </div>
                                   ) : (
                                     <span
-                                      className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.entriesText}`}
+                                      className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                      style={colorScheme.textGradientStyle}
                                     >
                                       {entriesNumber}
                                     </span>
                                   )}
-                                  <div className={`text-[12px] sm:text-[14px] ${colorScheme.textMuted} mt-1`}>
+                                  <div
+                                    className={`text-[12px] sm:text-[14px] mt-1 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                    style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
+                                  >
                                     Free Entries
                                   </div>
                                 </div>
@@ -1031,19 +1097,30 @@ export default function MembershipSection({
 
                       {/* Features List - Tick marks hidden on desktop (see "View package inclusions" below) */}
                       <div className="flex-1 lg:flex-initial overflow-visible space-y-3 sm:space-y-3 mb-4 sm:mb-0 lg:mb-2">
-                        {/* Price Badge - Inside Features Section */}
+                        {/* Price Badge - Inside Features Section, CTA style (distinct from prize badges) */}
                         <div className="pb-4 sm:pb-0 flex justify-center">
-                          <div className={`font-poppins w-fit ${colorScheme.priceBadgeBg} backdrop-blur-sm px-3 py-2 rounded-2xl border border-white/30 shadow-[0_4px_16px_rgba(255,255,255,0.25)]`}>
+                          <div className="font-poppins w-fit backdrop-blur-sm px-3 py-2 rounded-2xl overflow-hidden" style={colorScheme.badgeStyle}>
                             <div className="flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0">
-                              <div className={`text-base sm:text-lg lg:text-xl font-bold ${colorScheme.priceText}`}>
+                              <div
+                                className={`text-base sm:text-lg lg:text-xl font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
+                                style={colorScheme.textGradientStyle}
+                              >
                                 ${plan.price}
                               </div>
                               {plan.period !== "one-time" ? (
-                                <div className={`text-xs lg:text-sm font-semibold ${colorScheme.textMuted}`}>
+                                <div
+                                  className={`text-xs lg:text-sm font-semibold ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
+                                >
                                   Per Giveaway
                                 </div>
                               ) : (
-                                <div className={`text-xs lg:text-sm font-semibold ${colorScheme.textMuted}`}>One Time Payment</div>
+                                <div
+                                  className={`text-xs lg:text-sm font-semibold ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
+                                >
+                                  One Time Payment
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1056,9 +1133,12 @@ export default function MembershipSection({
                         {isCurrentSubscription(plan) ? (
                           <button
                             disabled
-                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-gradient-to-r ${colorScheme.gradient} text-white cursor-not-allowed opacity-90 ${colorScheme.borderGlow}`}
+                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed hover:scale-100 hover:shadow-none opacity-90`}
+                            style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
                           >
-                            Current Plan
+                            <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                              Current Plan
+                            </span>
                           </button>
                         ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                           <button
@@ -1074,34 +1154,54 @@ export default function MembershipSection({
                               plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                             let buttonText = "Enter Now";
                             const buttonHeight = "h-[44px] sm:h-[48px]";
-                            let buttonClass = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
+                            const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform`;
+                            let buttonClass = `${baseLayout} ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
+                            let buttonStyle: React.CSSProperties | undefined;
+                            const isEnterNow = (t: string) => t === "Enter Now";
+                            const usesBadgeStyle = (t: string) =>
+                              t === "Enter Now" || t === "Current Plan" || t.startsWith("Downgrade to ");
 
-                            // past_due: show "Update payment" for subscription plans - route to my-account
                             if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
                               buttonText = "Update payment";
                               buttonClass += " bg-amber-600 text-white hover:bg-amber-700";
                             } else if (hasActiveSubscription && activeTab === "membership") {
                               if (hierarchy.isCurrent) {
                                 buttonText = "Current Plan";
-                                buttonClass +=
-                                  " bg-green-600 text-white cursor-default hover:scale-100 hover:shadow-none";
+                                const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+                                buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed hover:scale-100 hover:shadow-none opacity-90`;
+                                buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
                               } else if (hierarchy.isDowngrade) {
                                 buttonText = `Downgrade to ${plan.name}`;
-                                buttonClass += " bg-transparent text-white hover:bg-red-600 hover:text-white";
+                                const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+                                buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
+                                buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
                               } else if (hierarchy.isUpgrade) {
                                 buttonText = `Upgrade to ${plan.name}`;
                                 buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
                               }
+                            } else if (isEnterNow(buttonText)) {
+                              const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+                              buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
+                              buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
+                            } else {
+                              buttonClass += ` ${colorScheme.borderGlow}`;
                             }
 
                             return (
                               <button
-                                className={`${buttonClass} ${buttonText === "Enter Now" ? ` ${colorScheme.borderGlow} membership-enter-cta-animation` : colorScheme.borderGlow}`}
+                                className={buttonClass}
+                                style={buttonStyle}
                                 onClick={() => handlePlanSelect(plan)}
                                 disabled={hasActiveSubscription && hierarchy.isCurrent}
                                 suppressHydrationWarning
                               >
-                                {buttonText === "Enter Now" ? <span className="relative z-10">{buttonText}</span> : buttonText}
+                                {usesBadgeStyle(buttonText) ? (
+                                  <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                    {buttonText}
+                                  </span>
+                                ) : (
+                                  buttonText
+                                )}
                               </button>
                             );
                           })()

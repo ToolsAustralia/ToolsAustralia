@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import {
+  getMembershipSectionColorScheme,
+  derivePlanIdFromPackage,
+} from "@/utils/package-colors/packageColorScheme";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -40,9 +43,9 @@ const getBadgeText = (packageName: string, membershipType?: "subscription" | "on
 
 interface MembershipBadgeProps {
   /**
-   * Package data containing name and type
+   * Package data containing name, type, and optional _id (from API)
    */
-  packageData?: { name: string; type?: "subscription" | "one-time" };
+  packageData?: { _id?: string; name: string; type?: "subscription" | "one-time" };
   /**
    * Whether the membership is currently active
    */
@@ -112,60 +115,76 @@ export default function MembershipBadge({
       }
     : undefined;
 
-  // Icon-only: render just the icon (no text), e.g. for my-account one-time card
+  // Derive planId for package-themed styling
+  const planId = derivePlanIdFromPackage(packageData, finalMembershipType);
+  const isMembershipTab = finalMembershipType === "subscription";
+  const colorScheme = getMembershipSectionColorScheme(planId, isMembershipTab);
+  const badgeStyle = colorScheme.badgeStyle ?? {};
+
+  // Icon-only: render icon with package-themed background and border
   if (iconOnly) {
     if (!packageIcon) return null;
     const Wrapper = onClick ? "button" : "span";
+    const iconStyle = badgeStyle.background
+      ? {
+          ...badgeStyle,
+          border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
+          padding: "2px",
+        }
+      : {
+          background: colorScheme.accentHex,
+          border: `2px solid ${colorScheme.accentHex}`,
+          boxShadow: `0 0 8px ${colorScheme.accentHex}66`,
+          padding: "2px",
+        };
     return (
       <Wrapper
         type={onClick ? "button" : undefined}
         onClick={handleClick}
-        className={`inline-flex items-center justify-center flex-shrink-0 ${className} ${
-          onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded" : ""
+        className={`inline-flex items-center justify-center flex-shrink-0 rounded-full p-1 ${className} ${
+          onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
         }`}
+        style={iconStyle}
         title={packageData.name}
         aria-label={onClick ? `View details for ${packageData.name}` : undefined}
       >
         <Image
           src={packageIcon}
           alt={`${packageData.name} icon`}
-          className="w-6 h-6 object-contain"
-          width={24}
-          height={24}
+          className="w-5 h-5 object-contain"
+          width={20}
+          height={20}
         />
       </Wrapper>
     );
   }
 
-  // Get color scheme
-  const colorScheme = getPackageColorScheme(packageData.name);
-
   // Get badge text
   const badgeText = getBadgeText(packageData.name, finalMembershipType);
-
-  // Get gradient color for border
-  const borderGradientColor = colorScheme.accentHex;
 
   // Check if this is a boss or power package (for special animation)
   const isPremiumPackage =
     packageData.name.toLowerCase().includes("boss") || packageData.name.toLowerCase().includes("power");
 
   const Wrapper = onClick ? "button" : "span";
+  const fullBadgeStyle = badgeStyle.background
+    ? {
+        ...badgeStyle,
+        border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
+      }
+    : {
+        background: colorScheme.accentHex,
+        border: `2px solid ${colorScheme.accentHex}`,
+        boxShadow: `0 0 20px ${colorScheme.accentHex}66`,
+      };
   return (
     <Wrapper
       type={onClick ? "button" : undefined}
       onClick={handleClick}
-      className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-1 rounded-full shadow-lg relative overflow-hidden ${
-        colorScheme.text
-      } ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
+      className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-1 rounded-full shadow-lg relative overflow-hidden ${colorScheme.text} ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
         onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
       }`}
-      style={{
-        border: `2px solid transparent`,
-        backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
-        backgroundOrigin: `border-box`,
-        backgroundClip: `padding-box, border-box`,
-      }}
+      style={fullBadgeStyle}
       aria-label={onClick ? `View details for ${packageData.name}` : undefined}
     >
       {/* Package Icon */}

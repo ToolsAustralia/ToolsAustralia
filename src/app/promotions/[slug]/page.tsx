@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 
+import PromoThemeInitializer from "@/components/promo/PromoThemeInitializer";
 import PromoBanner from "@/components/sections/promo/PromoBanner";
 import PromoHero from "@/components/sections/promo/PromoHero";
 import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
@@ -172,6 +173,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         initialVariantConfig={serverAssignment?.variantConfig}
         initialAnonymousId={serverAssignment?.anonymousId}
       >
+        <PromoThemeInitializer slug={prize.slug} />
         <div className="min-h-screen bg-white w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 

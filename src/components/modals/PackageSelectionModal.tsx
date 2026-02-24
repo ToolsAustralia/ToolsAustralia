@@ -11,14 +11,13 @@ import { useUserData } from "@/hooks/queries";
 import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
-import PromoBadge from "@/components/ui/PromoBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageIcon } from "@/utils/images/package-icons";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getMembershipSectionColorScheme, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 
 // Helper function to convert hex color to rgba for box-shadow
 const hexToRgba = (hex: string, alpha: number) => {
@@ -553,7 +552,8 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
         {/* Packages Stacked Vertically */}
         <div className="space-y-2 sm:space-y-3 max-w-2xl mx-auto">
           {finalMembershipPlans.map((plan) => {
-            const colorScheme = getPackageColorScheme(plan.id);
+            const isMembershipTab = plan.period !== "one-time";
+            const colorScheme = getMembershipSectionColorScheme(plan.id, isMembershipTab);
             return (
               <div
                 key={plan.id}
@@ -565,17 +565,21 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                     : "hover:shadow-[0_0_25px_rgba(0,0,0,0.6)]"
                 }`}
                 style={{
-                  border: isSelectedPlan(plan)
-                    ? `3px solid ${colorScheme.accentHex}`
-                    : `2px solid transparent`,
-                  backgroundImage: isSelectedPlan(plan)
-                    ? `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${hexToRgba(
-                        colorScheme.accentHex,
-                        0.8
-                      )}, ${hexToRgba(colorScheme.accentHex, 0.5)})`
-                    : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${colorScheme.accentHex}, transparent)`,
-                  backgroundOrigin: `border-box`,
-                  backgroundClip: `padding-box, border-box`,
+                  ...(colorScheme.cardBorderGradient
+                    ? getCardBorderStyle(colorScheme, "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)")
+                    : {
+                        border: isSelectedPlan(plan)
+                          ? `3px solid ${colorScheme.accentHex}`
+                          : `2px solid transparent`,
+                        backgroundImage: isSelectedPlan(plan)
+                          ? `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${hexToRgba(
+                              colorScheme.accentHex,
+                              0.8
+                            )}, ${hexToRgba(colorScheme.accentHex, 0.5)})`
+                          : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${colorScheme.accentHex}, transparent)`,
+                        backgroundOrigin: "border-box",
+                        backgroundClip: "padding-box, border-box",
+                      }),
                   boxShadow: isSelectedPlan(plan)
                     ? `0 0 20px ${hexToRgba(colorScheme.accentHex, 0.6)}, 0 0 40px ${hexToRgba(
                         colorScheme.accentHex,
@@ -588,49 +592,62 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 }}
                 onClick={() => !isCurrentPlan(plan) && handlePlanSelect(plan)}
               >
-                {/* Promo Badge - Top Left Corner */}
+                {/* Promo Badge (10x entries) - Upper right, like MembershipSection */}
                 {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
-                  <div className="absolute top-2 left-2 z-20">
-                    <PromoBadge
-                      multiplier={plan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
-                      size="small"
-                      showPromoText={false}
+                  <div className="absolute -top-4 -right-4 sm:-top-5 sm:-right-5 z-30">
+                    <Image
+                      src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
+                      alt={`${plan.metadata.promoMultiplier}x entries`}
+                      width={64}
+                      height={64}
+                      className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
                     />
                   </div>
                 )}
 
-                {/* Best Chance Badge - Top Right Corner (for boss/power packages) */}
-                {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                  <div className="absolute top-1.5 right-1.5 z-20">
-                    <BestChanceBadge size="xs" />
+                {/* Price - Absolute top-left, no background */}
+                <div className="absolute top-1.5 left-1.5 z-20 font-poppins text-center">
+                  <div
+                    className={`font-bold text-base sm:text-lg leading-tight ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
+                    style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+                  >
+                    ${plan.price}
                   </div>
-                )}
+                  <div
+                    className="text-[9px] sm:text-[10px] font-semibold"
+                    style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.9)" }}
+                  >
+                    {plan.period === "one-time" ? "One Time" : "Per Giveaway"}
+                  </div>
+                </div>
 
-                {/* Badges - Top Right Corner (Current Plan and Popular) - Only show if not boss/power */}
-                {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                  <div className="absolute top-2 right-2 z-20 flex flex-col gap-1">
-                    {/* Current Plan Badge - Highest Priority */}
-                    {isCurrentPlan(plan) && (
-                      <div
-                        className="text-white rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-[10px] font-bold shadow-lg"
-                        style={colorScheme.badgeStyle}
-                      >
-                        <span className="sm:hidden">CURRENT</span>
-                        <span className="hidden sm:inline">CURRENT PLAN</span>
-                      </div>
+                {/* Badges - Top Right (Best Chance or Popular/Current) */}
+                <div className="absolute top-1.5 right-1.5 z-20 flex flex-col gap-0.5 items-end">
+                    {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                      <BestChanceBadge size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                     )}
-                    {/* Popular Badge - Show only if not current plan */}
-                    {plan.isPopular && !isCurrentPlan(plan) && (
-                      <div
-                        className="text-white rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 font-bold text-[8px] sm:text-[10px] shadow-lg"
-                        style={colorScheme.badgeStyle}
-                      >
-                        <span className="sm:hidden">POPULAR</span>
-                        <span className="hidden sm:inline">POPULAR</span>
-                      </div>
+                    {!(plan.id.includes("boss") || plan.id.includes("power")) && (
+                      <>
+                        {isCurrentPlan(plan) && (
+                          <div
+                            className="text-white rounded-full px-2 py-1 text-[8px] font-bold shadow-lg"
+                            style={colorScheme.badgeStyle}
+                          >
+                            <span className="sm:hidden">CURRENT</span>
+                            <span className="hidden sm:inline">CURRENT PLAN</span>
+                          </div>
+                        )}
+                        {plan.isPopular && !isCurrentPlan(plan) && (
+                          <div
+                            className="text-white rounded-full px-2 py-1 text-[8px] font-bold shadow-lg"
+                            style={colorScheme.badgeStyle}
+                          >
+                            POPULAR
+                          </div>
+                        )}
+                      </>
                     )}
-                  </div>
-                )}
+                </div>
 
                 {/* Current Selection Indicator */}
                 {isSelectedPlan(plan) && !isCurrentPlan(plan) && (
@@ -663,34 +680,34 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 )}
 
                 {/* Plan Content - Centered Layout */}
-                <div className="text-center pt-2 sm:pt-3">
+                <div className="text-center pt-12 sm:pt-14">
                   <div className="flex items-center justify-center gap-2 mb-1 sm:mb-1.5">
-                    <h3 className={`text-base sm:text-lg font-bold ${colorScheme.text} tracking-wide`}>{plan.name}</h3>
+                    <h3
+                      className="text-base sm:text-lg font-bold tracking-wide"
+                      style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+                    >
+                      {plan.name}
+                    </h3>
                   </div>
-                  {plan.subtitle && <p className={`text-xs sm:text-sm ${colorScheme.textMuted} mb-1.5 sm:mb-2`}>{plan.subtitle}</p>}
+                  {plan.subtitle && (
+                    <p
+                      className="text-xs sm:text-sm mb-1.5 sm:mb-2"
+                      style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.8)" }}
+                    >
+                      {plan.subtitle}
+                    </p>
+                  )}
 
-                  {/* Price and Entries - Reordered Layout */}
-                  <div className="flex items-center justify-between mb-2 sm:mb-3">
-                    {/* Price - Left Side (moved from right) */}
-                    <div className="flex-1 text-left">
-                      <div className={`text-lg sm:text-xl font-bold ${colorScheme.priceText}`}>${plan.price}</div>
-                      <div className={`text-[10px] sm:text-xs ${colorScheme.textMuted}`}>
-                        {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
-                      </div>
-                    </div>
-
-                    {/* Free Entries - Center (moved from left) */}
-                    <div className="flex-1 text-center">
+                  {/* Entries - Centered */}
+                  <div className="flex items-center justify-center mb-2 sm:mb-3">
+                    <div className="text-center">
                       {(() => {
-                        // Extract entries from features
                         const entriesFeature = plan.features.find(
                           (feature) => feature.text.includes("Entries") || feature.text.includes("entries")
                         );
                         if (entriesFeature) {
                           const entriesText = entriesFeature.text;
                           const entriesNumber = entriesText.match(/(\d+)/)?.[1] || "0";
-
-                          // Check if promo is active
                           const isPromoActive = plan.metadata?.isPromoActive;
                           const promoMultiplier = (plan.metadata?.promoMultiplier as number) || 1;
                           const originalEntries = isPromoActive
@@ -698,36 +715,45 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                             : parseInt(entriesNumber);
 
                           return (
-                            <div className={`${colorScheme.text}`}>
+                            <div className={colorScheme.textGradientStyle ? "" : "text-white"}>
                               {isPromoActive ? (
                                 <div className="flex items-center justify-center gap-1.5 sm:gap-2">
-                                  <span className={`text-sm sm:text-base font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
+                                  <span className="text-sm sm:text-base font-bold line-through opacity-40 text-white/70">
                                     {originalEntries}
                                   </span>
-                                  <span className={`text-sm sm:text-base font-bold ${colorScheme.entriesText}`}>→</span>
-                                  <div
-                                    className={`text-xl sm:text-2xl font-bold ${colorScheme.entriesText}`}
+                                  <span
+                                    className="text-sm sm:text-base font-bold"
+                                    style={colorScheme.textGradientStyle ?? { color: "white" }}
+                                  >
+                                    →
+                                  </span>
+                                  <span
+                                    className="text-xl sm:text-2xl font-bold"
+                                    style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
                                   >
                                     {entriesNumber}
-                                  </div>
+                                  </span>
                                 </div>
                               ) : (
-                                <div
-                                  className={`text-xl sm:text-2xl font-bold ${colorScheme.entriesText}`}
+                                <span
+                                  className="text-xl sm:text-2xl font-bold"
+                                  style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
                                 >
                                   {entriesNumber}
-                                </div>
+                                </span>
                               )}
-                              <div className={`text-xs sm:text-sm ${colorScheme.textMuted}`}>Free Entries</div>
+                              <div
+                                className="text-xs sm:text-sm"
+                                style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.8)" }}
+                              >
+                                Free Entries
+                              </div>
                             </div>
                           );
                         }
                         return null;
                       })()}
                     </div>
-
-                    {/* Empty space for balance - Right */}
-                    <div className="flex-1"></div>
                   </div>
 
                   {/* Other features as preview (excluding entries) */}
@@ -735,7 +761,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                     .filter((feature) => !feature.text.includes("Entries") && !feature.text.includes("entries"))
                     .slice(0, 1)
                     .map((feature, index) => (
-                      <p key={index} className={`text-xs sm:text-sm ${colorScheme.textMuted} mb-0`}>
+                      <p key={index} className="text-xs sm:text-sm text-white/80 mb-0">
                         {feature.text}
                       </p>
                     ))}

@@ -4,12 +4,14 @@ import React from "react";
 import Image from "next/image";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import type { PromoLandingTheme } from "@/stores/usePromoThemeStore";
 
 /**
  * Highlights key parts of discount messages (codes and amounts) with gradient text
  * Similar to the membership hero section highlighting
  */
-function highlightDiscountMessage(message: string): React.ReactNode {
+function highlightDiscountMessage(message: string, gradientStyle?: React.CSSProperties, fallbackGradient?: string): React.ReactNode {
   // Pattern to match discount codes (TA followed by numbers, optionally with "Code" prefix)
   const codePattern = /(Code\s+)?(TA\d+[A-Z]*)/gi;
   // Pattern to match percentages (25%, 20%, etc.)
@@ -83,7 +85,14 @@ function highlightDiscountMessage(message: string): React.ReactNode {
     parts.push(
       <span
         key={key++}
-        className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent font-bold"
+        className="bg-clip-text text-transparent font-bold"
+        style={
+          gradientStyle ?? {
+            backgroundImage: fallbackGradient ?? "linear-gradient(to right, #D32F2F, #b91c1c)",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+          }
+        }
       >
         {match.text}
       </span>
@@ -178,6 +187,8 @@ interface UnlockDiscountsProps {
   title?: string;
   description?: string;
   hasAccess?: boolean; // Whether user has access to partner discounts
+  /** Optional package theme to use when user has active package (Partner Discounts section on my-account) */
+  packageTheme?: PromoLandingTheme;
 }
 
 export default function UnlockDiscounts({
@@ -185,9 +196,12 @@ export default function UnlockDiscounts({
   title = "Unlock Partner Discounts",
   description = "Get instant access to exclusive discounts from Australia's top tool brands",
   hasAccess = false, // Default to false for public pages
+  packageTheme,
 }: UnlockDiscountsProps = {}) {
   const discountsRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
+  const storeTheme = usePromoTheme();
+  const theme = packageTheme ?? storeTheme;
 
   return (
     <section ref={discountsRef} className="py-8 sm:py-12 lg:py-16 mb-12 relative">
@@ -269,7 +283,11 @@ export default function UnlockDiscounts({
                   {/* Discount Message - Flexible middle section */}
                   <div className="w-full flex-1 min-h-0 flex items-center justify-center py-1">
                     <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 font-['Inter'] text-center leading-tight line-clamp-2">
-                      {highlightDiscountMessage(partner.discountMessage)}
+                      {highlightDiscountMessage(partner.discountMessage, {
+                        backgroundImage: theme.gradientSolid,
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                      }, `linear-gradient(to right, ${theme.primary}, ${theme.primaryDark})`)}
                     </p>
                   </div>
                   {/* Tools Australia Logo - Fixed at bottom */}
@@ -303,7 +321,12 @@ export default function UnlockDiscounts({
                 openEntryFlow({ openLocalModal: false });
               }}
               suppressHydrationWarning
-              className="relative bg-gradient-to-br from-red-600 via-red-700 to-red-800 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl shadow-[0_8px_32px_rgba(239,68,68,0.4)] hover:shadow-[0_12px_40px_rgba(239,68,68,0.6)] transition-all duration-300 hover:scale-105 border-2 border-red-400/30 group"
+              className="relative text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group"
+              style={{
+                background: theme.gradientSolid,
+                boxShadow: `0 8px 32px ${theme.shadowRgba}`,
+                border: `2px solid ${theme.borderRgba}`,
+              }}
             >
               {/* Metallic shine effect */}
               <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>

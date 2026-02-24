@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { useSidebar } from "@/contexts/SidebarContext";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 /**
  * FloatingPromoBanner Component
@@ -18,6 +19,7 @@ import { useSidebar } from "@/contexts/SidebarContext";
 const FloatingPromoBanner: React.FC = () => {
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
+  const theme = usePromoTheme();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollY = useRef(0);
@@ -30,6 +32,9 @@ const FloatingPromoBanner: React.FC = () => {
 
   // Check if we're on a mini draw page (main page or details pages)
   const isMiniDrawPage = pathname?.startsWith("/mini-draws");
+
+  // Check if we're on a promotions landing page (hide - page has its own PromoBanner and CTA)
+  const isPromotionsPage = pathname?.startsWith("/promotions");
 
   // Check if we're on a shop page
   const isShopPage = pathname?.startsWith("/shop");
@@ -135,6 +140,7 @@ const FloatingPromoBanner: React.FC = () => {
   // Don't render at all if:
   // - On 404 page
   // - Sidebar is open
+  // - On promotions page (landing has its own banner and CTA)
   // - On shop page (hide banner on all shop pages)
   // - On admin page (hide banner on all admin pages)
   // - On affiliate page (hide banner on all affiliate pages)
@@ -147,6 +153,7 @@ const FloatingPromoBanner: React.FC = () => {
   if (
     pathname === "/not-found" ||
     isAnySidebarOpen ||
+    isPromotionsPage ||
     isShopPage ||
     isAdminPage ||
     isAffiliatePage ||
@@ -195,8 +202,8 @@ const FloatingPromoBanner: React.FC = () => {
           transition={{ duration: 0.3, ease: "easeInOut" }}
           className="fixed bottom-0 left-0 right-0 z-[40] shadow-2xl border-t-2 border-yellow-300 cursor-pointer select-none"
           style={{
-            background: `linear-gradient(135deg, #ef4444 0%, #dc2626 25%, #b91c1c 50%, #991b1b 75%, #ef4444 100%)`,
-            boxShadow: `0 -10px 30px rgba(239, 68, 68, 0.7), 0 0 20px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
+            background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}cc 25%, ${theme.primary}99 50%, ${theme.primary}99 75%, ${theme.primary} 100%)`,
+            boxShadow: `0 -10px 30px ${theme.shadowRgba}, 0 0 20px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3)`,
           }}
         >
           <div className="max-w-7xl mx-auto px-1 sm:px-4 py-1 sm:py-2">
@@ -213,7 +220,7 @@ const FloatingPromoBanner: React.FC = () => {
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
-                background: `linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(239, 68, 68, 0.25) 25%, rgba(220, 38, 38, 0.35) 50%, rgba(185, 28, 28, 0.25) 75%, rgba(239, 68, 68, 0.15) 100%)`,
+                background: `linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, ${theme.shadowRgba.replace(/,\s*0\.6\)/, ", 0.25)")} 25%, ${theme.shadowRgba.replace(/,\s*0\.6\)/, ", 0.35)")} 50%, ${theme.shadowRgba.replace(/,\s*0\.6\)/, ", 0.25)")} 75%, ${theme.shadowRgba.replace(/,\s*0\.6\)/, ", 0.15)")} 100%)`,
                 animation: "pulse 2s infinite",
               }}
             />

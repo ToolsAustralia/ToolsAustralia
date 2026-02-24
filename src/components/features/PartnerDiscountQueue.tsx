@@ -18,7 +18,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package } from "lucide-react";
 import Image from "next/image";
 import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import {
+  getMembershipSectionColorScheme,
+  derivePlanIdFromPackage,
+  getCardBorderStyle,
+} from "@/utils/package-colors/packageColorScheme";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -422,9 +426,29 @@ export default function PartnerDiscountQueue({
     setIsExpanded((prev) => !prev);
   };
 
+  // Package theme for icon and card border (subscription uses membership tab colors, e.g. Boss → black/gold)
+  const packageTheme =
+    summary.isActiveSubscription && summary.subscriptionBenefits
+      ? (() => {
+          const packageData = {
+            name: summary.subscriptionBenefits.packageName,
+            type: "subscription" as const,
+          };
+          const planId = derivePlanIdFromPackage(packageData, "subscription");
+          return getMembershipSectionColorScheme(planId, true);
+        })()
+      : null;
+
+  const cardBorderStyle = packageTheme
+    ? packageTheme.cardBorderGradient
+      ? getCardBorderStyle(packageTheme, "linear-gradient(135deg, #050607 0%, #0f1117 50%, #030304 100%)")
+      : { borderColor: `${packageTheme.accentHex}80`, borderWidth: 1 }
+    : undefined;
+
   return (
     <div
       className={`relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white ${className}`}
+      style={cardBorderStyle}
     >
       {/* Premium Background Effects */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 opacity-40"></div>
@@ -446,31 +470,40 @@ export default function PartnerDiscountQueue({
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          {summary.isActiveSubscription && summary.subscriptionBenefits ? (
+          {summary.isActiveSubscription && summary.subscriptionBenefits && packageTheme ? (
             (() => {
               const packageName = summary.subscriptionBenefits.packageName;
               const packageIcon = getPackageIconImage(packageName, "subscription");
-              const colorScheme = getPackageColorScheme(packageName);
-              const borderGradientColor = colorScheme.accentHex;
+              const badgeStyle = packageTheme.badgeStyle ?? {};
               const isPremiumPackage =
                 packageName.toLowerCase().includes("boss") || packageName.toLowerCase().includes("power");
 
               if (!packageIcon) return null;
+
+              const iconStyle = packageTheme.cardBorderGradient
+                ? {
+                    ...getCardBorderStyle(packageTheme, badgeStyle.background ?? "#0a0a0a"),
+                    padding: "8px",
+                    minWidth: "48px",
+                    minHeight: "48px",
+                    boxShadow: badgeStyle.boxShadow ?? `0 0 12px rgba(212,175,55,0.4)`,
+                  }
+                : badgeStyle.background
+                ? { ...badgeStyle, padding: "8px", minWidth: "48px", minHeight: "48px" }
+                : {
+                    border: `2px solid ${packageTheme.accentHex}`,
+                    boxShadow: `0 0 12px ${packageTheme.accentHex}66`,
+                    padding: "8px",
+                    minWidth: "48px",
+                    minHeight: "48px",
+                  };
 
               return (
                 <span
                   className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden ${
                     isOptimisticUpdate ? "animate-pulse" : ""
                   } ${isPremiumPackage ? "animate-pulse" : ""}`}
-                  style={{
-                    border: `2px solid transparent`,
-                    backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
-                    backgroundOrigin: `border-box`,
-                    backgroundClip: `padding-box, border-box`,
-                    padding: "8px",
-                    minWidth: "48px",
-                    minHeight: "48px",
-                  }}
+                  style={iconStyle}
                 >
                   <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
                     <Image

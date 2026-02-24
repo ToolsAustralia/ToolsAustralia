@@ -6,8 +6,10 @@ import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { SectionContainer } from "@/components/ui";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 export default function GiveawayDetails() {
+  const theme = usePromoTheme();
   const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
   const detailsRef = useScrollAnimation();
   const [isMounted, setIsMounted] = useState(false);
@@ -70,48 +72,12 @@ export default function GiveawayDetails() {
   }, [currentMajorDraw, isMounted]);
 
   const details = [
-    {
-      icon: Clock,
-      title: `Entries Close (${formattedDates.timezone || ""})`,
-      description: !isMounted || isLoading ? "TBA" : formattedDates.entriesClose,
-      color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
-    },
-    {
-      icon: Calendar,
-      title: `Draw Date (${formattedDates.timezone || ""})`,
-      description: !isMounted || isLoading ? "TBA" : formattedDates.drawDate,
-      color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
-    },
-    {
-      icon: Truck,
-      title: "Delivery",
-      description: "Australia-wide, free of charge",
-      color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
-    },
-    {
-      icon: Zap,
-      title: "We'll Call You",
-      description: "Winner contacted by phone at the draw",
-      color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
-    },
-    {
-      icon: Shield,
-      title: "Eligibility",
-      description: "Open to all Australian residents 18+ (Excluding SA & ACT)",
-      color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
-    },
-    {
-      icon: IdCard,
-      title: "License Numbers",
-      description: "NTP/15640",
-      color: "text-red-500",
-      bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90",
-    },
+    { icon: Clock, title: `Entries Close (${formattedDates.timezone || ""})`, description: !isMounted || isLoading ? "TBA" : formattedDates.entriesClose, bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
+    { icon: Calendar, title: `Draw Date (${formattedDates.timezone || ""})`, description: !isMounted || isLoading ? "TBA" : formattedDates.drawDate, bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
+    { icon: Truck, title: "Delivery", description: "Australia-wide, free of charge", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
+    { icon: Zap, title: "We'll Call You", description: "Winner contacted by phone at the draw", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
+    { icon: Shield, title: "Eligibility", description: "Open to all Australian residents 18+ (Excluding SA & ACT)", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
+    { icon: IdCard, title: "License Numbers", description: "NTP/15640", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
   ];
 
   return (
@@ -149,7 +115,7 @@ export default function GiveawayDetails() {
                 >
                   {/* Metallic shine effect for icon */}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-xl"></div>
-                  <detail.icon className={`w-4 h-4 sm:w-6 sm:h-6 ${detail.color} relative z-10`} />
+                  <detail.icon className="w-4 h-4 sm:w-6 sm:h-6 relative z-10" style={{ color: theme.primary }} />
                 </div>
               </div>
 
