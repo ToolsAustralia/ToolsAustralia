@@ -24,7 +24,8 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { getPackageIcon } from "@/utils/images/package-icons";
-import { getMembershipSectionColorScheme, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -71,6 +72,7 @@ const SpecialPackages50OffText: React.FC = () => {
 };
 
 const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onClose, packages, onPackageSelect }) => {
+  const { variantConfig } = useVariantContext();
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<StaticMembershipPackage | null>(null);
   const [couponCode, setCouponCode] = useState("");
@@ -610,7 +612,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           {/* Package List - Styled to match PackageSelectionModal (uses package color scheme) */}
           <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
             {packagesWithPromo.map((pkg) => {
-              const colorScheme = getMembershipSectionColorScheme(pkg._id || "", false);
+              const colorScheme = getPackageColorSchemeForPromo(pkg._id || "", false, variantConfig);
               const isSelected = selectedPackage?._id === pkg._id;
               // Use solid accent color for card text - textGradientStyle with backgroundClip can make nested text invisible on dark cards
               const cardTextStyle = { color: colorScheme.accentHex };
@@ -731,7 +733,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           <div className="space-y-2 sm:space-y-3">
             {/* Buy Button - uses package badgeStyle when package selected (same as Enter Now) */}
             {selectedPackage ? (() => {
-              const colorScheme = getMembershipSectionColorScheme(selectedPackage._id || "", false);
+              const colorScheme = getPackageColorSchemeForPromo(selectedPackage._id || "", false, variantConfig);
               const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
               const buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
               return (
@@ -781,7 +783,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
           {/* Additional Benefits - Only shown when package is selected (uses package color scheme) */}
           {selectedPackage && (() => {
-            const colorScheme = getMembershipSectionColorScheme(selectedPackage._id || "", false);
+            const colorScheme = getPackageColorSchemeForPromo(selectedPackage._id || "", false, variantConfig);
             // Use solid accent color - gradient styles (packageInclusionTextStyle/textGradientStyle) can make text invisible on dark card backgrounds
             const benefitsTextStyle = { color: colorScheme.accentHex };
             return (

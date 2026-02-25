@@ -417,6 +417,59 @@ const ONE_TIME_TAB_COLOR_MAP: Record<string, COLOR_KEYS> = {
 };
 
 /**
+ * Minimal shape for variant config used by package color resolver.
+ * Avoids circular dependency with Variant model.
+ */
+export type PackageColorsVariantConfig = {
+  packageColors?: {
+    oneTime?: Partial<Record<string, COLOR_KEYS>>;
+    membership?: Partial<Record<string, COLOR_KEYS>>;
+  };
+} | null | undefined;
+
+/** Normalize planId to slot key for package color lookup */
+function planIdToSlotKey(planId: string, isMembershipTab: boolean): string {
+  const lower = planId.toLowerCase();
+  if (lower.includes("apprentice")) return "apprentice-pack";
+  if (lower.includes("tradie")) return "tradie-pack";
+  if (lower.includes("foreman")) return "foreman-pack";
+  if (lower.includes("boss")) return "boss-pack";
+  if (lower.includes("power")) return "power-pack";
+  if (!isMembershipTab) {
+    if (lower.includes("black")) return "black-pack";
+    if (lower.includes("mint")) return "mint-pack";
+    if (lower.includes("cash")) return "cash-prize";
+  }
+  return "power-pack";
+}
+
+/**
+ * Get package color scheme for promotions page, respecting A/B test variant overrides.
+ * When variantConfig.packageColors has an override for the slot, uses that COLOR_KEY.
+ * Otherwise falls back to getMembershipSectionColorScheme (default behavior).
+ */
+export function getPackageColorSchemeForPromo(
+  planId: string,
+  isMembershipTab: boolean,
+  variantConfig?: PackageColorsVariantConfig
+): PackageColorScheme {
+  const slot = planIdToSlotKey(planId, isMembershipTab);
+  const override = variantConfig?.packageColors
+    ? (isMembershipTab
+        ? variantConfig.packageColors.membership?.[slot]
+        : variantConfig.packageColors.oneTime?.[slot])
+    : undefined;
+
+  if (override) {
+    const base = getPackageColorScheme(override);
+    const overrides = MEMBERSHIP_SECTION_GRADIENTS[override as COLOR_KEYS];
+    return overrides ? { ...base, ...overrides } : base;
+  }
+
+  return getMembershipSectionColorScheme(planId, isMembershipTab);
+}
+
+/**
  * Get MembershipSection-specific color scheme.
  * - Membership tab: uses MEMBERSHIP_TAB_COLOR_MAP
  * - One-time tab: uses ONE_TIME_TAB_COLOR_MAP (dewalt, kincrome, ryobi, black, makita)

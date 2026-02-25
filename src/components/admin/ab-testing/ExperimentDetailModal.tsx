@@ -305,17 +305,17 @@ export default function ExperimentDetailModal({
                     </div>
 
                     {/* Variant Config Preview */}
-                    {(variant.config.hero?.ctaText ||
-                      variant.config.banner?.badgeText ||
-                      variant.config.packages?.highlightPackage) && (
+                    {(variant.config?.hero?.ctaText ||
+                      variant.config?.banner?.badgeText ||
+                      variant.config?.packages?.highlightPackage) && (
                       <div className="text-xs text-gray-500 space-y-1">
-                        {variant.config.hero?.ctaText && (
+                        {variant.config?.hero?.ctaText && (
                           <div>Hero CTA: {variant.config.hero.ctaText}</div>
                         )}
-                        {variant.config.banner?.badgeText && (
+                        {variant.config?.banner?.badgeText && (
                           <div>Banner: {variant.config.banner.badgeText}</div>
                         )}
-                        {variant.config.packages?.highlightPackage && (
+                        {variant.config?.packages?.highlightPackage && (
                           <div>Highlight Package: {variant.config.packages.highlightPackage}</div>
                         )}
                       </div>

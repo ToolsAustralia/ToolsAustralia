@@ -17,7 +17,8 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageIcon } from "@/utils/images/package-icons";
-import { getMembershipSectionColorScheme, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
 // Helper function to convert hex color to rgba for box-shadow
 const hexToRgba = (hex: string, alpha: number) => {
@@ -42,6 +43,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 }) => {
   // Determine active tab based on current plan (no toggle, just display what's selected)
   const activeTab: "membership" | "one-time" = currentPlan.period === "mo" ? "membership" : "one-time";
+  const { variantConfig } = useVariantContext();
   const { data: session } = useSession();
   const [selectedPlan, setSelectedPlan] = useState<LocalMembershipPlan>(currentPlan);
   // Sub-tab for one-time packages: allow switching between regular one-time and membership packages
@@ -553,7 +555,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
         <div className="space-y-2 sm:space-y-3 max-w-2xl mx-auto">
           {finalMembershipPlans.map((plan) => {
             const isMembershipTab = plan.period !== "one-time";
-            const colorScheme = getMembershipSectionColorScheme(plan.id, isMembershipTab);
+            const colorScheme = getPackageColorSchemeForPromo(plan.id, isMembershipTab, variantConfig);
             const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
             return (
               <div

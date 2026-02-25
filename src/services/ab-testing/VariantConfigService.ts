@@ -23,6 +23,10 @@ export class VariantConfigService {
       membershipModal: {
         // Defaults: use existing component logic (same pattern as hero/banner/packages)
       },
+      packageColors: {
+        oneTime: {},
+        membership: {},
+      },
     };
   }
 
@@ -51,6 +55,16 @@ export class VariantConfigService {
       membershipModal: {
         ...baseConfig.membershipModal,
         ...variantConfig.membershipModal,
+      },
+      packageColors: {
+        oneTime: {
+          ...baseConfig.packageColors?.oneTime,
+          ...variantConfig.packageColors?.oneTime,
+        },
+        membership: {
+          ...baseConfig.packageColors?.membership,
+          ...variantConfig.packageColors?.membership,
+        },
       },
     };
   }
@@ -154,6 +168,21 @@ export class VariantConfigService {
         const membershipModal = cfg.membershipModal as Record<string, unknown>;
         if (membershipModal.showPackageSelectionFirst !== undefined && typeof membershipModal.showPackageSelectionFirst !== "boolean") {
           errors.push("MembershipModal showPackageSelectionFirst must be a boolean");
+        }
+      }
+    }
+
+    // Validate packageColors config (split test)
+    if (cfg.packageColors !== undefined) {
+      if (typeof cfg.packageColors !== "object") {
+        errors.push("PackageColors config must be an object");
+      } else {
+        const packageColors = cfg.packageColors as Record<string, unknown>;
+        if (packageColors.oneTime !== undefined && typeof packageColors.oneTime !== "object") {
+          errors.push("PackageColors oneTime must be an object");
+        }
+        if (packageColors.membership !== undefined && typeof packageColors.membership !== "object") {
+          errors.push("PackageColors membership must be an object");
         }
       }
     }

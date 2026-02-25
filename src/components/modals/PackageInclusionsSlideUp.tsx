@@ -5,7 +5,8 @@ import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
-import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
 interface PackageInclusionsExpandedProps {
   isExpanded: boolean;
@@ -20,6 +21,8 @@ interface PackageInclusionsExpandedProps {
  * for additional packages. Adapts to light and dark backgrounds (transparent/no background).
  */
 const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ isExpanded, packages, showAccumulationChart = false }) => {
+  const { variantConfig } = useVariantContext();
+
   // Helper to get package icon - uses centralized utility with fallback logic
   const getPackageIconLocal = (planId: string) => {
     // Try direct lookup first using centralized utility
@@ -54,7 +57,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
   if (!isExpanded) return null;
 
   const renderPackageCard = (plan: LocalMembershipPlan) => {
-    const colorScheme = getMembershipSectionColorScheme(plan.id, showAccumulationChart);
+    const colorScheme = getPackageColorSchemeForPromo(plan.id, showAccumulationChart, variantConfig);
     const packageIcon = getPackageIconLocal(plan.id);
 
     return (
