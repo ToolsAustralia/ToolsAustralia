@@ -554,6 +554,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
           {finalMembershipPlans.map((plan) => {
             const isMembershipTab = plan.period !== "one-time";
             const colorScheme = getMembershipSectionColorScheme(plan.id, isMembershipTab);
+            const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
             return (
               <div
                 key={plan.id}
@@ -569,24 +570,24 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                     ? getCardBorderStyle(colorScheme, "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)")
                     : {
                         border: isSelectedPlan(plan)
-                          ? `3px solid ${colorScheme.accentHex}`
+                          ? `3px solid ${accentHex}`
                           : `2px solid transparent`,
                         backgroundImage: isSelectedPlan(plan)
                           ? `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${hexToRgba(
-                              colorScheme.accentHex,
+                              accentHex,
                               0.8
-                            )}, ${hexToRgba(colorScheme.accentHex, 0.5)})`
-                          : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${colorScheme.accentHex}, transparent)`,
+                            )}, ${hexToRgba(accentHex, 0.5)})`
+                          : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${accentHex}, transparent)`,
                         backgroundOrigin: "border-box",
                         backgroundClip: "padding-box, border-box",
                       }),
                   boxShadow: isSelectedPlan(plan)
-                    ? `0 0 20px ${hexToRgba(colorScheme.accentHex, 0.6)}, 0 0 40px ${hexToRgba(
-                        colorScheme.accentHex,
+                    ? `0 0 20px ${hexToRgba(accentHex, 0.6)}, 0 0 40px ${hexToRgba(
+                        accentHex,
                         0.4
                       )}, 0 0 60px rgba(251, 191, 36, 0.3), 0 0 0 4px rgba(251, 191, 36, 0.2)`
-                    : `0 0 15px ${hexToRgba(colorScheme.accentHex, 0.4)}, 0 0 30px ${hexToRgba(
-                        colorScheme.accentHex,
+                    : `0 0 15px ${hexToRgba(accentHex, 0.4)}, 0 0 30px ${hexToRgba(
+                        accentHex,
                         0.2
                       )}`,
                 }}
@@ -609,7 +610,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 <div className="absolute top-1.5 left-1.5 z-20 font-poppins text-center">
                   <div
                     className={`font-bold text-base sm:text-lg leading-tight ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
-                    style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+                    style={colorScheme.textGradientStyle ?? { color: accentHex }}
                   >
                     ${plan.price}
                   </div>
@@ -653,7 +654,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {isSelectedPlan(plan) && !isCurrentPlan(plan) && (
                   <div
                     className="absolute -top-1 -right-1 text-white rounded-full p-0.5 sm:p-1 flex items-center justify-center"
-                    style={{ background: colorScheme.accentHex }}
+                    style={{ background: accentHex }}
                   >
                     <Check size={10} className="sm:hidden" />
                     <Check size={12} className="hidden sm:block" />
@@ -680,11 +681,11 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 )}
 
                 {/* Plan Content - Centered Layout */}
-                <div className="text-center pt-12 sm:pt-14">
+                <div className="text-center pt-8 sm:pt-8">
                   <div className="flex items-center justify-center gap-2 mb-1 sm:mb-1.5">
                     <h3
                       className="text-base sm:text-lg font-bold tracking-wide"
-                      style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+                      style={colorScheme.textGradientStyle ?? { color: accentHex }}
                     >
                       {plan.name}
                     </h3>
@@ -729,7 +730,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                                   </span>
                                   <span
                                     className="text-xl sm:text-2xl font-bold"
-                                    style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+                                    style={colorScheme.textGradientStyle ?? { color: accentHex }}
                                   >
                                     {entriesNumber}
                                   </span>
@@ -737,14 +738,14 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                               ) : (
                                 <span
                                   className="text-xl sm:text-2xl font-bold"
-                                  style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+                                  style={colorScheme.textGradientStyle ?? { color: accentHex }}
                                 >
                                   {entriesNumber}
                                 </span>
                               )}
                               <div
                                 className="text-xs sm:text-sm"
-                                style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.8)" }}
+                                style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: accentHex }}
                               >
                                 Free Entries
                               </div>

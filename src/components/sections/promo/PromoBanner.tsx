@@ -635,8 +635,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             inset 0 -1px 0 rgba(0, 0, 0, 0.3)
           `,
           ...(isScrolled
-            ? { border: "2px solid rgba(251, 191, 36, 0.5)" }
-            : { borderBottom: "2px solid rgba(239, 68, 68, 0.6)" }),
+            ? { border: `2px solid ${theme.borderRgba}` }
+            : { borderBottom: `2px solid ${theme.borderRgba}` }),
         } as React.CSSProperties}
         transition={{
           duration: 0.5,
@@ -800,7 +800,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               if (countdownDisplay.type === "hidden") return null;
 
               const drawTime = getDrawTimeText();
-              const rightSectionTileStyle = { background: theme.gradientSolid };
+              const rightSectionTileStyle = { background: theme.gradientSolid, boxShadow: `0 0 12px ${theme.shadowRgba}` };
 
               // No promo: show replacement label
               if (isNoPromo) {
@@ -808,7 +808,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div className="flex items-center justify-center">
                     <div
                       className={`rounded-lg shadow-lg ring-2 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
-                    style={{ background: theme.gradientSolid, boxShadow: `0 0 12px ${theme.shadowRgba}` }}
+                    style={rightSectionTileStyle}
                     >
                       <div
                         className={`text-white font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
@@ -833,7 +833,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div className="flex items-center justify-center">
                     <div
                       className={`rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
-                    style={{ background: theme.gradientSolid }}
+                    style={rightSectionTileStyle}
                     >
                       <div
                         className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
@@ -851,7 +851,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div className="flex items-center justify-center">
                     <div
                       className={`rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
-                    style={{ background: theme.gradientSolid }}
+                    style={rightSectionTileStyle}
                     >
                       <div
                         className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}

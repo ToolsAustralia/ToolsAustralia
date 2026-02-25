@@ -896,7 +896,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               onClick={handleEnterNow}
               suppressHydrationWarning
               className="promo-hero-cta-button w-full rounded-full hidden lg:block px-6 py-3 sm:px-8 sm:py-4"
-              style={{ background: theme.gradient }}
+              style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
                 <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
@@ -923,8 +923,9 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 ${
                   currentMajorDraw?.status === "frozen"
                     ? "bg-gradient-to-br from-gray-900 via-gray-800 to-black"
-                    : "bg-gradient-to-br from-red-600 to-red-700"
+                    : ""
                 }`}
+                style={currentMajorDraw?.status !== "frozen" ? { background: theme.gradientSolid } : undefined}
               >
                 {/* Frozen notice for consistency with MajorDrawSection */}
                 {currentMajorDraw?.status === "frozen" && (
@@ -973,7 +974,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               onClick={handleEnterNow}
               suppressHydrationWarning
               className="promo-hero-cta-button w-full rounded-full lg:hidden px-6 py-3 sm:px-8 sm:py-4"
-              style={{ background: theme.gradient }}
+              style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
                 <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>

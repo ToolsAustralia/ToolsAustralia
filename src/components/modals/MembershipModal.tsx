@@ -4984,7 +4984,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                           : getMembershipSectionColorScheme(planId, isMembershipTab);
                         const accentHex = promoEnhancedPlan?.metadata?.isUpsellOffer
                           ? promoTheme.primary
-                          : pkgScheme.accentHex;
+                          : (pkgScheme.accentHexLight ?? pkgScheme.accentHex);
                         const isPackageCard = Boolean(
                           promoEnhancedPlan?.id &&
                             (promoEnhancedPlan.id.startsWith("mini-pack-") ||
@@ -5028,27 +5028,32 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                 }
                           }
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4
-                                  className={`font-bold text-xs sm:text-sm ${nameStyle ? "" : ""}`}
-                                  style={nameStyle ?? (isPackageCard ? { color: accentHex } : undefined)}
-                                >
-                                  {promoEnhancedPlan?.name || "No package selected"}
-                                </h4>
-                              </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <h4
+                                className={`font-bold text-xs sm:text-sm leading-tight ${nameStyle ? "" : ""}`}
+                                style={nameStyle ?? (isPackageCard ? { color: accentHex } : undefined)}
+                              >
+                                {promoEnhancedPlan?.name || "No package selected"}
+                              </h4>
                               <p
-                                className={`text-xs sm:text-sm ${isPackageCard ? "text-gray-100" : "text-gray-600"}`}
+                                className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600" : ""}`}
+                                style={
+                                  isPackageCard && pkgScheme.textGradientStyle
+                                    ? { ...pkgScheme.textGradientStyle, opacity: 0.9 }
+                                    : isPackageCard
+                                      ? { color: accentHex }
+                                      : undefined
+                                }
                               >
                                 {promoEnhancedPlan?.features && promoEnhancedPlan.features.length > 0
                                   ? promoEnhancedPlan.features[0].text
                                   : promoEnhancedPlan?.subtitle || "No package selected"}
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="flex flex-col gap-0.5 items-end shrink-0">
                               <div
-                                className={`font-bold text-xs sm:text-sm ${pkgScheme.textGradientStyle ? "" : ""}`}
+                                className={`font-bold text-xs sm:text-sm leading-tight ${pkgScheme.textGradientStyle ? "" : ""}`}
                                 style={
                                   isPackageCard && pkgScheme.textGradientStyle
                                     ? pkgScheme.textGradientStyle
@@ -5066,8 +5071,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                               {promoEnhancedPlan?.metadata?.isUpsellOffer !== true && (
                                 <button
                                   onClick={handlePackageChange}
-                                  className={`relative z-10 mt-1 text-xs sm:text-sm underline hover:no-underline transition-all duration-200 cursor-pointer ${!isPackageCard ? "text-blue-600 hover:text-blue-800" : ""}`}
-                                  style={isPackageCard ? { color: accentHex } : undefined}
+                                  className={`relative z-10 text-xs sm:text-sm leading-tight underline hover:no-underline transition-all duration-200 cursor-pointer ${!isPackageCard ? "text-blue-600 hover:text-blue-800" : ""}`}
+                                  style={
+                                    isPackageCard
+                                      ? { color: pkgScheme.changeButtonTextWhite ? "white" : accentHex }
+                                      : undefined
+                                  }
                                 >
                                   Change
                                 </button>
