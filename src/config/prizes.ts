@@ -1089,11 +1089,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_036.jpg", alt: "Makita DJV184Z jigsaw" },
       { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_037.jpg", alt: "Makita DJR187Z reciprocating saw" },
       { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_038.jpg", alt: "Makita DKP181Z planer" },
-      { src: "/images/majordraws/makita-set/dcl283zbx1-001.jpg", alt: "Makita DCL283ZBX1 stick vacuum" },
-      { src: "/images/majordraws/makita-set/mr002gz-001.jpg", alt: "Makita MR002GZ jobsite radio" },
-      { src: "/images/majordraws/makita-set/bl1850b-001.jpg", alt: "Makita BL1850B batteries" },
-      { src: "/images/majordraws/makita-set/dc18rd-001.jpg", alt: "Makita DC18RD charger" },
-      { src: "/images/majordraws/makita-set/199936-9-001.jpg", alt: "Makita tool carry bags" },
     ],
     highlights: [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
@@ -1301,11 +1296,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_036.jpg", alt: "Makita DJV184Z jigsaw" },
       { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_037.jpg", alt: "Makita DJR187Z reciprocating saw" },
       { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_038.jpg", alt: "Makita DKP181Z planer" },
-      { src: "/images/majordraws/makita-set/dcl283zbx1-001.jpg", alt: "Makita DCL283ZBX1 stick vacuum" },
-      { src: "/images/majordraws/makita-set/mr002gz-001.jpg", alt: "Makita MR002GZ jobsite radio" },
-      { src: "/images/majordraws/makita-set/bl1850b-001.jpg", alt: "Makita BL1850B batteries" },
-      { src: "/images/majordraws/makita-set/dc18rd-001.jpg", alt: "Makita DC18RD charger" },
-      { src: "/images/majordraws/makita-set/199936-9-001.jpg", alt: "Makita tool carry bags" },
     ],
     highlights: [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },

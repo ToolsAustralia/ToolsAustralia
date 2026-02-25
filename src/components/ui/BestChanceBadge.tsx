@@ -2,23 +2,28 @@
 
 import React from "react";
 import { Star } from "lucide-react";
+import type { PackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 
 interface BestChanceBadgeProps {
   size?: "xs" | "small" | "medium" | "large";
   className?: string;
   /** Optional package-themed styles to match the card (background, boxShadow, border) */
   badgeStyle?: { background: string; boxShadow: string; border: string };
+  /** Optional color scheme for gradient border (e.g. black theme golden gradient) */
+  colorScheme?: PackageColorScheme;
 }
 
 /**
  * BestChanceBadge Component
  * Premium badge indicating "LAST CHANCE" for boss and power packages
- * Uses purple/violet gradient for premium feel with star icon
+ * Uses brand red gradient (Milwaukee red) for premium feel with star icon
  */
 const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
   size = "medium",
   className = "",
   badgeStyle: customBadgeStyle,
+  colorScheme,
 }) => {
   // Size configurations
   const sizeConfig = {
@@ -47,11 +52,23 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
   const config = sizeConfig[size];
 
   const defaultStyle = {
-    background: "linear-gradient(135deg, #a855f7 0%, #9333ea 25%, #7e22ce 50%, #6b21a8 75%, #581c87 100%)",
-    boxShadow: "0 0 25px rgba(168, 85, 247, 0.8), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-    border: "2px solid rgba(216, 180, 254, 0.5)",
+    background: "linear-gradient(135deg, #D20600 0%, #9a0400 25%, #6C0300 50%, #4a0200 75%, #D20600 100%)",
+    boxShadow: "0 0 25px rgba(210, 6, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
+    border: "2px solid rgba(255, 255, 255, 0.4)",
   };
-  const style = customBadgeStyle ?? defaultStyle;
+  const baseStyle = customBadgeStyle ?? defaultStyle;
+
+  const containerStyle =
+    colorScheme?.cardBorderGradient && customBadgeStyle
+      ? {
+          ...getCardBorderStyle(colorScheme, customBadgeStyle.background),
+          boxShadow: customBadgeStyle.boxShadow,
+        }
+      : {
+          background: baseStyle.background,
+          boxShadow: baseStyle.boxShadow,
+          border: baseStyle.border,
+        };
 
   return (
     <div
@@ -63,11 +80,7 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
         relative overflow-hidden
         ${className}
       `}
-      style={{
-        background: style.background,
-        boxShadow: style.boxShadow,
-        border: style.border,
-      }}
+      style={containerStyle}
     >
       {/* Subtle static highlight - no shimmer */}
       <div
@@ -77,11 +90,11 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
         }}
       />
 
-      {/* Animated background effect */}
+      {/* Animated background effect - brand red */}
       <div
         className="absolute inset-0 opacity-0"
         style={{
-          background: `linear-gradient(135deg, #a855f7 0%, #9333ea 25%, #7e22ce 50%, #6b21a8 75%, #581c87 100%)`,
+          background: `linear-gradient(135deg, #D20600 0%, #9a0400 25%, #6C0300 50%, #4a0200 75%, #D20600 100%)`,
           animation: "pulse 2s infinite",
         }}
       />

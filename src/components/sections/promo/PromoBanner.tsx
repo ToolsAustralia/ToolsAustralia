@@ -21,6 +21,7 @@ import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-b
 import { NO_PROMO_BADGE, NO_PROMO_MAIN_LINE, NO_PROMO_RIGHT_LABEL } from "@/constants/promo-banner";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { UrgencyClockIcon } from "@/components/ui";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 // Helper function to get current timezone abbreviation (AEST or AEDT)
 const getTimezoneAbbr = (): string => {
@@ -62,6 +63,7 @@ interface PromoBannerProps {
 }
 
 export default function PromoBanner({ initialMembershipPromo, initialOneTimePromo }: PromoBannerProps) {
+  const theme = usePromoTheme();
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
@@ -633,9 +635,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             inset 0 -1px 0 rgba(0, 0, 0, 0.3)
           `,
           ...(isScrolled
-            ? { border: "2px solid rgba(251, 191, 36, 0.5)" }
-            : { borderBottom: "2px solid rgba(239, 68, 68, 0.6)" }),
-        }}
+            ? { border: `2px solid ${theme.borderRgba}` }
+            : { borderBottom: `2px solid ${theme.borderRgba}` }),
+        } as React.CSSProperties}
         transition={{
           duration: 0.5,
           ease: "easeInOut",
@@ -773,7 +775,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       ) : (
                         <>
                           <span className="text-white">GET </span>
-                          <span className="text-red-500" suppressHydrationWarning>{multiplier}X</span>
+                          <span suppressHydrationWarning style={{ color: theme.primary }}>{multiplier}X</span>
                           <span className="text-white"> ENTRIES</span>
                         </>
                       )}
@@ -785,7 +787,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       className={`font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5 ${isScrolled ? "max-[360px]:text-[14px] max-[360px]:ps-1 whitespace-nowrap" : ""}`}
                     >
                       <span className="text-white">GET </span>
-                      <span className="text-red-500">10X</span>
+                      <span style={{ color: theme.primary }}>10X</span>
                       <span className="text-white"> ENTRIES</span>
                     </span>
                   </div>
@@ -793,18 +795,20 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               </div>
             </div>
 
-            {/* Right Side - Draw Date Text or Countdown */}
+            {/* Right Side - Draw Date Text or Countdown (uses simpler gradient) */}
             {(() => {
               if (countdownDisplay.type === "hidden") return null;
 
               const drawTime = getDrawTimeText();
+              const rightSectionTileStyle = { background: theme.gradientSolid, boxShadow: `0 0 12px ${theme.shadowRgba}` };
 
               // No promo: show replacement label
               if (isNoPromo) {
                 return (
                   <div className="flex items-center justify-center">
                     <div
-                      className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                      className={`rounded-lg shadow-lg ring-2 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                    style={rightSectionTileStyle}
                     >
                       <div
                         className={`text-white font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
@@ -828,7 +832,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div
-                      className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                      className={`rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                    style={rightSectionTileStyle}
                     >
                       <div
                         className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
@@ -845,7 +850,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div
-                      className={`bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                      className={`rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                    style={rightSectionTileStyle}
                     >
                       <div
                         className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
@@ -861,7 +867,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               // Scheduled end countdown (DAYS HRS MINS or HRS MINS SECS)
               if (countdownDisplay.type === "scheduled_end") {
                 const useDays = countdownDisplay.useDays ?? false;
-                const tileClass = "bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3";
+                const tileClass = "rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3";
                 const labelClass = "text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm";
                 return (
                   <motion.div
@@ -872,27 +878,27 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   >
                     <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                       {useDays && scheduledEndTimeLeft.days != null && (
-                        <div className={tileClass}>
+                        <div className={tileClass} style={rightSectionTileStyle}>
                           <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                             {scheduledEndTimeLeft.days.toString().padStart(2, "0")}
                           </div>
                           <div className={labelClass}>DAYS</div>
                         </div>
                       )}
-                      <div className={tileClass}>
+                      <div className={tileClass} style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                           {scheduledEndTimeLeft.hours.toString().padStart(2, "0")}
                         </div>
                         <div className={labelClass}>HRS</div>
                       </div>
-                      <div className={tileClass}>
+                      <div className={tileClass} style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                           {scheduledEndTimeLeft.minutes.toString().padStart(2, "0")}
                         </div>
                         <div className={labelClass}>MINS</div>
                       </div>
                       {!useDays && (
-                        <div className={tileClass}>
+                        <div className={tileClass} style={rightSectionTileStyle}>
                           <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                             {scheduledEndTimeLeft.seconds.toString().padStart(2, "0")}
                           </div>
@@ -911,15 +917,15 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   return (
                     <div className="flex flex-col items-center justify-center gap-1">
                       <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                        <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                           <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
                           <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
                         </div>
-                        <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                           <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
                           <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
                         </div>
-                        <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                           <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
                           <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
                         </div>
@@ -937,19 +943,19 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   >
                     <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                       {/* Countdown to freeze time */}
-                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                           {freezeTimeLeft.hours.toString().padStart(2, "0")}
                         </div>
                         <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
                       </div>
-                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                           {freezeTimeLeft.minutes.toString().padStart(2, "0")}
                         </div>
                         <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
                       </div>
-                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                           {freezeTimeLeft.seconds.toString().padStart(2, "0")}
                         </div>
@@ -966,7 +972,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 if (!isContentReady || isDrawLoading) {
                   return (
                     <div className="flex items-center justify-center">
-                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 opacity-0">
+                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 opacity-0" style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md">
                           <div className="flex flex-col items-center gap-0.5 sm:gap-1">
                             <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">DRAWN TOMORROW</div>
@@ -985,7 +991,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex items-center justify-center"
                   >
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3">
+                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3" style={rightSectionTileStyle}>
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md">
                         {/* Always stack vertically in 2 rows */}
                         <div className="flex flex-col items-center gap-0.5 sm:gap-1">
@@ -1007,15 +1013,15 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex flex-col items-center justify-center gap-1">
                     <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
                         <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
                       </div>
-                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
                         <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
                       </div>
-                      <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                         <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
                         <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
                       </div>
@@ -1034,19 +1040,19 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                     {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
                     {/* Fixed width classes to prevent size changes on load */}
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                         {timeLeft.hours.toString().padStart(2, "0")}
                       </div>
                       <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
                     </div>
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                         {timeLeft.minutes.toString().padStart(2, "0")}
                       </div>
                       <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
                     </div>
-                    <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg shadow-lg ring-2 ring-red-300/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3">
+                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
                       <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
                         {timeLeft.seconds.toString().padStart(2, "0")}
                       </div>

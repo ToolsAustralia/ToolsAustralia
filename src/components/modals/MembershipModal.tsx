@@ -53,6 +53,8 @@ import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { getPackageColorScheme, getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { autoLogPaymentError, autoLogStripeError, type PaymentErrorDetails } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -124,7 +126,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const router = useRouter();
   const pathname = usePathname();
   const { showToast } = useToast();
-  
+  const promoTheme = usePromoTheme();
+
   // Get variant config from context (for A/B testing)
   // Use prop if provided, otherwise try to get from context
   const { variantConfig: contextVariantConfig } = useVariantContext();
@@ -4576,7 +4579,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         title=""
         titleNode={
           <>
-            JOIN <span className="text-red-200 font-bold">TOOLS AUSTRALIA</span>
+            JOIN <span className="font-bold" style={{ color: promoTheme.primary }}>TOOLS AUSTRALIA</span>
           </>
         }
         subtitle={
@@ -4595,7 +4598,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period !== "one-time" &&
             promoLinkInfo.appliesToMembership && (
-              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse">
+              <p className="text-xs sm:text-sm font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse" style={{ color: promoTheme.primary }}>
                 🎁 Active promo: Get {promoLinkInfo.bonusEntries} extra entries when you join
               </p>
             )}
@@ -4603,7 +4606,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period === "one-time" &&
             promoLinkInfo.appliesToOneTime && (
-              <p className="text-xs sm:text-sm text-[#ee0000] font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse">
+              <p className="text-xs sm:text-sm font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse" style={{ color: promoTheme.primary }}>
                 🎁 Active promo: Get {promoLinkInfo.bonusEntries} extra entries with this purchase
               </p>
             )}
@@ -4633,15 +4636,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleStepClick(1)}
+                  style={currentStep === 1 ? { backgroundColor: promoTheme.primary } : undefined}
                   className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
-                    currentStep === 1 ? "bg-[#ee0000] text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
+                    currentStep === 1 ? "text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
                   }`}
                   aria-current={currentStep === 1 ? "step" : undefined}
                 >
                   <span
                     className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 1 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+                      currentStep === 1 ? "bg-white" : "bg-gray-400 text-white"
                     }`}
+                    style={currentStep === 1 ? { color: promoTheme.primary } : undefined}
                   >
                     1
                   </span>
@@ -4651,11 +4656,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   type="button"
                   onClick={() => hasCompletedRegistration && handleStepClick(2)}
                   disabled={!hasCompletedRegistration}
+                  style={hasCompletedRegistration && currentStep === 2 ? { backgroundColor: promoTheme.primary } : undefined}
                   className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors ${
                     !hasCompletedRegistration
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-80"
                       : currentStep === 2
-                        ? "bg-[#ee0000] text-white font-bold cursor-pointer"
+                        ? "text-white font-bold cursor-pointer"
                         : "bg-gray-100 text-gray-500 font-medium cursor-pointer hover:bg-gray-200"
                   }`}
                   aria-current={currentStep === 2 ? "step" : undefined}
@@ -4664,8 +4670,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 >
                   <span
                     className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 2 ? "bg-white text-[#ee0000]" : "bg-gray-400 text-white"
+                      currentStep === 2 ? "bg-white" : "bg-gray-400 text-white"
                     }`}
+                    style={currentStep === 2 ? { color: promoTheme.primary } : undefined}
                   >
                     2
                   </span>
@@ -4872,7 +4879,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                   clearReferralCode();
                                 }
                               }}
-                              className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base"
+                              className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:border-transparent transition-all duration-300 text-sm sm:text-base"
+                              style={{ ["--tw-ring-color" as string]: promoTheme.primary }}
                               placeholder="Enter coupon code"
                             />
                             {couponApplied ? (
@@ -4966,95 +4974,93 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                           </div>
                         </div>
                       </div>
-                    ) : (
+                    ) : (() => {
+                        const planId = promoEnhancedPlan?.metadata?.isUpsellOffer
+                          ? "power-pack"
+                          : (promoEnhancedPlan?.id || "power-pack");
+                        const isMembershipTab = promoEnhancedPlan?.period !== "one-time";
+                        const pkgScheme = promoEnhancedPlan?.metadata?.isUpsellOffer
+                          ? getPackageColorScheme(planId)
+                          : getMembershipSectionColorScheme(planId, isMembershipTab);
+                        const accentHex = promoEnhancedPlan?.metadata?.isUpsellOffer
+                          ? promoTheme.primary
+                          : (pkgScheme.accentHexLight ?? pkgScheme.accentHex);
+                        const isPackageCard = Boolean(
+                          promoEnhancedPlan?.id &&
+                            (promoEnhancedPlan.id.startsWith("mini-pack-") ||
+                              promoEnhancedPlan.id.includes("apprentice") ||
+                              promoEnhancedPlan.id.includes("tradie") ||
+                              promoEnhancedPlan.id.includes("foreman") ||
+                              promoEnhancedPlan.id.includes("boss") ||
+                              promoEnhancedPlan.id.includes("power-pack"))
+                        );
+                        const cardBorderColor = isPackageCard ? `${accentHex}${pkgScheme.cardBorderOpacity}` : undefined;
+                        const nameStyle = isPackageCard && pkgScheme.textGradientStyle
+                          ? pkgScheme.textGradientStyle
+                          : isPackageCard
+                            ? { color: accentHex }
+                            : undefined;
+                        const bonusBorderColor = isPackageCard ? `${accentHex}4D` : `${promoTheme.primary}4D`;
+                        const bonusTextColor = isPackageCard ? accentHex : promoTheme.primary;
+                        return (
                       <>
                         <h3
                           className={`text-xs sm:text-sm font-bold mb-1 sm:mb-2 ${
-                            promoEnhancedPlan?.metadata?.isUpsellOffer === true ? "text-red-600" : "text-gray-800"
+                            promoEnhancedPlan?.metadata?.isUpsellOffer === true ? "" : "text-gray-800"
                           }`}
+                          style={promoEnhancedPlan?.metadata?.isUpsellOffer === true ? { color: promoTheme.primary } : undefined}
                         >
                           {promoEnhancedPlan?.metadata?.isUpsellOffer === true ? "Limited Offer" : "Selected Package"}
                         </h3>
                         <div
-                          className={"rounded-lg sm:rounded-xl p-2 sm:p-3"}
-                          style={{
-                            border: "2px solid transparent",
-                            backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${
-                              promoEnhancedPlan?.metadata?.isUpsellOffer === true
-                                ? "#dc2626"
-                                : promoEnhancedPlan?.id?.includes("apprentice")
-                                ? "#94a3b8"
-                                : promoEnhancedPlan?.id?.includes("tradie")
-                                ? "#3b82f6"
-                                : promoEnhancedPlan?.id?.includes("foreman")
-                                ? "#10b981"
-                                : promoEnhancedPlan?.id?.includes("boss")
-                                ? "#fbbf24"
-                                : promoEnhancedPlan?.id?.includes("power-pack")
-                                ? "#f97316"
-                                : "#6b7280"
-                            }, transparent)`,
-                            backgroundOrigin: "border-box",
-                            backgroundClip: "padding-box, border-box",
-                          }}
+                          className="rounded-lg sm:rounded-xl p-2 sm:p-3"
+                          style={
+                            cardBorderColor
+                              ? {
+                                  border: `2px solid ${cardBorderColor}`,
+                                  backgroundImage: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+                                }
+                              : {
+                                  border: "2px solid transparent",
+                                  backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${accentHex}, transparent)`,
+                                  backgroundOrigin: "border-box",
+                                  backgroundClip: "padding-box, border-box",
+                                }
+                          }
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4
-                                  className={`font-bold text-xs sm:text-sm ${
-                                    promoEnhancedPlan?.id?.includes("apprentice")
-                                      ? "text-gray-300"
-                                      : promoEnhancedPlan?.id?.includes("tradie")
-                                      ? "text-blue-400"
-                                      : promoEnhancedPlan?.id?.includes("foreman")
-                                      ? "text-green-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.6)]"
-                                      : promoEnhancedPlan?.id?.includes("boss")
-                                      ? "text-yellow-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]"
-                                      : promoEnhancedPlan?.id?.includes("power-pack")
-                                      ? "text-orange-400 drop-shadow-[0_0_6px_rgba(249,115,22,0.6)]"
-                                      : "text-white"
-                                  }`}
-                                >
-                                  {promoEnhancedPlan?.name || "No package selected"}
-                                </h4>
-                              </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <h4
+                                className={`font-bold text-xs sm:text-sm leading-tight ${nameStyle ? "" : ""}`}
+                                style={nameStyle ?? (isPackageCard ? { color: accentHex } : undefined)}
+                              >
+                                {promoEnhancedPlan?.name || "No package selected"}
+                              </h4>
                               <p
-                                className={`text-xs sm:text-sm ${
-                                  promoEnhancedPlan?.id &&
-                                  (promoEnhancedPlan.metadata?.isUpsellOffer === true ||
-                                    promoEnhancedPlan.id.startsWith("mini-pack-") ||
-                                    promoEnhancedPlan.id.includes("tradie") ||
-                                    promoEnhancedPlan.id.includes("apprentice-pack") ||
-                                    promoEnhancedPlan.id.includes("tradie-pack") ||
-                                    promoEnhancedPlan.id.includes("foreman") ||
-                                    promoEnhancedPlan.id.includes("foreman-pack") ||
-                                    promoEnhancedPlan.id.includes("boss-pack") ||
-                                    promoEnhancedPlan.id.includes("boss") ||
-                                    promoEnhancedPlan.id.includes("power-pack"))
-                                    ? "text-gray-100"
-                                    : "text-gray-600"
-                                }`}
+                                className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600" : ""}`}
+                                style={
+                                  isPackageCard && pkgScheme.textGradientStyle
+                                    ? { ...pkgScheme.textGradientStyle, opacity: 0.9 }
+                                    : isPackageCard
+                                      ? { color: accentHex }
+                                      : undefined
+                                }
                               >
                                 {promoEnhancedPlan?.features && promoEnhancedPlan.features.length > 0
                                   ? promoEnhancedPlan.features[0].text
                                   : promoEnhancedPlan?.subtitle || "No package selected"}
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="flex flex-col gap-0.5 items-end shrink-0">
                               <div
-                                className={`font-bold text-xs sm:text-sm ${
-                                  promoEnhancedPlan?.id?.includes("apprentice")
-                                    ? "text-gray-300"
-                                    : promoEnhancedPlan?.id?.includes("tradie")
-                                    ? "text-blue-400"
-                                    : promoEnhancedPlan?.id?.includes("foreman")
-                                    ? "text-green-300 drop-shadow-[0_0_4px_rgba(16,185,129,0.6)]"
-                                    : promoEnhancedPlan?.id?.includes("boss") ||
-                                      promoEnhancedPlan?.id?.includes("power-pack")
-                                    ? "text-yellow-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.6)]"
-                                    : "text-white"
-                                }`}
+                                className={`font-bold text-xs sm:text-sm leading-tight ${pkgScheme.textGradientStyle ? "" : ""}`}
+                                style={
+                                  isPackageCard && pkgScheme.textGradientStyle
+                                    ? pkgScheme.textGradientStyle
+                                    : isPackageCard
+                                      ? { color: accentHex }
+                                      : undefined
+                                }
                               >
                                 {promoEnhancedPlan?.price && promoEnhancedPlan?.period
                                   ? promoEnhancedPlan.period === "one-time"
@@ -5062,36 +5068,29 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                     : `$${promoEnhancedPlan.price} Per Giveaway`
                                   : "No price"}
                               </div>
-                              {/* Only show change button if it's not a limited upsell offer */}
                               {promoEnhancedPlan?.metadata?.isUpsellOffer !== true && (
                                 <button
                                   onClick={handlePackageChange}
-                                  className={`relative z-10 mt-1 text-xs sm:text-sm underline hover:no-underline transition-all duration-200 cursor-pointer ${
-                                    promoEnhancedPlan?.id &&
-                                    (promoEnhancedPlan.id.startsWith("mini-pack-") ||
-                                      promoEnhancedPlan.id.includes("tradie") ||
-                                      promoEnhancedPlan.id.includes("apprentice-pack") ||
-                                      promoEnhancedPlan.id.includes("tradie-pack") ||
-                                      promoEnhancedPlan.id.includes("foreman") ||
-                                      promoEnhancedPlan.id.includes("foreman-pack") ||
-                                      promoEnhancedPlan.id.includes("boss-pack") ||
-                                      promoEnhancedPlan.id.includes("boss") ||
-                                      promoEnhancedPlan.id.includes("power-pack"))
-                                      ? "text-gray-200 hover:text-white"
-                                      : "text-blue-600 hover:text-blue-800"
-                                  }`}
+                                  className={`relative z-10 text-xs sm:text-sm leading-tight underline hover:no-underline transition-all duration-200 cursor-pointer ${!isPackageCard ? "text-blue-600 hover:text-blue-800" : ""}`}
+                                  style={
+                                    isPackageCard
+                                      ? { color: pkgScheme.changeButtonTextWhite ? "white" : accentHex }
+                                      : undefined
+                                  }
                                 >
                                   Change
                                 </button>
                               )}
                             </div>
                           </div>
-                          {/* Promo Active Section */}
                           {promoEnhancedPlan?.metadata?.isPromoActive &&
                             promoEnhancedPlan?.metadata?.promoMultiplier && (
-                              <div className="mt-3 pt-3 border-t border-yellow-400/30">
+                              <div
+                                className="mt-3 pt-3 border-t"
+                                style={{ borderColor: bonusBorderColor }}
+                              >
                                 <div className="flex items-center justify-center gap-2">
-                                  <span className="text-xs sm:text-sm text-yellow-300 font-semibold">
+                                  <span className="text-xs sm:text-sm font-semibold" style={{ color: bonusTextColor }}>
                                     <HexagonalPromoBadge
                                       multiplier={promoEnhancedPlan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
                                       size="xs"
@@ -5105,7 +5104,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                             )}
                         </div>
                       </>
-                    )}
+                    );
+                    })()}
                   </div>
                 </div>
               </div>

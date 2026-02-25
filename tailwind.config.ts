@@ -1,10 +1,14 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  safelist: [
+    { pattern: /^(text|bg|border|shadow|ring)-premium-gold(\/[\d]+)?$/ },
+  ],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/utils/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
@@ -37,16 +41,15 @@ const config: Config = {
           900: "#111827",
         },
         makita: {
-          // Makita brand colors - official cyan/teal palette
-          // Using proper color scale for Tailwind compatibility
-          400: "#007577", // Darker Makita teal
-          500: "#008C95", // Primary Makita cyan
-          600: "#008C95", // Primary Makita cyan (same as 500)
-          700: "#007577", // Darker Makita teal (same as 400)
-          // Legacy aliases for backward compatibility
-          light: "#008C95",
-          dark: "#007577",
+          // Makita dark teal palette from circuit-style reference
+          400: "#065255", // Deep muted teal (edges)
+          500: "#008C95", // Primary/vibrant teal
+          600: "#00B8C2", // Lighter center
+          700: "#065255", // Darkest
+          light: "#00B8C2",
+          dark: "#065255",
         },
+        "premium-gold": "#D4AF37",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "sans-serif"],

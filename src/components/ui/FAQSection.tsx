@@ -17,6 +17,8 @@ interface FAQSectionProps {
   categories?: string[];
   showCategoryFilter?: boolean;
   variant?: "red" | "blue" | "purple" | "gold";
+  iconColor?: string;
+  iconColorHex?: string;
   className?: string;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "4xl";
 }
@@ -48,6 +50,8 @@ export default function FAQSection({
   categories = [],
   showCategoryFilter = false,
   variant = "red",
+  iconColor,
+  iconColorHex,
   className = "",
   maxWidth = "4xl",
 }: FAQSectionProps) {
@@ -101,7 +105,7 @@ export default function FAQSection({
         )}
 
         {/* FAQ Accordion */}
-        <MetallicAccordion items={accordionItems} variant={variant} allowMultiple={false} />
+        <MetallicAccordion items={accordionItems} variant={variant} iconColor={iconColor} iconColorHex={iconColorHex} allowMultiple={false} />
       </div>
     </div>
   );

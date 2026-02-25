@@ -16,6 +16,7 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useSearchParams, usePathname } from "next/navigation";
 import type { PrizeCatalogEntry } from "@/config/prizes";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
@@ -264,6 +265,7 @@ const formatTimeWithoutPeriod = (date: Date): string => {
 
 export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const prizeRef = useScrollAnimation();
+  const theme = usePromoTheme();
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
@@ -565,17 +567,17 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
           {prizes.length > 1 && (
             <div className="mt-4 sm:mt-6">
               <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
-               Pick your <span style={{ color: "#EE0000" }}>toolbox</span>
+               Pick your <span style={{ color: theme.primary }}>toolbox</span>
               </p>
               
-              {/* Toolbox Type Toggle - Milwaukee (left) and Sidchrome (right) */}
+              {/* Toolbox Type Toggle - Milwaukee (left) and Sidchrome (right) - uses brandColors to match active power toolset */}
               <div className="flex justify-center gap-3 sm:gap-4 mb-4">
                 <button
                   onClick={() => handleToolboxTypeChange("milwaukee")}
                   className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
                     toolboxType === "milwaukee"
-                      ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
+                      ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-lg ${brandColors.shadowColor}`
+                      : `bg-white text-gray-700 border-gray-300 ${brandColors.hoverBorderColor} ${brandColors.hoverTextColor}`
                   }`}
                   suppressHydrationWarning
                 >
@@ -585,8 +587,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   onClick={() => handleToolboxTypeChange("sidchrome")}
                   className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
                     toolboxType === "sidchrome"
-                      ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-600"
+                      ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-lg ${brandColors.shadowColor}`
+                      : `bg-white text-gray-700 border-gray-300 ${brandColors.hoverBorderColor} ${brandColors.hoverTextColor}`
                   }`}
                   suppressHydrationWarning
                 >
@@ -595,7 +597,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </div>
               
               <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
-               Pick your <span style={{ color: "#EE0000" }}>Power Toolset</span>
+               Pick your <span style={{ color: theme.primary }}>Power Toolset</span>
               </p>
 
               {/* Prize selection - 3-card grid for the selected toolbox type (stay visible even when cash is selected) */}
@@ -894,7 +896,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               onClick={handleEnterNow}
               suppressHydrationWarning
               className="promo-hero-cta-button w-full rounded-full hidden lg:block px-6 py-3 sm:px-8 sm:py-4"
-              style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
+              style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
                 <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
@@ -921,8 +923,9 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 ${
                   currentMajorDraw?.status === "frozen"
                     ? "bg-gradient-to-br from-gray-900 via-gray-800 to-black"
-                    : "bg-gradient-to-br from-red-600 to-red-700"
+                    : ""
                 }`}
+                style={currentMajorDraw?.status !== "frozen" ? { background: theme.gradientSolid } : undefined}
               >
                 {/* Frozen notice for consistency with MajorDrawSection */}
                 {currentMajorDraw?.status === "frozen" && (
@@ -971,7 +974,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               onClick={handleEnterNow}
               suppressHydrationWarning
               className="promo-hero-cta-button w-full rounded-full lg:hidden px-6 py-3 sm:px-8 sm:py-4"
-              style={{ background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" }}
+              style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
                 <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { FAQSection, FAQItem } from "@/components/ui";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 const faqs: FAQItem[] = [
   {
@@ -60,12 +61,14 @@ const faqs: FAQItem[] = [
 ];
 
 export default function PromoFAQs() {
+  const theme = usePromoTheme();
   return (
     <FAQSection
       title="Frequently Asked Questions"
       faqs={faqs}
       showCategoryFilter={false}
       variant="red"
+      iconColorHex={theme.primary}
       maxWidth="4xl"
       className="py-8 sm:py-12 lg:py-16"
     />

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 export default function FloatingGetEntriesButton() {
   const [isVisible, setIsVisible] = useState(false);
@@ -49,6 +50,7 @@ export default function FloatingGetEntriesButton() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const theme = usePromoTheme();
   const handleGetEntries = () => {
     const packagesSection = document.getElementById("packages");
     if (packagesSection) {
@@ -77,13 +79,23 @@ export default function FloatingGetEntriesButton() {
             whileTap={{ scale: 0.95 }}
             className={`group relative inline-flex items-center justify-center px-6 py-2 sm:px-10 sm:py-2.5 rounded-full font-extrabold text-sm sm:text-lg tracking-wide text-white 
                        border border-white/20 backdrop-blur-lg transition-all duration-300
-                       ${isInWinnersOrHowItWorks ? "promo-hero-cta-button shimmer-once overflow-hidden" : "bg-gradient-to-br from-red-600 via-red-700 to-red-800 shadow-[0_0_40px_rgba(220,38,38,0.6)] hover:shadow-[0_0_60px_rgba(239,68,68,0.8)]"}`}
-            style={isInWinnersOrHowItWorks ? { background: "linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)" } : undefined}
+                       ${isInWinnersOrHowItWorks ? "promo-hero-cta-button shimmer-once overflow-hidden" : ""}`}
+            style={
+              isInWinnersOrHowItWorks
+                ? { background: theme.gradientSolid }
+                : {
+                    background: theme.gradientSolid,
+                    boxShadow: `0 0 40px ${theme.shadowRgba}`,
+                  }
+            }
           >
             <span className="relative z-10">GET ENTRIES</span>
 
             {!isInWinnersOrHowItWorks && (
-              <span className="absolute inset-0 rounded-full border border-red-400/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <span
+                className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{ border: `1px solid ${theme.borderRgba}` }}
+              />
             )}
           </motion.button>
         </motion.div>

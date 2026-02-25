@@ -5,6 +5,7 @@ import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
+import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 
 interface PackageInclusionsExpandedProps {
   isExpanded: boolean;
@@ -19,48 +20,6 @@ interface PackageInclusionsExpandedProps {
  * for additional packages. Adapts to light and dark backgrounds (transparent/no background).
  */
 const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ isExpanded, packages, showAccumulationChart = false }) => {
-  // Helper function to get package color scheme - uses colors that work on both light and dark backgrounds
-  const getPackageColorScheme = (planId: string) => {
-    const normalizedId = planId.toLowerCase();
-
-    if (normalizedId.includes("apprentice")) {
-      return {
-        text: "text-gray-600",
-        bullet: "text-gray-500",
-        feature: "text-gray-700", // Works on both backgrounds with good contrast
-      };
-    } else if (normalizedId.includes("tradie")) {
-      return {
-        text: "text-blue-600",
-        bullet: "text-blue-500",
-        feature: "text-gray-700",
-      };
-    } else if (normalizedId.includes("foreman")) {
-      return {
-        text: "text-green-600",
-        bullet: "text-green-500",
-        feature: "text-gray-700",
-      };
-    } else if (normalizedId.includes("boss")) {
-      return {
-        text: "text-yellow-600",
-        bullet: "text-yellow-500",
-        feature: "text-gray-700",
-      };
-    } else if (normalizedId.includes("power")) {
-      return {
-        text: "text-orange-600",
-        bullet: "text-orange-500",
-        feature: "text-gray-700",
-      };
-    }
-    return {
-      text: "text-gray-600",
-      bullet: "text-gray-500",
-      feature: "text-gray-700",
-    };
-  };
-
   // Helper to get package icon - uses centralized utility with fallback logic
   const getPackageIconLocal = (planId: string) => {
     // Try direct lookup first using centralized utility
@@ -95,15 +54,19 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
   if (!isExpanded) return null;
 
   const renderPackageCard = (plan: LocalMembershipPlan) => {
-    const colorScheme = getPackageColorScheme(plan.id);
+    const colorScheme = getMembershipSectionColorScheme(plan.id, showAccumulationChart);
     const packageIcon = getPackageIconLocal(plan.id);
 
     return (
       <div
         key={plan.id}
-        className="space-y-3 rounded-2xl border border-gray-200 bg-white/95 shadow-[0_4px_20px_rgba(15,23,42,0.08)] p-4 sm:p-5 backdrop-blur-sm"
+        className="space-y-3 rounded-2xl shadow-[0_4px_20px_rgba(15,23,42,0.08)] p-4 sm:p-5 backdrop-blur-sm"
+        style={{
+          border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
+          backgroundColor: "rgba(255,255,255,0.95)",
+        }}
       >
-        {/* Package Name with Icon */}
+        {/* Package Name with Icon - uses package accent color */}
         <div className="flex items-center gap-3">
           {packageIcon && (
             <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 relative">
@@ -116,7 +79,12 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
               />
             </div>
           )}
-          <h3 className={`text-xl sm:text-2xl font-bold ${colorScheme.text}`}>{plan.name}</h3>
+          <h3
+            className="text-xl sm:text-2xl font-bold"
+            style={colorScheme.packageInclusionTextStyle ?? colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
+          >
+            {plan.name}
+          </h3>
         </div>
 
         {/* Features List - Vertical bullet points (dash aligned to text baseline on mobile) */}
@@ -124,10 +92,10 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
           {plan.features.map((feature, index) => (
             <li
               key={index}
-              className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.feature} text-sm sm:text-base leading-relaxed`}
+              className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.textOnLight ?? colorScheme.text} text-sm sm:text-base leading-relaxed`}
             >
-              <span className={`${colorScheme.bullet} font-bold flex-shrink-0`}>-</span>
-              <span className="flex-1 min-w-0">{feature.text}</span>
+              <span className={`${colorScheme.textOnLight ?? colorScheme.text} font-bold flex-shrink-0`}>-</span>
+              <span className={`flex-1 min-w-0 ${colorScheme.textOnLight ?? colorScheme.text}`}>{feature.text}</span>
             </li>
           ))}
         </ul>

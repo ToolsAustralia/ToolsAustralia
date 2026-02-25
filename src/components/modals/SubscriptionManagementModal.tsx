@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Settings, AlertTriangle, CheckCircle, XCircle, ArrowUp, ArrowDown } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
+import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useToast } from "@/components/ui/Toast";
 import { useRenewSubscription } from "@/hooks/queries/useSubscriptionQueries";
@@ -706,45 +707,35 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       {!renderAsPanel && <ModalHeader title="Manage Subscription" onClose={onClose} showLogo={false} />}
 
       <ModalContent padding="lg">
-        {membershipPackage && activeSubscription ? (
+        {membershipPackage && activeSubscription ? (() => {
+          const planId = membershipPackage._id || membershipPackage.name?.toLowerCase().replace(/\s+/g, "-") || "";
+          const currentPlanColorScheme = getMembershipSectionColorScheme(planId, true);
+          return (
           <div className="space-y-4 sm:space-y-6">
-            {/* Current Plan Info */}
+            {/* Current Plan Info - uses package color scheme (solid theme background + border) */}
             <div
-              className={`rounded-lg p-4 sm:p-6 text-white ${
-                // Dynamic gradient based on plan type - matching MembershipSection.tsx
-                membershipPackage.name?.toLowerCase().includes("tradie") ||
-                membershipPackage._id?.includes("tradie") ||
-                membershipPackage._id?.includes("apprentice-pack")
-                  ? "bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800"
-                  : membershipPackage.name?.toLowerCase().includes("tradie-pack") ||
-                    membershipPackage._id?.includes("tradie-pack")
-                  ? "bg-gradient-to-br from-emerald-600 via-green-700 to-teal-800"
-                  : membershipPackage.name?.toLowerCase().includes("foreman") ||
-                    membershipPackage._id?.includes("foreman") ||
-                    membershipPackage._id?.includes("foreman-pack")
-                  ? "bg-gradient-to-br from-purple-600 via-violet-700 to-indigo-800"
-                  : membershipPackage.name?.toLowerCase().includes("boss") || membershipPackage._id?.includes("boss")
-                  ? "bg-gradient-to-br from-gray-900 via-black to-gray-800 relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-r before:from-yellow-400/20 before:via-transparent before:to-yellow-400/20 before:animate-pulse before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-1000"
-                  : // Default fallback
-                    "bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800"
-              }`}
+              className={`rounded-lg p-4 sm:p-6 relative overflow-hidden ${currentPlanColorScheme.enterNowButtonTextClass ?? currentPlanColorScheme.text}`}
+              style={{
+                ...currentPlanColorScheme.badgeStyle,
+                border: `2px solid ${currentPlanColorScheme.accentHex}${currentPlanColorScheme.cardBorderOpacity || "CC"}`,
+              }}
             >
               <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
-                <h2 className="text-lg sm:text-xl font-bold">Current Plan</h2>
+                <h2 className="text-lg sm:text-xl font-bold" style={currentPlanColorScheme.textGradientStyle ?? undefined}>Current Plan</h2>
               </div>
 
               <div className="space-y-2 sm:space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90 text-xs sm:text-sm">Plan:</span>
-                  <span className="font-semibold text-xs sm:text-sm">{membershipPackage.name}</span>
+                  <span className="text-xs sm:text-sm opacity-90">Plan:</span>
+                  <span className="font-semibold text-xs sm:text-sm" style={currentPlanColorScheme.textGradientStyle ?? undefined}>{membershipPackage.name}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90 text-xs sm:text-sm">Price:</span>
+                  <span className="text-xs sm:text-sm opacity-90">Price:</span>
                   <span className="font-semibold text-xs sm:text-sm">${membershipPackage.price}/month</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90 text-xs sm:text-sm">Started:</span>
+                  <span className="text-xs sm:text-sm opacity-90">Started:</span>
                   <span className="font-semibold text-xs sm:text-sm">
                     {new Date(activeSubscription.startDate).toLocaleDateString("en-US", {
                       year: "numeric",
@@ -755,14 +746,14 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 </div>
                 {subscriptionBenefits?.isCancelled ? (
                   <div className="flex justify-between items-center">
-                    <span className="text-white/90 text-xs sm:text-sm">Subscription Ends:</span>
+                    <span className="text-xs sm:text-sm opacity-90">Subscription Ends:</span>
                     <span className="font-semibold text-yellow-300 text-xs sm:text-sm">
                       {formatDate(subscriptionBenefits.endDate || activeSubscription.endDate) ?? "Unknown"}
                     </span>
                   </div>
                 ) : activeSubscription.endDate ? (
                   <div className="flex justify-between items-center">
-                    <span className="text-white/90 text-xs sm:text-sm">Next Billing:</span>
+                    <span className="text-xs sm:text-sm opacity-90">Next Billing:</span>
                     <span className="font-semibold text-xs sm:text-sm">{formatDate(activeSubscription.endDate) ?? "Unknown"}</span>
                   </div>
                 ) : null}
@@ -784,7 +775,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 )}
 
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90 text-xs sm:text-sm">Auto Renewal:</span>
+                  <span className="text-xs sm:text-sm opacity-90">Auto Renewal:</span>
                   <span
                     className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${
                       activeSubscription.autoRenew ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"
@@ -1010,6 +1001,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                         lastMonthAccumulated
                       );
                       const downgradeEntries = downgradeCalculation.entriesToGrant;
+                      const colorScheme = getMembershipSectionColorScheme(downgrade.packageId, true);
+                      const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+                      const buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
 
                       return (
                         <div
@@ -1018,9 +1012,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                         >
                           <div className="flex-1 w-full sm:w-auto">
                             <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
-                              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-orange-500 rounded-full flex-shrink-0"></div>
+                              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: colorScheme.accentHex }}></div>
                               <h5 className="font-medium text-gray-900 text-sm sm:text-base">{downgrade.name}</h5>
-                              <span className="text-base sm:text-lg font-bold text-orange-600">${downgrade.price}/month</span>
+                              <span className="text-base sm:text-lg font-bold" style={{ color: colorScheme.accentHex }}>${downgrade.price}/month</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">{downgrade.description}</p>
                             <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500">
@@ -1028,18 +1022,20 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                               <span>{downgrade.partnerDiscountDays} days partner access</span>
                             </div>
                           </div>
-                          <Button
+                          <button
+                            type="button"
                             onClick={() => {
                               setSelectedDowngrade(downgrade);
                               setShowDowngradeConfirm(true);
                             }}
                             disabled={isLoading || benefitsLoading}
-                            variant="secondary"
-                            size="sm"
-                            className="border-orange-300 text-orange-600 hover:bg-orange-50 w-full sm:w-auto ml-0 sm:ml-4 text-xs sm:text-sm"
+                            className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto ml-0 sm:ml-4 disabled:opacity-60 disabled:cursor-not-allowed`}
+                            style={buttonStyle}
                           >
-                            Schedule Downgrade
-                          </Button>
+                            <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                              Schedule Downgrade
+                            </span>
+                          </button>
                         </div>
                       );
                     })}
@@ -1094,7 +1090,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             </div>
             )}
           </div>
-        ) : activeOneTimePackage ? (
+          );
+        })() : activeOneTimePackage ? (
           <div className="text-center py-8">
             <div className="bg-gray-50 rounded-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-2">One-Time Package</h2>

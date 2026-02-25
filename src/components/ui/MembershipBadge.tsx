@@ -2,66 +2,13 @@
 
 import Image from "next/image";
 import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
+import {
+  getMembershipSectionColorScheme,
+  derivePlanIdFromPackage,
+} from "@/utils/package-colors/packageColorScheme";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
-
-// Helper function to extract gradient color for border
-const getGradientColor = (gradient: string): string => {
-  if (gradient.includes("yellow-3") || gradient.includes("yellow-4")) return "#facc15";
-  if (gradient.includes("blue")) return "#3b82f6";
-  if (gradient.includes("purple")) return "#9333ea";
-  if (gradient.includes("orange")) return "#f97316";
-  if (gradient.includes("yellow-4") && gradient.includes("amber")) return "#fbbf24";
-  if (gradient.includes("gray-300") || gradient.includes("slate-400")) return "#94a3b8"; // Silver
-  if (gradient.includes("blue-500") || gradient.includes("blue-600")) return "#3b82f6"; // Blue
-  if (gradient.includes("green-500") || gradient.includes("green-600")) return "#22c55e"; // Green
-  return "#6b7280";
-};
-
-// Helper function to get package color scheme (matching MembershipSection)
-const getPackageColorScheme = (packageName: string) => {
-  const lowerName = packageName.toLowerCase();
-
-  if (lowerName.includes("apprentice")) {
-    return {
-      gradient: "from-gray-300 via-slate-400 to-gray-500",
-      text: "text-gray-300",
-      border: "border-gray-400/40",
-    };
-  } else if (lowerName.includes("tradie")) {
-    return {
-      gradient: "from-blue-500 via-blue-600 to-blue-700",
-      text: "text-blue-400",
-      border: "border-blue-500/50",
-    };
-  } else if (lowerName.includes("foreman")) {
-    return {
-      gradient: "from-green-500 via-green-600 to-green-700",
-      text: "text-green-300",
-      border: "border-green-500/50",
-    };
-  } else if (lowerName.includes("boss")) {
-    return {
-      gradient: "from-yellow-400 via-amber-500 to-yellow-600",
-      text: "text-yellow-400",
-      border: "border-yellow-400/50",
-    };
-  } else if (lowerName.includes("power")) {
-    return {
-      gradient: "from-orange-600 via-red-500 to-orange-700",
-      text: "text-orange-400",
-      border: "border-orange-500/50",
-    };
-  }
-
-  // Default fallback
-  return {
-    gradient: "from-slate-600 via-gray-700 to-slate-800",
-    text: "text-gray-400",
-    border: "border-gray-500/50",
-  };
-};
 
 // Helper function to get package icon based on package name and type
 // Uses centralized utility for consistency
@@ -96,9 +43,9 @@ const getBadgeText = (packageName: string, membershipType?: "subscription" | "on
 
 interface MembershipBadgeProps {
   /**
-   * Package data containing name and type
+   * Package data containing name, type, and optional _id (from API)
    */
-  packageData?: { name: string; type?: "subscription" | "one-time" };
+  packageData?: { _id?: string; name: string; type?: "subscription" | "one-time" };
   /**
    * Whether the membership is currently active
    */
@@ -168,60 +115,76 @@ export default function MembershipBadge({
       }
     : undefined;
 
-  // Icon-only: render just the icon (no text), e.g. for my-account one-time card
+  // Derive planId for package-themed styling
+  const planId = derivePlanIdFromPackage(packageData, finalMembershipType);
+  const isMembershipTab = finalMembershipType === "subscription";
+  const colorScheme = getMembershipSectionColorScheme(planId, isMembershipTab);
+  const badgeStyle = colorScheme.badgeStyle ?? {};
+
+  // Icon-only: render icon with package-themed background and border
   if (iconOnly) {
     if (!packageIcon) return null;
     const Wrapper = onClick ? "button" : "span";
+    const iconStyle = badgeStyle.background
+      ? {
+          ...badgeStyle,
+          border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
+          padding: "2px",
+        }
+      : {
+          background: colorScheme.accentHex,
+          border: `2px solid ${colorScheme.accentHex}`,
+          boxShadow: `0 0 8px ${colorScheme.accentHex}66`,
+          padding: "2px",
+        };
     return (
       <Wrapper
         type={onClick ? "button" : undefined}
         onClick={handleClick}
-        className={`inline-flex items-center justify-center flex-shrink-0 ${className} ${
-          onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded" : ""
+        className={`inline-flex items-center justify-center flex-shrink-0 rounded-full p-1 ${className} ${
+          onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
         }`}
+        style={iconStyle}
         title={packageData.name}
         aria-label={onClick ? `View details for ${packageData.name}` : undefined}
       >
         <Image
           src={packageIcon}
           alt={`${packageData.name} icon`}
-          className="w-6 h-6 object-contain"
-          width={24}
-          height={24}
+          className="w-5 h-5 object-contain"
+          width={20}
+          height={20}
         />
       </Wrapper>
     );
   }
 
-  // Get color scheme
-  const colorScheme = getPackageColorScheme(packageData.name);
-
   // Get badge text
   const badgeText = getBadgeText(packageData.name, finalMembershipType);
-
-  // Get gradient color for border
-  const borderGradientColor = getGradientColor(colorScheme.gradient);
 
   // Check if this is a boss or power package (for special animation)
   const isPremiumPackage =
     packageData.name.toLowerCase().includes("boss") || packageData.name.toLowerCase().includes("power");
 
   const Wrapper = onClick ? "button" : "span";
+  const fullBadgeStyle = badgeStyle.background
+    ? {
+        ...badgeStyle,
+        border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
+      }
+    : {
+        background: colorScheme.accentHex,
+        border: `2px solid ${colorScheme.accentHex}`,
+        boxShadow: `0 0 20px ${colorScheme.accentHex}66`,
+      };
   return (
     <Wrapper
       type={onClick ? "button" : undefined}
       onClick={handleClick}
-      className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-1 rounded-full shadow-lg relative overflow-hidden ${
-        colorScheme.text
-      } ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
+      className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-1 rounded-full shadow-lg relative overflow-hidden ${colorScheme.text} ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
         onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
       }`}
-      style={{
-        border: `2px solid transparent`,
-        backgroundImage: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${borderGradientColor}, transparent)`,
-        backgroundOrigin: `border-box`,
-        backgroundClip: `padding-box, border-box`,
-      }}
+      style={fullBadgeStyle}
       aria-label={onClick ? `View details for ${packageData.name}` : undefined}
     >
       {/* Package Icon */}
