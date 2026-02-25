@@ -11,7 +11,8 @@ export type COLOR_KEYS =
   | "dewalt-yellow"
   | "milwaukee-red"
   | "black"
-  | "mint-green";
+  | "mint-green"
+  | "cash-green";
 
 /** @deprecated Use COLOR_KEYS - kept for backward compatibility */
 export type PROMO_TIER_KEYS = COLOR_KEYS;
@@ -103,6 +104,7 @@ const PLAN_ID_TO_COLOR_KEY: Record<string, COLOR_KEYS> = {
   "power-pack": "milwaukee-red",
   "black-pack": "black",
   "mint-pack": "mint-green",
+  "cash-prize": "cash-green",
   // Color keys as identity (when getPackageColorScheme receives a color key directly)
   "kincrome-blue": "kincrome-blue",
   "ryobi-green": "ryobi-green",
@@ -111,6 +113,7 @@ const PLAN_ID_TO_COLOR_KEY: Record<string, COLOR_KEYS> = {
   "milwaukee-red": "milwaukee-red",
   black: "black",
   "mint-green": "mint-green",
+  "cash-green": "cash-green",
 };
 
 /** Normalize planId or color key to COLOR_KEYS */
@@ -123,6 +126,7 @@ function toColorKey(planId: string): COLOR_KEYS {
   if (planId.includes("power")) return "milwaukee-red";
   if (planId.includes("black")) return "black";
   if (planId.includes("mint")) return "mint-green";
+  if (planId.includes("cash")) return "cash-green";
   return "milwaukee-red";
 }
 
@@ -176,6 +180,13 @@ const BRAND_GRADIENTS: Record<COLOR_KEYS, { bg: string; primary: string; primary
     primary: "#66DD99",
     primaryLight: "#88E8B3",
     primaryDark: "#22AA55",
+    accent: "#000000",
+  },
+  "cash-green": {
+    bg: "linear-gradient(135deg, #16a34a 0%, #22c55e 50%, #15803d 100%)",
+    primary: "#22c55e",
+    primaryLight: "#4ade80",
+    primaryDark: "#16a34a",
     accent: "#000000",
   },
 };
@@ -245,6 +256,15 @@ const MEMBERSHIP_SECTION_GRADIENTS: Record<COLOR_KEYS, { bgGradient: string; gra
       border: "1px solid rgba(102, 221, 153, 0.9)",
     },
   },
+  "cash-green": {
+    bgGradient: "linear-gradient(135deg, #15803d 0%, #16a34a 40%, #22c55e 50%, #16a34a 60%, #15803d 100%)",
+    gradient: "from-[#16a34a] via-[#22c55e] to-[#15803d]",
+    badgeStyle: {
+      background: "#22c55e",
+      boxShadow: "0 0 35px rgba(34, 197, 94, 0.6), 0 4px 20px rgba(22, 163, 74, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
+      border: "1px solid rgba(34, 197, 94, 0.9)",
+    },
+  },
 };
 
 /**
@@ -279,7 +299,8 @@ export function slugToPromoTierPlanId(slug: string): COLOR_KEYS {
   if (s.includes("milwaukee")) return "milwaukee-red";
   if (s.includes("ryobi") || s.includes("tradie")) return "ryobi-green";
   if (s.includes("kincrome") || s.includes("apprentice")) return "kincrome-blue";
-  if (s.includes("black") || s.includes("cash")) return "black";
+  if (s.includes("cash")) return "cash-green";
+  if (s.includes("black")) return "black";
   if (s.includes("mint") || s.includes("green")) return "mint-green";
   return "milwaukee-red"; // Default for unknown
 }
@@ -293,6 +314,7 @@ const LANDING_PAGE_BRAND: Record<COLOR_KEYS, { primary: string; primaryLight: st
   "milwaukee-red": { primary: "#C8102E", primaryLight: "#E02D42", primaryDark: "#9a0c24" },
   black: { primary: "#D4AF37", primaryLight: "#E8C547", primaryDark: "#B8860B" },
   "mint-green": { primary: "#66DD99", primaryLight: "#88E8B3", primaryDark: "#22AA55" },
+  "cash-green": { primary: "#22c55e", primaryLight: "#4ade80", primaryDark: "#16a34a" },
 };
 
 // Tools Australia brand red (matches site nav, login, AdminSidebar: #ee0000)
@@ -548,6 +570,7 @@ export function getPackageGlowColor(planIdOrColorKey: string): string {
     case "milwaukee-red": return "from-[#C8102E]/20 via-[#000000]/8 to-transparent";
     case "black": return "from-[#D4AF37]/15 via-[#000000]/8 to-transparent";
     case "mint-green": return "from-[#66DD99]/20 via-[#000000]/8 to-transparent";
+    case "cash-green": return "from-[#22c55e]/20 via-[#000000]/8 to-transparent";
     default: return "from-gray-500/10 via-gray-500/2.5 to-transparent";
   }
 }
@@ -814,6 +837,38 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     barColorVertical: "bg-gradient-to-t from-[#22AA55] via-[#66DD99] to-[#88E8B3]",
     barColorLightVertical: "bg-gradient-to-t from-[#66DD99] via-[#88E8B3] to-[#66DD99]",
     barGradientCss: "linear-gradient(to top, #22AA55 0%, #66DD99 50%, #88E8B3 100%)",
+  },
+  "cash-green": {
+    bgGradient: BRAND_GRADIENTS["cash-green"].bg,
+    gradient: "from-[#22c55e] via-[#4ade80] to-[#16a34a]",
+    text: "text-white",
+    textMuted: "text-white/90",
+    textOnLight: "text-[#14532d]",
+    featureOnLight: "text-gray-700",
+    priceText: "text-white",
+    priceBadgeBg: "bg-white/25 backdrop-blur-sm",
+    buttonBg: "bg-[#16a34a] hover:bg-[#22c55e] active:scale-[0.98] border border-white/20",
+    buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2),0_0_12px_rgba(34,197,94,0.35)]",
+    buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(34,197,94,0.5)]",
+    buttonText: "text-white",
+    glow: "drop-shadow-[0_0_16px_rgba(34,197,94,0.6)]",
+    border: "border-[#22c55e]/50",
+    shadow: "shadow-[#22c55e]/40",
+    hoverShadow: "hover:shadow-[#22c55e]/55",
+    borderGlow: "animate-border-glow-green",
+    badgeStyle: {
+      background: "#22c55e",
+      boxShadow: "0 0 35px rgba(34, 197, 94, 0.6), 0 4px 20px rgba(22, 163, 74, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
+      border: "1px solid rgba(34, 197, 94, 0.9)",
+    },
+    accentHex: BRAND_GRADIENTS["cash-green"].primary,
+    entriesText: "text-white",
+    cardBorderOpacity: "CC",
+    barColor: "bg-gradient-to-r from-[#16a34a] via-[#22c55e] to-[#15803d]",
+    barColorLight: "bg-gradient-to-r from-[#22c55e] via-[#4ade80] to-[#22c55e]",
+    barColorVertical: "bg-gradient-to-t from-[#16a34a] via-[#22c55e] to-[#15803d]",
+    barColorLightVertical: "bg-gradient-to-t from-[#22c55e] via-[#4ade80] to-[#16a34a]",
+    barGradientCss: "linear-gradient(to top, #16a34a 0%, #22c55e 50%, #15803d 100%)",
   },
 };
 
