@@ -3302,6 +3302,25 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (result.success) {
+      // ✅ Safety net: Sync subscription.endDate for renewals (covers missed subscription.updated)
+      if (expandedInvoice.billing_reason === "subscription_cycle") {
+        try {
+          const freshSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const periodEnd = getSubscriptionPeriodEnd(freshSubscription);
+          if (periodEnd != null) {
+            await User.findByIdAndUpdate(user._id, {
+              $set: { "subscription.endDate": new Date(periodEnd * 1000) },
+            });
+            webhookLog("info", `Synced subscription.endDate from Stripe for renewal: ${user.email}`);
+          }
+        } catch (endDateSyncError) {
+          webhookLog(
+            "warn",
+            `Non-critical: could not sync subscription.endDate for renewal: ${endDateSyncError}`
+          );
+        }
+      }
+
       // ✅ Process referral if this is first purchase (processedPayments.length === 1)
       // Only process for initial subscription creation, not renewals or upgrades
       if (expandedInvoice.billing_reason === "subscription_create") {
