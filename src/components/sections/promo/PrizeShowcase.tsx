@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
@@ -20,6 +21,13 @@ import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useSearchParams, usePathname } from "next/navigation";
 import type { PrizeCatalogEntry } from "@/config/prizes";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
+import {
+  ToolboxSelector,
+  PowerToolsetCarousel,
+  getToolboxTypeFromSlug,
+  getToolsetFromSlug,
+  filterPrizesByToolboxType,
+} from "./prize-selection";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -202,41 +210,6 @@ const getFormattedLabel = (label: string, slug?: string, isMobile?: boolean) => 
   };
 };
 
-// Helper function to get toolbox type from slug
-const getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash" => {
-  if (slug === "cash-prize") return "cash";
-  // Check if slug is a Milwaukee toolbox combo (starts with "milwaukee-" or ends with "-milwaukee")
-  // but exclude sidchrome combos (e.g., "milwaukee-sidchrome")
-  if ((slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")) {
-    return "milwaukee";
-  }
-  // Check if slug includes "sidchrome" (for sidchrome toolbox combos)
-  if (slug.includes("sidchrome")) return "sidchrome";
-  // Default fallback (shouldn't happen with valid slugs)
-  return "sidchrome";
-};
-
-// Helper to get toolset (power toolset brand) from slug. Slug format: "{toolset}-{toolbox}"
-const getToolsetFromSlug = (slug: string): "milwaukee" | "dewalt" | "makita" | null => {
-  if (!slug || slug === "cash-prize") return null;
-  const toolset = slug.split("-")[0];
-  if (toolset === "milwaukee" || toolset === "dewalt" || toolset === "makita") return toolset;
-  return null;
-};
-
-// Helper function to filter prizes by toolbox type
-const filterPrizesByToolboxType = (prizes: PrizeCatalogEntry[], toolboxType: "sidchrome" | "milwaukee" | "cash") => {
-  if (toolboxType === "cash") {
-    return prizes.filter((p) => p.slug === "cash-prize");
-  }
-  if (toolboxType === "sidchrome") {
-    return prizes.filter((p) => p.slug.includes("sidchrome"));
-  }
-  if (toolboxType === "milwaukee") {
-    return prizes.filter((p) => p.slug.includes("milwaukee") && !p.slug.includes("sidchrome"));
-  }
-  return prizes;
-};
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (day: number): string => {
@@ -315,19 +288,6 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const toolsetToolboxType: "sidchrome" | "milwaukee" =
     toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
   const toolsetPrizes = filterPrizesByToolboxType(prizes, toolsetToolboxType);
-
-  // Keep one toolset card visually selected when switching toolbox (URL may lag). Same toolset, current toolbox.
-  const effectiveSlugForToolsetGrid =
-    toolboxType === "cash" || !activeSlug
-      ? activeSlug
-      : toolsetPrizes.some((p) => p.slug === activeSlug)
-        ? activeSlug
-        : (() => {
-            const toolset = getToolsetFromSlug(activeSlug);
-            if (!toolset) return activeSlug;
-            const derived = `${toolset}-${toolsetToolboxType}`;
-            return toolsetPrizes.some((p) => p.slug === derived) ? derived : activeSlug;
-          })();
 
   // Find the index of the active prize in the filtered list for mobile navigation
   const activePrizeIndex = filteredPrizes.findIndex((p) => p.slug === activeSlug);
@@ -502,12 +462,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     // Remember last non-cash toolbox type so Step 2 stays visible if cash is selected later
     setLastNonCashToolboxType(type);
 
-    // Retain toolset selection when switching toolbox: e.g. Milwaukee + DeWalt -> Sidchrome toolbox -> Sidchrome + DeWalt
-    const currentToolset = getToolsetFromSlug(activeSlug ?? "");
-    if (currentToolset) {
-      const newSlug = `${currentToolset}-${type}` as const;
-      handleSelectPrize(newSlug);
-    }
+    // Do not navigate or auto-select a toolset when user only clicked the toolbox.
+    // User must click a toolset to select it; carousel will show no selection until they do.
   };
 
   if (!activePrize) {
@@ -533,15 +489,14 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
     >
       <div className={useParentContainer ? "relative z-0 w-full" : `${SECTION_CONTAINER_CLASSES} relative z-0`}>
         <div className="text-center mb-6 sm:mb-12">
-          {/* First Prize Image - Conditionally displayed based on selected prize */}
+          {/* First Prize Image - Conditionally displayed based on selected prize; smaller on desktop */}
           <div className="flex justify-center">
             <Image
               src={getFirstPrizeImagePath(activeSlug)}
               alt="First Prize"
               width={800}
               height={200}
-              // add scale-150 h-[375px] if new 1stprize image is added
-              className="w-full max-w-4xl h-auto object-contain h-auto "
+              className="w-full max-w-4xl lg:max-w-2xl h-auto object-contain"
               priority
             />
           </div>
@@ -565,115 +520,55 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
           </div>
 
           {prizes.length > 1 && (
-            <div className="mt-4 sm:mt-6">
-              <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="mt-6 sm:mt-8"
+            >
+              <motion.p
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, duration: 0.4 }}
+                className="font-agency font-[950] uppercase text-black mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+              >
                Pick your <span style={{ color: theme.primary }}>toolbox</span>
-              </p>
-              
-              {/* Toolbox Type Toggle - Milwaukee (left) and Sidchrome (right) - uses brandColors to match active power toolset */}
-              <div className="flex justify-center gap-3 sm:gap-4 mb-4">
-                <button
-                  onClick={() => handleToolboxTypeChange("milwaukee")}
-                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
-                    toolboxType === "milwaukee"
-                      ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-lg ${brandColors.shadowColor}`
-                      : `bg-white text-gray-700 border-gray-300 ${brandColors.hoverBorderColor} ${brandColors.hoverTextColor}`
-                  }`}
-                  suppressHydrationWarning
-                >
-                  Milwaukee Toolbox
-                </button>
-                <button
-                  onClick={() => handleToolboxTypeChange("sidchrome")}
-                  className={`font-acumin font-[950] px-4 sm:px-10 py-2 sm:py-4 rounded-xl sm:rounded-2xl text-[14px] sm:text-xl transition-all duration-200 border-2 ${
-                    toolboxType === "sidchrome"
-                      ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} ${brandColors.borderColor} shadow-lg ${brandColors.shadowColor}`
-                      : `bg-white text-gray-700 border-gray-300 ${brandColors.hoverBorderColor} ${brandColors.hoverTextColor}`
-                  }`}
-                  suppressHydrationWarning
-                >
-                  Sidchrome Toolbox
-                </button>
-              </div>
-              
-              <p className="font-agency font-[950] uppercase text-black mb-2 sm:mb-3 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]">
+              </motion.p>
+
+              <ToolboxSelector
+                selectedType={
+                  toolboxType === "cash"
+                    ? null
+                    : (() => {
+                        const t = getToolboxTypeFromSlug(activeSlug ?? "");
+                        return t === "milwaukee" || t === "sidchrome" ? t : lastNonCashToolboxType;
+                      })()
+                }
+                onSelect={handleToolboxTypeChange}
+                className="mb-8 sm:mb-10"
+              />
+
+              <motion.p
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.4 }}
+                className="font-agency font-[950] uppercase text-black mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+              >
                Pick your <span style={{ color: theme.primary }}>Power Toolset</span>
-              </p>
+              </motion.p>
 
-              {/* Prize selection - 3-card grid for the selected toolbox type (stay visible even when cash is selected) */}
-              <div className={`grid ${toolsetPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 sm:gap-4 max-w-5xl mx-auto overflow-visible`}>
-                    {toolsetPrizes.map((prizeOption) => {
-                      const isActive = prizeOption.slug === effectiveSlugForToolsetGrid;
-                      const brandColors = getPrizeBrandColors(prizeOption.slug);
-                      const brandLogoPath = getBrandLogoPath(prizeOption.slug);
-                      const formattedLabel = getFormattedLabel(prizeOption.label, prizeOption.slug, true);
-                      return (
-                        <button
-                          key={prizeOption.slug}
-                          onClick={() => handleSelectPrize(prizeOption.slug)}
-                          tabIndex={-1}
-                          style={!isActive ? {
-                            outline: "none",
-                            boxShadow: `0 0 15px ${getBrandGlowColor(prizeOption.slug)}`,
-                            borderColor: getBrandBorderColor(prizeOption.slug),
-                          } : { 
-                            outline: "none", 
-                            boxShadow: "none",
-                            borderColor: getBrandBorderColor(prizeOption.slug),
-                          }}
-                          className={`relative p-3 sm:p-5 rounded-2xl border-2 transition-all duration-300 text-center cursor-pointer overflow-visible min-h-[90px] sm:min-h-[110px] group ${
-                            isActive
-                              ? `bg-gradient-to-br ${brandColors.gradient} ${brandColors.textColor} shadow-xl ${brandColors.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                              : `bg-white text-gray-700 border-opacity-100 ${brandColors.hoverBorderColor} hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]`
-                          }`}
-                        >
-                          {/* Brand logo watermark - only shown when active */}
-                          {isActive && brandLogoPath && (
-                            <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-                              <Image
-                                src={brandLogoPath}
-                                alt=""
-                                fill
-                                className="object-contain opacity-20"
-                                sizes="(max-width: 640px) 100px, 150px"
-                              />
-                            </div>
-                          )}
-
-                          {/* Hover glow effect for inactive cards */}
-                          {!isActive && (
-                            <div
-                              className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${brandColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
-                            />
-                          )}
-
-                          {/* Active shimmer effect */}
-                          {isActive && (
-                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                          )}
-
-                          {/* Active checkmark badge */}
-                          {isActive && (
-                            <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 animate-in fade-in zoom-in duration-200">
-                              <Check className={`w-4 h-4 ${brandColors.checkmarkColor}`} />
-                            </div>
-                          )}
-
-                          {/* Card content - line2 & line3 only (line1/toolbox removed - already in Pick Your Toolset) */}
-                          <div className="relative z-10 w-full overflow-visible">
-                            <div
-                              className={`font-acumin font-[950] text-[14px] sm:text-lg leading-[1.08] transition-colors duration-200 break-words text-center ${
-                                isActive ? "text-white" : "text-gray-900 group-hover:text-gray-950"
-                              }`}
-                            >
-                              {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
-                              {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+              <PowerToolsetCarousel
+                prizes={toolsetPrizes}
+                activeSlug={
+                  toolboxType === "cash"
+                    ? null
+                    : toolsetPrizes.some((p) => p.slug === activeSlug)
+                      ? activeSlug
+                      : null
+                }
+                onSelect={handleSelectPrize}
+                className=""
+              />
 
               {/* Cash option is a separate prize path (no toolbox/toolset) */}
               <div className="mt-4 max-w-5xl mx-auto">
@@ -704,7 +599,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
 
                 
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
 
