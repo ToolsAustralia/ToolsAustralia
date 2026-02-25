@@ -6,6 +6,7 @@
  * 2. Draw ending in 30 minutes (Frozen)
  * 3. Draw just ended (Gap Period)
  * 4. Next draw active (Post-Gap)
+ * 5. Draw tomorrow (DRAWN TOMORROW promo banner)
  */
 
 "use client";
@@ -37,7 +38,7 @@ export default function MajorDrawTestControls() {
     
     if (savedScenario) {
       const scenario = parseInt(savedScenario);
-      if (scenario >= 1 && scenario <= 4) {
+      if (scenario >= 1 && scenario <= 5) {
         setCurrentScenario(scenario);
       }
     }
@@ -251,6 +252,18 @@ export default function MajorDrawTestControls() {
               >
                 <div className="font-semibold text-sm mb-1">Test 4: Next Active</div>
                 <div className="text-xs text-white/80">Gap ended, next draw active</div>
+              </button>
+
+              {/* Test 5: Draw tomorrow */}
+              <button
+                onClick={() => runTestScenario(5, currentDrawPair !== null)}
+                disabled={isLoading}
+                className={`w-full text-left bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 disabled:from-gray-700 disabled:to-gray-800 text-white rounded-xl p-3 transition-all duration-200 hover:scale-[1.02] disabled:cursor-not-allowed ${
+                  currentScenario === 5 ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-gray-900" : ""
+                }`}
+              >
+                <div className="font-semibold text-sm mb-1">Test 5: Draw Tomorrow</div>
+                <div className="text-xs text-white/80">Active draw, drawDate = tomorrow AEST (promo banner)</div>
               </button>
             </div>
 
