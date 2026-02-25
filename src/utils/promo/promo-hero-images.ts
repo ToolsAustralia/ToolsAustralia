@@ -80,8 +80,11 @@ export function getMultiplierImageVariant(multiplier: number | null | undefined)
 }
 
 /**
- * Maps draw date status to image variant name
- * 
+ * Maps draw date status to image variant name.
+ * Assets used:
+ * - Drawn tomorrow: feb-drawn-tomorrow.webp (desktop), feb-drawn-tomorrow-mobile.webp (mobile)
+ * - Drawn tonight:  feb-drawn-tonight.webp (desktop), feb-drawn-tonight-mobile.webp (mobile)
+ *
  * @param status - Draw date status ("today", "tomorrow", or null)
  * @returns Image variant name (e.g., "feb-drawn-tonight", "feb-drawn-tomorrow")
  */

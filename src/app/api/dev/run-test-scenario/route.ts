@@ -1,17 +1,23 @@
 /**
  * Development API: Run Major Draw Test Scenarios
  *
- * POST /api/dev/run-test-scenario?scenario=1-4
+ * POST /api/dev/run-test-scenario?scenario=1-5
  *
- * Executes one of 4 test scenarios for major draw lifecycle testing.
+ * Executes one of 5 test scenarios for major draw lifecycle testing.
+ * Scenario 5: Draw tomorrow (active draw with drawDate = tomorrow AEST, for promo banner testing).
  * Only available in development environment.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
 import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
 import { getNextQueuedDraw } from "@/utils/draws/major-draw-helpers";
 import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
+import { createAESTDateAsUTC } from "@/utils/common/timezone";
+import { addDays, addMinutes } from "date-fns";
+
+const AEST_TIMEZONE = "Australia/Sydney";
 
 export async function POST(request: NextRequest) {
   // Only allow in development
@@ -27,8 +33,8 @@ export async function POST(request: NextRequest) {
     const restoreCurrentDrawId = searchParams.get("currentDrawId");
     const restoreNextDrawId = searchParams.get("nextDrawId");
 
-    if (scenario < 1 || scenario > 4) {
-      return NextResponse.json({ error: "Invalid scenario. Must be 1-4." }, { status: 400 });
+    if (scenario < 1 || scenario > 5) {
+      return NextResponse.json({ error: "Invalid scenario. Must be 1-5." }, { status: 400 });
     }
 
     await connectDB();
@@ -177,6 +183,25 @@ export async function POST(request: NextRequest) {
         nextIsActive = true;
         break;
 
+      case 5: {
+        // TEST 5: Draw tomorrow (active draw with drawDate = tomorrow AEST — for "DRAWN TOMORROW" promo banner)
+        const tomorrowDate = addDays(now, 1);
+        const tomorrowYear = parseInt(formatInTimeZone(tomorrowDate, AEST_TIMEZONE, "yyyy"), 10);
+        const tomorrowMonth = parseInt(formatInTimeZone(tomorrowDate, AEST_TIMEZONE, "M"), 10);
+        const tomorrowDay = parseInt(formatInTimeZone(tomorrowDate, AEST_TIMEZONE, "d"), 10);
+        currentDrawEnd = createAESTDateAsUTC(tomorrowYear, tomorrowMonth, tomorrowDay, 18, 0); // Tomorrow 6:00 PM AEST
+        currentFreeze = addMinutes(currentDrawEnd, -30);
+        currentStatus = "active";
+        currentIsActive = true;
+        currentConfigLocked = false;
+        currentLockedAt = undefined;
+
+        nextActivation = new Date(currentDrawEnd.getTime() + 4 * 60 * 60 * 1000);
+        nextStatus = "queued";
+        nextIsActive = false;
+        break;
+      }
+
       default:
         return NextResponse.json({ error: "Invalid scenario" }, { status: 400 });
     }
@@ -210,7 +235,8 @@ export async function POST(request: NextRequest) {
     const shouldTriggerReset =
       (scenario === 1 && currentIsActive) || // Test Case 1: Active draw
       (scenario === 2 && currentStatus === "frozen") || // Test Case 2: Frozen draw
-      (scenario === 4 && nextIsActive); // Test Case 4: Next draw active
+      (scenario === 4 && nextIsActive) || // Test Case 4: Next draw active
+      (scenario === 5 && currentIsActive); // Test Case 5: Draw tomorrow (active)
 
     if (shouldTriggerReset) {
       try {
@@ -236,6 +262,7 @@ export async function POST(request: NextRequest) {
       "Frozen draw (ends in 30 mins)",
       "Gap period (just ended)",
       "Next draw active (post-gap)",
+      "Draw tomorrow (DRAWN TOMORROW promo)",
     ];
 
     const response: {
