@@ -1,7 +1,9 @@
 "use client";
 
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
-import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
+import type { PackageColorsVariantConfig } from "@/utils/package-colors/packageColorScheme";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 
 /** When set (e.g. in my-account explainer), chart shows user's actual accumulation from lastMonthAccumulatedEntries; multiplier is not applied and promo badge is hidden. */
 export interface UserAccumulationInput {
@@ -39,8 +41,8 @@ const packages = [
 // Map MembershipSection package colors to chart format (vertical bars)
 // Uses membership tab mapping: tradie=Kincrome, foreman=Ryobi, boss=Black
 // barGradientCss uses inline styles because Tailwind doesn't scan utils/ for arbitrary classes
-const getChartColorScheme = (packageId: string) => {
-  const scheme = getMembershipSectionColorScheme(packageId, true);
+function getChartColorScheme(packageId: string, variantConfig?: PackageColorsVariantConfig) {
+  const scheme = getPackageColorSchemeForPromo(packageId, true, variantConfig);
   return {
     barGradientCss:
       scheme.barGradientCss ?? "linear-gradient(to top, #475569 0%, #64748b 50%, #475569 100%)",
@@ -48,7 +50,7 @@ const getChartColorScheme = (packageId: string) => {
     border: scheme.border,
     accentHex: scheme.accentHex,
   };
-};
+}
 
 /**
  * Calculate accumulated entries for a package
@@ -65,6 +67,7 @@ export default function VerticalAccumulationChart({
   showOnlySelectedPackage = false,
   userAccumulation,
 }: VerticalAccumulationChartProps) {
+  const { variantConfig } = useVariantContext();
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const promoMultiplier = resolvedMembershipMultiplier ?? 1;
 
@@ -89,7 +92,7 @@ export default function VerticalAccumulationChart({
               userAccumulation.lastMonthAccumulatedEntries + 2 * userAccumulation.baseEntriesPerMonth,
           }
         : calculateAccumulation(pkg.baseEntries, useUserData ? 1 : promoMultiplier);
-    const colorScheme = getChartColorScheme(pkg.id);
+    const colorScheme = getChartColorScheme(pkg.id, variantConfig);
 
     return {
       ...pkg,
