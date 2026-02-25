@@ -54,7 +54,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { rewardsEnabled } from "@/config/featureFlags";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
-import { getPackageColorScheme, getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
 import { autoLogPaymentError, autoLogStripeError, type PaymentErrorDetails } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -4979,9 +4979,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                           ? "power-pack"
                           : (promoEnhancedPlan?.id || "power-pack");
                         const isMembershipTab = promoEnhancedPlan?.period !== "one-time";
-                        const pkgScheme = promoEnhancedPlan?.metadata?.isUpsellOffer
-                          ? getPackageColorScheme(planId)
-                          : getMembershipSectionColorScheme(planId, isMembershipTab);
+                        const pkgScheme = getPackageColorSchemeForPromo(planId, isMembershipTab, contextVariantConfig);
                         const accentHex = promoEnhancedPlan?.metadata?.isUpsellOffer
                           ? promoTheme.primary
                           : (pkgScheme.accentHexLight ?? pkgScheme.accentHex);

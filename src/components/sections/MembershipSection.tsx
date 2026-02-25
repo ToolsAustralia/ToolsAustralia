@@ -22,7 +22,7 @@ import { SectionContainer } from "@/components/ui";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import {
-  getMembershipSectionColorScheme,
+  getPackageColorSchemeForPromo,
   getMembershipSectionGlowColor,
   getCardBorderStyle,
 } from "@/utils/package-colors/packageColorScheme";
@@ -494,7 +494,7 @@ export default function MembershipSection({
           <div className="lg:hidden overflow-visible ">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-md mx-auto overflow-visible">
               {membershipPlans.map((plan, index) => {
-                const colorScheme = getMembershipSectionColorScheme(plan.id, activeTab === "membership");
+                const colorScheme = getPackageColorSchemeForPromo(plan.id, activeTab === "membership", contextVariantConfig);
                 const highlighted = isHighlighted(plan.id);
                 const isAdditionalPackage =
                   plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
@@ -859,7 +859,7 @@ export default function MembershipSection({
           >
             {membershipPlans.length > 0 ? (
               membershipPlans.map((plan) => {
-              const colorScheme = getMembershipSectionColorScheme(plan.id, activeTab === "membership");
+              const colorScheme = getPackageColorSchemeForPromo(plan.id, activeTab === "membership", contextVariantConfig);
               const highlighted = isHighlighted(plan.id);
               const isAdditionalPackage =
                 plan.isMemberOnly && plan.name.toLowerCase().includes("additional");

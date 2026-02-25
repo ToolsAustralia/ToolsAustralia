@@ -1,6 +1,26 @@
 import mongoose, { Document, Schema } from "mongoose";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import type { CountdownMode } from "@/utils/promo-banner/countdown-mode";
+import type { COLOR_KEYS } from "@/utils/package-colors/packageColorScheme";
+
+/** Package slots for one-time tab (main + additional one-time packs) */
+export type OneTimePackageSlot =
+  | "apprentice-pack"
+  | "tradie-pack"
+  | "foreman-pack"
+  | "boss-pack"
+  | "power-pack"
+  | "black-pack"
+  | "mint-pack"
+  | "cash-prize";
+
+/** Package slots for membership tab */
+export type MembershipPackageSlot =
+  | "apprentice-pack"
+  | "tradie-pack"
+  | "foreman-pack"
+  | "boss-pack"
+  | "power-pack";
 
 /**
  * Variant Configuration Interface
@@ -36,6 +56,11 @@ export interface VariantConfig {
   };
   membershipModal?: {
     showPackageSelectionFirst?: boolean; // Toggle package selection modal on step 2 (for landing/promotion pages)
+  };
+  /** Package color overrides for split testing - one slot maps to one COLOR_KEYS value */
+  packageColors?: {
+    oneTime?: Partial<Record<OneTimePackageSlot, COLOR_KEYS>>;
+    membership?: Partial<Record<MembershipPackageSlot, COLOR_KEYS>>;
   };
 }
 

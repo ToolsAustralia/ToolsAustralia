@@ -1,11 +1,44 @@
 "use client";
 
 import React, { useState } from "react";
-import { Save, X, Image, Type, Package, ShoppingCart } from "lucide-react";
+import { Save, X, Image, Type, Package, ShoppingCart, Palette } from "lucide-react";
 import { Input, Textarea, Checkbox, Button, FormSection, Select } from "@/components/modals/ui";
 import { Variant, CreateVariantPayload } from "@/hooks/queries/useABTestingQueries";
 import type { CountdownMode } from "@/utils/promo-banner/countdown-mode";
 import { STATIC_URGENCY_LABEL_PRESETS } from "@/utils/promo-banner/countdown-mode";
+import type { OneTimePackageSlot, MembershipPackageSlot } from "@/models/ab-testing/Variant";
+import type { COLOR_KEYS } from "@/utils/package-colors/packageColorScheme";
+
+const COLOR_KEYS_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Use default" },
+  { value: "kincrome-blue", label: "Kincrome Blue" },
+  { value: "ryobi-green", label: "Ryobi Green" },
+  { value: "makita-teal", label: "Makita Teal" },
+  { value: "dewalt-yellow", label: "DeWalt Yellow" },
+  { value: "milwaukee-red", label: "Milwaukee Red" },
+  { value: "black", label: "Black" },
+  { value: "mint-green", label: "Mint Green" },
+  { value: "cash-green", label: "Cash Green" },
+];
+
+const ONE_TIME_SLOTS: { key: OneTimePackageSlot; label: string }[] = [
+  { key: "apprentice-pack", label: "Apprentice" },
+  { key: "tradie-pack", label: "Tradie" },
+  { key: "foreman-pack", label: "Foreman" },
+  { key: "boss-pack", label: "Boss" },
+  { key: "power-pack", label: "Power" },
+  { key: "black-pack", label: "Black" },
+  { key: "mint-pack", label: "Mint" },
+  { key: "cash-prize", label: "Cash" },
+];
+
+const MEMBERSHIP_SLOTS: { key: MembershipPackageSlot; label: string }[] = [
+  { key: "apprentice-pack", label: "Apprentice" },
+  { key: "tradie-pack", label: "Tradie" },
+  { key: "foreman-pack", label: "Foreman" },
+  { key: "boss-pack", label: "Boss" },
+  { key: "power-pack", label: "Power" },
+];
 
 interface VariantConfigEditorProps {
   variant?: Variant;
@@ -23,11 +56,12 @@ export default function VariantConfigEditor({ variant, experimentId, onSave, onC
     name: variant?.name || "",
     trafficPercentage: variant?.trafficPercentage || 50,
     isControl: variant?.isControl ?? false,
-    config: variant?.config || {
-      hero: {},
-      banner: {},
-      packages: {},
-      membershipModal: {},
+    config: {
+      hero: variant?.config?.hero ?? {},
+      banner: variant?.config?.banner ?? {},
+      packages: variant?.config?.packages ?? {},
+      membershipModal: variant?.config?.membershipModal ?? {},
+      packageColors: variant?.config?.packageColors ?? { oneTime: {}, membership: {} },
     },
   });
 
@@ -411,6 +445,79 @@ export default function VariantConfigEditor({ variant, experimentId, onSave, onC
           <p className="text-xs text-gray-500">
             Note: Package display order and other advanced configurations can be added in future updates.
           </p>
+        </div>
+      </FormSection>
+
+      {/* Package Colors Split Test */}
+      <FormSection title="Package colors (split test)" icon={Palette}>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500">
+            Override package colors for this variant. Conversions will appear in the same experiment&apos;s analytics. Leave empty to use default colors.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">One-time packages</h4>
+              <div className="space-y-2">
+                {ONE_TIME_SLOTS.map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <label className="w-24 text-sm text-gray-600 shrink-0">{label}</label>
+                    <Select
+                      id={`oneTime-${key}`}
+                      value={formData.config.packageColors?.oneTime?.[key] ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          config: {
+                            ...formData.config,
+                            packageColors: {
+                              ...formData.config.packageColors,
+                              oneTime: {
+                                ...formData.config.packageColors?.oneTime,
+                                [key]: (e.target.value || undefined) as COLOR_KEYS | undefined,
+                              },
+                            },
+                          },
+                        })
+                      }
+                      options={COLOR_KEYS_OPTIONS}
+                      placeholder="Default"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Membership packages</h4>
+              <div className="space-y-2">
+                {MEMBERSHIP_SLOTS.map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <label className="w-24 text-sm text-gray-600 shrink-0">{label}</label>
+                    <Select
+                      id={`membership-${key}`}
+                      value={formData.config.packageColors?.membership?.[key] ?? ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          config: {
+                            ...formData.config,
+                            packageColors: {
+                              ...formData.config.packageColors,
+                              membership: {
+                                ...formData.config.packageColors?.membership,
+                                [key]: (e.target.value || undefined) as COLOR_KEYS | undefined,
+                              },
+                            },
+                          },
+                        })
+                      }
+                      options={COLOR_KEYS_OPTIONS}
+                      placeholder="Default"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </FormSection>
 
