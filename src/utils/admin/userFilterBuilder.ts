@@ -49,6 +49,26 @@ export function getActiveSubscriptionSubFilter(): Record<string, unknown> {
 }
 
 /**
+ * Get filter for users who have EVER made a purchase (conversion metric).
+ * Counts: subscription (any paid state), one-time packages, mini-draw packages, upsells.
+ * Use for conversion rate = % of signups who ever paid.
+ *
+ * @param includeUserActive - Include isActive: true (default true)
+ * @returns MongoDB filter for $or clause or standalone query
+ */
+export function getEverPaidUserFilter(includeUserActive = true): Record<string, unknown> {
+  const orFilter: Record<string, unknown> = {
+    $or: [
+      { "subscription.packageId": { $exists: true, $ne: null } },
+      { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
+      { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
+      { upsellPurchases: { $exists: true, $not: { $size: 0 } } },
+    ],
+  };
+  return includeUserActive ? { ...orFilter, isActive: true } : orFilter;
+}
+
+/**
  * Builds a MongoDB filter object from UserFilters parameters
  * 
  * @param filters - User filter parameters from the request
