@@ -5,6 +5,10 @@
  * charging existing customers mid-cycle. They are not charged until the 24th,
  * then renew on the 24th going forward.
  *
+ * Uses MongoDB-first filtering: only fetches Stripe subscriptions for users
+ * whose subscription.startDate is on the 25th, 26th, or 27th (AEST). Much
+ * faster than listing all Stripe subscriptions.
+ *
  * Usage:
  *   npx tsx scripts/migrate-anchor-billing-24.ts [--dry-run] [--limit=N]
  *
@@ -15,10 +19,12 @@
  * Safety:
  * - Skips subscriptions that already renew on the 24th.
  * - Skips subscriptions with cancel_at_period_end === true (customer chose to cancel at current
- *   period end; we must not change billing or trial_end or we could charge them / extend access).
+ *   period end; we must not change trial_end or we could charge them / extend access).
  * - Rate-limit safety: delay between each Stripe update + retry on 429 (Too Many Requests).
- * - Only lists active and past_due; trialing subscriptions are not migrated (would override trial_end).
+ * - MongoDB-first: only processes users whose subscription.startDate is 25th, 26th, or 27th (AEST).
  * Logs { subId, customerEmail, oldAnchorDay, newAnchorDay, action } for every processed or skipped subscription.
+ *
+ * Env: .env.local must have MONGODB_URI and STRIPE_SECRET_KEY.
  *
  * @module scripts/migrate-anchor-billing-24
  */
@@ -63,11 +69,17 @@ function getCustomerEmail(sub: import("stripe").Stripe.Subscription): string | n
 }
 
 async function main() {
+  if (!process.env.MONGODB_URI) {
+    console.error("❌ MONGODB_URI is not set. Set it in .env.local and try again.");
+    process.exit(1);
+  }
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error("❌ STRIPE_SECRET_KEY is not set. Set it in .env.local and try again.");
     process.exit(1);
   }
 
+  const mongoose = await import("mongoose");
+  const User = (await import("../src/models/User")).default;
   const { stripe } = await import("../src/lib/stripe");
   const {
     getCalendarDayInAEST,
@@ -92,9 +104,10 @@ async function main() {
   let skippedAlreadyAnchored = 0;
   let skippedNot2527 = 0;
   let skippedNoPeriodEnd = 0;
+  let skippedStripeNotFound = 0;
   let updated = 0;
   let errors = 0;
-  let totalSeen = 0;
+  let subIdsToMigrate: string[] = [];
 
   const nowSec = Math.floor(Date.now() / 1000);
   const next24Timestamp = getNextAnchorTimestamp(new Date());
@@ -108,130 +121,151 @@ async function main() {
   console.log(`   Next 24th (AEST) used for trial_end: ${next24Date.toISOString()} (${formatInTimeZone(next24Date, AEST, "yyyy-MM-dd HH:mm zzz")})`);
   console.log("");
 
-  const seenIds = new Set<string>();
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log("✅ Connected to MongoDB\n");
 
-  for (const status of ["active", "past_due"] as const) {
-    if (processed >= LIMIT) break;
-    console.log(`   🔍 Listing subscriptions from Stripe (status=${status})...`);
-    let countThisStatus = 0;
-    try {
-      for await (const sub of stripe.subscriptions.list({
-        status,
-        limit: 100,
-        expand: ["data.customer"],
-      })) {
-        countThisStatus++;
-        if (seenIds.has(sub.id)) {
-          console.log(`      [DUP] ${sub.id} (already seen from other status)`);
-          continue;
-        }
-        seenIds.add(sub.id);
-        totalSeen++;
+    // MongoDB-first: only users whose subscription.startDate is on 25th, 26th, or 27th (AEST)
+    const usersWithSub = await User.find({
+      stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
+      "subscription.startDate": { $exists: true },
+    })
+      .select("stripeSubscriptionId subscription.startDate email")
+      .lean();
 
-        const subId = sub.id;
-        const customerEmail = getCustomerEmail(sub);
+    const candidateSubIds = usersWithSub
+      .filter((u) => u.subscription?.startDate && u.stripeSubscriptionId)
+      .filter((u) => {
+        const day = getCalendarDayInAEST(new Date(u.subscription!.startDate!));
+        return (ANCHOR_JOIN_DAYS as readonly number[]).includes(day);
+      })
+      .map((u) => u.stripeSubscriptionId as string);
+    subIdsToMigrate = [...new Set(candidateSubIds)].slice(0, LIMIT);
 
-        // Safety: do not touch subscriptions scheduled to cancel. Customer expects to stop at
-        // current period end; changing trial_end/billing could charge them or extend access.
-        if (sub.cancel_at_period_end) {
-          const periodEnd = getSubscriptionPeriodEnd(sub);
-          const oldAnchorDay = periodEnd != null ? getCalendarDayInAEST(new Date(periodEnd * 1000)) : 0;
-          log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 0, action: "skip_cancel_at_period_end" });
-          skippedCancelAtPeriodEnd++;
-          const renewalStr = periodEnd != null ? formatInTimeZone(new Date(periodEnd * 1000), AEST, "yyyy-MM-dd") : "n/a";
-          console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} cancel_at_period_end=true (ends ${renewalStr}) → skip_cancel_at_period_end`);
-          continue;
-        }
+    console.log(`   📊 Found ${subIdsToMigrate.length} subscription(s) with start date on 25th/26th/27th (AEST)\n`);
 
-        // getSubscriptionPeriodEnd: legacy (sub.current_period_end) or Basil (earliest of items[].current_period_end). Null if neither present (e.g. multi-item list without expand); we skip.
-        const periodEnd = getSubscriptionPeriodEnd(sub);
-
-        if (periodEnd == null) {
-          skippedNoPeriodEnd++;
-          log.push({ subId, customerEmail, oldAnchorDay: 0, newAnchorDay: 0, action: "skip_no_period_end" });
-          console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} renewalDate=n/a (no current_period_end on sub or items) → skip_no_period_end`);
-          continue;
-        }
-
-        const periodEndDate = new Date(periodEnd * 1000);
-        const renewalDateAEST = formatInTimeZone(periodEndDate, AEST, "yyyy-MM-dd");
-        const oldAnchorDay = getCalendarDayInAEST(periodEndDate);
-
-        // Already anchored: by period-end day (24) or by billing_cycle_anchor_config (older subs may not have this field; we rely on oldAnchorDay).
-        const already24 =
-          oldAnchorDay === ANCHOR_DAY_OF_MONTH ||
-          (sub as { billing_cycle_anchor_config?: { day_of_month?: number } }).billing_cycle_anchor_config?.day_of_month ===
-            ANCHOR_DAY_OF_MONTH;
-
-        if (already24) {
-          log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 24, action: "skip_already_anchored" });
-          skippedAlreadyAnchored++;
-          console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} (AEST) day=${oldAnchorDay} → already_anchored (24th)`);
-          continue;
-        }
-
-        // Only migrate 25th, 26th, 27th renewers
-        if (!(ANCHOR_JOIN_DAYS as readonly number[]).includes(oldAnchorDay)) {
-          log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: oldAnchorDay, action: "skip_not_25_27" });
-          skippedNot2527++;
-          console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} (AEST) day=${oldAnchorDay} → not_25_27 (only 25/26/27 are migrated)`);
-          continue;
-        }
-
-        // processed counts subscriptions considered for update (capped by LIMIT), not total scanned.
-        processed++;
-        log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 24, action: DRY_RUN ? "would_update" : "updated" });
-
-        if (DRY_RUN) {
-          console.log(
-            `      [DRY] ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} day=${oldAnchorDay} → WOULD UPDATE trial_end=${next24Timestamp} proration_behavior=none`
-          );
-          updated++;
-          continue;
-        }
-
-        try {
-          const existingMetadata = (sub.metadata || {}) as Record<string, string>;
-          // Overwriting billing_anchor_rule is intentional (idempotent re-run).
-          const updateParams = {
-            trial_end: next24Timestamp,
-            proration_behavior: "none" as const,
-            metadata: { ...existingMetadata, billing_anchor_rule: "join_25_27_to_24" },
-          };
-          let lastErr: unknown;
-          for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt++) {
-            try {
-              await stripe.subscriptions.update(subId, updateParams);
-              lastErr = undefined;
-              break;
-            } catch (e) {
-              lastErr = e;
-              const statusCode = e && typeof e === "object" && "statusCode" in e ? (e as { statusCode?: number }).statusCode : undefined;
-              if (statusCode === 429 && attempt < MAX_RETRIES_429) {
-                const waitMs = getRetryAfterMs(e, attempt);
-                console.log(`      [429] ${subId} rate limited, waiting ${waitMs}ms then retry (${attempt + 1}/${MAX_RETRIES_429})`);
-                await sleep(waitMs);
-                continue;
-              }
-              throw e;
-            }
-          }
-          if (lastErr) throw lastErr;
-          console.log(`      [OK]  ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} day=${oldAnchorDay} → updated to 24th`);
-          updated++;
-          await sleep(DELAY_BETWEEN_UPDATES_MS);
-        } catch (err) {
-          errors++;
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(`      [ERR] ${subId} ${customerEmail ?? "(no email)"} day=${oldAnchorDay} → ${msg}`);
-          log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 24, action: `error: ${msg}` });
-        }
-      }
-      console.log(`   ✓ status=${status}: ${countThisStatus} subscription(s) listed.\n`);
-    } catch (listErr) {
-      console.error(`   [ERR] listing status=${status}:`, listErr);
-      errors++;
+    if (subIdsToMigrate.length === 0) {
+      console.log("✅ No subscriptions to migrate.");
+      await mongoose.disconnect();
+      process.exit(0);
     }
+
+    for (const subId of subIdsToMigrate) {
+      if (processed >= LIMIT) break;
+
+      let sub: import("stripe").Stripe.Subscription;
+      try {
+        sub = await stripe.subscriptions.retrieve(subId, { expand: ["customer"] });
+      } catch (retrieveErr) {
+        const msg = retrieveErr instanceof Error ? retrieveErr.message : String(retrieveErr);
+        if (msg.includes("No such subscription") || (retrieveErr as { statusCode?: number })?.statusCode === 404) {
+          skippedStripeNotFound++;
+          log.push({ subId, customerEmail: null, oldAnchorDay: 0, newAnchorDay: 0, action: "skip_stripe_404" });
+          console.log(`      [SKIP] ${subId} not found in Stripe → skip`);
+          continue;
+        }
+        throw retrieveErr;
+      }
+
+      const customerEmail = getCustomerEmail(sub);
+
+      // Safety: do not touch subscriptions scheduled to cancel.
+      if (sub.cancel_at_period_end) {
+        const periodEnd = getSubscriptionPeriodEnd(sub);
+        const oldAnchorDay = periodEnd != null ? getCalendarDayInAEST(new Date(periodEnd * 1000)) : 0;
+        log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 0, action: "skip_cancel_at_period_end" });
+        skippedCancelAtPeriodEnd++;
+        const renewalStr = periodEnd != null ? formatInTimeZone(new Date(periodEnd * 1000), AEST, "yyyy-MM-dd") : "n/a";
+        console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} cancel_at_period_end=true (ends ${renewalStr}) → skip_cancel_at_period_end`);
+        continue;
+      }
+
+      const periodEnd = getSubscriptionPeriodEnd(sub);
+
+      if (periodEnd == null) {
+        skippedNoPeriodEnd++;
+        log.push({ subId, customerEmail, oldAnchorDay: 0, newAnchorDay: 0, action: "skip_no_period_end" });
+        console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} renewalDate=n/a (no current_period_end) → skip_no_period_end`);
+        continue;
+      }
+
+      const periodEndDate = new Date(periodEnd * 1000);
+      const renewalDateAEST = formatInTimeZone(periodEndDate, AEST, "yyyy-MM-dd");
+      const oldAnchorDay = getCalendarDayInAEST(periodEndDate);
+
+      // Already anchored to 24th
+      const already24 =
+        oldAnchorDay === ANCHOR_DAY_OF_MONTH ||
+        (sub as { billing_cycle_anchor_config?: { day_of_month?: number } }).billing_cycle_anchor_config?.day_of_month ===
+          ANCHOR_DAY_OF_MONTH;
+
+      if (already24) {
+        log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 24, action: "skip_already_anchored" });
+        skippedAlreadyAnchored++;
+        console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} (AEST) day=${oldAnchorDay} → already_anchored (24th)`);
+        continue;
+      }
+
+      // Double-check: only migrate 25th, 26th, 27th (MongoDB filter should have caught this, but Stripe period might differ)
+      if (!(ANCHOR_JOIN_DAYS as readonly number[]).includes(oldAnchorDay)) {
+        log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: oldAnchorDay, action: "skip_not_25_27" });
+        skippedNot2527++;
+        console.log(`      [SKIP] ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} (AEST) day=${oldAnchorDay} → not_25_27`);
+        continue;
+      }
+
+      processed++;
+      log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 24, action: DRY_RUN ? "would_update" : "updated" });
+
+      if (DRY_RUN) {
+        console.log(
+          `      [DRY] ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} day=${oldAnchorDay} → WOULD UPDATE trial_end=${next24Timestamp} proration_behavior=none`
+        );
+        updated++;
+        continue;
+      }
+
+      try {
+        const existingMetadata = (sub.metadata || {}) as Record<string, string>;
+        const updateParams = {
+          trial_end: next24Timestamp,
+          proration_behavior: "none" as const,
+          metadata: { ...existingMetadata, billing_anchor_rule: "join_25_27_to_24" },
+        };
+        let lastErr: unknown;
+        for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt++) {
+          try {
+            await stripe.subscriptions.update(subId, updateParams);
+            lastErr = undefined;
+            break;
+          } catch (e) {
+            lastErr = e;
+            const statusCode = e && typeof e === "object" && "statusCode" in e ? (e as { statusCode?: number }).statusCode : undefined;
+            if (statusCode === 429 && attempt < MAX_RETRIES_429) {
+              const waitMs = getRetryAfterMs(e, attempt);
+              console.log(`      [429] ${subId} rate limited, waiting ${waitMs}ms then retry (${attempt + 1}/${MAX_RETRIES_429})`);
+              await sleep(waitMs);
+              continue;
+            }
+            throw e;
+          }
+        }
+        if (lastErr) throw lastErr;
+        console.log(`      [OK]  ${subId} ${customerEmail ?? "(no email)"} renewalDate=${renewalDateAEST} day=${oldAnchorDay} → updated to 24th`);
+        updated++;
+        await sleep(DELAY_BETWEEN_UPDATES_MS);
+      } catch (err) {
+        errors++;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`      [ERR] ${subId} ${customerEmail ?? "(no email)"} day=${oldAnchorDay} → ${msg}`);
+        log.push({ subId, customerEmail, oldAnchorDay, newAnchorDay: 24, action: `error: ${msg}` });
+      }
+    }
+
+    await mongoose.disconnect();
+  } catch (connErr) {
+    console.error("❌ MongoDB connection or script error:", connErr);
+    process.exit(1);
   }
 
   console.log("--- Log (for audit) ---");
@@ -252,13 +286,16 @@ async function main() {
   }
 
   console.log("--- Summary ---");
-  console.log(`   Total subscriptions seen (active + past_due, deduped): ${totalSeen}`);
+  console.log(`   Subscriptions to process (25th/26th/27th start date): ${subIdsToMigrate.length}`);
   console.log(`   Will be updated / Updated: ${updated}${DRY_RUN ? " (dry run)" : ""}`);
-  console.log(`   Skipped (not 25th–27th): ${skippedNot2527}`);
-  console.log(`   Skipped (already cancelled, cancel_at_period_end): ${skippedCancelAtPeriodEnd}`);
+  console.log(`   Skipped (not 25th–27th by period_end): ${skippedNot2527}`);
+  console.log(`   Skipped (cancel_at_period_end): ${skippedCancelAtPeriodEnd}`);
   console.log(`   Skipped (already 24th): ${skippedAlreadyAnchored}`);
   if (skippedNoPeriodEnd > 0) {
     console.log(`   Skipped (no current_period_end): ${skippedNoPeriodEnd}`);
+  }
+  if (skippedStripeNotFound > 0) {
+    console.log(`   Skipped (Stripe 404): ${skippedStripeNotFound}`);
   }
   console.log(`   Errors: ${errors}`);
 }

@@ -2,13 +2,21 @@
  * Brand color mapping utility for prize toggles
  * Maps prize slugs to their corresponding brand gradient classes
  * Used in PrizeShowcase component
+ * Derives power-toolset colors from packageColorScheme (single source of truth)
  * Milwaukee uses Tools Australia brand red (#ee0000) for site consistency
  */
 
 import type { PrizeSlug } from "@/config/prizes";
+import {
+  getLandingPageThemeFromSlug,
+  getPackageColorScheme,
+  slugToPromoTierPlanId,
+  hexToRgbString,
+  hexToRgbaString,
+} from "@/utils/package-colors/packageColorScheme";
 
-// Tools Australia brand red (matches site nav, login, AdminSidebar)
-const TOOLS_AUSTRALIA_RED = {
+// Tools Australia brand red (matches site nav, login, AdminSidebar) - Milwaukee overrides package theme
+const TOOLS_AUSTRALIA_RED: PrizeBrandColors = {
   gradient: "from-[#d40000] via-[#ee0000] to-[#ff4444]",
   borderColor: "border-[#ee0000]",
   shadowColor: "shadow-[0_0_20px_rgba(238,0,0,0.4)]",
@@ -18,6 +26,23 @@ const TOOLS_AUSTRALIA_RED = {
   hoverBorderColor: "hover:border-[#ff4444]",
   hoverTextColor: "hover:text-[#ee0000]",
 } as const;
+
+/** Build PrizeBrandColors from packageColorScheme theme (dewalt, makita, ryobi, etc.) */
+function buildBrandColorsFromTheme(slug: PrizeSlug): PrizeBrandColors {
+  const theme = getLandingPageThemeFromSlug(slug);
+  const scheme = getPackageColorScheme(slugToPromoTierPlanId(slug));
+  const { primary, primaryLight, primaryDark } = theme;
+  return {
+    gradient: `from-[${primary}] via-[${primaryLight}] to-[${primaryDark}]`,
+    borderColor: `border-[${primaryDark}]`,
+    shadowColor: `shadow-[${primary}]/40`,
+    textColor: scheme.text,
+    subtitleTextColor: scheme.text === "text-black" ? "text-black/90" : "text-white/90",
+    checkmarkColor: `text-[${primaryDark}]`,
+    hoverBorderColor: `hover:border-[${primaryLight}]`,
+    hoverTextColor: `hover:text-[${primaryDark}]`,
+  };
+}
 
 export interface PrizeBrandColors {
   gradient: string;
@@ -37,55 +62,15 @@ export interface PrizeBrandColors {
 export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
   switch (slug) {
     case "milwaukee-sidchrome":
-      return { ...TOOLS_AUSTRALIA_RED };
-    case "dewalt-sidchrome":
-      return {
-        gradient: "from-yellow-500 via-yellow-600 to-amber-600",
-        borderColor: "border-amber-600",
-        shadowColor: "shadow-yellow-500/40",
-        textColor: "text-black",
-        subtitleTextColor: "text-black/90",
-        checkmarkColor: "text-yellow-600",
-        hoverBorderColor: "hover:border-amber-500",
-        hoverTextColor: "hover:text-amber-600",
-      };
-    case "makita-sidchrome":
-      return {
-        // Makita #009EA8 (extracted from reference imagery)
-        gradient: "from-makita-500 via-makita-600 to-makita-700",
-        borderColor: "border-makita-500", // Primary Makita cyan border
-        shadowColor: "shadow-makita-500/40", // Makita cyan shadow
-        textColor: "text-white",
-        subtitleTextColor: "text-white/90",
-        checkmarkColor: "text-makita-500", // Makita cyan checkmark
-        hoverBorderColor: "hover:border-makita-400", // Darker Makita teal on hover
-        hoverTextColor: "hover:text-makita-500",
-      };
     case "milwaukee-milwaukee":
       return { ...TOOLS_AUSTRALIA_RED };
+    case "dewalt-sidchrome":
     case "dewalt-milwaukee":
-      return {
-        gradient: "from-yellow-500 via-yellow-600 to-amber-600",
-        borderColor: "border-amber-600",
-        shadowColor: "shadow-yellow-500/40",
-        textColor: "text-black",
-        subtitleTextColor: "text-black/90",
-        checkmarkColor: "text-yellow-600",
-        hoverBorderColor: "hover:border-amber-500",
-        hoverTextColor: "hover:text-amber-600",
-      };
+    case "makita-sidchrome":
     case "makita-milwaukee":
-      return {
-        // Makita #009EA8 (extracted from reference imagery)
-        gradient: "from-makita-500 via-makita-600 to-makita-700",
-        borderColor: "border-makita-600", // Darker Makita cyan border
-        shadowColor: "shadow-makita-500/40", // Makita cyan shadow
-        textColor: "text-white",
-        subtitleTextColor: "text-white/90",
-        checkmarkColor: "text-makita-500", // Makita cyan checkmark
-        hoverBorderColor: "hover:border-makita-500", // Makita teal on hover
-        hoverTextColor: "hover:text-makita-500",
-      };
+    case "ryobi-sidchrome":
+    case "ryobi-milwaukee":
+      return buildBrandColorsFromTheme(slug);
     case "cash-prize":
       return {
         gradient: "from-green-500 via-green-600 to-green-700",
@@ -115,46 +100,23 @@ export function getPrizeBrandColors(slug: PrizeSlug): PrizeBrandColors {
 /**
  * Get brand-specific solid border color for CSS (RGB format)
  * Used for image gallery borders to match prize selector boxes
- * Using darker shades for better visibility
+ * Derives from packageColorScheme (primaryDark) for power toolsets
  */
 export function getBrandBorderColor(slug: PrizeSlug): string {
-  switch (slug) {
-    case "milwaukee-sidchrome":
-    case "milwaukee-milwaukee":
-      return "rgb(238, 0, 0)"; // Tools Australia #ee0000
-    case "dewalt-sidchrome":
-    case "dewalt-milwaukee":
-      return "rgb(229, 160, 0)"; // DeWalt #E5A000
-    case "makita-sidchrome":
-    case "makita-milwaukee":
-      return "rgb(0, 160, 170)"; // Makita #00A0AA
-    case "cash-prize":
-      return "rgb(22, 163, 74)"; // green-600 - darker green
-    default:
-      return "rgb(185, 28, 28)"; // red-700 fallback
-  }
+  if (slug === "cash-prize") return "rgb(22, 163, 74)"; // green-600
+  const theme = getLandingPageThemeFromSlug(slug);
+  return hexToRgbString(theme.primaryDark);
 }
 
 /**
  * Get brand-specific glow color for CSS (RGBA format)
  * Used for border glows and shadow effects
+ * Derives from packageColorScheme (primaryDark) for power toolsets
  */
 export function getBrandGlowColor(slug: PrizeSlug): string {
-  switch (slug) {
-    case "milwaukee-sidchrome":
-    case "milwaukee-milwaukee":
-      return "rgba(238, 0, 0, 0.6)"; // Tools Australia #ee0000
-    case "dewalt-sidchrome":
-    case "dewalt-milwaukee":
-      return "rgba(253, 184, 19, 0.6)"; // DeWalt #FDB813
-    case "makita-sidchrome":
-    case "makita-milwaukee":
-      return "rgba(0, 184, 194, 0.6)"; // Makita #00B8C2
-    case "cash-prize":
-      return "rgba(34, 197, 94, 0.6)"; // green-500
-    default:
-      return "rgba(239, 68, 68, 0.6)"; // red-500 fallback
-  }
+  if (slug === "cash-prize") return "rgba(34, 197, 94, 0.6)"; // green-500
+  const theme = getLandingPageThemeFromSlug(slug);
+  return hexToRgbaString(theme.primaryDark, 0.6);
 }
 
 /**
@@ -172,6 +134,9 @@ export function getBrandGlowClass(slug: PrizeSlug): string {
     case "makita-sidchrome":
     case "makita-milwaukee":
       return "glow-makita";
+    case "ryobi-sidchrome":
+    case "ryobi-milwaukee":
+      return "glow-ryobi";
     case "cash-prize":
       return "glow-green";
     default:

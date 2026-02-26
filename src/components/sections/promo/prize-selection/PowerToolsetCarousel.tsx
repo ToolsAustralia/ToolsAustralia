@@ -94,6 +94,7 @@ export function PowerToolsetCarousel({
     if (toolset === "milwaukee") return "milwaukee-red";
     if (toolset === "dewalt") return "dewalt-yellow";
     if (toolset === "makita") return "makita-teal";
+    if (toolset === "ryobi") return "ryobi-green";
     return "milwaukee-red";
   };
 

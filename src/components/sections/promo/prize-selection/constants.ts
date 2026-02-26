@@ -13,6 +13,7 @@ export const POWERSET_IMAGES: Record<string, string> = {
   milwaukee: "/images/brands/name/milwaukeeSet.png",
   dewalt: "/images/brands/name/dewaltSet.png",
   makita: "/images/brands/name/makitaSet.png",
+  ryobi: "/images/brands/name/ryobiSet.png",
 };
 
 /** Brand name logo images - overlay on power toolset images */
@@ -20,6 +21,7 @@ export const POWERSET_BRAND_TEXT: Record<string, string> = {
   milwaukee: "/images/brands/name/milwaukeeText.png",
   dewalt: "/images/brands/name/dewaltText.png",
   makita: "/images/brands/name/makitaText.png",
+  ryobi: "/images/brands/name/ryobiText.png",
 };
 
 /** Toolset display labels - shown as bottom overlay. Add label when adding new toolset. */
@@ -27,6 +29,7 @@ export const POWERSET_LABELS: Record<string, string> = {
   makita: "Makita 18V Brushless 15 Piece Combo Kit (DLX1514TX1)",
   dewalt: "DeWalt 18V XR 14 Piece Kit - 2X 5Ah & 2X FLEXVOLT® 9Ah",
   milwaukee: "Milwaukee M18 FUEL™ 13 Piece Power Pack 13B4",
+  ryobi: "RYOBI 18V ONE+ 12 Piece Kit + 36V Lawn Mower & Garden Tools",
 };
 
 /** Toolbox display labels - shown as bottom overlay */
@@ -39,7 +42,7 @@ export const TOOLBOX_LABELS: Record<string, string> = {
 export type ToolboxType = "sidchrome" | "milwaukee" | "cash";
 
 /** Power toolset brand keys */
-export type ToolsetType = "milwaukee" | "dewalt" | "makita";
+export type ToolsetType = "milwaukee" | "dewalt" | "makita" | "ryobi";
 
 /** Toolbox image size config - modify for responsive scaling */
 export const TOOLBOX_SIZES = {

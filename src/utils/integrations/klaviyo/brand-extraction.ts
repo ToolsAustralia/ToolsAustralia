@@ -16,14 +16,13 @@ import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
  * - "milwaukee-sidchrome" → "milwaukee"
  * - "dewalt-sidchrome" → "dewalt"
  * - "makita-sidchrome" → "makita"
- * - "milwaukee-milwaukee" → "milwaukee"
- * - "dewalt-milwaukee" → "dewalt"
- * - "makita-milwaukee" → "makita"
+ * - "ryobi-sidchrome" → "ryobi"
+ * - "ryobi-milwaukee" → "ryobi"
  * - "cash-prize" → "milwaukee" (default)
  * - "unknown-slug" → "milwaukee" (default)
  *
- * @param slug - Promotion slug (e.g., "milwaukee-sidchrome", "dewalt-milwaukee")
- * @returns Lowercase brand name (e.g., "milwaukee", "dewalt", "makita")
+ * @param slug - Promotion slug (e.g., "milwaukee-sidchrome", "dewalt-milwaukee", "ryobi-sidchrome")
+ * @returns Lowercase brand name (e.g., "milwaukee", "dewalt", "makita", "ryobi")
  */
 export function extractBrandFromSlug(slug: string | null | undefined): string {
   // Default brand is milwaukee
@@ -47,8 +46,8 @@ export function extractBrandFromSlug(slug: string | null | undefined): string {
   const brand = parts[0];
 
   // Validate that we extracted a valid brand
-  // Known brands: milwaukee, dewalt, makita
-  const validBrands = ["milwaukee", "dewalt", "makita"];
+  // Known brands: milwaukee, dewalt, makita, ryobi
+  const validBrands = ["milwaukee", "dewalt", "makita", "ryobi"];
   if (validBrands.includes(brand)) {
     return brand;
   }

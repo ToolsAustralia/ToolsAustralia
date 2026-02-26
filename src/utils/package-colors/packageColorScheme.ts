@@ -380,11 +380,24 @@ export function getLandingPageThemeFromSlug(slug: string): {
   };
 }
 
-function hexToRgbaValues(hex: string): [number, number, number] {
+/** Parse hex (#RRGGBB) to [r, g, b]. Used for RGB/RGBA string generation. */
+export function hexToRgbaValues(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return [r, g, b];
+}
+
+/** Convert hex to rgb(r, g, b) string for CSS. */
+export function hexToRgbString(hex: string): string {
+  const [r, g, b] = hexToRgbaValues(hex);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Convert hex to rgba(r, g, b, alpha) string for CSS. */
+export function hexToRgbaString(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgbaValues(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /**
