@@ -49,7 +49,7 @@ export async function createOrUpdateSubscriptionUser(
       packageId: subscriptionData.packageId,
       startDate: new Date(),
       endDate: undefined, // Subscriptions don't have end dates
-      isActive: subscriptionData.status === "active",
+      isActive: subscriptionData.status === "active" || subscriptionData.status === "trialing",
       autoRenew: true,
       status: subscriptionData.status,
     };
@@ -75,7 +75,7 @@ export async function createOrUpdateSubscriptionUser(
       packageId: subscriptionData.packageId,
       startDate: new Date(),
       endDate: undefined, // Subscriptions don't have end dates
-      isActive: subscriptionData.status === "active",
+      isActive: subscriptionData.status === "active" || subscriptionData.status === "trialing",
       autoRenew: true,
       status: subscriptionData.status,
       pendingChange: undefined, // Initialize pendingChange field for subscription management

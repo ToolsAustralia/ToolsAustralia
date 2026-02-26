@@ -9,9 +9,9 @@
  * stripe.subscriptions.create(), not to subscriptions created or managed via
  * Subscription Schedules.
  *
- * We use create_prorations so the first invoice reflects partial usage (signup
- * to next 24th). Alternative would be proration_behavior: none + trial_end to
- * next 24th (no charge until 24th).
+ * We use trial_end + proration_behavior: none so renewal anchors to the 24th
+ * (AEST). Callers add add_invoice_items with full package price so users pay
+ * immediately at signup rather than waiting until the 24th.
  */
 
 import { formatInTimeZone } from "date-fns-tz";
@@ -81,16 +81,16 @@ export function getNextAnchorTimestamp(referenceDate: Date): number {
 /**
  * Returns Stripe subscription create params when the join date qualifies for
  * anchor-to-24th (25th, 26th, or 27th in AEST). Otherwise returns {}.
- * Uses only billing_cycle_anchor_config (not billing_cycle_anchor timestamp)
- * so Stripe handles short months and leap years. Do not mix both.
+ * Uses trial_end (AEST-based) so renewal displays correctly as the 24th.
+ * Callers must add add_invoice_items with full package price for immediate charge.
  */
 export function getSubscriptionCreateParamsForAnchor(joinDate: Date): Record<string, unknown> {
   if (!isJoinDateAnchoredTo24(joinDate)) {
     return {};
   }
   return {
-    billing_cycle_anchor_config: { day_of_month: ANCHOR_DAY_OF_MONTH },
-    proration_behavior: "create_prorations",
+    trial_end: getNextAnchorTimestamp(new Date()),
+    proration_behavior: "none",
     metadata: { billing_anchor_rule: "join_25_27_to_24" },
   };
 }

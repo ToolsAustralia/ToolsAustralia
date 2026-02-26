@@ -24,7 +24,7 @@ import { ensureCustomerExists, updateCustomerPaymentMethod } from "@/utils/payme
 import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subscription-assignment";
 import { createOrUpdateSubscriptionUser } from "@/utils/payment/user-subscription-utils";
 // Klaviyo integration handled by webhook for best practices
-import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
+import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
@@ -424,6 +424,8 @@ export async function POST(request: NextRequest) {
 
     const anchorParams = getSubscriptionCreateParamsForAnchor(new Date());
     const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
+    const hasAnchor = Object.keys(anchorParams).length > 0;
+    const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
     // Traceability: subscriptionRequestId, userId, planId for webhooks and debugging
     const userIdForMetadata = registeredUser?._id?.toString() ?? "new";
@@ -460,6 +462,21 @@ export async function POST(request: NextRequest) {
       collection_method: "charge_automatically",
       metadata: baseMetadata as Stripe.MetadataParam,
       ...restAnchorParams,
+      ...(hasAnchor &&
+        membershipPackage &&
+        next24Date &&
+        membershipPackage.stripeProductId && {
+          add_invoice_items: [
+            {
+              price_data: {
+                currency: "aud",
+                unit_amount: Math.round(membershipPackage.price * 100),
+                product: membershipPackage.stripeProductId,
+              },
+              quantity: 1,
+            },
+          ],
+        }),
     };
 
     if (createPayload.collection_method !== undefined && createPayload.collection_method !== "charge_automatically") {
@@ -555,7 +572,7 @@ export async function POST(request: NextRequest) {
               packageId: String(membershipPackage._id), // Force string conversion
               startDate: new Date(),
               endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
-              isActive: subscription.status === "active", // ✅ Set based on Stripe subscription status
+              isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
               autoRenew: true,
               status: subscription.status, // Track subscription status
             },
@@ -604,7 +621,7 @@ export async function POST(request: NextRequest) {
           packageId: String(membershipPackage._id), // Force string conversion
           startDate: new Date(),
           endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
-          isActive: subscription.status === "active", // ✅ Set based on Stripe subscription status
+          isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
           autoRenew: true,
           status: subscription.status, // Track subscription status
           pendingChange: undefined, // Initialize pendingChange field for subscription management
