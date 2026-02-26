@@ -417,7 +417,7 @@ export default function MembershipSection({
           return (
             <div className="text-center">
               <h2
-                className={`font-agency font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} mb-2 sm:mb-3 lg:mb-4`}
+                className={`font-agency font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} dark:text-white mb-2 sm:mb-3 lg:mb-4`}
               >
                 <span style={{ color: theme.primary }}>{effectiveMultiplier}X PROMO</span> ACTIVATED
               </h2>
@@ -724,7 +724,7 @@ export default function MembershipSection({
                             </div>
 
                             {/* Horizontal Divider */}
-                            <div className="w-full p-[0.25px] bg-white/80 mb-2"></div>
+                            <div className="w-full p-[0.25px] bg-white/80 dark:bg-neutral-600/50 mb-2"></div>
 
                             {/* Price Badge - CTA style (distinct from prize badges) */}
                             <div className="flex-1 min-h-0 overflow-visible flex justify-center my-2">
@@ -1093,7 +1093,7 @@ export default function MembershipSection({
                       </div>
 
                       {/* Horizontal Divider */}
-                      <div className="w-full p-[0.5px] bg-white mb-4 lg:mb-2 rounded-full"></div>
+                      <div className="w-full p-[0.5px] bg-white dark:bg-neutral-600/50 mb-4 lg:mb-2 rounded-full"></div>
 
                       {/* Features List - Tick marks hidden on desktop (see "View package inclusions" below) */}
                       <div className="flex-1 lg:flex-initial overflow-visible space-y-3 sm:space-y-3 mb-4 sm:mb-0 lg:mb-2">
@@ -1214,7 +1214,7 @@ export default function MembershipSection({
             })
           ) : (
             <div className="col-span-full text-center py-12">
-              <p className="text-gray-600">No membership packages available</p>
+              <p className="text-gray-600 dark:text-neutral-400">No membership packages available</p>
             </div>
           )}
           </div>

@@ -46,6 +46,9 @@ export interface PrizeCatalogEntry {
 
 export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "ryobi-sidchrome" | "milwaukee-milwaukee" | "dewalt-milwaukee" | "makita-milwaukee" | "ryobi-milwaukee" | "cash-prize";
 
+/** Strict canonical name for the Ryobi prize - use consistently across labels, headings, and display. */
+export const RYOBI_PRIZE_STRICT_NAME = "Custom Ryobi 18V ONE+ Kit with 36V Brushless Ryobi Lawn Mower";
+
 export const SIDCHROME_SCMT11402_TOOL_KIT: PrizeSpecItem = {
   name: "Sidchrome SCMT11402 356 Piece Tool Kit & Storage",
   description:
@@ -1446,14 +1449,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "ryobi-sidchrome",
-    label: "Sidchrome Toolbox, Ryobi 18V ONE+ Power Tool Kit, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Ryobi 18V ONE+ Power Tool Kit, $5000 cash",
+    label: `${RYOBI_PRIZE_STRICT_NAME} (Sidchrome Toolbox, $5000 cash)`,
+    heroHeading: `${RYOBI_PRIZE_STRICT_NAME} (Sidchrome Toolbox, $5000 cash)`,
     heroSubheading:
-      "RYOBI 18V ONE+ 12 Piece Kit, 36V Lawn Mower, garden tools and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+      `${RYOBI_PRIZE_STRICT_NAME} and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.`,
     summary:
-      "RYOBI 18V ONE+ power tools, 36V lawn mower, garden equipment and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+      `${RYOBI_PRIZE_STRICT_NAME}, garden equipment and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.`,
     detailedDescription:
-      "Win the RYOBI 18V ONE+ professional toolkit featuring the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V 46cm Lawn Mower. Power everything with ONE+ HP 5Ah batteries and organise it all in the Sidchrome SCMT11402 356-piece cabinet. Plus $5000 cash.",
+      `Win the ${RYOBI_PRIZE_STRICT_NAME} featuring the 18V ONE+ 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer. Power everything with ONE+ HP 5Ah batteries and organise it all in the Sidchrome SCMT11402 356-piece cabinet. Plus $5000 cash.`,
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobiSet-sidchromeTb.webp",
     gallery: [
@@ -1522,14 +1525,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "ryobi-milwaukee",
-    label: "Milwaukee Toolbox, Ryobi 18V ONE+ Power Tool Kit, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Ryobi 18V ONE+ Power Tool Kit, $5000 cash",
+    label: `${RYOBI_PRIZE_STRICT_NAME} (Milwaukee Toolbox, $5000 cash)`,
+    heroHeading: `${RYOBI_PRIZE_STRICT_NAME} (Milwaukee Toolbox, $5000 cash)`,
     heroSubheading:
-      "RYOBI 18V ONE+ 12 Piece Kit, 36V Lawn Mower, garden tools with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      `${RYOBI_PRIZE_STRICT_NAME} with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
     summary:
-      "RYOBI 18V ONE+ power tools, 36V lawn mower, garden equipment and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      `${RYOBI_PRIZE_STRICT_NAME}, garden equipment and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
     detailedDescription:
-      "Win the RYOBI 18V ONE+ professional toolkit featuring the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V 46cm Lawn Mower. Power everything with ONE+ HP 5Ah batteries and organise it all in the Milwaukee 56\" High Capacity Combination tool storage. Plus $5000 cash.",
+      `Win the ${RYOBI_PRIZE_STRICT_NAME} featuring the 18V ONE+ 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer. Power everything with ONE+ HP 5Ah batteries and organise it all in the Milwaukee 56\" High Capacity Combination tool storage. Plus $5000 cash.`,
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobiSet-milwaukeeTb.webp",
     gallery: [
@@ -1690,7 +1693,7 @@ export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | un
     return "Sidchrome + Makita + $5,000 Cash";
   }
   if (slug === "ryobi-sidchrome") {
-    return "Sidchrome + Ryobi + $5,000 Cash";
+    return `Sidchrome + ${RYOBI_PRIZE_STRICT_NAME} + $5,000 Cash`;
   }
   if (slug === "milwaukee-milwaukee") {
     return "Milwaukee Toolbox + Milwaukee + $5,000 Cash";
@@ -1702,7 +1705,7 @@ export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | un
     return "Milwaukee Toolbox + Makita + $5,000 Cash";
   }
   if (slug === "ryobi-milwaukee") {
-    return "Milwaukee Toolbox + Ryobi + $5,000 Cash";
+    return `Milwaukee Toolbox + ${RYOBI_PRIZE_STRICT_NAME} + $5,000 Cash`;
   }
   
   // Fallback to full label

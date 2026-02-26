@@ -14,7 +14,7 @@ export default function PromoPackages() {
   return (
     <>
       {/* Packages Section with scroll target */}
-      <section id="packages" className="bg-white">
+      <section id="packages" className="bg-white dark:bg-neutral-900/50">
         <SectionContainer>
           <MembershipSection 
             title="Choose Your Entry Package" 

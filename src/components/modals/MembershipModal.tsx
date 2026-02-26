@@ -4638,13 +4638,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   onClick={() => handleStepClick(1)}
                   style={currentStep === 1 ? { backgroundColor: promoTheme.primary } : undefined}
                   className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
-                    currentStep === 1 ? "text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
+                    currentStep === 1 ? (promoTheme.preferDarkBackground ? "text-black font-bold" : "text-white font-bold") : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
                   }`}
                   aria-current={currentStep === 1 ? "step" : undefined}
                 >
                   <span
                     className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 1 ? "bg-white" : "bg-gray-400 text-white"
+                      currentStep === 1 ? (promoTheme.preferDarkBackground ? "bg-black" : "bg-white") : "bg-gray-400 text-white"
                     }`}
                     style={currentStep === 1 ? { color: promoTheme.primary } : undefined}
                   >
@@ -4661,7 +4661,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     !hasCompletedRegistration
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-80"
                       : currentStep === 2
-                        ? "text-white font-bold cursor-pointer"
+                        ? (promoTheme.preferDarkBackground ? "text-black font-bold cursor-pointer" : "text-white font-bold cursor-pointer")
                         : "bg-gray-100 text-gray-500 font-medium cursor-pointer hover:bg-gray-200"
                   }`}
                   aria-current={currentStep === 2 ? "step" : undefined}
@@ -4670,7 +4670,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 >
                   <span
                     className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 2 ? "bg-white" : "bg-gray-400 text-white"
+                      currentStep === 2 ? (promoTheme.preferDarkBackground ? "bg-black" : "bg-white") : "bg-gray-400 text-white"
                     }`}
                     style={currentStep === 2 ? { color: promoTheme.primary } : undefined}
                   >

@@ -7,7 +7,7 @@ import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
 export default function Footer() {
   return (
-    <footer className="bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white relative overflow-hidden w-full">
+    <footer className="bg-gradient-to-br from-gray-900 via-gray-800 to-black dark:bg-neutral-950 text-white relative overflow-hidden w-full">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-5 pattern-dots-white"></div>
 

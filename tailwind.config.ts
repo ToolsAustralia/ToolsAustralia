@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   safelist: [
     { pattern: /^(text|bg|border|shadow|ring)-premium-gold(\/[\d]+)?$/ },
   ],
