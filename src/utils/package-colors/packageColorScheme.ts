@@ -584,6 +584,7 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
   borderRgba: string;
   badgeStyle: PackageColorScheme["badgeStyle"];
   accentHex: string;
+  preferDarkBackground: boolean;
 } {
   const scheme = getMembershipSectionColorScheme(planId, isMembershipTab);
   const packKey =
@@ -597,6 +598,7 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
     : (ONE_TIME_TAB_COLOR_MAP[packKey] ?? toColorKey(packKey));
   const brand = LANDING_PAGE_BRAND[colorKey] ?? LANDING_PAGE_BRAND["milwaukee-red"];
   const { primary, primaryLight, primaryDark } = brand;
+  const preferDarkBackground = colorKey === "ryobi-green";
   return {
     primary,
     primaryLight,
@@ -609,6 +611,7 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
     borderRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.4)`,
     badgeStyle: scheme.badgeStyle,
     accentHex: primary,
+    preferDarkBackground,
   };
 }
 
