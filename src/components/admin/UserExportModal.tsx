@@ -19,6 +19,8 @@ import {
   ChevronUp,
   CheckSquare,
   Square,
+  Trophy,
+  Users,
 } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent, Button, Checkbox } from "@/components/modals/ui";
 import type { UserFilters } from "@/types/admin";
@@ -43,6 +45,23 @@ interface ExportFormat {
   description: string;
   extension: string;
 }
+
+export type ExportSegment = "all" | "top20MajorDraw";
+
+const EXPORT_SEGMENTS: { value: ExportSegment; label: string; description: string; icon: React.ReactNode }[] = [
+  {
+    value: "all",
+    label: "All filtered users",
+    description: "Export users matching your current filters",
+    icon: <Users className="w-5 h-5" />,
+  },
+  {
+    value: "top20MajorDraw",
+    label: "Top 20% major draw entry holders",
+    description: "Export the top 20% of users with the most entries in the active major draw",
+    icon: <Trophy className="w-5 h-5" />,
+  },
+];
 
 const EXPORT_FORMATS: ExportFormat[] = [
   {
@@ -100,12 +119,13 @@ const GROUP_NAMES: Record<FieldGroup, string> = {
 
 export default function UserExportModal({ isOpen, onClose, filters, totalUsers }: UserExportModalProps) {
   // State management
+  const [selectedSegment, setSelectedSegment] = useState<ExportSegment>("all");
   const [selectedFormat, setSelectedFormat] = useState<"csv" | "excel">("csv");
   const [selectedFields, setSelectedFields] = useState<string[]>(() => getDefaultFields());
   const [isExporting, setIsExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<"idle" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [expandedGroups, setExpandedGroups] = useState<Set<FieldGroup>>(new Set(["basic", "subscription", "financial"]));
+  const [expandedGroups, setExpandedGroups] = useState<Set<FieldGroup>>(new Set(["basic", "subscription", "financial", "entries"]));
 
   // Get fields grouped by category
   const fieldsByGroup = useMemo(() => getFieldsByGroup(), []);
@@ -202,7 +222,12 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
       params.set("format", selectedFormat);
       params.set("fields", selectedFields.join(","));
 
-      // Add filter parameters
+      // Add segment if not "all"
+      if (selectedSegment === "top20MajorDraw") {
+        params.set("segment", "top20MajorDraw");
+      }
+
+      // Add filter parameters (ignored when segment is top20MajorDraw)
       if (filters.search) params.set("search", filters.search);
       if (filters.subscriptionStatus) params.set("subscriptionStatus", filters.subscriptionStatus);
       if (filters.autoRenew) params.set("autoRenew", filters.autoRenew);
@@ -273,6 +298,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
+      setSelectedSegment("all");
       setSelectedFields(getDefaultFields());
       setSelectedFormat("csv");
       setExportStatus("idle");
@@ -287,11 +313,47 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="2xl" height="fixed">
       <ModalHeader
         title="Export Users"
-        subtitle={`Export filtered users: ${filterSummary}${totalUsers !== undefined ? ` (${totalUsers} users)` : ""}`}
+        subtitle={
+          selectedSegment === "top20MajorDraw"
+            ? "Export the top 20% of users with the most entries in the active major draw"
+            : `Export filtered users: ${filterSummary}${totalUsers !== undefined ? ` (${totalUsers} users)` : ""}`
+        }
         onClose={handleClose}
       />
 
       <ModalContent padding="md" className="flex flex-col gap-4">
+        {/* Segment Selection */}
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-gray-700">Export Segment</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {EXPORT_SEGMENTS.map((segment) => (
+              <button
+                key={segment.value}
+                onClick={() => setSelectedSegment(segment.value)}
+                disabled={isExporting}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  selectedSegment === segment.value
+                    ? "border-red-500 bg-red-50"
+                    : "border-gray-200 hover:border-gray-300 bg-white"
+                } ${isExporting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`${selectedSegment === segment.value ? "text-red-600" : "text-gray-400"}`}>
+                    {segment.icon}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium text-gray-900">{segment.label}</div>
+                    <div className="text-xs text-gray-500 mt-1">{segment.description}</div>
+                  </div>
+                  {selectedSegment === segment.value && (
+                    <CheckCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Format Selection */}
         <div className="space-y-2">
           <label className="text-sm font-semibold text-gray-700">Export Format</label>

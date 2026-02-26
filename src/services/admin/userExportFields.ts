@@ -192,6 +192,7 @@ export const EXPORT_FIELDS: ExportFieldDefinition[] = [
     type: "number",
     group: "entries",
     isComputed: true,
+    isDefault: true,
   },
   {
     key: "miniDrawCount",
