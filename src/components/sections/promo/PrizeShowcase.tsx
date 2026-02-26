@@ -72,6 +72,9 @@ const getBrandLogoPath = (slug: string): string | null => {
     case "makita-sidchrome":
     case "makita-milwaukee":
       return "/images/brands/Makita-red.png";
+    case "ryobi-sidchrome":
+    case "ryobi-milwaukee":
+      return "/images/brands/name/ryobiText.png";
     case "cash-prize":
       return null; // No watermark for cash prize
     default:
@@ -88,6 +91,9 @@ const getFirstPrizeImagePath = (slug: string): string => {
     case "makita-sidchrome":
     case "makita-milwaukee":
       return "/images/promotion/FirstPrizeText/1stprice-makita.png";
+    case "ryobi-sidchrome":
+    case "ryobi-milwaukee":
+      return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png"; // Fallback until 1stprice-ryobi.png exists
     case "cash-prize":
       return "/images/promotion/FirstPrizeText/1stprice-cash.png";
     case "milwaukee-sidchrome":
@@ -140,6 +146,20 @@ const getFormattedLabel = (label: string, slug?: string, isMobile?: boolean) => 
       return {
         line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
         line2: isMobile ? "Makita Powertools" : "Makita",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "ryobi-sidchrome") {
+      return {
+        line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+        line2: isMobile ? "Ryobi Powertools" : "Ryobi",
+        line3: "$5000 Cash Prize",
+      };
+    }
+    if (slug === "ryobi-milwaukee") {
+      return {
+        line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+        line2: isMobile ? "Ryobi Powertools" : "Ryobi",
         line3: "$5000 Cash Prize",
       };
     }
@@ -477,7 +497,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   return (
     <section 
       ref={prizeRef} 
-      className=" pb-2 sm:pb-12 relative"
+      className="pb-2 sm:pb-12 relative overflow-hidden"
       style={{ 
         scrollMarginTop: 0,
         // On mobile, prevent scroll snapping during navigation (gated by isMounted to avoid hydration mismatch)
@@ -487,7 +507,17 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
         } : {}),
       }}
     >
-      <div className={useParentContainer ? "relative z-0 w-full" : `${SECTION_CONTAINER_CLASSES} relative z-0`}>
+      {/* Crack texture overlay - visible only in dark mode */}
+      <div
+        className="absolute inset-0 z-0 pointer-events-none opacity-0 dark:opacity-[0.3] transition-opacity duration-300"
+        aria-hidden="true"
+        style={{
+          backgroundImage: "url('/images/background/promo/FX/crack.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
+      <div className={useParentContainer ? "relative z-10 w-full" : `${SECTION_CONTAINER_CLASSES} relative z-10`}>
         <div className="text-center mb-6 sm:mb-12">
           {/* First Prize Image - Conditionally displayed based on selected prize; smaller on desktop */}
           <div className="flex justify-center">
@@ -508,12 +538,12 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </h2>
             </div>
             {activePrize.heroSubheading && (
-              <p className="hidden sm:block text-sm sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">
+              <p className="hidden sm:block text-sm sm:text-lg text-gray-700 dark:text-neutral-300 font-['Inter'] max-w-2xl mx-auto">
                 {activePrize.heroSubheading}
               </p>
             )}
             {activePrize.summary && (
-              <p className="text-xs sm:text-base text-gray-500 font-['Inter'] max-w-2xl mx-auto mt-3">
+              <p className="text-xs sm:text-base text-gray-500 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto mt-3">
                 {activePrize.summary}
               </p>
             )}
@@ -530,7 +560,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.4 }}
-                className="font-agency font-[950] uppercase text-black mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
               >
                Pick your <span style={{ color: theme.primary }}>toolbox</span>
               </motion.p>
@@ -539,10 +569,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 selectedType={
                   toolboxType === "cash"
                     ? null
-                    : (() => {
-                        const t = getToolboxTypeFromSlug(activeSlug ?? "");
-                        return t === "milwaukee" || t === "sidchrome" ? t : lastNonCashToolboxType;
-                      })()
+                    : toolboxType
                 }
                 onSelect={handleToolboxTypeChange}
                 className="mb-8 sm:mb-10"
@@ -552,7 +579,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.4 }}
-                className="font-agency font-[950] uppercase text-black mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
               >
                Pick your <span style={{ color: theme.primary }}>Power Toolset</span>
               </motion.p>
@@ -573,8 +600,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               {/* Cash option is a separate prize path (no toolbox/toolset) */}
               <div className="mt-4 max-w-5xl mx-auto">
                 <div className="relative flex items-center justify-center my-6 sm:my-8">
-                  <div className="h-px w-full bg-gray-300" />
-                  <div className="absolute px-3 py-1 rounded-full bg-white border border-gray-200 text-[10px] sm:text-xs font-bold tracking-[0.22em] text-gray-600">
+                  <div className="h-px w-full bg-gray-300 dark:bg-neutral-700" />
+                  <div className="absolute px-3 py-1 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-[10px] sm:text-xs font-bold tracking-[0.22em] text-gray-600 dark:text-neutral-400">
                     OR
                   </div>
                 </div>
@@ -586,7 +613,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   className={`w-full py-2.5 sm:py-4 rounded-xl sm:rounded-2xl font-acumin font-[950] text-sm sm:text-2xl transition-all duration-200 border-2 relative overflow-hidden flex items-center justify-center ${
                     toolboxType === "cash"
                       ? "border-green-500 shadow-lg shadow-green-500/40 bg-cover bg-center"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600 hover:shadow-lg"
+                      : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 border-gray-300 dark:border-neutral-600 hover:border-green-400 hover:text-green-600 hover:shadow-lg"
                   }`}
                   style={toolboxType === "cash" ? { backgroundImage: `url('/images/majordraws/cash-prize/cash-prize-10000.png')` } : undefined}
                   suppressHydrationWarning
@@ -606,9 +633,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
           <div className="relative order-1 space-y-3 sm:space-y-4">
             <div 
-              className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden"
+              className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden bg-[#EEEEEC] dark:bg-neutral-800"
               style={{
-                backgroundColor: "#EEEEEC",
                 borderColor: getBrandBorderColor(activeSlug || "milwaukee-milwaukee"),
                 boxShadow: `0 0 20px ${getBrandGlowColor(activeSlug || "milwaukee-milwaukee")}, 0 8px 32px rgba(0,0,0,0.4)`,
               }}
@@ -632,7 +658,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                     const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
                     const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
                     const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp") ? "scale-150" : "";
+                    const isRyobiSetTb = src.includes("ryobiset-milwaukeetb") || src.includes("ryobiset-sidchrometb");
+                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set") || isRyobiSetTb) && src.endsWith(".webp")) ? "scale-150" : "";
                     const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[5%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                     const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                     return (
@@ -660,7 +687,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   const isDewaltSetSidchrome = firstSrc.includes("dewaltset-sidchrome");
                   const isMakitaUpward = isMakitaSetHero || firstSrc.includes("makita.webp");
                   const isMilwaukeeUpward = (isMilwaukeeSetHero || firstSrc.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-                  const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set")) && firstSrc.endsWith(".webp") ? "scale-150" : "";
+                  const isRyobiSetTbFirst = firstSrc.includes("ryobiset-milwaukeetb") || firstSrc.includes("ryobiset-sidchrometb");
+                  const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set") || isRyobiSetTbFirst) && firstSrc.endsWith(".webp")) ? "scale-150" : "";
                   const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                   return (
@@ -716,7 +744,8 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                   const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
                   const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
                   const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-                  const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : (src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp") ? "scale-150" : "";
+                  const isRyobiSetTbThumb = src.includes("ryobiset-milwaukeetb") || src.includes("ryobiset-sidchrometb");
+                  const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set") || isRyobiSetTbThumb) && src.endsWith(".webp")) ? "scale-150" : "";
                   const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                   return (
@@ -801,7 +830,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </div>
             </button>
 
-            <div className="w-full hidden lg:block">
+            <div className="w-full hidden lg:block bg-white rounded-lg p-2">
               <Image
                 src="/images/safe-checkout-stripe.png"
                 alt="Guaranteed safe & secure checkout powered by Stripe"
@@ -879,7 +908,7 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
               </div>
             </button>
 
-            <div className="w-full lg:hidden">
+            <div className="w-full lg:hidden bg-white rounded-lg p-2">
               <Image
                 src="/images/safe-checkout-stripe.png"
                 alt="Guaranteed safe & secure checkout powered by Stripe"

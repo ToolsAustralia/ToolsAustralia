@@ -202,16 +202,17 @@ export default function UnlockDiscounts({
   const { openEntryFlow } = useMajorDrawEntryCta();
   const storeTheme = usePromoTheme();
   const theme = packageTheme ?? storeTheme;
+  const preferDark = theme.preferDarkBackground ?? false;
 
   return (
     <section ref={discountsRef} className="py-8 sm:py-12 lg:py-16 mb-12 relative">
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
             {title}
           </h2>
-          <p className="text-base sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">{description}</p>
+          <p className="text-base sm:text-lg text-gray-700 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">{description}</p>
         </div>
 
         {/* Partner Discounts Grid - Only show when user has access */}
@@ -223,7 +224,7 @@ export default function UnlockDiscounts({
                 href={partner.businessLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative bg-white rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 border-2 border-gray-200 hover:border-gray-300 flex flex-col min-h-[200px] sm:min-h-[280px] lg:min-h-[320px] cursor-pointer"
+                className="group relative bg-white dark:bg-neutral-800 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 border-2 border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500 flex flex-col min-h-[200px] sm:min-h-[280px] lg:min-h-[320px] cursor-pointer"
               >
                 {/* Top Section: Full Background with Centered Logo */}
                 <div
@@ -273,16 +274,16 @@ export default function UnlockDiscounts({
                 </div>
 
                 {/* Bottom Section: White Background with Discount Message */}
-                <div className="h-[50%] bg-white flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-hidden">
+                <div className="h-[50%] bg-white dark:bg-neutral-800 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-hidden">
                   {/* Brand Name Title - Fixed max height with line clamping */}
                   <div className="w-full flex-shrink-0 max-h-[3em] overflow-hidden">
-                    <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 font-['Poppins'] text-center line-clamp-2 leading-tight">
+                    <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white font-['Poppins'] text-center line-clamp-2 leading-tight">
                       {partner.name}
                     </h3>
                   </div>
                   {/* Discount Message - Flexible middle section */}
                   <div className="w-full flex-1 min-h-0 flex items-center justify-center py-1">
-                    <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 font-['Inter'] text-center leading-tight line-clamp-2">
+                    <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 dark:text-neutral-300 font-['Inter'] text-center leading-tight line-clamp-2">
                       {highlightDiscountMessage(partner.discountMessage, {
                         backgroundImage: theme.gradientSolid,
                         WebkitBackgroundClip: "text",
@@ -321,7 +322,7 @@ export default function UnlockDiscounts({
                 openEntryFlow({ openLocalModal: false });
               }}
               suppressHydrationWarning
-              className="relative text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group"
+              className={`relative ${preferDark ? "text-black" : "text-white"} px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group`}
               style={{
                 background: theme.gradientSolid,
                 boxShadow: `0 8px 32px ${theme.shadowRgba}`,

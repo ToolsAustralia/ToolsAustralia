@@ -44,7 +44,10 @@ export interface PrizeCatalogEntry {
   cardBackgroundImage?: string; // Optional background image for toggle cards
 }
 
-export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "milwaukee-milwaukee" | "dewalt-milwaukee" | "makita-milwaukee" | "cash-prize";
+export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "ryobi-sidchrome" | "milwaukee-milwaukee" | "dewalt-milwaukee" | "makita-milwaukee" | "ryobi-milwaukee" | "cash-prize";
+
+/** Strict canonical name for the Ryobi prize - use consistently across labels, headings, and display. */
+export const RYOBI_PRIZE_STRICT_NAME = "Custom Ryobi 18V ONE+ Kit with 36V Brushless Ryobi Lawn Mower";
 
 export const SIDCHROME_SCMT11402_TOOL_KIT: PrizeSpecItem = {
   name: "Sidchrome SCMT11402 356 Piece Tool Kit & Storage",
@@ -921,6 +924,113 @@ export const MAKITA_SIDCHROME_STORAGE: PrizeSpecItem[] = [
   },
   SIDCHROME_SCMT11402_TOOL_KIT,
 ];
+
+export const RYOBI_POWER_TOOLS: PrizeSpecItem[] = [
+  {
+    name: "RYOBI 18V ONE+ 12 Piece 4Ah Kit",
+    model: "R18X12C142B",
+    description:
+      "The RYOBI 18V ONE+ 12-Piece 4Ah Kit includes essential tools for DIY, home maintenance and repair: Drill Driver, Impact Driver, 115mm Angle Grinder, 150mm Circular Saw, Reciprocating Saw, Detail Sander, Multi Tool, Hand Vacuum, Workshop Blower, High Pressure Inflator, LED Flashlight, Bluetooth Radio, plus 2x 4Ah Batteries and 2A Charger.",
+    specifications: [
+      "12 tools in one kit",
+      "2x 18V ONE+ 4Ah Lithium batteries",
+      "18V ONE+ 2A Charger",
+      "2x Tool Bags",
+      "24 clutch settings on drill for precise torque control",
+      "2-speed gearbox for fast drilling or slow driving",
+      "45mm deep cuts at 0° with circular saw",
+      "Compatible with 200+ ONE+ products",
+    ],
+  },
+  {
+    name: "RYOBI 18V ONE+ Line Trimmer & Blower 2.0Ah Kit",
+    model: "R18XBLT12",
+    description:
+      "Combine line trimming and blower capabilities with one battery system. Ideal for garden maintenance and quick cleanup.",
+    specifications: ["18V ONE+ platform", "2.0Ah battery included", "Dual-purpose kit"],
+  },
+  {
+    name: "RYOBI 18V ONE+ HP Brushless 254mm Sliding Mitre Saw",
+    model: "R18MS254X",
+    description:
+      "Crosscut timber with precision using the brushless HP mitre saw. 4,100rpm max, bevel and mitre cuts 0–47° left/right, LED cut line guide. Cuts up to 45mm x 310mm at 0°.",
+    specifications: [
+      "Blade: 254mm",
+      "No Load Speed: 4,100 rpm",
+      "Mitre: 0–47° both sides",
+      "Bevel: 0–45°",
+      "Rail locking for transport",
+    ],
+  },
+  {
+    name: "RYOBI 18V ONE+ Jigsaw",
+    model: "R18JS-0",
+    description:
+      "Cordless jigsaw with 3,000 SPM and 25mm stroke. Cuts wood, aluminium and plastic with adjustable bevel 0–45°.",
+    specifications: [
+      "Stroke: 25mm",
+      "Speed: 1,100–3,000 SPM",
+      "Max cutting capacity: 101mm wood, 6.35mm steel",
+      "Tool-less blade clamp",
+    ],
+  },
+  {
+    name: "RYOBI 18V ONE+ Compact Fan",
+    model: "RCF18",
+    description:
+      "Portable fan for camping and outdoor use. Integrated clamp for surfaces up to 38mm. Up to 12.5hrs on 4Ah battery.",
+    specifications: [
+      "2 speed settings",
+      "290° horizontal, 300° vertical rotation",
+      "Clamp capacity: 38mm",
+    ],
+  },
+  {
+    name: "RYOBI 18V ONE+ HP Brushless 55cm Hedge Trimmer",
+    model: "R18XHTR10",
+    description:
+      "Dual-action diamond-ground blades, 24mm cutting capacity, HEDGE SWEEP function, Anti-Jam technology.",
+    specifications: [
+      "Bar length: 55cm",
+      "Blade speed: 3,100 SPM",
+      "24mm cut capacity",
+      "Up to 400m² on 2Ah battery",
+    ],
+  },
+  {
+    name: "RYOBI 36V Brushless 46cm Lawn Mower 4Ah Kit",
+    model: "RLM36X46BL",
+    description:
+      "46cm EasyEdge deck, load-sensing blade speed, 20–70mm cutting height, 45L grass catcher. Up to 50 minutes runtime on 4Ah battery.",
+    specifications: [
+      "Cutting path: 46cm",
+      "Brushless motor",
+      "5 height settings",
+      "36V 4Ah battery and 1.7A charger included",
+    ],
+  },
+];
+
+export const RYOBI_POWER_SYSTEM: PrizeSpecItem[] = [
+  {
+    name: "RYOBI 18V ONE+ HP 5Ah Battery Twin Pack",
+    model: "RB185050X",
+    description:
+      "Two high-performance 5Ah batteries for extended runtime. Up to 2.5x runtime vs 2Ah. IntelliCell technology, temperature control, fuel gauge.",
+    specifications: ["Capacity: 5Ah each", "Peak output: 1,625W", "Compatible with 200+ ONE+ tools"],
+  },
+  {
+    name: "RYOBI 18V ONE+ 4Ah Batteries (from 12 Piece Kit)",
+    description: "2x 4Ah batteries included with 12 Piece Kit. IntelliCell monitoring for balanced charging.",
+    specifications: ["Capacity: 4Ah each", "18V ONE+ platform"],
+  },
+  {
+    name: "RYOBI 18V ONE+ 2A Charger",
+    description: "Charges any ONE+ 18V battery. LED display for charge status.",
+    specifications: ["2A output", "Works with all 18V ONE+ batteries"],
+  },
+];
+
 /**
  * Prize catalog entries are the single source of truth for prize imagery/copy.
  * Add new prize packs here – frontend components resolve everything dynamically.
@@ -1338,6 +1448,158 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     ],
   },
   {
+    slug: "ryobi-sidchrome",
+    label: `${RYOBI_PRIZE_STRICT_NAME} (Sidchrome Toolbox, $5000 cash)`,
+    heroHeading: `${RYOBI_PRIZE_STRICT_NAME} (Sidchrome Toolbox, $5000 cash)`,
+    heroSubheading:
+      `${RYOBI_PRIZE_STRICT_NAME} and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.`,
+    summary:
+      `${RYOBI_PRIZE_STRICT_NAME}, garden equipment and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.`,
+    detailedDescription:
+      `Win the ${RYOBI_PRIZE_STRICT_NAME} featuring the 18V ONE+ 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer. Power everything with ONE+ HP 5Ah batteries and organise it all in the Sidchrome SCMT11402 356-piece cabinet. Plus $5000 cash.`,
+    prizeValueLabel: "$25,000+ Value",
+    cardBackgroundImage: "/images/majordraws/ryobi-set/ryobiSet-sidchromeTb.webp",
+    gallery: [
+      { src: "/images/majordraws/ryobi-set/ryobiSet-sidchromeTb.webp", alt: "Ryobi set with Sidchrome toolbox" },
+      { src: "/images/majordraws/ryobi-set/RYOBI.webp", alt: "Ryobi prize collection" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_052.jpg", alt: "Ryobi power tools" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_053.jpg", alt: "Ryobi 18V ONE+ tools" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_054.jpg", alt: "Ryobi drill and impact" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_055.jpg", alt: "Ryobi circular saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_056.jpg", alt: "Ryobi angle grinder" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_057.jpg", alt: "Ryobi recip saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_059.jpg", alt: "Ryobi multi-tool" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_060.jpg", alt: "Ryobi workshop blower" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_061.jpg", alt: "Ryobi detail sander" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_062.jpg", alt: "Ryobi cordless caulking gun" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_063.jpg", alt: "Ryobi Bluetooth radio" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_064.jpg", alt: "Ryobi compact fan" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_065.jpg", alt: "Ryobi high pressure inflator" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_070.jpg", alt: "Ryobi line trimmer" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_071.jpg", alt: "Ryobi hedge trimmer" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_072.jpg", alt: "Ryobi mitre saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_073.jpg", alt: "Ryobi lawn mower" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_076.jpg", alt: "Ryobi batteries" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_077.jpg", alt: "Ryobi chargers" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_078.jpg", alt: "Ryobi ONE+ system" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_079.jpg", alt: "Ryobi toolset" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "12+ Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
+      {
+        icon: "Package",
+        title: "Sidchrome 356pc Kit",
+        description: "Complete hand-tool cabinet for workshop builds.",
+      },
+      {
+        icon: "Battery",
+        title: "ONE+ Power System",
+        description: "18V ONE+ batteries power 200+ tools across the range.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Garden Equipment",
+        summary: "18V ONE+ 12-piece kit, mitre saw, jigsaw, fan, hedge trimmer, lawn mower and more.",
+        items: RYOBI_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "ONE+ HP 5Ah batteries and 2A charger keep every tool ready.",
+        items: RYOBI_POWER_SYSTEM,
+      },
+      {
+        id: "storage",
+        label: "Workshop Storage & Hand Tools",
+        summary: "Sidchrome SCMT11402 roller cabinet loaded with 356 precision hand tools and foam inlays.",
+        items: MILWAUKEE_WORKSHOP_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "ryobi-milwaukee",
+    label: `${RYOBI_PRIZE_STRICT_NAME} (Milwaukee Toolbox, $5000 cash)`,
+    heroHeading: `${RYOBI_PRIZE_STRICT_NAME} (Milwaukee Toolbox, $5000 cash)`,
+    heroSubheading:
+      `${RYOBI_PRIZE_STRICT_NAME} with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
+    summary:
+      `${RYOBI_PRIZE_STRICT_NAME}, garden equipment and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
+    detailedDescription:
+      `Win the ${RYOBI_PRIZE_STRICT_NAME} featuring the 18V ONE+ 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer. Power everything with ONE+ HP 5Ah batteries and organise it all in the Milwaukee 56\" High Capacity Combination tool storage. Plus $5000 cash.`,
+    prizeValueLabel: "$25,000+ Value",
+    cardBackgroundImage: "/images/majordraws/ryobi-set/ryobiSet-milwaukeeTb.webp",
+    gallery: [
+      { src: "/images/majordraws/ryobi-set/ryobiSet-milwaukeeTb.webp", alt: "Ryobi set with Milwaukee toolbox" },
+      { src: "/images/majordraws/ryobi-set/RYOBI.webp", alt: "Ryobi prize collection" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_052.jpg", alt: "Ryobi power tools" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_053.jpg", alt: "Ryobi 18V ONE+ tools" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_054.jpg", alt: "Ryobi drill and impact" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_055.jpg", alt: "Ryobi circular saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_056.jpg", alt: "Ryobi angle grinder" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_057.jpg", alt: "Ryobi recip saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_059.jpg", alt: "Ryobi multi-tool" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_060.jpg", alt: "Ryobi workshop blower" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_061.jpg", alt: "Ryobi detail sander" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_062.jpg", alt: "Ryobi cordless caulking gun" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_063.jpg", alt: "Ryobi Bluetooth radio" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_064.jpg", alt: "Ryobi compact fan" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_065.jpg", alt: "Ryobi high pressure inflator" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_070.jpg", alt: "Ryobi line trimmer" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_071.jpg", alt: "Ryobi hedge trimmer" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_072.jpg", alt: "Ryobi mitre saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_073.jpg", alt: "Ryobi lawn mower" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_076.jpg", alt: "Ryobi batteries" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_077.jpg", alt: "Ryobi chargers" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_078.jpg", alt: "Ryobi ONE+ system" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_079.jpg", alt: "Ryobi toolset" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "12+ Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
+      {
+        icon: "Package",
+        title: "Milwaukee 56\" Toolbox",
+        description: "High capacity combination tool storage with electronic lock.",
+      },
+      {
+        icon: "Battery",
+        title: "ONE+ Power System",
+        description: "18V ONE+ batteries power 200+ tools across the range.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Garden Equipment",
+        summary: "18V ONE+ 12-piece kit, mitre saw, jigsaw, fan, hedge trimmer, lawn mower and more.",
+        items: RYOBI_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "ONE+ HP 5Ah batteries and 2A charger keep every tool ready.",
+        items: RYOBI_POWER_SYSTEM,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "Milwaukee 56\" High Capacity Combination tool storage with premium features.",
+        items: MILWAUKEE_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
     slug: "cash-prize",
     label: "$10,000 Tax Free Cash",
     heroHeading: "$10,000 Tax Free Cash",
@@ -1430,6 +1692,9 @@ export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | un
   if (slug === "makita-sidchrome") {
     return "Sidchrome + Makita + $5,000 Cash";
   }
+  if (slug === "ryobi-sidchrome") {
+    return `Sidchrome + ${RYOBI_PRIZE_STRICT_NAME} + $5,000 Cash`;
+  }
   if (slug === "milwaukee-milwaukee") {
     return "Milwaukee Toolbox + Milwaukee + $5,000 Cash";
   }
@@ -1438,6 +1703,9 @@ export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | un
   }
   if (slug === "makita-milwaukee") {
     return "Milwaukee Toolbox + Makita + $5,000 Cash";
+  }
+  if (slug === "ryobi-milwaukee") {
+    return `Milwaukee Toolbox + ${RYOBI_PRIZE_STRICT_NAME} + $5,000 Cash`;
   }
   
   // Fallback to full label

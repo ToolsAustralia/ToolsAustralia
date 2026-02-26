@@ -127,6 +127,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
         variant="metallic-red"
         className={brandColors ? `!bg-gradient-to-br ${brandColors.gradient}` : ""}
         showCloseButton={true}
+        preferDarkBackground={Boolean(prize?.slug && (prize.slug === "ryobi-sidchrome" || prize.slug === "ryobi-milwaukee"))}
       />
 
       <ModalContent scrollbar="metallic" padding="lg" className="max-h-[80vh]">

@@ -174,7 +174,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={prize.slug} />
-        <div className="min-h-screen bg-white w-full overflow-hidden">
+        <div className="min-h-screen bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
           <main className="w-full overflow-hidden ">

@@ -30,7 +30,7 @@ const PROMO_IMAGE_BASE_PATH = "/images/background/promo";
 /**
  * Default image variant (no-badge)
  */
-const DEFAULT_VARIANT = "feb-no-badge";
+const DEFAULT_VARIANT = "mar-no-badge";
 
 /**
  * Resolves variant image override to PromoImagePaths
@@ -58,7 +58,7 @@ export function resolveVariantImageOverride(
  * Maps multiplier value to image variant name
  * 
  * @param multiplier - Active promo multiplier (2, 3, 5, 10, or null)
- * @returns Image variant name (e.g., "feb-x10", "feb-no-badge")
+ * @returns Image variant name (e.g., "mar-x10", "mar-no-badge")
  */
 export function getMultiplierImageVariant(multiplier: number | null | undefined): string {
   if (!multiplier) {
@@ -67,13 +67,13 @@ export function getMultiplierImageVariant(multiplier: number | null | undefined)
 
   switch (multiplier) {
     case 10:
-      return "feb-x10";
+      return "mar-x10";
     case 5:
-      return "feb-x5";
+      return "mar-x5";
     case 3:
-      return "feb-x3";
+      return "mar-x3";
     case 2:
-      return "feb-x2";
+      return "mar-no-badge"; // No mar-x2; use no-badge fallback
     default:
       return DEFAULT_VARIANT;
   }
@@ -102,10 +102,10 @@ export function getDrawDateImageVariant(status: DrawDateStatus): string | null {
 /**
  * Builds full image paths from variant name
  * Constructs both desktop and mobile paths following the naming convention:
- * - Desktop: /images/background/promo/feb-{variant}.webp
- * - Mobile: /images/background/promo/feb-{variant}-mobile.webp
+ * - Desktop: /images/background/promo/mar-{variant}.webp
+ * - Mobile: /images/background/promo/mar-{variant}-mobile.webp
  * 
- * @param variant - Image variant name (e.g., "feb-x10", "feb-no-badge")
+ * @param variant - Image variant name (e.g., "mar-x10", "mar-no-badge")
  * @returns PromoImagePaths object with desktop and mobile paths
  */
 export function buildImagePaths(variant: string): PromoImagePaths {
@@ -126,7 +126,7 @@ export function buildImagePaths(variant: string): PromoImagePaths {
  * ```typescript
  * // Multiplier-based selection
  * const paths = getPromoImagePaths({ multiplier: 10 });
- * // Returns: { desktop: "/images/background/promo/feb-x10.webp", mobile: "/images/background/promo/feb-x10-mobile.webp" }
+ * // Returns: { desktop: "/images/background/promo/mar-x10.webp", mobile: "/images/background/promo/mar-x10-mobile.webp" }
  * 
  * // Draw date override
  * const paths = getPromoImagePaths({ multiplier: 10, drawDateStatus: "tomorrow" });

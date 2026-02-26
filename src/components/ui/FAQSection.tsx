@@ -75,12 +75,12 @@ export default function FAQSection({
         {(title || subtitle) && (
           <div className="text-center mb-8 sm:mb-12">
             {title && (
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
                 {title}
               </h2>
             )}
             {subtitle && (
-              <p className="text-base sm:text-lg text-gray-700 font-['Inter'] max-w-2xl mx-auto">{subtitle}</p>
+              <p className="text-base sm:text-lg text-gray-700 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">{subtitle}</p>
             )}
           </div>
         )}
