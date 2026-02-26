@@ -11,6 +11,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import type { EnhancedDashboardMetrics, TrendData } from "@/types/admin/EnhancedMetrics";
 import User from "@/models/User";
 import connectDB from "@/lib/mongodb";
+import { getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";
 
 export class DashboardMetricsService {
   constructor(
@@ -159,9 +160,10 @@ export class DashboardMetricsService {
       isActive: true,
     });
 
-    // Get paying customers (users with at least one payment)
+    // Get paying customers: users who signed up in range AND have ever made a purchase
     const payingCustomers = await User.countDocuments({
-      "subscription.isActive": true,
+      createdAt: { $gte: startDate, $lte: endDate },
+      ...getEverPaidUserFilter(false),
       isActive: true,
     });
 
@@ -203,10 +205,7 @@ export class DashboardMetricsService {
 
     await connectDB();
     const totalUsers = await User.countDocuments({ isActive: true });
-    const payingUsers = await User.countDocuments({
-      "subscription.isActive": true,
-      isActive: true,
-    });
+    const payingUsers = await User.countDocuments(getEverPaidUserFilter());
     const conversionRate = totalUsers > 0 ? (payingUsers / totalUsers) * 100 : 0;
 
     return {

@@ -10,7 +10,7 @@ import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
-import { getActiveSubscriptionFilter, getActiveSubscriptionSubFilter } from "@/utils/admin/userFilterBuilder";
+import { getActiveSubscriptionFilter, getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";
 import { trendCalculationService } from "@/services/admin/TrendCalculationService";
 
 /**
@@ -321,32 +321,19 @@ export async function GET(request: NextRequest) {
     let conversionRate = 0;
 
     if (dateRange === "all-time") {
-      // All-time conversion rate: all paying users / all users
-      const payingUsers = await User.countDocuments({
-        $or: [
-          // For subscriptions, count only true active subscriptions (will auto-renew, matches projected income)
-          getActiveSubscriptionSubFilter(),
-          { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
-          { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
-        ],
-        isActive: true,
-      });
+      // All-time conversion rate: all paying users / all users (ever made a purchase)
+      const payingUsers = await User.countDocuments(getEverPaidUserFilter());
       conversionRate = totalUsers > 0 ? Math.round((payingUsers / totalUsers) * 100) : 0;
     } else {
       // Date-range specific conversion rate
       // Get users who signed up in the date range
       const usersInRange = newSignupsInRange; // Already calculated above
 
-      // Get users who signed up in range AND have made at least one purchase (anytime)
+      // Get users who signed up in range AND have made at least one purchase (ever)
       // This shows the conversion rate of users who signed up in that period
       const convertedUsersInRange = await User.countDocuments({
         createdAt: { $gte: startDate, $lte: endDate },
-        $or: [
-          // For subscriptions, count only true active subscriptions (will auto-renew, matches projected income)
-          getActiveSubscriptionSubFilter(),
-          { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
-          { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
-        ],
+        ...getEverPaidUserFilter(false),
         isActive: true,
       });
 
@@ -571,11 +558,7 @@ export async function GET(request: NextRequest) {
       let previousConversionRate = 0;
       const previousConvertedUsersInRange = await User.countDocuments({
         createdAt: { $gte: comparisonStartDate, $lte: comparisonEndDate },
-        $or: [
-          getActiveSubscriptionSubFilter(),
-          { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
-          { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
-        ],
+        ...getEverPaidUserFilter(false),
         isActive: true,
       });
       previousConversionRate =

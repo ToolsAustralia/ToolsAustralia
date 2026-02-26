@@ -49,6 +49,20 @@ export function getActiveSubscriptionSubFilter(): Record<string, unknown> {
 }
 
 /**
+ * Get filter for users who have processed payments (conversion metric).
+ * Source of truth: User.processedPayments - only users with at least one processed payment are converted.
+ *
+ * @param includeUserActive - Include isActive: true (default true)
+ * @returns MongoDB filter for converted users
+ */
+export function getEverPaidUserFilter(includeUserActive = true): Record<string, unknown> {
+  const filter: Record<string, unknown> = {
+    processedPayments: { $exists: true, $not: { $size: 0 } },
+  };
+  return includeUserActive ? { ...filter, isActive: true } : filter;
+}
+
+/**
  * Builds a MongoDB filter object from UserFilters parameters
  * 
  * @param filters - User filter parameters from the request
