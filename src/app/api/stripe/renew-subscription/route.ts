@@ -8,7 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
-import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
+import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 
 const renewSubscriptionSchema = z.object({
@@ -369,6 +369,8 @@ export async function POST(request: NextRequest) {
       : new Date();
     const anchorParams = getSubscriptionCreateParamsForAnchor(joinDateForAnchor);
     const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
+    const hasAnchor = Object.keys(anchorParams).length > 0;
+    const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
     const baseMetadata = {
       packageId: targetPackage._id,
@@ -389,6 +391,21 @@ export async function POST(request: NextRequest) {
       collection_method: "charge_automatically",
       metadata: baseMetadata as Stripe.MetadataParam,
       ...restAnchorParams,
+      ...(hasAnchor &&
+        targetPackage &&
+        next24Date &&
+        targetPackage.stripeProductId && {
+          add_invoice_items: [
+            {
+              price_data: {
+                currency: "aud",
+                unit_amount: Math.round(targetPackage.price * 100),
+                product: targetPackage.stripeProductId,
+              },
+              quantity: 1,
+            },
+          ],
+        }),
     };
 
     if (createPayload.collection_method !== undefined && createPayload.collection_method !== "charge_automatically") {
@@ -411,15 +428,19 @@ export async function POST(request: NextRequest) {
       newSubscriptionPeriodEnd != null ? new Date(newSubscriptionPeriodEnd * 1000) : undefined;
 
     // Check if payment completed immediately
-    if (latestInvoice?.status === "paid" && newSubscription.status === "active") {
+    if (
+      latestInvoice?.status === "paid" &&
+      (newSubscription.status === "active" || newSubscription.status === "trialing")
+    ) {
       // console.log(`✅ Payment completed immediately`);
 
       // Update user subscription (sync endDate from Stripe so UI shows correct next renewal)
+      // trialing = paid first invoice (e.g. anchor 25-27 flow); grant access until trial_end
       user.subscription = {
         packageId: targetPackage._id,
         startDate: new Date(),
         endDate: newSubscriptionEndDate, // End of current billing period from Stripe
-        isActive: true,
+        isActive: true, // active or trialing both have access
         autoRenew: true,
         status: "active",
       };

@@ -3302,6 +3302,21 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (result.success) {
+      // ✅ Safety net: Sync isActive for subscription_create (covers renew-subscription "payment requires confirmation" flow)
+      // When user completes payment for trialing subscription, ensure isActive = true
+      if (expandedInvoice.billing_reason === "subscription_create") {
+        try {
+          const subStatus = subscription?.status;
+          const shouldBeActive = subStatus === "active" || subStatus === "trialing";
+          if (shouldBeActive && !user.subscription?.isActive) {
+            await User.findByIdAndUpdate(user._id, { $set: { "subscription.isActive": true, "subscription.status": subStatus } });
+            webhookLog("info", `Synced subscription.isActive=true (status=${subStatus}) for ${user.email}`);
+          }
+        } catch (syncErr) {
+          webhookLog("warn", `Non-critical: could not sync isActive for subscription_create: ${syncErr}`);
+        }
+      }
+
       // ✅ Safety net: Sync subscription.endDate for renewals (covers missed subscription.updated)
       if (expandedInvoice.billing_reason === "subscription_cycle") {
         try {

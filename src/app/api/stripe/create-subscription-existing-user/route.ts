@@ -9,7 +9,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
-import { getSubscriptionCreateParamsForAnchor } from "@/utils/billing/anchor-billing";
+import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
@@ -206,6 +206,8 @@ export async function POST(request: NextRequest) {
 
     const anchorParams = getSubscriptionCreateParamsForAnchor(new Date());
     const { metadata: anchorMetadata, ...restAnchorParams } = anchorParams;
+    const hasAnchor = Object.keys(anchorParams).length > 0;
+    const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
     const userIdForMetadata = existingUser._id?.toString() ?? "";
     const baseMetadata = {
@@ -235,6 +237,21 @@ export async function POST(request: NextRequest) {
       collection_method: "charge_automatically",
       metadata: baseMetadata as Stripe.MetadataParam,
       ...restAnchorParams,
+      ...(hasAnchor &&
+        membershipPackage &&
+        next24Date &&
+        membershipPackage.stripeProductId && {
+          add_invoice_items: [
+            {
+              price_data: {
+                currency: "aud",
+                unit_amount: Math.round(membershipPackage.price * 100),
+                product: membershipPackage.stripeProductId,
+              },
+              quantity: 1,
+            },
+          ],
+        }),
     };
 
     if (createPayload.collection_method !== undefined && createPayload.collection_method !== "charge_automatically") {
@@ -286,7 +303,7 @@ export async function POST(request: NextRequest) {
     // Omit pendingChange/previousSubscription – Mongoose rejects undefined for these subdocument paths
     existingUser.subscription = {
       packageId: membershipPackage._id,
-      isActive: subscription.status === "active", // ✅ Set based on Stripe subscription status
+      isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
       startDate: new Date(),
       endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
       autoRenew: true,
@@ -334,7 +351,8 @@ export async function POST(request: NextRequest) {
         const periodEnd = getSubscriptionPeriodEnd(subscriptionUpdated);
         const endDate = periodEnd != null ? new Date(periodEnd * 1000) : undefined;
 
-        const isActive = subscriptionUpdated.status === "active";
+        const isActive =
+          subscriptionUpdated.status === "active" || subscriptionUpdated.status === "trialing";
         const newStatus = subscriptionUpdated.status;
 
         // Update only the fields we need via $set – never touch previousSubscription/pendingChange so Mongoose never sees undefined

@@ -8,8 +8,9 @@ Users who **join on the 25th, 26th, or 27th** (AEST) are anchored so their subsc
 
 ### New subscriptions (25th / 26th / 27th joiners)
 
-- We set **`billing_cycle_anchor_config: { day_of_month: 24 }`** when creating the subscription.
-- First charge is prorated (signup → next 24th); subsequent charges are on the 24th.
+- We use **`trial_end`** (next 24th at midnight AEST) and **`proration_behavior: "none"`** so renewal anchors to the 24th.
+- We add **`add_invoice_items`** with the full package price so the user pays immediately at signup (not prorated, per terms).
+- First invoice = full price charged at signup; subscription status is `trialing` until the 24th, then `active` with renewals on the 24th.
 - **Cancellation**: If the user cancels (`cancel_at_period_end`), their access ends on the **24th** (full period). Stripe does **not** charge again at period end. Cancellation date = period end = 24th.
 
 ### Migration (existing 25th–27th renewers)
