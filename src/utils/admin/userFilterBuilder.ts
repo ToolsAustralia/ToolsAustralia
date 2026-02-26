@@ -59,7 +59,8 @@ export function getActiveSubscriptionSubFilter(): Record<string, unknown> {
 export function getEverPaidUserFilter(includeUserActive = true): Record<string, unknown> {
   const orFilter: Record<string, unknown> = {
     $or: [
-      { "subscription.packageId": { $exists: true, $ne: null } },
+      // Must exclude "" - registration sets packageId: "" for users who never paid
+      { "subscription.packageId": { $exists: true, $nin: [null, ""] } },
       { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
       { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
       { upsellPurchases: { $exists: true, $not: { $size: 0 } } },
