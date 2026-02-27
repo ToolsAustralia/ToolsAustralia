@@ -6,21 +6,8 @@ import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import ChargeJobLock from "@/models/ChargeJobLock";
-import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
-import { isDevelopment } from "@/lib/environment";
 import Stripe from "stripe";
 import mongoose from "mongoose";
-
-// Rate limiters
-const adminRateLimiter = createRateLimiter("charge-past-due-admin", {
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  maxRequests: 1,
-});
-
-const globalRateLimiter = createRateLimiter("charge-past-due-global", {
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  maxRequests: 1,
-});
 
 /**
  * Sanitize Stripe response to remove PCI-sensitive data
@@ -56,37 +43,6 @@ function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
   }
 
   return sanitized;
-}
-
-/**
- * Check if invoice was charged in last 24 hours
- */
-async function wasChargedRecently(invoiceId: string): Promise<boolean> {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentCharge = await InvoiceChargeLog.findOne({
-    invoiceId,
-    attemptedAt: { $gte: oneDayAgo },
-    status: { $in: ["success", "failed"] },
-  });
-
-  return !!recentCharge;
-}
-
-/**
- * Check if invoice can be retried
- */
-async function canRetryInvoice(invoiceId: string): Promise<boolean> {
-  const latestLog = await InvoiceChargeLog.findOne({
-    invoiceId,
-  })
-    .sort({ attemptedAt: -1 })
-    .lean();
-
-  if (!latestLog || !latestLog.canRetryAt) {
-    return true;
-  }
-
-  return new Date() >= latestLog.canRetryAt;
 }
 
 /**
@@ -416,42 +372,7 @@ export async function POST(request: NextRequest) {
 
     const adminId = session.user.id;
 
-    // 2. Rate limiting - per admin (skip in development)
-    if (!isDevelopment()) {
-      const adminIdentifier = adminId;
-      const adminRateCheck = adminRateLimiter.check(adminIdentifier);
-      if (!adminRateCheck.success) {
-        return NextResponse.json(
-          {
-            error: "Rate limit exceeded",
-            message: `Please wait ${adminRateCheck.retryAfterSeconds} seconds before trying again.`,
-            retryAfter: adminRateCheck.retryAfterSeconds,
-          },
-          { status: 429 }
-        );
-      }
-    }
-
-    // 3. Rate limiting - global (skip in development)
-    if (!isDevelopment()) {
-      const clientIp = getClientIdentifier(
-        request.headers.get("x-real-ip"),
-        request.headers.get("x-forwarded-for")
-      );
-      const globalRateCheck = globalRateLimiter.check("global");
-      if (!globalRateCheck.success) {
-        return NextResponse.json(
-          {
-            error: "Global rate limit exceeded",
-            message: `This operation can only be performed once per 24 hours. Please wait ${globalRateCheck.retryAfterSeconds} seconds.`,
-            retryAfter: globalRateCheck.retryAfterSeconds,
-          },
-          { status: 429 }
-        );
-      }
-    }
-
-    // 4. Confirmation validation
+    // 2. Confirmation validation
     const body = await request.json();
     if (body.confirmation !== "CHARGE") {
       return NextResponse.json(
@@ -460,7 +381,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Global mutex lock check
+    // 3. Global mutex lock check
     const lock = await ChargeJobLock.findById("charge-job-lock");
     const now = new Date();
 
@@ -499,7 +420,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // 6. Fetch eligible invoices from Stripe with pagination
+      // 4. Fetch eligible invoices from Stripe with pagination
       // Note: Stripe invoices don't have "past_due" status - that's a subscription status
       // We fetch "open" invoices and filter by database subscription status
       // Use pagination to ensure we get all invoices consistently
@@ -542,7 +463,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 7. Map invoices to MongoDB users
+      // 5. Map invoices to MongoDB users
       const customerIds = allInvoices
         .map((inv) => (typeof inv.customer === "string" ? inv.customer : inv.customer?.id))
         .filter(Boolean) as string[];
@@ -556,11 +477,11 @@ export async function POST(request: NextRequest) {
 
       const userMap = new Map(users.map((u) => [u.stripeCustomerId, u]));
 
-      // 8. Batch fetch customers to get their default payment methods (fallback)
+      // 6. Batch fetch customers to get their default payment methods (fallback)
       // Uses throttled batching with retry logic to respect Stripe rate limits
       const customerPaymentMethodMap = await batchFetchCustomers(customerIds, 15, 200);
 
-      // 9. Filter invoices based on all criteria
+      // 7. Filter invoices based on all criteria
       // Note: invoice.status is already "open" from the list call above
       const eligibleInvoices = allInvoices.filter((invoice) => {
         // Check collection method
@@ -617,7 +538,7 @@ export async function POST(request: NextRequest) {
       let failed = 0;
       let skipped = 0;
 
-      // 9. Process in batches
+      // 8. Process in batches
       const BATCH_SIZE = 15;
       const BATCH_DELAY = 500;
 
@@ -635,36 +556,6 @@ export async function POST(request: NextRequest) {
             // Get user first (needed for email in results)
             const user = userMap.get(customerId);
             const userEmail = user?.email || "N/A";
-
-            // Check idempotency
-            if (await wasChargedRecently(invoiceId)) {
-              skipped++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user?._id?.toString(),
-                userEmail: userEmail,
-                status: "skipped",
-                skipReason: "Already charged in last 24 hours",
-                amount: invoice.amount_remaining || 0,
-              });
-              return;
-            }
-
-            // Check retry eligibility
-            if (!(await canRetryInvoice(invoiceId))) {
-              skipped++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user?._id?.toString(),
-                userEmail: userEmail,
-                status: "skipped",
-                skipReason: "Retry not yet allowed",
-                amount: invoice.amount_remaining || 0,
-              });
-              return;
-            }
 
             if (!user) {
               skipped++;
@@ -806,17 +697,6 @@ export async function POST(request: NextRequest) {
                 return;
               }
 
-              // Determine if this is a permanent failure
-              const permanentFailures = [
-                "authentication_required",
-                "card_declined",
-                "expired_card",
-                "insufficient_funds",
-                "generic_decline",
-              ];
-
-              const isPermanentFailure = permanentFailures.some((code) => stripeError.code === code);
-
               processed++;
               failed++;
               results.push({
@@ -840,7 +720,6 @@ export async function POST(request: NextRequest) {
                 errorMessage: stripeError.message,
                 amount: invoice.amount_remaining || 0,
                 attemptedAt: new Date(),
-                canRetryAt: isPermanentFailure ? new Date(Date.now() + 24 * 60 * 60 * 1000) : undefined,
                 result: sanitizeStripeResponse(stripeError),
               });
             }

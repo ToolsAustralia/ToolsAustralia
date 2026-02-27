@@ -80,8 +80,10 @@ export function ToolboxSelector({
               transition: { duration: 0.15 },
             }}
             animate={{
-              opacity: isActive ? 1 : 0.7,
-              filter: isActive ? "drop-shadow(0 8px 24px rgba(0,0,0,0.2))" : "none",
+              opacity: isActive ? 1 : 0.55,
+              filter: isActive
+                ? "drop-shadow(0 8px 24px rgba(0,0,0,0.2))"
+                : "brightness(1.25) saturate(0.7)",
             }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className="relative cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-red-500/60 focus-visible:ring-offset-4 rounded-2xl"
