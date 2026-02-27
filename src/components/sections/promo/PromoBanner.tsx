@@ -796,8 +796,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             </div>
 
             {/* Right Side - Draw Date Text or Countdown (uses simpler gradient) */}
+            {countdownDisplay.type !== "hidden" && (
+            <div className="relative flex items-center justify-center">
             {(() => {
-              if (countdownDisplay.type === "hidden") return null;
 
               const drawTime = getDrawTimeText();
               const rightSectionTileStyle = { background: theme.gradientSolid, boxShadow: `0 0 12px ${theme.shadowRgba}` };
@@ -1062,8 +1063,21 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 </motion.div>
               );
             })()}
+            </div>
+            )}
           </div>
+
         </motion.div>
+
+        {/* Badge image - outside overflow-hidden so -top-3 when sticky won't be clipped */}
+        {countdownDisplay.type !== "hidden" && !isNoPromo && multiplier && [2, 3, 5, 10].includes(multiplier) && (
+          <img
+            src={`/images/badge/X${multiplier}.png`}
+            alt={`${multiplier}X entries`}
+            className={`absolute ${isScrolled ? "-top-3 sm:-top-6 -right-2 sm:-right-4" : "top-0 sm:-top-2 right-0 sm:right-2"} ${isScrolled ? "w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20" : "w-9 h-9 sm:w-11 sm:h-11 lg:w-14 lg:h-14"} object-contain z-20 pointer-events-none select-none`}
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.5))" }}
+          />
+        )}
       </motion.div>
     </>
   );
