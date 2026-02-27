@@ -18,7 +18,7 @@ const adminRateLimiter = createRateLimiter("charge-past-due-admin", {
 });
 
 const globalRateLimiter = createRateLimiter("charge-past-due-global", {
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  windowMs: 12 * 60 * 60 * 1000, // 12 hours (allows twice per day)
   maxRequests: 1,
 });
 
@@ -59,13 +59,13 @@ function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
 }
 
 /**
- * Check if invoice was charged in last 24 hours
+ * Check if invoice was charged in last 12 hours (allows twice per day)
  */
 async function wasChargedRecently(invoiceId: string): Promise<boolean> {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
   const recentCharge = await InvoiceChargeLog.findOne({
     invoiceId,
-    attemptedAt: { $gte: oneDayAgo },
+    attemptedAt: { $gte: twelveHoursAgo },
     status: { $in: ["success", "failed"] },
   });
 
@@ -443,7 +443,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: "Global rate limit exceeded",
-            message: `This operation can only be performed once per 24 hours. Please wait ${globalRateCheck.retryAfterSeconds} seconds.`,
+            message: `This operation can only be performed twice per day (every 12 hours). Please wait ${globalRateCheck.retryAfterSeconds} seconds.`,
             retryAfter: globalRateCheck.retryAfterSeconds,
           },
           { status: 429 }
@@ -645,7 +645,7 @@ export async function POST(request: NextRequest) {
                 userId: user?._id?.toString(),
                 userEmail: userEmail,
                 status: "skipped",
-                skipReason: "Already charged in last 24 hours",
+                skipReason: "Already charged in last 12 hours",
                 amount: invoice.amount_remaining || 0,
               });
               return;
