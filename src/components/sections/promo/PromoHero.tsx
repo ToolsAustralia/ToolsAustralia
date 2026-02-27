@@ -14,17 +14,6 @@ import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { DrawDateStatus } from "@/utils/promo/promo-hero-types";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
-import PromoBadge from "@/components/ui/PromoBadge";
-
-/**
- * PromoBadge position on toolset landing hero - tweak to find sweetspot.
- * Uses Tailwind classes: top-*, right-*, left-*, bottom-* (e.g. top-4, right-4).
- * Mobile applies < lg breakpoint; desktop applies lg and up.
- */
-const PROMO_BADGE_POSITION = {
-  mobile: "top-4 left-4",
-  desktop: "lg:top-8 lg:left-auto lg:right-8",
-} as const;
 
 interface PromoHeroProps {
   initialPromo?: ServerPromo | null;
@@ -178,20 +167,6 @@ export default function PromoHero({
           />
         </div>
       </div>
-
-      {/* PromoBadge - toolset landing pages only, position via PROMO_BADGE_POSITION above */}
-      {isToolsetLandingPage && (() => {
-        const mult = resolvedMultiplier;
-        const validMult = mult != null && [2, 3, 5, 10].includes(mult) ? (mult as 2 | 3 | 5 | 10) : 10;
-        return (
-          <div
-            className={`absolute z-20 ${PROMO_BADGE_POSITION.mobile} ${PROMO_BADGE_POSITION.desktop}`}
-            aria-hidden
-          >
-            <PromoBadge multiplier={validMult} size="medium" />
-          </div>
-        );
-      })()}
 
       {/* Hero Content - Optional messaging overlay from variant config */}
       {/* Use suppressHydrationWarning to prevent hydration mismatch when variant config loads */}
