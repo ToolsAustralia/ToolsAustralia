@@ -12,14 +12,32 @@ import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
 import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { DrawDateStatus } from "@/utils/promo/promo-hero-types";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
+import PromoBadge from "@/components/ui/PromoBadge";
+
+/**
+ * PromoBadge position on toolset landing hero - tweak to find sweetspot.
+ * Uses Tailwind classes: top-*, right-*, left-*, bottom-* (e.g. top-4, right-4).
+ * Mobile applies < lg breakpoint; desktop applies lg and up.
+ */
+const PROMO_BADGE_POSITION = {
+  mobile: "top-4 left-4",
+  desktop: "lg:top-8 lg:left-auto lg:right-8",
+} as const;
 
 interface PromoHeroProps {
   initialPromo?: ServerPromo | null;
   initialMajorDraw?: ServerMajorDraw | null;
+  /** Toolset landing page - use landing hero images when available */
+  isToolsetLandingPage?: boolean;
 }
 
-export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroProps) {
+export default function PromoHero({
+  initialPromo,
+  initialMajorDraw,
+  isToolsetLandingPage = false,
+}: PromoHeroProps) {
   // Use initial data if available, but allow refetching for real-time updates
   const { isLoading, data: currentDraw } = useCurrentMajorDraw();
   const { data: activePromo } = usePromoByType("membership-packages");
@@ -78,14 +96,18 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
     return null;
   };
 
-  // Resolve hero image paths using centralized utility
-  // Priority: Variant config > Draw date (today/tomorrow) > multiplier-based images
+  // Resolve hero image paths
+  // Toolset landing: use landing hero if available for current prize slug
+  // Otherwise: Variant config > Draw date > multiplier-based images
+  const currentSlug = usePromoThemeStore((s) => s.slug);
   const drawDateStatus = getDrawDateStatus();
-  const heroImagePaths = getPromoImagePaths({
+  const landingHeroPaths = isToolsetLandingPage && currentSlug ? getLandingHeroImagePaths(currentSlug) : null;
+  const standardHeroPaths = getPromoImagePaths({
     multiplier: resolvedMultiplier,
     drawDateStatus,
     variantImageOverride: variantConfig?.hero?.imageSrc,
   });
+  const heroImagePaths = landingHeroPaths ?? standardHeroPaths;
   
   // Get CTA text from variant config or use default
   const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";
@@ -156,6 +178,20 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
           />
         </div>
       </div>
+
+      {/* PromoBadge - toolset landing pages only, position via PROMO_BADGE_POSITION above */}
+      {isToolsetLandingPage && (() => {
+        const mult = resolvedMultiplier;
+        const validMult = mult != null && [2, 3, 5, 10].includes(mult) ? (mult as 2 | 3 | 5 | 10) : 10;
+        return (
+          <div
+            className={`absolute z-20 ${PROMO_BADGE_POSITION.mobile} ${PROMO_BADGE_POSITION.desktop}`}
+            aria-hidden
+          >
+            <PromoBadge multiplier={validMult} size="medium" />
+          </div>
+        );
+      })()}
 
       {/* Hero Content - Optional messaging overlay from variant config */}
       {/* Use suppressHydrationWarning to prevent hydration mismatch when variant config loads */}

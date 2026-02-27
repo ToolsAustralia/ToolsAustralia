@@ -419,13 +419,22 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
               return (
                 <div key={group}>
                   {/* Group Header */}
-                  <button
-                    onClick={() => toggleGroupExpansion(group)}
-                    disabled={isExporting}
-                    className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  <div
+                    role="button"
+                    tabIndex={isExporting ? -1 : 0}
+                    aria-disabled={isExporting}
+                    onClick={() => !isExporting && toggleGroupExpansion(group)}
+                    onKeyDown={(e) => {
+                      if (!isExporting && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        toggleGroupExpansion(group);
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between p-3 transition-colors cursor-pointer ${isExporting ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-50"}`}
                   >
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleGroup(group);
@@ -449,7 +458,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
                     ) : (
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     )}
-                  </button>
+                  </div>
 
                   {/* Group Fields */}
                   {isExpanded && (

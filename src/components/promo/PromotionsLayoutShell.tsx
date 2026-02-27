@@ -15,7 +15,8 @@ export default function PromotionsLayoutShell({
   const pathname = usePathname();
   const isRyobiPage =
     pathname === "/promotions/ryobi-sidchrome" ||
-    pathname === "/promotions/ryobi-milwaukee";
+    pathname === "/promotions/ryobi-milwaukee" ||
+    pathname === "/promotions/ryobi";
 
   return (
     <div className={isRyobiPage ? "dark" : ""}>
