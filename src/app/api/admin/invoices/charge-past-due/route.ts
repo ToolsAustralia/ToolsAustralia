@@ -46,23 +46,6 @@ function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
 }
 
 /**
- * Check if invoice can be retried
- */
-async function canRetryInvoice(invoiceId: string): Promise<boolean> {
-  const latestLog = await InvoiceChargeLog.findOne({
-    invoiceId,
-  })
-    .sort({ attemptedAt: -1 })
-    .lean();
-
-  if (!latestLog || !latestLog.canRetryAt) {
-    return true;
-  }
-
-  return new Date() >= latestLog.canRetryAt;
-}
-
-/**
  * Fetch customer with retry logic for rate limit errors
  * Follows Stripe best practices for handling rate limits
  */
@@ -574,21 +557,6 @@ export async function POST(request: NextRequest) {
             const user = userMap.get(customerId);
             const userEmail = user?.email || "N/A";
 
-            // Check retry eligibility
-            if (!(await canRetryInvoice(invoiceId))) {
-              skipped++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user?._id?.toString(),
-                userEmail: userEmail,
-                status: "skipped",
-                skipReason: "Retry not yet allowed",
-                amount: invoice.amount_remaining || 0,
-              });
-              return;
-            }
-
             if (!user) {
               skipped++;
               results.push({
@@ -729,17 +697,6 @@ export async function POST(request: NextRequest) {
                 return;
               }
 
-              // Determine if this is a permanent failure
-              const permanentFailures = [
-                "authentication_required",
-                "card_declined",
-                "expired_card",
-                "insufficient_funds",
-                "generic_decline",
-              ];
-
-              const isPermanentFailure = permanentFailures.some((code) => stripeError.code === code);
-
               processed++;
               failed++;
               results.push({
@@ -763,7 +720,6 @@ export async function POST(request: NextRequest) {
                 errorMessage: stripeError.message,
                 amount: invoice.amount_remaining || 0,
                 attemptedAt: new Date(),
-                canRetryAt: isPermanentFailure ? new Date(Date.now() + 24 * 60 * 60 * 1000) : undefined,
                 result: sanitizeStripeResponse(stripeError),
               });
             }
