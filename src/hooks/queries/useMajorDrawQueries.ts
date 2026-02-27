@@ -412,6 +412,10 @@ export const useNextDraw = () => {
           name: string;
           _id: string;
           activationDate: string | null;
+          prize?: {
+            name?: string;
+            images?: string[];
+          };
         } | null;
       }>("/api/major-draw/next");
       return response.nextDraw;

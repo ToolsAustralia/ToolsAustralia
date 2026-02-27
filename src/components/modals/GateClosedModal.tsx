@@ -7,6 +7,10 @@ import Link from "next/link";
 import { useUserContext } from "@/contexts/UserContext";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import { apprentice, tradie, foreman, boss, power } from "@/utils/images/package-icons";
+import { formatActivationDate } from "@/utils/promo-banner/format-activation-date";
+import { getPackageColorSchemeForPromo, hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
+import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 export interface GateClosedModalProps {
   isOpen: boolean;
@@ -28,42 +32,32 @@ const GateClosedModal: React.FC<GateClosedModalProps> = ({
   nextDrawName,
 }) => {
   const { isAuthenticated } = useUserContext();
-
-  // Format the activation date nicely
-  const formatActivationDate = (dateString: string | null): string => {
-    if (!dateString) return "";
-
-    try {
-      const date = new Date(dateString);
-      
-      // Format: "Tuesday, 28 January 2025 at 5:30pm"
-      const options: Intl.DateTimeFormatOptions = {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      };
-
-      return date.toLocaleDateString("en-AU", options);
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return dateString;
-    }
-  };
+  const { variantConfig } = useVariantContext();
+  const { data: nextDraw } = useNextDraw();
 
   const formattedDate = formatActivationDate(nextActivationDate);
 
-  // Package color configurations
+  // Use next draw's prize image as background, fallback to default promo image
+  const backgroundImageSrc =
+    nextDraw?.prize?.images?.[0] || "/images/background/promo/x10 entries.webp";
+
+  // Package icons with colors from MembershipSection package color scheme (one-time tab mapping)
   const packageConfigs = [
-    { icon: apprentice, name: "apprentice", glowColor: "rgba(156, 163, 175, 0.5)", bgGlowColor: "rgba(156, 163, 175, 0.2)", hoverGlowColor: "rgba(156, 163, 175, 0.4)" }, // Gray/Silver
-    { icon: tradie, name: "tradie", glowColor: "rgba(59, 130, 246, 0.5)", bgGlowColor: "rgba(59, 130, 246, 0.2)", hoverGlowColor: "rgba(59, 130, 246, 0.4)" }, // Blue
-    { icon: foreman, name: "foreman", glowColor: "rgba(34, 197, 94, 0.5)", bgGlowColor: "rgba(34, 197, 94, 0.2)", hoverGlowColor: "rgba(34, 197, 94, 0.4)" }, // Green
-    { icon: boss, name: "boss", glowColor: "rgba(250, 204, 21, 0.5)", bgGlowColor: "rgba(250, 204, 21, 0.2)", hoverGlowColor: "rgba(250, 204, 21, 0.4)" }, // Yellow/Gold
-    { icon: power, name: "power", glowColor: "rgba(249, 115, 22, 0.5)", bgGlowColor: "rgba(249, 115, 22, 0.2)", hoverGlowColor: "rgba(249, 115, 22, 0.4)" }, // Orange
-  ];
+    { icon: apprentice, planId: "apprentice-pack" },
+    { icon: tradie, planId: "tradie-pack" },
+    { icon: foreman, planId: "foreman-pack" },
+    { icon: boss, planId: "boss-pack" },
+    { icon: power, planId: "power-pack" },
+  ].map(({ icon, planId }) => {
+    const colorScheme = getPackageColorSchemeForPromo(planId, false, variantConfig);
+    return {
+      icon,
+      name: planId.replace("-pack", ""),
+      glowColor: hexToRgbaString(colorScheme.accentHex, 0.5),
+      bgGlowColor: hexToRgbaString(colorScheme.accentHex, 0.2),
+      hoverGlowColor: hexToRgbaString(colorScheme.accentHex, 0.4),
+    };
+  });
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose}>
@@ -76,8 +70,8 @@ const GateClosedModal: React.FC<GateClosedModalProps> = ({
           {/* Background Image with Darker Dim Overlay */}
           <div className="absolute inset-0 z-0">
             <Image
-              src="/images/background/promo/x10 entries.webp"
-              alt="Background"
+              src={backgroundImageSrc}
+              alt={nextDraw?.name ? `Next draw: ${nextDraw.name}` : "Background"}
               fill
               className="object-cover opacity-20"
               priority
@@ -164,7 +158,7 @@ const GateClosedModal: React.FC<GateClosedModalProps> = ({
                   className="block w-full"
                 >
                   <Button
-                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 hover:from-yellow-500 hover:via-orange-500 hover:to-red-500 text-black font-semibold py-3 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                   >
                     <Gift className="w-5 h-5" />
                     Visit Mini Draws

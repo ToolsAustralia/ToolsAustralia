@@ -294,10 +294,12 @@ export function getGradientColor(gradient: string): string {
  */
 export function slugToPromoTierPlanId(slug: string): COLOR_KEYS {
   const s = slug.toLowerCase();
-  if (s.includes("dewalt")) return "dewalt-yellow";
-  if (s.includes("makita")) return "makita-teal";
-  if (s.includes("milwaukee")) return "milwaukee-red";
-  if (s.includes("ryobi") || s.includes("tradie")) return "ryobi-green";
+  // Slug format is "toolset-toolbox" — check toolset (prefix) first so e.g. ryobi-milwaukee uses Ryobi theme
+  if (s.startsWith("ryobi")) return "ryobi-green";
+  if (s.startsWith("dewalt")) return "dewalt-yellow";
+  if (s.startsWith("makita")) return "makita-teal";
+  if (s.startsWith("milwaukee")) return "milwaukee-red";
+  if (s.includes("tradie")) return "ryobi-green";
   if (s.includes("kincrome") || s.includes("apprentice")) return "kincrome-blue";
   if (s.includes("cash")) return "cash-green";
   if (s.includes("black")) return "black";
@@ -353,18 +355,21 @@ export function getLandingPageThemeFromSlug(slug: string): {
   borderRgba: string;
   badgeStyle: PackageColorScheme["badgeStyle"];
   accentHex: string;
+  preferDarkBackground: boolean;
 } {
   // Milwaukee pages use Tools Australia brand red
   if (slug === "milwaukee-milwaukee" || slug === "milwaukee-sidchrome") {
     return {
       ...TOOLS_AUSTRALIA_RED,
       accentHex: TOOLS_AUSTRALIA_RED.primary,
+      preferDarkBackground: false,
     };
   }
   const colorKey = slugToPromoTierPlanId(slug);
   const scheme = getPackageColorScheme(colorKey);
   const brand = LANDING_PAGE_BRAND[colorKey] ?? LANDING_PAGE_BRAND["milwaukee-red"];
   const { primary, primaryLight, primaryDark } = brand;
+  const preferDarkBackground = slug === "ryobi-sidchrome" || slug === "ryobi-milwaukee";
   return {
     primary,
     primaryLight,
@@ -377,14 +382,28 @@ export function getLandingPageThemeFromSlug(slug: string): {
     borderRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.4)`,
     badgeStyle: scheme.badgeStyle,
     accentHex: primary,
+    preferDarkBackground,
   };
 }
 
-function hexToRgbaValues(hex: string): [number, number, number] {
+/** Parse hex (#RRGGBB) to [r, g, b]. Used for RGB/RGBA string generation. */
+export function hexToRgbaValues(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return [r, g, b];
+}
+
+/** Convert hex to rgb(r, g, b) string for CSS. */
+export function hexToRgbString(hex: string): string {
+  const [r, g, b] = hexToRgbaValues(hex);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Convert hex to rgba(r, g, b, alpha) string for CSS. */
+export function hexToRgbaString(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgbaValues(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /**
@@ -395,6 +414,7 @@ export function getPromoPrimaryTheme() {
   return {
     ...TOOLS_AUSTRALIA_RED,
     accentHex: TOOLS_AUSTRALIA_RED.primary,
+    preferDarkBackground: false,
   };
 }
 
@@ -564,6 +584,7 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
   borderRgba: string;
   badgeStyle: PackageColorScheme["badgeStyle"];
   accentHex: string;
+  preferDarkBackground: boolean;
 } {
   const scheme = getMembershipSectionColorScheme(planId, isMembershipTab);
   const packKey =
@@ -577,6 +598,7 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
     : (ONE_TIME_TAB_COLOR_MAP[packKey] ?? toColorKey(packKey));
   const brand = LANDING_PAGE_BRAND[colorKey] ?? LANDING_PAGE_BRAND["milwaukee-red"];
   const { primary, primaryLight, primaryDark } = brand;
+  const preferDarkBackground = colorKey === "ryobi-green";
   return {
     primary,
     primaryLight,
@@ -589,6 +611,7 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
     borderRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.4)`,
     badgeStyle: scheme.badgeStyle,
     accentHex: primary,
+    preferDarkBackground,
   };
 }
 

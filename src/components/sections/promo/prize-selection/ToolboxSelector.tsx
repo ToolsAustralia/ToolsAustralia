@@ -80,21 +80,24 @@ export function ToolboxSelector({
               transition: { duration: 0.15 },
             }}
             animate={{
-              opacity: isActive ? 1 : 0.7,
-              filter: isActive ? "drop-shadow(0 8px 24px rgba(0,0,0,0.2))" : "none",
+              opacity: isActive ? 1 : 0.55,
+              filter: isActive
+                ? "drop-shadow(0 8px 24px rgba(0,0,0,0.2))"
+                : "brightness(1.25) saturate(0.7)",
             }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className="relative cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-red-500/60 focus-visible:ring-offset-4 rounded-2xl"
             aria-pressed={isActive}
             aria-label={`${type === "milwaukee" ? "Milwaukee" : "Sidchrome"} Toolbox`}
           >
-            {/* Highlight behind image - darker red glow only when selected */}
+            {/* Red circular background burst - transfers to selected toolbox on click */}
             {isActive && (
               <div
-                className="absolute inset-0 -inset-4 pointer-events-none -z-10"
+                className="absolute inset-0 -inset-6 sm:-inset-8 pointer-events-none -z-10"
                 style={{
-                  background: "radial-gradient(ellipse 80% 80% at 50% 50%, rgba(180, 0, 0, 0.5), rgba(140, 0, 0, 0.25) 50%, transparent 70%)",
-                  filter: "blur(14px)",
+                  background: "radial-gradient(ellipse 70% 70% at 50% 50%, rgba(220, 38, 38, 0.6), rgba(185, 28, 28, 0.35) 45%, rgba(127, 29, 29, 0.15) 65%, transparent 85%)",
+                  filter: "blur(16px)",
+                  boxShadow: "0 0 60px 20px rgba(185, 28, 28, 0.25)",
                 }}
               />
             )}

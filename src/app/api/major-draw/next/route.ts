@@ -36,6 +36,12 @@ export async function GET() {
           name: nextDraw.name,
           _id: String(nextDraw._id),
           activationDate: nextDraw.activationDate ? nextDraw.activationDate.toISOString() : null,
+          prize: nextDraw.prize
+            ? {
+                name: nextDraw.prize.name,
+                images: nextDraw.prize.images || [],
+              }
+            : undefined,
         },
       },
       {

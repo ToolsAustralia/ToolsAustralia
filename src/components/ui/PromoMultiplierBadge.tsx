@@ -23,6 +23,7 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
   showPromoText = true,
 }) => {
   const theme = usePromoTheme();
+  const preferDark = theme.preferDarkBackground ?? false;
   return (
     <div className={`absolute -top-1.5 -right-1.5 z-10 ${className}`}>
       <div
@@ -36,9 +37,9 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
         {/* Subtle static highlight - no shimmer/light shine effect */}
         {/* Content - Multiplier with optional PROMO text */}
         <span
-          className="relative z-10 text-white font-black"
+          className={`relative z-10 font-black ${preferDark ? "text-black" : "text-white"}`}
           style={{
-            textShadow: "0 1px 2px rgba(0, 0, 0, 0.5)",
+            textShadow: preferDark ? "0 1px 2px rgba(255, 255, 255, 0.3)" : "0 1px 2px rgba(0, 0, 0, 0.5)",
           }}
         >
           {multiplier}x{showPromoText ? " PROMO" : ""}

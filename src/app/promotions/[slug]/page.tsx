@@ -34,6 +34,11 @@ const UnlockDiscounts = dynamic(() => import("@/components/sections/promo/Unlock
 const LatestWinnerHero = dynamic(() => import("@/components/sections/LatestWinnerHero"), {
   ssr: true, // Keep SSR for SEO
 });
+
+const WinnerTestimoniesClientLazy = dynamic(
+  () => import("@/components/sections/WinnerTestimoniesClientLazy"),
+  { ssr: true }
+);
 import { getPrizeBySlug, listPrizes } from "@/config/prizes";
 import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-queries";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
@@ -174,7 +179,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={prize.slug} />
-        <div className="min-h-screen bg-white w-full overflow-hidden">
+        <div className="min-h-screen bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
           <main className="w-full overflow-hidden ">
@@ -195,6 +200,10 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
 
           <Suspense fallback={<div className="min-h-[400px]" />}>
             <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
+          </Suspense>
+
+          <Suspense fallback={<div className="min-h-[200px]" />}>
+            <WinnerTestimoniesClientLazy />
           </Suspense>
 
           <Suspense fallback={<div className="min-h-[300px]" />}>

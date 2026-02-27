@@ -30,7 +30,7 @@ export default function NewsletterSection() {
   return (
     <div className="absolute top-0 left-0 right-0 z-20 -translate-y-1/2 w-full overflow-hidden">
       <div className="w-full px-3 sm:px-4 lg:px-8 lg:max-w-8xl lg:mx-auto">
-        <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 lg:p-8 shadow-2xl relative overflow-hidden">
+        <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 dark:from-neutral-800 dark:via-neutral-700 dark:to-neutral-800 rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 lg:p-8 shadow-2xl relative overflow-hidden">
           {/* Background Pattern */}
           <div className="absolute inset-0 opacity-10 pattern-rings-soft"></div>
 
@@ -49,13 +49,13 @@ export default function NewsletterSection() {
               {/* Right Content - Form Section */}
               <div className="flex flex-col gap-2 sm:gap-3 lg:gap-4 w-auto lg:w-96 flex-shrink-0">
                 <div className="relative w-36 sm:w-44 md:w-52 lg:w-full">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-400 z-10" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter email"
-                    className="w-full bg-white rounded-[10px] sm:rounded-[12px] lg:rounded-[16px] pl-10 pr-4 sm:pl-12 sm:pr-4 lg:pl-14 lg:pr-4 py-2 sm:py-2 lg:py-4 text-sm sm:text-sm lg:text-[16px] text-gray-900 placeholder-gray-500 border-0 focus:ring-2 focus:ring-yellow-300 focus:outline-none transition-all duration-200"
+                    className="w-full bg-white dark:bg-neutral-800 rounded-[10px] sm:rounded-[12px] lg:rounded-[16px] pl-10 pr-4 sm:pl-12 sm:pr-4 lg:pl-14 lg:pr-4 py-2 sm:py-2 lg:py-4 text-sm sm:text-sm lg:text-[16px] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 border-0 focus:ring-2 focus:ring-yellow-300 dark:focus:ring-neutral-500 focus:outline-none transition-all duration-200"
                     required
                     suppressHydrationWarning
                   />
@@ -64,7 +64,7 @@ export default function NewsletterSection() {
                 <button
                   onClick={handleSubscribe}
                   disabled={isLoading || !email}
-                  className="bg-white hover:bg-gray-100 text-black font-semibold py-3 sm:py-3 lg:py-4 px-4 sm:px-5 lg:px-8 rounded-[10px] sm:rounded-[12px] lg:rounded-[16px] text-sm sm:text-sm lg:text-[16px] transition-all duration-300 flex items-center justify-center gap-2 sm:gap-2 lg:gap-3 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-white dark:bg-neutral-700 hover:bg-gray-100 dark:hover:bg-neutral-600 text-black dark:text-white font-semibold py-3 sm:py-3 lg:py-4 px-4 sm:px-5 lg:px-8 rounded-[10px] sm:rounded-[12px] lg:rounded-[16px] text-sm sm:text-sm lg:text-[16px] transition-all duration-300 flex items-center justify-center gap-2 sm:gap-2 lg:gap-3 w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <>
