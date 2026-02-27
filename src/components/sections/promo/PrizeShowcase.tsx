@@ -19,15 +19,19 @@ import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useSearchParams, usePathname } from "next/navigation";
-import type { PrizeCatalogEntry } from "@/config/prizes";
+import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
 import {
   ToolboxSelector,
   PowerToolsetCarousel,
+  StaticToolsetHighlight,
   getToolboxTypeFromSlug,
   getToolsetFromSlug,
   filterPrizesByToolboxType,
 } from "./prize-selection";
+import { getPrizesForToolsetSlug, isToolsetLandingSlug } from "@/config/promo-landing-slugs";
+import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { getPrizeBySlug } from "@/config/prizes";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -37,6 +41,10 @@ import "swiper/css/free-mode";
 
 interface PrizeShowcaseProps {
   slug?: string;
+  /** Toolset landing page mode - both toolboxes, fixed toolset, no navigation */
+  toolsetMode?: boolean;
+  /** Toolset slug (ryobi, milwaukee, dewalt, makita) when toolsetMode */
+  toolsetSlug?: string;
 }
 
 const formatIconKey = (iconName: string) =>
@@ -256,9 +264,14 @@ const formatTimeWithoutPeriod = (date: Date): string => {
   return `${hour12}:${minutesStr}${period}`;
 };
 
-export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
+export default function PrizeShowcase({
+  slug: slugProp,
+  toolsetMode = false,
+  toolsetSlug,
+}: PrizeShowcaseProps = {}) {
   const prizeRef = useScrollAnimation();
   const theme = usePromoTheme();
+  const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
@@ -267,47 +280,74 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
   const { openEntryFlow } = useMajorDrawEntryCta();
-  const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug });
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const useParentContainer = pathname === "/" || pathname === "/my-account";
-  
+
+  // Toolset mode: prize slugs for this toolset (Sidchrome first, Milwaukee second)
+  const toolsetPrizeSlugs =
+    toolsetMode && toolsetSlug && isToolsetLandingSlug(toolsetSlug)
+      ? getPrizesForToolsetSlug(toolsetSlug)
+      : null;
+  const toolsetPrizesCatalog: PrizeCatalogEntry[] = toolsetPrizeSlugs
+    ? (toolsetPrizeSlugs
+        .map((s) => getPrizeBySlug(s))
+        .filter((p): p is PrizeCatalogEntry => p != null) ?? [])
+    : [];
+
+  // Toolset mode: effective slug from toolbox selection (local state, no URL change)
+  const [toolsetEffectiveSlug, setToolsetEffectiveSlug] = useState<string | null>(null);
+  const effectiveSlugForCatalog = toolsetMode
+    ? (toolsetEffectiveSlug ?? toolsetPrizeSlugs?.[0] ?? slugProp)
+    : slugProp;
+
+  const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
+
   // Toolbox type toggle state - initialize from activeSlug to prevent navigation issues
   const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
   // Remember last non-cash toolbox so we can keep showing the power toolset options even when cash is selected
   const [lastNonCashToolboxType, setLastNonCashToolboxType] = useState<"sidchrome" | "milwaukee">("milwaukee");
-  
-  // Update toolbox type based on current slug when it changes
-  // This ensures the toggle reflects the current page's toolbox type
-  // Initialize on mount and update when slug changes
+
+  // Toolset mode: init effective slug from default (Sidchrome)
   useEffect(() => {
-    if (activeSlug) {
+    if (toolsetMode && toolsetPrizeSlugs) {
+      const defaultSlug = toolsetPrizeSlugs[0];
+      setToolsetEffectiveSlug(defaultSlug);
+      setToolboxType("sidchrome");
+      setLastNonCashToolboxType("sidchrome");
+    }
+  }, [toolsetMode, toolsetSlug]);
+
+  // Update toolbox type based on current slug when it changes (evergreen mode only)
+  useEffect(() => {
+    if (!toolsetMode && activeSlug) {
       const typeFromSlug = getToolboxTypeFromSlug(activeSlug);
       setToolboxType((currentType) => {
-        // Only update if the type actually changed to prevent unnecessary re-renders
         if (currentType !== typeFromSlug) {
           localStorage.setItem("prizeToolboxType", typeFromSlug);
           return typeFromSlug;
         }
         return currentType;
       });
-
-      // Keep a sticky "last non-cash" value so the Step 2 toolset UI stays visible even on cash
       if (typeFromSlug !== "cash") {
         setLastNonCashToolboxType(typeFromSlug);
       }
     }
-  }, [activeSlug]);
-  
+  }, [activeSlug, toolsetMode]);
+
   // Filter prizes based on selected toolbox type
-  const filteredPrizes = filterPrizesByToolboxType(prizes, toolboxType);
+  const filteredPrizes = toolsetMode
+    ? toolsetPrizesCatalog
+    : filterPrizesByToolboxType(prizes, toolboxType);
 
   // Step 2 ("Power Toolset") should remain visible even when cash is selected
   const toolsetToolboxType: "sidchrome" | "milwaukee" =
     toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
-  const toolsetPrizes = filterPrizesByToolboxType(prizes, toolsetToolboxType);
+  const toolsetPrizes = toolsetMode
+    ? toolsetPrizesCatalog
+    : filterPrizesByToolboxType(prizes, toolsetToolboxType);
 
   // Find the index of the active prize in the filtered list for mobile navigation
   const activePrizeIndex = filteredPrizes.findIndex((p) => p.slug === activeSlug);
@@ -468,22 +508,30 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
   };
   
   const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "cash") => {
-    // Only navigate if the type is actually changing
     if (toolboxType === type) return;
 
     setToolboxType(type);
     localStorage.setItem("prizeToolboxType", type);
 
     if (type === "cash") {
-      handleSelectPrize("cash-prize");
+      if (toolsetMode) {
+        setToolsetEffectiveSlug("cash-prize");
+        setStoreSlug("cash-prize");
+      } else {
+        handleSelectPrize("cash-prize");
+      }
       return;
     }
 
-    // Remember last non-cash toolbox type so Step 2 stays visible if cash is selected later
     setLastNonCashToolboxType(type);
 
-    // Do not navigate or auto-select a toolset when user only clicked the toolbox.
-    // User must click a toolset to select it; carousel will show no selection until they do.
+    if (toolsetMode && toolsetPrizeSlugs) {
+      const newSlug = type === "sidchrome" ? toolsetPrizeSlugs[0] : toolsetPrizeSlugs[1];
+      setToolsetEffectiveSlug(newSlug);
+      setStoreSlug(newSlug);
+    } else {
+      // Evergreen: do not navigate; user must click toolset to select
+    }
   };
 
   if (!activePrize) {
@@ -549,21 +597,26 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
             )}
           </div>
 
-          {prizes.length > 1 && (
+          {(prizes.length > 1 || toolsetMode) && (
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="mt-6 sm:mt-8"
             >
-              <motion.p
+              <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.4 }}
-                className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                className="mb-3 sm:mb-4 text-center px-2"
               >
-               Pick your <span style={{ color: theme.primary }}>toolbox</span>
-              </motion.p>
+                <p className="font-agency font-[950] uppercase text-black dark:text-white text-md sm:text-[32px] lg:text-agency-title leading-[1.08] break-words">
+                  Win your choice of <span style={{ color: theme.primary }}>toolbox</span>
+                </p>
+                <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-neutral-400 font-medium break-words whitespace-normal">
+                  Sidchrome or Milwaukee — plus power toolset & $5,000 cash
+                </p>
+              </motion.div>
 
               <ToolboxSelector
                 selectedType={
@@ -575,27 +628,61 @@ export default function PrizeShowcase({ slug }: PrizeShowcaseProps = {}) {
                 className="mb-8 sm:mb-10"
               />
 
-              <motion.p
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.4 }}
-                className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
-              >
-               Pick your <span style={{ color: theme.primary }}>Power Toolset</span>
-              </motion.p>
+              {toolsetMode && toolsetSlug ? (
+                <motion.p
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2, duration: 0.4 }}
+                  className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                >
+                  <span style={{ color: theme.primary }}>
+                    {toolsetSlug === "ryobi"
+                      ? "Ryobi"
+                      : toolsetSlug === "milwaukee"
+                        ? "Milwaukee"
+                        : toolsetSlug === "dewalt"
+                          ? "DeWalt"
+                          : "Makita"}{" "}
+                  </span>
+                  Power Toolset
+                </motion.p>
+              ) : (
+                <motion.p
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2, duration: 0.4 }}
+                  className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                >
+                  Pick your <span style={{ color: theme.primary }}>Power Toolset</span>
+                </motion.p>
+              )}
 
-              <PowerToolsetCarousel
-                prizes={toolsetPrizes}
-                activeSlug={
-                  toolboxType === "cash"
-                    ? null
-                    : toolsetPrizes.some((p) => p.slug === activeSlug)
-                      ? activeSlug
-                      : null
-                }
-                onSelect={handleSelectPrize}
-                className=""
-              />
+              {toolsetMode && toolsetSlug ? (
+                <StaticToolsetHighlight
+                  toolset={toolsetSlug}
+                  prizeSlug={
+                    ((toolboxType === "cash"
+                      ? (lastNonCashToolboxType === "sidchrome"
+                          ? toolsetPrizeSlugs?.[0]
+                          : toolsetPrizeSlugs?.[1])
+                      : activeSlug) ?? toolsetPrizeSlugs?.[0] ?? "milwaukee-milwaukee") as PrizeSlug
+                  }
+                  className=""
+                />
+              ) : (
+                <PowerToolsetCarousel
+                  prizes={toolsetPrizes}
+                  activeSlug={
+                    toolboxType === "cash"
+                      ? null
+                      : toolsetPrizes.some((p) => p.slug === activeSlug)
+                        ? activeSlug
+                        : null
+                  }
+                  onSelect={handleSelectPrize}
+                  className=""
+                />
+              )}
 
               {/* Cash option is a separate prize path (no toolbox/toolset) */}
               <div className="mt-4 max-w-5xl mx-auto">

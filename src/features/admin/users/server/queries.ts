@@ -15,7 +15,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { REFERRAL_CONSTANTS } from "@/lib/referral";
 import type { UserFilters, AdminUserDetail } from "@/types/admin";
-import { getActiveSubscriptionFilter, getActiveSubscriptionSubFilter } from "@/utils/admin/userFilterBuilder";
+import { getActiveSubscriptionFilter, getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";
 
 /**
  * Calculate engagement score based on user activity
@@ -793,21 +793,13 @@ export async function getUsers(filters: UserFilters) {
   }
 
   // Calculate stats from all users (not just paginated)
-  // Conversions = users who have made at least one purchase (subscription OR one-time package OR mini-draw package)
+  // Conversions = users who have ever made at least one purchase (subscription, one-time, mini-draw, upsell)
   const [totalUsers, activeSubscriptionsCount, verifiedUsersCount, convertedUsersCount] = await Promise.all([
     User.countDocuments({ isActive: true }),
     // Active subscriptions: only count subscriptions that will auto-renew (matches projected income calculation)
     User.countDocuments(getActiveSubscriptionFilter()),
     User.countDocuments({ isEmailVerified: true, isActive: true }),
-    User.countDocuments({
-      $or: [
-        // For conversions, count subscriptions that will auto-renew (true active subscriptions)
-        getActiveSubscriptionSubFilter(),
-        { oneTimePackages: { $exists: true, $not: { $size: 0 } } },
-        { miniDrawPackages: { $exists: true, $not: { $size: 0 } } },
-      ],
-      isActive: true,
-    }),
+    User.countDocuments(getEverPaidUserFilter()),
   ]);
 
   // Transform users data with computed fields and map packageId to packageName
