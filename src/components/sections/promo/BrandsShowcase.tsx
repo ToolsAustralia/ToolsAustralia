@@ -7,11 +7,11 @@ export default function BrandsShowcase() {
   const brandsRef = useScrollAnimation();
 
   return (
-    <section ref={brandsRef} className="py-4 bg-gradient-to-br from-gray-50 to-white">
+    <section ref={brandsRef} className="py-4 bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950">
       <div className="w-full   mx-auto">
         {/* Section Header */}
         <div className="text-center mb-4">
-          <p className="text-sm sm:text-base lg:text-lg text-gray-600 font-['Inter'] font-semibold max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 dark:text-neutral-400 font-['Inter'] font-semibold max-w-2xl mx-auto">
             Win huge tool prizes from Australia&apos;s best brands!
           </p>
         </div>

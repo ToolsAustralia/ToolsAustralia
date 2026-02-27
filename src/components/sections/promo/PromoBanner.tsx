@@ -64,6 +64,9 @@ interface PromoBannerProps {
 
 export default function PromoBanner({ initialMembershipPromo, initialOneTimePromo }: PromoBannerProps) {
   const theme = usePromoTheme();
+  const preferDark = theme.preferDarkBackground ?? false;
+  const rightSectionTextClass = preferDark ? "text-black" : "text-white";
+  const rightSectionLabelClass = preferDark ? "text-gray-800" : "text-red-100";
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
@@ -812,7 +815,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`text-white font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
                       >
                         {NO_PROMO_RIGHT_LABEL}
                       </div>
@@ -837,10 +840,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={`flex items-center justify-center gap-1.5 ${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
                       >
                         {promoEndingLabel}
-                        <UrgencyClockIcon className="text-white" size="md" />
+                        <UrgencyClockIcon className={rightSectionTextClass} size="md" />
                       </div>
                     </div>
                   </div>
@@ -855,10 +858,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`flex items-center justify-center gap-1.5 text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={`flex items-center justify-center gap-1.5 ${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
                       >
                         {countdownDisplay.label}
-                        <UrgencyClockIcon className="text-white" size="md" />
+                        <UrgencyClockIcon className={rightSectionTextClass} size="md" />
                       </div>
                     </div>
                   </div>
@@ -869,7 +872,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               if (countdownDisplay.type === "scheduled_end") {
                 const useDays = countdownDisplay.useDays ?? false;
                 const tileClass = "rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3";
-                const labelClass = "text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm";
+                const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -880,27 +883,27 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                       {useDays && scheduledEndTimeLeft.days != null && (
                         <div className={tileClass} style={rightSectionTileStyle}>
-                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                             {scheduledEndTimeLeft.days.toString().padStart(2, "0")}
                           </div>
                           <div className={labelClass}>DAYS</div>
                         </div>
                       )}
                       <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                           {scheduledEndTimeLeft.hours.toString().padStart(2, "0")}
                         </div>
                         <div className={labelClass}>HRS</div>
                       </div>
                       <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                           {scheduledEndTimeLeft.minutes.toString().padStart(2, "0")}
                         </div>
                         <div className={labelClass}>MINS</div>
                       </div>
                       {!useDays && (
                         <div className={tileClass} style={rightSectionTileStyle}>
-                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                             {scheduledEndTimeLeft.seconds.toString().padStart(2, "0")}
                           </div>
                           <div className={labelClass}>SECS</div>
@@ -919,16 +922,16 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     <div className="flex flex-col items-center justify-center gap-1">
                       <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                         <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
-                          <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
+                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
                         </div>
                         <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
-                          <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
+                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
                         </div>
                         <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
-                          <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
+                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
                         </div>
                       </div>
                     </div>
@@ -945,22 +948,22 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                       {/* Countdown to freeze time */}
                       <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                           {freezeTimeLeft.hours.toString().padStart(2, "0")}
                         </div>
-                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
                       </div>
                       <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                           {freezeTimeLeft.minutes.toString().padStart(2, "0")}
                         </div>
-                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
                       </div>
                       <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                           {freezeTimeLeft.seconds.toString().padStart(2, "0")}
                         </div>
-                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
                       </div>
                     </div>
                   </motion.div>
@@ -974,7 +977,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   return (
                     <div className="flex items-center justify-center">
                       <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 opacity-0" style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md">
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md`}>
                           <div className="flex flex-col items-center gap-0.5 sm:gap-1">
                             <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">DRAWN TOMORROW</div>
                             <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">12:00 AM AEDT</div>
@@ -993,7 +996,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     className="flex items-center justify-center"
                   >
                     <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3" style={rightSectionTileStyle}>
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md">
+                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md`}>
                         {/* Always stack vertically in 2 rows */}
                         <div className="flex flex-col items-center gap-0.5 sm:gap-1">
                           <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
@@ -1015,16 +1018,16 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div className="flex flex-col items-center justify-center gap-1">
                     <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
                       <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
-                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
+                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
                       </div>
                       <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
-                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
+                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
                       </div>
                       <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">00</div>
-                        <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
+                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
                       </div>
                     </div>
                   </div>
@@ -1042,22 +1045,22 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
                     {/* Fixed width classes to prevent size changes on load */}
                     <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                         {timeLeft.hours.toString().padStart(2, "0")}
                       </div>
-                      <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">HRS</div>
+                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
                     </div>
                     <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                         {timeLeft.minutes.toString().padStart(2, "0")}
                       </div>
-                      <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">MINS</div>
+                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
                     </div>
                     <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className="text-white font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl">
+                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
                         {timeLeft.seconds.toString().padStart(2, "0")}
                       </div>
-                      <div className="text-red-100 font-medium text-[10px] sm:text-[10px] lg:text-sm">SECS</div>
+                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
                     </div>
                   </div>
                 </motion.div>

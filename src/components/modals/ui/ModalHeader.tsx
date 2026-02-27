@@ -18,6 +18,10 @@ export interface ModalHeaderProps {
   accent?: "none" | "red";
   logoSize?: "sm" | "md" | "lg";
   showCloseButton?: boolean; // Optional prop to control close button visibility (defaults to true for backward compatibility)
+  /** When true (e.g. Ryobi theme), use dark text for better contrast on light backgrounds */
+  preferDarkBackground?: boolean;
+  /** Optional inline style (e.g. for theme gradient background) */
+  style?: React.CSSProperties;
 }
 
 const ModalHeader: React.FC<ModalHeaderProps> = ({
@@ -33,6 +37,8 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   accent = "red",
   logoSize = "md",
   showCloseButton = true, // Default to true to maintain backward compatibility
+  preferDarkBackground = false,
+  style: headerStyle,
 }) => {
   const resolvedVariant = variant === "auto" ? (showLogo ? "metallic" : "brand") : variant;
 
@@ -46,15 +52,17 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   const accentClass = accent === "red" ? "metal-accent-red" : "";
 
   const logoHeightClass = logoSize === "sm" ? "h-6" : logoSize === "lg" ? "h-10" : "h-8";
+  const textClass = preferDarkBackground ? "!text-black" : "text-white";
+  const subtitleClass = preferDarkBackground ? "!text-gray-800" : "text-white/80";
 
   return (
-    <div className={`${headerBaseClass} ${accentClass} p-4 text-white relative ${className}`}>
+    <div className={`${headerBaseClass} ${accentClass} p-4 ${textClass} relative ${className}`} style={headerStyle}>
       {/* Close Button - Conditionally rendered based on showCloseButton prop */}
       {showCloseButton && (
         <button
           onClick={onClose}
           type="button"
-          className="absolute top-4 right-4 text-white hover:text-gray-200 transition-all duration-300 hover:scale-110 z-50 p-1 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20"
+          className={`absolute top-4 right-4 ${textClass} transition-all duration-300 hover:scale-110 z-50 p-1 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 ${preferDarkBackground ? "hover:text-gray-700" : "hover:text-gray-200"}`}
           aria-label="Close modal"
         >
           <X size={20} />
@@ -72,7 +80,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
       <h2 className="text-center text-base sm:text-lg font-bold px-12">{titleNode ?? title}</h2>
 
       {/* Subtitle */}
-      {subtitle && <p className="text-center text-white/80 text-sm mt-1">{subtitle}</p>}
+      {subtitle && <p className={`text-center ${subtitleClass} text-sm mt-1`}>{subtitle}</p>}
     </div>
   );
 };

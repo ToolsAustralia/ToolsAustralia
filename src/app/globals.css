@@ -982,6 +982,21 @@
   color: #0b7e88;
 }
 
+/* Ryobi (Lime Green) */
+.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next,
+.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev,
+.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next,
+.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev {
+  color: #b8e000;
+}
+
+.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next:hover,
+.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev:hover,
+.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next:hover,
+.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev:hover {
+  color: #e0ff00;
+}
+
 .main-swiper .swiper-button-next:active,
 .main-swiper .swiper-button-prev:active {
   transform: scale(1.1);
@@ -1028,6 +1043,18 @@
   box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
 }
 
+/* Ryobi Pagination (Lime Green) */
+.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet,
+.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet {
+  border: 2px solid rgba(224, 255, 0, 0.3);
+}
+
+.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet-active,
+.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet-active {
+  background: #b8e000;
+  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6);
+}
+
 /* Thumbnail Swiper - Default/Milwaukee (Red) */
 .thumbs-swiper .swiper-slide-thumb-active > div {
   border-color: #ef4444 !important;
@@ -1048,6 +1075,13 @@
   box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
 }
 
+/* Ryobi Thumbnails (Lime Green) */
+.thumbs-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-slide-thumb-active > div,
+.thumbs-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-slide-thumb-active > div {
+  border-color: #b8e000 !important;
+  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6);
+}
+
 /* Brand-specific glow utilities */
 .glow-milwaukee {
   box-shadow: 0 0 20px rgba(239, 68, 68, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -1059,6 +1093,10 @@
 
 .glow-makita {
   box-shadow: 0 0 20px rgba(0, 197, 207, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.glow-ryobi {
+  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .glow-green {

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, LayoutDashboard, Gift, Home } from "lucide-react";
+import { Menu, LayoutDashboard, Gift, Home } from "lucide-react";
 import { useUserContext } from "@/contexts/UserContext";
 
 const MENU_ITEMS = [
@@ -23,6 +23,7 @@ const MENU_ITEMS = [
 export default function PromotionsAccountButton() {
   const { isAuthenticated, loading } = useUserContext();
   const theme = usePromoTheme();
+  const preferDark = theme.preferDarkBackground ?? false;
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +90,7 @@ export default function PromotionsAccountButton() {
         onClick={() => setIsOpen(!isOpen)}
         aria-label={isOpen ? "Close menu" : "Open menu"}
         aria-expanded={isOpen}
-        className="group relative flex items-center justify-center w-12 h-12 rounded-full font-extrabold text-sm tracking-wide text-white border border-white/20 backdrop-blur-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(211,47,47,0.5)] shrink-0"
+        className={`group relative flex items-center justify-center w-12 h-12 rounded-full font-extrabold text-sm tracking-wide border border-white/20 backdrop-blur-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(211,47,47,0.5)] shrink-0 ${preferDark ? "text-black" : "text-white"}`}
         style={{
           background: theme.gradient,
           boxShadow: `0 0 30px ${theme.shadowRgba}`,
@@ -98,13 +99,7 @@ export default function PromotionsAccountButton() {
         whileTap={{ scale: 0.97 }}
       >
         <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ border: `1px solid ${theme.borderRgba}` }} />
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="relative z-10"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </motion.div>
+        <Menu className="h-6 w-6 relative z-10" />
       </motion.button>
         </motion.div>
       )}

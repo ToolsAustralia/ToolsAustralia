@@ -12,14 +12,21 @@ import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
 import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { DrawDateStatus } from "@/utils/promo/promo-hero-types";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 
 interface PromoHeroProps {
   initialPromo?: ServerPromo | null;
   initialMajorDraw?: ServerMajorDraw | null;
+  /** Toolset landing page - use landing hero images when available */
+  isToolsetLandingPage?: boolean;
 }
 
-export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroProps) {
+export default function PromoHero({
+  initialPromo,
+  initialMajorDraw,
+  isToolsetLandingPage = false,
+}: PromoHeroProps) {
   // Use initial data if available, but allow refetching for real-time updates
   const { isLoading, data: currentDraw } = useCurrentMajorDraw();
   const { data: activePromo } = usePromoByType("membership-packages");
@@ -78,14 +85,18 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
     return null;
   };
 
-  // Resolve hero image paths using centralized utility
-  // Priority: Variant config > Draw date (today/tomorrow) > multiplier-based images
+  // Resolve hero image paths
+  // Toolset landing: use landing hero if available for current prize slug
+  // Otherwise: Variant config > Draw date > multiplier-based images
+  const currentSlug = usePromoThemeStore((s) => s.slug);
   const drawDateStatus = getDrawDateStatus();
-  const heroImagePaths = getPromoImagePaths({
+  const landingHeroPaths = isToolsetLandingPage && currentSlug ? getLandingHeroImagePaths(currentSlug) : null;
+  const standardHeroPaths = getPromoImagePaths({
     multiplier: resolvedMultiplier,
     drawDateStatus,
     variantImageOverride: variantConfig?.hero?.imageSrc,
   });
+  const heroImagePaths = landingHeroPaths ?? standardHeroPaths;
   
   // Get CTA text from variant config or use default
   const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";
@@ -93,6 +104,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
   // Get CTA style from variant config
   const ctaStyle = variantConfig?.hero?.ctaStyle;
   const theme = usePromoTheme();
+  const preferDark = theme.preferDarkBackground ?? false;
 
   // Show loading state only if major draw is loading (not variant - variant loads in background)
   if (isLoading) {
@@ -171,7 +183,7 @@ export default function PromoHero({ initialPromo, initialMajorDraw }: PromoHeroP
       <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30 overflow-visible">
         <button
           onClick={handleEnterNow}
-          className="promo-hero-cta-button font-agency inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide text-white backdrop-blur-lg"
+          className={`promo-hero-cta-button font-agency inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide backdrop-blur-lg ${preferDark ? "text-black" : "text-white"}`}
           style={{
             background: ctaStyle?.backgroundColor ?? theme.gradient,
             ...(ctaStyle?.textColor && { color: ctaStyle.textColor }),

@@ -321,6 +321,9 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       case "makita-sidchrome":
       case "makita-milwaukee":
         return "/images/brands/Makita-red.png";
+      case "ryobi-sidchrome":
+      case "ryobi-milwaukee":
+        return "/images/brands/name/ryobiText.png";
       case "cash-prize":
         return null;
       default:
@@ -337,6 +340,9 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       case "makita-sidchrome":
       case "makita-milwaukee":
         return "/images/promotion/FirstPrizeText/1stprice-makita.png";
+      case "ryobi-sidchrome":
+      case "ryobi-milwaukee":
+        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png"; // Fallback until 1stprice-ryobi.png exists
       case "cash-prize":
         return "/images/promotion/FirstPrizeText/1stprice-cash.png";
       case "milwaukee-sidchrome":
@@ -393,6 +399,20 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         return {
           line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
           line2: isMobile ? "Makita Powertools" : "Makita",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "ryobi-sidchrome") {
+        return {
+          line1: isMobile ? "Sidchrome Toolbox" : "Sidchrome",
+          line2: isMobile ? "Ryobi Powertools" : "Ryobi",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "ryobi-milwaukee") {
+        return {
+          line1: isMobile ? "Milwaukee Toolbox" : "Milwaukee",
+          line2: isMobile ? "Ryobi Powertools" : "Ryobi",
           line3: "$5000 Cash Prize",
         };
       }
