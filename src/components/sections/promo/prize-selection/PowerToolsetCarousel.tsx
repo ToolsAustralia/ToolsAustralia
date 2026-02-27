@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import type { PrizeCatalogEntry } from "@/config/prizes";
@@ -46,9 +45,6 @@ const sideItemVariants = {
     transition: { type: "spring" as const, stiffness: 400, damping: 20 },
   },
 };
-
-const SWIPE_THRESHOLD = 50;
-const SWIPE_COOLDOWN_MS = 450;
 
 const centerVariants = {
   enter: {
@@ -106,56 +102,6 @@ export function PowerToolsetCarousel({
   const activeImgSrc = activeToolset ? POWERSET_IMAGES[activeToolset] : null;
 
   const glowColor = activeSlug != null ? getBrandGlowColor(activeSlug as PrizeSlug) : "transparent";
-
-  // Swipe handling - mobile only, one at a time
-  const touchStartX = useRef<number>(0);
-  const isSwipeBlocked = useRef(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < 640);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  const handleSwipeSelect = useCallback(
-    (targetPrize: PrizeCatalogEntry) => {
-      if (!activePrize || targetPrize.slug === activePrize.slug || isSwipeBlocked.current) return;
-      isSwipeBlocked.current = true;
-      onSelect(targetPrize.slug);
-      setTimeout(() => {
-        isSwipeBlocked.current = false;
-      }, SWIPE_COOLDOWN_MS);
-    },
-    [activePrize, onSelect]
-  );
-
-  const onTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      if (!isMobile || activeSlug == null) return;
-      touchStartX.current = e.touches[0].clientX;
-    },
-    [isMobile, activeSlug]
-  );
-
-  const onTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      if (!isMobile || activeSlug == null || isSwipeBlocked.current) return;
-      const endX = e.changedTouches[0].clientX;
-      const delta = touchStartX.current - endX;
-      if (Math.abs(delta) < SWIPE_THRESHOLD) return;
-      // Swipe right (delta > 0): finger moved right → content shifts left → right-side item comes to center
-      if (delta > 0 && rightPrizes.length > 0) {
-        handleSwipeSelect(rightPrizes[0]);
-      }
-      // Swipe left (delta < 0): finger moved left → content shifts right → left-side item comes to center
-      else if (delta < 0 && leftPrizes.length > 0) {
-        handleSwipeSelect(leftPrizes[leftPrizes.length - 1]);
-      }
-    },
-    [isMobile, activeSlug, handleSwipeSelect, leftPrizes, rightPrizes]
-  );
 
   const getToolsetColorKey = (toolset: string) => {
     if (toolset === "milwaukee") return "milwaukee-red";
@@ -266,12 +212,8 @@ export function PowerToolsetCarousel({
             {leftPrizes.map((prize, i) => renderSideImage(prize, i, true))}
           </div>
 
-          {/* Center - focused image with ambient glow and brand text; swipe-enabled on mobile */}
-          <div
-            className="relative flex-shrink-0 flex items-center justify-center px-1 sm:px-2 touch-pan-y"
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
-          >
+          {/* Center - focused image with ambient glow and brand text */}
+          <div className="relative flex-shrink-0 flex items-center justify-center px-1 sm:px-2">
             <motion.div
               className="absolute inset-0 -m-8 rounded-3xl blur-3xl pointer-events-none"
               animate={{
