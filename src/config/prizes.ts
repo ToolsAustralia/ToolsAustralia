@@ -1656,7 +1656,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
 ];
 
-export const DEFAULT_PRIZE_SLUG: PrizeSlug = "milwaukee-milwaukee";
+export const DEFAULT_PRIZE_SLUG: PrizeSlug = "ryobi-milwaukee";
 
 export function getPrizeBySlug(slug: string): PrizeCatalogEntry | undefined {
   return PRIZE_CATALOG.find((prize) => prize.slug === slug);

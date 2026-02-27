@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
-import { useMajorDrawCountdown, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawCountdown, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
 import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
 import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST } from "@/utils/common/timezone";
@@ -18,10 +18,13 @@ import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
 import { getAlternatingDefaultText } from "@/utils/promo-banner/default-text-manager";
 import { resolveBadgeText } from "@/utils/promo-banner/resolve-badge-text";
 import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-banner/countdown-mode";
-import { NO_PROMO_BADGE, NO_PROMO_MAIN_LINE, NO_PROMO_RIGHT_LABEL } from "@/constants/promo-banner";
+import { NO_PROMO_BADGE, NO_PROMO_MAIN_LINE, NO_PROMO_RIGHT_LABEL, GAP_PERIOD_BADGE_TEXT, GAP_PERIOD_MAIN_LINE } from "@/constants/promo-banner";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { UrgencyClockIcon } from "@/components/ui";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { useUserContext } from "@/contexts/UserContext";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 // Helper function to get current timezone abbreviation (AEST or AEDT)
 const getTimezoneAbbr = (): string => {
@@ -71,8 +74,17 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
   const { isLoading: isDrawLoading } = useCurrentMajorDraw();
+  const { data: nextDraw } = useNextDraw();
+
+  // Gap period: gates closed (no active draw), next draw ~3.5hrs away
+  const isGapPeriod = currentDraw?.status !== "active";
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
-  
+
+  // User context for member+one-time tab multiplier resolution (align with MembershipSection)
+  const { userData } = useUserContext();
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
+  const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+
   // Get variant config from context (wait for variant to resolve so we know countdown mode etc.)
   const { variantConfig, isLoading: isVariantLoading } = useVariantContext();
 
@@ -95,6 +107,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     minutes: number;
     seconds: number;
   }>({ hours: 0, minutes: 0, seconds: 0 });
+
+  const [gapPeriodTimeLeft, setGapPeriodTimeLeft] = useState({
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
 
   const [isScrolled, setIsScrolled] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
@@ -134,9 +152,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   }, []);
 
   // Effective-for-banner: multiplier, source, scheduled meta (for countdown mode and badge)
+  // When member toggles to one-time tab, they see additional packages which use membership promo
   const { data: effectiveForBanner, isLoading: isEffectiveForBannerLoading } = useEffectiveForBanner();
-  const currentType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
-  const effectiveEntry = effectiveForBanner?.[currentType];
+  const baseType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
+  const effectivePromoTypeForBanner =
+    activeTab === "one-time" && hasAccessToAdditionalPackages ? "membership-packages" : baseType;
+  const effectiveEntry = effectiveForBanner?.[effectivePromoTypeForBanner];
 
   // Promo "fully resolved" = we know for sure whether there is an active promo or no-promo state
   const isPromoResolved =
@@ -229,13 +250,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
   }, []);
 
-  // Determine which promo to display based on active tab
+  // Determine which promo to display based on effective promo type (aligns with multiplier resolution)
   const getActivePromo = () => {
-    if (activeTab === "membership") {
+    if (effectivePromoTypeForBanner === "membership-packages") {
       return membershipPromo;
-    } else {
-      return oneTimePromo;
     }
+    return oneTimePromo;
   };
 
   const activePromo = getActivePromo();
@@ -244,14 +264,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const currentType = activeTab === "membership" ? "membership-packages" : "one-time-packages";
-    const current = currentAlternatingMultipliers?.data?.[currentType] ?? null;
-    
+    const current = currentAlternatingMultipliers?.data?.[effectivePromoTypeForBanner] ?? null;
+
     // Debug logging (development only)
     if (process.env.NODE_ENV === "development") {
       console.log("🔄 PromoBanner alternating multiplier update:", {
         activeTab,
-        currentType,
+        effectivePromoTypeForBanner,
         hasActivePromo: !!activePromo,
         currentAlternatingValue: current,
         currentAlternatingData: currentAlternatingMultipliers?.data,
@@ -270,7 +289,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
         // If no alternating multiplier is available, clear it
         setAlternatingMultiplier(null);
         if (process.env.NODE_ENV === "development") {
-          console.log("⚠️ No alternating multiplier available for", currentType);
+          console.log("⚠️ No alternating multiplier available for", effectivePromoTypeForBanner);
         }
       }
     } else {
@@ -280,7 +299,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
         console.log("🚫 Active promo exists, clearing alternating multiplier");
       }
     }
-  }, [currentAlternatingMultipliers, activeTab, activePromo]);
+  }, [currentAlternatingMultipliers, effectivePromoTypeForBanner, activePromo]);
 
   // Countdown strategy:
   // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
@@ -326,6 +345,29 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
   }, [targetDateMs]);
+
+  // Countdown to next draw activation during gap period (gates closed)
+  useEffect(() => {
+    if (!nextDraw?.activationDate) return;
+
+    const updateGapCountdown = () => {
+      const now = Date.now();
+      const activationMs = new Date(nextDraw.activationDate!).getTime();
+      const remainingMs = Math.max(0, activationMs - now);
+      const totalSeconds = Math.floor(remainingMs / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+
+      setGapPeriodTimeLeft((prev) =>
+        prev.hours === h && prev.minutes === m && prev.seconds === s ? prev : { hours: h, minutes: m, seconds: s }
+      );
+    };
+
+    updateGapCountdown();
+    const timer = setInterval(updateGapCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [nextDraw?.activationDate]);
 
   // Separate countdown for freeze time when draw is tonight
   useEffect(() => {
@@ -443,8 +485,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return { hasScheduledPromo: true, isUrgent };
   }, [effectiveEntry?.source, effectiveEntry?.scheduledEndDate]);
 
-  // Badge text (gold pill): draw status → variant override → scheduled promo default → 10x → scheduled text → alternating default; no-promo uses constant
+  // Badge text (gold pill): gap period → no-promo → draw status → variant override → scheduled promo default → 10x → scheduled text → alternating default
   const badgeText = useMemo(() => {
+    if (isGapPeriod) return GAP_PERIOD_BADGE_TEXT;
     if (isNoPromo) return NO_PROMO_BADGE;
     const drawStatus = getDrawDateStatus();
     // Draw status takes priority (DRAWN TONIGHT / DRAWN TOMORROW)
@@ -471,6 +514,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       multiplier,
     });
   }, [
+    isGapPeriod,
     isNoPromo,
     activeTab,
     scheduledPromoState,
@@ -574,12 +618,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     // Also measure on resize to handle responsive changes
     window.addEventListener("resize", measureBanner);
     return () => window.removeEventListener("resize", measureBanner);
-  }, [isScrolled, activePromo, multiplier]);
+  }, [isScrolled, activePromo, multiplier, isGapPeriod]);
 
-  // Don't render if: 404, sidebar open, promo not yet resolved, or (not no-promo and no badge and no multiplier)
+  // Don't render if: 404, sidebar open, promo not yet resolved, or (not no-promo and no badge and no multiplier and not gap period)
   if (pathname === "/not-found" || isAnySidebarOpen) return null;
   if (!isPromoResolved) return null; // Hide until we know active promo vs no-promo
-  if (!isNoPromo && !badgeText && !multiplier) return null;
+  if (!isGapPeriod && !isNoPromo && !badgeText && !multiplier) return null;
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
   // Use wrapper to prevent layout shift when banner becomes fixed
@@ -773,7 +817,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     <span
                       className={`font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5 ${isScrolled ? "max-[360px]:text-[14px] max-[360px]:ps-1 whitespace-nowrap" : ""}`}
                     >
-                      {isNoPromo ? (
+                      {isGapPeriod ? (
+                        <span className="text-white">{GAP_PERIOD_MAIN_LINE}</span>
+                      ) : isNoPromo ? (
                         <span className="text-white">{NO_PROMO_MAIN_LINE}</span>
                       ) : (
                         <>
@@ -799,12 +845,50 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             </div>
 
             {/* Right Side - Draw Date Text or Countdown (uses simpler gradient) */}
-            {countdownDisplay.type !== "hidden" && (
+            {(countdownDisplay.type !== "hidden" || isGapPeriod) && (
             <div className="relative flex items-center justify-center">
             {(() => {
 
               const drawTime = getDrawTimeText();
               const rightSectionTileStyle = { background: theme.gradientSolid, boxShadow: `0 0 12px ${theme.shadowRgba}` };
+
+              // Gap period: "NEXT DRAW IN" label + countdown timer (compact padding to align with left height)
+              if (isGapPeriod) {
+                const tileClass = "rounded-lg shadow-lg ring-2 ring-white/20 text-center w-11 sm:w-12 lg:w-16 px-1.5 sm:px-2 lg:px-2 py-0.5 sm:py-0.5 lg:py-1.5";
+                const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
+                    className="flex flex-col items-center justify-center"
+                  >
+                    <div className={`${rightSectionLabelClass} font-semibold text-[9px] sm:text-[10px] uppercase tracking-wider`}>
+                      NEXT DRAW IN
+                    </div>
+                    <div className="flex items-center justify-center gap-1 sm:gap-1.5 lg:gap-2">
+                      <div className={tileClass} style={rightSectionTileStyle}>
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
+                          {gapPeriodTimeLeft.hours.toString().padStart(2, "0")}
+                        </div>
+                        <div className={labelClass}>HRS</div>
+                      </div>
+                      <div className={tileClass} style={rightSectionTileStyle}>
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
+                          {gapPeriodTimeLeft.minutes.toString().padStart(2, "0")}
+                        </div>
+                        <div className={labelClass}>MINS</div>
+                      </div>
+                      <div className={tileClass} style={rightSectionTileStyle}>
+                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
+                          {gapPeriodTimeLeft.seconds.toString().padStart(2, "0")}
+                        </div>
+                        <div className={labelClass}>SECS</div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              }
 
               // No promo: show replacement label
               if (isNoPromo) {
@@ -1073,7 +1157,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
         </motion.div>
 
         {/* Badge image - outside overflow-hidden so -top-3 when sticky won't be clipped */}
-        {countdownDisplay.type !== "hidden" && !isNoPromo && multiplier && [2, 3, 5, 10].includes(multiplier) && (
+        {!isGapPeriod && countdownDisplay.type !== "hidden" && !isNoPromo && multiplier && [2, 3, 5, 10].includes(multiplier) && (
           <img
             src={`/images/badge/X${multiplier}.png`}
             alt={`${multiplier}X entries`}

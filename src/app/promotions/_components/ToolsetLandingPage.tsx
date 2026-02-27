@@ -46,6 +46,11 @@ const LatestWinnerHero = dynamic(() => import("@/components/sections/LatestWinne
   ssr: true,
 });
 
+const WinnerTestimoniesClientLazy = dynamic(
+  () => import("@/components/sections/WinnerTestimoniesClientLazy"),
+  { ssr: true }
+);
+
 interface ToolsetLandingPageProps {
   toolsetSlug: ToolsetLandingSlug;
 }
@@ -126,6 +131,10 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
+            </Suspense>
+
+            <Suspense fallback={<div className="min-h-[200px]" />}>
+              <WinnerTestimoniesClientLazy />
             </Suspense>
 
             <Suspense fallback={<div className="min-h-[300px]" />}>
