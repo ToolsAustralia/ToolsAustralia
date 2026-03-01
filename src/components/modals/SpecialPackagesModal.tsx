@@ -66,7 +66,7 @@ const SpecialPackages50OffText: React.FC = () => {
         filter: `drop-shadow(0 0 6px rgba(${r},${g},${b},0.5))`,
       }}
     >
-      $50 off
+      50% off 
     </span>
   );
 };
@@ -585,6 +585,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
             <p className="text-xs sm:text-sm text-gray-600 mb-3">
               you are entitled to{" "}
               <SpecialPackages50OffText />
+              {" "}
               today
             </p>
 
@@ -631,6 +632,19 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                   }}
                   onClick={() => handlePackageSelect(pkg)}
                 >
+                  {/* Promo Badge - Upper right, like PackageSelectionModal/MembershipSection */}
+                  {pkg.isPromoActive && pkg.promoMultiplier && (
+                    <div className="absolute -top-4 -right-4 sm:-top-5 sm:-right-5 z-30">
+                      <Image
+                        src={`/images/badge/X${pkg.promoMultiplier}.png`}
+                        alt={`${pkg.promoMultiplier}x entries`}
+                        width={64}
+                        height={64}
+                        className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                      />
+                    </div>
+                  )}
+
                   {/* Selection Indicator */}
                   {isSelected && (
                     <div
