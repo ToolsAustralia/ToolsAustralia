@@ -28,13 +28,24 @@ const LANDING_IMAGE_BASE = "/images/background/promo/landing";
 
 /** Prize slug -> landing hero image paths. null = use standard promo hero. */
 const LANDING_HERO_MAP: Partial<Record<PrizeSlug, PromoImagePaths>> = {
+  // Ryobi: Sidchrome TB images (default for ryobi)
   "ryobi-sidchrome": {
     desktop: `${LANDING_IMAGE_BASE}/sidchromeTb-ryobiSet.webp`,
     mobile: `${LANDING_IMAGE_BASE}/sidchromeTb-ryobiSet-mobile.webp`,
   },
-  // Add more as images become available:
-  // "ryobi-milwaukee": { desktop: "milwaukeeTb-ryobiSet.webp", mobile: "milwaukeeTb-ryobiSet-mobile.webp" },
-  // etc.
+  // Milwaukee, DeWalt, Makita: Milwaukee TB images (default until Sidchrome TB variants are ready)
+  "milwaukee-milwaukee": {
+    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-milwaukeeSet.webp`,
+    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-milwaukeeSet-mobile.webp`,
+  },
+  "dewalt-milwaukee": {
+    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-dewaltSet.webp`,
+    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-dewaltSet-mobile.webp`,
+  },
+  "makita-milwaukee": {
+    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-makitaSet.webp`,
+    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-makitaSet-mobile.webp`,
+  },
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
@@ -49,10 +60,18 @@ export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, P
 }
 
 /**
- * Default prize slug for a toolset page (Sidchrome variant).
+ * Default prize slug for a toolset page.
+ * Uses prize variant that has landing hero images available:
+ * - Ryobi: Sidchrome TB (sidchromeTb-ryobiSet)
+ * - Milwaukee, DeWalt, Makita: Milwaukee TB (milwaukeeTb-{toolset}Set) until Sidchrome TB variants are ready
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
-  return TOOLSET_TO_PRIZE_SLUGS[slug][0];
+  const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
+  const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
+  const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
+  if (hasMilwaukeeHero) return milwaukee;
+  if (hasSidchromeHero) return sidchrome;
+  return sidchrome; // fallback to Sidchrome variant
 }
 
 /**
