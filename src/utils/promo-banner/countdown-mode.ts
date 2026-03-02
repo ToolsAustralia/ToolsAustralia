@@ -77,12 +77,12 @@ export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): 
   const endMs = scheduledEndDate ? new Date(scheduledEndDate).getTime() : undefined;
   const timeLeftMs = endMs != null ? endMs - now : undefined;
 
-  // Static urgency modes: show countdown when scheduled promo has <24h remaining, else show label
+  // Static urgency modes: default = 24hr countdown to next midnight AEST (refreshes every midnight)
+  // Skip scheduled_end; show midnight countdown instead of static label (PROMO ENDING) or promo-end countdown
   const staticUrgencyModes: CountdownMode[] = ["limited_time_only", "ending", "static_urgency"];
   if (staticUrgencyModes.includes(countdownMode)) {
-    const withinLast24h = timeLeftMs != null && timeLeftMs > 0 && timeLeftMs <= MS_24H;
-    if (source === "scheduled" && withinLast24h) {
-      return { type: "scheduled_end", endMs: endMs!, useDays: false };
+    if (source === "scheduled" && timeLeftMs != null && timeLeftMs > 0) {
+      return { type: "midnight" };
     }
     const label =
       (countdownLabel?.trim() && countdownLabel.trim()) ||

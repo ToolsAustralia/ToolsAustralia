@@ -908,32 +908,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 );
               }
 
-              // Scheduled promo >=24h: show label (variant countdownLabel overrides "PROMO ENDING" for split tests) - skip when draw is today/tomorrow
-              const drawStatus = getDrawDateStatus();
-              if (
-                scheduledPromoState.hasScheduledPromo &&
-                !scheduledPromoState.isUrgent &&
-                drawStatus !== "today" &&
-                drawStatus !== "tomorrow"
-              ) {
-                const promoEndingLabel = variantConfig?.banner?.countdownLabel?.trim() || "PROMO ENDING";
-                return (
-                  <div className="flex items-center justify-center">
-                    <div
-                      className={`rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
-                    style={rightSectionTileStyle}
-                    >
-                      <div
-                        className={`flex items-center justify-center gap-1.5 ${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
-                      >
-                        {promoEndingLabel}
-                        <UrgencyClockIcon className={rightSectionTextClass} size="md" />
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
               if (countdownDisplay.type === "static_urgency" && countdownDisplay.label) {
                 return (
                   <div className="flex items-center justify-center">

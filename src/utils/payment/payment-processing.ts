@@ -99,6 +99,12 @@ interface UserDocument {
     status?: string;
     lastMonthAccumulatedEntries?: number;
   };
+  signupAttribution?: {
+    promotionPageType: "evergreen" | "toolset";
+    promotionSlug: string;
+    visitedAt: Date;
+    anonymousId?: string;
+  };
   upsellPurchases?: Array<{
     offerId: string;
     offerTitle: string;
@@ -273,11 +279,25 @@ async function processPaymentBenefitsInternal(
         //   userId: user._id.toString(),
         // });
 
+        // Promotion attribution for analytics (from User.signupAttribution)
+        const promoAttr =
+          user.signupAttribution?.promotionSlug ?
+            {
+              promotionPageType: user.signupAttribution.promotionPageType,
+              promotionSlug: user.signupAttribution.promotionSlug,
+              attributionSource: "signup" as const,
+              ...(user.signupAttribution.utmSource && { utmSource: user.signupAttribution.utmSource }),
+              ...(user.signupAttribution.utmMedium && { utmMedium: user.signupAttribution.utmMedium }),
+              ...(user.signupAttribution.utmCampaign && { utmCampaign: user.signupAttribution.utmCampaign }),
+            }
+          : undefined;
+
         const paymentEventData = {
           entries: packageData.entries,
           points: packageData.points,
           price: packageData.price,
           ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
+          ...(promoAttr && promoAttr),
         };
 
         // Get user's active experiment assignment (non-blocking - don't fail if this errors)

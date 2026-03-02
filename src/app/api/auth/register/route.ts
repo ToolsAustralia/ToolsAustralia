@@ -20,6 +20,7 @@ import { extractUTMParams } from "@/utils/tracking/utm-helpers";
 import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
+import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import { IUser } from "@/models/User";
 import { stripe } from "@/lib/stripe";
 
@@ -61,6 +62,9 @@ const registerSchema = z.object({
     }, "Please enter a valid Australian mobile number (e.g., 0412345678 or +61412345678)"),
   affiliateCode: z.string().optional(),
   promotionSlug: z.string().optional(), // Optional promotion slug for brand interest tracking
+  utm_source: z.string().optional(),
+  utm_medium: z.string().optional(),
+  utm_campaign: z.string().optional(),
 });
 
 /**
@@ -74,6 +78,46 @@ function isPlainAccount(user: IUser | null): boolean {
   return !user.accumulatedEntries || user.accumulatedEntries === 0;
 }
 
+type UTMSnapshot = {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+};
+
+/**
+ * Build signup attribution from promotion slug and optional UTM for analytics.
+ */
+function buildSignupAttribution(
+  promotionSlug?: string,
+  utm?: UTMSnapshot
+): { promotionPageType: "evergreen" | "toolset"; promotionSlug: string; visitedAt: Date; utmSource?: string; utmMedium?: string; utmCampaign?: string } | undefined {
+  if (!promotionSlug || !isValidPromoSlug(promotionSlug)) return undefined;
+  return {
+    promotionPageType: getPageTypeFromSlug(promotionSlug),
+    promotionSlug: promotionSlug.toLowerCase().trim(),
+    visitedAt: new Date(),
+    ...(utm?.utm_source && { utmSource: utm.utm_source }),
+    ...(utm?.utm_medium && { utmMedium: utm.utm_medium }),
+    ...(utm?.utm_campaign && { utmCampaign: utm.utm_campaign }),
+  };
+}
+
+/** Get UTM from client body or fallback to Referer header. */
+function getUTMFromRequest(validatedData: { utm_source?: string; utm_medium?: string; utm_campaign?: string }, referer: string | null): UTMSnapshot {
+  const fromClient = validatedData.utm_source || validatedData.utm_medium || validatedData.utm_campaign;
+  if (fromClient) {
+    return {
+      ...(validatedData.utm_source && { utm_source: validatedData.utm_source }),
+      ...(validatedData.utm_medium && { utm_medium: validatedData.utm_medium }),
+      ...(validatedData.utm_campaign && { utm_campaign: validatedData.utm_campaign }),
+    };
+  }
+  if (referer) {
+    return extractUTMParams(referer);
+  }
+  return {};
+}
+
 /**
  * POST /api/auth/register
  * Register a new user account or update existing plain account
@@ -84,6 +128,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validatedData = registerSchema.parse(body);
+
+    // UTM for signup attribution (client-sent or fallback to Referer)
+    const utm = getUTMFromRequest(validatedData, request.headers.get("referer"));
 
     // console.log(`🔄 Attempting to register user: ${validatedData.email}`);
 
@@ -189,6 +236,9 @@ export async function POST(request: NextRequest) {
           existingUser.lastName = validatedData.lastName.trim();
           existingUser.email = validatedData.email.toLowerCase().trim();
           existingUser.mobile = cleanedMobile;
+
+          const signupAttr = buildSignupAttribution(validatedData.promotionSlug, utm);
+          if (signupAttr) existingUser.signupAttribution = signupAttr;
 
           // Handle affiliate code update (only if provided and not already set)
           if (
@@ -320,6 +370,9 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
+      const signupAttrEmail = buildSignupAttribution(validatedData.promotionSlug, utm);
+      if (signupAttrEmail) existingUser.signupAttribution = signupAttrEmail;
+
       // Handle affiliate code update (only if provided and not already set)
       if (
         validatedData.affiliateCode &&
@@ -409,6 +462,9 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
+      const signupAttrMobile = buildSignupAttribution(validatedData.promotionSlug, utm);
+      if (signupAttrMobile) existingUser.signupAttribution = signupAttrMobile;
+
       // Handle affiliate code update (only if provided and not already set)
       if (
         validatedData.affiliateCode &&
@@ -488,6 +544,7 @@ export async function POST(request: NextRequest) {
     }
 
     // No existing accounts found - create new user account (passwordless)
+    const signupAttr = buildSignupAttribution(validatedData.promotionSlug, utm);
     const newUser = new User({
       firstName: validatedData.firstName.trim(),
       lastName: validatedData.lastName.trim(),
@@ -496,6 +553,7 @@ export async function POST(request: NextRequest) {
       role: "user",
       // No password field - passwordless system
       profileSetupCompleted: false, // New users need to complete profile setup
+      ...(signupAttr && { signupAttribution: signupAttr }),
       subscription: {
         packageId: "",
         startDate: new Date(),
@@ -621,16 +679,14 @@ export async function POST(request: NextRequest) {
         if (ctx.fbc) userData.fbc = ctx.fbc;
         if (ctx.fbp) userData.fbp = ctx.fbp;
 
-        // Extract UTM parameters and referrer information for enhanced tracking
-        const requestUrl = request.url;
-        const utmParams = extractUTMParams(requestUrl);
+        // UTM and referrer for Facebook CAPI (utm from client/referer, not request.url)
         const referrerHeader = request.headers.get("referer") || "";
         const referrerInfo = parseReferrer(referrerHeader);
 
-        // Determine source based on referrer and UTM parameters
+        // Determine source based on UTM and referrer
         let source = "direct";
-        if (utmParams.utm_source) {
-          source = utmParams.utm_source;
+        if (utm.utm_source) {
+          source = utm.utm_source;
         } else if (referrerInfo.referrer_domain) {
           // Determine source from referrer domain
           const domain = referrerInfo.referrer_domain.toLowerCase();
@@ -651,9 +707,9 @@ export async function POST(request: NextRequest) {
           source,
           ...(referrerInfo.referrer && { referrer: referrerInfo.referrer }),
           ...(referrerInfo.referrer_domain && { referrer_domain: referrerInfo.referrer_domain }),
-          ...(utmParams.utm_source && { utm_source: utmParams.utm_source }),
-          ...(utmParams.utm_medium && { utm_medium: utmParams.utm_medium }),
-          ...(utmParams.utm_campaign && { utm_campaign: utmParams.utm_campaign }),
+          ...(utm.utm_source && { utm_source: utm.utm_source }),
+          ...(utm.utm_medium && { utm_medium: utm.utm_medium }),
+          ...(utm.utm_campaign && { utm_campaign: utm.utm_campaign }),
           // Add brand interest if available from promotion slug
           ...(validatedData.promotionSlug && {
             initial_interest: extractBrandFromSlug(validatedData.promotionSlug) || validatedData.promotionSlug,

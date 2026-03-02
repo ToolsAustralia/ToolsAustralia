@@ -1,18 +1,22 @@
 "use client";
 
 import { usePromoLink } from "@/hooks/usePromoLink";
+import { useUTMPersistence } from "@/hooks/useUTMPersistence";
 
 /**
  * PromoLinkTracker Component
- * Silent component that tracks promo link codes from URL parameters
- * and stores them in sessionStorage for use during checkout
  *
- * This component should be added to the root layout to ensure
- * promo link codes are tracked site-wide
+ * Silent component that tracks promo link codes and UTM parameters site-wide.
+ * Mounted in root layout (providers.tsx).
+ *
+ * - Promo link codes: sessionStorage for checkout
+ * - UTM: sessionStorage for signup attribution (Klaviyo, Facebook)
+ *
+ * @see docs/UTM_ATTRIBUTION.md
  */
 export default function PromoLinkTracker() {
-  // Simply call the hook - it handles all the tracking logic
   usePromoLink();
+  useUTMPersistence();
 
   // This component doesn't render anything
   return null;

@@ -204,6 +204,18 @@ export interface IUser extends Document {
     membershipTied: boolean; // Whether membership is permanently tied to affiliate
   };
 
+  // Signup attribution (which promotion page led to registration)
+  signupAttribution?: {
+    promotionPageType: "evergreen" | "toolset";
+    promotionSlug: string;
+    visitedAt: Date;
+    anonymousId?: string;
+    // UTM snapshot at signup (e.g. klaviyo, facebook for channel attribution)
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+  };
+
   // Points Redemption History
   redemptionHistory?: Array<{
     redemptionId?: string | null;
@@ -818,6 +830,27 @@ const UserSchema = new Schema<IUser>(
       },
     },
 
+    signupAttribution: {
+      promotionPageType: {
+        type: String,
+        enum: ["evergreen", "toolset"],
+      },
+      promotionSlug: {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
+      visitedAt: {
+        type: Date,
+      },
+      anonymousId: {
+        type: String,
+      },
+      utmSource: { type: String, trim: true },
+      utmMedium: { type: String, trim: true },
+      utmCampaign: { type: String, trim: true },
+    },
+
     // Points Redemption History
     redemptionHistory: {
       type: [
@@ -1005,6 +1038,7 @@ UserSchema.index({
 UserSchema.index({ isActive: 1, createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
+UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
 // ✅ OPTION 1: Major Draw Entries index removed - using single source of truth
 
 // MiniDraw participation indexes
