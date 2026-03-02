@@ -170,7 +170,7 @@ function getPromoImagePath(
   // File naming convention:
   // - Packages (membership): "10X Tradie Package.png" (uppercase X)
   // - Plus (one-time packs): "2X Apprentice Plus.png" (uppercase X, use "Plus" not "Pack")
-  // - Upgrades (additional packs): "2x Apprentice Upgrade.png" (lowercase x)
+  // - Upgrades (additional packs): "2X Apprentice Upgrade.png" (uppercase X for consistency)
   let imageFileName: string;
   if (imageCategory === "Package") {
     // Membership packages: "2X/3X/5X/10X {Package} Package.png" (e.g. 3X Boss Package.png, 5X Tradie Package.png; 2X images upcoming)
@@ -181,9 +181,9 @@ function getPromoImagePath(
     // Uses uppercase X for consistency with Package images
     imageFileName = `${multiplier}X ${normalizedPackageName} Plus.png`;
   } else {
-    // Upgrades (additional packs): "2x Apprentice Upgrade.png" or "3x Tradie Upgrade.png"
-    // Note: Upgrades use lowercase "x" in the filename (matching actual file names)
-    imageFileName = `${multiplier}x ${normalizedPackageName} ${imageCategory}.png`;
+    // Upgrades (additional packs): "2X Apprentice Upgrade.png" or "3X Tradie Upgrade.png"
+    // Uses uppercase X for consistency with Package and Plus images
+    imageFileName = `${multiplier}X ${normalizedPackageName} ${imageCategory}.png`;
   }
 
   return `/images/upsells/active-promo/${imageFileName}`;
