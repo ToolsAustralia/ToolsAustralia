@@ -16,6 +16,7 @@ const hourlyInsightsQuerySchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
   filterLevel: z.enum(["campaign", "adset", "ad"]).optional(),
   filterIds: z.string().optional(), // Comma-separated IDs, e.g. "id1,id2,id3"
+  utmSource: z.string().optional(), // e.g. "facebook" — filter PaymentEvent revenue by data.utmSource
 });
 
 /**
@@ -27,11 +28,13 @@ async function parseAndValidate(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const filterLevel = ["campaign", "adset", "ad"].includes(body.filterLevel) ? body.filterLevel : undefined;
     const filterIds = Array.isArray(body.filterIds) ? body.filterIds.join(",") : body.filterIds ?? "";
+    const utmSource = typeof body.utmSource === "string" ? body.utmSource : undefined;
     query = {
       startDate: String(body.startDate ?? ""),
       endDate: String(body.endDate ?? ""),
       ...(filterLevel && { filterLevel }),
       ...(filterIds && { filterIds }),
+      ...(utmSource && { utmSource }),
     };
   } else {
     const { searchParams } = new URL(request.url);
@@ -51,8 +54,8 @@ async function parseAndValidate(request: NextRequest) {
  *   excludes membership renewals) for the selected date range in AEST; includes all traffic.
  * - Date range is interpreted as calendar days in Australia/Sydney (AEST/AEDT).
  *
- * GET Query Parameters: startDate, endDate, filterLevel?, filterIds? (comma-separated)
- * POST Body: { startDate, endDate, filterLevel?, filterIds?: string[] }
+ * GET Query Parameters: startDate, endDate, filterLevel?, filterIds? (comma-separated), utmSource? (e.g. facebook)
+ * POST Body: { startDate, endDate, filterLevel?, filterIds?: string[], utmSource?: string }
  */
 export async function GET(request: NextRequest) {
   return handleHourlyInsights(request);
@@ -166,7 +169,9 @@ async function handleHourlyInsights(request: NextRequest) {
     const paymentEventRepo = new PaymentEventRepository();
     let dbHourlyData;
     try {
-      dbHourlyData = await paymentEventRepo.aggregateRevenueAndCountByHourOfDay(startOfRangeAEST, endOfRangeAEST);
+      dbHourlyData = await paymentEventRepo.aggregateRevenueAndCountByHourOfDay(startOfRangeAEST, endOfRangeAEST, {
+        ...(validatedQuery.utmSource && { utmSource: validatedQuery.utmSource }),
+      });
     } catch (error) {
       console.error("❌ Error fetching PaymentEvent hourly data:", error);
       return NextResponse.json(

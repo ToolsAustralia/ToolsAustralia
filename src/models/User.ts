@@ -214,6 +214,12 @@ export interface IUser extends Document {
     utmSource?: string;
     utmMedium?: string;
     utmCampaign?: string;
+    utmContent?: string;
+    utmTerm?: string;
+    // Platform-specific IDs (from ad URLs: campaign_id, adset_id, ad_id)
+    campaignId?: string;
+    adsetId?: string;
+    adId?: string;
   };
 
   // Points Redemption History
@@ -849,6 +855,11 @@ const UserSchema = new Schema<IUser>(
       utmSource: { type: String, trim: true },
       utmMedium: { type: String, trim: true },
       utmCampaign: { type: String, trim: true },
+      utmContent: { type: String, trim: true },
+      utmTerm: { type: String, trim: true },
+      campaignId: { type: String, trim: true },
+      adsetId: { type: String, trim: true },
+      adId: { type: String, trim: true },
     },
 
     // Points Redemption History

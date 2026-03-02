@@ -7,6 +7,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPost } from "@/lib/queries";
+import { useAttribution } from "@/hooks/useAttribution";
 import { upsellPackages } from "@/data/upsellPackages";
 
 // Types
@@ -192,6 +193,7 @@ export const useTrackUpsellEvent = () => {
 
 export const usePurchaseUpsell = () => {
   const queryClient = useQueryClient();
+  const attribution = useAttribution();
 
   return useMutation({
     mutationFn: async ({
@@ -232,6 +234,7 @@ export const usePurchaseUpsell = () => {
         useDefaultPayment,
         paymentMethodId,
         ...(originalPurchaseContext && { originalPurchaseContext }),
+        ...(attribution && { attribution }),
       });
       return response;
     },

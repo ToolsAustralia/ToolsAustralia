@@ -7,6 +7,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPost, apiPut } from "@/lib/queries";
+import { useAttribution } from "@/hooks/useAttribution";
 import { getOneTimePackages } from "@/data/membershipPackages";
 
 // Types
@@ -151,6 +152,7 @@ export const useOneTimeMemberships = (userId?: string) => {
 // Mutations
 export const usePurchaseMembership = () => {
   const queryClient = useQueryClient();
+  const attribution = useAttribution();
 
   return useMutation({
     mutationFn: async ({
@@ -166,6 +168,7 @@ export const usePurchaseMembership = () => {
         referralCode,
         affiliateCode,
         promoLinkCode,
+        ...(attribution && { attribution }),
       });
       return response;
     },

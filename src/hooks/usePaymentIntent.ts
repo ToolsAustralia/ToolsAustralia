@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useAttribution } from "@/hooks/useAttribution";
 
 interface CreatePaymentIntentResponse {
   success: boolean;
@@ -23,6 +24,8 @@ interface CreatePaymentIntentParams {
  * Automatically saves payment method via setup_future_usage
  */
 export const usePaymentIntent = () => {
+  const attribution = useAttribution();
+
   return useMutation<CreatePaymentIntentResponse, Error, CreatePaymentIntentParams>({
     mutationFn: async (params: CreatePaymentIntentParams) => {
       const response = await fetch("/api/stripe/create-payment-intent", {
@@ -38,6 +41,7 @@ export const usePaymentIntent = () => {
           packageName: params.packageName,
           userEmail: params.userEmail,
           packageType: params.packageType,
+          ...(attribution && { attribution }),
         }),
       });
 

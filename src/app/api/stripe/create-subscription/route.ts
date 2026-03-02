@@ -20,6 +20,8 @@ import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
+import { attributionSchema } from "@/utils/tracking/attribution-schema";
 
 // Rate limit: 20 create-subscription requests per minute per IP
 const createSubscriptionRateLimiter = createRateLimiter("create-subscription", {
@@ -47,6 +49,7 @@ const createSubscriptionSchema = z.object({
   cancelPreviousSubscriptionId: z.string().optional(), // When user switches package: cancel this incomplete subscription before creating new one (guest: must match request email)
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  attribution: attributionSchema,
 });
 
 /**
@@ -439,6 +442,7 @@ export async function POST(request: NextRequest) {
       ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
       ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
+      ...buildAttributionMetadata(validatedData.attribution),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
     };
 

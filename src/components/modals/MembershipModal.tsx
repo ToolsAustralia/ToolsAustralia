@@ -44,7 +44,7 @@ import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
-import { extractUTMParams } from "@/utils/tracking/utm-helpers";
+import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 import LatestWinnersBadge from "../ui/LatestWinnersBadge";
@@ -1364,16 +1364,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Non-blocking - continue without slug (will default to "milwaukee")
     }
 
-    // UTM for signup attribution: current URL first, then sessionStorage (from earlier landing)
-    let utmParams: { utm_source?: string; utm_medium?: string; utm_campaign?: string } = {};
+    // Attribution for signup: current URL first, then sessionStorage (from earlier landing)
+    let attributionParams: {
+      utm_source?: string;
+      utm_medium?: string;
+      utm_campaign?: string;
+      utm_content?: string;
+      utm_term?: string;
+      campaign_id?: string;
+      adset_id?: string;
+      ad_id?: string;
+    } = {};
     try {
       if (typeof window !== "undefined") {
-        const fromUrl = extractUTMParams(window.location.search);
+        const fromUrl = extractAttributionParams(window.location.search);
         const fromStorage = getStoredUTMParams();
-        utmParams = fromUrl.utm_source || fromUrl.utm_medium || fromUrl.utm_campaign ? fromUrl : fromStorage || {};
+        const hasFromUrl =
+          fromUrl.utm_source || fromUrl.utm_medium || fromUrl.utm_campaign || fromUrl.campaign_id || fromUrl.adset_id || fromUrl.ad_id;
+        attributionParams = hasFromUrl ? fromUrl : (fromStorage || {});
       }
     } catch {
-      // Non-blocking - continue without UTM
+      // Non-blocking - continue without attribution
     }
 
     try {
@@ -1389,9 +1400,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           mobile: formData.phone,
           affiliateCode: affiliateCode || undefined, // Include affiliate code if present
           promotionSlug: promotionSlug, // Include promotion slug if on promotions page
-          ...(utmParams.utm_source && { utm_source: utmParams.utm_source }),
-          ...(utmParams.utm_medium && { utm_medium: utmParams.utm_medium }),
-          ...(utmParams.utm_campaign && { utm_campaign: utmParams.utm_campaign }),
+          ...(attributionParams.utm_source && { utm_source: attributionParams.utm_source }),
+          ...(attributionParams.utm_medium && { utm_medium: attributionParams.utm_medium }),
+          ...(attributionParams.utm_campaign && { utm_campaign: attributionParams.utm_campaign }),
+          ...(attributionParams.utm_content && { utm_content: attributionParams.utm_content }),
+          ...(attributionParams.utm_term && { utm_term: attributionParams.utm_term }),
+          ...(attributionParams.campaign_id && { campaign_id: attributionParams.campaign_id }),
+          ...(attributionParams.adset_id && { adset_id: attributionParams.adset_id }),
+          ...(attributionParams.ad_id && { ad_id: attributionParams.ad_id }),
         }),
       });
 

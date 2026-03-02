@@ -137,25 +137,34 @@ export class PaymentEventRepository {
    *
    * @param startDate - Start date (inclusive)
    * @param endDate - End date (inclusive)
+   * @param options - Optional filters: utmSource (e.g. "facebook") for platform-specific revenue
    * @returns Array of 24 hourly aggregations (hour 0-23)
    */
   async aggregateRevenueAndCountByHourOfDay(
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    options?: { utmSource?: string }
   ): Promise<{ hour: number; revenue: number; conversions: number }[]> {
     const AEST_TIMEZONE = "Australia/Sydney";
 
+    const matchQuery: Record<string, unknown> = {
+      eventType: "BenefitsGranted",
+      timestamp: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+      // Exclude membership renewals; only count purchases (one-time, upsell, mini-draw, initial membership)
+      $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+    };
+
+    if (options?.utmSource) {
+      const escaped = options.utmSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      matchQuery["data.utmSource"] = { $regex: new RegExp(`^${escaped}$`, "i") };
+    }
+
     const result = await PaymentEvent.aggregate([
       {
-        $match: {
-          eventType: "BenefitsGranted",
-          timestamp: {
-            $gte: startDate,
-            $lte: endDate,
-          },
-          // Exclude membership renewals; only count purchases (one-time, upsell, mini-draw, initial membership)
-          $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
-        },
+        $match: matchQuery,
       },
       {
         $project: {

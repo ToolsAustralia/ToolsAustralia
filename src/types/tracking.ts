@@ -30,6 +30,21 @@ export interface UTMParams {
 }
 
 /**
+ * Extended attribution parameters including UTM and platform-specific IDs.
+ * Used for payment attribution to track revenue by source (facebook, klaviyo, tiktok, etc.)
+ * and optionally by campaign/adset/ad level.
+ *
+ * @see docs/PAYMENT_ATTRIBUTION.md
+ */
+export interface AttributionParams extends UTMParams {
+  utm_content?: string;
+  utm_term?: string;
+  campaign_id?: string;
+  adset_id?: string;
+  ad_id?: string;
+}
+
+/**
  * Referrer information parsed from referrer URL
  */
 export interface ReferrerInfo {

@@ -18,6 +18,7 @@
   - **When:** Actual sales that occurred on that specific day
   - **Query:** `eventType: "BenefitsGranted"` with `timestamp` in date range
   - **Note:** Price is converted from Stripe cents to dollars when PaymentEvent is created
+  - **Attribution:** Revenue can be filtered by `data.utmSource` (e.g. facebook, klaviyo) for platform-specific ROAS—see [PAYMENT_ATTRIBUTION.md](./PAYMENT_ATTRIBUTION.md)
   
 - **Fallback Source:** `FacebookAdsInsight` model (`metrics.revenue` field)
   - **Unit:** Stored in CENTS, converted to DOLLARS (÷ 100)
