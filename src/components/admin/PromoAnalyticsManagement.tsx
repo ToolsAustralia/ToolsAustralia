@@ -15,6 +15,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Hash,
 } from "lucide-react";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
@@ -40,6 +41,17 @@ interface PromoPageMetrics {
   overallConversionRate: number;
 }
 
+interface UTMSourceMetrics {
+  utmSource: string;
+  visits: number;
+  signups: number;
+  conversions: number;
+  revenue: number;
+  visitToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
 interface PromoAnalyticsResponse {
   success: boolean;
   data: {
@@ -48,6 +60,7 @@ interface PromoAnalyticsResponse {
     totalConversions: number;
     totalRevenue: number;
     byPage: PromoPageMetrics[];
+    byUTMSource?: UTMSourceMetrics[];
     dateRange: { start: string; end: string };
   };
 }
@@ -287,14 +300,7 @@ export default function PromoAnalyticsManagement() {
             displayDate={displayDate || undefined}
             onExpand={() => {}}
           />
-          <button
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="p-2 border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-          </button>
+         
         </div>
       </div>
 
@@ -346,6 +352,73 @@ export default function PromoAnalyticsManagement() {
           color="green"
           subtitle="From attributed conversions"
         />
+      </div>
+
+      {/* Channel Attribution (UTM Source: Klaviyo, Facebook, etc.) */}
+      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200 flex items-center gap-2">
+          <Hash className="w-5 h-5 text-indigo-500" />
+          Channel Attribution (UTM Source)
+        </h3>
+        <p className="text-sm text-gray-500 px-4 pt-2 pb-1">
+          Visitors, signups, and conversions by marketing channel (e.g. Klaviyo, Facebook). Add{" "}
+          <code className="bg-gray-100 px-1 rounded">utm_source=klaviyo</code> or{" "}
+          <code className="bg-gray-100 px-1 rounded">utm_source=facebook</code> to campaign URLs.
+        </p>
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="p-8 text-center text-gray-500">Loading…</div>
+          ) : (() => {
+            const rows = data?.byUTMSource ?? [];
+            if (rows.length === 0) {
+              return (
+                <div className="p-8 text-center text-gray-500">
+                  No channel data for this period. Campaign links need <code className="bg-gray-100 px-1 rounded">utm_source</code> in the URL.
+                </div>
+              );
+            }
+            return (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left p-3 font-semibold text-gray-700">Channel</th>
+                    <th className="text-right p-3 font-semibold">Visits</th>
+                    <th className="text-right p-3 font-semibold">Signups</th>
+                    <th className="text-right p-3 font-semibold">Conversions</th>
+                    <th className="text-right p-3 font-semibold">Revenue</th>
+                    <th className="text-right p-3 font-semibold">V→S %</th>
+                    <th className="text-right p-3 font-semibold">S→C %</th>
+                    <th className="text-right p-3 font-semibold">Conv %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.utmSource} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            row.utmSource === "Direct"
+                              ? "bg-gray-100 text-gray-700"
+                              : "bg-indigo-100 text-indigo-800"
+                          }`}
+                        >
+                          {row.utmSource}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono">{formatNumber(row.visits)}</td>
+                      <td className="p-3 text-right font-mono">{formatNumber(row.signups)}</td>
+                      <td className="p-3 text-right font-mono">{formatNumber(row.conversions)}</td>
+                      <td className="p-3 text-right font-mono">{formatCurrency(row.revenue)}</td>
+                      <td className="p-3 text-right text-gray-600">{formatPercentage(row.visitToSignupRate)}</td>
+                      <td className="p-3 text-right text-gray-600">{formatPercentage(row.signupToConversionRate)}</td>
+                      <td className="p-3 text-right text-gray-600">{formatPercentage(row.overallConversionRate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
+        </div>
       </div>
 
       {/* Table */}

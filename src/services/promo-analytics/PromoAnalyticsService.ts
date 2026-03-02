@@ -8,6 +8,7 @@
 import PromoAnalyticsRepository, {
   type PromoAnalyticsSummary,
   type PromoPageMetrics,
+  type PromoAnalyticsByUTMSummary,
 } from "@/repositories/PromoAnalyticsRepository";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
@@ -53,6 +54,16 @@ export class PromoAnalyticsService {
     endDate: Date
   ): Promise<PromoAnalyticsSummary> {
     return PromoAnalyticsRepository.getAggregatedByPage(startDate, endDate);
+  }
+
+  /**
+   * Get aggregated metrics by UTM source (e.g. klaviyo, facebook) for channel attribution.
+   */
+  async getAggregatedByUTMSource(
+    startDate: Date,
+    endDate: Date
+  ): Promise<PromoAnalyticsByUTMSummary> {
+    return PromoAnalyticsRepository.getAggregatedByUTMSource(startDate, endDate);
   }
 
   /**
