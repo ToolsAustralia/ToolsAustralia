@@ -5,9 +5,10 @@
  * Used by utm-storage, register API, promo tracking, and Facebook CAPI.
  *
  * @see docs/UTM_ATTRIBUTION.md
+ * @see docs/PAYMENT_ATTRIBUTION.md
  */
 
-import type { UTMParams } from "@/types/tracking";
+import type { UTMParams, AttributionParams } from "@/types/tracking";
 
 /**
  * Extracts UTM parameters from URL or URLSearchParams
@@ -27,6 +28,27 @@ import type { UTMParams } from "@/types/tracking";
  * // Returns: { utm_source: "facebook", utm_medium: "cpc" }
  */
 export function extractUTMParams(urlOrParams: string | URLSearchParams): UTMParams {
+  const attribution = extractAttributionParams(urlOrParams);
+  return {
+    utm_source: attribution.utm_source,
+    utm_medium: attribution.utm_medium,
+    utm_campaign: attribution.utm_campaign,
+  };
+}
+
+/**
+ * Extracts full attribution parameters including UTM and platform-specific IDs
+ * (campaign_id, adset_id, ad_id) from URL or URLSearchParams.
+ * Used for payment attribution to track revenue by source and campaign/adset/ad level.
+ *
+ * @param urlOrParams - Either a URL string or URLSearchParams object
+ * @returns AttributionParams object
+ *
+ * @example
+ * const params = extractAttributionParams("https://site.com?utm_source=facebook&campaign_id=123");
+ * // Returns: { utm_source: "facebook", campaign_id: "123" }
+ */
+export function extractAttributionParams(urlOrParams: string | URLSearchParams): AttributionParams {
   try {
     let searchParams: URLSearchParams;
 
@@ -45,7 +67,6 @@ export function extractUTMParams(urlOrParams: string | URLSearchParams): UTMPara
           const url = new URL(urlOrParams);
           searchParams = url.searchParams;
         } catch {
-          // If it fails, treat as empty
           return {};
         }
       }
@@ -53,23 +74,28 @@ export function extractUTMParams(urlOrParams: string | URLSearchParams): UTMPara
       searchParams = urlOrParams;
     }
 
-    const params: UTMParams = {};
+    const params: AttributionParams = {};
 
-    // Extract UTM parameters
     const utmSource = searchParams.get("utm_source");
     const utmMedium = searchParams.get("utm_medium");
     const utmCampaign = searchParams.get("utm_campaign");
+    const utmContent = searchParams.get("utm_content");
+    const utmTerm = searchParams.get("utm_term");
+    const campaignId = searchParams.get("campaign_id");
+    const adsetId = searchParams.get("adset_id");
+    const adId = searchParams.get("ad_id");
 
     if (utmSource) params.utm_source = utmSource;
     if (utmMedium) params.utm_medium = utmMedium;
     if (utmCampaign) params.utm_campaign = utmCampaign;
+    if (utmContent) params.utm_content = utmContent;
+    if (utmTerm) params.utm_term = utmTerm;
+    if (campaignId) params.campaign_id = campaignId;
+    if (adsetId) params.adset_id = adsetId;
+    if (adId) params.ad_id = adId;
 
     return params;
   } catch {
-    // Return empty object on error (graceful degradation)
-    if (process.env.NODE_ENV === "development") {
-      // console.warn("Error extracting UTM parameters:", error);
-    }
     return {};
   }
 }

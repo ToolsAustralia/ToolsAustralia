@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { loadStripe, StripeCardElement } from "@stripe/stripe-js";
+import { useAttribution } from "@/hooks/useAttribution";
 
 // Validate Stripe publishable key before initializing
 const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -138,6 +139,7 @@ export interface SubscriptionResult {
 export function useStripeSubscription() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const attribution = useAttribution();
 
   const createSubscription = async (data: SubscriptionData): Promise<SubscriptionResult | null> => {
     try {
@@ -149,7 +151,10 @@ export function useStripeSubscription() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          ...(attribution && { attribution: attribution }),
+        }),
       });
 
       const result = await response.json();
@@ -184,7 +189,10 @@ export function useStripeSubscription() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          ...(attribution && { attribution: attribution }),
+        }),
       });
 
       const result = await response.json();
@@ -215,7 +223,10 @@ export function useStripeSubscription() {
           "Content-Type": "application/json",
         },
         credentials: "include", // Include cookies for session authentication
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          ...(attribution && { attribution: attribution }),
+        }),
       });
 
       const result = await response.json();
@@ -271,7 +282,10 @@ export function useStripeSubscription() {
           "Content-Type": "application/json",
         },
         credentials: "include", // Include cookies for session authentication
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          ...(attribution && { attribution: attribution }),
+        }),
       });
 
       const result = await response.json();

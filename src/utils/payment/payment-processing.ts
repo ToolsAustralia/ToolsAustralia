@@ -25,6 +25,7 @@ import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
+import type { AttributionParams } from "@/types/tracking";
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
@@ -142,7 +143,8 @@ export async function processPaymentBenefits(
     fbp?: string;
     event_source_url?: string;
   },
-  billingReason?: string // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
+  billingReason?: string, // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
+  sessionAttribution?: AttributionParams // Optional attribution from Stripe metadata (session) - takes priority over signup
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -188,7 +190,8 @@ export async function processPaymentBenefits(
     processedBy,
     paymentMetadata,
     requestContext,
-    billingReason
+    billingReason,
+    sessionAttribution
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -220,7 +223,8 @@ async function processPaymentBenefitsInternal(
     fbp?: string;
     event_source_url?: string;
   },
-  billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
+  billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
+  sessionAttribution?: AttributionParams
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -278,25 +282,52 @@ async function processPaymentBenefitsInternal(
         //   userId: user._id.toString(),
         // });
 
-        // Promotion attribution for analytics (from User.signupAttribution)
-        const promoAttr =
-          user.signupAttribution?.promotionSlug ?
-            {
-              promotionPageType: user.signupAttribution.promotionPageType,
-              promotionSlug: user.signupAttribution.promotionSlug,
-              attributionSource: "signup" as const,
-              ...(user.signupAttribution.utmSource && { utmSource: user.signupAttribution.utmSource }),
-              ...(user.signupAttribution.utmMedium && { utmMedium: user.signupAttribution.utmMedium }),
-              ...(user.signupAttribution.utmCampaign && { utmCampaign: user.signupAttribution.utmCampaign }),
-            }
-          : undefined;
+        // Attribution merge: session (from Stripe metadata) takes priority over signup
+        const signupAttr = user.signupAttribution;
+        const useSession = sessionAttribution && (sessionAttribution.utm_source || sessionAttribution.campaign_id);
+
+        const attributionData: Record<string, unknown> = {};
+        if (useSession && sessionAttribution) {
+          const us = sessionAttribution.utm_source ?? signupAttr?.utmSource;
+          const um = sessionAttribution.utm_medium ?? signupAttr?.utmMedium;
+          const uc = sessionAttribution.utm_campaign ?? signupAttr?.utmCampaign;
+          if (us) attributionData.utmSource = us;
+          if (um) attributionData.utmMedium = um;
+          if (uc) attributionData.utmCampaign = uc;
+          const uco = sessionAttribution.utm_content ?? signupAttr?.utmContent;
+          const ut = sessionAttribution.utm_term ?? signupAttr?.utmTerm;
+          if (uco) attributionData.utmContent = uco;
+          if (ut) attributionData.utmTerm = ut;
+          const cid = sessionAttribution.campaign_id ?? signupAttr?.campaignId;
+          const asid = sessionAttribution.adset_id ?? signupAttr?.adsetId;
+          const aid = sessionAttribution.ad_id ?? signupAttr?.adId;
+          if (cid) attributionData.campaignId = cid;
+          if (asid) attributionData.adsetId = asid;
+          if (aid) attributionData.adId = aid;
+          attributionData.attributionSource = "session";
+        } else if (signupAttr) {
+          if (signupAttr.utmSource) attributionData.utmSource = signupAttr.utmSource;
+          if (signupAttr.utmMedium) attributionData.utmMedium = signupAttr.utmMedium;
+          if (signupAttr.utmCampaign) attributionData.utmCampaign = signupAttr.utmCampaign;
+          if (signupAttr.utmContent) attributionData.utmContent = signupAttr.utmContent;
+          if (signupAttr.utmTerm) attributionData.utmTerm = signupAttr.utmTerm;
+          if (signupAttr.campaignId) attributionData.campaignId = signupAttr.campaignId;
+          if (signupAttr.adsetId) attributionData.adsetId = signupAttr.adsetId;
+          if (signupAttr.adId) attributionData.adId = signupAttr.adId;
+          attributionData.attributionSource = "signup";
+        }
+        // Promotion fields (promotionSlug, promotionPageType) come from signup only
+        if (signupAttr?.promotionSlug) {
+          attributionData.promotionPageType = signupAttr.promotionPageType;
+          attributionData.promotionSlug = signupAttr.promotionSlug;
+        }
 
         const paymentEventData = {
           entries: packageData.entries,
           points: packageData.points,
           price: packageData.price,
           ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
-          ...(promoAttr && promoAttr),
+          ...(Object.keys(attributionData).length > 0 && attributionData),
         };
 
         // Get user's active experiment assignment (non-blocking - don't fail if this errors)

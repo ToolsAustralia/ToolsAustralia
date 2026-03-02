@@ -21,6 +21,8 @@ import mongoose from "mongoose";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
+import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
 const createOneTimePurchaseSchema = z.object({
@@ -36,6 +38,7 @@ const createOneTimePurchaseSchema = z.object({
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  attribution: attributionSchema,
 });
 
 /**
@@ -506,6 +509,7 @@ export async function POST(request: NextRequest) {
         ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
         ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
+        ...buildAttributionMetadata(validatedData.attribution),
       };
 
       console.log(`📋 Updated metadata:`, updatedMetadata);
@@ -637,6 +641,7 @@ export async function POST(request: NextRequest) {
           ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
           ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
+          ...buildAttributionMetadata(validatedData.attribution),
         },
       });
 

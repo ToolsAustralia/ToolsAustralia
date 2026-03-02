@@ -312,6 +312,10 @@ After implementation, verify:
 - Event match quality (in Facebook Events Manager)
 - Webhook processing success rate
 
+### Revenue Filtering by Attribution
+
+PaymentEvent revenue is stored with UTM attribution (`data.utmSource`, `data.utmMedium`, etc.). The hourly insights API supports an optional `utmSource` query param (e.g. `utmSource=facebook`) to filter revenue by platform—enabling Facebook-only ROAS in the hourly breakdown. See [PAYMENT_ATTRIBUTION.md](./PAYMENT_ATTRIBUTION.md) for attribution capture, storage, and filtering.
+
 ## References
 
 - [Meta Conversions API Documentation](https://developers.facebook.com/docs/marketing-api/conversions-api)

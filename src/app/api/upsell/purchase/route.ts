@@ -14,6 +14,8 @@ import {
 } from "@/utils/payment/upsell-entries-calculator";
 import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
+import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 /**
@@ -53,6 +55,7 @@ const upsellPurchaseSchema = z.object({
           miniDrawName: z.string().optional(),
         })
         .optional(),
+  attribution: attributionSchema,
 });
 
 /**
@@ -417,7 +420,8 @@ export async function POST(request: NextRequest) {
         requestContext,
         calculatedEntriesCount,
         validatedData.originalPurchaseContext,
-        capiEventSourceUrl
+        capiEventSourceUrl,
+        validatedData.attribution
       );
     } else {
       // Create payment intent for manual confirmation
@@ -430,7 +434,8 @@ export async function POST(request: NextRequest) {
         calculatedEntriesCount,
         validatedData.originalPurchaseContext,
         request, // ✅ Pass request for error logging
-        capiEventSourceUrl
+        capiEventSourceUrl,
+        validatedData.attribution
       );
     }
   } catch (error) {
@@ -468,7 +473,8 @@ async function handleOneClickPurchase(
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
   calculatedEntriesCount: number,
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
-  capiEventSourceUrl?: string
+  capiEventSourceUrl?: string,
+  attribution?: Parameters<typeof buildAttributionMetadata>[0]
 ) {
   try {
     if (!paymentMethodId) {
@@ -578,6 +584,7 @@ async function handleOneClickPurchase(
         ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
         ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
+        ...buildAttributionMetadata(attribution),
       };
 
       // Log metadata for debugging
@@ -703,7 +710,8 @@ async function handlePaymentIntentCreation(
   calculatedEntriesCount: number,
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   request?: NextRequest, // ✅ Pass request for error logging
-  capiEventSourceUrl?: string
+  capiEventSourceUrl?: string,
+  attribution?: Parameters<typeof buildAttributionMetadata>[0]
 ) {
   try {
     // Derive event source URL for CAPI if not passed (e.g. from request)
@@ -737,6 +745,7 @@ async function handlePaymentIntentCreation(
       ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
       ...(eventSourceUrl ? { capi_event_source_url: eventSourceUrl } : {}),
+      ...buildAttributionMetadata(attribution),
     };
 
     // Log metadata for debugging
