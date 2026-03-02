@@ -68,7 +68,7 @@ export function getAlternatingDefaultText(): string {
     const index = (dayOfYear - 1) % 2;
     
     return DEFAULT_TEXTS[index];
-  } catch (error) {
+  } catch {
     // If any error, default to first text
     return DEFAULT_TEXTS[0];
   }

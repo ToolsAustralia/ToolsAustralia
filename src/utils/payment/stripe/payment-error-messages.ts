@@ -5,7 +5,7 @@
  * Ensures consistent, user-friendly messaging with actionable guidance.
  */
 
-import { ErrorType, categorizeError } from "./payment-error-detection";
+import { categorizeError } from "./payment-error-detection";
 
 /**
  * Format payment error message with user-friendly language and actionable guidance

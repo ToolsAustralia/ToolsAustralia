@@ -18,11 +18,6 @@ interface PurchaseSuccessPageProps {
   }>;
 }
 
-function PurchaseSuccessContent({ searchParams }: PurchaseSuccessPageProps) {
-  // This will be wrapped in Suspense by the parent component
-  return null; // Placeholder - will be replaced
-}
-
 export default async function PurchaseSuccessPage({ searchParams }: PurchaseSuccessPageProps) {
   const resolvedSearchParams = await searchParams;
 

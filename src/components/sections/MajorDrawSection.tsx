@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Users, ArrowRight, Zap, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, Zap, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -15,7 +14,6 @@ import "swiper/css/navigation";
 import "swiper/css/pagination";
 import "swiper/css/thumbs";
 import "swiper/css/free-mode";
-import { Button } from "@/components/modals/ui";
 import MembershipModal from "@/components/modals/MembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
@@ -297,7 +295,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const prizeSubheading = selectedPrize.heroSubheading;
   const prizeLabel = selectedPrize.label;
   const prizeSummary = selectedPrize.summary;
-  const prizeDescription = selectedPrize.detailedDescription;
+  const _prizeDescription = selectedPrize.detailedDescription;
 
   // Get brand colors for active prize to match View Specs button and other elements
   const activePrizeSlug = activeSlug || defaultSlug;
@@ -305,7 +303,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
   // Preserve affiliate code from URL if present
   const affiliateCode = searchParams.get("aff");
-  const detailsHref = affiliateCode
+  const _detailsHref = affiliateCode
     ? `/promotions/${activeSlug ?? defaultSlug}?aff=${affiliateCode}`
     : `/promotions/${activeSlug ?? defaultSlug}`;
 
@@ -426,7 +424,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return { line1: label, line2: null, line3: null };
   };
 
-  const getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash" => {
+  const _getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash" => {
     if (slug === "cash-prize") return "cash";
     if (
       (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) &&
@@ -753,7 +751,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   // Check if draw is completed or queued (gap state)
   const isCompleted = majorDraw?.status === "completed";
   const isQueued = majorDraw?.status === "queued";
-  const isGapState = isCompleted || isQueued;
+  const _isGapState = isCompleted || isQueued;
   const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
   const msUntilDraw = drawDateObj ? drawDateObj.getTime() - Date.now() : null;
   const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;

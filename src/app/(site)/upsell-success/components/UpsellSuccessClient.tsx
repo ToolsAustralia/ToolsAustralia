@@ -13,7 +13,7 @@ interface UpsellSuccessClientProps {
   };
 }
 
-export default function UpsellSuccessClient({ searchParams }: UpsellSuccessClientProps) {
+export default function UpsellSuccessClient({ searchParams: _searchParams }: UpsellSuccessClientProps) {
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
       <SectionContainer variant="narrow" className="py-8">

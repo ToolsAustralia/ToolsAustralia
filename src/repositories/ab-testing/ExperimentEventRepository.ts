@@ -431,5 +431,6 @@ export class ExperimentEventRepository {
   }
 }
 
-export default new ExperimentEventRepository();
+const experimentEventRepository = new ExperimentEventRepository();
+export default experimentEventRepository;
 

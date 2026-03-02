@@ -27,7 +27,7 @@ const stateProfessionOnlySchema = z.object({
 });
 
 // Validation schema for email verification only
-const emailVerificationSchema = z.object({
+const _emailVerificationSchema = z.object({
   completeSetupOnly: z.boolean().optional(),
 });
 

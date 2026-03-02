@@ -172,7 +172,7 @@ async function batchFetchCustomers(
  * GET /api/admin/invoices/charge-past-due
  * Preview eligible invoices/users that will be charged (no actual charging)
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     await connectDB();
 
@@ -545,7 +545,7 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < eligibleInvoices.length; i += BATCH_SIZE) {
         const batch = eligibleInvoices.slice(i, i + BATCH_SIZE);
 
-        const batchResults = await Promise.allSettled(
+        const _batchResults = await Promise.allSettled(
           batch.map(async (invoice) => {
             const invoiceId = invoice.id;
             if (!invoiceId) return;

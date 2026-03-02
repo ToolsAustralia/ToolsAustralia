@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { IDailyMetrics } from "@/types/metrics/DailyMetrics";
-import { formatCurrency, formatNumber, formatROAS } from "@/utils/metrics/formatters";
+import { formatCurrency, formatROAS } from "@/utils/metrics/formatters";
 import { format } from "date-fns";
 
 export interface DailyBreakdownChartProps {

@@ -212,7 +212,7 @@ export function calculateSubscriptionEntries(
     isResubscribe,
     promoMultiplier = 1,
     isUpgrade,
-    currentAccumulatedEntries = 0,
+    currentAccumulatedEntries: _currentAccumulatedEntries = 0,
   } = params;
 
   // Handle upgrade scenario (takes precedence)

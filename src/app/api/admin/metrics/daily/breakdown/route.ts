@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
       const dayNum = parseInt(formatInTimeZone(day, AEST_TIMEZONE, "d"), 10);
       const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
 
-      const startOfDay = createAESTDateAsUTC(year, month, dayNum, 0, 0);
+      const _startOfDay = createAESTDateAsUTC(year, month, dayNum, 0, 0);
       const endOfDay = createAESTDateAsUTC(year, month, dayNum, 23, 59);
       endOfDay.setUTCSeconds(59, 999);
 

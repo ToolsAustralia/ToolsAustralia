@@ -55,7 +55,7 @@ function getTodayThrough27thWindowInUTC(): { startUTC: Date; endUTC: Date; renew
  * - renewingOn27thCount, renewingOn27thRevenue, renewingOn27thDate: Users renewing from today through the upcoming 27th (AEST), inclusive
  * - pastDueCount, pastDueRevenue: Past-due subscription counts and at-risk revenue
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     await connectDB();
 

@@ -18,7 +18,6 @@ import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpe
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
-import { SectionContainer } from "@/components/ui";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import {
@@ -37,7 +36,7 @@ interface MembershipSectionProps {
 }
 
 export default function MembershipSection({
-  title = "CHOOSE YOUR PACKAGE",
+  title: _title = "CHOOSE YOUR PACKAGE",
   padding = "py-12 sm:py-16 lg:py-20",
   titleColor = "text-black",
   onPlanSelect,

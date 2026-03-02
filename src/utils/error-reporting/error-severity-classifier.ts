@@ -152,7 +152,7 @@ function extractErrorCode(error: unknown): string | undefined {
 export function classifyErrorSeverity(
   error: unknown,
   category: ErrorCategory,
-  context?: {
+  _context?: {
     endpoint?: string;
     component?: string;
     isPaymentRelated?: boolean;

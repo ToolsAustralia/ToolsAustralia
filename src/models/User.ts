@@ -1011,7 +1011,6 @@ UserSchema.pre("save", function (next) {
   if (this.redemptionHistory && Array.isArray(this.redemptionHistory)) {
     this.redemptionHistory = this.redemptionHistory.map((redemption) => {
       if (redemption.redemptionId === null || redemption.redemptionId === undefined) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { redemptionId: _redemptionId, ...rest } = redemption;
         return rest;
       }

@@ -13,7 +13,7 @@ interface PurchaseSuccessClientProps {
   };
 }
 
-export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessClientProps) {
+export default function PurchaseSuccessClient({ searchParams: _searchParams }: PurchaseSuccessClientProps) {
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
       <SectionContainer variant="narrow" className="py-8">

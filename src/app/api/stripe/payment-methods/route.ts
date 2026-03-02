@@ -91,8 +91,8 @@ export async function GET() {
                   }
                 : undefined,
           };
-        } catch (error) {
-          // console.warn(`Could not fetch payment method details for ${pm.paymentMethodId}:`, error);
+        } catch {
+          // console.warn(`Could not fetch payment method details for ${pm.paymentMethodId}:`, _error);
           // Return basic info without card details if Stripe fetch fails
           return {
             paymentMethodId: pm.paymentMethodId,

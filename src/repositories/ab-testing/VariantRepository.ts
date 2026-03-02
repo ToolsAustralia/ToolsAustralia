@@ -74,5 +74,6 @@ export class VariantRepository {
   }
 }
 
-export default new VariantRepository();
+const variantRepository = new VariantRepository();
+export default variantRepository;
 

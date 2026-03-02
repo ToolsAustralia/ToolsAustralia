@@ -65,7 +65,7 @@ export function extractUTMParams(urlOrParams: string | URLSearchParams): UTMPara
     if (utmCampaign) params.utm_campaign = utmCampaign;
 
     return params;
-  } catch (error) {
+  } catch {
     // Return empty object on error (graceful degradation)
     if (process.env.NODE_ENV === "development") {
       // console.warn("Error extracting UTM parameters:", error);

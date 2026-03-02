@@ -20,8 +20,6 @@
  */
 
 import { detectCategoryAndSeverity } from "@/utils/error-reporting/error-severity-classifier";
-import { enrichErrorContext } from "@/utils/error-reporting/error-context-enricher";
-import { ErrorContext } from "@/types/error-reporting";
 import { autoLogError } from "@/utils/error-reporting/auto-log-error";
 // ✅ FIXED: Dynamic import for server-side utility to prevent client-side bundling
 // autoLogErrorServer is only imported when needed (server-side)
@@ -98,7 +96,7 @@ export class ErrorLoggingService {
     context: LoggingContext,
     options?: LoggingOptions
   ): Promise<void> {
-    const { category, severity } = detectCategoryAndSeverity(error, {
+    const { severity } = detectCategoryAndSeverity(error, {
       endpoint: context.endpoint,
       component: context.component,
       isPaymentRelated: true,
@@ -167,7 +165,7 @@ export class ErrorLoggingService {
     context: LoggingContext,
     options?: LoggingOptions
   ): Promise<void> {
-    const { category, severity } = detectCategoryAndSeverity(error, {
+    const { severity } = detectCategoryAndSeverity(error, {
       endpoint: context.endpoint,
       component: context.component,
     });
@@ -217,7 +215,7 @@ export class ErrorLoggingService {
     context: LoggingContext,
     options?: LoggingOptions
   ): Promise<void> {
-    const { category, severity } = detectCategoryAndSeverity(error, {
+    const { severity } = detectCategoryAndSeverity(error, {
       endpoint: context.endpoint,
       component: context.component,
     });
@@ -267,7 +265,7 @@ export class ErrorLoggingService {
     context: LoggingContext,
     options?: LoggingOptions
   ): Promise<void> {
-    const { category, severity } = detectCategoryAndSeverity(error, {
+    const { severity } = detectCategoryAndSeverity(error, {
       endpoint: context.endpoint,
       component: context.component,
     });
@@ -317,7 +315,7 @@ export class ErrorLoggingService {
     context: LoggingContext,
     options?: LoggingOptions
   ): Promise<void> {
-    const { category, severity } = detectCategoryAndSeverity(error, {
+    const { severity } = detectCategoryAndSeverity(error, {
       endpoint: context.endpoint,
       component: context.component,
     });

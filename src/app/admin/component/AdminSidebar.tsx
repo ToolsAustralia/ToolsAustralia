@@ -153,7 +153,7 @@ const adminTabs = [
 ];
 
 export default function AdminSidebar({
-  selectedTab,
+  selectedTab: _selectedTab,
   onNavigateToSite,
   user,
   isMobile = false,

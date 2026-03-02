@@ -15,7 +15,7 @@ import { getSyncProgress } from "@/utils/integrations/klaviyo/klaviyo-draw-reset
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Verify admin authentication
     const session = await getServerSession(authOptions);

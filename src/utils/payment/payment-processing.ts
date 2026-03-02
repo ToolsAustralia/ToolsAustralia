@@ -9,7 +9,6 @@ import path from "path";
 import { klaviyo } from "@/lib/klaviyo";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import {
-  createSubscriptionStartedEvent,
   createOneTimePackagePurchasedEvent,
   createMiniDrawPurchasedEvent,
   createUpsellAcceptedEvent,
@@ -1382,7 +1381,7 @@ function trackKlaviyoEvent(
   },
   paymentIntentId: string,
   skipInvoice: boolean = false,
-  billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
+  _billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
@@ -1676,8 +1675,7 @@ async function handleUpsellPackage(
 
   // Note: Upsells typically don't include partner discount access in current implementation
   // If they do in the future, add logic here similar to one-time packages
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _paymentIntentId = paymentIntentId; // Reserved for future use when upsells include partner access
+  void paymentIntentId; // Reserved for future use when upsells include partner access
 }
 
 /**

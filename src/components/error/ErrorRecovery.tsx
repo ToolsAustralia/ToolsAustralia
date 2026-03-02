@@ -55,7 +55,7 @@ export const ErrorRecovery: React.FC<ErrorRecoveryProps> = ({
         duration: 3000,
       });
     } catch (retryError) {
-      const retryErrorMessage = retryError instanceof Error ? retryError.message : "Retry failed";
+      const _retryErrorMessage = retryError instanceof Error ? retryError.message : "Retry failed";
 
       if (retryCount >= maxRetries - 1) {
         showToast({

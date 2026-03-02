@@ -26,9 +26,9 @@ export function chiSquareTest(
     return { chiSquare: 0, pValue: 1, degreesOfFreedom: 1 };
   }
 
-  // Calculate conversion rates
-  const controlRate = controlConversions / controlVisitors;
-  const variantRate = variantConversions / variantVisitors;
+  // Calculate conversion rates (for reference; chi-square uses pooled rate)
+  const _controlRate = controlConversions / controlVisitors;
+  const _variantRate = variantConversions / variantVisitors;
 
   // Calculate pooled conversion rate (null hypothesis: rates are equal)
   const totalVisitors = controlVisitors + variantVisitors;

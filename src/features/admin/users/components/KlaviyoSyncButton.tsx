@@ -8,7 +8,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { RefreshCw, Users, CheckCircle, AlertCircle, X, Loader2 } from "lucide-react";
+import { RefreshCw, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent } from "@/components/modals/ui";
 
 interface PreviewData {

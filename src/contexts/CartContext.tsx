@@ -559,7 +559,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ],
       }));
     },
-    [cartState.items, trackRemoveFromCart]
+    [cartState.items, trackRemoveFromCart, trackKlaviyoRemoveFromCart]
   );
 
   const clearCart = useCallback(async () => {

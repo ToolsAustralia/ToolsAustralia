@@ -172,7 +172,7 @@ interface PaymentProgressProps {
 
 export const PaymentProgress: React.FC<PaymentProgressProps> = ({ step, progress }) => {
   const steps = ["Processing", "Verifying", "Completing"];
-  const currentStepIndex = steps.indexOf(step.charAt(0).toUpperCase() + step.slice(1));
+  const _currentStepIndex = steps.indexOf(step.charAt(0).toUpperCase() + step.slice(1));
 
   const stepIcons = {
     processing: <CreditCard className="w-5 h-5" />,

@@ -510,7 +510,7 @@ export async function fetchFacebookInsightsHourlyFiltered(
   dateRange: { since: string; until: string },
   options: { level: HourlyFilterLevel; filterIds: string[] }
 ): Promise<HourlyInsightData[]> {
-  const { level, filterIds } = options;
+  const { level: _level, filterIds } = options;
 
   // No filter or select all: use account-level
   if (!filterIds || filterIds.length === 0) {

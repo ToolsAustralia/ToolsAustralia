@@ -12,7 +12,6 @@ import {
   Check,
   CheckCircle,
   Eye,
-  MousePointerClick,
   Target,
   ArrowUpDown,
   ArrowUp,

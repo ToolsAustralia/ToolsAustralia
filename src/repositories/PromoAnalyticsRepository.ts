@@ -218,4 +218,5 @@ export class PromoAnalyticsRepository {
   }
 }
 
-export default new PromoAnalyticsRepository();
+const promoAnalyticsRepository = new PromoAnalyticsRepository();
+export default promoAnalyticsRepository;

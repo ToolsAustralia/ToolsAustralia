@@ -18,7 +18,7 @@
 import React, { useState } from "react";
 import { ModalContainer, ModalHeader, ModalContent, Button, Textarea } from "./ui";
 import { ErrorContext } from "@/types/error-reporting";
-import { AlertCircle, CheckCircle, Info, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 
 interface ReportProblemModalProps {
@@ -112,7 +112,7 @@ export default function ReportProblemModal({
   const displayErrorMessage = errorContext.errorMessage || "An error occurred";
 
   // Get browser info display
-  const browserInfoDisplay = errorContext.browserInfo
+  const _browserInfoDisplay = errorContext.browserInfo
     ? `${errorContext.browserInfo.name || "Unknown"} ${errorContext.browserInfo.version || ""} on ${errorContext.browserInfo.os || "Unknown OS"}`
     : "Unknown";
 

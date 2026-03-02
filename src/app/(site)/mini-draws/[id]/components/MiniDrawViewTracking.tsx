@@ -60,7 +60,7 @@ export default function MiniDrawViewTracking({ miniDraw }: MiniDrawViewTrackingP
     if (process.env.NODE_ENV === "development") {
       console.log(`📘 Facebook Pixel: ViewContent tracked for mini draw ${miniDraw.name}`);
     }
-  }, [miniDraw, trackViewContent, isAuthenticated, pathname]);
+  }, [miniDraw, trackViewContent, trackKlaviyoViewContent, isAuthenticated, pathname]);
 
   // This component doesn't render anything
   return null;

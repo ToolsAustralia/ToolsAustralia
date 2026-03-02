@@ -30,7 +30,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { IErrorReport } from "@/types/error-reporting";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays } from "date-fns";
 
 interface ErrorReportsAnalyticsProps {
   reports: IErrorReport[];

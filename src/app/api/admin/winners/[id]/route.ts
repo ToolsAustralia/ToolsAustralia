@@ -10,7 +10,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
-import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
 import mongoose, { Types } from "mongoose";

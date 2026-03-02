@@ -192,8 +192,8 @@ export async function POST(request: NextRequest) {
             },
           });
         }
-      } catch (error) {
-        // console.log(`⚠️ Could not retrieve existing subscription: ${error}`);
+      } catch {
+        // console.log(`⚠️ Could not retrieve existing subscription: ${_error}`);
         // console.log(`🔄 Will create new subscription`);
         renewalStrategy = "create_new";
       }

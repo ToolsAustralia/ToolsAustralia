@@ -21,7 +21,7 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
   });
   const [isExpired, setIsExpired] = useState(false);
 
-  const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
+  const { data: currentMajorDraw, isLoading: _isLoading } = useCurrentMajorDraw();
 
   useEffect(() => {
     if (!currentMajorDraw || !currentMajorDraw?.drawDate) {

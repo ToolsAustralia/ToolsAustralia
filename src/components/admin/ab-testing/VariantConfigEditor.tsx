@@ -51,7 +51,7 @@ interface VariantConfigEditorProps {
  * Variant Config Editor
  * Edit variant configuration using existing form components
  */
-export default function VariantConfigEditor({ variant, experimentId, onSave, onCancel }: VariantConfigEditorProps) {
+export default function VariantConfigEditor({ variant, experimentId: _experimentId, onSave, onCancel }: VariantConfigEditorProps) {
   const [formData, setFormData] = useState<CreateVariantPayload>({
     name: variant?.name || "",
     trafficPercentage: variant?.trafficPercentage || 50,

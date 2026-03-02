@@ -139,7 +139,7 @@ export default function PromoAnalyticsManagement() {
   }, [dateRange, drawDates, startDate, endDate, searchParams, pathname, router]);
 
   const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
-    let finalRange = range;
+    const finalRange = range;
     let finalStart = start;
     let finalEnd = end;
 
@@ -264,9 +264,9 @@ export default function PromoAnalyticsManagement() {
     );
   };
 
-  const visitToSignupPct = data?.totalVisits ? (data.totalSignups / data.totalVisits) * 100 : 0;
-  const signupToConversionPct = data?.totalSignups ? (data.totalConversions / data.totalSignups) * 100 : 0;
-  const overallPct = data?.totalVisits ? (data.totalConversions / data.totalVisits) * 100 : 0;
+  const _visitToSignupPct = data?.totalVisits ? (data.totalSignups / data.totalVisits) * 100 : 0;
+  const _signupToConversionPct = data?.totalSignups ? (data.totalConversions / data.totalSignups) * 100 : 0;
+  const _overallPct = data?.totalVisits ? (data.totalConversions / data.totalVisits) * 100 : 0;
 
   return (
     <div className="space-y-4 sm:space-y-6">

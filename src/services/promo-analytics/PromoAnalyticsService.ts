@@ -73,4 +73,5 @@ export class PromoAnalyticsService {
   }
 }
 
-export default new PromoAnalyticsService();
+const promoAnalyticsService = new PromoAnalyticsService();
+export default promoAnalyticsService;

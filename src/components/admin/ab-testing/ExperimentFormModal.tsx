@@ -220,7 +220,7 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
                 id="selectAll"
                 name="selectAll"
                 checked={selectAll}
-                onChange={(e) => handleSelectAll()}
+                onChange={(_e) => handleSelectAll()}
                 label="All Pages (*)"
                 description="Apply experiment to all promotion pages"
                 disabled={isSubmitting}

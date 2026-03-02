@@ -1,8 +1,6 @@
 import { Metadata } from "next";
 import MembershipSection from "@/components/sections/MembershipSection";
 import { Trophy, Bell, Users, Zap } from "lucide-react";
-import WinnerAnnouncement from "./components/WinnerAnnouncement";
-import CountdownHero from "./components/CountdownHero";
 import CompletedDrawsSection from "./components/CompletedDrawsSection";
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import connectDB from "@/lib/mongodb";

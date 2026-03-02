@@ -88,8 +88,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
   const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(true);
   const [isMembershipByPackageExpanded, setIsMembershipByPackageExpanded] = useState(true);
-  const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
+  const [_isDateFilterCollapsed, _setIsDateFilterCollapsed] = useState(true);
+  const [_isMobile, setIsMobile] = useState(false);
   const [isRevenueDetailModalOpen, setIsRevenueDetailModalOpen] = useState(false);
   const [selectedRevenueCategory, setSelectedRevenueCategory] = useState<RevenueCategory | null>(null);
   const [membershipModalPackage, setMembershipModalPackage] = useState<{
@@ -208,7 +208,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   };
 
   // Determine if filter should be collapsible (disabled on mobile since title is hidden)
-  const shouldCollapse = useMemo(() => {
+  const _shouldCollapse = useMemo(() => {
     return false; // Don't collapse on mobile anymore since title is hidden
   }, []);
 

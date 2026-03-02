@@ -98,7 +98,7 @@ async function main() {
   console.log(`Found ${duplicateCustomerIds.length} customer(s) with 2 active subscriptions.\n`);
 
   // Optional: Load MongoDB users for name enrichment
-  let mongoUsersByStripeId: Map<string, { firstName: string; lastName: string }> = new Map();
+  const mongoUsersByStripeId: Map<string, { firstName: string; lastName: string }> = new Map();
   if (USE_MONGO) {
     const mongoose = await import("mongoose");
     const User = (await import("../src/models/User")).default;

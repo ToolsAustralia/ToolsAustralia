@@ -534,7 +534,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     }
   };
 
-  const handleCardSelection = () => {
+  const _handleCardSelection = () => {
     // Close the special packages modal first
     handleClose();
 

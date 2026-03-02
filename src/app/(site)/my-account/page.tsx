@@ -29,7 +29,7 @@ import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
-import { hasSeenExplainer, markExplainerSeen } from "@/utils/subscription-explainer-storage";
+import { hasSeenExplainer } from "@/utils/subscription-explainer-storage";
 import { formatRenewalDate, getFallbackRenewalDate } from "@/utils/dates/month-helpers";
 import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Zap } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
@@ -43,8 +43,6 @@ import PackageDetailModal, {
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
-import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-
 /** Pending entries display data when user has active/failed-renewal but 0 entries in draw */
 type PendingEntriesData = {
   expectedEntries: number;
@@ -221,9 +219,9 @@ export default function MyAccountPage() {
   }, []);
 
   // Get membership packages and promo for modal integration
-  const { subscriptionPackages } = useMemberships();
+  useMemberships();
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
-  const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
+  const _membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
 
   const isRewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();

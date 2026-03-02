@@ -10,10 +10,9 @@ import { MajorDrawComparison } from "./MajorDrawComparison/MajorDrawComparison";
 import { ComparisonModeToggle, ComparisonMode } from "./shared/ComparisonModeToggle";
 import { MajorDrawSelector } from "./shared/MajorDrawSelector";
 import { useMajorDrawComparison } from "@/hooks/useMajorDrawComparison";
-import type { MajorDrawComparisonData } from "@/types/metrics/MajorDrawComparison";
 import { DailyMetricsTable } from "./DailyMetricsTable/DailyMetricsTable";
 import { ViewSwitcher } from "./shared/ViewSwitcher";
-import { MetricsDateFilter, MetricsDateFilterMode, WEBSITE_LAUNCH_DATE } from "./shared/MetricsDateFilter";
+import { MetricsDateFilter, MetricsDateFilterMode } from "./shared/MetricsDateFilter";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { MetricsErrorBoundary } from "./ErrorBoundary";
 import { DailyMetricsChart } from "./charts/DailyMetricsChart";
@@ -219,14 +218,18 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
     : monthlyLoading;
   
   const comparisonError = comparisonMode === "major-draw" ? majorDrawError : error;
-  const data = filterMode === "custom"
-    ? dailyMetricsData
-      ? {
-          currentMonth: dailyMetricsData,
-          previousMonth: [],
-        }
-      : null
-    : monthlyData;
+  const data = useMemo(
+    () =>
+      filterMode === "custom"
+        ? dailyMetricsData
+          ? {
+              currentMonth: dailyMetricsData,
+              previousMonth: [],
+            }
+          : null
+        : monthlyData,
+    [filterMode, dailyMetricsData, monthlyData]
+  );
   
   // Check if data has the MonthlyComparisonData structure
   const isMonthlyComparisonData = data && typeof data === 'object' && 'currentMonthTotal' in data && 'previousMonthTotal' in data && 'comparison' in data;
@@ -267,8 +270,8 @@ export function DailyMetricsView({ initialMonth }: DailyMetricsViewProps) {
       // Filter to ensure only dates from the selected month are shown
       if (selectedMonth) {
         const [year, month] = selectedMonth.split("-").map(Number);
-        const monthStart = startOfMonth(new Date(year, month - 1, 1));
-        const monthEnd = endOfMonth(new Date(year, month - 1, 1));
+        const _monthStart = startOfMonth(new Date(year, month - 1, 1));
+        const _monthEnd = endOfMonth(new Date(year, month - 1, 1));
         
         metrics = metrics.filter((metric) => {
           const metricDate = new Date(metric.date);

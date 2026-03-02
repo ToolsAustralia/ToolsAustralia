@@ -178,5 +178,6 @@ export class ExperimentService {
   }
 }
 
-export default new ExperimentService();
+const experimentService = new ExperimentService();
+export default experimentService;
 

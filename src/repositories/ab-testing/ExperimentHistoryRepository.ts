@@ -67,5 +67,6 @@ export class ExperimentHistoryRepository {
   }
 }
 
-export default new ExperimentHistoryRepository();
+const experimentHistoryRepository = new ExperimentHistoryRepository();
+export default experimentHistoryRepository;
 

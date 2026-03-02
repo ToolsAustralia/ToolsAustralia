@@ -66,7 +66,7 @@ export function getAlternatingMultiplier(multipliers: [number, number]): number 
     const index = (dayOfYear - 1) % 2;
     
     return multipliers[index];
-  } catch (error) {
+  } catch {
     // If any error, default to first multiplier
     return multipliers[0];
   }

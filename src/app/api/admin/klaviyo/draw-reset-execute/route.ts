@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { resetDrawPropertiesForAllUsers, getSyncProgress } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
+import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -18,7 +18,7 @@ export const runtime = 'nodejs';
 // In-memory lock to prevent concurrent manual syncs
 let isManualSyncInProgress = false;
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     // Verify admin authentication
     const session = await getServerSession(authOptions);

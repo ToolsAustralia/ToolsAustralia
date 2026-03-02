@@ -22,7 +22,6 @@ import {
   Clock,
   Send,
   Key,
-  MessageSquare,
   Gift,
   Trash2,
 } from "lucide-react";

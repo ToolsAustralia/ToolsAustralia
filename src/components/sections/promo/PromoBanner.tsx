@@ -299,7 +299,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
         console.log("🚫 Active promo exists, clearing alternating multiplier");
       }
     }
-  }, [currentAlternatingMultipliers, effectivePromoTypeForBanner, activePromo]);
+  }, [currentAlternatingMultipliers, effectivePromoTypeForBanner, activePromo]); // eslint-disable-line react-hooks/exhaustive-deps -- activeTab only used in dev log; effectivePromoTypeForBanner captures tab
 
   // Countdown strategy:
   // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
@@ -483,7 +483,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     const timeLeftMs = endMs - Date.now();
     const isUrgent = timeLeftMs > 0 && timeLeftMs <= MS_24H;
     return { hasScheduledPromo: true, isUrgent };
-  }, [effectiveEntry?.source, effectiveEntry?.scheduledEndDate]);
+  }, [effectiveEntry?.source, effectiveEntry?.scheduledEndDate]); // eslint-disable-line react-hooks/exhaustive-deps -- effectiveEntry object identity unstable; source/scheduledEndDate sufficient
 
   // Badge text (gold pill): gap period → no-promo → draw status → variant override → scheduled promo default → 10x → scheduled text → alternating default
   const badgeText = useMemo(() => {
@@ -513,6 +513,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       alternatingDefault,
       multiplier,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getDrawDateStatus stable; avoid fn-in-deps
   }, [
     isGapPeriod,
     isNoPromo,
@@ -545,6 +546,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     }
 
     return resolved;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getDrawDateStatus stable; effectiveEntry via source/dates
   }, [
     variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
@@ -1132,6 +1134,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
         {/* Badge image - outside overflow-hidden so -top-3 when sticky won't be clipped */}
         {!isGapPeriod && countdownDisplay.type !== "hidden" && !isNoPromo && multiplier && [2, 3, 5, 10].includes(multiplier) && (
+          /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={`/images/badge/X${multiplier}.png`}
             alt={`${multiplier}X entries`}

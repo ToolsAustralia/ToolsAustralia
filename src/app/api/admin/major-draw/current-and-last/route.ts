@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
-import { format } from "date-fns";
 import { addDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
@@ -16,7 +15,7 @@ const AEST_TIMEZONE = "Australia/Sydney";
  * Get current and last draw date ranges for filtering
  * Returns activationDate and drawDate for both draws
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || session.user.role !== "admin") {

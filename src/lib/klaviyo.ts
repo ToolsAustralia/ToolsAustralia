@@ -256,7 +256,7 @@ class KlaviyoClient {
             const duplicateProfileId = errorData.errors?.[0]?.meta?.duplicate_profile_id;
             
             // Use the duplicate profile ID if provided, otherwise use original
-            const targetProfileId = duplicateProfileId || profileId;
+            const _targetProfileId = duplicateProfileId || profileId;
             
             // Calculate exponential backoff delay with jitter
             const delayMs = baseDelayMs * Math.pow(2, attempt - 1);

@@ -16,7 +16,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { IDailyMetrics } from "@/types/metrics/DailyMetrics";
-import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 
 const AEST_TIMEZONE = "Australia/Sydney";

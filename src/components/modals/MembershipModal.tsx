@@ -32,8 +32,6 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { convertUpsellToLocalPlan } from "@/utils/membership/membership-adapters";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
-import { getPackageById } from "@/data/membershipPackages";
-import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
@@ -57,23 +55,17 @@ import { rewardsEnabled } from "@/config/featureFlags";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
-import { autoLogPaymentError, autoLogStripeError, type PaymentErrorDetails } from "@/utils/error-reporting/auto-log-error";
-import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
+import { autoLogPaymentError, type PaymentErrorDetails } from "@/utils/error-reporting/auto-log-error";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
-import { ErrorContext } from "@/types/error-reporting";
-import { extractSubscriptionData, validateSubscriptionResponse, isPaymentIntentReady } from "@/utils/payment/subscription-response-handler";
-import { createSubscriptionStateUpdate, isStateUpdateReadyForPayment } from "@/utils/payment/subscription-state-manager";
-import { handleSubscriptionError, handlePaymentIntentNotReadyError, handleInvalidResponseError, isRetryableError } from "@/utils/payment/subscription-error-handler";
+import { extractSubscriptionData, validateSubscriptionResponse } from "@/utils/payment/subscription-response-handler";
+import { createSubscriptionStateUpdate } from "@/utils/payment/subscription-state-manager";
+import { handleSubscriptionError, handlePaymentIntentNotReadyError, handleInvalidResponseError } from "@/utils/payment/subscription-error-handler";
 import { 
   detectPaymentError, 
-  isRecoverableError, 
-  categorizeError, 
-  getRecoveryStrategy,
   type RecoveryStrategy 
 } from "@/utils/payment/stripe/payment-error-detection";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { recoverSetupIntent } from "@/utils/payment/stripe/setup-intent-recovery";
-import { recoverPaymentIntent } from "@/utils/payment/stripe/payment-intent-recovery";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 // Member package mapping utilities imported but using inline mapping for simplicity
 
@@ -304,7 +296,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
-  const { userData: userDataForPromo, isMember: isMemberForPromo } = useUserContext();
+  const { userData: _userDataForPromo, isMember: isMemberForPromo } = useUserContext();
 
   // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
@@ -565,7 +557,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     };
 
     validatePromoLink();
-  }, [promoLinkCode, isOpen, activePlan]);
+  }, [promoLinkCode, isOpen, activePlan]); // eslint-disable-line react-hooks/exhaustive-deps -- isPlaceholderPlan derived from activePlan
 
   // Auto-rotate winner slide every 5 seconds, one direction only (always slide right)
   useEffect(() => {
@@ -828,7 +820,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     const isInPaymentFlow = currentStep >= 2;
     const hasCompletedRegistration = isAuthenticated || guestUserData !== null;
     const isActualPlan = !isPlaceholderPlan;
-    const shouldCreatePaymentIntent =
+    const _shouldCreatePaymentIntent =
       isInPaymentFlow && hasCompletedRegistration && isActualPlan && (showCardForm || isSubscription); // Only for subscriptions or when card form is shown
 
     // ✅ Option A: When Step 2 and subscription – use invoice PaymentIntent only (no SetupIntent)
@@ -1006,7 +998,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // ✅ CRITICAL: Also recreate if amount changed (switching between membership packages)
     const lastAmount = lastPaymentIntentAmountRef.current;
     const amountChanged = lastAmount !== null && lastAmount !== amountInCents;
-    const needsPaymentIntent = !paymentIntentClientSecret || amountChanged;
+    const _needsPaymentIntent = !paymentIntentClientSecret || amountChanged;
 
     // ✅ REMOVED: Upfront PaymentIntent creation for subscriptions
     // Subscriptions now use invoice PaymentIntent from subscription creation response
@@ -1179,6 +1171,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     );
     }, 300);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- omitting activePlan, handlePaymentError, handlePaymentSuccess to avoid payment flow loops
   }, [
     pendingFirstSubscriptionConfirm,
     paymentIntentClientSecret,
@@ -2064,6 +2057,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
     // Clear card form errors but preserve state
     setCardFormError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- formData.email, guestUserData?.email, isAuthenticated omitted to prevent submit handler churn
   }, [
     activePlan,
     paymentIntentId,
@@ -4208,7 +4202,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       
       // Use user-friendly error message from error handler
       let errorMessage = subscriptionError.userMessage;
-      const errorTitle = isAuthenticated ? "Purchase Failed" : "Account Creation Failed";
+      const _errorTitle = isAuthenticated ? "Purchase Failed" : "Account Creation Failed";
       let errorCode = subscriptionError.code; // Extract from utility function
       let declineCode: string | undefined;
       
@@ -4331,7 +4325,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           if (errorStr && errorStr !== "{}") {
             errorMessage = `Error details: ${errorStr.substring(0, 200)}`;
           }
-        } catch (e) {
+        } catch {
           // Give up - use default message
           errorMessage = "A processing error occurred. Please check Vercel logs for details.";
         }

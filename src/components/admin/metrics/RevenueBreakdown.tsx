@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { IDailyMetrics } from "@/types/metrics/DailyMetrics";
-import { DollarSign, Package, TrendingUp } from "lucide-react";
+import { Package, TrendingUp } from "lucide-react";
 
 interface RevenueBreakdownProps {
   metrics: IDailyMetrics[];

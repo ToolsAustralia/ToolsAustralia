@@ -483,8 +483,8 @@ export default function RevenueOverview() {
             <div className="flex items-end justify-start gap-4 sm:gap-5 lg:gap-6 h-full w-full min-w-max px-2 sm:px-4">
               {chartData.map((data, index) => {
                 const barId = `${data.date}-${index}`;
-                const isHovered = hoveredBar === barId;
-                const isClicked = clickedBar === barId;
+                const _isHovered = hoveredBar === barId;
+                const _isClicked = clickedBar === barId;
 
                 // Calculate column and bar widths - maximized for desktop
                 // Desktop gets much larger columns to fill available space

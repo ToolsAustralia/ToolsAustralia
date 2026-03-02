@@ -8,7 +8,7 @@ import { PaymentEventRepository } from "@/repositories/PaymentEventRepository";
 import { MetricsCalculationService } from "../metrics/MetricsCalculationService";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { formatInTimeZone } from "date-fns-tz";
-import type { EnhancedDashboardMetrics, TrendData } from "@/types/admin/EnhancedMetrics";
+import type { EnhancedDashboardMetrics } from "@/types/admin/EnhancedMetrics";
 import User from "@/models/User";
 import connectDB from "@/lib/mongodb";
 import { getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";

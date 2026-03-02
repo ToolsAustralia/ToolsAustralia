@@ -160,7 +160,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const minimumEntries = miniDraw.minimumEntries ?? 0;
   const totalEntries = miniDraw.totalEntries ?? 0;
   const entriesRemaining = Math.max(minimumEntries - totalEntries, 0);
-  const capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
+  const _capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
 
   // Convert to JSON-serializable format
   const latestWinnerData = latestWinnerDoc

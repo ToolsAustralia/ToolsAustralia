@@ -21,7 +21,7 @@ interface PowerToolsetCarouselProps {
 }
 
 const sideItemVariants = {
-  hidden: ({ i, fromLeft }: { i: number; fromLeft: boolean }) => ({
+  hidden: ({ i: _i, fromLeft }: { i: number; fromLeft: boolean }) => ({
     opacity: 0,
     x: fromLeft ? -24 : 24,
     scale: 0.88,

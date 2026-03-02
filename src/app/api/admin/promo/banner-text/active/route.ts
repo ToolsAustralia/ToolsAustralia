@@ -8,7 +8,7 @@ import type { PromoBannerText } from "@/types/admin";
  * Get currently active banner text (public endpoint for banner display)
  * No authentication required
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const service = new PromoBannerTextService();
     const activeText = await service.getActiveBannerText();

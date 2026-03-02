@@ -18,7 +18,6 @@
 import React, { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import type Stripe from "stripe";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "@/components/modals/ui";
 import { useToast } from "@/components/ui/Toast";
 import { AlertTriangle, CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
@@ -279,7 +278,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const payFailedInvoiceMutation = usePayFailedInvoice();
-  const { paymentMethods, loading: paymentMethodsLoading } = useSavedPaymentMethods();
+  const { paymentMethods, loading: _paymentMethodsLoading } = useSavedPaymentMethods();
 
   // State management
   const [paymentState, setPaymentState] = useState<{
@@ -294,7 +293,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<SavedPaymentMethod | null>(null);
-  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [_showPaymentMethods, setShowPaymentMethods] = useState(false);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -394,7 +393,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   };
 
   // Handle payment success from Payment Element
-  const handlePaymentSuccess = async (paymentMethodId?: string) => {
+  const handlePaymentSuccess = async (_paymentMethodId?: string) => {
     setIsSuccess(true);
     // Invalidate queries to refresh user data
     queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });

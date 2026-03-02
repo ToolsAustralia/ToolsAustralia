@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { Suspense } from "react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useState, useEffect } from "react";
-import { hasPixelConsent, revokePixelConsent } from "@/components/PixelTracker";
+import { hasPixelConsent } from "@/components/PixelTracker";
 
 function TestPixelsContent() {
   const {
@@ -22,7 +22,7 @@ function TestPixelsContent() {
   } = usePixelTracking();
 
   const [testResults, setTestResults] = useState<string[]>([]);
-  const [hasConsent, setHasConsent] = useState(true); // Always true in auto-accept mode
+  const [_hasConsent, setHasConsent] = useState(true); // Always true in auto-accept mode
   const [buttonStates, setButtonStates] = useState<Record<string, "idle" | "loading" | "success" | "error">>({});
   const [pixelStatus, setPixelStatus] = useState<{
     facebook: boolean;

@@ -1,12 +1,7 @@
 import ExperimentEventRepository from "@/repositories/ab-testing/ExperimentEventRepository";
 import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssignmentRepository";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
-import {
-  calculateStatisticalSignificance,
-  determineWinner,
-  calculateConfidenceInterval,
-  calculateLift,
-} from "@/utils/ab-testing/statistical-tests";
+import { calculateStatisticalSignificance, determineWinner } from "@/utils/ab-testing/statistical-tests";
 import Experiment from "@/models/ab-testing/Experiment";
 import mongoose from "mongoose";
 
@@ -366,7 +361,7 @@ export class ExperimentAnalyticsService {
   /**
    * Check if experiment meets stopping criteria
    */
-  async checkStoppingRules(experimentId: string): Promise<{
+  async checkStoppingRules(_experimentId: string): Promise<{
     shouldStop: boolean;
     reasons: string[];
   }> {
@@ -381,7 +376,7 @@ export class ExperimentAnalyticsService {
   /**
    * Get stopping rule status
    */
-  async getStoppingRuleStatus(experimentId: string) {
+  async getStoppingRuleStatus(_experimentId: string) {
     return {
       minConversions: { met: false, current: 0, required: 100 },
       confidenceThreshold: { met: false, current: 0, required: 95 },
@@ -390,5 +385,6 @@ export class ExperimentAnalyticsService {
   }
 }
 
-export default new ExperimentAnalyticsService();
+const experimentAnalyticsService = new ExperimentAnalyticsService();
+export default experimentAnalyticsService;
 

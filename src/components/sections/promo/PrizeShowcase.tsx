@@ -9,7 +9,6 @@ import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
@@ -26,7 +25,6 @@ import {
   PowerToolsetCarousel,
   StaticToolsetHighlight,
   getToolboxTypeFromSlug,
-  getToolsetFromSlug,
   filterPrizesByToolboxType,
 } from "./prize-selection";
 import { getPrizesForToolsetSlug, isToolsetLandingSlug } from "@/config/promo-landing-slugs";
@@ -68,8 +66,8 @@ const resolveHighlightIcon = (iconName?: string): LucideIcon => {
   return fallbackIcon;
 };
 
-// Helper function to get brand logo path based on prize slug
-const getBrandLogoPath = (slug: string): string | null => {
+// Helper function to get brand logo path based on prize slug (reserved for future use)
+const _getBrandLogoPath = (slug: string): string | null => {
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
@@ -111,8 +109,8 @@ const getFirstPrizeImagePath = (slug: string): string => {
   }
 };
 
-// Helper function to get formatted multi-line label for prize cards
-const getFormattedLabel = (label: string, slug?: string, isMobile?: boolean) => {
+// Helper function to get formatted multi-line label for prize cards (reserved for future use)
+const _getFormattedLabel = (label: string, slug?: string, isMobile?: boolean) => {
   // Check slug first for more accurate detection
   if (slug) {
     if (slug === "milwaukee-sidchrome") {
@@ -275,7 +273,7 @@ export default function PrizeShowcase({
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
+  const [isNavigating, _setIsNavigating] = useState(false);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
@@ -318,7 +316,7 @@ export default function PrizeShowcase({
       setToolboxType("sidchrome");
       setLastNonCashToolboxType("sidchrome");
     }
-  }, [toolsetMode, toolsetSlug]);
+  }, [toolsetMode, toolsetSlug, toolsetPrizeSlugs]); // Added toolsetPrizeSlugs per lint - init runs when slug list changes
 
   // Update toolbox type based on current slug when it changes (evergreen mode only)
   useEffect(() => {
@@ -386,8 +384,8 @@ export default function PrizeShowcase({
     };
   }, [activeSlug]);
   
-  // Navigation handlers for mobile prize selector
-  const handlePreviousPrize = () => {
+  // Navigation handlers for mobile prize selector (reserved for future mobile nav UI)
+  const _handlePreviousPrize = () => {
     if (filteredPrizes.length > 0) {
       const newIndex = mobilePrizeIndex > 0 ? mobilePrizeIndex - 1 : filteredPrizes.length - 1;
       setMobilePrizeIndex(newIndex);
@@ -395,7 +393,7 @@ export default function PrizeShowcase({
     }
   };
   
-  const handleNextPrize = () => {
+  const _handleNextPrize = () => {
     if (filteredPrizes.length > 0) {
       const newIndex = mobilePrizeIndex < filteredPrizes.length - 1 ? mobilePrizeIndex + 1 : 0;
       setMobilePrizeIndex(newIndex);
@@ -406,7 +404,7 @@ export default function PrizeShowcase({
   // Check if draw is completed or queued (gap state)
   const isCompleted = currentMajorDraw?.status === "completed";
   const isQueued = currentMajorDraw?.status === "queued";
-  const isGapState = isCompleted || isQueued;
+  const _isGapState = isCompleted || isQueued;
   const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
   const msUntilDraw = isMounted && drawDateObj ? drawDateObj.getTime() - Date.now() : null;
   const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;
