@@ -21,10 +21,10 @@ This system ensures that the correct promotional images are displayed based on t
 
 3. **Category Mismatch**: The system relied solely on `extractPackageInfo(offerId)` to determine image category, which didn't account for the actual business category (`subscription-plus`, `one-time-plus`, `additional-upgrade`).
 
-4. **File Naming Inconsistencies**: The system needed to handle different file naming conventions:
-   - Membership packages: `10X {Package} Package.png` (uppercase X)
-   - One-time plus: `2X {Package} Plus.png` (uppercase X)
-   - Additional upgrades: `2x {Package} Upgrade.png` (lowercase x)
+4. **File Naming Inconsistencies**: The system uses consistent uppercase X for all promo images:
+   - Membership packages: `10X {Package} Package.png`
+   - One-time plus: `2X {Package} Plus.png`
+   - Additional upgrades: `2X {Package} Upgrade.png`
 
 ---
 
@@ -165,7 +165,7 @@ additional-upgrade + one-time → "Upgrade" (for upgrade images)
 **Conventions**:
 - **Membership/Package**: `${multiplier}X ${packageName} Package.png` (uppercase X)
 - **One-time Plus**: `${multiplier}X ${packageName} Plus.png` (uppercase X)
-- **Additional Upgrade**: `${multiplier}x ${packageName} Upgrade.png` (lowercase x)
+- **Additional Upgrade**: `${multiplier}X ${packageName} Upgrade.png` (uppercase X)
 
 **Why**: Matches actual file naming in `public/images/upsells/active-promo/`.
 
@@ -248,8 +248,8 @@ public/images/upsells/
     ├── 10X Tradie Package.png
     ├── 2X Tradie Plus.png           # One-time 2X
     ├── 3X Tradie Plus.png           # One-time 3X
-    ├── 2x Tradie Upgrade.png        # Additional 2x (lowercase x)
-    └── 3x Tradie Upgrade.png        # Additional 3x (lowercase x)
+    ├── 2X Tradie Upgrade.png        # Additional 2X
+    └── 3X Tradie Upgrade.png        # Additional 3X
 ```
 
 ### Naming Rules
@@ -258,9 +258,9 @@ public/images/upsells/
 |-------------|----------|------------|------------------|---------|
 | Membership | subscription-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Package.png` | `3X Boss Package.png`, `5X Tradie Package.png`, `10X Foreman Package.png` (2X upcoming) |
 | One-time | one-time-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Plus.png` | `2X Tradie Plus.png`, `10X Boss Plus.png` |
-| One-time | additional-upgrade | 2, 3, 5, 10 | `{multiplier}x {Package} Upgrade.png` | `2x Tradie Upgrade.png`, `10X Boss Upgrade.png` |
+| One-time | additional-upgrade | 2, 3, 5, 10 | `{multiplier}X {Package} Upgrade.png` | `2X Tradie Upgrade.png`, `10X Boss Upgrade.png` |
 
-**Note**: Upgrades use lowercase `x`, Plus/Package use uppercase `X`.
+**Note**: All promo images use uppercase `X` for consistency (e.g., `2X`, `3X`, `5X`, `10X`).
 
 ---
 
@@ -300,7 +300,7 @@ When the upsell modal appears, check the browser console for:
 
 **Check**:
 - Generated filename matches actual file name
-- Casing is correct (uppercase X vs lowercase x)
+- Casing is consistent (uppercase X for all: Package, Plus, and Upgrade)
 - File exists in `public/images/upsells/active-promo/`
 
 **Solution**: Verify file naming matches the convention documented above.
@@ -360,7 +360,7 @@ interface UpsellImageParams {
 - ✅ Fixed membership 10X image detection with early check
 - ✅ Improved package type determination in `UpsellModal`
 - ✅ Added comprehensive debug logging
-- ✅ Fixed file naming convention (uppercase X for Plus/Package, lowercase x for Upgrade)
+- ✅ Fixed file naming convention (uppercase X for all promo images: Package, Plus, Upgrade)
 
 ---
 
