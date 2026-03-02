@@ -14,6 +14,8 @@ import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-pe
 import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
+import { attributionSchema } from "@/utils/tracking/attribution-schema";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
@@ -29,6 +31,7 @@ const createSubscriptionExistingUserSchema = z.object({
   cancelPreviousSubscriptionId: z.string().optional(), // When user switches package: cancel this incomplete subscription before creating new one
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  attribution: attributionSchema,
 });
 
 /**
@@ -224,6 +227,7 @@ export async function POST(request: NextRequest) {
       ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
       ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
+      ...buildAttributionMetadata(validatedData.attribution),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
     };
 

@@ -10,6 +10,8 @@ import { stripe } from "@/lib/stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Benefits are now granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
+import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 const miniDrawPurchaseSchema = z.object({
@@ -17,6 +19,7 @@ const miniDrawPurchaseSchema = z.object({
   miniDrawId: z.string().min(1, "Mini Draw ID is required"),
   useDefaultPayment: z.boolean().default(false),
   paymentMethodId: z.string().optional(),
+  attribution: attributionSchema,
 });
 
 /**
@@ -220,7 +223,8 @@ export async function POST(request: NextRequest) {
         validatedData.miniDrawId,
         validatedData.paymentMethodId,
         requestContext,
-        capiEventSourceUrl
+        capiEventSourceUrl,
+        validatedData.attribution
       );
     } else {
       if (!user.stripeCustomerId) {
@@ -234,7 +238,8 @@ export async function POST(request: NextRequest) {
         validatedData.paymentMethodId,
         requestContext,
         request, // ✅ Pass request for error logging
-        capiEventSourceUrl
+        capiEventSourceUrl,
+        validatedData.attribution
       );
     }
   } catch (error) {
@@ -284,7 +289,8 @@ async function handleOneClickPurchase(
   miniDrawId: string,
   paymentMethodId: string,
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
-  capiEventSourceUrl?: string
+  capiEventSourceUrl?: string,
+  attribution?: Parameters<typeof buildAttributionMetadata>[0]
 ) {
   try {
     // console.log("🎯 handleOneClickPurchase called with:", {
@@ -437,6 +443,7 @@ async function handleOneClickPurchase(
           ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
           ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
+          ...buildAttributionMetadata(attribution),
         },
       });
 
@@ -569,7 +576,8 @@ async function handlePaymentIntentCreation(
   paymentMethodId: string | undefined,
   requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
   request?: NextRequest, // ✅ Pass request for error logging
-  capiEventSourceUrl?: string
+  capiEventSourceUrl?: string,
+  attribution?: Parameters<typeof buildAttributionMetadata>[0]
 ) {
   try {
     const shouldConfirm = !!paymentMethodId;
@@ -604,6 +612,7 @@ async function handlePaymentIntentCreation(
         ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
         ...(eventSourceUrl ? { capi_event_source_url: eventSourceUrl } : {}),
+        ...buildAttributionMetadata(attribution),
       },
     });
 

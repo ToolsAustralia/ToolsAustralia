@@ -100,6 +100,45 @@ function extractRequestContextFromMetadata(metadata: Stripe.Metadata): {
 }
 
 /**
+ * Extract attribution (UTM + campaign/adset/ad IDs) from Stripe metadata.
+ * Keys: attr_utm_source, attr_utm_medium, attr_utm_campaign, attr_utm_content, attr_utm_term,
+ * attr_campaign_id, attr_adset_id, attr_ad_id.
+ */
+function extractAttributionFromMetadata(metadata: Stripe.Metadata): {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  campaign_id?: string;
+  adset_id?: string;
+  ad_id?: string;
+} | undefined {
+  const utmSource = metadata.attr_utm_source;
+  const utmMedium = metadata.attr_utm_medium;
+  const utmCampaign = metadata.attr_utm_campaign;
+  const utmContent = metadata.attr_utm_content;
+  const utmTerm = metadata.attr_utm_term;
+  const campaignId = metadata.attr_campaign_id;
+  const adsetId = metadata.attr_adset_id;
+  const adId = metadata.attr_ad_id;
+
+  if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm || campaignId || adsetId || adId) {
+    return {
+      ...(utmSource && { utm_source: utmSource }),
+      ...(utmMedium && { utm_medium: utmMedium }),
+      ...(utmCampaign && { utm_campaign: utmCampaign }),
+      ...(utmContent && { utm_content: utmContent }),
+      ...(utmTerm && { utm_term: utmTerm }),
+      ...(campaignId && { campaign_id: campaignId }),
+      ...(adsetId && { adset_id: adsetId }),
+      ...(adId && { ad_id: adId }),
+    };
+  }
+  return undefined;
+}
+
+/**
  * Get resolved promo multiplier for a package type (payment context)
  * Priority: Active Promo > Alternating Multiplier > Default (1x)
  * Uses PromoMultiplierResolverService for centralized resolution
@@ -883,6 +922,8 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
     });
   }
 
+  const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -915,7 +956,9 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
         variantId,
       }),
     },
-    requestContext // Pass request context for improved match quality
+    requestContext, // Pass request context for improved match quality
+    undefined, // billingReason (not applicable for upsell)
+    sessionAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -1037,6 +1080,8 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     price: priceInCents / 100, // ✅ FIX: Use validated priceInCents
   });
 
+  const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+
   const result = await processPaymentBenefits(
     paymentIntent.id,
     user._id.toString(),
@@ -1061,7 +1106,9 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
         variantId,
       }),
     },
-    requestContext // Pass request context for improved match quality
+    requestContext, // Pass request context for improved match quality
+    undefined, // billingReason (not applicable for one-time)
+    sessionAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -1182,6 +1229,8 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
     });
   }
 
+  const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -1208,7 +1257,9 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
         variantId,
       }),
     },
-    requestContext // Pass request context for improved match quality
+    requestContext, // Pass request context for improved match quality
+    undefined, // billingReason (not applicable for mini-draw)
+    sessionAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -3255,6 +3306,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       packageName: membershipPackage.name,
     });
 
+    const sessionAttribution =
+      (subscription?.metadata ? extractAttributionFromMetadata(subscription.metadata) : undefined) ??
+      (expandedInvoice.metadata ? extractAttributionFromMetadata(expandedInvoice.metadata) : undefined);
+
     const result = await processPaymentBenefits(
       invoicePaymentId,
       user._id.toString(),
@@ -3280,7 +3335,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         }),
       },
       requestContext, // Pass request context if available (may be undefined for renewals)
-      expandedInvoice.billing_reason || undefined // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
+      expandedInvoice.billing_reason || undefined, // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
+      sessionAttribution
     );
 
     // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits

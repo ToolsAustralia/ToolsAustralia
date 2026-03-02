@@ -17,6 +17,7 @@ import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import type { MiniDrawType } from "@/types/mini-draw";
+import { useAttribution } from "@/hooks/useAttribution";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -34,6 +35,7 @@ export default function MiniDrawPackages({
   const { data: session } = useSession();
   const { showToast } = useToast();
   const { userData, isAuthenticated } = useUserContext();
+  const attribution = useAttribution();
   const { data: paymentMethods } = usePaymentMethods(userData?._id);
   const queryClient = useQueryClient();
 
@@ -231,6 +233,7 @@ export default function MiniDrawPackages({
           miniDrawId,
           useDefaultPayment,
           paymentMethodId,
+          ...(attribution && { attribution }),
         }),
       });
 

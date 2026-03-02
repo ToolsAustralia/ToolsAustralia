@@ -6,6 +6,8 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
+import { attributionSchema } from "@/utils/tracking/attribution-schema";
 
 /**
  * POST /api/stripe/create-payment-intent
@@ -31,6 +33,7 @@ const createPaymentIntentSchema = z.object({
   packageName: z.string().optional(),
   userEmail: z.string().email().optional(),
   packageType: z.enum(["one-time", "membership"]).optional(),
+  attribution: attributionSchema,
 });
 
 export async function POST(request: NextRequest) {
@@ -140,6 +143,7 @@ export async function POST(request: NextRequest) {
         packageType: "one-time", // Only one-time purchases use this endpoint
         ...(validatedData.packageId && { packageId: validatedData.packageId }),
         ...(validatedData.packageName && { packageName: validatedData.packageName }),
+        ...buildAttributionMetadata(validatedData.attribution),
       },
     });
 

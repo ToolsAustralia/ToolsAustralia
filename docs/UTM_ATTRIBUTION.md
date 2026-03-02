@@ -4,7 +4,9 @@
 
 This feature captures UTM parameters from the URL and persists them to sessionStorage, so they can be attributed at signup or conversion even if the user navigates away before registering. It supports multi-touch attribution for marketing channels (e.g. Facebook, Google Ads, Klaviyo).
 
-**Supported UTM parameters:** `utm_source`, `utm_medium`, `utm_campaign`
+**Supported UTM parameters:** `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`
+
+**Platform IDs (for payment attribution):** `campaign_id`, `adset_id`, `ad_id` — see [PAYMENT_ATTRIBUTION.md](./PAYMENT_ATTRIBUTION.md) for details.
 
 ## Problem It Solves
 
@@ -61,9 +63,16 @@ UTM sent to API (register, payment)  →  stored on User model
   "utm_source": "facebook",
   "utm_medium": "cpc",
   "utm_campaign": "spring_sale",
+  "utm_content": "ad_creative_1",
+  "utm_term": "keywords",
+  "campaign_id": "1202000001234567",
+  "adset_id": "1202000001234568",
+  "ad_id": "1202000001234569",
   "capturedAt": 1704067200000
 }
 ```
+
+Extended fields (`utm_content`, `utm_term`, `campaign_id`, `adset_id`, `ad_id`) support payment attribution—see [PAYMENT_ATTRIBUTION.md](./PAYMENT_ATTRIBUTION.md).
 
 ## API Reference
 
