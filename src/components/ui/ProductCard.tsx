@@ -82,7 +82,6 @@ type ProductCardProps = {
 export default function ProductCard({
   product,
   onAddToCart,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   width: _width = "w-[295px]",
   viewMode = "grid",
 }: ProductCardProps) {
@@ -345,7 +344,7 @@ export default function ProductCard({
         setLocalLoadingState((prev) => ({ ...prev, [productData.id]: false }));
       }, 300);
     }
-  }, [productData, addToCart, onAddToCart, product, trackAddToCart]);
+  }, [productData, addToCart, onAddToCart, product, trackAddToCart, trackKlaviyoAddToCart]);
 
   // Retry failed operation
   const handleRetry = useCallback(async () => {

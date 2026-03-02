@@ -231,7 +231,7 @@ async function handleResetPassword(user: any) {
     await user.save();
 
     // Send password reset email
-    const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
+    const _resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
 
     // TODO: Implement email sending functionality
     // console.log(`Would send password reset email to ${user.email} with URL: ${resetUrl}`);

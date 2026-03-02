@@ -14,8 +14,8 @@
  * - Upsell grants: 2 × 150 = 300 entries
  */
 
-import { getPackageById, type StaticMembershipPackage } from "@/data/membershipPackages";
-import { getMiniDrawPackageById, type MiniDrawPackage } from "@/data/miniDrawPackages";
+import { getPackageById } from "@/data/membershipPackages";
+import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 
 export interface CalculateUpsellEntriesParams {
   baseEntries: number;

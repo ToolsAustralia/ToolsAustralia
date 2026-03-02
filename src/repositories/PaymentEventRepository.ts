@@ -12,7 +12,6 @@
 
 import PaymentEvent from "@/models/PaymentEvent";
 import type { IPaymentEvent } from "@/models/PaymentEvent";
-import mongoose from "mongoose";
 
 export class PaymentEventRepository {
   /**

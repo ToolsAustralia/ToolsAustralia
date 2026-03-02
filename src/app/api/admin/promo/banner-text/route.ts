@@ -23,7 +23,7 @@ const createBannerTextSchema = z.object({
  * GET /api/admin/promo/banner-text
  * Get all scheduled texts (admin management)
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || session.user.role !== "admin") {

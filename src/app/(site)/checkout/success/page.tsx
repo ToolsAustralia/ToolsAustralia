@@ -19,11 +19,6 @@ interface CheckoutSuccessPageProps {
   }>;
 }
 
-function CheckoutSuccessContent({ searchParams }: CheckoutSuccessPageProps) {
-  // This will be wrapped in Suspense by the parent component
-  return null; // Placeholder - will be replaced
-}
-
 export default async function CheckoutSuccessPage({ searchParams }: CheckoutSuccessPageProps) {
   const resolvedSearchParams = await searchParams;
   const orderId = resolvedSearchParams.orderId || "ORD-2024-001";

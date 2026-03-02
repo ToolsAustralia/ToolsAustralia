@@ -1,7 +1,6 @@
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import VariantConfigService from "@/services/ab-testing/VariantConfigService";
@@ -22,7 +21,7 @@ interface ServerVariantAssignment {
  */
 export async function getServerVariantAssignment(
   experimentId: string | null,
-  slug: string
+  _slug: string
 ): Promise<ServerVariantAssignment | null> {
   if (!experimentId) {
     return {

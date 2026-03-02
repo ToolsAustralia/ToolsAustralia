@@ -13,7 +13,6 @@ import { ensureIndexesOnce } from "@/utils/database/ensure-indexes";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import { calculateSubscriptionEntries } from "@/utils/payment/subscription-entries-calculator";
-import Promo from "@/models/Promo";
 import { createUserFromPaymentMetadata, shouldCreateAccountFromMetadata } from "@/utils/payment/account-manager";
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 import { handlePaymentCancellation } from "@/utils/payment/payment-cleanup";
@@ -805,12 +804,12 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
   const staticEntriesCount = parseInt(paymentIntent.metadata.staticEntriesCount || "0");
   
   let finalEntriesCount: number;
-  let entriesSource: string;
+  let _entriesSource: string;
   
   if (calculatedEntriesCount > 0) {
     // Use calculated entries (from dynamic calculation)
     finalEntriesCount = calculatedEntriesCount;
-    entriesSource = "calculated";
+    _entriesSource = "calculated";
     webhookLog(
       "info",
       `✅ Using calculated upsell entries: ${finalEntriesCount} (package: ${upsellPackage.entriesCount}, static: ${staticEntriesCount})`
@@ -818,7 +817,7 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
   } else if (staticEntriesCount > 0) {
     // Fallback to static entries from metadata
     finalEntriesCount = staticEntriesCount;
-    entriesSource = "static-metadata";
+    _entriesSource = "static-metadata";
     webhookLog(
       "info",
       `ℹ️ Using static entries from metadata: ${finalEntriesCount} (package fallback: ${upsellPackage.entriesCount})`
@@ -826,7 +825,7 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
   } else {
     // Final fallback to package static value (backward compatibility)
     finalEntriesCount = upsellPackage.entriesCount;
-    entriesSource = "package-static";
+    _entriesSource = "package-static";
     webhookLog(
       "info",
       `⚠️ Using package static entries (backward compatibility): ${finalEntriesCount}`
@@ -1309,7 +1308,7 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
         if (packageData) {
           packageName = packageData.name || packageName;
         }
-      } catch (error) {
+      } catch {
         webhookLog("warn", `Could not fetch package name for ${packageId}, using default`);
       }
     }
@@ -2578,7 +2577,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         if (packageData) {
           packageName = packageData.name || packageName;
         }
-      } catch (error) {
+      } catch {
         webhookLog("warn", `Could not fetch package name for ${packageId}, using default`);
       }
 
@@ -3876,7 +3875,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 /**
  * Handle charge refund updated event (when refund status changes)
  */
-async function handleChargeRefundUpdated(refund: Stripe.Refund) {
+async function _handleChargeRefundUpdated(refund: Stripe.Refund) {
   try {
     webhookLog("info", `Processing charge refund updated: ${refund.id}, status: ${refund.status}`);
 
@@ -4039,7 +4038,7 @@ async function handleChargeDisputeClosed(dispute: Stripe.Dispute) {
  * Handle payment intent canceled (payment canceled before completion)
  * Just cleanup - no refund needed as payment never completed
  */
-async function handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
+async function _handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
   try {
     webhookLog("info", `Payment intent canceled: ${paymentIntent.id}`);
     

@@ -14,6 +14,12 @@ const eslintConfig = [
   {
     ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts"],
   },
+  {
+    rules: {
+      // Allow unused vars/args prefixed with _ for intentional placeholders (API signatures, props)
+      "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    },
+  },
 ];
 
 export default eslintConfig;

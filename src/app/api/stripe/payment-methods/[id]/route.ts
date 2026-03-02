@@ -39,7 +39,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // Detach payment method from Stripe customer
     try {
       await stripe.paymentMethods.detach(paymentMethodId);
-    } catch (stripeError) {
+    } catch {
       // console.warn(`Warning: Could not detach payment method from Stripe: ${stripeError}`);
       // Continue with deletion even if Stripe detachment fails
     }

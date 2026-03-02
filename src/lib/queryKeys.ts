@@ -120,6 +120,7 @@ export const queryKeys = {
     users: ["admin", "users"] as const,
     orders: ["admin", "orders"] as const,
     analytics: ["admin", "analytics"] as const,
+    promoAnalytics: (params: Record<string, string>) => ["admin", "promo-analytics", params] as const,
     products: ["admin", "products"] as const,
     miniDraws: ["admin", "mini-draws"] as const,
     metrics: {

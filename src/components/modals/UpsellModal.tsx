@@ -381,7 +381,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     } else {
       setIsVisible(false);
     }
-  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice, defaultPaymentMethod]);
+  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice, defaultPaymentMethod]); // eslint-disable-line react-hooks/exhaustive-deps -- userContext/userData omitted to avoid visibility flicker
 
   // Countdown timer for urgency - TODO: Implement countdown timer
   // useEffect(() => {

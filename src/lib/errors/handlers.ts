@@ -4,7 +4,7 @@
 
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { MetricsError, AggregationError, ValidationError } from "./index";
+import { MetricsError, ValidationError } from "./index";
 
 /**
  * Handle API errors and return appropriate HTTP responses

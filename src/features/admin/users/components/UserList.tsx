@@ -11,8 +11,6 @@ import {
   ChevronsRight,
   ArrowUp,
   ArrowDown,
-  Trophy,
-  Gift,
   AlertTriangle,
   Users,
 } from "lucide-react";

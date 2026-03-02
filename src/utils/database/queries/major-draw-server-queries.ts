@@ -8,7 +8,6 @@
 
 import { createCachedQuery } from "./server-queries";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
-import { IMajorDraw } from "@/models/MajorDraw";
 
 /**
  * Interface for major draw data returned from server queries

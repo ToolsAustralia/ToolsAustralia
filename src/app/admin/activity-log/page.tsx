@@ -17,7 +17,6 @@ import {
   ChevronRight,
   ArrowLeft,
 } from "lucide-react";
-import { AdminUser } from "@/types/admin";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 
 interface ActivityLogItem {

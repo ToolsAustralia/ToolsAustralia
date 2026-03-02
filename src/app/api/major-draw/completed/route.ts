@@ -91,7 +91,7 @@ export async function GET() {
     };
 
     // Helper to convert ObjectId to string
-    const toIdString = (id: Types.ObjectId | string | undefined): string => {
+    const _toIdString = (id: Types.ObjectId | string | undefined): string => {
       if (!id) return "";
       if (id instanceof Types.ObjectId) return id.toString();
       if (typeof id === "string") return id;

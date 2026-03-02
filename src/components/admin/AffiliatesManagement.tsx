@@ -1,14 +1,11 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   Search,
   Plus,
   Eye,
-  DollarSign,
   Users,
-  CheckCircle,
-  XCircle,
   Copy,
   Check,
   AlertTriangle,
@@ -69,6 +66,7 @@ export default function AffiliatesManagement() {
 
   React.useEffect(() => {
     fetchAffiliates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchAffiliates is defined below, adding would cause circular dep
   }, [page, debouncedSearch]);
 
   const fetchAffiliates = async () => {

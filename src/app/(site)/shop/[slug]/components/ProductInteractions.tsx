@@ -30,7 +30,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   const { data: session } = useSession();
   const { trackAddToCart } = usePixelTracking();
   const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
-  const { isAuthenticated } = useUserContext();
+  const { isAuthenticated: _isAuthenticated } = useUserContext();
 
   const handleQuantityChange = (change: number) => {
     setQuantity(Math.max(1, Math.min(product.stock || 999, quantity + change)));

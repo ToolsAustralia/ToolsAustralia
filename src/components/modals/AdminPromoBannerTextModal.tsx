@@ -25,7 +25,7 @@ import type {
   PromoBannerTextRecurrencePattern,
 } from "@/types/admin";
 import DateRangeCalendar from "@/components/admin/DateRangeCalendar";
-import { convertUTCToAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
+import { createAESTDateAsUTC } from "@/utils/common/timezone";
 
 interface AdminPromoBannerTextModalProps {
   isOpen: boolean;

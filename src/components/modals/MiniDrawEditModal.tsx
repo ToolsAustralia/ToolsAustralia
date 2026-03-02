@@ -13,7 +13,6 @@ import {
   ModalContent,
   ModalHeader,
   Select,
-  Textarea,
 } from "./ui";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 
@@ -86,7 +85,10 @@ export default function MiniDrawEditModal({
   const [formState, setFormState] = useState<MiniDrawFormState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const prizeImages = formState?.prize.images ?? [];
+  const prizeImages = useMemo(
+    () => formState?.prize.images ?? [],
+    [formState?.prize?.images]
+  );
   const disableConfigFields = miniDraw?.configurationLocked ?? false;
 
   useEffect(() => {

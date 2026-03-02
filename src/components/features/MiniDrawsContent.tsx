@@ -48,7 +48,6 @@ interface MiniDrawsContentProps {
 }
 
 export default function MiniDrawsContent({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   initialMiniDraws: _initialMiniDraws,
   totalMiniDraws: initialTotalMiniDraws,
 }: MiniDrawsContentProps) {

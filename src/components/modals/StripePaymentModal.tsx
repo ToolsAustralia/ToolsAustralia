@@ -78,7 +78,7 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [stripeInstance, setStripeInstance] = useState<Stripe | null>(null);
   // State for upgrade info - dynamically updated from API response and rendered in payment summary (lines 402-432)
-  const [currentUpgradeInfo, setCurrentUpgradeInfo] = useState(upgradeInfo);
+  const [_currentUpgradeInfo, setCurrentUpgradeInfo] = useState(upgradeInfo);
 
   React.useEffect(() => {
     stripePromise.then((stripe) => setStripeInstance(stripe));

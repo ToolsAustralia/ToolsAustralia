@@ -34,11 +34,11 @@ export default function PromoHero({
   const { openEntryFlow } = useMajorDrawEntryCta();
   
   // Get variant config from context
-  const { experimentId, variantId, variantConfig, isLoading: isVariantLoading } = useVariantContext();
+  const { experimentId, variantId, variantConfig, isLoading: _isVariantLoading } = useVariantContext();
   const { trackEvent } = useExperimentTracking();
 
   // Use initial data if available, otherwise fall back to fetched data
-  const promo = initialPromo || activePromo;
+  const _promo = initialPromo || activePromo;
   const majorDraw = initialMajorDraw || currentDraw;
 
   // Get resolved multiplier (Active Promo > Alternating > Default 10x for display)

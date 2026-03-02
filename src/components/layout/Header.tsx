@@ -42,7 +42,6 @@ import {
   Trash2,
   Plus,
   Minus,
-  Star,
   ChevronDown,
   Clock,
 } from "lucide-react";

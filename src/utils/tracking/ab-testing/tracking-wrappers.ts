@@ -2,7 +2,7 @@ import { trackFacebookEvent } from "@/components/FacebookPixel";
 import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
 import { sendFacebookEvent, type FacebookEvent } from "@/lib/facebook";
-import { enhanceFacebookEvent, enhanceTikTokEvent, enhanceKlaviyoEvent } from "./pixel-integration";
+import { enhanceFacebookEvent } from "./pixel-integration";
 import { attachExperimentMetadata } from "./experiment-metadata";
 
 /**

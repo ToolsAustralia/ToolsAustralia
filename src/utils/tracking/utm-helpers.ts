@@ -1,11 +1,10 @@
 /**
  * UTM Parameter Helper Utilities
  *
- * Provides utility functions for extracting UTM parameters from URLs.
- * Works for both client-side (URL string) and server-side (URLSearchParams) usage.
+ * Extracts UTM parameters from URLs or URLSearchParams.
+ * Used by utm-storage, register API, promo tracking, and Facebook CAPI.
  *
- * @author Senior Full-Stack Developer
- * @version 1.0.0
+ * @see docs/UTM_ATTRIBUTION.md
  */
 
 import type { UTMParams } from "@/types/tracking";
@@ -66,7 +65,7 @@ export function extractUTMParams(urlOrParams: string | URLSearchParams): UTMPara
     if (utmCampaign) params.utm_campaign = utmCampaign;
 
     return params;
-  } catch (error) {
+  } catch {
     // Return empty object on error (graceful degradation)
     if (process.env.NODE_ENV === "development") {
       // console.warn("Error extracting UTM parameters:", error);

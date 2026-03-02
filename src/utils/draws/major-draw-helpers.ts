@@ -41,7 +41,7 @@ export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Pro
     const { transitionMajorDrawsIfNeeded } = await import("./major-draw-transition-service");
     await transitionMajorDrawsIfNeeded();
     // Don't log or block on errors - debouncing will prevent excessive calls
-  } catch (error) {
+  } catch {
     // Silently continue - transition errors shouldn't block draw selection
     // Cron job serves as fallback for transitions
   }
@@ -67,9 +67,6 @@ export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Pro
 
   // Step 3: Check if payment was created before freeze but processed after
   if (currentDraw && paymentMetadata?.created && currentDraw.freezeEntriesAt) {
-    const paymentDate = new Date(paymentMetadata.created);
-    const freezeDate = currentDraw.freezeEntriesAt;
-
     // console.log(`🔍 Step 3 - Freeze period check:`);
     // console.log(`   Payment created: ${paymentDate.toISOString()}`);
     // console.log(`   Freeze starts at: ${freezeDate.toISOString()}`);

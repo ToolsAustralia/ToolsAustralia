@@ -4,8 +4,6 @@
  * Type definitions for daily aggregated user metrics.
  */
 
-import type { UserMetrics } from "./UserMetrics";
-
 export interface IDailyUserMetrics {
   date: Date;
   totalUsers: number;

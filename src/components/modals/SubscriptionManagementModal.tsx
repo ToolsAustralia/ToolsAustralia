@@ -17,7 +17,6 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
-import type { IUser } from "@/models/User";
 
 interface User {
   _id: string;
@@ -235,7 +234,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
 
   // Helper function to get Tradie subscription package for non-subscribers
-  const getTradiePackage = (): LocalMembershipPlan => {
+  const _getTradiePackage = (): LocalMembershipPlan => {
     const targetPackageId = "tradie-subscription";
     const packageData = subscriptionPackages.find((pkg) => pkg.id === targetPackageId);
 

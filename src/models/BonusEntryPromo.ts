@@ -1,5 +1,4 @@
 import mongoose, { Document, Schema } from "mongoose";
-import { convertUTCToAEST } from "@/utils/common/timezone";
 
 /**
  * Bonus Entry Promo Model

@@ -16,7 +16,6 @@ import {
   getSubscriptionBadgeConfig,
   getUserStatusBadgeConfig,
 } from "../utils/userHelpers";
-import type { StaticImageData } from "next/image";
 import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 
 interface UserRowProps {

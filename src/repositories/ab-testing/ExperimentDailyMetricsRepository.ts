@@ -211,5 +211,6 @@ export class ExperimentDailyMetricsRepository {
   }
 }
 
-export default new ExperimentDailyMetricsRepository();
+const experimentDailyMetricsRepository = new ExperimentDailyMetricsRepository();
+export default experimentDailyMetricsRepository;
 

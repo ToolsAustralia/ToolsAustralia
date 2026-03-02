@@ -25,7 +25,7 @@ const SUBSCRIPTION_PACKAGE_IDS = [
  * - packages: [{ packageId, packageName, activeCount, cancelledCount, pastDueCount, activeRevenue, pastDueRevenue }]
  * - summary: { totalActiveCount, totalPastDueCount, totalActiveRevenue, totalPastDueRevenue }
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     await connectDB();
 

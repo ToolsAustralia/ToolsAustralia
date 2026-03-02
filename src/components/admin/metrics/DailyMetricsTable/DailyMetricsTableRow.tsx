@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { IDailyMetrics } from "@/types/metrics/DailyMetrics";
-import { formatCurrency, formatNumber, formatROAS, formatPercentage } from "@/utils/metrics/formatters";
+import { formatCurrency, formatNumber, formatROAS } from "@/utils/metrics/formatters";
 import { formatInTimeZone } from "date-fns-tz";
 
 const AEST_TIMEZONE = "Australia/Sydney";

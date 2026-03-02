@@ -331,7 +331,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
     }
   };
 
-  const handleUpdateSubscriptionPaymentMethod = async (paymentMethodId: string) => {
+  const _handleUpdateSubscriptionPaymentMethod = async (paymentMethodId: string) => {
     if (!hasActiveSubscription) {
       showToast({
         type: "error",
@@ -501,7 +501,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
             
             return uniquePaymentMethods.map((paymentMethod) => {
             const isSubscriptionPaymentMethod = subscriptionPaymentMethodId === paymentMethod.paymentMethodId;
-            const isUpdating = updatingSubscriptionId === paymentMethod.paymentMethodId;
+            const _isUpdating = updatingSubscriptionId === paymentMethod.paymentMethodId;
 
             return (
               <div

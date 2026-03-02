@@ -295,7 +295,7 @@ export function getRecoveryStrategy(error: unknown): RecoveryStrategy {
  * Check if state should be preserved for this error
  * State should ALWAYS be preserved unless recovery explicitly requires clearing
  */
-export function shouldPreserveState(error: unknown): boolean {
+export function shouldPreserveState(_error: unknown): boolean {
   // Always preserve state - only clear if recovery explicitly requires it
   // Recovery utilities will handle clearing state when creating new SetupIntent/PaymentIntent
   return true;

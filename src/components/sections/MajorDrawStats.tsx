@@ -19,7 +19,7 @@ interface MajorDrawStatsProps {
 }
 
 const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
-  const { data: completedDrawsData, isLoading, error } = useCompletedMajorDraws();
+  const { data: completedDrawsData, isLoading: _isLoading, error } = useCompletedMajorDraws();
 
   const stats = useMemo((): MajorDrawStats => {
     if (!completedDrawsData?.draws) {

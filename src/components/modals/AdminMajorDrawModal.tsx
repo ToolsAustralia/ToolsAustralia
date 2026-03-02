@@ -7,7 +7,6 @@ import {
   ModalHeader,
   ModalContent,
   Input,
-  Textarea,
   Button,
   DateTimePicker,
   FormSection,

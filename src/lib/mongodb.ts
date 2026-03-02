@@ -98,7 +98,7 @@ async function checkConnectionHealth(conn: mongoose.Connection): Promise<boolean
     if (!conn.db) return false;
     await conn.db.admin().ping();
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }

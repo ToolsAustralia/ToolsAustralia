@@ -47,7 +47,6 @@ import connectDB from "@/lib/mongodb";
 import type { InsightLevel } from "@/types/facebook-ads";
 
 const AEST_TIMEZONE = "Australia/Sydney";
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Simple in-memory cache for daily metrics

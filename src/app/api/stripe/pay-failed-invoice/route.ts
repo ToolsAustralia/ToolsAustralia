@@ -28,13 +28,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   getFailedInvoicePaymentData,
-  payInvoiceWithDefaultMethod,
   extractPaymentIntentFromInvoice,
 } from "@/utils/payment/failed-invoice-handler";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     await connectDB();
 

@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
 
       klaviyo.trackEventBackground(downgradeEvent);
       // console.log(`✅ Klaviyo downgrade scheduled event sent for user: ${user._id}`);
-    } catch (klaviyoError) {
+    } catch {
       // console.log(`⚠️ Klaviyo downgrade event failed: ${klaviyoError}`);
     }
 

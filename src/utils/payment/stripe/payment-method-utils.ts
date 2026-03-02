@@ -37,7 +37,7 @@ export async function attachPaymentMethodToCustomer(
     console.log(`✅ Attached payment method ${paymentMethodId} to customer ${customerId}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorCode = error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
+    const _errorCode = error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
 
     // Check if error is due to payment method being "consumed"
     if (

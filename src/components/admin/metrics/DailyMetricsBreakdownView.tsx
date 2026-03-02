@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React from "react";
 import { DailyMetricsBreakdownTable, type BreakdownItem } from "./DailyMetricsBreakdownTable";
 import { useDailyMetricsBreakdown } from "@/hooks/useDailyMetricsBreakdown";
 import { Skeleton } from "@/components/ui/skeleton";

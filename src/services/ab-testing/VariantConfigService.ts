@@ -1,5 +1,4 @@
 import { VariantConfig } from "@/models/ab-testing/Variant";
-import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 
 /**
  * Variant Config Service
@@ -194,5 +193,6 @@ export class VariantConfigService {
   }
 }
 
-export default new VariantConfigService();
+const variantConfigService = new VariantConfigService();
+export default variantConfigService;
 

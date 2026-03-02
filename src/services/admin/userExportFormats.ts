@@ -12,7 +12,7 @@ import { stringify } from "csv-stringify/sync";
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
 import type { TransformedUserData } from "./userExportTransformation";
-import { getDisplayName, type ExportFieldDefinition } from "./userExportFields";
+import { getDisplayName } from "./userExportFields";
 
 /**
  * Generate CSV file from transformed user data
@@ -48,20 +48,6 @@ export function generateCSVResponse(
       "Cache-Control": "no-cache",
     },
   });
-}
-
-/**
- * Calculate optimal column width based on content
- * 
- * @param value - Cell value
- * @param headerLength - Header length
- * @returns Column width in Excel units
- */
-function calculateColumnWidth(value: unknown, headerLength: number): number {
-  const valueLength = String(value || "").length;
-  // Take the max of header and value length, with some padding
-  // Excel column width is approximately character width * 1.2
-  return Math.max(headerLength, valueLength, 10) * 1.2 + 2;
 }
 
 /**

@@ -36,7 +36,7 @@ export async function verifyAffiliateToken(token: string) {
       username: string;
       name: string;
     };
-  } catch (error) {
+  } catch {
     return null;
   }
 }

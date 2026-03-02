@@ -280,8 +280,9 @@ export default function FacebookPixel({
   return (
     <>
       {/* Noscript fallback for users with JavaScript disabled */}
-      {/* Using img instead of Image component as this is a 1x1 tracking pixel that should not be optimized */}
+      {/* Using img - next/image does not work inside noscript, and 1x1 pixel should not be optimized */}
       <noscript>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           height="1"
           width="1"

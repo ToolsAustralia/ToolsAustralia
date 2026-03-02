@@ -20,7 +20,6 @@ import {
   Gift,
   X,
   ClipboardList,
-  XCircle,
   Ban,
   RefreshCw,
   PauseCircle,

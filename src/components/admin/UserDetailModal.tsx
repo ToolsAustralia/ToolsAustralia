@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
+  XCircle,
   Mail,
   Phone,
   MapPin,
@@ -21,7 +22,6 @@ import {
   Clock,
   Send,
   Key,
-  MessageSquare,
   Gift,
   Trash2,
 } from "lucide-react";
@@ -34,7 +34,12 @@ import { StaticImageData } from "next/image";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { membershipPackages, getPackageById } from "@/data/membershipPackages";
 import { AdminUserUpdatePayload, UserActionType } from "@/types/admin";
-import { useAdminUpdateUser, useAdminUserActions, useAdminUserDetail } from "@/hooks/queries/useAdminQueries";
+import {
+  useAdminCancelSubscription,
+  useAdminUpdateUser,
+  useAdminUserActions,
+  useAdminUserDetail,
+} from "@/hooks/queries/useAdminQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
@@ -298,12 +303,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const { data: user, isLoading, error } = useAdminUserDetail(userId || "");
   const userActions = useAdminUserActions();
   const updateUser = useAdminUpdateUser();
+  const cancelSubscriptionMutation = useAdminCancelSubscription();
   const [activeEditTab, setActiveEditTab] = useState<TabType | null>(null);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
   const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
   const [adminNewPassword, setAdminNewPassword] = useState("");
+  const [showCancelSubscriptionModal, setShowCancelSubscriptionModal] = useState(false);
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
   const rewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
   const referralHistory = user?.referral?.history ?? [];
@@ -1862,13 +1870,28 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             View the active membership plan, renewal schedule, and accumulated entries.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveEditTab("subscription")}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-                        >
-                          Edit Subscription
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* Show for active OR past_due: past_due has isActive=false but still has Stripe sub to cancel */}
+                          {(user.subscription?.isActive || user.subscription?.status === "past_due") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCancelAtPeriodEnd(true);
+                                setShowCancelSubscriptionModal(true);
+                              }}
+                              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              Cancel Subscription
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setActiveEditTab("subscription")}
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          >
+                            Edit Subscription
+                          </button>
+                        </div>
                       </div>
 
                       {user.subscription ? (
@@ -3128,6 +3151,103 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 className="px-4 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-400 text-sm font-semibold text-white shadow-sm hover:from-yellow-600 hover:to-yellow-500 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {actionLoading === "admin_set_password" ? "Saving..." : "Save Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Subscription Modal */}
+      {showCancelSubscriptionModal && user?.id && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}
+        >
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowCancelSubscriptionModal(false)}
+          />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <XCircle className="w-5 h-5 text-red-600" />
+                <h3 className="text-lg font-bold text-gray-900">Cancel Subscription</h3>
+              </div>
+              <button
+                onClick={() => setShowCancelSubscriptionModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 sm:p-6 space-y-4">
+              <p className="text-sm text-gray-700">
+                How would you like to cancel this user&apos;s subscription?
+              </p>
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 cursor-pointer has-[:checked]:border-red-300 has-[:checked]:bg-red-50/50">
+                  <input
+                    type="radio"
+                    name="cancelOption"
+                    checked={cancelAtPeriodEnd}
+                    onChange={() => setCancelAtPeriodEnd(true)}
+                    className="mt-1 text-red-600"
+                  />
+                  <div>
+                    <span className="font-medium text-gray-900">Cancel at end of billing period</span>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      User keeps access until the current period ends.
+                    </p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 cursor-pointer has-[:checked]:border-red-300 has-[:checked]:bg-red-50/50">
+                  <input
+                    type="radio"
+                    name="cancelOption"
+                    checked={!cancelAtPeriodEnd}
+                    onChange={() => setCancelAtPeriodEnd(false)}
+                    className="mt-1 text-red-600"
+                  />
+                  <div>
+                    <span className="font-medium text-gray-900">Cancel immediately</span>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Access revoked now. No refund for unused time.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div className="flex gap-3 p-4 sm:p-6 pt-0">
+              <button
+                type="button"
+                onClick={() => setShowCancelSubscriptionModal(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                disabled={cancelSubscriptionMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await cancelSubscriptionMutation.mutateAsync({
+                      userId: user.id,
+                      cancelAtPeriodEnd,
+                    });
+                    setShowCancelSubscriptionModal(false);
+                    alert(
+                      cancelAtPeriodEnd
+                        ? "Subscription will be canceled at the end of the billing period."
+                        : "Subscription canceled successfully."
+                    );
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : "Failed to cancel subscription.");
+                  }
+                }}
+                disabled={cancelSubscriptionMutation.isPending}
+                className="flex-1 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                {cancelSubscriptionMutation.isPending ? "Canceling..." : "Confirm"}
               </button>
             </div>
           </div>

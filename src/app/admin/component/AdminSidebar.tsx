@@ -52,6 +52,11 @@ const adminTabs = [
     label: "Facebook Ads",
     icon: TrendingUp,
   },
+  {
+    id: "promo-analytics",
+    label: "Page Analytics",
+    icon: BarChart3,
+  },
   // Temporarily hidden - no content yet
   // {
   //   id: "analytics",
@@ -148,7 +153,7 @@ const adminTabs = [
 ];
 
 export default function AdminSidebar({
-  selectedTab,
+  selectedTab: _selectedTab,
   onNavigateToSite,
   user,
   isMobile = false,

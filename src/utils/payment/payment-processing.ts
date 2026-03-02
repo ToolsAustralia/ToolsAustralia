@@ -9,7 +9,6 @@ import path from "path";
 import { klaviyo } from "@/lib/klaviyo";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import {
-  createSubscriptionStartedEvent,
   createOneTimePackagePurchasedEvent,
   createMiniDrawPurchasedEvent,
   createUpsellAcceptedEvent,
@@ -98,6 +97,12 @@ interface UserDocument {
     autoRenew?: boolean;
     status?: string;
     lastMonthAccumulatedEntries?: number;
+  };
+  signupAttribution?: {
+    promotionPageType: "evergreen" | "toolset";
+    promotionSlug: string;
+    visitedAt: Date;
+    anonymousId?: string;
   };
   upsellPurchases?: Array<{
     offerId: string;
@@ -273,11 +278,25 @@ async function processPaymentBenefitsInternal(
         //   userId: user._id.toString(),
         // });
 
+        // Promotion attribution for analytics (from User.signupAttribution)
+        const promoAttr =
+          user.signupAttribution?.promotionSlug ?
+            {
+              promotionPageType: user.signupAttribution.promotionPageType,
+              promotionSlug: user.signupAttribution.promotionSlug,
+              attributionSource: "signup" as const,
+              ...(user.signupAttribution.utmSource && { utmSource: user.signupAttribution.utmSource }),
+              ...(user.signupAttribution.utmMedium && { utmMedium: user.signupAttribution.utmMedium }),
+              ...(user.signupAttribution.utmCampaign && { utmCampaign: user.signupAttribution.utmCampaign }),
+            }
+          : undefined;
+
         const paymentEventData = {
           entries: packageData.entries,
           points: packageData.points,
           price: packageData.price,
           ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
+          ...(promoAttr && promoAttr),
         };
 
         // Get user's active experiment assignment (non-blocking - don't fail if this errors)
@@ -1362,7 +1381,7 @@ function trackKlaviyoEvent(
   },
   paymentIntentId: string,
   skipInvoice: boolean = false,
-  billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
+  _billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
@@ -1656,8 +1675,7 @@ async function handleUpsellPackage(
 
   // Note: Upsells typically don't include partner discount access in current implementation
   // If they do in the future, add logic here similar to one-time packages
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _paymentIntentId = paymentIntentId; // Reserved for future use when upsells include partner access
+  void paymentIntentId; // Reserved for future use when upsells include partner access
 }
 
 /**

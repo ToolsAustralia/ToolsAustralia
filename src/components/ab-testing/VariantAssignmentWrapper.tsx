@@ -30,7 +30,7 @@ export function VariantAssignmentWrapper({
   // Use initial values if available and hook hasn't loaded yet, otherwise use hook values
   const finalVariantId = isLoading && initialVariantId !== undefined ? initialVariantId : variantId;
   const finalVariantConfig = isLoading && initialVariantConfig !== undefined ? initialVariantConfig : variantConfig;
-  const finalAnonymousId = isLoading && initialAnonymousId !== undefined ? initialAnonymousId : anonymousId;
+  const _finalAnonymousId = isLoading && initialAnonymousId !== undefined ? initialAnonymousId : anonymousId;
 
   return (
     <VariantProvider

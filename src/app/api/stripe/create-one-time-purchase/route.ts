@@ -12,7 +12,6 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // ✅ REMOVED: processPaymentBenefits and isPaymentProcessed imports
 // Fallback processing removed to prevent duplicate Facebook tracking
 // Webhook is now the single source of truth for payment processing
-import Promo from "@/models/Promo";
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
@@ -22,7 +21,6 @@ import mongoose from "mongoose";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
-import { getBaseUrl } from "@/utils/url/get-base-url";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
 const createOneTimePurchaseSchema = z.object({
@@ -405,15 +403,15 @@ export async function POST(request: NextRequest) {
                 console.log(`✅ [A/B Testing] Found assignment from cookie (for new user or fallback):`, experimentAssignment);
                 break;
               }
-            } catch (error) {
+            } catch {
               // Invalid cookie data, skip
               console.warn(`⚠️ [A/B Testing] Invalid assignment cookie: ${cookieName}`);
             }
           }
         }
-      } catch (error) {
+      } catch (_error) {
         // Silently fail - cookie fallback should not block payment creation
-        console.warn("Error checking assignment cookies:", error);
+        console.warn("Error checking assignment cookies:", _error);
       }
     }
     

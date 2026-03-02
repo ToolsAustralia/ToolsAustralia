@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { Calendar } from "lucide-react";
 import { WEBSITE_LAUNCH_DATE_AEST } from "@/utils/common/timezone";
 
 export type MetricsDateFilterMode = "month" | "custom" | "all-time";
@@ -30,7 +29,7 @@ export function MetricsDateFilter({
   onFilterModeChange,
   onCustomClick,
   className = "",
-  displayDate,
+  displayDate: _displayDate,
 }: MetricsDateFilterProps) {
   const modes: Array<{ value: MetricsDateFilterMode; label: string; shortLabel: string }> = [
     { value: "month", label: "Month", shortLabel: "Month" },

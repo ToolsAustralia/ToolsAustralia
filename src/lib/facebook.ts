@@ -412,7 +412,7 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
           }
         }
       }
-    } catch (parseError) {
+    } catch {
       // Response parsing failed, but request was successful
       if (process.env.NODE_ENV === "development") {
         // console.warn("⚠️ Failed to parse Facebook CAPI response:", parseError);

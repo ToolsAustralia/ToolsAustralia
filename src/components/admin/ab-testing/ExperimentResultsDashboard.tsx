@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { BarChart3, TrendingUp, TrendingDown, Target, Award, AlertCircle, CheckCircle2 } from "lucide-react";
+import { BarChart3, Target, Award, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 interface ExperimentResultsDashboardProps {
   experimentId: string;
@@ -56,7 +56,7 @@ interface ExperimentResults {
  * Displays comprehensive statistical analysis and metrics for A/B testing experiments
  */
 export default function ExperimentResultsDashboard({ experimentId }: ExperimentResultsDashboardProps) {
-  const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({});
+  const [dateRange, _setDateRange] = useState<{ start?: Date; end?: Date }>({});
 
   // Fetch analytics data
   const { data: analyticsData, isLoading } = useQuery<ExperimentResults>({

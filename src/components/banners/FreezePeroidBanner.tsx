@@ -31,7 +31,7 @@ interface FreezePeriodBannerProps {
 export default function FreezePeriodBanner({
   nextDrawName,
   timeUntilDraw: initialTimeUntilDraw,
-  status,
+  status: _status,
   className = "",
 }: FreezePeriodBannerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTimeUntilDraw);

@@ -163,7 +163,7 @@ export function checkErrorReportRateLimit(
  */
 export function getErrorReportRateLimitInfo(
   userId: string | undefined,
-  request: NextRequest
+  _request: NextRequest
 ): {
   maxRequests: number;
   windowMinutes: number;

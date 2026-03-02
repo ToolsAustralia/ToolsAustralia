@@ -60,7 +60,7 @@ export default function ProductViewTracking({ product }: ProductViewTrackingProp
     if (process.env.NODE_ENV === "development") {
       console.log(`📘 Facebook Pixel: ViewContent tracked for product ${product.name}`);
     }
-  }, [product, trackViewContent, isAuthenticated, pathname]);
+  }, [product, trackViewContent, trackKlaviyoViewContent, isAuthenticated, pathname]);
 
   // This component doesn't render anything
   return null;

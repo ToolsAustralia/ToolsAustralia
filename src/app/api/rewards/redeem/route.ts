@@ -99,7 +99,7 @@ async function addToMajorDraw(
       // Save the major draw
       await activeMajorDraw.save();
 
-      const totalEntries =
+      const _totalEntries =
         activeMajorDraw.entries.reduce((sum: number, entry: { totalEntries: number }) => sum + entry.totalEntries, 0) ||
         0;
 

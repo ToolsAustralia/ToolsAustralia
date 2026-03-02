@@ -1,11 +1,15 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { usePromoPageTracking } from "@/hooks/usePromoPageTracking";
 
 /**
- * Wraps promotions layout content and applies dark mode when on Ryobi slug pages.
- * Uses pathname-based detection for immediate application (no theme store lag).
- * Enables dark: Tailwind variants for neon green (#E0FF00) on dark backgrounds.
+ * Wraps promotions layout content.
+ *
+ * - Dark mode on Ryobi slug pages (pathname-based)
+ * - usePromoPageTracking() for visit analytics and attribution storage
+ *
+ * @see docs/PROMO_PAGE_ANALYTICS.md
  */
 export default function PromotionsLayoutShell({
   children,
@@ -13,6 +17,7 @@ export default function PromotionsLayoutShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  usePromoPageTracking();
   const isRyobiPage =
     pathname === "/promotions/ryobi-sidchrome" ||
     pathname === "/promotions/ryobi-milwaukee" ||

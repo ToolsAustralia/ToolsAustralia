@@ -164,5 +164,6 @@ export class VariantAssignmentRepository {
   }
 }
 
-export default new VariantAssignmentRepository();
+const variantAssignmentRepository = new VariantAssignmentRepository();
+export default variantAssignmentRepository;
 

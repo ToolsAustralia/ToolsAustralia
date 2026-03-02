@@ -143,7 +143,7 @@ const StripeCardForm = React.forwardRef<
                 reportable: true,
                 errorContext,
               });
-            } catch (error) {
+            } catch {
               // Fallback if context collection fails
               showToast({
                 type: "error",

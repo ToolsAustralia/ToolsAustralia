@@ -2,7 +2,6 @@
 
 import React, { memo } from "react";
 import { MetricCard } from "../metrics/shared/MetricCard";
-import { TrendIndicator } from "../metrics/shared/TrendIndicator";
 import type { LucideIcon } from "lucide-react";
 import type { TrendData } from "@/types/admin/EnhancedMetrics";
 

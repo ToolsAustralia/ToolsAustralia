@@ -12,7 +12,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { checkErrorReportRateLimit } from "@/lib/rate-limiting/error-reports";
-import { generateDeduplicationHashServer, generateCategoryAwareDeduplicationHash } from "@/utils/error-reporting/deduplication";
+import { generateCategoryAwareDeduplicationHash } from "@/utils/error-reporting/deduplication";
 import { ErrorContext } from "@/types/error-reporting";
 import crypto from "crypto";
 

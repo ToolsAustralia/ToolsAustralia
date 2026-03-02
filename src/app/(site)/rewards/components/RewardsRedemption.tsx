@@ -150,7 +150,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
         promoMultiplier: pkg.promoMultiplier,
       })),
     ],
-    [allOneTimePackages, miniDrawPackages, hasAccess, currentUserPoints, user.rewardsPoints, userMajorDrawStats]
+    [allOneTimePackages, miniDrawPackages, hasAccess, currentUserPoints, user.rewardsPoints]
   );
 
   // Infinite scrolling effect
