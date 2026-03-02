@@ -80,12 +80,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const summary = await PromoAnalyticsService.getAggregatedMetrics(rangeStart, rangeEnd);
+    const [summary, utmSummary] = await Promise.all([
+      PromoAnalyticsService.getAggregatedMetrics(rangeStart, rangeEnd),
+      PromoAnalyticsService.getAggregatedByUTMSource(rangeStart, rangeEnd),
+    ]);
 
     return NextResponse.json({
       success: true,
       data: {
         ...summary,
+        byUTMSource: utmSummary.byUTMSource,
         dateRange: { start: rangeStart.toISOString(), end: rangeEnd.toISOString() },
       },
     });
