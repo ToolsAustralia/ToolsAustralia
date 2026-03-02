@@ -149,8 +149,8 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
         });
 
         if (response.ok) {
-          const result = await response.json();
-          // console.log("✅ Invoice finalized:", result);
+          const _result = await response.json();
+          // console.log("✅ Invoice finalized:", _result);
           setInvoiceFinalized(true);
 
           // Clear timeout if it exists

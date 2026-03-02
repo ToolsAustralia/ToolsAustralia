@@ -3,7 +3,6 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
 import { apiGet } from "@/lib/queries";
 import type { IDailyUserMetrics } from "@/types/metrics/DailyUserMetrics";
 

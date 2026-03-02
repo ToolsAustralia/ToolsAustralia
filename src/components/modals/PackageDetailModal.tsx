@@ -3,7 +3,7 @@
 import React from "react";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
-import { Check, Ticket, Percent, Handshake, ChevronRight } from "lucide-react";
+import { Check, Ticket, Handshake, ChevronRight } from "lucide-react";
 
 /** Package data shape used by badges and modals */
 export interface PackageDetailModalPackageData {
@@ -81,7 +81,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
   const entriesPerMonth = packageData.entriesPerMonth ?? 0;
   const totalEntries = packageData.totalEntries ?? 0;
   const partnerDays = packageData.partnerDiscountDays ?? 0;
-  const shopDiscount = packageData.shopDiscountPercent ?? 0;
+  const _shopDiscount = packageData.shopDiscountPercent ?? 0;
   const features = packageData.features ?? [];
 
   const chartPackageId = toChartPackageId(packageData.name, packageData._id);

@@ -24,8 +24,8 @@ export interface StatePreservationStrategy {
  * State should ALWAYS be preserved unless recovery explicitly requires clearing
  */
 export function preservePaymentState(
-  error: unknown,
-  currentState: Partial<PaymentState>
+  _error: unknown,
+  _currentState: Partial<PaymentState>
 ): StatePreservationStrategy {
   // Always preserve state by default
   // Only clear if recovery explicitly requires it (handled by recovery utilities)

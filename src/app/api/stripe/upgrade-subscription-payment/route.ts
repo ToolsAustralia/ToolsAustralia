@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const validatedData = upgradeSubscriptionPaymentSchema.parse(body);
     // console.log(`✅ Data validated:`, validatedData);
 
-    const { newPackageId } = validatedData;
+    const { newPackageId: _newPackageId } = validatedData;
     // console.log(`📦 Upgrading to package: ${newPackageId}`);
 
     // Get the existing user
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
     const latestInvoice = updatedSubscription.latest_invoice as Stripe.Invoice;
     const invoiceWithPaymentIntent = latestInvoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent };
     const paymentIntent = invoiceWithPaymentIntent?.payment_intent as Stripe.PaymentIntent;
-    const invoiceWithPaid = latestInvoice as Stripe.Invoice & { paid?: boolean };
+    const _invoiceWithPaid = latestInvoice as Stripe.Invoice & { paid?: boolean };
     // console.log(`💰 Invoice payment status: ${invoiceWithPaid.paid ? "Paid" : "Unpaid"}`);
 
     // console.log(`💳 Latest invoice:`, {

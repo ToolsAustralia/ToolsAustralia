@@ -505,7 +505,7 @@ export async function sendPasswordResetEmail({
   to,
   userName,
   resetUrl,
-  resetCode,
+  resetCode: _resetCode,
 }: {
   to: string;
   userName?: string;
@@ -772,12 +772,12 @@ export function checkFormSubmissionRateLimit(identifier: string): { allowed: boo
   }
 
   const timeSinceLastSubmission = now - current.lastSubmissionTime;
-  const minutesSinceLastSubmission = Math.floor(timeSinceLastSubmission / (60 * 1000));
+  const _minutesSinceLastSubmission = Math.floor(timeSinceLastSubmission / (60 * 1000));
 
   if (timeSinceLastSubmission < FORM_SUBMISSION_RATE_LIMIT_WINDOW) {
     // Rate limited - calculate retry after time in seconds
     const retryAfter = Math.ceil((FORM_SUBMISSION_RATE_LIMIT_WINDOW - timeSinceLastSubmission) / 1000);
-    const retryAfterMinutes = Math.ceil(retryAfter / 60);
+    const _retryAfterMinutes = Math.ceil(retryAfter / 60);
     // console.warn(
     //   `🚫 Rate limit BLOCKED for ${identifier} - Last submission was ${minutesSinceLastSubmission} minute(s) ago. Retry after ${retryAfterMinutes} minute(s) (${retryAfter} seconds)`
     // );

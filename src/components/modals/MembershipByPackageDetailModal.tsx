@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Users, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, User } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
-import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
+import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useAdminUsers } from "@/hooks/queries/useAdminQueries";
 import type { UserFilters } from "@/types/admin";
 import { format } from "date-fns";
@@ -29,7 +29,7 @@ const statusLabels: Record<StatusFilter, string> = {
 export default function MembershipByPackageDetailModal({
   isOpen,
   onClose,
-  packageId,
+  packageId: _packageId,
   packageName,
   initialStatusFilter,
   onUserClick,

@@ -254,8 +254,7 @@ export function canAccessPartnerDiscounts(user: IUser, brand?: string): boolean 
   // If brand filtering is needed, you can add brand-specific logic here
   // For now, all active access grants access to all partner discounts
   // Future enhancement: filter by brand
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _brand = brand; // Placeholder for future brand-specific logic
+  void brand; // Placeholder for future brand-specific logic
   return true;
 }
 

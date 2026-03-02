@@ -207,8 +207,7 @@ export default function ProductCategories({
     const container = scrollContainerRef.current;
     const scrollLeft = container.scrollLeft;
     const scrollWidth = container.scrollWidth;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _ = container.clientWidth; // clientWidth calculated but not used in this context
+    const _clientWidth = container.clientWidth; // clientWidth calculated but not used in this context
 
     // Calculate the width of one set of brands
     const oneSetWidth = scrollWidth / 3;

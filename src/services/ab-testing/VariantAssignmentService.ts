@@ -171,5 +171,6 @@ export class VariantAssignmentService {
   }
 }
 
-export default new VariantAssignmentService();
+const variantAssignmentService = new VariantAssignmentService();
+export default variantAssignmentService;
 

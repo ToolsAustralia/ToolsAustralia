@@ -2,7 +2,6 @@
 
 import React from "react";
 import type { MonthlyComparisonData } from "@/types/metrics/MonthlyComparison";
-import { format } from "date-fns";
 
 export interface MetricsOverlayChartProps {
   data: MonthlyComparisonData;

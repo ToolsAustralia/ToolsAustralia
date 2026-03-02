@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
-  PromoBannerText,
   PromoBannerTextListResponse,
   PromoBannerTextResponse,
   CreatePromoBannerTextPayload,

@@ -8,11 +8,8 @@ import {
   Pause,
   Square,
   Eye,
-  Edit,
-  Trash2,
   Search,
   Filter,
-  Calendar,
   Target,
 } from "lucide-react";
 import { useExperiments, useActivateExperiment, usePauseExperiment, useEndExperiment } from "@/hooks/queries/useABTestingQueries";
@@ -31,7 +28,7 @@ export default function ABTestingManagement() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const queryClient = useQueryClient();
+  const _queryClient = useQueryClient();
 
   const { data: experimentsData, isLoading, error, refetch } = useExperiments({
     search: search || undefined,

@@ -770,3 +770,57 @@ export function useAdminUpdateUser() {
     },
   });
 }
+
+export interface AdminCancelSubscriptionResult {
+  cancelledImmediately: boolean;
+  subscriptionId: string;
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
+  endDate: string | null;
+  isPastDue: boolean;
+}
+
+/**
+ * Hook to cancel a user's subscription (admin only)
+ */
+export function useAdminCancelSubscription() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    AdminCancelSubscriptionResult,
+    Error,
+    { userId: string; cancelAtPeriodEnd?: boolean }
+  >({
+    mutationFn: async ({ userId, cancelAtPeriodEnd = true }) => {
+      const response = await fetch(`/api/admin/users/${userId}/cancel-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelAtPeriodEnd }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error || `Failed to cancel subscription: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || "Failed to cancel subscription");
+      }
+
+      return result.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "users", "detail", variables.userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "users", "list"],
+      });
+    },
+    onError: (error) => {
+      console.error("Admin cancel subscription failed:", error);
+    },
+  });
+}

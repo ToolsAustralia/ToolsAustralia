@@ -21,7 +21,7 @@ function hashIPAddress(ip: string): string {
 }
 
 import ErrorReport from "@/models/ErrorReport";
-import { generateDeduplicationHashServer, generateCategoryAwareDeduplicationHash } from "./deduplication";
+import { generateCategoryAwareDeduplicationHash } from "./deduplication";
 import { ErrorContext } from "@/types/error-reporting";
 import crypto from "crypto";
 

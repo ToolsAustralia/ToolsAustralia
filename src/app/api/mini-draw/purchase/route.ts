@@ -10,8 +10,6 @@ import { stripe } from "@/lib/stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 // Benefits are now granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
-import { getBaseUrl } from "@/utils/url/get-base-url";
-import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 const miniDrawPurchaseSchema = z.object({

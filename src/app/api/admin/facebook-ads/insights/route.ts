@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
-import { getStartOfTodayInAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
+import { getStartOfTodayInAEST } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import type {

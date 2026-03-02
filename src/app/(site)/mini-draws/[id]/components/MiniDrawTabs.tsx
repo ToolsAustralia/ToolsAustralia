@@ -45,15 +45,14 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
   const totalEntries = miniDraw.totalEntries ?? 0;
   const computedRemaining = Math.max(minimumEntries - totalEntries, 0);
   const entriesRemaining = miniDraw.entriesRemaining ?? computedRemaining;
-  const capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
+  const _capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
   const cycle = miniDraw.cycle ?? 1;
   const latestWinner = miniDraw.latestWinner;
   const winnerHistory = miniDraw.winnerHistory ?? [];
   const isCompleted = miniDraw.status === "completed";
   const isCancelled = miniDraw.status === "cancelled";
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
-  const brandMeta = getBrandMeta(miniDraw.brandId);
-  const brandLabel = brandMeta?.name ?? "Mini Draw";
+  const _brandLabel = getBrandMeta(miniDraw.brandId)?.name ?? "Mini Draw";
 
   return (
     <div className="mt-8 sm:mt-16 bg-gray-50 w-full">

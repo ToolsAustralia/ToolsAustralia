@@ -29,7 +29,7 @@ export class AnonymousIdService {
    * Reads existing cookie or creates new one if not present
    * Validates and regenerates if corrupted
    */
-  async getOrCreateAnonymousId(request: NextRequest): Promise<string> {
+  async getOrCreateAnonymousId(_request: NextRequest): Promise<string> {
     const cookieStore = await cookies();
     const existingId = cookieStore.get(this.COOKIE_NAME);
 
@@ -85,5 +85,6 @@ export class AnonymousIdService {
   }
 }
 
-export default new AnonymousIdService();
+const anonymousIdService = new AnonymousIdService();
+export default anonymousIdService;
 

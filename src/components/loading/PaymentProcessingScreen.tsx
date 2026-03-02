@@ -28,7 +28,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   isVisible = true,
   onSuccess,
   onError,
-  onTimeout,
+  onTimeout: _onTimeout,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);

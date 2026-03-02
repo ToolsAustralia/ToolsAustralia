@@ -16,7 +16,7 @@ export async function getAffiliateSession() {
 
     const payload = await verifyAffiliateToken(token);
     return payload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

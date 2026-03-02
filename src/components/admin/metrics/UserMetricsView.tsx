@@ -8,7 +8,7 @@ import { SignupSourceChart } from "./users/SignupSourceChart";
 import { ProfessionBreakdown } from "./users/ProfessionBreakdown";
 import { MembershipLifecycleChart } from "./users/MembershipLifecycleChart";
 import { DailyUserMetricsTable } from "./users/DailyUserMetricsTable";
-import { MetricsDateFilter, MetricsDateFilterMode, WEBSITE_LAUNCH_DATE } from "./shared/MetricsDateFilter";
+import { MetricsDateFilter, MetricsDateFilterMode } from "./shared/MetricsDateFilter";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { ViewSwitcher } from "./shared/ViewSwitcher";
 import { ComparisonModeToggle, ComparisonMode } from "./shared/ComparisonModeToggle";
@@ -19,7 +19,7 @@ import { MetricCard } from "./shared/MetricCard";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, startOfMonth, endOfMonth, parseISO, startOfDay } from "date-fns";
-import { Users, CreditCard, DollarSign, TrendingUp, ShoppingCart } from "lucide-react";
+import { Users, CreditCard, DollarSign, TrendingUp } from "lucide-react";
 import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 
 export function UserMetricsView() {

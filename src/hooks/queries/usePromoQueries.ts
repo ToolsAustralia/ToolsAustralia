@@ -147,7 +147,7 @@ export const usePromoByType = (type: "one-time-packages" | "mini-packages" | "me
  */
 export const useResolvedMultiplier = (
   type: "one-time-packages" | "mini-packages" | "membership-packages",
-  context: "display" | "payment" = "display"
+  _context: "display" | "payment" = "display"
 ): number | null => {
   const { data: currentEffective } = useCurrentAlternatingMultipliers();
 
@@ -157,7 +157,7 @@ export const useResolvedMultiplier = (
       return effective;
     }
     return null;
-  }, [currentEffective, type, context]);
+  }, [currentEffective, type]); // context unused in body; omit to satisfy exhaustive-deps
 };
 
 const fetchEffectiveForBanner = async (): Promise<EffectiveForBannerResponse["data"]> => {

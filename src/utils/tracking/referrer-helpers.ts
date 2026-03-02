@@ -57,7 +57,7 @@ export function parseReferrer(referrer: string): ReferrerInfo {
       referrer: referrer,
       referrer_domain: referrerDomain,
     };
-  } catch (error) {
+  } catch {
     // Return safe defaults on error
     if (process.env.NODE_ENV === "development") {
       // console.warn("Error parsing referrer:", error);

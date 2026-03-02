@@ -95,22 +95,21 @@ Right-side content is driven by `countdownDisplay.type` and overrides. **Draw st
 
 ### 3.3 Scheduled Promo (default behaviour)
 
-When there is an active **scheduled promo**:
+When there is an active **scheduled promo**, the right side shows the **24hr countdown to next midnight AEST** (default; refreshes every midnight), not the countdown to promo end or static "PROMO ENDING".
 
-| Promo Time Left | Right Side Display |
-|-----------------|--------------------|
-| **≥24 hours** | Static label: `variantConfig.banner.countdownLabel` or `PROMO ENDING` |
-| **<24 hours** | Countdown tiles (HRS MINS SECS, or DAYS HRS MINS if >24h) |
+| Condition | Right Side Display |
+|-----------|--------------------|
+| Scheduled promo active | 24hr countdown to next midnight (HRS MINS SECS) |
 
-Variant `countdownLabel` overrides the default "PROMO ENDING" when set (e.g. for split tests). This block is **skipped** when the draw is today or tomorrow so that draw content is shown instead.
+This block is **skipped** when the draw is today or tomorrow so that draw content is shown instead.
 
 ### 3.4 Other Countdown Display Types
 
 | Type | When | Right Side Display |
 |------|------|--------------------|
-| `static_urgency` | No draw today/tomorrow, static mode | Static label (e.g. LIMITED TIME ONLY, PROMO ENDING, ENDING SOON) |
-| `scheduled_end` | Scheduled promo ends in <24h | Countdown tiles (HRS MINS SECS or DAYS HRS MINS) |
-| `midnight` | Fallback when no draw/scheduled | Countdown to next midnight AEST (HRS MINS SECS) |
+| `static_urgency` | No scheduled promo, static mode | Static label (e.g. LIMITED TIME ONLY, PROMO ENDING, ENDING SOON) |
+| `scheduled_end` | Variant `countdownMode: "scheduled_end"` + scheduled promo | Countdown to promo end (DAYS HRS MINS or HRS MINS SECS) |
+| `midnight` | Default: scheduled promo or fallback | 24hr countdown to next midnight AEST (HRS MINS SECS, refreshes at midnight) |
 
 ### 3.5 Countdown Tile Formats
 
@@ -129,10 +128,8 @@ Variant `countdownLabel` overrides the default "PROMO ENDING" when set (e.g. for
 showCountdown = false?           → hidden (right side not shown)
 draw today?                      → draw_tonight (countdown to freeze)
 draw tomorrow?                   → draw_tomorrow (DRAWN TOMORROW + time)
-scheduled promo active?
-   ├─ promo ends in <24h         → scheduled_end (countdown tiles)
-   └─ promo ends in ≥24h         → static_urgency (label)
-else                             → midnight (countdown to next midnight AEST)
+scheduled promo active?          → midnight (24hr countdown to next midnight AEST, default)
+else                             → midnight or static_urgency
 ```
 
 **Step-by-step logic:**
@@ -141,7 +138,7 @@ else                             → midnight (countdown to next midnight AEST)
 2. **Draw today** → `draw_tonight`
 3. **Draw tomorrow** → `draw_tomorrow`
 4. **Static urgency modes** (`limited_time_only`, `ending`, `static_urgency`):
-   - Scheduled promo **&lt;24h** → `scheduled_end` (countdown)
+   - Scheduled promo with time left → `midnight` (24hr countdown to next midnight AEST, default)
    - Else → `static_urgency` (label)
 5. **scheduled_end mode** + scheduled promo → `scheduled_end` (countdown)
 6. **Fallback** → `midnight` (countdown to next midnight AEST)
@@ -170,8 +167,7 @@ Three countdown timers are used:
 | Draw today | DRAWN TONIGHT | GET X ENTRIES | Countdown to freeze |
 | Draw today + scheduled promo &lt;24h | DRAWN TONIGHT | GET X ENTRIES | Countdown to freeze *(draw wins)* |
 | Draw tomorrow | DRAWN TOMORROW | GET X ENTRIES | DRAWN TOMORROW + time |
-| Scheduled promo, ≥24h left | BIG BONUS (or variant badge) | GET X ENTRIES | PROMO ENDING (or variant countdownLabel) |
-| Scheduled promo, &lt;24h left | ENDS TONIGHT (or variant badge) | GET X ENTRIES | Countdown (HRS MINS SECS) |
+| Scheduled promo (any time left) | BIG BONUS / ENDS TONIGHT (or variant badge) | GET X ENTRIES | 24hr countdown to midnight (HRS MINS SECS) |
 | 10× multiplier (no draw/scheduled) | BIGGEST BONUS | GET 10X ENTRIES | Static label or countdown |
 | Draw in 2+ days | Default badge (variant → 10× → scheduled text → alternating) | GET X ENTRIES | Static label or midnight countdown |
 
@@ -182,7 +178,7 @@ Three countdown timers are used:
 **Variant overrides apply only when the draw is not today or tomorrow.** They override scheduled-promo defaults (BIG BONUS, ENDS TONIGHT, PROMO ENDING) but never draw-based messaging.
 
 - **`variantConfig.banner.badgeText`** — Overrides badge (BIG BONUS / ENDS TONIGHT) when scheduled promo is active and draw is not today/tomorrow
-- **`variantConfig.banner.countdownLabel`** — Overrides "PROMO ENDING" when scheduled promo has ≥24h left and draw is not today/tomorrow
+- **`variantConfig.banner.countdownLabel`** — Overrides static label when `static_urgency` is shown (no scheduled promo with end date)
 
 When a variant does not set these values, the scheduled promo defaults apply.
 

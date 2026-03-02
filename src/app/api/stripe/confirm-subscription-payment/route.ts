@@ -6,7 +6,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { getPackageById } from "@/data/membershipPackages";
 import { cancelDuplicatePaymentIntents } from "@/utils/payment/stripe/subscription-utils";
 import {
   findAvailablePaymentMethod,

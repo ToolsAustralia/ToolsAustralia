@@ -4,10 +4,7 @@
  */
 
 import type { StaticImageData } from "next/image";
-import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
-
-// Type alias for consistency with existing code
-type PackageIconImageData = PackageIconData;
+import { getPackageIconByName } from "@/utils/images/package-icons";
 
 /**
  * Format currency amount to AUD format

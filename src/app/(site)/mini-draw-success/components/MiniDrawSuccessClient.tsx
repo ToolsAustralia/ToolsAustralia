@@ -12,7 +12,7 @@ interface MiniDrawSuccessClientProps {
   };
 }
 
-export default function MiniDrawSuccessClient({ searchParams }: MiniDrawSuccessClientProps) {
+export default function MiniDrawSuccessClient({ searchParams: _searchParams }: MiniDrawSuccessClientProps) {
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

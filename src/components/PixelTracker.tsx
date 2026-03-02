@@ -16,10 +16,10 @@ export default function PixelTracker({
   facebookPixelId,
   tiktokPixelId,
   disabled = false,
-  enableConsent = false,
+  enableConsent: _enableConsent = false,
   nonce,
 }: PixelTrackerProps) {
-  const [consentGiven, setConsentGiven] = useState(true); // Always true - auto-accept
+  const [_consentGiven, setConsentGiven] = useState(true); // Always true - auto-accept
 
   useEffect(() => {
     // ✅ AUTO-ACCEPT: Automatically grant pixel consent for all users

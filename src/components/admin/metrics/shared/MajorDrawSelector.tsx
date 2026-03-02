@@ -5,7 +5,7 @@ import { useCompletedMajorDraws } from "@/hooks/queries/useMajorDrawQueries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 
-interface MajorDraw {
+interface _MajorDraw {
   _id: string;
   name: string;
   drawDate: string;

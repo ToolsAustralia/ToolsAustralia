@@ -100,9 +100,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       userPhone,
       userFirstName,
       userLastName,
-      userCity,
+      userCity: _userCity,
       userState,
-      userZipCode,
+      userZipCode: _userZipCode,
       userCountry,
       entriesAdded,
       pointsEarned,
@@ -387,7 +387,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       try {
         await trackTikTokEvent("CompletePayment", commonParams);
         // console.log(`📱 TikTok Pixel: Purchase tracked for ${packageType} - $${value} ${currency}`);
-      } catch (tiktokError) {
+      } catch {
         // Silently fail - TikTok tracking is optional and client-side only
         console.warn("⚠️ TikTok Pixel tracking skipped (server-side execution)");
       }
@@ -573,14 +573,14 @@ export async function trackPixelSubscription(
       } else {
         // console.warn(`⚠️ Facebook Conversions API: Failed to send ${action} event (EventID: ${eventID})`);
       }
-    } catch (apiError) {
+    } catch {
       // console.error(`❌ Error sending ${action} to Facebook Conversions API:`, apiError);
     }
 
     // 3. Track TikTok Pixel
     await trackTikTokEvent(action, commonParams);
     // console.log(`📱 TikTok Pixel: ${action} tracked - ${packageName} - $${value} ${currency}`);
-  } catch (error) {
+  } catch {
     // console.error(`❌ Error tracking pixel ${action}:`, error);
   }
 }
@@ -647,7 +647,7 @@ export async function trackPixelSubscriptionUpgrade(params: {
     // Track TikTok Pixel - Use Subscribe event for upgrade
     await trackTikTokEvent("Subscribe", commonParams);
     // console.log(`📱 TikTok Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
-  } catch (error) {
+  } catch {
     // console.error(`❌ Error tracking pixel subscription upgrade:`, error);
   }
 }
@@ -714,7 +714,7 @@ export async function trackPixelSubscriptionDowngrade(params: {
     // Track TikTok Pixel - Use Subscribe event for downgrade (still a subscription)
     await trackTikTokEvent("Subscribe", commonParams);
     // console.log(`📱 TikTok Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
-  } catch (error) {
+  } catch {
     // console.error(`❌ Error tracking pixel subscription downgrade:`, error);
   }
 }
@@ -774,7 +774,7 @@ export async function trackPixelCancellation(params: {
     // Track TikTok Pixel
     await trackTikTokEvent("Unsubscribe", commonParams);
     // console.log(`📱 TikTok Pixel: Cancellation tracked - ${packageName}`);
-  } catch (error) {
+  } catch {
     // console.error("❌ Error tracking pixel cancellation:", error);
   }
 }
@@ -821,21 +821,21 @@ export async function trackPixelSubscriptionRenewal(params: {
       packageName,
       userId,
       userEmail,
-      userPhone,
-      userFirstName,
-      userLastName,
+      userPhone: _userPhoneRenewal,
+      userFirstName: _userFirstNameRenewal,
+      userLastName: _userLastNameRenewal,
       entriesPerMonth,
-      eventSourceUrl,
-      fbc: providedFbc,
-      fbp: providedFbp,
-      requestContext,
-      clientIpAddress,
-      clientUserAgent,
+      eventSourceUrl: _eventSourceUrlRenewal,
+      fbc: _providedFbcRenewal,
+      fbp: _providedFbpRenewal,
+      requestContext: _requestContextRenewal,
+      clientIpAddress: _clientIpAddressRenewal,
+      clientUserAgent: _clientUserAgentRenewal,
     } = params;
 
     // Generate unique event ID for deduplication
     const eventID = generateEventID("renewal", subscriptionId);
-    const eventTime = Math.floor(Date.now() / 1000);
+    const _eventTime = Math.floor(Date.now() / 1000);
 
     // Prepare common parameters for TikTok/Klaviyo tracking
     const commonParams = {
@@ -861,7 +861,7 @@ export async function trackPixelSubscriptionRenewal(params: {
     // Track TikTok Pixel (optional - for internal analytics)
     await trackTikTokEvent("CompletePayment", commonParams);
     // console.log(`📱 TikTok Pixel: Subscription renewal tracked - $${value} ${currency}`);
-  } catch (error) {
+  } catch {
     // console.error("❌ Error tracking pixel subscription renewal:", error);
   }
 }

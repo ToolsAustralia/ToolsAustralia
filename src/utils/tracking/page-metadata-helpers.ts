@@ -103,7 +103,7 @@ export function extractPageMetadata(pathname: string, url?: string): PageMetadat
       page_name: pageName,
       page_url: pageUrl,
     };
-  } catch (error) {
+  } catch {
     // Return safe defaults on error
     if (process.env.NODE_ENV === "development") {
       // console.warn("Error extracting page metadata:", error);

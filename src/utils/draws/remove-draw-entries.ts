@@ -7,8 +7,8 @@
  * These functions use atomic operations to ensure data consistency.
  */
 
-import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
-import MiniDraw, { IMiniDraw } from "@/models/MiniDraw";
+import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 import connectDB from "@/lib/mongodb";
 import mongoose from "mongoose";
 
@@ -88,7 +88,7 @@ export async function removeMajorDrawEntries(
       }
 
       // Update the user's entry in this draw atomically
-      const remainingEntriesFromSource = entriesFromSource - entriesToRemoveFromDraw;
+      const _remainingEntriesFromSource = entriesFromSource - entriesToRemoveFromDraw;
       const newTotalEntries = userEntry.totalEntries - entriesToRemoveFromDraw;
 
       if (newTotalEntries <= 0) {

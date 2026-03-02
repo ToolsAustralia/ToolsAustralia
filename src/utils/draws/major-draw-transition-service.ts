@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
+import "@/models/MajorDraw"; // Side-effect: registers model with mongoose
+import type { IMajorDraw } from "@/models/MajorDraw";
 
 /**
  * Major Draw Transition Service
@@ -68,7 +69,7 @@ async function checkConnectionHealth(): Promise<{ healthy: boolean; pinged: bool
       ]);
       lastPingTime = now;
       return { healthy: true, pinged: true };
-    } catch (error) {
+    } catch {
       // Ping failed - connection may be unhealthy
       return { healthy: false, pinged: true };
     }

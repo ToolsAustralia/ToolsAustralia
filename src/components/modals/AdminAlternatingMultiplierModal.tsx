@@ -6,7 +6,6 @@ import {
   ModalContainer,
   ModalHeader,
   ModalContent,
-  Input,
   Textarea,
   Button,
   FormSection,

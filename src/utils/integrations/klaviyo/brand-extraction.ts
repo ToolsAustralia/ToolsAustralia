@@ -7,7 +7,6 @@
  * @module utils/integrations/klaviyo/brand-extraction
  */
 
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 
 /**
  * Extract brand name from promotion slug

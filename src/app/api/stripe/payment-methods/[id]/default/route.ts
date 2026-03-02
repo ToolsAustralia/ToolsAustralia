@@ -91,7 +91,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               console.log(`✅ Re-attached payment method ${paymentMethodId} to customer ${user.stripeCustomerId}`);
             } catch (reattachError) {
               console.error("Error re-attaching payment method:", reattachError);
-              const errorMessage = reattachError instanceof Error ? reattachError.message : "Unknown error";
               return NextResponse.json(
                 { 
                   success: false, 

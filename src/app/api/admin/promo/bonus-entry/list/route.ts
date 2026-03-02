@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import BonusEntryPromo from "@/models/BonusEntryPromo";
-import { convertUTCToAEST, formatDateReadable } from "@/utils/common/timezone";
+import { formatDateReadable } from "@/utils/common/timezone";
 
 /**
  * GET /api/admin/promo/bonus-entry/list

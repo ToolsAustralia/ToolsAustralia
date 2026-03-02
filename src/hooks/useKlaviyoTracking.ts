@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { identifyKlaviyoUser, trackKlaviyoEvent, trackKlaviyoPageView } from "@/utils/tracking/klaviyo-helpers";
+import { identifyKlaviyoUser, trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
 
 /**
  * Klaviyo Event Parameters Interface

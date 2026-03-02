@@ -16,8 +16,7 @@ interface DiagonalPatternOverlayProps {
 export default function DiagonalPatternOverlay({
   className = "",
   opacity = 0.3,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  size: _ = "cover", // Size parameter not currently used
+  size: _size = "cover", // Size parameter not currently used
   color = "#ffffff",
   strokeWidth = 2,
   dashArray = "10,10",

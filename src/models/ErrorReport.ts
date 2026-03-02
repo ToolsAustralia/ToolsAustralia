@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
-import { ErrorReportStatus, IErrorReport } from "@/types/error-reporting";
+import type { IErrorReport } from "@/types/error-reporting";
 
 /**
  * Error Report Model

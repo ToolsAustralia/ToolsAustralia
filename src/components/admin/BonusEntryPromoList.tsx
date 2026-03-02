@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useBonusEntryPromos, useDeleteBonusEntryPromo } from "@/hooks/queries/usePromoQueries";
 import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
 import type { BonusEntryPromo } from "@/types/admin";
-import { Gift, Edit2, Trash2, Calendar, Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { Gift, Edit2, Trash2, Calendar, Loader2, RefreshCw } from "lucide-react";
 import { formatDateReadable } from "@/utils/common/timezone";
 
 interface BonusEntryPromoListProps {

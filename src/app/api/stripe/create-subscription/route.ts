@@ -9,20 +9,12 @@ import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
-import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
-import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
-import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
-import mongoose from "mongoose";
-import { getSubscriptionPaymentIntent, cancelDuplicatePaymentIntents } from "@/utils/payment/stripe/subscription-utils";
 import {
   attachPaymentMethodToCustomer,
-  setDefaultPaymentMethod,
-  verifyPaymentMethodAttachment,
 } from "@/utils/payment/stripe/payment-method-utils";
 import { ensureCustomerExists, updateCustomerPaymentMethod } from "@/utils/payment/stripe/customer-utils";
 import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subscription-assignment";
-import { createOrUpdateSubscriptionUser } from "@/utils/payment/user-subscription-utils";
 // Klaviyo integration handled by webhook for best practices
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
@@ -69,7 +61,7 @@ export async function POST(request: NextRequest) {
   let membershipPackage: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
   let user: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, prefer-const
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let customer: any = null;
 
   try {
@@ -351,8 +343,8 @@ export async function POST(request: NextRequest) {
         // ✅ OPTIMIZED: Use utility function that parallelizes attach + update
         await updateCustomerPaymentMethod(customer.id, finalPaymentMethodId);
       } catch (pmError) {
-        const errorMessage = pmError instanceof Error ? pmError.message : String(pmError);
-        const errorCode = pmError && typeof pmError === "object" && "code" in pmError ? String(pmError.code) : undefined;
+        const _errorMessage = pmError instanceof Error ? pmError.message : String(pmError);
+        const _errorCode = pmError && typeof pmError === "object" && "code" in pmError ? String(pmError.code) : undefined;
         
         console.error(`❌ Failed to attach/set default payment method ${finalPaymentMethodId}:`, pmError);
         

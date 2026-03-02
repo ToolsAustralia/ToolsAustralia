@@ -8,7 +8,6 @@ import {
   Users,
   Search,
   Download,
-  Eye,
   UserPlus,
   CheckCircle,
   XCircle,

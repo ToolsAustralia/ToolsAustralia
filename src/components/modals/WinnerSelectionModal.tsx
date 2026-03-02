@@ -65,7 +65,7 @@ export default function WinnerSelectionModal({
   drawId,
   drawName,
   drawType,
-  totalEntries,
+  totalEntries: _totalEntries,
   currentWinner,
   enableImageField = false,
 }: WinnerSelectionModalProps) {

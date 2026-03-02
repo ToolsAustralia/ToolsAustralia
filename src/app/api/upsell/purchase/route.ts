@@ -13,10 +13,7 @@ import {
   getPackageBaseEntries,
 } from "@/utils/payment/upsell-entries-calculator";
 import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
-import Promo from "@/models/Promo";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
-import { getBaseUrl } from "@/utils/url/get-base-url";
-import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 /**

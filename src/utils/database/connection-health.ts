@@ -146,7 +146,7 @@ export function getPoolUtilization(): number | null {
     if (!metrics) return null;
     
     return Math.round((metrics.active / metrics.maxPoolSize) * 100);
-  } catch (error) {
+  } catch {
     return null;
   }
 }

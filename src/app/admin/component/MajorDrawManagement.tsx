@@ -45,7 +45,7 @@ export default function MajorDrawManagement() {
     winnerId?: string;
     winnerName?: string;
   } | null>(null);
-  const [isLoadingWinner, setIsLoadingWinner] = useState(false);
+  const [_isLoadingWinner, setIsLoadingWinner] = useState(false);
   const [isEditWinnerModalOpen, setIsEditWinnerModalOpen] = useState(false);
 
   // Fetch current winner from Winner model

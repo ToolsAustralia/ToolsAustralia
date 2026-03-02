@@ -17,7 +17,7 @@ export async function getUserActiveExperimentAssignment(
 ): Promise<{ experimentId: string; variantId: string } | null> {
   try {
     // Find all active experiments
-    const now = new Date();
+    const _now = new Date();
     const activeExperiments = await ExperimentRepository.findAll({
       status: "active",
       page: 1,

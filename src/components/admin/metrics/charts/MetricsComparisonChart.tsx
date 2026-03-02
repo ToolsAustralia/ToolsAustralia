@@ -86,7 +86,7 @@ export function MetricsComparisonChart({
     conversions: "#f59e0b",
   };
 
-  const nameMap: Record<string, string> = {
+  const _nameMap: Record<string, string> = {
     revenue: "Revenue",
     adSpend: "Ad Spend",
     profit: "Profit",

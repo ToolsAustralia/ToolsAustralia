@@ -167,5 +167,6 @@ export class ExperimentStoppingRulesService {
   }
 }
 
-export default new ExperimentStoppingRulesService();
+const experimentStoppingRulesService = new ExperimentStoppingRulesService();
+export default experimentStoppingRulesService;
 

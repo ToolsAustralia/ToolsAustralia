@@ -201,7 +201,7 @@ export const useUpgradeSubscription = () => {
       });
       return response;
     },
-    onSuccess: (data) => {
+    onSuccess: (_data) => {
       // Invalidate user and membership queries to reflect new subscription
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
       queryClient.invalidateQueries({ queryKey: queryKeys.memberships.packages });

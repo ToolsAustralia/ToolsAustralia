@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, XCircle, CreditCard, CheckCircle, X, Loader2 } from "lucide-react";
+import { AlertTriangle, XCircle, CheckCircle, X, Loader2 } from "lucide-react";
 import { Button } from "../modals/ui";
 
 export interface ChargePastDueModalProps {
@@ -82,11 +82,12 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
   const itemsPerPage = 20;
 
   // Fetch preview when modal opens
+  // Omit state: we only want to fetch when modal opens, not on every state transition
   useEffect(() => {
     if (isOpen && state === "idle") {
       fetchPreview();
     }
-  }, [isOpen]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPreview = async () => {
     setState("loading");

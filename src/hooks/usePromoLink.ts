@@ -58,7 +58,7 @@ export const usePromoLink = () => {
     if (storedCode) {
       setPromoCodeState(storedCode);
     }
-  }, []); // Run once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- Run once on mount; promoCode read is guard only
 
   const setPromoCode = useCallback((code: string | null) => {
     if (typeof window === "undefined") return;

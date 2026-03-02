@@ -13,7 +13,7 @@ import type {
   ComparisonMetrics,
 } from "@/types/metrics/MonthlyComparison";
 import { getMonthDateRange, getPreviousMonth } from "@/utils/dates/month-helpers";
-import { aggregateMonthlyTotals, calculateWeightedROAS } from "@/utils/metrics/aggregators";
+import { aggregateMonthlyTotals } from "@/utils/metrics/aggregators";
 
 export class MonthlyComparisonService {
   constructor(

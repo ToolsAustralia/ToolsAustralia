@@ -146,7 +146,7 @@ const UnifiedModalManager: React.FC = () => {
             isOpen={isSpecialPackagesOpen}
             onClose={() => handleModalClose("special-packages")}
             packages={specialPackages}
-            onPackageSelect={(pkg) => {
+            onPackageSelect={(_pkg) => {
               // Handle package selection - this would typically trigger purchase flow
               // console.log("Special package selected:", pkg);
             }}

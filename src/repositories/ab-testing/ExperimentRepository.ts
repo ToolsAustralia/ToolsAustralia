@@ -125,5 +125,6 @@ export class ExperimentRepository {
   }
 }
 
-export default new ExperimentRepository();
+const experimentRepository = new ExperimentRepository();
+export default experimentRepository;
 

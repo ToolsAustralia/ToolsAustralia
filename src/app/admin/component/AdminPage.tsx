@@ -33,6 +33,7 @@ import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
+import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
 import MembershipByPackageDetailModal from "@/components/modals/MembershipByPackageDetailModal";
@@ -87,8 +88,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
   const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(true);
   const [isMembershipByPackageExpanded, setIsMembershipByPackageExpanded] = useState(true);
-  const [isDateFilterCollapsed, setIsDateFilterCollapsed] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
+  const [_isDateFilterCollapsed, _setIsDateFilterCollapsed] = useState(true);
+  const [_isMobile, setIsMobile] = useState(false);
   const [isRevenueDetailModalOpen, setIsRevenueDetailModalOpen] = useState(false);
   const [selectedRevenueCategory, setSelectedRevenueCategory] = useState<RevenueCategory | null>(null);
   const [membershipModalPackage, setMembershipModalPackage] = useState<{
@@ -207,7 +208,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   };
 
   // Determine if filter should be collapsible (disabled on mobile since title is hidden)
-  const shouldCollapse = useMemo(() => {
+  const _shouldCollapse = useMemo(() => {
     return false; // Don't collapse on mobile anymore since title is hidden
   }, []);
 
@@ -483,6 +484,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
         await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
         await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
+      } else if (selectedTab === "promo-analytics") {
+        await queryClient.invalidateQueries({ queryKey: ["admin", "promo-analytics"] });
+        await queryClient.refetchQueries({ queryKey: ["admin", "promo-analytics"] });
       } else if (selectedTab === "users") {
         // Invalidate and refetch Users data
         await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });
@@ -647,6 +651,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "submissions" && "Partner applications and contact form submissions"}
                   {selectedTab === "users" && "User account management and administration"}
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
+                  {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
                   {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                 </p>
@@ -1448,6 +1453,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* FACEBOOK ADS TAB */}
           {selectedTab === "facebook-ads" && <FacebookAdsManagement />}
+
+          {/* PROMO ANALYTICS TAB */}
+          {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (

@@ -354,9 +354,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     if (!isOpen) {
       stepDeterminedRef.current = false;
     }
-  }, [isOpen, initialStep, onClose, restoreStateFromStorage, userData, userDataLoading]); // Wait for userData to load
-  // Note: userData is intentionally excluded from affecting reset logic
-  // This allows the modal to maintain its state during email update process
+  }, [isOpen, initialStep, onClose, restoreStateFromStorage, userData, userDataLoading]); // eslint-disable-line react-hooks/exhaustive-deps -- currentStep omitted: adding it would reset form on every step change
 
   // Auto-save state when critical fields change
   useEffect(() => {

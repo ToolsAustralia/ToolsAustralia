@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { FlaskConical, Plus, Edit, Trash2, Play, Pause, Square, AlertTriangle, Target, Calendar, Eye, BarChart3, ExternalLink } from "lucide-react";
+import { FlaskConical, Plus, Edit, Trash2, AlertTriangle, Target, Eye, BarChart3 } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -41,7 +41,7 @@ export default function ExperimentDetailModal({
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [isCreatingVariant, setIsCreatingVariant] = useState(false);
   const [activeTab, setActiveTab] = useState<"variants" | "results">("variants");
-  const router = useRouter();
+  const _router = useRouter();
 
   const createVariantMutation = useCreateVariant();
   const updateVariantMutation = useUpdateVariant();
