@@ -28,6 +28,21 @@ export interface PromoAnalyticsSummary {
   byPage: PromoPageMetrics[];
 }
 
+export interface UTMSourceMetrics {
+  utmSource: string;
+  visits: number;
+  signups: number;
+  conversions: number;
+  revenue: number;
+  visitToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
+export interface PromoAnalyticsByUTMSummary {
+  byUTMSource: UTMSourceMetrics[];
+}
+
 /** All valid promotion slugs for aggregation (evergreen + toolset) */
 function getAllPromoSlugs(): { pageType: PromoPageType; slug: string }[] {
   const pages: { pageType: PromoPageType; slug: string }[] = [];
@@ -215,6 +230,154 @@ export class PromoAnalyticsRepository {
       sorted.sort((a, b) => b.revenue - a.revenue);
     }
     return sorted.slice(0, limit);
+  }
+
+  /**
+   * Aggregate metrics by UTM source (e.g. klaviyo, facebook) for channel attribution.
+   * Visits from PromoAnalyticsVisit, signups from User, conversions from PaymentEvent.
+   */
+  async getAggregatedByUTMSource(startDate: Date, endDate: Date): Promise<PromoAnalyticsByUTMSummary> {
+    await connectDB();
+
+    // 1. Visits by utmSource (PromoAnalyticsVisit) - empty/null -> "direct"
+    const visitAgg = await PromoAnalyticsVisit.aggregate<
+      { _id: string; visits: number }
+    >([
+      { $match: { timestamp: { $gte: startDate, $lte: endDate } } },
+      {
+        $addFields: {
+          _utmKey: {
+            $cond: {
+              if: { $or: [{ $eq: ["$utmSource", null] }, { $eq: ["$utmSource", ""] }] },
+              then: "direct",
+              else: { $toLower: { $ifNull: ["$utmSource", ""] } },
+            },
+          },
+        },
+      },
+      { $match: { _utmKey: { $ne: "" } } },
+      { $group: { _id: "$_utmKey", visits: { $sum: 1 } } },
+    ]).exec();
+
+    const visitMap = new Map<string, number>();
+    for (const r of visitAgg) {
+      const key = r._id || "direct";
+      visitMap.set(key, r.visits);
+    }
+
+    // 2. Signups by utmSource (User.signupAttribution.utmSource)
+    const signupAgg = await User.aggregate<
+      { _id: string; signups: number }
+    >([
+      {
+        $match: {
+          "signupAttribution.promotionSlug": { $exists: true, $ne: "" },
+          createdAt: { $gte: startDate, $lte: endDate },
+        },
+      },
+      {
+        $addFields: {
+          _utmKey: {
+            $cond: {
+              if: {
+                $or: [
+                  { $eq: ["$signupAttribution.utmSource", null] },
+                  { $eq: ["$signupAttribution.utmSource", ""] },
+                ],
+              },
+              then: "direct",
+              else: { $toLower: { $ifNull: ["$signupAttribution.utmSource", ""] } },
+            },
+          },
+        },
+      },
+      { $match: { _utmKey: { $ne: "" } } },
+      { $group: { _id: "$_utmKey", signups: { $sum: 1 } } },
+    ]).exec();
+
+    const signupMap = new Map<string, number>();
+    for (const r of signupAgg) {
+      const key = r._id || "direct";
+      signupMap.set(key, r.signups);
+    }
+
+    // 3. Conversions and revenue by utmSource (PaymentEvent.data.utmSource)
+    const conversionAgg = await PaymentEvent.aggregate<
+      { _id: string; conversions: number; revenue: number }
+    >([
+      {
+        $match: {
+          eventType: "BenefitsGranted",
+          timestamp: { $gte: startDate, $lte: endDate },
+          "data.promotionSlug": { $exists: true, $ne: "" },
+          $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+        },
+      },
+      {
+        $addFields: {
+          _utmKey: {
+            $cond: {
+              if: { $or: [{ $eq: ["$data.utmSource", null] }, { $eq: ["$data.utmSource", ""] }] },
+              then: "direct",
+              else: { $toLower: { $ifNull: ["$data.utmSource", ""] } },
+            },
+          },
+        },
+      },
+      { $match: { _utmKey: { $ne: "" } } },
+      {
+        $group: {
+          _id: "$_utmKey",
+          conversions: { $sum: 1 },
+          revenue: { $sum: { $ifNull: ["$data.price", 0] } },
+        },
+      },
+    ]).exec();
+
+    const conversionMap = new Map<string, { conversions: number; revenue: number }>();
+    for (const r of conversionAgg) {
+      const key = r._id || "direct";
+      conversionMap.set(key, {
+        conversions: r.conversions ?? 0,
+        revenue: r.revenue ?? 0,
+      });
+    }
+
+    // Collect all UTM sources
+    const allSources = new Set<string>([
+      ...visitMap.keys(),
+      ...signupMap.keys(),
+      ...conversionMap.keys(),
+    ]);
+
+    const byUTMSource: UTMSourceMetrics[] = [];
+    for (const source of allSources) {
+      const visits = visitMap.get(source) ?? 0;
+      const signups = signupMap.get(source) ?? 0;
+      const conv = conversionMap.get(source);
+      const conversions = conv?.conversions ?? 0;
+      const revenue = conv?.revenue ?? 0;
+
+      const visitToSignupRate = visits > 0 ? (signups / visits) * 100 : 0;
+      const signupToConversionRate = signups > 0 ? (conversions / signups) * 100 : 0;
+      const overallConversionRate = visits > 0 ? (conversions / visits) * 100 : 0;
+
+      byUTMSource.push({
+        utmSource: source === "direct" ? "Direct" : source.charAt(0).toUpperCase() + source.slice(1),
+        visits,
+        signups,
+        conversions,
+        revenue,
+        visitToSignupRate,
+        signupToConversionRate,
+        overallConversionRate,
+      });
+    }
+
+    // Sort by signups descending (most impactful channels first)
+    byUTMSource.sort((a, b) => b.signups - a.signups);
+
+    return { byUTMSource };
   }
 }
 
