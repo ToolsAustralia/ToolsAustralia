@@ -6,6 +6,10 @@
 // Main service
 export { default as emailService } from './email-service';
 
+// Sender identities
+export { EmailCategory, getSenderIdentity } from './sender-identities';
+export type { SenderIdentity } from './sender-identities';
+
 // Rate limiting
 export {
   emailVerificationRateLimiter,
@@ -15,33 +19,14 @@ export {
 // Types
 export * from './types';
 
-// Legacy compatibility (during migration)
-// Re-export utility functions that are still used
+// Provider-agnostic utilities (rate limiting, code generation, expiry)
 export {
+  checkEmailVerificationRateLimit,
+  checkPasswordResetRateLimit,
   checkEmailRateLimit,
   generateEmailVerificationCode,
   getEmailVerificationExpiry,
+  getPasswordResetExpiry,
+  getPasswordResetExpiryMinutes,
   checkFormSubmissionRateLimit,
-} from '../email';
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+} from './utils';

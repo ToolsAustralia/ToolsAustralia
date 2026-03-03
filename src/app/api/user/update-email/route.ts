@@ -5,11 +5,11 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import {
-  sendEmailVerificationCode,
+  emailService,
   generateEmailVerificationCode,
-  checkEmailRateLimit,
+  checkEmailVerificationRateLimit,
   getEmailVerificationExpiry,
-} from "@/lib/email";
+} from "@/lib/email/";
 
 const updateEmailSchema = z.object({
   newEmail: z.string().email("Invalid email address"),
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check rate limiting for the new email
-    const rateLimitResult = checkEmailRateLimit(validatedData.newEmail);
+    const rateLimitResult = checkEmailVerificationRateLimit(validatedData.newEmail);
     if (!rateLimitResult.allowed) {
       const resetTimeMinutes = Math.ceil((rateLimitResult.resetTime - Date.now()) / 60000);
       return NextResponse.json(
@@ -110,13 +110,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ User email updated from ${session.user.email} to ${validatedData.newEmail}`);
 
-    // Send verification code to new email
     try {
-      await sendEmailVerificationCode(validatedData.newEmail, verificationCode, user.firstName);
+      await emailService.sendVerificationEmail(validatedData.newEmail, {
+        userName: user.firstName,
+        verificationCode,
+      });
       console.log(`✅ Verification code sent to new email: ${validatedData.newEmail}`);
     } catch (emailError) {
       console.error("❌ Failed to send verification email:", emailError);
-      // Don't fail the request if email sending fails - user can request resend
     }
 
     return NextResponse.json({

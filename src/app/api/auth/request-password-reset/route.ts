@@ -3,7 +3,12 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import crypto from "crypto";
-import { checkEmailRateLimit, sendPasswordResetEmail } from "@/lib/email";
+import {
+  emailService,
+  checkPasswordResetRateLimit,
+  getPasswordResetExpiry,
+  getPasswordResetExpiryMinutes,
+} from "@/lib/email/";
 
 const requestSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -19,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const { email } = parsed.data;
 
-    const rateLimit = checkEmailRateLimit(email);
+    const rateLimit = checkPasswordResetRateLimit(email);
     if (!rateLimit.allowed) {
       const resetMinutes = Math.ceil((rateLimit.resetTime - Date.now()) / 60000);
       return NextResponse.json(
@@ -43,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     const resetToken = crypto.randomBytes(32).toString("hex");
     const resetCode = crypto.randomInt(100000, 999999).toString();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+    const expiresAt = getPasswordResetExpiry();
 
     user.passwordResetToken = resetToken;
     user.passwordResetExpires = expiresAt;
@@ -52,11 +57,11 @@ export async function POST(request: NextRequest) {
     const resetUrl = `${
       process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || ""
     }/reset-password?token=${resetToken}`;
-    await sendPasswordResetEmail({
-      to: user.email,
+    await emailService.sendPasswordResetEmail(user.email, {
       userName: user.firstName,
       resetUrl,
       resetCode,
+      expiryMinutes: getPasswordResetExpiryMinutes(),
     });
 
     return NextResponse.json({

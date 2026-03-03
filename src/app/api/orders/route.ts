@@ -6,7 +6,6 @@ import Order from "@/models/Order";
 import { z } from "zod";
 import { verify } from "jsonwebtoken";
 import { JWTPayload } from "@/types/api";
-import { autoVerifyEmailOnPurchase } from "@/utils/payment/payment-processing";
 
 const createOrderSchema = z.object({
   products: z
@@ -104,15 +103,6 @@ export async function POST(request: NextRequest) {
     });
 
     await newOrder.save();
-
-    // TEMPORARY: Auto-verify email on purchase (SMTP to SendGrid migration workaround)
-    // This should be removed once email verification is working properly
-    try {
-      autoVerifyEmailOnPurchase(user);
-    } catch (error) {
-      // Non-blocking - don't fail order creation if email verification check fails
-      console.error("❌ Error in auto-verify email on purchase (non-blocking):", error);
-    }
 
     // Clear user's cart
     user.cart = [];

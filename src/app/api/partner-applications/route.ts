@@ -4,7 +4,7 @@ import PartnerApplication from "@/models/PartnerApplication";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { sendPartnerApplicationEmail, checkFormSubmissionRateLimit } from "@/lib/email";
+import { emailService, checkFormSubmissionRateLimit } from "@/lib/email/";
 
 /**
  * Partner Application API Endpoints
@@ -163,8 +163,7 @@ export async function POST(request: NextRequest) {
 
     await partnerApplication.save();
 
-    // Send email notification (non-blocking - don't fail if email fails)
-    sendPartnerApplicationEmail({
+    emailService.sendPartnerApplicationEmail({
       firstName: validatedData.firstName,
       lastName: validatedData.lastName,
       businessName: validatedData.businessName,
@@ -173,10 +172,9 @@ export async function POST(request: NextRequest) {
       abn: validatedData.abn,
       acn: validatedData.acn,
       goals: validatedData.goals,
-      submittedAt: partnerApplication.submittedAt,
+      submittedAt: partnerApplication.submittedAt.toISOString(),
     }).catch((error) => {
       console.error("Failed to send partner application email notification:", error);
-      // Don't throw - email failure shouldn't prevent application submission
     });
 
     return NextResponse.json({

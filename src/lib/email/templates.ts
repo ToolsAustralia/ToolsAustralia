@@ -268,9 +268,14 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
 /**
  * Create HTML email template for password reset
  */
-export function createPasswordResetEmailTemplate(userName: string, resetUrl: string): string {
+export function createPasswordResetEmailTemplate(
+  userName: string,
+  resetUrl: string,
+  expiryMinutes: number = 1440
+): string {
   const baseUrl = getBaseUrl();
   const safeName = userName || 'User';
+  const expiryText = expiryMinutes >= 60 ? `${expiryMinutes / 60} hour${expiryMinutes > 60 ? 's' : ''}` : `${expiryMinutes} minutes`;
   
   return `
     <!DOCTYPE html>
@@ -447,7 +452,7 @@ export function createPasswordResetEmailTemplate(userName: string, resetUrl: str
                     
                     <p class="intro-text">
                         We received a request to reset the password for your Tools Australia account.
-                        Click the button below to securely choose a new password. This link expires in 60 minutes.
+                        Click the button below to securely choose a new password. This link expires in ${expiryText}.
                     </p>
 
                     <div class="reset-button-wrapper">
@@ -463,7 +468,7 @@ export function createPasswordResetEmailTemplate(userName: string, resetUrl: str
                     <div class="security-notice">
                         <h3>Security Information</h3>
                         <ul>
-                            <li>This reset link expires in 60 minutes.</li>
+                            <li>This reset link expires in ${expiryText}.</li>
                             <li>Never share this link with anyone.</li>
                             <li>If you didn't request a password reset, you can safely ignore this email.</li>
                         </ul>
