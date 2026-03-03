@@ -77,7 +77,7 @@ export default function GiveawayDetails() {
     { icon: Truck, title: "Delivery", description: "Australia-wide, free of charge", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
     { icon: Zap, title: "We'll Call You", description: "Winner contacted by phone at the draw", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
     { icon: Shield, title: "Eligibility", description: "Open to all Australian residents 18+ (Excluding SA & ACT)", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
-    { icon: IdCard, title: "License Numbers", description: "NTP/15640", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
+    { icon: IdCard, title: "License Numbers", description: "NTP/15961", bgColor: "bg-gradient-to-br from-gray-700/90 via-gray-600/90 to-gray-700/90" },
   ];
 
   return (
