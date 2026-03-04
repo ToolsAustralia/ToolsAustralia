@@ -91,7 +91,7 @@ export default function AlternatingMultiplierList() {
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {configs.map((config) => {
           const currentMultiplier = getCurrentMultiplier(config);
           const otherMultiplier = config.multipliers.find((m) => m !== currentMultiplier);
@@ -99,14 +99,14 @@ export default function AlternatingMultiplierList() {
           return (
             <div
               key={config.id}
-              className={`bg-white rounded-lg border-2 p-4 ${
+              className={`bg-white rounded-lg border-2 p-3 sm:p-4 ${
                 config.isEnabled ? "border-green-200 bg-green-50" : "border-gray-200"
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h4 className="text-lg font-semibold text-gray-900">{getTypeLabel(config.type)}</h4>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+                    <h4 className="text-base sm:text-lg font-semibold text-gray-900">{getTypeLabel(config.type)}</h4>
                     {config.isEnabled ? (
                       <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
                         <CheckCircle2 className="w-3 h-3" />
