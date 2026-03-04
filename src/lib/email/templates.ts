@@ -4,6 +4,8 @@
  * These templates can be migrated to SendGrid Dynamic Templates later if desired
  */
 
+import { escapeHtml, escapeHtmlPreserveNewlines } from './utils';
+
 /**
  * Get the base URL for the application
  */
@@ -12,11 +14,16 @@ function getBaseUrl(): string {
   return appUrl.replace(/\/$/, ''); // Remove trailing slash
 }
 
+/** Support email for customer replies - used in template footers */
+const SUPPORT_EMAIL = 'support@toolsaustralia.com.au';
+
 /**
  * Create HTML email template for verification code
  */
 export function createVerificationEmailTemplate(userName: string, verificationCode: string): string {
   const baseUrl = getBaseUrl();
+  const safeUserName = escapeHtml(userName);
+  const safeCode = escapeHtml(verificationCode);
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -216,7 +223,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                 </div>
                 
                 <div class="content">
-                    <h2 class="greeting">Hello ${userName}!</h2>
+                    <h2 class="greeting">Hello ${safeUserName}!</h2>
                     
                     <p class="intro-text">
                         Thank you for joining Tools Australia. To complete your account setup and ensure the security of your account, please verify your email address using the verification code below.
@@ -224,7 +231,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                     
                     <div class="verification-section">
                         <p class="verification-label">Your Verification Code</p>
-                        <div class="verification-code">${verificationCode}</div>
+                        <div class="verification-code">${safeCode}</div>
                     </div>
                     
                     <p class="instructions">
@@ -242,7 +249,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                     </div>
                     
                     <p class="support-text">
-                        If you have any questions or need assistance, our support team is here to help. You can reach us through your account dashboard or by replying to this email.
+                        If you have any questions or need assistance, our support team is here to help. You can reach us through your account dashboard or by contacting <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a>.
                     </p>
                     
                     <div class="signature">
@@ -255,7 +262,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                 
                 <div class="footer">
                     <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
-                    <p class="footer-text">This is an automated message. Please do not reply to this email.</p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
                     <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
                 </div>
             </div>
@@ -274,7 +281,7 @@ export function createPasswordResetEmailTemplate(
   expiryMinutes: number = 1440
 ): string {
   const baseUrl = getBaseUrl();
-  const safeName = userName || 'User';
+  const safeName = escapeHtml(userName || 'User');
   const expiryText = expiryMinutes >= 60 ? `${expiryMinutes / 60} hour${expiryMinutes > 60 ? 's' : ''}` : `${expiryMinutes} minutes`;
   
   return `
@@ -489,7 +496,7 @@ export function createPasswordResetEmailTemplate(
                 
                 <div class="footer">
                     <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
-                    <p class="footer-text">This is an automated message. Please do not reply to this email.</p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
                     <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
                 </div>
             </div>
@@ -516,6 +523,12 @@ export function createContactSubmissionEmailTemplate(data: {
     timeStyle: 'long',
     timeZone: 'Australia/Sydney',
   });
+  const safeFirstName = escapeHtml(data.firstName);
+  const safeLastName = escapeHtml(data.lastName);
+  const safeEmail = escapeHtml(data.email);
+  const safePhone = escapeHtml(data.phone);
+  const safeSubject = escapeHtml(data.subject);
+  const safeMessage = escapeHtmlPreserveNewlines(data.message);
 
   return `
     <!DOCTYPE html>
@@ -525,134 +538,56 @@ export function createContactSubmissionEmailTemplate(data: {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>New Contact Form Submission - Tools Australia</title>
         <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 line-height: 1.6;
                 color: #1f2937;
-                background-color: #f3f4f6;
-                padding: 20px;
+                margin: 0;
+                padding: 0;
+                background-color: #f8fafc;
             }
-            .email-container {
-                max-width: 650px;
+            .email-wrapper { width: 100%; background-color: #f8fafc; padding: 20px 0; }
+            .container {
+                max-width: 600px;
                 margin: 0 auto;
                 background-color: #ffffff;
-                border-radius: 8px;
+                border-radius: 16px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
                 overflow: hidden;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                border: 1px solid #e5e7eb;
             }
             .header {
-                background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-                padding: 30px;
+                background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+                padding: 40px 30px;
                 text-align: center;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
             }
-            .header-title {
-                color: #ffffff;
-                font-size: 24px;
-                font-weight: 600;
-                margin: 0;
-                letter-spacing: 0.5px;
-            }
-            .content {
-                padding: 40px;
-            }
-            .intro {
-                font-size: 16px;
-                color: #4b5563;
-                margin-bottom: 30px;
-                line-height: 1.7;
-            }
-            .info-grid {
-                display: grid;
-                grid-template-columns: 1fr;
-                gap: 20px;
-                margin-bottom: 30px;
-            }
-            .info-item {
-                border-bottom: 1px solid #e5e7eb;
-                padding-bottom: 15px;
-            }
-            .info-item:last-child {
-                border-bottom: none;
-            }
-            .info-label {
-                font-size: 12px;
-                font-weight: 600;
-                color: #6b7280;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-bottom: 6px;
-            }
-            .info-value {
-                font-size: 16px;
-                color: #111827;
-                font-weight: 500;
-            }
-            .message-section {
-                background-color: #f9fafb;
-                border-left: 4px solid #dc2626;
-                padding: 20px;
-                border-radius: 4px;
-                margin: 30px 0;
-            }
-            .message-label {
-                font-size: 12px;
-                font-weight: 600;
-                color: #6b7280;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-bottom: 10px;
-            }
-            .message-content {
-                font-size: 15px;
-                color: #1f2937;
-                line-height: 1.8;
-                white-space: pre-wrap;
-            }
-            .timestamp {
-                font-size: 13px;
-                color: #6b7280;
-                margin-top: 30px;
-                padding-top: 20px;
-                border-top: 1px solid #e5e7eb;
-            }
-            .footer {
-                background-color: #f9fafb;
-                padding: 25px 40px;
-                text-align: center;
-                border-top: 1px solid #e5e7eb;
-            }
-            .footer-text {
-                font-size: 12px;
-                color: #6b7280;
-                margin: 0;
-            }
-            .footer-logo {
-                margin-top: 15px;
-                opacity: 0.6;
-            }
-            @media (max-width: 600px) {
-                .content {
-                    padding: 25px;
-                }
-                .header {
-                    padding: 25px 20px;
-                }
-                .header-title {
-                    font-size: 20px;
-                }
-            }
+            .logo { max-width: 200px; height: auto; margin-bottom: 16px; }
+            .header-title { color: white; font-size: 18px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+            .content { padding: 40px 30px; }
+            .intro { font-size: 16px; color: #4b5563; margin-bottom: 30px; line-height: 1.7; }
+            .info-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 30px; }
+            .info-item { border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; }
+            .info-item:last-child { border-bottom: none; }
+            .info-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+            .info-value { font-size: 16px; color: #111827; font-weight: 500; }
+            .message-section { background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 20px; border-radius: 8px; margin: 30px 0; }
+            .message-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+            .message-content { font-size: 15px; color: #1f2937; line-height: 1.8; white-space: pre-wrap; }
+            .timestamp { font-size: 13px; color: #6b7280; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+            .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; }
+            .footer-text { color: #6b7280; font-size: 13px; margin: 0 0 8px 0; line-height: 1.5; }
+            @media (max-width: 600px) { .container { margin: 10px; border-radius: 12px; } .header, .content, .footer { padding: 30px 20px; } .header-title { font-size: 16px; } }
         </style>
     </head>
     <body>
-        <div class="email-container">
-            <div class="header">
-                <h1 class="header-title">New Contact Form Submission</h1>
-            </div>
+        <div class="email-wrapper">
+            <div class="container">
+                <div class="header">
+                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
+                    <h1 class="header-title">New Contact Form Submission</h1>
+                </div>
             
             <div class="content">
                 <p class="intro">You have received a new contact form submission from the Tools Australia website.</p>
@@ -660,25 +595,25 @@ export function createContactSubmissionEmailTemplate(data: {
                 <div class="info-grid">
                     <div class="info-item">
                         <div class="info-label">Full Name</div>
-                        <div class="info-value">${data.firstName} ${data.lastName}</div>
+                        <div class="info-value">${safeFirstName} ${safeLastName}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Email Address</div>
-                        <div class="info-value"><a href="mailto:${data.email}" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
+                        <div class="info-value"><a href="mailto:${safeEmail}" style="color: #dc2626; text-decoration: none;">${safeEmail}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Phone Number</div>
-                        <div class="info-value"><a href="tel:${data.phone}" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
+                        <div class="info-value"><a href="tel:${safePhone}" style="color: #dc2626; text-decoration: none;">${safePhone}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Subject</div>
-                        <div class="info-value">${data.subject}</div>
+                        <div class="info-value">${safeSubject}</div>
                     </div>
                 </div>
                 
                 <div class="message-section">
                     <div class="message-label">Message</div>
-                    <div class="message-content">${data.message.replace(/\n/g, '<br>')}</div>
+                    <div class="message-content">${safeMessage}</div>
                 </div>
                 
                 <div class="timestamp">
@@ -689,8 +624,10 @@ export function createContactSubmissionEmailTemplate(data: {
             <div class="footer">
                 <p class="footer-text">This is an automated notification from Tools Australia.</p>
                 <p class="footer-text">Please reply directly to this email to respond to the customer.</p>
+                <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
             </div>
         </div>
+    </div>
     </body>
     </html>
   `;
@@ -715,6 +652,14 @@ export function createPartnerApplicationEmailTemplate(data: {
     timeStyle: 'long',
     timeZone: 'Australia/Sydney',
   });
+  const safeFirstName = escapeHtml(data.firstName);
+  const safeLastName = escapeHtml(data.lastName);
+  const safeBusinessName = escapeHtml(data.businessName);
+  const safeEmail = escapeHtml(data.email);
+  const safePhone = escapeHtml(data.phone);
+  const safeAbn = escapeHtml(data.abn ?? '');
+  const safeAcn = escapeHtml(data.acn ?? '');
+  const safeGoals = escapeHtmlPreserveNewlines(data.goals ?? '');
 
   return `
     <!DOCTYPE html>
@@ -724,134 +669,56 @@ export function createPartnerApplicationEmailTemplate(data: {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>New Partner Application - Tools Australia</title>
         <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 line-height: 1.6;
                 color: #1f2937;
-                background-color: #f3f4f6;
-                padding: 20px;
+                margin: 0;
+                padding: 0;
+                background-color: #f8fafc;
             }
-            .email-container {
-                max-width: 650px;
+            .email-wrapper { width: 100%; background-color: #f8fafc; padding: 20px 0; }
+            .container {
+                max-width: 600px;
                 margin: 0 auto;
                 background-color: #ffffff;
-                border-radius: 8px;
+                border-radius: 16px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
                 overflow: hidden;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                border: 1px solid #e5e7eb;
             }
             .header {
-                background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-                padding: 30px;
+                background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+                padding: 40px 30px;
                 text-align: center;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
             }
-            .header-title {
-                color: #ffffff;
-                font-size: 24px;
-                font-weight: 600;
-                margin: 0;
-                letter-spacing: 0.5px;
-            }
-            .content {
-                padding: 40px;
-            }
-            .intro {
-                font-size: 16px;
-                color: #4b5563;
-                margin-bottom: 30px;
-                line-height: 1.7;
-            }
-            .info-grid {
-                display: grid;
-                grid-template-columns: 1fr;
-                gap: 20px;
-                margin-bottom: 30px;
-            }
-            .info-item {
-                border-bottom: 1px solid #e5e7eb;
-                padding-bottom: 15px;
-            }
-            .info-item:last-child {
-                border-bottom: none;
-            }
-            .info-label {
-                font-size: 12px;
-                font-weight: 600;
-                color: #6b7280;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-bottom: 6px;
-            }
-            .info-value {
-                font-size: 16px;
-                color: #111827;
-                font-weight: 500;
-            }
-            .goals-section {
-                background-color: #f9fafb;
-                border-left: 4px solid #dc2626;
-                padding: 20px;
-                border-radius: 4px;
-                margin: 30px 0;
-            }
-            .goals-label {
-                font-size: 12px;
-                font-weight: 600;
-                color: #6b7280;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-bottom: 10px;
-            }
-            .goals-content {
-                font-size: 15px;
-                color: #1f2937;
-                line-height: 1.8;
-                white-space: pre-wrap;
-            }
-            .timestamp {
-                font-size: 13px;
-                color: #6b7280;
-                margin-top: 30px;
-                padding-top: 20px;
-                border-top: 1px solid #e5e7eb;
-            }
-            .footer {
-                background-color: #f9fafb;
-                padding: 25px 40px;
-                text-align: center;
-                border-top: 1px solid #e5e7eb;
-            }
-            .footer-text {
-                font-size: 12px;
-                color: #6b7280;
-                margin: 0;
-            }
-            .footer-logo {
-                margin-top: 15px;
-                opacity: 0.6;
-            }
-            @media (max-width: 600px) {
-                .content {
-                    padding: 25px;
-                }
-                .header {
-                    padding: 25px 20px;
-                }
-                .header-title {
-                    font-size: 20px;
-                }
-            }
+            .logo { max-width: 200px; height: auto; margin-bottom: 16px; }
+            .header-title { color: white; font-size: 18px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+            .content { padding: 40px 30px; }
+            .intro { font-size: 16px; color: #4b5563; margin-bottom: 30px; line-height: 1.7; }
+            .info-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 30px; }
+            .info-item { border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; }
+            .info-item:last-child { border-bottom: none; }
+            .info-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+            .info-value { font-size: 16px; color: #111827; font-weight: 500; }
+            .goals-section { background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 20px; border-radius: 8px; margin: 30px 0; }
+            .goals-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+            .goals-content { font-size: 15px; color: #1f2937; line-height: 1.8; white-space: pre-wrap; }
+            .timestamp { font-size: 13px; color: #6b7280; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+            .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; }
+            .footer-text { color: #6b7280; font-size: 13px; margin: 0 0 8px 0; line-height: 1.5; }
+            @media (max-width: 600px) { .container { margin: 10px; border-radius: 12px; } .header, .content, .footer { padding: 30px 20px; } .header-title { font-size: 16px; } }
         </style>
     </head>
     <body>
-        <div class="email-container">
-            <div class="header">
-                <h1 class="header-title">New Partner Application</h1>
-            </div>
+        <div class="email-wrapper">
+            <div class="container">
+                <div class="header">
+                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
+                    <h1 class="header-title">New Partner Application</h1>
+                </div>
             
             <div class="content">
                 <p class="intro">You have received a new partner application from the Tools Australia website.</p>
@@ -859,30 +726,30 @@ export function createPartnerApplicationEmailTemplate(data: {
                 <div class="info-grid">
                     <div class="info-item">
                         <div class="info-label">Contact Name</div>
-                        <div class="info-value">${data.firstName} ${data.lastName}</div>
+                        <div class="info-value">${safeFirstName} ${safeLastName}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Email Address</div>
-                        <div class="info-value"><a href="mailto:${data.email}" style="color: #dc2626; text-decoration: none;">${data.email}</a></div>
+                        <div class="info-value"><a href="mailto:${safeEmail}" style="color: #dc2626; text-decoration: none;">${safeEmail}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Phone Number</div>
-                        <div class="info-value"><a href="tel:${data.phone}" style="color: #dc2626; text-decoration: none;">${data.phone}</a></div>
+                        <div class="info-value"><a href="tel:${safePhone}" style="color: #dc2626; text-decoration: none;">${safePhone}</a></div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Business Name</div>
-                        <div class="info-value">${data.businessName}</div>
+                        <div class="info-value">${safeBusinessName}</div>
                     </div>
                     ${data.abn ? `
                     <div class="info-item">
                         <div class="info-label">ABN</div>
-                        <div class="info-value">${data.abn}</div>
+                        <div class="info-value">${safeAbn}</div>
                     </div>
                     ` : ''}
                     ${data.acn ? `
                     <div class="info-item">
                         <div class="info-label">ACN</div>
-                        <div class="info-value">${data.acn}</div>
+                        <div class="info-value">${safeAcn}</div>
                     </div>
                     ` : ''}
                 </div>
@@ -890,7 +757,7 @@ export function createPartnerApplicationEmailTemplate(data: {
                 ${data.goals ? `
                 <div class="goals-section">
                     <div class="goals-label">Partnership Goals</div>
-                    <div class="goals-content">${data.goals.replace(/\n/g, '<br>')}</div>
+                    <div class="goals-content">${safeGoals}</div>
                 </div>
                 ` : ''}
                 
@@ -902,6 +769,143 @@ export function createPartnerApplicationEmailTemplate(data: {
             <div class="footer">
                 <p class="footer-text">This is an automated notification from Tools Australia.</p>
                 <p class="footer-text">Please reply directly to this email to respond to the applicant.</p>
+                <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+            </div>
+        </div>
+    </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Create HTML email template for login code (passwordless sign-in)
+ */
+export function createLoginCodeEmailTemplate(userName: string, loginCode: string, expiryMinutes: number = 15): string {
+  const baseUrl = getBaseUrl();
+  const safeUserName = escapeHtml(userName);
+  const safeCode = escapeHtml(loginCode);
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login Code - Tools Australia</title>
+        <style>
+            body {
+                font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                margin: 0;
+                padding: 0;
+                background-color: #f8fafc;
+            }
+            .email-wrapper {
+                width: 100%;
+                background-color: #f8fafc;
+                padding: 20px 0;
+            }
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 16px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+                border: 1px solid #e5e7eb;
+            }
+            .header {
+                background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+                padding: 40px 30px;
+                text-align: center;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+            }
+            .logo { max-width: 200px; height: auto; margin-bottom: 16px; }
+            .header-title { color: white; font-size: 18px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+            .content { padding: 40px 30px; }
+            .greeting { font-size: 24px; font-weight: 700; color: #1f2937; margin: 0 0 20px 0; }
+            .intro-text { font-size: 16px; color: #4b5563; margin: 0 0 30px 0; line-height: 1.7; }
+            .code-section {
+                background: linear-gradient(135deg, #fef2f2 0%, #fef7f7 100%);
+                border: 2px solid #fecaca;
+                border-radius: 12px;
+                padding: 30px;
+                text-align: center;
+                margin: 30px 0;
+                position: relative;
+            }
+            .code-section::before {
+                content: '';
+                position: absolute;
+                top: -2px; left: -2px; right: -2px; bottom: -2px;
+                background: linear-gradient(135deg, #dc2626, #b91c1c);
+                border-radius: 12px;
+                z-index: -1;
+            }
+            .code-label { font-size: 14px; font-weight: 600; color: #dc2626; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 15px 0; }
+            .login-code { font-size: 36px; font-weight: 800; color: #dc2626; letter-spacing: 8px; font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace; margin: 0; }
+            .security-notice {
+                background-color: #fffbeb;
+                border-left: 4px solid #f59e0b;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 30px 0;
+            }
+            .security-notice h3 { color: #92400e; font-size: 16px; font-weight: 700; margin: 0 0 12px 0; }
+            .security-notice ul { margin: 0; padding-left: 20px; color: #92400e; }
+            .security-notice li { margin: 8px 0; font-size: 14px; }
+            .signature { margin: 30px 0 0 0; }
+            .signature-text { font-size: 15px; color: #4b5563; margin: 0; }
+            .team-name { font-weight: 700; color: #dc2626; }
+            .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; }
+            .footer-text { color: #6b7280; font-size: 13px; margin: 0 0 8px 0; line-height: 1.5; }
+            @media (max-width: 600px) {
+                .container { margin: 10px; border-radius: 12px; }
+                .header, .content, .footer { padding: 30px 20px; }
+                .login-code { font-size: 28px; letter-spacing: 6px; }
+                .greeting { font-size: 20px; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-wrapper">
+            <div class="container">
+                <div class="header">
+                    <div>
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
+                        <h1 class="header-title">Sign-In Code</h1>
+                    </div>
+                </div>
+                <div class="content">
+                    <h2 class="greeting">Hi ${safeUserName},</h2>
+                    <p class="intro-text">
+                        You requested a one-time code to sign in to your Tools Australia account. Enter the code below to continue.
+                    </p>
+                    <div class="code-section">
+                        <p class="code-label">Your Sign-In Code</p>
+                        <div class="login-code">${safeCode}</div>
+                    </div>
+                    <div class="security-notice">
+                        <h3>Security Information</h3>
+                        <ul>
+                            <li>This code expires in ${expiryMinutes} minutes</li>
+                            <li>Never share this code with anyone</li>
+                            <li>If you didn't request this code, you can safely ignore this email</li>
+                            <li>This code can only be used once</li>
+                        </ul>
+                    </div>
+                    <div class="signature">
+                        <p class="signature-text">
+                            Best regards,<br>
+                            <span class="team-name">The Tools Australia Team</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="footer">
+                    <p class="footer-text">&copy; 2025 Tools Australia. All rights reserved.</p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                </div>
             </div>
         </div>
     </body>
@@ -909,24 +913,95 @@ export function createPartnerApplicationEmailTemplate(data: {
   `;
 }
 
+/**
+ * Create HTML email template for admin replies to contact/partner submissions
+ */
+export function createAdminReplyEmailTemplate(
+  submitterName: string,
+  adminMessage: string,
+  submissionType: 'contact' | 'partner' = 'contact'
+): string {
+  const baseUrl = getBaseUrl();
+  const safeName = escapeHtml(submitterName);
+  // adminMessage may be HTML from RichTextEditor; use as-is (Tiptap output is safe)
+  const messageHtml =
+    typeof adminMessage === 'string' && adminMessage.includes('<') && adminMessage.includes('>')
+      ? adminMessage
+      : escapeHtmlPreserveNewlines(adminMessage);
+  const typeLabel = submissionType === 'partner' ? 'Partner Application' : 'Contact Inquiry';
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Tools Australia</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                margin: 0;
+                padding: 0;
+                background-color: #f8fafc;
+            }
+            .email-wrapper { width: 100%; background-color: #f8fafc; padding: 20px 0; }
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 16px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+                border: 1px solid #e5e7eb;
+            }
+            .header {
+                background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+                padding: 40px 30px;
+                text-align: center;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+            }
+            .logo { max-width: 200px; height: auto; margin-bottom: 16px; }
+            .header-title { color: white; font-size: 18px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+            .content { padding: 40px 30px; }
+            .greeting { font-size: 22px; font-weight: 700; color: #1f2937; margin: 0 0 24px 0; }
+            .reply-body { font-size: 16px; color: #1f2937; line-height: 1.8; margin: 0 0 30px 0; }
+            .reply-body p { margin: 0 0 0.5em 0; }
+            .reply-body p:last-child { margin-bottom: 0; }
+            .signature { margin: 30px 0 0 0; }
+            .signature-text { font-size: 15px; color: #4b5563; margin: 0; }
+            .team-name { font-weight: 700; color: #dc2626; }
+            .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; }
+            .footer-text { color: #6b7280; font-size: 13px; margin: 0 0 8px 0; line-height: 1.5; }
+            @media (max-width: 600px) { .container { margin: 10px; border-radius: 12px; } .header, .content, .footer { padding: 30px 20px; } }
+        </style>
+    </head>
+    <body>
+        <div class="email-wrapper">
+            <div class="container">
+                <div class="header">
+                    <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
+                    <h1 class="header-title">Reply to Your ${typeLabel}</h1>
+                </div>
+                <div class="content">
+                    <h2 class="greeting">Hi ${safeName},</h2>
+                    <div class="reply-body">${messageHtml}</div>
+                    <div class="signature">
+                        <p class="signature-text">
+                            Best regards,<br>
+                            <span class="team-name">The Tools Australia Team</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="footer">
+                    <p class="footer-text">&copy; 2025 Tools Australia. All rights reserved.</p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+}

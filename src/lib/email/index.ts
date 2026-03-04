@@ -19,14 +19,19 @@ export {
 // Types
 export * from './types';
 
-// Provider-agnostic utilities (rate limiting, code generation, expiry)
+// Provider-agnostic utilities (rate limiting, code generation, expiry, HTML escaping)
 export {
   checkEmailVerificationRateLimit,
   checkPasswordResetRateLimit,
+  checkLoginCodeRateLimit,
   checkEmailRateLimit,
   generateEmailVerificationCode,
   getEmailVerificationExpiry,
   getPasswordResetExpiry,
   getPasswordResetExpiryMinutes,
+  getLoginCodeExpiry,
+  getLoginCodeExpiryMinutes,
   checkFormSubmissionRateLimit,
+  escapeHtml,
+  escapeHtmlPreserveNewlines,
 } from './utils';

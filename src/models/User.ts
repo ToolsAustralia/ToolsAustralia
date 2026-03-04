@@ -142,6 +142,11 @@ export interface IUser extends Document {
   smsOtpExpires?: Date;
   smsOtpAttempts?: number;
 
+  // Login Code (passwordless sign-in via emailed code)
+  loginCode?: string;
+  loginCodeExpires?: Date;
+  loginCodeAttempts?: number;
+
   // Password Reset
   passwordResetToken?: string;
   passwordResetExpires?: Date;
@@ -691,6 +696,15 @@ const UserSchema = new Schema<IUser>(
       type: Number,
       default: 0,
       min: [0, "OTP attempts cannot be negative"],
+    },
+
+    // Login Code (passwordless sign-in via emailed code)
+    loginCode: String,
+    loginCodeExpires: Date,
+    loginCodeAttempts: {
+      type: Number,
+      default: 0,
+      min: [0, "Login code attempts cannot be negative"],
     },
 
     // Password Reset

@@ -77,8 +77,24 @@ class SendGridClient {
       };
     }
 
+    if (!this.config.apiKey?.trim()) {
+      return {
+        success: false,
+        error: 'SENDGRID_API_KEY is required but not configured',
+        errorCode: EmailErrorCode.CONFIGURATION_ERROR,
+      };
+    }
+
     if (!this.initialized) {
       this.initialize();
+    }
+
+    if (!params.from?.email?.trim() || !params.from?.name?.trim()) {
+      return {
+        success: false,
+        error: 'Missing required from (email, name)',
+        errorCode: EmailErrorCode.VALIDATION_ERROR,
+      };
     }
 
     if (!params.to || !params.subject) {
@@ -111,11 +127,12 @@ class SendGridClient {
       } as Parameters<typeof sgMail.send>[0];
     } else {
       const content: Array<{ type: string; value: string }> = [];
-      if (params.html) {
-        content.push({ type: 'text/html', value: params.html });
-      }
+      // SendGrid requires: text/plain first, then text/html
       if (params.text) {
         content.push({ type: 'text/plain', value: params.text });
+      }
+      if (params.html) {
+        content.push({ type: 'text/html', value: params.html });
       }
 
       if (content.length === 0) {
@@ -136,26 +153,39 @@ class SendGridClient {
     }
 
     let lastError: Error | null = null;
+    let lastRawError: unknown = null;
     for (let attempt = 1; attempt <= this.config.retryAttempts; attempt++) {
       try {
         const [response] = await sgMail.send(msg);
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
+          const raw = response.headers['x-message-id'];
+          const messageId = Array.isArray(raw) ? raw[0] : (raw as string | undefined);
           return {
             success: true,
-            messageId: response.headers['x-message-id'] as string | undefined,
+            messageId,
           };
         } else {
           throw new Error(`SendGrid returned status ${response.statusCode}`);
         }
       } catch (error) {
+        lastRawError = error;
         lastError = error instanceof Error ? error : new Error(String(error));
+        this.logSendGridError(error);
 
         if (this.isValidationError(error)) {
           return {
             success: false,
             error: lastError.message,
             errorCode: EmailErrorCode.VALIDATION_ERROR,
+          };
+        }
+
+        if (this.isRateLimitError(error)) {
+          return {
+            success: false,
+            error: 'SendGrid rate limit exceeded. Please try again later.',
+            errorCode: EmailErrorCode.RATE_LIMIT_EXCEEDED,
           };
         }
 
@@ -171,6 +201,7 @@ class SendGridClient {
     }
 
     console.error('❌ SendGrid email send failed after all retries:', lastError);
+    this.logSendGridError(lastRawError ?? lastError);
     return {
       success: false,
       error: lastError?.message || 'Failed to send email after retries',
@@ -187,6 +218,26 @@ class SendGridClient {
       }
     }
     return false;
+  }
+
+  private isRateLimitError(error: unknown): boolean {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const response = (error as { response: { statusCode?: number } }).response;
+      return response?.statusCode === 429;
+    }
+    return false;
+  }
+
+  /**
+   * Log full SendGrid error details for debugging (400 Bad Request, etc.)
+   */
+  private logSendGridError(error: unknown): void {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const res = (error as { response?: { body?: unknown; statusCode?: number } }).response;
+      if (res?.body) {
+        console.error('SendGrid error details:', JSON.stringify(res.body, null, 2));
+      }
+    }
   }
 
   private sleep(ms: number): Promise<void> {

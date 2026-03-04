@@ -2,9 +2,14 @@
  * Sender Identities
  * Defines per-email-type sender addresses for SendGrid.
  * All addresses must be under a domain authenticated in SendGrid.
+ *
+ * If SendGrid returns 400 for sender identity, try setting SENDGRID_FROM_DOMAIN
+ * to the authenticated subdomain (e.g. em7481.toolsaustralia.com.au) in .env.local
  */
 
-const EMAIL_DOMAIN = 'toolsaustralia.com.au';
+const DEFAULT_EMAIL_DOMAIN = 'toolsaustralia.com.au';
+const EMAIL_DOMAIN =
+  process.env.SENDGRID_FROM_DOMAIN?.trim() || DEFAULT_EMAIL_DOMAIN;
 
 export enum EmailCategory {
   VERIFICATION = 'VERIFICATION',
@@ -21,33 +26,42 @@ export interface SenderIdentity {
   replyTo?: string;
 }
 
-const SENDER_IDENTITIES: Record<EmailCategory, SenderIdentity> = {
+/** Support email for replies - always use root domain for customer-facing support */
+const SUPPORT_EMAIL = 'support@toolsaustralia.com.au';
+
+const SENDER_IDENTITIES: Record<EmailCategory, SenderIdentity> = (() => {
+  const domain = EMAIL_DOMAIN;
+  return {
   [EmailCategory.VERIFICATION]: {
-    fromEmail: `verify-email@${EMAIL_DOMAIN}`,
+    fromEmail: `verify-email@${domain}`,
     fromName: 'Tools Australia',
+    replyTo: SUPPORT_EMAIL,
   },
   [EmailCategory.PASSWORD_RESET]: {
-    fromEmail: `reset-password@${EMAIL_DOMAIN}`,
+    fromEmail: `reset-password@${domain}`,
     fromName: 'Tools Australia',
+    replyTo: SUPPORT_EMAIL,
   },
   [EmailCategory.CONTACT_NOTIFICATION]: {
-    fromEmail: `no-reply@${EMAIL_DOMAIN}`,
+    fromEmail: `no-reply@${domain}`,
     fromName: 'Tools Australia',
   },
   [EmailCategory.PARTNER_NOTIFICATION]: {
-    fromEmail: `no-reply@${EMAIL_DOMAIN}`,
+    fromEmail: `no-reply@${domain}`,
     fromName: 'Tools Australia',
   },
   [EmailCategory.ADMIN_SUPPORT]: {
-    fromEmail: `support@${EMAIL_DOMAIN}`,
+    fromEmail: `support@${domain}`,
     fromName: 'Tools Australia Support',
-    replyTo: `support@${EMAIL_DOMAIN}`,
+    replyTo: SUPPORT_EMAIL,
   },
   [EmailCategory.TRANSACTIONAL]: {
-    fromEmail: `no-reply@${EMAIL_DOMAIN}`,
+    fromEmail: `no-reply@${domain}`,
     fromName: 'Tools Australia',
+    replyTo: SUPPORT_EMAIL,
   },
 };
+})();
 
 /**
  * Resolve the sender identity for a given email category.

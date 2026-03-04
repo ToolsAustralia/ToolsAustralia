@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 import {
   emailService,
   EmailCategory,
+  escapeHtmlPreserveNewlines,
   getPasswordResetExpiry,
   getPasswordResetExpiryMinutes,
 } from "@/lib/email/";
@@ -296,7 +297,7 @@ async function handleSendEmail(user: any, subject: string, message: string) {
     const emailResult = await emailService.sendCustomEmail({
       to: user.email,
       subject,
-      html: `<p>${message.replace(/\n/g, "<br>")}</p>`,
+      html: `<p>${escapeHtmlPreserveNewlines(message)}</p>`,
       text: message,
       category: EmailCategory.ADMIN_SUPPORT,
     });

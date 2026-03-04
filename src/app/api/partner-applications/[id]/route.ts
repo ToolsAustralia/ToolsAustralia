@@ -46,7 +46,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Invalid application ID" }, { status: 400 });
     }
 
-    const application = await PartnerApplication.findById(id).populate("reviewedBy", "name email").lean();
+    const application = await PartnerApplication.findById(id)
+      .populate("reviewedBy", "name email")
+      .populate({ path: "replies.sentBy", select: "name email", strictPopulate: false })
+      .lean();
 
     if (!application) {
       return NextResponse.json({ error: "Partner application not found" }, { status: 404 });
@@ -108,7 +111,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const updatedApplication = await PartnerApplication.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
-    }).populate("reviewedBy", "name email");
+    }).populate("reviewedBy", "name email")
+      .populate({ path: "replies.sentBy", select: "name email", strictPopulate: false });
 
     return NextResponse.json({
       success: true,

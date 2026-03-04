@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
 
     await partnerApplication.save();
 
-    emailService.sendPartnerApplicationEmail({
+    const emailResult = await emailService.sendPartnerApplicationEmail({
       firstName: validatedData.firstName,
       lastName: validatedData.lastName,
       businessName: validatedData.businessName,
@@ -173,9 +173,18 @@ export async function POST(request: NextRequest) {
       acn: validatedData.acn,
       goals: validatedData.goals,
       submittedAt: partnerApplication.submittedAt.toISOString(),
-    }).catch((error) => {
-      console.error("Failed to send partner application email notification:", error);
     });
+
+    if (!emailResult.success) {
+      console.error("Failed to send partner application email notification:", emailResult.error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "We received your application but encountered an issue notifying our team. Your application has been saved. Please try again in a few minutes or contact us directly.",
+        },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

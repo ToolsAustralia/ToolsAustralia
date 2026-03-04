@@ -17,7 +17,7 @@ const VerificationEmailPreview: React.FC = () => {
   const mockVerificationCode = "ABC123";
   const baseUrl = mounted && typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
-  // Generate the email HTML using the same template from lib/email.ts
+  // Inline template aligned with src/lib/email/templates.ts (createVerificationEmailTemplate)
   const emailHtml = `
     <!DOCTYPE html>
     <html lang="en">
@@ -256,7 +256,7 @@ const VerificationEmailPreview: React.FC = () => {
                 
                 <div class="footer">
                     <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
-                    <p class="footer-text">This is an automated message. Please do not reply to this email.</p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:support@toolsaustralia.com.au" style="color: #dc2626; text-decoration: none;">support@toolsaustralia.com.au</a></p>
                     <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
                 </div>
             </div>

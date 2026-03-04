@@ -26,14 +26,20 @@ export async function POST(request: NextRequest) {
 
     const rateLimit = checkPasswordResetRateLimit(email);
     if (!rateLimit.allowed) {
-      const resetMinutes = Math.ceil((rateLimit.resetTime - Date.now()) / 60000);
+      const retryAfterSeconds = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
+      const retryAfterMinutes = Math.ceil(retryAfterSeconds / 60);
       return NextResponse.json(
         {
           success: false,
-          error: `Too many requests. Try again in ${resetMinutes} minutes.`,
-          rateLimit,
+          error: `You can request a password reset only once every 5 minutes. Please try again after ${retryAfterMinutes} minute${retryAfterMinutes === 1 ? '' : 's'}.`,
+          retryAfterSeconds,
         },
-        { status: 429 }
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+          },
+        }
       );
     }
 

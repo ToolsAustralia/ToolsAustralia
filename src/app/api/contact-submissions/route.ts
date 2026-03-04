@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
 
     await contactSubmission.save();
 
-    emailService.sendContactSubmissionEmail({
+    const emailResult = await emailService.sendContactSubmissionEmail({
       firstName: validatedData.firstName,
       lastName: validatedData.lastName,
       email: validatedData.email,
@@ -176,9 +176,18 @@ export async function POST(request: NextRequest) {
       subject: validatedData.subject,
       message: validatedData.message,
       submittedAt: contactSubmission.submittedAt.toISOString(),
-    }).catch((error) => {
-      console.error("Failed to send contact submission email notification:", error);
     });
+
+    if (!emailResult.success) {
+      console.error("Failed to send contact submission email notification:", emailResult.error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "We received your submission but encountered an issue notifying our team. Your message has been saved. Please try again in a few minutes or contact us directly.",
+        },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json(
       {

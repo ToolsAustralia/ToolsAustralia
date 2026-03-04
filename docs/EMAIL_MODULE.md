@@ -38,10 +38,11 @@ All addresses must be under a domain authenticated in SendGrid (`toolsaustralia.
 ```typescript
 import {
   emailService,
-  checkEmailRateLimit,
+  checkEmailVerificationRateLimit,
+  checkFormSubmissionRateLimit,
+  escapeHtml,
   generateEmailVerificationCode,
   getEmailVerificationExpiry,
-  checkFormSubmissionRateLimit,
   EmailCategory,
   getSenderIdentity,
 } from '@/lib/email/';
@@ -61,10 +62,12 @@ import {
 
 | Function | Description |
 |----------|-------------|
-| `checkEmailVerificationRateLimit(email)` | Rate limit for verification: 3 per 5 min |
-| `checkPasswordResetRateLimit(email)` | Rate limit for password reset: 3 per 5 min |
+| `checkEmailVerificationRateLimit(email)` | Rate limit for verification: 3 per 5 min (short-term) |
+| `checkPasswordResetRateLimit(email)` | Rate limit for password reset: 3 per 5 min (short-term) |
 | `checkFormSubmissionRateLimit(identifier)` | Rate limit for contact/partner forms: 1 per 5 min |
 | `generateEmailVerificationCode()` | 6-character alphanumeric code |
+| `escapeHtml(str)` | Escape HTML to prevent XSS in templates |
+| `escapeHtmlPreserveNewlines(str)` | Escape HTML and convert `\n` to `<br>` |
 | `getEmailVerificationExpiry()` | Expiry date for verification codes (24h default) |
 | `getPasswordResetExpiry()` | Expiry date for reset links (24h default) |
 | `getPasswordResetExpiryMinutes()` | Reset link expiry in minutes |
@@ -131,6 +134,17 @@ await emailService.sendCustomEmail({
 | PASSWORD_RESET_EXPIRY_MINUTES | No | 1440 | Password reset link expiry (24h) |
 
 **Rate limits:** Email verification 3/5min, password reset 3/5min, contact/partner forms 1/5min. Admin emails have no rate limit.
+
+### Rate Limiter Architecture
+
+Two rate-limiting approaches exist:
+
+| Source | Env Var | Window | Used By |
+|--------|---------|--------|---------|
+| `utils.ts` | `EMAIL_VERIFICATION_RATE_LIMIT_PER_5MIN` | 5 minutes | `/api/auth/send-email-verification`, `/api/user/update-email`, `/api/auth/request-password-reset` |
+| `rate-limiter.ts` | `EMAIL_VERIFICATION_RATE_LIMIT_PER_HOUR` | 1 hour | Exported but **not used** by API routes (available for future use) |
+
+The API routes use the **5-minute** rate limiters from `utils.ts` for immediate spam protection. The `rate-limiter.ts` module provides configurable longer-window limiters if needed.
 
 ## API Routes Using Email
 

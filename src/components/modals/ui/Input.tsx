@@ -21,8 +21,9 @@ interface InputProps {
   step?: number;
   maxLength?: number;
   autoComplete?: string;
-  className?: string; // Applied to the input element itself
-  wrapperClassName?: string; // Applied to the wrapper div
+  size?: "md" | "lg";
+  className?: string;
+  wrapperClassName?: string;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
@@ -45,11 +46,17 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       step,
       maxLength,
       autoComplete,
+      size = "md",
       className = "",
       wrapperClassName = "",
     },
     ref
   ) => {
+    const sizeStyles = {
+      md: "px-3 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3 text-sm",
+      lg: "px-4 py-3 sm:py-3.5 text-base",
+    };
+
     return (
       <div className={`space-y-1.5 sm:space-y-2 ${wrapperClassName}`}>
         {/* Label */}
@@ -90,7 +97,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             step={step}
             maxLength={maxLength}
             autoComplete={autoComplete}
-            className={`w-full px-3 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3 text-sm border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
+            className={`w-full ${sizeStyles[size]} border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
               Icon && !onIconClick ? "pl-9 sm:pl-10" : ""
             } ${Icon && onIconClick ? "pr-9 sm:pr-10" : ""} ${error ? "border-red-500 bg-red-50" : "border-gray-300"} ${
               disabled ? "bg-gray-100 cursor-not-allowed" : "hover:border-red-400 hover:shadow-sm"

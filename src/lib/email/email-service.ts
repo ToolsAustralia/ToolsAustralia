@@ -7,6 +7,7 @@
 import SendGridClient from './sendgrid-client';
 import {
   EmailResult,
+  EmailErrorCode,
   EmailVerificationPayload,
   PasswordResetPayload,
   ContactSubmissionPayload,
@@ -18,8 +19,11 @@ import {
   createPasswordResetEmailTemplate,
   createContactSubmissionEmailTemplate,
   createPartnerApplicationEmailTemplate,
+  createLoginCodeEmailTemplate,
+  createAdminReplyEmailTemplate,
 } from './templates';
 import { EmailCategory, getSenderIdentity } from './sender-identities';
+import { stripHtml } from './utils';
 
 const CONTACT_RECIPIENT = process.env.CONTACT_EMAIL || 'support@toolsaustralia.com.au';
 
@@ -159,6 +163,69 @@ class EmailService {
   }
 
   /**
+   * Send a login code email for passwordless sign-in.
+   * Sender: verify-email@toolsaustralia.com.au (reuses VERIFICATION identity)
+   */
+  public async sendLoginCodeEmail(
+    to: string,
+    payload: { userName: string; loginCode: string; expiryMinutes?: number }
+  ): Promise<EmailResult> {
+    this.ensureInitialized();
+
+    const expiryMinutes = payload.expiryMinutes ?? 15;
+    const sender = getSenderIdentity(EmailCategory.VERIFICATION);
+    const htmlContent = createLoginCodeEmailTemplate(
+      payload.userName || 'User',
+      payload.loginCode,
+      expiryMinutes
+    );
+    const textContent = `Hi ${payload.userName || 'User'},\n\nYour Tools Australia sign-in code is: ${payload.loginCode}\n\nThis code expires in ${expiryMinutes} minutes. If you didn't request this, you can ignore this email.`;
+
+    return this.client.sendEmail({
+      to,
+      from: { email: sender.fromEmail, name: sender.fromName },
+      subject: 'Your Sign-In Code - Tools Australia',
+      html: htmlContent,
+      text: textContent,
+      replyTo: sender.replyTo,
+    });
+  }
+
+  /**
+   * Send an admin reply to a contact/partner submission.
+   * Sender: support@domain | replyTo: support@toolsaustralia.com.au
+   */
+  public async sendAdminReplyEmail(
+    to: string,
+    payload: {
+      submitterName: string;
+      adminMessage: string;
+      originalSubject: string;
+      submissionType: 'contact' | 'partner';
+    }
+  ): Promise<EmailResult> {
+    this.ensureInitialized();
+
+    const sender = getSenderIdentity(EmailCategory.ADMIN_SUPPORT);
+    const subject = payload.originalSubject;
+    const htmlContent = createAdminReplyEmailTemplate(
+      payload.submitterName,
+      payload.adminMessage,
+      payload.submissionType
+    );
+    const textContent = `Hi ${payload.submitterName},\n\n${stripHtml(payload.adminMessage)}\n\nBest regards,\nThe Tools Australia Team`;
+
+    return this.client.sendEmail({
+      to,
+      from: { email: sender.fromEmail, name: sender.fromName },
+      subject,
+      html: htmlContent,
+      text: textContent,
+      replyTo: sender.replyTo,
+    });
+  }
+
+  /**
    * Send a custom email with optional category-based sender resolution.
    * Falls back to TRANSACTIONAL sender if no category is provided.
    * Supports both HTML/text and SendGrid Dynamic Templates.
@@ -166,10 +233,31 @@ class EmailService {
   public async sendCustomEmail(payload: CustomEmailPayload): Promise<EmailResult> {
     this.ensureInitialized();
 
+    // Validate template usage: when templateId is set, templateData is required (can be {})
+    if (payload.templateId) {
+      if (payload.templateData === undefined) {
+        return {
+          success: false,
+          error: 'templateData is required when templateId is provided',
+          errorCode: EmailErrorCode.VALIDATION_ERROR,
+        };
+      }
+    } else {
+      // When not using template, require at least one of html or text
+      const hasContent = Boolean(payload.html?.trim() || payload.text?.trim());
+      if (!hasContent) {
+        return {
+          success: false,
+          error: 'Either templateId with templateData, or at least one of html or text must be provided',
+          errorCode: EmailErrorCode.VALIDATION_ERROR,
+        };
+      }
+    }
+
     const sender = getSenderIdentity(payload.category ?? EmailCategory.TRANSACTIONAL);
     const replyTo = payload.replyTo ?? sender.replyTo;
 
-    if (payload.templateId && payload.templateData) {
+    if (payload.templateId && payload.templateData !== undefined) {
       return this.client.sendEmail({
         to: payload.to,
         from: { email: sender.fromEmail, name: sender.fromName },
