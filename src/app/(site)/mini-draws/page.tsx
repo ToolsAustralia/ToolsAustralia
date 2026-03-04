@@ -22,7 +22,7 @@ export default async function MiniDrawsPage() {
   const nonce = await getNonce();
 
   return (
-    <div className="min-h-screen-svh bg-white">
+    <div className="min-h-screen-svh bg-white w-full overflow-x-hidden">
       <BreadcrumbJsonLd
         items={[
           { name: "Home", item: `${baseUrl}/` },

@@ -15,8 +15,13 @@ import {
   AlertCircle,
   RefreshCw,
   Edit,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Button, Input, Select } from "@/components/modals/ui";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useToast } from "@/components/ui/Toast";
 import { formatDateInAEST } from "@/utils/common/timezone";
 import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
@@ -531,88 +536,69 @@ export default function DrawResults() {
 
   if (isLoading && draws.length === 0) {
     return (
-      <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 animate-spin text-red-600 mx-auto mb-4" />
-          <span className="text-lg text-gray-600 font-['Poppins']">Loading draws...</span>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+            Draw Results
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-3 sm:p-4 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
+              <div className="h-8 bg-gray-200 rounded mb-2 w-3/4"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6 animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-10 bg-gray-200 rounded w-full"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100 ">
-      <div className="w-full mx-auto space-y-8">
-        {/* Header Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Draw Results</h1>
-          <p className="text-lg text-gray-600 font-['Poppins']">Manage completed draws and winner selection</p>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+     
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Total Draws Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl">
-                <Trophy className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Total Draws</span>
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900 mb-1 font-['Poppins']">{stats.totalDraws}</h3>
-            <p className="text-sm text-gray-600">Completed draws</p>
-          </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <MetricCard
+          title="Total Draws"
+          value={stats.totalDraws}
+          icon={Trophy}
+          color="blue"
+          subtitle="Completed draws"
+        />
+        <MetricCard
+          title="Total Entries"
+          value={stats.totalEntries.toLocaleString()}
+          icon={Users}
+          color="emerald"
+          subtitle="All entries combined"
+        />
+        <MetricCard
+          title="Total Prize Value"
+          value={formatCurrency(stats.totalPrizeValue)}
+          icon={DollarSign}
+          color="yellow"
+          subtitle="Prize pool value"
+        />
+        <MetricCard
+          title="Winner Rate"
+          value={`${stats.winnerSelectionRate}%`}
+          icon={CheckCircle}
+          color="purple"
+          subtitle="Selection completion"
+        />
+      </div>
 
-          {/* Total Entries Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl">
-                <Users className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Total Entries</span>
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900 mb-1 font-['Poppins']">
-              {stats.totalEntries.toLocaleString()}
-            </h3>
-            <p className="text-sm text-gray-600">All entries combined</p>
-          </div>
-
-          {/* Total Prize Value Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl">
-                <DollarSign className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Total Prize Value</span>
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-1 font-['Poppins']">
-              {formatCurrency(stats.totalPrizeValue)}
-            </h3>
-            <p className="text-sm text-gray-600">Prize pool value</p>
-          </div>
-
-          {/* Winner Rate Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl">
-                <CheckCircle className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Winner Rate</span>
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900 mb-1 font-['Poppins']">{stats.winnerSelectionRate}%</h3>
-            <p className="text-sm text-gray-600">Selection completion</p>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl">
-              <Search className="w-6 h-6 text-white" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 font-['Poppins']">Filter & Search</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Filter & Search</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <Input
               placeholder="Search draws..."
               value={filters.search}
@@ -654,25 +640,24 @@ export default function DrawResults() {
           </div>
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error}</span>
-          </div>
-        )}
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-        {/* Draws List */}
-        <div className="space-y-4">
-          {draws.map((draw) => {
+      {/* Draws List */}
+      <div className="space-y-3 sm:space-y-4">
+        {draws.map((draw) => {
             const winnerStatus = getWinnerStatus(draw);
             const StatusIcon = winnerStatus.icon;
 
             return (
-              <div key={draw._id} className="bg-white rounded-lg shadow border hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
+              <div key={draw._id} className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">{draw.name}</h3>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(draw.status)}`}>
@@ -689,7 +674,7 @@ export default function DrawResults() {
                         dangerouslySetInnerHTML={{ __html: draw.description || "" }}
                       />
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Calendar className="w-4 h-4" />
                           <span>Draw: {formatDate(draw.drawDate)}</span>
@@ -726,25 +711,24 @@ export default function DrawResults() {
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-2 ml-4">
-                      {(draw.status === "completed" || draw.status === "frozen") &&
-                        (!draw.winner || !draw.winner.userId) && (
-                          <Button onClick={() => handleSelectWinner(draw)} size="sm" icon={UserPlus}>
-                            Select Winner
-                          </Button>
-                        )}
-                      {draw.winner && draw.winner.userId && (
-                        <Button onClick={() => handleEditWinner(draw)} size="sm" variant="outline" icon={Edit}>
-                          Edit Winner
+                  <div className="flex flex-wrap gap-2 sm:flex-col sm:flex-shrink-0">
+                    {(draw.status === "completed" || draw.status === "frozen") &&
+                      (!draw.winner || !draw.winner.userId) && (
+                        <Button onClick={() => handleSelectWinner(draw)} size="sm" icon={UserPlus}>
+                          Select Winner
                         </Button>
                       )}
-                      <Button onClick={() => handleEditDraw(draw)} size="sm" variant="outline" icon={Edit}>
-                        Edit Draw
+                    {draw.winner && draw.winner.userId && (
+                      <Button onClick={() => handleEditWinner(draw)} size="sm" variant="outline" icon={Edit}>
+                        Edit Winner
                       </Button>
-                      <Button onClick={() => handleExport(draw)} size="sm" variant="outline" icon={Download}>
-                        Export
-                      </Button>
-                    </div>
+                    )}
+                    <Button onClick={() => handleEditDraw(draw)} size="sm" variant="outline" icon={Edit}>
+                      Edit Draw
+                    </Button>
+                    <Button onClick={() => handleExport(draw)} size="sm" variant="outline" icon={Download}>
+                      Export
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -752,30 +736,56 @@ export default function DrawResults() {
           })}
         </div>
 
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(pagination.currentPage - 1)}
-              disabled={!pagination.hasPrevPage || isLoading}
-            >
-              Previous
-            </Button>
-            <span className="px-4 py-2 text-sm text-gray-600">
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(1)}
+                disabled={!pagination.hasPrevPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="First page"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={!pagination.hasPrevPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </div>
+            <span className="text-xs sm:text-sm text-gray-700 font-medium">
               Page {pagination.currentPage} of {pagination.totalPages}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(pagination.currentPage + 1)}
-              disabled={!pagination.hasNextPage || isLoading}
-            >
-              Next
-            </Button>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={!pagination.hasNextPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Next page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.totalPages)}
+                disabled={!pagination.hasNextPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Last page"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* Winner Selection Modal */}
         {selectedDraw && (
@@ -838,20 +848,19 @@ export default function DrawResults() {
           />
         )}
 
-        {/* Edit Draw Modal */}
-        {editingDraw && (
-          <MajorDrawEditModal
-            isOpen={isEditDrawModalOpen}
-            onCloseAction={() => {
-              setIsEditDrawModalOpen(false);
-              setEditingDraw(null);
-            }}
-            onSaveAction={handleSaveDraw}
-            majorDraw={convertToMajorDrawData(editingDraw)}
-            isLoading={isSubmittingDraw}
-          />
-        )}
-      </div>
+      {/* Edit Draw Modal */}
+      {editingDraw && (
+        <MajorDrawEditModal
+          isOpen={isEditDrawModalOpen}
+          onCloseAction={() => {
+            setIsEditDrawModalOpen(false);
+            setEditingDraw(null);
+          }}
+          onSaveAction={handleSaveDraw}
+          majorDraw={convertToMajorDrawData(editingDraw)}
+          isLoading={isSubmittingDraw}
+        />
+      )}
     </div>
   );
 }

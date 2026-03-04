@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 import Winner from "@/models/Winner";
 import ReferralEvent from "@/models/ReferralEvent";
 import mongoose from "mongoose";
@@ -26,6 +27,8 @@ export interface ActivityLogItem {
   status: "success" | "info" | "warning" | "error";
   amount?: number;
   timestamp: Date;
+  /** For mini-draw purchases: link to /mini-draws/[id] */
+  miniDrawId?: string;
 }
 
 /**
@@ -139,6 +142,27 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map(paymentUsers.map((u) => [u._id.toString(), u]));
 
+    // Batch fetch MiniDraw titles for mini-draw payments (for "Entered in [title] with X entries")
+    const rawMiniDrawIds = [
+      ...new Set(
+        payments
+          .filter((p) => p.packageType === "mini-draw")
+          .map((p) => (p.data as Record<string, unknown>)?.miniDrawId as string)
+          .filter(Boolean)
+      ),
+    ];
+    const validMiniDrawIds = rawMiniDrawIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const miniDraws =
+      validMiniDrawIds.length > 0
+        ? await MiniDraw.find({ _id: { $in: validMiniDrawIds } })
+            .select("_id name")
+            .lean()
+        : [];
+    type MiniDrawLean = { _id: mongoose.Types.ObjectId; name: string };
+    const miniDrawMap = new Map<string, string>(
+      (miniDraws as unknown as MiniDrawLean[]).map((d) => [d._id.toString(), d.name])
+    );
+
     console.log(`📊 Activity Log - Found ${payments.length} payment events`);
 
     payments.forEach((payment) => {
@@ -231,7 +255,15 @@ export async function GET(request: NextRequest) {
         action = `Purchased ${packageName}`;
         type = "one_time_purchase";
       } else if (payment.packageType === "mini-draw") {
-        action = `Purchased ${packageName}`;
+        const miniDrawId = paymentData?.miniDrawId as string | undefined;
+        const entries = (paymentData?.entries as number | undefined) ?? 0;
+        const miniDrawTitle = miniDrawId ? miniDrawMap.get(miniDrawId) : null;
+        if (miniDrawId && miniDrawTitle) {
+          action = `Entered in "${miniDrawTitle}" with ${entries} ${entries === 1 ? "entry" : "entries"}`;
+          type = "one_time_purchase";
+        } else {
+          action = `Purchased ${packageName}`;
+        }
         type = "one_time_purchase";
       }
 
@@ -240,7 +272,7 @@ export async function GET(request: NextRequest) {
         action = `High-value purchase: ${action} - $${amount}`;
       }
 
-      activities.push({
+      const activityPayload: ActivityLogItem = {
         id: `payment-${payment._id}`,
         type,
         user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
@@ -250,7 +282,14 @@ export async function GET(request: NextRequest) {
         status: "success",
         amount,
         timestamp: payment.timestamp,
-      });
+      };
+      if (payment.packageType === "mini-draw") {
+        const miniDrawId = (payment.data as Record<string, unknown>)?.miniDrawId as string | undefined;
+        if (miniDrawId && miniDrawMap.has(miniDrawId)) {
+          activityPayload.miniDrawId = miniDrawId;
+        }
+      }
+      activities.push(activityPayload);
     });
 
     // ========================================

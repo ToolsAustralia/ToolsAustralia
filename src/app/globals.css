@@ -268,6 +268,7 @@
     font-family: var(--font-inter), system-ui, sans-serif;
     /* Lock the document in light mode for consistent branding */
     color-scheme: light;
+    overflow-x: hidden;
   }
   
   /* Prevent scroll snapping on mobile during navigation */
@@ -287,6 +288,7 @@
     /* Ensure body stays light even when browsers try to auto-darken */
     background-color: #ffffff !important;
     color: #171717 !important;
+    overflow-x: hidden;
   }
 
   /* Comprehensive focus outline removal for all form elements */

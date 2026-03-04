@@ -262,7 +262,7 @@ export default function MiniDrawsContent({
             )}
 
             {/* Controls row */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Filters Button - Mobile/Tablet only */}
               <div className="lg:hidden flex-shrink-0">
                 <button

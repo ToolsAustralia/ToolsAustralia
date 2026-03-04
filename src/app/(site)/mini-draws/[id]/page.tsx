@@ -229,7 +229,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     : "bg-gradient-to-r from-gray-800 to-gray-900 text-white";
 
   return (
-    <div className="min-h-screen-svh bg-white">
+    <div className="min-h-screen-svh bg-white w-full overflow-x-hidden">
       {/* Track ViewContent event for Facebook Pixel */}
       <MiniDrawViewTracking miniDraw={miniDrawData} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">

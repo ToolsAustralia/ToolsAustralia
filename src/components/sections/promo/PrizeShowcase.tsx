@@ -29,7 +29,7 @@ import {
 } from "./prize-selection";
 import { getPrizesForToolsetSlug, isToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
-import { getPrizeBySlug } from "@/config/prizes";
+import { getPrizeBySlug, listPrizes } from "@/config/prizes";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -282,6 +282,7 @@ export default function PrizeShowcase({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const useParentContainer = pathname === "/" || pathname === "/my-account";
+  const isPromotionsPage = pathname?.startsWith("/promotions") ?? false;
 
   // Toolset mode: prize slugs for this toolset (Sidchrome first, Milwaukee second)
   const toolsetPrizeSlugs =
@@ -296,17 +297,23 @@ export default function PrizeShowcase({
 
   // Toolset mode: effective slug from toolbox selection (local state, no URL change)
   const [toolsetEffectiveSlug, setToolsetEffectiveSlug] = useState<string | null>(null);
-  const effectiveSlugForCatalog = toolsetMode
-    ? (toolsetEffectiveSlug ?? toolsetPrizeSlugs?.[0] ?? slugProp)
-    : slugProp;
-
-  const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
-
+  // When NOT on promotions page (e.g. home, my-account): local slug, no navigation
+  const [localEffectiveSlug, setLocalEffectiveSlug] = useState<string | null>(null);
   // Toolbox type toggle state - initialize from activeSlug to prevent navigation issues
   const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
   // Remember last non-cash toolbox so we can keep showing the power toolset options even when cash is selected
   const [lastNonCashToolboxType, setLastNonCashToolboxType] = useState<"sidchrome" | "milwaukee">("milwaukee");
+
+  const effectiveSlugForCatalog = (() => {
+    if (toolsetMode) return toolsetEffectiveSlug ?? toolsetPrizeSlugs?.[0] ?? slugProp;
+    if (isPromotionsPage) return slugProp;
+    if (localEffectiveSlug) return localEffectiveSlug;
+    const tt: "sidchrome" | "milwaukee" = toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
+    return filterPrizesByToolboxType(listPrizes(), tt)[0]?.slug ?? slugProp;
+  })();
+
+  const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
 
   // Toolset mode: init effective slug from default (Sidchrome)
   useEffect(() => {
@@ -467,7 +474,14 @@ export default function PrizeShowcase({
   const handleSelectPrize = (nextSlug: string) => {
     if (!nextSlug || nextSlug === activeSlug) return;
 
-    // Preserve affiliate code from URL if present (App Router compatible)
+    // When NOT on promotions page: update prizes in place, no navigation
+    if (!isPromotionsPage && !toolsetMode) {
+      setLocalEffectiveSlug(nextSlug);
+      setStoreSlug(nextSlug);
+      return;
+    }
+
+    // On promotions page: navigate to keep URL in sync
     const affiliateCode = searchParams.get("aff");
     const newUrl = affiliateCode ? `/promotions/${nextSlug}?aff=${affiliateCode}` : `/promotions/${nextSlug}`;
 

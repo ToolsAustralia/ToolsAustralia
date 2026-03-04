@@ -114,7 +114,7 @@ const VariantSchema = new Schema<IVariant>(
 );
 
 // Indexes
-VariantSchema.index({ experimentId: 1 });
+// Note: experimentId_1 removed - redundant with compound index experimentId_1_isControl_1
 VariantSchema.index({ isControl: 1 });
 VariantSchema.index({ experimentId: 1, isControl: 1 });
 
