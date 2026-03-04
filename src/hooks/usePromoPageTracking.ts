@@ -61,6 +61,7 @@ export function usePromoPageTracking() {
       ...(utmParams?.get("utm_source") && { utmSource: utmParams.get("utm_source") }),
       ...(utmParams?.get("utm_medium") && { utmMedium: utmParams.get("utm_medium") }),
       ...(utmParams?.get("utm_campaign") && { utmCampaign: utmParams.get("utm_campaign") }),
+      ...(utmParams?.get("campaign_id") && !utmParams?.get("utm_campaign") && { utmCampaign: `fb_${utmParams.get("campaign_id")}` }),
     };
 
     fetch("/api/tracking/promo-page-visit", {
