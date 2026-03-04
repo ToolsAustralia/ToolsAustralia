@@ -34,6 +34,7 @@ import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
+import ActivityLogManagement from "./ActivityLogManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
 import MembershipByPackageDetailModal from "@/components/modals/MembershipByPackageDetailModal";
@@ -654,6 +655,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
                   {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
+                  {selectedTab === "activity-log" && "Complete activity history with filters and search"}
                 </p>
               </div>
             </div>
@@ -1402,7 +1404,24 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                           <div className="scale-75">{getActivityIcon(activity.type)}</div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-900 leading-tight">{activity.action}</p>
+                          <p className="text-xs font-medium text-gray-900 leading-tight">
+                            {activity.miniDrawId && activity.action.includes('"') ? (
+                              <>
+                                {activity.action.split('"')[0]}
+                                <a
+                                  href={`/mini-draws/${activity.miniDrawId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-red-600 hover:text-red-700 underline font-semibold"
+                                >
+                                  {activity.action.split('"')[1]}
+                                </a>
+                                {activity.action.split('"')[2] ?? ""}
+                              </>
+                            ) : (
+                              activity.action
+                            )}
+                          </p>
                           <div className="flex items-center space-x-1 mt-0.5">
                             <ClickableUserDisplay
                               displayText={activity.user}
@@ -1456,6 +1475,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* PROMO ANALYTICS TAB */}
           {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}
+
+          {/* ACTIVITY LOG TAB */}
+          {selectedTab === "activity-log" && <ActivityLogManagement />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (

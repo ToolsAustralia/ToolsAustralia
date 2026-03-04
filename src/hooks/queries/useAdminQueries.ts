@@ -28,6 +28,8 @@ export interface RecentActivity {
   status: "success" | "info" | "warning" | "error";
   amount?: number;
   timestamp: Date;
+  /** For mini-draw purchases: link to /mini-draws/[id] */
+  miniDrawId?: string;
 }
 
 // Types for revenue breakdown
