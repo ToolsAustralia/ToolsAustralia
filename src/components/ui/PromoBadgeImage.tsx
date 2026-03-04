@@ -1,16 +1,23 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 
-const VALID_MULTIPLIERS = [2, 3, 5, 10] as const;
+type ValidMultiplier = 2 | 3 | 5 | 10;
 
 interface PromoBadgeImageProps {
-  multiplier: (typeof VALID_MULTIPLIERS)[number];
+  multiplier: ValidMultiplier;
   size?: "small" | "medium" | "large";
   className?: string;
 }
 
 const sizeMap = {
+  small: { width: 48, height: 48 },
+  medium: { width: 56, height: 56 },
+  large: { width: 72, height: 72 },
+};
+
+const sizeClassMap = {
   small: "h-8 w-auto sm:h-10 md:h-12",
   medium: "h-10 w-auto sm:h-12 md:h-14",
   large: "h-12 w-auto sm:h-14 md:h-18",
@@ -26,12 +33,15 @@ const PromoBadgeImage: React.FC<PromoBadgeImageProps> = ({
   className = "",
 }) => {
   const src = `/images/badge/X${multiplier}.png`;
+  const dimensions = sizeMap[size];
 
   return (
-    <img
+    <Image
       src={src}
       alt={`${multiplier}x promo`}
-      className={`object-contain ${sizeMap[size]} ${className}`}
+      width={dimensions.width}
+      height={dimensions.height}
+      className={`object-contain ${sizeClassMap[size]} ${className}`}
     />
   );
 };

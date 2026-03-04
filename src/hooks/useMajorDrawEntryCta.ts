@@ -240,6 +240,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         },
       };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- oneTimePromoMultiplier required for isMember path plan recalculation
   }, [
     safeOneTimePackages,
     safeSubscriptionPackages,

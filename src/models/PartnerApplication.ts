@@ -160,7 +160,6 @@ const PartnerApplicationSchema = new Schema<IPartnerApplication>(
   },
   {
     timestamps: true,
-    strictPopulate: false,
   }
 );
 
