@@ -134,8 +134,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    // Check if user has password set (without exposing the actual password)
+    const userWithPassword = await User.findById(userData._id).select("password").lean();
+    const hasPassword = !!userWithPassword?.password;
+
     const responseData = {
       ...userData,
+      hasPassword,
       subscriptionPackageData,
       enrichedOneTimePackages: oneTimePackageData,
     };

@@ -73,7 +73,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
     <ModalContainer isOpen={isOpen} onClose={onCloseAction} size="lg">
       <ModalHeader
         title="Refer a Friend & Both Score 100 Bonus Entries"
-        subtitle="Share your code. When your friend subscribes or buys a one-time package and verifies their email, you both pocket 100 bonus entries."
+        subtitle="Share your code. When your friend subscribes or buys a one-time package, you both pocket 100 bonus entries."
         onClose={onCloseAction}
         showLogo
       />
@@ -85,7 +85,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
           </div>
           <div className="text-sm text-gray-700">
             Invite a mate, and you both score 100 bonus entries once they complete their first membership or one-time
-            package purchase and verify their email.
+            package purchase.
           </div>
         </div>
 
@@ -207,8 +207,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-2 w-2 rounded-full bg-[#ee0000]" aria-hidden />
                   <span>
-                    They join Tools Australia, enter the code in the coupon field, subscribe or grab a one-time package,
-                    and confirm their email.
+                    They join Tools Australia, enter the code in the coupon field, and subscribe or grab a one-time package.
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
