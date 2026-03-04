@@ -21,6 +21,7 @@ import {
   TrendingUp,
   FlaskConical,
   Bug,
+  ScrollText,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -128,6 +129,11 @@ const adminTabs = [
     id: "error-reports",
     label: "Error Reports",
     icon: Bug,
+  },
+  {
+    id: "activity-log",
+    label: "Activity Log",
+    icon: ScrollText,
   },
   // Temporarily hidden - no content yet
   // {
