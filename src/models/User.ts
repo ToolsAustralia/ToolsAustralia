@@ -1036,7 +1036,7 @@ UserSchema.pre("save", function (next) {
 // Note: email index is automatically created due to unique: true
 UserSchema.index({ role: 1 });
 UserSchema.index({ "subscription.isActive": 1 });
-UserSchema.index({ isActive: 1 });
+// Note: isActive_1 removed - redundant with compound indexes (isActive_1_createdAt_-1, etc.)
 // MongoDB Atlas recommended: compound index for subscription-related queries
 UserSchema.index({
   isActive: 1,
@@ -1046,6 +1046,18 @@ UserSchema.index({
 });
 // MongoDB Atlas recommended: compound index for active users sorted by creation date
 UserSchema.index({ isActive: 1, createdAt: -1 });
+// Performance Advisor: mobile lookups (register, update-profile duplicate checks)
+UserSchema.index({ mobile: 1 });
+// Performance Advisor: subscription status/autoRenew/endDate filtering (projected income, renewals, etc.)
+UserSchema.index({
+  isActive: 1,
+  "subscription.isActive": 1,
+  "subscription.status": 1,
+  "subscription.endDate": 1,
+  "subscription.autoRenew": 1,
+});
+// Performance Advisor: createdAt sorting for admin user list/search (when not filtering by isActive)
+UserSchema.index({ createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
