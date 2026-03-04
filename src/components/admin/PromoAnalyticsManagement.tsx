@@ -11,7 +11,6 @@ import {
   Users,
   UserCheck,
   DollarSign,
- 
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -26,6 +25,8 @@ import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { useCurrentAndLastDrawDates, useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import PromoPageDetailModal from "@/components/modals/PromoPageDetailModal";
+import ChannelDetailModal from "@/components/modals/ChannelDetailModal";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -91,6 +92,16 @@ export default function PromoAnalyticsManagement() {
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
   const [sortColumn, setSortColumn] = useState<keyof PromoPageMetrics>("visits");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [selectedPage, setSelectedPage] = useState<{
+    pageType: "evergreen" | "toolset";
+    slug: string;
+    pageLabel: string;
+    summary: { visits: number; signups: number; conversions: number; revenue: number };
+  } | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<{
+    utmSource: string;
+    summary: { visits: number; signups: number; conversions: number; revenue: number };
+  } | null>(null);
 
   const { data: drawDates } = useCurrentAndLastDrawDates();
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
@@ -386,14 +397,23 @@ export default function PromoAnalyticsManagement() {
                     <th className="text-right p-3 font-semibold">Signups</th>
                     <th className="text-right p-3 font-semibold">Conversions</th>
                     <th className="text-right p-3 font-semibold">Revenue</th>
-                    <th className="text-right p-3 font-semibold">V→S %</th>
-                    <th className="text-right p-3 font-semibold">S→C %</th>
-                    <th className="text-right p-3 font-semibold">Conv %</th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold">V→S %</th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold">S→C %</th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold">Conv %</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={row.utmSource} className="border-t border-gray-100 hover:bg-gray-50">
+                    <tr
+                      key={row.utmSource}
+                      className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() =>
+                        setSelectedChannel({
+                          utmSource: row.utmSource,
+                          summary: { visits: row.visits, signups: row.signups, conversions: row.conversions, revenue: row.revenue },
+                        })
+                      }
+                    >
                       <td className="p-3">
                         <span
                           className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -409,9 +429,9 @@ export default function PromoAnalyticsManagement() {
                       <td className="p-3 text-right font-mono">{formatNumber(row.signups)}</td>
                       <td className="p-3 text-right font-mono">{formatNumber(row.conversions)}</td>
                       <td className="p-3 text-right font-mono">{formatCurrency(row.revenue)}</td>
-                      <td className="p-3 text-right text-gray-600">{formatPercentage(row.visitToSignupRate)}</td>
-                      <td className="p-3 text-right text-gray-600">{formatPercentage(row.signupToConversionRate)}</td>
-                      <td className="p-3 text-right text-gray-600">{formatPercentage(row.overallConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.visitToSignupRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.signupToConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.overallConversionRate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -466,14 +486,25 @@ export default function PromoAnalyticsManagement() {
                       Revenue {getSortIcon("revenue")}
                     </button>
                   </th>
-                  <th className="text-right p-3 font-semibold">V→S %</th>
-                  <th className="text-right p-3 font-semibold">S→C %</th>
-                  <th className="text-right p-3 font-semibold">Conv %</th>
+                  <th className="hidden md:table-cell text-right p-3 font-semibold">V→S %</th>
+                  <th className="hidden md:table-cell text-right p-3 font-semibold">S→C %</th>
+                  <th className="hidden md:table-cell text-right p-3 font-semibold">Conv %</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedPages.map((row) => (
-                  <tr key={`${row.pageType}-${row.slug}`} className="border-t border-gray-100 hover:bg-gray-50">
+                  <tr
+                    key={`${row.pageType}-${row.slug}`}
+                    className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() =>
+                      setSelectedPage({
+                        pageType: row.pageType,
+                        slug: row.slug,
+                        pageLabel: getPrizeLabel(row.slug) ?? row.slug,
+                        summary: { visits: row.visits, signups: row.signups, conversions: row.conversions, revenue: row.revenue },
+                      })
+                    }
+                  >
                     <td className="p-3">
                       <div className="flex items-center gap-2">
                         <span
@@ -492,9 +523,9 @@ export default function PromoAnalyticsManagement() {
                     <td className="p-3 text-right font-mono">{formatNumber(row.signups)}</td>
                     <td className="p-3 text-right font-mono">{formatNumber(row.conversions)}</td>
                     <td className="p-3 text-right font-mono">{formatCurrency(row.revenue)}</td>
-                    <td className="p-3 text-right text-gray-600">{formatPercentage(row.visitToSignupRate)}</td>
-                    <td className="p-3 text-right text-gray-600">{formatPercentage(row.signupToConversionRate)}</td>
-                    <td className="p-3 text-right text-gray-600">{formatPercentage(row.overallConversionRate)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.visitToSignupRate)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.signupToConversionRate)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.overallConversionRate)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -502,6 +533,32 @@ export default function PromoAnalyticsManagement() {
           )}
         </div>
       </div>
+
+      {/* Page Detail Modal */}
+      {selectedPage && (
+        <PromoPageDetailModal
+          isOpen={true}
+          onClose={() => setSelectedPage(null)}
+          pageType={selectedPage.pageType}
+          slug={selectedPage.slug}
+          pageLabel={selectedPage.pageLabel}
+          startDate={startDate}
+          endDate={endDate}
+          summaryFromParent={selectedPage.summary}
+        />
+      )}
+
+      {/* Channel Detail Modal */}
+      {selectedChannel && (
+        <ChannelDetailModal
+          isOpen={true}
+          onClose={() => setSelectedChannel(null)}
+          utmSource={selectedChannel.utmSource}
+          startDate={startDate}
+          endDate={endDate}
+          summaryFromParent={selectedChannel.summary}
+        />
+      )}
     </div>
   );
 }
