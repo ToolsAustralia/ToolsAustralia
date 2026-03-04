@@ -78,6 +78,9 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   // Ref to prevent multiple auto-completions of step 3
   const hasAutoCompletedRef = useRef(false);
 
+  // Ref to prevent double submission of email verification (handles double-click before setState flushes)
+  const isSendingEmailRef = useRef(false);
+
   // Ref to store handleComplete function for use in useEffect
   const handleCompleteRef = useRef<((bypassEmailCheck?: boolean) => Promise<void>) | null>(null);
 
@@ -746,11 +749,13 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   };
 
   const handleSendEmailVerification = async () => {
+    if (isSendingEmailRef.current) return;
     if (!currentEmail) {
       setError("No email address found");
       return;
     }
 
+    isSendingEmailRef.current = true;
     setIsSendingEmail(true);
     setError(null);
 
@@ -779,6 +784,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       console.error("Send email verification error:", error);
       setError("Network error. Please try again.");
     } finally {
+      isSendingEmailRef.current = false;
       setIsSendingEmail(false);
     }
   };

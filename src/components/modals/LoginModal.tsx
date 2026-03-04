@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Clipboard, ClipboardCheck } from "lucide-react";
@@ -56,53 +56,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
-  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
   const [isPasteClicked, setIsPasteClicked] = useState(false);
   const [loginCodeFlow, setLoginCodeFlow] = useState(false);
   const [loginCodeSent, setLoginCodeSent] = useState(false);
 
-  const checkEmailVerificationStatus = useCallback(async () => {
-    setIsCheckingVerification(true);
-    setError("");
-    try {
-      // Try to send verification code - if email is already verified, API will return an error
-      // This is a way to check verification status without requiring authentication
-      const response = await fetch("/api/auth/send-email-verification", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+  // Ref to prevent double submission of send verification (handles double-click before setState flushes)
+  const isSendingVerificationRef = useRef(false);
 
-      const data = await response.json();
-
-      // If email is already verified, API returns error "Email is already verified"
-      if (!data.success && data.error?.includes("already verified")) {
-        setNeedsEmailVerification(false);
-      } else if (!data.success && data.error?.includes("not found")) {
-        // User not found - shouldn't happen in this flow, but handle it
-        setError("User account not found");
-        setNeedsEmailVerification(false);
-      } else {
-        // Email is not verified - show verification flow
-        setNeedsEmailVerification(true);
-      }
-    } catch (error) {
-      console.error("Error checking email verification status:", error);
-      // On error, assume email is verified and show password field
-      setNeedsEmailVerification(false);
-    } finally {
-      setIsCheckingVerification(false);
-    }
-  }, [email]);
-
-  // Check email verification status when modal opens
+  // Reset state when modal closes (do NOT auto-send verification on open - wait for user to click)
   useEffect(() => {
-    if (isOpen && email) {
-      checkEmailVerificationStatus();
-    } else {
-      // Reset state when modal closes
+    if (!isOpen) {
       setNeedsEmailVerification(false);
       setPassword("");
       setError("");
@@ -111,7 +74,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
       setLoginCodeSent(false);
       setCodeDigits(["", "", "", "", "", ""]);
     }
-  }, [isOpen, email, checkEmailVerificationStatus]);
+  }, [isOpen]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -149,8 +112,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
         if (errorMessage.includes("email") && errorMessage.includes("verify")) {
           setNeedsEmailVerification(true);
           setError("Please verify your email address to continue.");
-          // Automatically send verification code
-          handleSendVerificationCode();
+          // Show verification UI - user must click "Send Verification Code" to receive email
         } else {
           setError("Invalid email or password");
         }
@@ -257,6 +219,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   };
 
   const handleSendVerificationCode = async () => {
+    if (isSendingVerificationRef.current) return;
+
+    isSendingVerificationRef.current = true;
     setIsSendingCode(true);
     setError("");
 
@@ -283,6 +248,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
       console.error("Send verification code error:", error);
       setError("Network error. Please try again.");
     } finally {
+      isSendingVerificationRef.current = false;
       setIsSendingCode(false);
     }
   };
@@ -519,7 +485,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
         setError("");
         setCodeDigits(["", "", "", "", "", ""]);
       } else {
-        setError(data.error || "Failed to send sign-in code");
+        // If user needs to verify email first, switch to verification flow
+        if (data.error?.toLowerCase().includes("verify your email first")) {
+          setNeedsEmailVerification(true);
+          setLoginCodeFlow(false);
+          setError("Please verify your email first before using sign-in codes.");
+        } else {
+          setError(data.error || "Failed to send sign-in code");
+        }
       }
     } catch (err) {
       console.error("Send login code error:", err);
@@ -618,14 +591,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
               </div>
             )}
 
-          {/* Loading Spinner - Show while checking email verification status */}
-          {isCheckingVerification ? (
-            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-              <p className="text-sm text-gray-600">Checking account status...</p>
-            </div>
-          ) : (
-            <>
+          <>
               {/* Email Verification Flow */}
               {needsEmailVerification ? (
                 <div className="space-y-4">
@@ -899,7 +865,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                 </>
               )}
             </>
-          )}
         </div>
       </ModalContent>
     </ModalContainer>
