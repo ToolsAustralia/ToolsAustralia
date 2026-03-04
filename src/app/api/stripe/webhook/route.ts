@@ -30,6 +30,7 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 
@@ -3056,12 +3057,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       return;
     }
 
-    // ✅ DETECT RESUBSCRIBE SCENARIO
-    // User is resubscribing if: subscription is not active, has lastMonthAccumulatedEntries, and this is a new subscription
-    const isResubscribe =
-      invoice.billing_reason === "subscription_create" &&
+    // Resubscribe: use subscription metadata first (API may have set user.subscription.isActive before webhook runs)
+    const isResubscribeFromMetadata =
+      expandedInvoice.billing_reason === "subscription_create" &&
+      subscription.metadata?.[STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE] === "true";
+    const isResubscribeFromUser =
+      expandedInvoice.billing_reason === "subscription_create" &&
       !user.subscription?.isActive &&
       user.subscription?.lastMonthAccumulatedEntries !== undefined;
+    const isResubscribe = isResubscribeFromMetadata || isResubscribeFromUser;
 
     // ✅ CONSOLE LOG: Resubscription detection
     if (isResubscribe) {

@@ -16,6 +16,7 @@ import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLim
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
@@ -212,6 +213,12 @@ export async function POST(request: NextRequest) {
     const hasAnchor = Object.keys(anchorParams).length > 0;
     const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
+    // Compute resubscribe before creating subscription so webhook can use metadata (API may set isActive before webhook runs)
+    const isResubscribeForMetadata =
+      existingUser.subscription &&
+      !existingUser.subscription.isActive &&
+      existingUser.subscription.lastMonthAccumulatedEntries !== undefined;
+
     const userIdForMetadata = existingUser._id?.toString() ?? "";
     const baseMetadata = {
       packageId: validatedData.packageId,
@@ -229,6 +236,7 @@ export async function POST(request: NextRequest) {
       ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...buildAttributionMetadata(validatedData.attribution),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
+      ...(isResubscribeForMetadata && { [STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE]: "true" }),
     };
 
     const createPayload: Stripe.SubscriptionCreateParams = {
@@ -292,15 +300,8 @@ export async function POST(request: NextRequest) {
     const subscriptionEndDate =
       subscriptionPeriodEnd != null ? new Date(subscriptionPeriodEnd * 1000) : undefined;
 
-    // ✅ CRITICAL: Preserve lastMonthAccumulatedEntries when resubscribing
-    // Check if this is a resubscription (user had subscription before but it's not active)
-    const isResubscribe =
-      existingUser.subscription &&
-      !existingUser.subscription.isActive &&
-      existingUser.subscription.lastMonthAccumulatedEntries !== undefined;
-
-    // Preserve lastMonthAccumulatedEntries if this is a resubscription
-    const preservedLastMonthAccumulatedEntries = isResubscribe
+    // Preserve lastMonthAccumulatedEntries if this is a resubscription (already computed for metadata above)
+    const preservedLastMonthAccumulatedEntries = isResubscribeForMetadata
       ? existingUser.subscription!.lastMonthAccumulatedEntries
       : undefined;
 
@@ -316,7 +317,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Log resubscription detection
-    if (isResubscribe) {
+    if (isResubscribeForMetadata) {
       console.log(
         `✅ [RESUBSCRIBE] Preserved lastMonthAccumulatedEntries: ${preservedLastMonthAccumulatedEntries} for user ${existingUser.email}`
       );
