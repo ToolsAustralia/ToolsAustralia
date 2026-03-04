@@ -178,10 +178,8 @@ export async function createUserFromPaymentMetadata(
       accumulatedEntries: 0,
       entryWallet: 0,
       rewardsPoints: 0,
-      // ✅ CRITICAL: Auto-verify email for users who just completed a purchase
-      // If they paid, their email is verified (they provided it during checkout and payment succeeded)
-      // This prevents race condition where user sees email verification step before webhook processes
-      isEmailVerified: true, // ✅ Changed from false - users who paid have verified email
+      // Email verification is optional — users can verify via SendGrid in the setup modal
+      isEmailVerified: false,
       isActive: true,
       savedPaymentMethods: savedPaymentMethodData ? [savedPaymentMethodData] : [],
       profileSetupCompleted: false,

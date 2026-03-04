@@ -65,6 +65,7 @@ export interface UserData {
   rewardsPoints: number;
   accumulatedEntries: number;
   isEmailVerified: boolean;
+  hasPassword?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
