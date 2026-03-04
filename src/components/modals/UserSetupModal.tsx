@@ -573,6 +573,51 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       if (!saved) {
         return; // Don't proceed if save failed
       }
+
+      // When only step 2 is required (e.g. email already verified), complete setup here instead of advancing to a non-existent step 3
+      if (currentStepIndex + 1 >= stepsNeeded.length) {
+        setIsLoading(true);
+        setError(null);
+        try {
+          const response = await fetch("/api/user/setup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ completeSetupOnly: true }),
+          });
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || "Failed to complete setup");
+          }
+          setSuccess(true);
+          await refetch();
+          const { pendingUpsellAfterSetup, pendingUpsellData, setPendingUpsellAfterSetup } =
+            useModalPriorityStore.getState();
+          if (pendingUpsellAfterSetup && pendingUpsellData) {
+            setPendingUpsellAfterSetup(false);
+            setTimeout(() => {
+              const { requestModal } = useModalPriorityStore.getState();
+              requestModal("upsell", false, pendingUpsellData);
+            }, 2000);
+          }
+          try {
+            sessionStorage.setItem("showReferFriendAfterSetup", "true");
+          } catch {
+            // ignore
+          }
+          setTimeout(() => {
+            onComplete();
+            onClose();
+            sessionStorage.setItem("setupJustCompleted", "true");
+            clearStateFromStorage();
+            window.location.reload();
+          }, 1500);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "An error occurred");
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
     }
 
     setCurrentStepIndex((i) => i + 1);
