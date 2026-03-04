@@ -52,7 +52,7 @@ export default function ChannelDetailModal({
 
   const summary = data?.summary ?? summaryFromParent;
 
-  const sortedPages = useMemo(() => {
+  const sortedPages = useMemo((): ChannelPageMetrics[] => {
     if (!data?.byPage) return [];
     const arr = [...data.byPage];
     arr.sort((a, b) => {

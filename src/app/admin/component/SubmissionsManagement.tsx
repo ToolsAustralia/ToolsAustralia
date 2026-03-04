@@ -4,6 +4,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Search, Building, MessageSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { formatDateInAEST } from "@/utils/common/timezone";
+import {
+  SubmissionDetailModal,
+  getStatusColor,
+  type PartnerApplication,
+  type ContactSubmission,
+} from "@/components/admin/submissions";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -12,51 +18,6 @@ interface PaginationInfo {
   limit: number;
   total: number;
   pages: number;
-}
-
-interface PartnerApplication {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  businessName: string;
-  email: string;
-  phone: string;
-  abn?: string;
-  acn?: string;
-  goals?: string;
-  status: "pending" | "under_review" | "approved" | "rejected" | "contacted";
-  adminNotes?: string;
-  submittedAt: string;
-  readAt?: string | null;
-  reviewedBy?: {
-    name: string;
-    email: string;
-  };
-  reviewedAt?: string;
-}
-
-interface ContactSubmission {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  subject: string;
-  message: string;
-  status: "new" | "in_progress" | "resolved" | "closed";
-  priority: "low" | "medium" | "high" | "urgent";
-  submittedAt: string;
-  readAt?: string | null;
-  assignedTo?: {
-    name: string;
-    email: string;
-  };
-  respondedBy?: {
-    name: string;
-    email: string;
-  };
-  respondedAt?: string;
-  response?: string;
 }
 
 export default function SubmissionsManagement() {
@@ -81,8 +42,6 @@ export default function SubmissionsManagement() {
   const [readFilter, setReadFilter] = useState<string>("all");
   const [selectedItem, setSelectedItem] = useState<PartnerApplication | ContactSubmission | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [editingNotes, setEditingNotes] = useState("");
-  const [editingStatus, setEditingStatus] = useState("");
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -170,74 +129,22 @@ export default function SubmissionsManagement() {
     setLoading(false);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-      case "new":
-        return "bg-yellow-100 text-yellow-800";
-      case "under_review":
-      case "in_progress":
-        return "bg-blue-100 text-blue-800";
-      case "approved":
-      case "resolved":
-        return "bg-green-100 text-green-800";
-      case "rejected":
-      case "closed":
-        return "bg-red-100 text-red-800";
-      case "contacted":
-        return "bg-purple-100 text-purple-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
   const handleViewDetails = (item: PartnerApplication | ContactSubmission) => {
     setSelectedItem(item);
-    setEditingNotes("adminNotes" in item ? item.adminNotes || "" : "");
-    setEditingStatus("status" in item ? item.status : "");
     setShowModal(true);
-    // Mark as read when viewed (if not already read)
     const isRead = "readAt" in item && item.readAt;
     if (!isRead) {
       markAsRead(item);
     }
   };
 
-  const handleUpdate = async () => {
-    if (!selectedItem) return;
-
-    try {
-      const endpoint =
-        activeTab === "partner"
-          ? `/api/partner-applications/${selectedItem._id}`
-          : `/api/contact-submissions/${selectedItem._id}`;
-
-      const body =
-        activeTab === "partner"
-          ? { status: editingStatus, adminNotes: editingNotes }
-          : { adminNotes: editingNotes };
-
-      const response = await fetch(endpoint, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (response.ok) {
-        if (activeTab === "partner") {
-          await fetchPartnerApplications(partnerPagination.page);
-        } else {
-          await fetchContactSubmissions(contactPagination.page);
-        }
-        window.dispatchEvent(new Event("admin-submissions-updated"));
-        setShowModal(false);
-        setSelectedItem(null);
-      }
-    } catch (error) {
-      console.error("Error updating:", error);
+  const handleModalUpdated = async () => {
+    if (activeTab === "partner") {
+      await fetchPartnerApplications(partnerPagination.page);
+    } else {
+      await fetchContactSubmissions(contactPagination.page);
     }
+    window.dispatchEvent(new Event("admin-submissions-updated"));
   };
 
   if (loading) {
@@ -560,158 +467,17 @@ export default function SubmissionsManagement() {
         </div>
       )}
 
-      {/* Modal for viewing/editing details */}
+      {/* Detail modal */}
       {showModal && selectedItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-3 sm:p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">
-                  {activeTab === "partner" ? "Partner Application Details" : "Contact Submission Details"}
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowModal(false);
-                    setSelectedItem(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Contact Information */}
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Contact Information</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Name:</span>
-                      <span className="ml-2 font-medium">
-                        {selectedItem.firstName} {selectedItem.lastName}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Email:</span>
-                      <span className="ml-2 font-medium">{selectedItem.email}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Phone:</span>
-                      <span className="ml-2 font-medium">{selectedItem.phone}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Submitted:</span>
-                      <span className="ml-2 font-medium">
-                        {formatDateInAEST(new Date(selectedItem.submittedAt), "dd MMM yyyy, hh:mm a")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Business Information (for partner applications) */}
-                {activeTab === "partner" && "businessName" in selectedItem && (
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Business Information</h4>
-                    <div className="text-sm space-y-1">
-                      <div>
-                        <span className="text-gray-500">Business Name:</span>
-                        <span className="ml-2 font-medium">{selectedItem.businessName}</span>
-                      </div>
-                      {selectedItem.abn && (
-                        <div>
-                          <span className="text-gray-500">ABN:</span>
-                          <span className="ml-2 font-medium">{selectedItem.abn}</span>
-                        </div>
-                      )}
-                      {selectedItem.acn && (
-                        <div>
-                          <span className="text-gray-500">ACN:</span>
-                          <span className="ml-2 font-medium">{selectedItem.acn}</span>
-                        </div>
-                      )}
-                      {selectedItem.goals && (
-                        <div>
-                          <span className="text-gray-500">Goals:</span>
-                          <p className="mt-1 text-gray-700">{selectedItem.goals}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Message (for contact submissions) */}
-                {activeTab === "contact" && "message" in selectedItem && (
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Message</h4>
-                    <div className="text-sm space-y-1">
-                      <div>
-                        <span className="text-gray-500">Subject:</span>
-                        <span className="ml-2 font-medium">{selectedItem.subject}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Message:</span>
-                        <p className="mt-1 text-gray-700 whitespace-pre-wrap">{selectedItem.message}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Status Management (partner only) / Admin Notes */}
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-2">
-                    {activeTab === "partner" ? "Status Management" : "Admin Notes"}
-                  </h4>
-                  <div className="space-y-3">
-                    {activeTab === "partner" && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select
-                          value={editingStatus}
-                          onChange={(e) => setEditingStatus(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="under_review">Under Review</option>
-                          <option value="approved">Approved</option>
-                          <option value="rejected">Rejected</option>
-                          <option value="contacted">Contacted</option>
-                        </select>
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Admin Notes</label>
-                      <textarea
-                        value={editingNotes}
-                        onChange={(e) => setEditingNotes(e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        placeholder="Add notes about this submission..."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowModal(false);
-                    setSelectedItem(null);
-                  }}
-                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-all duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdate}
-                  className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  {activeTab === "partner" ? "Update Status" : "Update Notes"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SubmissionDetailModal
+          submission={selectedItem}
+          type={activeTab}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedItem(null);
+          }}
+          onUpdated={handleModalUpdated}
+        />
       )}
     </div>
   );

@@ -25,13 +25,14 @@ import MembershipModal from "@/components/modals/MembershipModal";
 import SettingsModal from "@/components/modals/SettingsModal";
 import ReferFriendModal from "@/components/modals/ReferFriendModal";
 import RenewalFailedModal from "@/components/modals/RenewalFailedModal";
+import PastDrawsModal from "@/components/modals/PastDrawsModal";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { hasSeenExplainer } from "@/utils/subscription-explainer-storage";
 import { formatRenewalDate, getFallbackRenewalDate } from "@/utils/dates/month-helpers";
-import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Zap } from "lucide-react";
+import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Zap, History } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import ProductCard from "@/components/ui/ProductCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
@@ -231,6 +232,7 @@ export default function MyAccountPage() {
   const [openSettingsToSubscription, setOpenSettingsToSubscription] = useState(false);
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
   const [isRenewalFailedModalOpen, setIsRenewalFailedModalOpen] = useState(false);
+  const [isPastDrawsModalOpen, setIsPastDrawsModalOpen] = useState(false);
 
   // State for accumulation tooltip
   const [showAccumulationTooltip, setShowAccumulationTooltip] = useState(false);
@@ -832,6 +834,13 @@ export default function MyAccountPage() {
                           {displayTotalEntries}
                         </div>
                         <div className="text-white/90 text-sm font-semibold uppercase tracking-wide">Total Entries</div>
+                        <button
+                          onClick={() => setIsPastDrawsModalOpen(true)}
+                          className="mt-2 inline-flex items-center gap-1 text-white/70 hover:text-white text-[10px] sm:text-xs font-medium transition-colors duration-200 underline underline-offset-2 decoration-white/50 hover:decoration-white"
+                        >
+                          <History className="w-3 h-3" />
+                          View Past Draws
+                        </button>
                       </div>
                     </div>
 
@@ -1052,7 +1061,7 @@ export default function MyAccountPage() {
                 </div>
                 {/* Mobile Only - Manage Membership Buttons */}
                 <div className="lg:hidden flex flex-col gap-3 mt-6">
-                  {/* First Row: Manage and Refer a Friend */}
+                  {/* First Row: Settings and Refer a Friend */}
                   <div className="flex flex-row gap-3">
                     <button
                       onClick={() => setIsSettingsModalOpen(true)}
@@ -1328,6 +1337,12 @@ export default function MyAccountPage() {
           setIsRenewalFailedModalOpen(false);
           closeModal();
         }}
+      />
+
+      <PastDrawsModal
+        isOpen={isPastDrawsModalOpen}
+        onClose={() => setIsPastDrawsModalOpen(false)}
+        userId={session?.user?.id ?? ""}
       />
 
       {/* Click outside to close accumulation tooltip */}

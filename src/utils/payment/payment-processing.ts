@@ -921,24 +921,6 @@ async function checkAndApplyPromoLink(
   }
 }
 
-/**
- * TEMPORARY: Auto-verify email on purchase during SMTP to SendGrid migration
- * This should be removed once email verification is working properly
- * 
- * Automatically marks a user's email as verified when they complete a purchase.
- * This is a temporary workaround to ensure users can access their accounts while
- * email verification emails may not be delivered reliably during the migration.
- * 
- * @param user - The user document to potentially verify (must have isEmailVerified property)
- */
-export function autoVerifyEmailOnPurchase(user: IUser | (UserDocument & { isEmailVerified?: boolean })): void {
-  const isEnabled = process.env.TEMPORARY_AUTO_VERIFY_EMAIL_ON_PURCHASE === "true";
-  if (isEnabled && !user.isEmailVerified) {
-    (user as IUser).isEmailVerified = true;
-    // Optional: Log for monitoring
-    console.log(`[TEMPORARY] Auto-verified email for user ${user.email} via purchase`);
-  }
-}
 
 async function grantBenefits(
   user: UserDocument,
@@ -1383,15 +1365,6 @@ async function grantBenefits(
       // Non-blocking - log but don't fail payment processing
       console.error("❌ Affiliate commission processing error (non-blocking):", _commissionError);
     }
-  }
-
-  // TEMPORARY: Auto-verify email on purchase (SMTP to SendGrid migration workaround)
-  // This should be removed once email verification is working properly
-  try {
-    autoVerifyEmailOnPurchase(user);
-  } catch (error) {
-    // Non-blocking - don't fail purchase flow if email verification check fails
-    console.error("❌ Error in auto-verify email on purchase (non-blocking):", error);
   }
 
   // Save user

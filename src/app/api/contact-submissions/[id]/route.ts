@@ -52,6 +52,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const submission = await ContactSubmission.findById(id)
       .populate('assignedTo', 'name email')
       .populate('respondedBy', 'name email')
+      .populate({ path: 'replies.sentBy', select: 'name email', strictPopulate: false })
       .lean();
 
     if (!submission) {
@@ -121,7 +122,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       updateData,
       { new: true, runValidators: true }
     ).populate('assignedTo', 'name email')
-     .populate('respondedBy', 'name email');
+     .populate('respondedBy', 'name email')
+     .populate({ path: 'replies.sentBy', select: 'name email', strictPopulate: false });
 
     return NextResponse.json({
       success: true,
