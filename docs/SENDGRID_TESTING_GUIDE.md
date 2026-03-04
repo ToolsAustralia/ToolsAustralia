@@ -1,6 +1,8 @@
 # SendGrid Email Testing Guide
 
-This guide will help you test the SendGrid email migration to ensure all email types are working correctly.
+This guide will help you test the SendGrid email integration to ensure all email types are working correctly.
+
+For module architecture and API reference, see [EMAIL_MODULE.md](./EMAIL_MODULE.md).
 
 ## Prerequisites
 
@@ -27,20 +29,25 @@ Add these variables to your `.env.local` (development) or production environment
 ```bash
 # SendGrid Configuration
 SENDGRID_API_KEY=SG.your-actual-api-key-here
-SENDGRID_FROM_EMAIL=noreply@toolsaustralia.com.au
-SENDGRID_FROM_NAME=Tools Australia
 EMAIL_ENABLED=true
 EMAIL_RETRY_ATTEMPTS=3
 EMAIL_RETRY_DELAY_MS=1000
 
-# Contact Email (for form submissions)
-CONTACT_EMAIL=hello@toolsaustralia.com.au
+# Recipient for contact form and partner application notifications
+CONTACT_EMAIL=support@toolsaustralia.com.au
+
+# Email Verification: 3 per 5 min, 24hr expiry
+EMAIL_VERIFICATION_EXPIRY_MINUTES=1440
+EMAIL_VERIFICATION_RATE_LIMIT_PER_5MIN=3
+
+# Password Reset: 24hr expiry
+PASSWORD_RESET_EXPIRY_MINUTES=1440
 ```
 
 **Important:** 
 - Replace `SG.your-actual-api-key-here` with your actual SendGrid API key
-- The `SENDGRID_FROM_EMAIL` must be verified in SendGrid (either authenticated domain or verified single sender)
-- For testing, you can use SendGrid's default sender or verify a single sender email
+- `SENDGRID_FROM_EMAIL` and `SENDGRID_FROM_NAME` are NOT used; sender addresses are per email type
+- Domain authentication is required: all sender addresses use `@toolsaustralia.com.au`. Authenticate in SendGrid (Settings → Sender Authentication) before sending
 
 ## Testing Methods
 
@@ -164,13 +171,28 @@ POST /api/partner-applications
 }
 ```
 
+## Sender Identity Mapping
+
+Each email type uses a different "from" address for clarity and deliverability:
+
+| Email Type | From Address | Reply-To |
+|------------|--------------|----------|
+| Verification | verify-email@toolsaustralia.com.au | — |
+| Password reset | reset-password@toolsaustralia.com.au | — |
+| Contact form notification | no-reply@toolsaustralia.com.au | Submitter's email |
+| Partner application notification | no-reply@toolsaustralia.com.au | Submitter's email |
+| Admin support email | support@toolsaustralia.com.au | support@toolsaustralia.com.au |
+| Custom / transactional | no-reply@toolsaustralia.com.au | — |
+
+Contact and partner form notifications are sent **to** `CONTACT_EMAIL` (default: support@toolsaustralia.com.au).
+
 ## Verification Checklist
 
 For each email type, verify:
 
 - [ ] **Email is received** (check inbox and spam)
-- [ ] **Sender name** is "Tools Australia"
-- [ ] **From email** is correct (noreply@toolsaustralia.com.au)
+- [ ] **Sender name** matches the type (e.g. "Tools Australia" or "Tools Australia Support")
+- [ ] **From email** matches the sender identity (verify-email@, reset-password@, no-reply@, support@)
 - [ ] **Subject line** is correct
 - [ ] **HTML rendering** is correct (logo, colors, layout)
 - [ ] **Text version** is readable (if provided)
@@ -216,9 +238,7 @@ For each email type, verify:
 
 ### Issue: "Invalid sender email"
 **Solution:** 
-- Verify the sender email in SendGrid (Settings → Sender Authentication)
-- For testing, use SendGrid's default sender or verify a single sender
-- In production, authenticate your domain
+- Authenticate your domain in SendGrid (Settings → Sender Authentication). Once the domain `toolsaustralia.com.au` is authenticated, all addresses under that domain (verify-email@, reset-password@, no-reply@, support@) are valid.
 
 ### Issue: "Rate limit exceeded"
 **Solution:**
@@ -263,7 +283,7 @@ Before going live:
 Create a test file `test-emails.ts`:
 
 ```typescript
-import { emailService } from '@/lib/email';
+import { emailService } from '@/lib/email/';
 
 async function testAllEmails() {
   const testEmail = 'your-test-email@example.com';
@@ -284,19 +304,16 @@ async function testAllEmails() {
   });
   console.log('Reset:', reset);
   
-  console.log('Testing contact submission...');
-  const contact = await emailService.sendContactSubmissionEmail(
-    process.env.CONTACT_EMAIL || 'hello@toolsaustralia.com.au',
-    {
-      firstName: 'John',
-      lastName: 'Doe',
-      email: testEmail,
-      phone: '0412345678',
-      subject: 'Test Subject',
-      message: 'Test message',
-      submittedAt: new Date().toISOString(),
-    }
-  );
+  console.log('Testing contact submission (sends to CONTACT_EMAIL)...');
+  const contact = await emailService.sendContactSubmissionEmail({
+    firstName: 'John',
+    lastName: 'Doe',
+    email: testEmail,
+    phone: '0412345678',
+    subject: 'Test Subject',
+    message: 'Test message',
+    submittedAt: new Date().toISOString(),
+  });
   console.log('Contact:', contact);
 }
 
@@ -309,11 +326,10 @@ Run with: `tsx test-emails.ts`
 
 After successful testing:
 
-1. ✅ Remove old Nodemailer code (optional cleanup)
-2. ✅ Update documentation
-3. ✅ Set up SendGrid webhooks (optional)
-4. ✅ Configure email analytics
-5. ✅ Set up monitoring/alerts
+1. Set up SendGrid webhooks (optional)
+2. Configure email analytics
+3. Set up monitoring/alerts
+4. See `docs/EMAIL_MODULE.md` for module architecture and API reference
 
 ## Support
 

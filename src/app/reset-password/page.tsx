@@ -47,29 +47,42 @@ function ResetPasswordContent() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        // Set inline error for email field if email doesn't exist
+        const errorMessage = data.error || "Could not send reset email. Please try again.";
+
+        // Rate limited: 1 attempt every 5 minutes
+        if (res.status === 429) {
+          setEmailError(errorMessage);
+          showToast({
+            type: "error",
+            title: "Please wait before trying again",
+            message: errorMessage,
+            duration: 6000,
+          });
+          return;
+        }
+
+        // Email not found
         const isEmailNotFound =
           res.status === 404 ||
           data.error?.toLowerCase().includes("no account") ||
           data.error?.toLowerCase().includes("not found");
 
         if (isEmailNotFound) {
-          setEmailError(data.error || "No account found with this email address.");
-          // Also show toast for visibility
+          setEmailError(errorMessage);
           showToast({
             type: "error",
             title: "Email not found",
-            message: data.error || "No account found with this email address.",
+            message: errorMessage,
           });
         } else {
-          // Show toast for other errors
+          setEmailError(errorMessage);
           showToast({
             type: "error",
             title: "Request failed",
-            message: data.error || "Could not send reset email. Please try again.",
+            message: errorMessage,
           });
         }
-        return; // Exit early, don't throw
+        return;
       }
 
       // Clear email field and error on success

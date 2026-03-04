@@ -122,11 +122,11 @@ export default function PromoBannerTextList() {
             {texts.map((text) => (
               <div
                 key={text.id}
-                className={`p-4 sm:p-6 hover:bg-gray-50 transition-colors ${
+                className={`p-3 sm:p-6 hover:bg-gray-50 transition-colors ${
                   !text.isActive ? "opacity-60" : ""
                 }`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                   <div className="flex-1">
                     <div className="flex items-start gap-3 mb-2">
                       <div className="flex-1">
@@ -154,7 +154,7 @@ export default function PromoBannerTextList() {
                             {text.scheduleType === "one-time" ? "One-time" : "Recurring"}
                           </span>
                         </div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2">{text.text}</h4>
+                        <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">{text.text}</h4>
                         <div className="text-sm text-gray-600 space-y-1">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />

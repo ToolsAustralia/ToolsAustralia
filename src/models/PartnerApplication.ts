@@ -4,6 +4,12 @@ import mongoose, { Document, Schema } from "mongoose";
  * Partner Application Model
  * Stores partner application submissions from the "Become a Partner" page
  */
+export interface IPartnerReply {
+  body: string;
+  sentAt: Date;
+  sentBy: mongoose.Types.ObjectId;
+}
+
 export interface IPartnerApplication extends Document {
   // Basic Information
   firstName: string;
@@ -13,8 +19,8 @@ export interface IPartnerApplication extends Document {
   phone: string;
 
   // Business Details (Optional)
-  abn?: string; // Australian Business Number
-  acn?: string; // Australian Company Number
+  abn?: string;
+  acn?: string;
 
   // Partnership Goals
   goals?: string;
@@ -26,6 +32,9 @@ export interface IPartnerApplication extends Document {
   reviewedBy?: mongoose.Types.ObjectId;
   reviewedAt?: Date;
 
+  // Conversation thread
+  replies: IPartnerReply[];
+
   // Metadata
   submittedAt: Date;
   ipAddress?: string;
@@ -33,6 +42,12 @@ export interface IPartnerApplication extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const ReplySchema = new Schema({
+  body: { type: String, required: true, trim: true, maxlength: 15000 },
+  sentAt: { type: Date, default: Date.now },
+  sentBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+}, { _id: true });
 
 const PartnerApplicationSchema = new Schema<IPartnerApplication>(
   {
@@ -123,6 +138,9 @@ const PartnerApplicationSchema = new Schema<IPartnerApplication>(
     reviewedAt: {
       type: Date,
     },
+
+    // Conversation thread
+    replies: [ReplySchema],
 
     // Metadata
     submittedAt: {

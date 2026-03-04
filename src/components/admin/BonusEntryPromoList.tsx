@@ -109,7 +109,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
   return (
     <>
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-4 sm:p-6 border-b border-gray-200">
+        <div className="p-3 sm:p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Gift className="w-5 h-5 text-red-600" />
@@ -126,7 +126,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-3 sm:p-6">
           {promos.length === 0 ? (
             <div className="text-center py-8">
               <Gift className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -136,91 +136,146 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Bonus Entries
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date Range
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {promos.map((promo) => (
-                    <tr key={promo.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{getTypeLabel(promo.type)}</div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Gift className="w-4 h-4 text-red-600" />
-                          <span className="text-sm font-semibold text-gray-900">{promo.bonusEntries}</span>
-                          <span className="text-xs text-gray-500">entries</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900">
-                          <div className="flex items-center gap-1 mb-1">
-                            <Calendar className="w-3 h-3 text-gray-400" />
-                            <span className="font-medium">Start:</span>
-                            <span>{promo.startDateFormatted || formatDateReadable(new Date(promo.startDate))}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3 text-gray-400" />
-                            <span className="font-medium">End:</span>
-                            <span>{promo.endDateFormatted || formatDateReadable(new Date(promo.endDate))}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">{getStatusBadge(promo)}</td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm text-gray-500 max-w-xs truncate">
-                          {promo.description || <span className="text-gray-400 italic">No description</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(promo)}
-                            className="text-blue-600 hover:text-blue-900 p-1.5 rounded transition-colors"
-                            title="Edit promo"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(promo.id)}
-                            disabled={deletingId === promo.id}
-                            className="text-red-600 hover:text-red-900 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Delete promo"
-                          >
-                            {deletingId === promo.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
+            <>
+              {/* Mobile: Card layout */}
+              <div className="sm:hidden space-y-3">
+                {promos.map((promo) => (
+                  <div
+                    key={promo.id}
+                    className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50/50"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Gift className="w-4 h-4 text-red-600 shrink-0" />
+                        <span className="text-sm font-semibold text-gray-900">
+                          {promo.bonusEntries} entries
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {getStatusBadge(promo)}
+                        <button
+                          onClick={() => handleEdit(promo)}
+                          className="text-blue-600 hover:text-blue-900 p-1.5 rounded"
+                          title="Edit"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(promo.id)}
+                          disabled={deletingId === promo.id}
+                          className="text-red-600 hover:text-red-900 p-1.5 rounded disabled:opacity-50"
+                          title="Delete"
+                        >
+                          {deletingId === promo.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 space-y-0.5">
+                      <div>{getTypeLabel(promo.type)}</div>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 shrink-0" />
+                        {promo.startDateFormatted || formatDateReadable(new Date(promo.startDate))} →{" "}
+                        {promo.endDateFormatted || formatDateReadable(new Date(promo.endDate))}
+                      </div>
+                      {promo.description && (
+                        <div className="truncate">{promo.description}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: Table layout */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Bonus Entries
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date Range
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Description
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {promos.map((promo) => (
+                      <tr key={promo.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{getTypeLabel(promo.type)}</div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Gift className="w-4 h-4 text-red-600" />
+                            <span className="text-sm font-semibold text-gray-900">{promo.bonusEntries}</span>
+                            <span className="text-xs text-gray-500">entries</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                              <span className="font-medium">Start:</span>
+                              <span>{promo.startDateFormatted || formatDateReadable(new Date(promo.startDate))}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                              <span className="font-medium">End:</span>
+                              <span>{promo.endDateFormatted || formatDateReadable(new Date(promo.endDate))}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(promo)}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-500 max-w-xs truncate">
+                            {promo.description || <span className="text-gray-400 italic">No description</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(promo)}
+                              className="text-blue-600 hover:text-blue-900 p-1.5 rounded transition-colors"
+                              title="Edit promo"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(promo.id)}
+                              disabled={deletingId === promo.id}
+                              className="text-red-600 hover:text-red-900 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete promo"
+                            >
+                              {deletingId === promo.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>

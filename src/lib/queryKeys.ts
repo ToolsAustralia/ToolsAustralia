@@ -121,6 +121,10 @@ export const queryKeys = {
     orders: ["admin", "orders"] as const,
     analytics: ["admin", "analytics"] as const,
     promoAnalytics: (params: Record<string, string>) => ["admin", "promo-analytics", params] as const,
+    promoPageDetail: (pageType: string, slug: string, startDate: string, endDate: string) =>
+      ["admin", "promo-analytics", "page-detail", pageType, slug, startDate, endDate] as const,
+    promoChannelDetail: (utmSource: string, startDate: string, endDate: string) =>
+      ["admin", "promo-analytics", "channel-detail", utmSource, startDate, endDate] as const,
     products: ["admin", "products"] as const,
     miniDraws: ["admin", "mini-draws"] as const,
     metrics: {

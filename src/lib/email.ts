@@ -1,4 +1,10 @@
-import nodemailer from "nodemailer";
+/**
+ * @deprecated This file is superseded by the `src/lib/email/` module.
+ * All sending functions here are no longer used. Utility functions have been
+ * extracted to `src/lib/email/utils.ts`. This file is retained only as a
+ * reference and will be removed in a future cleanup pass.
+ */
+
 import crypto from "crypto";
 import { isDevelopment } from "@/lib/environment";
 
@@ -91,24 +97,11 @@ export function generateEmailVerificationCode(): string {
 }
 
 /**
- * Create email transporter
+ * @deprecated SMTP transport has been removed. Use `emailService` from `@/lib/email/` instead.
  */
-function createEmailTransporter() {
-  // Check if SMTP is configured
-  if (!process.env.SMTP_SERVER_HOST || !process.env.SMTP_SERVER_USER || !process.env.SMTP_SERVER_PASSWORD) {
-    // console.warn("⚠️ SMTP not configured - Email verification disabled");
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_SERVER_HOST,
-    port: parseInt(process.env.SMTP_SERVER_PORT || "587"),
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_SERVER_USER,
-      pass: process.env.SMTP_SERVER_PASSWORD,
-    },
-  });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createEmailTransporter(): any {
+  return null;
 }
 
 /**
@@ -374,7 +367,8 @@ function createVerificationEmailTemplate(userName: string, verificationCode: str
 }
 
 /**
- * Send email verification code
+ * @deprecated Use `emailService.sendVerificationEmail()` from `@/lib/email/` instead.
+ * This SMTP-based function is kept for backward compatibility during migration.
  */
 export async function sendEmailVerificationCode(
   email: string,
@@ -445,7 +439,8 @@ export function generateEmailVerificationToken(): string {
 }
 
 /**
- * Send a plain email with provided subject/body (centralized design)
+ * @deprecated Use `emailService.sendCustomEmail()` from `@/lib/email/` instead.
+ * This SMTP-based function is kept for backward compatibility during migration.
  */
 export async function sendCustomEmail({
   to,
@@ -498,8 +493,8 @@ export async function sendCustomEmail({
 }
 
 /**
- * Send password reset email with link and code
- * Uses the same header/footer and overall styling as the verification email for consistency.
+ * @deprecated Use `emailService.sendPasswordResetEmail()` from `@/lib/email/` instead.
+ * This SMTP-based function is kept for backward compatibility during migration.
  */
 export async function sendPasswordResetEmail({
   to,
@@ -1223,8 +1218,8 @@ function createPartnerApplicationEmailTemplate(data: {
 }
 
 /**
- * Send contact form submission notification email
- * Note: Rate limiting is now checked BEFORE calling this function in the API endpoint
+ * @deprecated Use `emailService.sendContactSubmissionEmail()` from `@/lib/email/` instead.
+ * This SMTP-based function is kept for backward compatibility during migration.
  */
 export async function sendContactSubmissionEmail(data: {
   firstName: string;
@@ -1284,8 +1279,8 @@ export async function sendContactSubmissionEmail(data: {
 }
 
 /**
- * Send partner application notification email
- * Note: Rate limiting is now checked BEFORE calling this function in the API endpoint
+ * @deprecated Use `emailService.sendPartnerApplicationEmail()` from `@/lib/email/` instead.
+ * This SMTP-based function is kept for backward compatibility during migration.
  */
 export async function sendPartnerApplicationEmail(data: {
   firstName: string;

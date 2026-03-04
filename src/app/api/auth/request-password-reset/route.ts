@@ -3,7 +3,12 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import crypto from "crypto";
-import { checkEmailRateLimit, sendPasswordResetEmail } from "@/lib/email";
+import {
+  emailService,
+  checkPasswordResetRateLimit,
+  getPasswordResetExpiry,
+  getPasswordResetExpiryMinutes,
+} from "@/lib/email/";
 
 const requestSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -19,16 +24,22 @@ export async function POST(request: NextRequest) {
 
     const { email } = parsed.data;
 
-    const rateLimit = checkEmailRateLimit(email);
+    const rateLimit = checkPasswordResetRateLimit(email);
     if (!rateLimit.allowed) {
-      const resetMinutes = Math.ceil((rateLimit.resetTime - Date.now()) / 60000);
+      const retryAfterSeconds = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
+      const retryAfterMinutes = Math.ceil(retryAfterSeconds / 60);
       return NextResponse.json(
         {
           success: false,
-          error: `Too many requests. Try again in ${resetMinutes} minutes.`,
-          rateLimit,
+          error: `You can request a password reset only once every 5 minutes. Please try again after ${retryAfterMinutes} minute${retryAfterMinutes === 1 ? '' : 's'}.`,
+          retryAfterSeconds,
         },
-        { status: 429 }
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+          },
+        }
       );
     }
 
@@ -43,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     const resetToken = crypto.randomBytes(32).toString("hex");
     const resetCode = crypto.randomInt(100000, 999999).toString();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+    const expiresAt = getPasswordResetExpiry();
 
     user.passwordResetToken = resetToken;
     user.passwordResetExpires = expiresAt;
@@ -52,11 +63,11 @@ export async function POST(request: NextRequest) {
     const resetUrl = `${
       process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || ""
     }/reset-password?token=${resetToken}`;
-    await sendPasswordResetEmail({
-      to: user.email,
+    await emailService.sendPasswordResetEmail(user.email, {
       userName: user.firstName,
       resetUrl,
       resetCode,
+      expiryMinutes: getPasswordResetExpiryMinutes(),
     });
 
     return NextResponse.json({
