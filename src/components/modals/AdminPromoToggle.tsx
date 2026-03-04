@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useTogglePromo, useAdminActivePromos, type TogglePromoData } from "@/hooks/queries/usePromoQueries";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
-import PromoBadge from "@/components/ui/PromoBadge";
+import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import { Loader2, Zap } from "lucide-react";
 
 interface AdminPromoToggleProps {
@@ -55,18 +55,18 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
     const isToggling = togglingPromo?.startsWith(type);
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">{typeLabel}</h3>
+      <div className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">{typeLabel}</h3>
           {currentPromo && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Current:</span>
-              <PromoBadge multiplier={currentPromo.multiplier} size="small" />
+              <span className="text-xs sm:text-sm text-gray-600">Current:</span>
+              <PromoBadgeImage multiplier={currentPromo.multiplier} size="small" />
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-5 gap-2 sm:gap-3">
           {/* Toggle buttons: 10x, 5x, 3x, 2x, OFF */}
           {promoMultipliers.map((multiplier) => {
             const isActive = currentMultiplier === multiplier;
@@ -79,7 +79,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
                 onClick={() => handleToggle(type, multiplier)}
                 disabled={isToggling || togglePromoMutation.isPending}
                 className={`
-                  relative px-4 py-3 rounded-lg font-bold text-sm transition-all duration-200
+                  relative px-2 py-2 sm:px-4 sm:py-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200
                   ${
                     isActive
                       ? "bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-600 text-black shadow-lg scale-105 ring-2 ring-yellow-300"
@@ -110,7 +110,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
             onClick={() => handleToggle(type, null)}
             disabled={isToggling || togglePromoMutation.isPending || !currentPromo}
             className={`
-              relative px-4 py-3 rounded-lg font-bold text-sm transition-all duration-200
+              relative px-2 py-2 sm:px-4 sm:py-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200
               ${
                 !currentPromo
                   ? "bg-gradient-to-r from-red-500 via-red-600 to-red-700 text-white shadow-lg scale-105 ring-2 ring-red-300"
@@ -142,7 +142,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
             <Loader2 className="w-8 h-8 animate-spin text-red-600" />
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {renderToggleSection("membership-packages", membershipPromo, "Membership Subscription Promo")}
             <div className="border-t border-gray-200"></div>
             {renderToggleSection("one-time-packages", oneTimePromo, "One-Time Packages")}

@@ -14,7 +14,7 @@ import AdminPromoBannerTextModal from "@/components/modals/AdminPromoBannerTextM
 import PromoBannerTextList from "@/components/admin/PromoBannerTextList";
 import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatingMultiplierModal";
 import AlternatingMultiplierList from "@/components/admin/AlternatingMultiplierList";
-import PromoBadge from "@/components/ui/PromoBadge";
+import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import type { ScheduledPromo } from "@/types/admin";
 import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat } from "lucide-react";
 
@@ -31,25 +31,25 @@ export default function PromoManagement() {
   const { data: activePromos = [], isLoading: activeLoading, refetch: refetchActive } = useAdminActivePromos();
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Promo Management</h2>
-          <p className="text-gray-600 mt-1">Manage promotional campaigns and entry multipliers</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Promo Management</h2>
+          <p className="text-gray-600 text-sm sm:text-base mt-0.5 sm:mt-1">Manage campaigns and entry multipliers</p>
         </div>
         <button
           onClick={() => setIsToggleModalOpen(true)}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+          className="inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shrink-0"
         >
-          <Settings className="w-4 h-4" />
+          <Settings className="w-4 h-4 shrink-0" />
           Toggle Promos
         </button>
       </div>
 
       {/* Active Promos */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-4 sm:p-6 border-b border-gray-200">
+        <div className="p-3 sm:p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Zap className="w-5 h-5 text-yellow-500" />
@@ -65,7 +65,7 @@ export default function PromoManagement() {
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-3 sm:p-6">
           {activeLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-red-600" />
@@ -77,27 +77,27 @@ export default function PromoManagement() {
               <p className="text-sm text-gray-400 mt-1">Create a new promo to boost package sales</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {activePromos.map((promo) => (
                 <div
                   key={promo.id}
-                  className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-4 border border-red-200"
+                  className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-3 sm:p-4 border border-red-200"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <PromoBadge multiplier={promo.multiplier} />
-                        <span className="text-sm font-medium text-gray-700 capitalize">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+                        <PromoBadgeImage multiplier={promo.multiplier} size="small" className="shrink-0" />
+                        <span className="text-sm font-medium text-gray-700 capitalize truncate">
                           {promo.type.replace("-", " ")}
                         </span>
                       </div>
                       {promo.createdBy && (
-                        <div className="text-sm text-gray-600">
+                        <div className="text-xs sm:text-sm text-gray-600 truncate">
                           Created by: {promo.createdBy.firstName} {promo.createdBy.lastName}
                         </div>
                       )}
                     </div>
-                    <div className="text-sm text-gray-500">Use toggle button above to change or turn off</div>
+                    <div className="text-xs sm:text-sm text-gray-500 shrink-0">Use toggle above</div>
                   </div>
                 </div>
               ))}
@@ -107,16 +107,15 @@ export default function PromoManagement() {
       </div>
 
       {/* Scheduled Promos Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+      <div className="mt-6 sm:mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <div className="min-w-0">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-red-600" />
               Scheduled Promos
             </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Define campaign phases with date ranges and multipliers; they apply automatically when the current time
-              falls within a phase. Priority: Scheduled &gt; Toggle Promo &gt; Alternating.
+            <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+              Campaign phases with date ranges; apply automatically. Priority: Scheduled &gt; Toggle &gt; Alternating.
             </p>
           </div>
           <button
@@ -124,7 +123,7 @@ export default function PromoManagement() {
               setEditingScheduledPromo(null);
               setIsScheduledModalOpen(true);
             }}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shrink-0"
           >
             <Plus className="w-4 h-4" />
             Schedule Promo
@@ -140,20 +139,20 @@ export default function PromoManagement() {
       </div>
 
       {/* Bonus Entry Promos Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+      <div className="mt-6 sm:mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <div className="min-w-0">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
               <Gift className="w-5 h-5 text-red-600" />
               Bonus Entry Promos
             </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Create date-based promos that grant bonus entries when users purchase packages during specific periods
+            <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+              Date-based promos granting bonus entries during specific periods
             </p>
           </div>
           <button
             onClick={() => setIsBonusEntryModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shrink-0"
           >
             <Plus className="w-4 h-4" />
             Create Bonus Entry Promo
@@ -164,21 +163,20 @@ export default function PromoManagement() {
       </div>
 
       {/* Promo Links Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+      <div className="mt-6 sm:mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <div className="min-w-0">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-red-600" />
               Promo Links
             </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Create shareable promo links with unique codes that grant bonus entries. Users click the link and the code
-              is saved for their next purchase.
+            <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+              Shareable promo links with unique codes for bonus entries on next purchase
             </p>
           </div>
           <button
             onClick={() => setIsPromoLinkModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shrink-0"
           >
             <Plus className="w-4 h-4" />
             Create Promo Link
@@ -189,21 +187,20 @@ export default function PromoManagement() {
       </div>
 
       {/* Promo Banner Text Schedule Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+      <div className="mt-6 sm:mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <div className="min-w-0">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-red-600" />
               Promo Banner Text Schedule
             </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Schedule custom banner text for holidays and special occasions. Supports one-time date ranges and
-              recurring patterns (weekdays, weekends, or specific days). All dates are in AEST timezone.
+            <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+              Custom banner text for holidays. One-time or recurring (weekdays/weekends). AEST timezone.
             </p>
           </div>
           <button
             onClick={() => setIsBannerTextModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shrink-0"
           >
             <Plus className="w-4 h-4" />
             Create Scheduled Text
@@ -214,22 +211,20 @@ export default function PromoManagement() {
       </div>
 
       {/* Alternating Multiplier Settings Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+      <div className="mt-6 sm:mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <div className="min-w-0">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
               <Repeat className="w-5 h-5 text-red-600" />
               Alternating Multiplier Settings
             </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Configure multipliers that automatically alternate daily at midnight AEST. Only applies when no active
-              promo exists for the package type. Priority: Active Promo &gt; Alternating Multiplier &gt; Default (10x
-              display, 1x payment).
+            <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+              Daily alternating multipliers at midnight AEST. Priority: Active &gt; Alternating &gt; Default
             </p>
           </div>
           <button
             onClick={() => setIsAlternatingMultiplierModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shrink-0"
           >
             <Plus className="w-4 h-4" />
             Create Configuration

@@ -101,7 +101,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
   return (
     <>
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-4 sm:p-6 border-b border-gray-200">
+        <div className="p-3 sm:p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-red-600" />
@@ -118,7 +118,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-3 sm:p-6">
           {promoLinks.length === 0 ? (
             <div className="text-center py-8">
               <Link2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -126,133 +126,214 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
               <p className="text-sm text-gray-400 mt-1">Create a new promo link to share with users</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Code
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Bonus Entries
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Package Types
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Expiration
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Usage
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {promoLinks.map((promoLink) => (
-                    <tr key={promoLink.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-mono font-semibold text-gray-900">{promoLink.code}</span>
-                          <button
-                            onClick={() => handleCopyLink(promoLink.promoUrl, promoLink.id)}
-                            className="text-gray-400 hover:text-gray-600 transition-colors"
-                            title="Copy link"
-                          >
-                            {copiedId === promoLink.id ? (
-                              <Check className="w-4 h-4 text-green-600" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Link2 className="w-4 h-4 text-red-600" />
-                          <span className="text-sm font-semibold text-gray-900">{promoLink.bonusEntries}</span>
-                          <span className="text-xs text-gray-500">entries</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {promoLink.appliesToMembership && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              Membership
-                            </span>
-                          )}
-                          {promoLink.appliesToOneTime && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                              One-Time
-                            </span>
-                          )}
-                          {!promoLink.appliesToMembership && !promoLink.appliesToOneTime && (
-                            <span className="text-xs text-gray-400 italic">None selected</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900">
-                          {promoLink.expiresAt ? (
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-gray-400" />
-                              <span>
-                                {promoLink.expiresAtFormatted || formatDateReadable(new Date(promoLink.expiresAt))}
-                              </span>
-                            </div>
+            <>
+              {/* Mobile: Card layout */}
+              <div className="sm:hidden space-y-3">
+                {promoLinks.map((promoLink) => (
+                  <div
+                    key={promoLink.id}
+                    className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50/50"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-mono font-semibold text-gray-900 truncate">
+                          {promoLink.code}
+                        </span>
+                        <button
+                          onClick={() => handleCopyLink(promoLink.promoUrl, promoLink.id)}
+                          className="text-gray-400 hover:text-gray-600 shrink-0"
+                          title="Copy"
+                        >
+                          {copiedId === promoLink.id ? (
+                            <Check className="w-4 h-4 text-green-600" />
                           ) : (
-                            <span className="text-gray-400 italic">No expiration</span>
+                            <Copy className="w-4 h-4" />
                           )}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {getStatusBadge(promoLink)}
+                        <button
+                          onClick={() => handleEdit(promoLink)}
+                          className="text-blue-600 hover:text-blue-900 p-1.5 rounded"
+                          title="Edit"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(promoLink.id)}
+                          disabled={deletingId === promoLink.id}
+                          className="text-red-600 hover:text-red-900 p-1.5 rounded disabled:opacity-50"
+                          title="Delete"
+                        >
+                          {deletingId === promoLink.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 space-y-0.5">
+                      <div className="flex items-center gap-1">
+                        <Link2 className="w-3 h-3 shrink-0" />
+                        {promoLink.bonusEntries} entries
+                        {(promoLink.appliesToMembership || promoLink.appliesToOneTime) && (
+                          <span className="ml-1">
+                            ({[
+                              promoLink.appliesToMembership && "Membership",
+                              promoLink.appliesToOneTime && "One-Time",
+                            ]
+                              .filter(Boolean)
+                              .join(", ")})
+                          </span>
+                        )}
+                      </div>
+                      {promoLink.expiresAt && (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 shrink-0" />
+                          Expires:{" "}
+                          {promoLink.expiresAtFormatted ||
+                            formatDateReadable(new Date(promoLink.expiresAt))}
                         </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          <span className="font-medium">{promoLink.usageCount}</span>
-                          <span className="text-gray-500 ml-1">{promoLink.usageCount === 1 ? "use" : "uses"}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">{getStatusBadge(promoLink)}</td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm text-gray-500 max-w-xs truncate">
-                          {promoLink.description || <span className="text-gray-400 italic">No description</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(promoLink)}
-                            className="text-blue-600 hover:text-blue-900 p-1.5 rounded transition-colors"
-                            title="Edit promo link"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(promoLink.id)}
-                            disabled={deletingId === promoLink.id}
-                            className="text-red-600 hover:text-red-900 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Delete promo link"
-                          >
-                            {deletingId === promoLink.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
+                      )}
+                      <div>
+                        {promoLink.usageCount} {promoLink.usageCount === 1 ? "use" : "uses"}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: Table layout */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Code
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Bonus Entries
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Package Types
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Expiration
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Usage
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Description
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {promoLinks.map((promoLink) => (
+                      <tr key={promoLink.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-mono font-semibold text-gray-900">{promoLink.code}</span>
+                            <button
+                              onClick={() => handleCopyLink(promoLink.promoUrl, promoLink.id)}
+                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Copy link"
+                            >
+                              {copiedId === promoLink.id ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Link2 className="w-4 h-4 text-red-600" />
+                            <span className="text-sm font-semibold text-gray-900">{promoLink.bonusEntries}</span>
+                            <span className="text-xs text-gray-500">entries</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {promoLink.appliesToMembership && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                Membership
+                              </span>
+                            )}
+                            {promoLink.appliesToOneTime && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                One-Time
+                              </span>
+                            )}
+                            {!promoLink.appliesToMembership && !promoLink.appliesToOneTime && (
+                              <span className="text-xs text-gray-400 italic">None selected</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900">
+                            {promoLink.expiresAt ? (
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                                <span>
+                                  {promoLink.expiresAtFormatted || formatDateReadable(new Date(promoLink.expiresAt))}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic">No expiration</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            <span className="font-medium">{promoLink.usageCount}</span>
+                            <span className="text-gray-500 ml-1">{promoLink.usageCount === 1 ? "use" : "uses"}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(promoLink)}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-500 max-w-xs truncate">
+                            {promoLink.description || <span className="text-gray-400 italic">No description</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(promoLink)}
+                              className="text-blue-600 hover:text-blue-900 p-1.5 rounded transition-colors"
+                              title="Edit promo link"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(promoLink.id)}
+                              disabled={deletingId === promoLink.id}
+                              className="text-red-600 hover:text-red-900 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete promo link"
+                            >
+                              {deletingId === promoLink.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>
