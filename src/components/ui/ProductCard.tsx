@@ -391,7 +391,7 @@ export default function ProductCard({
   // Grid view
   if (viewMode === "grid") {
     return (
-      <div className="bg-white rounded-[20px] sm:rounded-[25px] lg:rounded-[30px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-visible group h-full flex flex-col">
+      <div className="bg-white rounded-[20px] sm:rounded-[25px] lg:rounded-[30px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-hidden group h-full flex flex-col">
         <div className="relative">
           {/* Product Image */}
           <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
@@ -422,7 +422,7 @@ export default function ProductCard({
 
           {/* Your Entries Badge - Top Center (only shows if user has entries) */}
           {productData.isPrize && isAuthenticated && getUserEntryCount() > 0 && (
-            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10 whitespace-nowrap group">
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10 whitespace-nowrap">
               <div className="relative bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium shadow-lg shadow-green-500/50 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 opacity-40"></div>
                 <span className="relative z-10 flex items-center gap-1">

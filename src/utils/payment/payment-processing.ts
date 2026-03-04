@@ -327,6 +327,8 @@ async function processPaymentBenefitsInternal(
           points: packageData.points,
           price: packageData.price,
           ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
+          ...(packageData.packageType === "mini-draw" &&
+            paymentMetadata?.miniDrawId && { miniDrawId: paymentMetadata.miniDrawId }), // For activity log: "Entered in [mini draw title]"
           ...(Object.keys(attributionData).length > 0 && attributionData),
         };
 

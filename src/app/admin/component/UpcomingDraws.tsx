@@ -13,8 +13,13 @@ import {
   Users,
   DollarSign,
   Trophy,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Button, Input, Select } from "@/components/modals/ui";
+import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useToast } from "@/components/ui/Toast";
 import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
 import { formatDateInLocal } from "@/utils/common/timezone";
@@ -415,80 +420,66 @@ export default function UpcomingDraws() {
 
   if (isLoading && draws.length === 0) {
     return (
-      <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 animate-spin text-red-600 mx-auto mb-4" />
-          <span className="text-lg text-gray-600 font-['Poppins']">Loading upcoming draws...</span>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+            Upcoming Draws
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-3 sm:p-4 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
+              <div className="h-8 bg-gray-200 rounded mb-2 w-3/4"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6 animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-10 bg-gray-200 rounded w-full"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100 ">
-      <div className="w-full mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-6 h-6 text-blue-600" />
-              Upcoming Draws
-            </h2>
-            <p className="text-gray-600 mt-1">Manage and edit queued and active draws</p>
-          </div>
-          <Button
-            onClick={() => fetchDraws(pagination.currentPage)}
-            disabled={isLoading}
-            variant="outline"
-            icon={RefreshCw}
-          >
-            Refresh
-          </Button>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      
+     
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Draws</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalDraws}</p>
-              </div>
-              <Calendar className="w-8 h-8 text-blue-600" />
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Entries</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalEntries.toLocaleString()}</p>
-              </div>
-              <Users className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Prize Value</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalPrizeValue)}</p>
-              </div>
-              <DollarSign className="w-8 h-8 text-yellow-600" />
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Winner Rate</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.winnerSelectionRate}%</p>
-              </div>
-              <Trophy className="w-8 h-8 text-purple-600" />
-            </div>
-          </div>
-        </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <MetricCard
+          title="Total Draws"
+          value={stats.totalDraws}
+          icon={Calendar}
+          color="blue"
+        />
+        <MetricCard
+          title="Total Entries"
+          value={stats.totalEntries.toLocaleString()}
+          icon={Users}
+          color="emerald"
+        />
+        <MetricCard
+          title="Total Prize Value"
+          value={formatCurrency(stats.totalPrizeValue)}
+          icon={DollarSign}
+          color="yellow"
+        />
+        <MetricCard
+          title="Winner Rate"
+          value={`${stats.winnerSelectionRate}%`}
+          icon={Trophy}
+          color="purple"
+        />
+      </div>
 
-        {/* Filters */}
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Filter & Search</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <Input
               placeholder="Search draws..."
               value={filters.search}
@@ -524,25 +515,24 @@ export default function UpcomingDraws() {
           </div>
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error}</span>
-          </div>
-        )}
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-        {/* Draws List */}
-        <div className="space-y-4">
-          {draws.map((draw) => {
-            const StatusIcon = getStatusIcon(draw.status);
-            const canEdit = canEditDraw(draw);
+      {/* Draws List */}
+      <div className="space-y-3 sm:space-y-4">
+        {draws.map((draw) => {
+          const StatusIcon = getStatusIcon(draw.status);
+          const canEdit = canEditDraw(draw);
 
-            return (
-              <div key={draw._id} className="bg-white rounded-lg shadow border hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
+          return (
+            <div key={draw._id} className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">{draw.name}</h3>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(draw.status)}`}>
@@ -562,7 +552,7 @@ export default function UpcomingDraws() {
                         dangerouslySetInnerHTML={{ __html: draw.description || "" }}
                       />
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Calendar className="w-4 h-4" />
                           <span>Activation: {formatDate(draw.activationDate)}</span>
@@ -589,62 +579,86 @@ export default function UpcomingDraws() {
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-2 ml-4">
-                      {canEdit && (
-                        <Button onClick={() => handleEditDraw(draw)} size="sm" icon={Edit}>
-                          Edit Draw
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline" icon={Eye}>
-                        Preview
-                      </Button>
-                    </div>
-                  </div>
+                <div className="flex flex-wrap gap-2 sm:flex-col sm:flex-shrink-0">
+                  {canEdit && (
+                    <Button onClick={() => handleEditDraw(draw)} size="sm" icon={Edit}>
+                      Edit Draw
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" icon={Eye}>
+                    Preview
+                  </Button>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
+      </div>
 
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(pagination.currentPage - 1)}
-              disabled={!pagination.hasPrevPage || isLoading}
-            >
-              Previous
-            </Button>
-            <span className="px-4 py-2 text-sm text-gray-600">
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(1)}
+                disabled={!pagination.hasPrevPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="First page"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={!pagination.hasPrevPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </div>
+            <span className="text-xs sm:text-sm text-gray-700 font-medium">
               Page {pagination.currentPage} of {pagination.totalPages}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(pagination.currentPage + 1)}
-              disabled={!pagination.hasNextPage || isLoading}
-            >
-              Next
-            </Button>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={!pagination.hasNextPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Next page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.totalPages)}
+                disabled={!pagination.hasNextPage || isLoading}
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Last page"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Edit Modal */}
-        {selectedDraw && (
-          <MajorDrawEditModal
-            isOpen={isEditModalOpen}
-            onCloseAction={() => {
-              setIsEditModalOpen(false);
-              setSelectedDraw(null);
-            }}
-            onSaveAction={handleSaveDraw}
-            majorDraw={convertToMajorDrawData(selectedDraw)}
-            isLoading={isSubmitting}
-          />
-        )}
-      </div>
+      {/* Edit Modal */}
+      {selectedDraw && (
+        <MajorDrawEditModal
+          isOpen={isEditModalOpen}
+          onCloseAction={() => {
+            setIsEditModalOpen(false);
+            setSelectedDraw(null);
+          }}
+          onSaveAction={handleSaveDraw}
+          majorDraw={convertToMajorDrawData(selectedDraw)}
+          isLoading={isSubmitting}
+        />
+      )}
     </div>
   );
 }
