@@ -95,7 +95,8 @@ function applySubscriptionUpdate(user: IUser, subscription?: AdminUserUpdatePayl
 
   if (subscription.packageId !== undefined) {
     // Allow clearing packageId by setting it to null or empty string
-    user.subscription.packageId = subscription.packageId === null || subscription.packageId === "" ? null : subscription.packageId;
+    user.subscription.packageId =
+      subscription.packageId === null || subscription.packageId === "" ? null : subscription.packageId;
   }
 
   if (subscription.status !== undefined) {
@@ -179,7 +180,7 @@ function applyMiniDrawPackagesUpdate(user: IUser, packages: NonNullable<AdminUse
     (user.miniDrawPackages || []).map((pkg) => [
       pkg.stripePaymentIntentId || `${pkg.packageId}-${pkg.startDate?.toISOString()}`,
       pkg,
-    ])
+    ]),
   );
 
   const normalisedPackages = packages.map((pkg) => {
@@ -215,7 +216,7 @@ function applyPartnerDiscountUpdate(user: IUser, updates: NonNullable<AdminUserU
   }
 
   const statusMap = new Map<string, NonNullable<AdminUserUpdatePayload["partnerDiscountQueue"]>[number]["status"]>(
-    updates.map((item) => [item.queueId, item.status])
+    updates.map((item) => [item.queueId, item.status]),
   );
 
   user.partnerDiscountQueue = user.partnerDiscountQueue.map((queueItem) => {
@@ -240,7 +241,7 @@ function applyPartnerDiscountUpdate(user: IUser, updates: NonNullable<AdminUserU
 async function syncMajorDrawParticipation(
   userId: string,
   updates: NonNullable<AdminUserUpdatePayload["majorDrawParticipation"]>,
-  session: mongoose.ClientSession
+  session: mongoose.ClientSession,
 ) {
   const now = new Date();
 
@@ -305,12 +306,12 @@ async function syncMiniDrawParticipation(
   user: IUser,
   userId: string,
   updates: NonNullable<AdminUserUpdatePayload["miniDrawParticipation"]>,
-  session: mongoose.ClientSession
+  session: mongoose.ClientSession,
 ) {
   const now = new Date();
   const nextUserParticipation: typeof user.miniDrawParticipation = [];
   const existingParticipationMap = new Map(
-    (user.miniDrawParticipation || []).map((entry) => [entry.miniDrawId?.toString(), entry])
+    (user.miniDrawParticipation || []).map((entry) => [entry.miniDrawId?.toString(), entry]),
   );
 
   for (const participation of updates) {
@@ -517,7 +518,8 @@ export async function resetUserPassword(userId: string) {
   user.passwordResetExpires = expiresAt;
   await user.save();
 
-  const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
+  const baseUrl = (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const resetUrl = `${baseUrl || "https://toolsaustralia.com.au"}/reset-password?token=${resetToken}`;
 
   return {
     success: true,
@@ -636,8 +638,3 @@ export async function resendSMSVerification(userId: string) {
     otpCode, // Include for admin reference
   };
 }
-
-
-
-
-
