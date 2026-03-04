@@ -73,7 +73,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           error: "Invalid action",
           validActions,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (!newPassword || newPassword.length < 6) {
           return NextResponse.json(
             { error: "New password is required and must be at least 6 characters" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         result = await handleAdminSetPassword(user, newPassword);
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             {
               error: "Note is required",
             },
-            { status: 400 }
+            { status: 400 },
           );
         }
         result = await handleAddNote(user, note, session.user.id);
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           {
             error: "Unknown action",
           },
-          { status: 400 }
+          { status: 400 },
         );
     }
 
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         error: "Failed to perform action",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -229,7 +229,8 @@ async function handleResetPassword(user: any) {
     user.passwordResetExpires = expiresAt;
     await user.save();
 
-    const resetUrl = `${process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || ""}/reset-password?token=${resetToken}`;
+    const baseUrl = (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    const resetUrl = `${baseUrl || "https://toolsaustralia.com.au"}/reset-password?token=${resetToken}`;
 
     const emailResult = await emailService.sendPasswordResetEmail(user.email, {
       userName: user.firstName,
@@ -496,8 +497,7 @@ async function handleClearPaymentMethods(user: any) {
       } catch (stripeError) {
         // Continue even if some detachments fail (payment method might already be detached)
         failedDetachments++;
-        const errorMessage =
-          stripeError instanceof Error ? stripeError.message : "Unknown Stripe error";
+        const errorMessage = stripeError instanceof Error ? stripeError.message : "Unknown Stripe error";
         errors.push(`Failed to detach ${paymentMethod.paymentMethodId}: ${errorMessage}`);
         console.warn(`Warning: Could not detach payment method ${paymentMethod.paymentMethodId}:`, stripeError);
       }
@@ -515,7 +515,7 @@ async function handleClearPaymentMethods(user: any) {
         // Log but don't fail - customer might not exist or already have no default
         console.warn(
           `Warning: Could not clear default payment method for customer ${user.stripeCustomerId}:`,
-          stripeError
+          stripeError,
         );
       }
     }
