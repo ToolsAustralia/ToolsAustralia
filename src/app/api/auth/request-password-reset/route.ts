@@ -31,15 +31,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `You can request a password reset only once every 5 minutes. Please try again after ${retryAfterMinutes} minute${retryAfterMinutes === 1 ? '' : 's'}.`,
+          error: `You can request a password reset only once every 5 minutes. Please try again after ${retryAfterMinutes} minute${retryAfterMinutes === 1 ? "" : "s"}.`,
           retryAfterSeconds,
         },
         {
           status: 429,
           headers: {
-            'Retry-After': String(retryAfterSeconds),
+            "Retry-After": String(retryAfterSeconds),
           },
-        }
+        },
       );
     }
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json(
         { success: false, error: "No account found with this email address. Please check your email and try again." },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     user.passwordResetExpires = expiresAt;
     await user.save();
 
-    // In development, use request origin so reset link points to localhost when testing locally
+    // Base URL for reset link: use env so production always uses your canonical domain (e.g. https://toolsaustralia.com.au).
+    // In development, use request origin so reset link points to localhost when testing locally.
     let baseUrl = (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
     if (process.env.NODE_ENV === "development") {
       try {
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+    const resetUrl = `${baseUrl || "https://toolsaustralia.com.au"}/reset-password?token=${resetToken}`;
     await emailService.sendPasswordResetEmail(user.email, {
       userName: user.firstName,
       resetUrl,
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
     console.error("Request password reset error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error", details: error instanceof Error ? error.message : "Unknown" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
