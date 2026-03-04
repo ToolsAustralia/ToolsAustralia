@@ -60,9 +60,24 @@ export async function POST(request: NextRequest) {
     user.passwordResetExpires = expiresAt;
     await user.save();
 
-    const resetUrl = `${
-      process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || ""
-    }/reset-password?token=${resetToken}`;
+    // In development, use request origin so reset link points to localhost when testing locally
+    let baseUrl = (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    if (process.env.NODE_ENV === "development") {
+      try {
+        const requestOrigin = request.headers.get("origin") || request.headers.get("referer")?.replace(/\/$/, "");
+        if (requestOrigin) {
+          const originUrl = new URL(requestOrigin);
+          baseUrl = originUrl.origin;
+        } else {
+          const url = new URL(request.url);
+          baseUrl = url.origin;
+        }
+      } catch {
+        baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      }
+    }
+
+    const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
     await emailService.sendPasswordResetEmail(user.email, {
       userName: user.firstName,
       resetUrl,

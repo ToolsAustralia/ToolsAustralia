@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { AlertCircle, CheckCircle, Clipboard, ClipboardCheck } from "lucide-react";
 import ModalHeader from "@/components/modals/ui/ModalHeader";
 import ModalContent from "@/components/modals/ui/ModalContent";
@@ -43,6 +43,9 @@ export default function EmailVerificationModal({
   const [canResend, setCanResend] = useState(false);
   const [remainingAttempts, setRemainingAttempts] = useState(5);
   const [isPasteClicked, setIsPasteClicked] = useState(false);
+
+  // Ref to prevent double submission of resend (handles double-click before setState flushes)
+  const isSendingRef = useRef(false);
 
   // SessionStorage key for persisting modal state
   const VERIFICATION_STATE_KEY = `emailVerificationModal_${email}`;
@@ -235,6 +238,9 @@ export default function EmailVerificationModal({
   };
 
   const handleSendCode = async () => {
+    if (isSendingRef.current) return;
+
+    isSendingRef.current = true;
     setIsSending(true);
     setError("");
 
@@ -271,6 +277,7 @@ export default function EmailVerificationModal({
       console.error("Send verification code error:", error);
       setError("Network error. Please try again.");
     } finally {
+      isSendingRef.current = false;
       setIsSending(false);
     }
   };
