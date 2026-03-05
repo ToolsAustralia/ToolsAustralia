@@ -60,9 +60,11 @@ export async function GET(request: NextRequest) {
     let rangeEnd: Date;
 
     if (dateRange === "custom" && startDate && endDate) {
-      rangeStart = new Date(startDate);
-      rangeEnd = new Date(endDate);
-      rangeEnd.setHours(23, 59, 59, 999);
+      const [startY, startM, startD] = startDate.split("-").map(Number);
+      const [endY, endM, endD] = endDate.split("-").map(Number);
+      rangeStart = createAESTDateAsUTC(startY, startM, startD, 0, 0);
+      rangeEnd = createAESTDateAsUTC(endY, endM, endD, 23, 59);
+      rangeEnd.setUTCSeconds(59, 999);
     } else {
       switch (dateRange) {
         case "today":
