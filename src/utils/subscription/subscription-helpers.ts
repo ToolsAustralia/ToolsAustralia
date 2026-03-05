@@ -72,15 +72,37 @@ export function getFailedRenewalStatus(user: IUser | null | undefined): {
   };
 }
 
-/** Subscription statuses that block purchasing a new subscription */
-const BLOCKING_SUBSCRIPTION_STATUSES = ["active", "past_due", "unpaid"] as const;
+/**
+ * Subscription statuses that block purchasing a new subscription.
+ *
+ * Any non-terminal Stripe status with a live subscription object must be
+ * resolved (paid, cancelled, or expired) before a new one can be created.
+ *
+ * NOT included:
+ * - "incomplete": Registration initialises every user with status "incomplete"
+ *   before any Stripe subscription exists, and the plan-switch flow during
+ *   checkout relies on creating a new subscription while the previous one is
+ *   still "incomplete" (cancelled via cancelPreviousSubscriptionId).
+ * - "incomplete_expired": Terminal status; invoice voided, safe to resubscribe.
+ * - "canceled" / "cancelled": Terminal; user can resubscribe.
+ * - missing/unknown: No live subscription; allow.
+ */
+export const BLOCKING_SUBSCRIPTION_STATUSES = [
+  "active",
+  "past_due",
+  "unpaid",
+  "trialing",
+  "paused",
+] as const;
+
+export type BlockingSubscriptionStatus = (typeof BLOCKING_SUBSCRIPTION_STATUSES)[number];
 
 /**
  * Check if user has a subscription that blocks purchasing a new one
  *
- * Users with active, past_due, or unpaid subscriptions cannot buy a new
- * subscription until they resolve (pay, cancel) their existing one.
- * Use this to prevent showing "Enter Now" when the API would reject the purchase.
+ * Users with active, past_due, unpaid, trialing, or paused subscriptions
+ * cannot buy a new subscription until they resolve their existing one
+ * (pay, cancel, or let it expire).
  *
  * @param user - User object with subscription data (IUser, UserData, or any with subscription.status)
  * @returns true if user has a blocking subscription, false otherwise
@@ -90,7 +112,7 @@ export function hasBlockingSubscription(user: { subscription?: { status?: string
     return false;
   }
   return BLOCKING_SUBSCRIPTION_STATUSES.includes(
-    user.subscription.status as (typeof BLOCKING_SUBSCRIPTION_STATUSES)[number]
+    user.subscription.status as BlockingSubscriptionStatus
   );
 }
 

@@ -904,9 +904,36 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           setIsCreatingSubscription(false);
         };
 
-        const onError = () => {
+        const onError = (err: unknown) => {
           isCreatingSubscriptionRef.current = false;
           setIsCreatingSubscription(false);
+
+          const errCode =
+            err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+          const errMsg =
+            err instanceof Error ? err.message : "Failed to create subscription. Please try again.";
+
+          if (errCode === "EXISTING_SUBSCRIPTION") {
+            showToast({
+              type: "error",
+              title: "Existing Subscription",
+              message: errMsg,
+              duration: 10000,
+              action: {
+                label: "Manage Subscription",
+                onClick: () => {
+                  router.push("/my-account");
+                },
+              },
+            });
+          } else {
+            showToast({
+              type: "error",
+              title: "Subscription Error",
+              message: errMsg,
+              duration: 6000,
+            });
+          }
         };
 
         if (isAuthenticated && userData) {

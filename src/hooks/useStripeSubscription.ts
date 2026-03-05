@@ -141,7 +141,7 @@ export function useStripeSubscription() {
   const [error, setError] = useState<string | null>(null);
   const attribution = useAttribution();
 
-  const createSubscription = async (data: SubscriptionData): Promise<SubscriptionResult | null> => {
+  const createSubscription = async (data: SubscriptionData): Promise<SubscriptionResult> => {
     try {
       setLoading(true);
       setError(null);
@@ -159,13 +159,14 @@ export function useStripeSubscription() {
 
       const result = await response.json();
 
-      // Check if the response is successful
-      if (!response.ok) {
-        throw new Error(result.error || result.details || `HTTP ${response.status}: Failed to create subscription`);
-      }
-
-      if (!result.success) {
-        throw new Error(result.error || result.details || "Failed to create subscription");
+      if (!response.ok || !result.success) {
+        const apiError = new Error(result.error || result.details || `HTTP ${response.status}: Failed to create subscription`) as Error & {
+          code?: string;
+          response?: { data?: { error?: string; code?: string } };
+        };
+        apiError.code = result.code;
+        apiError.response = { data: { error: result.error, code: result.code } };
+        throw apiError;
       }
 
       return result;
@@ -173,7 +174,7 @@ export function useStripeSubscription() {
       const errorMessage = err instanceof Error ? err.message : "Failed to create subscription";
       setError(errorMessage);
       console.error("Subscription creation error:", err);
-      return null;
+      throw err;
     } finally {
       setLoading(false);
     }
