@@ -7,6 +7,7 @@
 export { ToolboxSelector } from "./ToolboxSelector";
 export { PowerToolsetCarousel } from "./PowerToolsetCarousel";
 export { StaticToolsetHighlight } from "./StaticToolsetHighlight";
+export { OtherToolsetsCarousel } from "./OtherToolsetsCarousel";
 export {
   getToolboxTypeFromSlug,
   getToolsetFromSlug,

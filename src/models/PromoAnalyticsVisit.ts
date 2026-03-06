@@ -15,6 +15,8 @@ export interface IPromoAnalyticsVisit extends Document {
   _id: mongoose.Types.ObjectId;
   pageType: PromoPageType;
   slug: string;
+  /** Toolset slug user was on before visiting this page (e.g. from Other Toolsets carousel) */
+  referrerSlug?: string;
   anonymousId?: string;
   userId?: mongoose.Types.ObjectId;
   referrer?: string;
@@ -34,6 +36,12 @@ const PromoAnalyticsVisitSchema = new Schema<IPromoAnalyticsVisit>(
     slug: {
       type: String,
       required: [true, "Slug is required"],
+      trim: true,
+      lowercase: true,
+    },
+    referrerSlug: {
+      type: String,
+      required: false,
       trim: true,
       lowercase: true,
     },
@@ -80,6 +88,7 @@ const PromoAnalyticsVisitSchema = new Schema<IPromoAnalyticsVisit>(
 
 // Indexes for efficient analytics queries
 PromoAnalyticsVisitSchema.index({ pageType: 1, slug: 1, timestamp: -1 });
+PromoAnalyticsVisitSchema.index({ referrerSlug: 1, slug: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ anonymousId: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ userId: 1, timestamp: -1 });
 

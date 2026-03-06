@@ -34,6 +34,7 @@ interface PromoPageMetrics {
   pageType: "evergreen" | "toolset";
   slug: string;
   visits: number;
+  crossVisits: number;
   signups: number;
   conversions: number;
   revenue: number;
@@ -464,6 +465,15 @@ export default function PromoAnalyticsManagement() {
                   </th>
                   <th className="text-right p-3 font-semibold">
                     <button
+                      onClick={() => handleSort("crossVisits")}
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600"
+                      title="Visits from other toolset landing pages"
+                    >
+                      Cross-visits {getSortIcon("crossVisits")}
+                    </button>
+                  </th>
+                  <th className="text-right p-3 font-semibold">
+                    <button
                       onClick={() => handleSort("signups")}
                       className="flex items-center justify-end gap-1 w-full hover:text-red-600"
                     >
@@ -520,6 +530,7 @@ export default function PromoAnalyticsManagement() {
                       </div>
                     </td>
                     <td className="p-3 text-right font-mono">{formatNumber(row.visits)}</td>
+                    <td className="p-3 text-right font-mono" title="From other toolset pages">{formatNumber(row.crossVisits ?? 0)}</td>
                     <td className="p-3 text-right font-mono">{formatNumber(row.signups)}</td>
                     <td className="p-3 text-right font-mono">{formatNumber(row.conversions)}</td>
                     <td className="p-3 text-right font-mono">{formatCurrency(row.revenue)}</td>

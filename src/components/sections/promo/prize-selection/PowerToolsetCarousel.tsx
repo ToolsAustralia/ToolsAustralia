@@ -4,7 +4,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import type { PrizeCatalogEntry } from "@/config/prizes";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
 import { getToolsetFromSlug } from "./utils";
 import type { PrizeSlug } from "@/config/prizes";
@@ -121,6 +121,7 @@ export function PowerToolsetCarousel({
     const label = toolset ? POWERSET_LABELS[toolset] : null;
     if (!imgSrc) return null;
     const scheme = toolset ? getPackageColorScheme(getToolsetColorKey(toolset)) : null;
+    const badgeStyle = toolset ? getToolsetBadgeStyle(toolset) : null;
     return (
       <motion.button
         key={prizeOption.slug}
@@ -142,14 +143,14 @@ export function PowerToolsetCarousel({
             sizes="112px"
           />
         </div>
-        {label && scheme && (
+        {label && scheme && badgeStyle && (
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-10 w-[95%] pointer-events-none">
             <div
               className="rounded-xl backdrop-blur-md px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-lg"
               style={{
-                background: scheme.badgeStyle.background,
-                boxShadow: scheme.badgeStyle.boxShadow,
-                border: scheme.badgeStyle.border,
+                background: badgeStyle.background,
+                boxShadow: badgeStyle.boxShadow,
+                border: badgeStyle.border,
               }}
             >
               <p className={`font-agency font-bold text-[7px] sm:text-[8px] lg:text-[10px] leading-tight text-center truncate ${scheme.buttonText}`}>
@@ -267,14 +268,15 @@ export function PowerToolsetCarousel({
                     </div>
                     {activeToolset && POWERSET_LABELS[activeToolset] && (() => {
                       const scheme = getPackageColorScheme(getToolsetColorKey(activeToolset));
+                      const badgeStyle = getToolsetBadgeStyle(activeToolset);
                       return (
                         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-10 w-[95%] sm:w-[90%] pointer-events-none">
                           <div
                             className="rounded-xl backdrop-blur-md px-2 py-1.5 sm:px-5 sm:py-2.5 shadow-xl"
                             style={{
-                              background: scheme.badgeStyle.background,
-                              boxShadow: scheme.badgeStyle.boxShadow,
-                              border: scheme.badgeStyle.border,
+                              background: badgeStyle.background,
+                              boxShadow: badgeStyle.boxShadow,
+                              border: badgeStyle.border,
                             }}
                           >
                             <p className={`font-agency font-bold text-[10px] sm:text-xs lg:text-sm leading-tight text-center line-clamp-2 ${scheme.buttonText}`}>

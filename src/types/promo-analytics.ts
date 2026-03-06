@@ -13,6 +13,11 @@ export interface UTMCampaignMetrics {
   overallConversionRate: number;
 }
 
+export interface VisitsFromMetric {
+  referrerSlug: string;
+  visits: number;
+}
+
 export interface PageDetailResult {
   pageType: PromoPageType;
   slug: string;
@@ -24,6 +29,8 @@ export interface PageDetailResult {
     revenue: number;
   };
   byCampaign: UTMCampaignMetrics[];
+  /** Visits that came from another toolset landing page (e.g. Milwaukee 12, DeWalt 8) */
+  visitsFrom?: VisitsFromMetric[];
 }
 
 export interface ChannelPageMetrics {

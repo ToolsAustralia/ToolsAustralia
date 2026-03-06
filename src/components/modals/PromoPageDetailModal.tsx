@@ -57,6 +57,29 @@ export default function PromoPageDetailModal({
           </div>
         )}
 
+        {/* Visits from other toolset pages */}
+        {data?.visitsFrom && data.visitsFrom.length > 0 && (
+          <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+            <h4 className="text-sm font-semibold text-indigo-900 mb-2">
+              Visits from other landing pages
+            </h4>
+            <p className="text-xs text-indigo-700 mb-3">
+              Users who landed on another toolset page first, then navigated here via the &quot;Explore other toolsets&quot; carousel.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {data.visitsFrom.map(({ referrerSlug, visits }) => (
+                <span
+                  key={referrerSlug}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-sm font-medium text-indigo-900"
+                >
+                  <span className="capitalize">{referrerSlug}</span>
+                  <span className="text-indigo-600">({formatNumber(visits)})</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Summary cards */}
         {summary && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

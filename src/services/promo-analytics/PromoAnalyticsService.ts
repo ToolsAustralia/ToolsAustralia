@@ -11,6 +11,7 @@ import PromoAnalyticsRepository, {
   type PromoAnalyticsByUTMSummary,
 } from "@/repositories/PromoAnalyticsRepository";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
+import { isToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
 import type { PageDetailResult, ChannelDetailResult } from "@/types/promo-analytics";
 
@@ -22,6 +23,7 @@ export class PromoAnalyticsService {
   async recordVisit(data: {
     pageType: PromoPageType;
     slug: string;
+    referrerSlug?: string;
     anonymousId?: string;
     referrer?: string;
     utmSource?: string;
@@ -32,10 +34,15 @@ export class PromoAnalyticsService {
       return { success: false, error: "Invalid promotion slug" };
     }
     const pageType = getPageTypeFromSlug(data.slug);
+    const referrerSlug =
+      data.referrerSlug && isToolsetLandingSlug(data.referrerSlug)
+        ? data.referrerSlug.toLowerCase().trim()
+        : undefined;
     await PromoAnalyticsRepository.createVisit({
       ...data,
       pageType,
       slug: data.slug.toLowerCase().trim(),
+      referrerSlug,
     });
     return { success: true };
   }
