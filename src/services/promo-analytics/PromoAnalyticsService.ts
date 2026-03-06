@@ -11,7 +11,6 @@ import PromoAnalyticsRepository, {
   type PromoAnalyticsByUTMSummary,
 } from "@/repositories/PromoAnalyticsRepository";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
-import { isToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
 import type { PageDetailResult, ChannelDetailResult } from "@/types/promo-analytics";
 
@@ -35,7 +34,7 @@ export class PromoAnalyticsService {
     }
     const pageType = getPageTypeFromSlug(data.slug);
     const referrerSlug =
-      data.referrerSlug && isToolsetLandingSlug(data.referrerSlug)
+      data.referrerSlug && isValidPromoSlug(data.referrerSlug)
         ? data.referrerSlug.toLowerCase().trim()
         : undefined;
     await PromoAnalyticsRepository.createVisit({

@@ -45,7 +45,10 @@ function formatToolsetLabel(slug: ToolsetLandingSlug): string {
 }
 
 interface OtherToolsetsCarouselProps {
-  currentToolsetSlug: ToolsetLandingSlug;
+  /** Slug to store as referrer when user navigates (toolset or evergreen prize slug) */
+  referrerSlug: string;
+  /** When on toolset page, exclude this from the list; when undefined (evergreen), show all 4 */
+  currentToolsetSlug?: ToolsetLandingSlug;
   onNavigate?: (targetSlug: ToolsetLandingSlug) => void;
   className?: string;
 }
@@ -53,7 +56,10 @@ interface OtherToolsetsCarouselProps {
 const SLIDE_WIDTH = 220;
 const SLIDE_GAP = 20;
 
+const ALL_TOOLSETS = ["ryobi", "milwaukee", "dewalt", "makita"] as const;
+
 export function OtherToolsetsCarousel({
+  referrerSlug,
   currentToolsetSlug,
   onNavigate,
   className = "",
@@ -61,9 +67,9 @@ export function OtherToolsetsCarousel({
   const router = useRouter();
   const searchParams = useSearchParams();
   const theme = usePromoTheme();
-  const otherToolsets = (["ryobi", "milwaukee", "dewalt", "makita"] as const).filter(
-    (s) => s !== currentToolsetSlug
-  );
+  const otherToolsets = currentToolsetSlug
+    ? (ALL_TOOLSETS.filter((s) => s !== currentToolsetSlug) as ToolsetLandingSlug[])
+    : ([...ALL_TOOLSETS] as ToolsetLandingSlug[]);
 
   const [shuffledToolsets, setShuffledToolsets] = useState<ToolsetLandingSlug[]>(otherToolsets);
   const [isMobile, setIsMobile] = useState(false);
@@ -105,7 +111,7 @@ export function OtherToolsetsCarousel({
   const handleClick = useCallback(
     (targetSlug: ToolsetLandingSlug) => {
       try {
-        sessionStorage.setItem(FROM_PROMO_SLUG_KEY, currentToolsetSlug);
+        sessionStorage.setItem(FROM_PROMO_SLUG_KEY, referrerSlug);
       } catch {
         // Ignore storage errors
       }
@@ -116,7 +122,7 @@ export function OtherToolsetsCarousel({
         : `/promotions/${targetSlug}`;
       router.push(href, { scroll: true });
     },
-    [currentToolsetSlug, onNavigate, router, searchParams]
+    [referrerSlug, onNavigate, router, searchParams]
   );
 
   const displayToolsets = isMobile ? shuffledToolsets : otherToolsets;

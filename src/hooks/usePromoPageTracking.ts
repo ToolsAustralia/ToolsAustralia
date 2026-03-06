@@ -59,8 +59,8 @@ export function usePromoPageTracking() {
     let referrerSlug: string | undefined;
     try {
       const fromSlug = sessionStorage.getItem(FROM_PROMO_SLUG_KEY);
-      if (fromSlug && isToolsetLandingSlug(fromSlug)) {
-        referrerSlug = fromSlug;
+      if (fromSlug && isValidPromoSlug(fromSlug)) {
+        referrerSlug = fromSlug.toLowerCase().trim();
       }
     } catch {
       // Ignore storage errors

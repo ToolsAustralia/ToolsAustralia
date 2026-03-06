@@ -29,6 +29,7 @@ import {
   filterPrizesByToolboxType,
 } from "./prize-selection";
 import { getPrizesForToolsetSlug, isToolsetLandingSlug } from "@/config/promo-landing-slugs";
+import { isValidPromoSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getPrizeBySlug, listPrizes } from "@/config/prizes";
 
@@ -37,6 +38,8 @@ import "swiper/css/navigation";
 import "swiper/css/pagination";
 import "swiper/css/thumbs";
 import "swiper/css/free-mode";
+
+const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
 interface PrizeShowcaseProps {
   slug?: string;
@@ -285,6 +288,16 @@ export default function PrizeShowcase({
   const useParentContainer = pathname === "/" || pathname === "/my-account";
   const isPromotionsPage = pathname?.startsWith("/promotions") ?? false;
 
+  // Slug from URL for evergreen - ensures cross-visit referrer matches tracked page
+  const pathnameSlug = (() => {
+    if (!pathname?.startsWith("/promotions/")) return null;
+    const match = pathname.match(/^\/promotions\/([^/?#]+)/);
+    const slug = match?.[1]?.toLowerCase().trim();
+    return slug && isValidPromoSlug(slug) ? slug : null;
+  })();
+
+  const isEvergreenPromoPage = isPromotionsPage && pathnameSlug && !isToolsetLandingSlug(pathnameSlug);
+
   // Toolset mode: prize slugs for this toolset (Sidchrome first, Milwaukee second)
   const toolsetPrizeSlugs =
     toolsetMode && toolsetSlug && isToolsetLandingSlug(toolsetSlug)
@@ -486,6 +499,20 @@ export default function PrizeShowcase({
     // On promotions page: navigate to keep URL in sync
     const affiliateCode = searchParams.get("aff");
     const newUrl = affiliateCode ? `/promotions/${nextSlug}?aff=${affiliateCode}` : `/promotions/${nextSlug}`;
+
+    // Cross-visit tracking: store current slug as referrer before navigating so destination records it
+    const referrer = isEvergreenPromoPage && pathnameSlug
+      ? pathnameSlug
+      : toolsetMode && toolsetSlug
+        ? toolsetSlug
+        : null;
+    if (referrer && isValidPromoSlug(nextSlug) && referrer !== nextSlug) {
+      try {
+        sessionStorage.setItem(FROM_PROMO_SLUG_KEY, referrer);
+      } catch {
+        // Ignore storage errors
+      }
+    }
 
     // Toolset landing pages: always scroll to top so user sees the hero
     // Evergreen pages: preserve scroll when switching prizes (PowerToolsetCarousel)
@@ -1018,7 +1045,7 @@ export default function PrizeShowcase({
         </div>
 
         {toolsetMode && toolsetSlug && isToolsetLandingSlug(toolsetSlug) && (
-          <OtherToolsetsCarousel currentToolsetSlug={toolsetSlug} />
+          <OtherToolsetsCarousel referrerSlug={toolsetSlug} currentToolsetSlug={toolsetSlug} />
         )}
       </div>
 
