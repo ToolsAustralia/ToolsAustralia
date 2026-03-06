@@ -9,6 +9,7 @@ import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 const promoPageVisitSchema = z.object({
   pageType: z.enum(["evergreen", "toolset"]),
   slug: z.string().min(1).max(100),
+  referrerSlug: z.string().min(1).max(50).optional(),
   utmSource: z.string().optional(),
   utmMedium: z.string().optional(),
   utmCampaign: z.string().optional(),
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
     const result = await PromoAnalyticsService.recordVisit({
       pageType: validatedData.pageType,
       slug: validatedData.slug,
+      referrerSlug: validatedData.referrerSlug,
       anonymousId,
       referrer: referrerInfo.referrer || undefined,
       utmSource: validatedData.utmSource ?? attribution.utm_source,

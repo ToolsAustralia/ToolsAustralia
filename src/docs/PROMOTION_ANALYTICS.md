@@ -58,6 +58,7 @@ Slug validation and page-type derivation: `[src/utils/promo-analytics/validate-p
 |------------|--------|--------------------------------------------------|
 | pageType   | string | `"evergreen"` or `"toolset"`                     |
 | slug       | string | Promotion page slug                              |
+| referrerSlug| string| Toolset slug user was on before visiting (e.g. from "Explore other toolsets" carousel) |
 | anonymousId| string | Session/cookie ID (pre-auth)                      |
 | userId     | ObjectId| Set when user registers (optional)               |
 | referrer   | string | Referrer URL                                     |
@@ -66,7 +67,7 @@ Slug validation and page-type derivation: `[src/utils/promo-analytics/validate-p
 | utmCampaign| string | UTM campaign name                                |
 | timestamp  | Date   | Visit time                                       |
 
-**Indexes:** `{ pageType, slug, timestamp }`, `{ anonymousId, timestamp }`, `{ userId, timestamp }`  
+**Indexes:** `{ pageType, slug, timestamp }`, `{ referrerSlug, slug, timestamp }`, `{ anonymousId, timestamp }`, `{ userId, timestamp }`  
 **TTL:** 90 days (auto-delete for data retention)
 
 ## User.signupAttribution
@@ -107,7 +108,8 @@ When a user converts, `PaymentEvent.data` includes promo attribution from `User.
 - **Flow:**
   1. On `/promotions/*`, extracts `pageType` and `slug` from pathname
   2. Stores attribution in sessionStorage (`tools-aus:promo-attribution`) for checkout
-  3. Sends `POST /api/tracking/promo-page-visit` with UTM params from URL
+  3. Reads `tools-aus:from-promo-slug` from sessionStorage when set (user navigated from another toolset via "Explore other toolsets" carousel)
+  4. Sends `POST /api/tracking/promo-page-visit` with UTM params and optional `referrerSlug`
 
 ### 2. Signup Attribution
 
@@ -138,8 +140,9 @@ When a user converts, `PaymentEvent.data` includes promo attribution from `User.
 - Date filter: Today, Yesterday, Current Draw, Last Draw, All Time, Custom (matches Overview/Facebook Ads)
 - Summary cards: Visits, Signups, Conversions, Revenue
 - Funnel: Visits → Signups → Conversions with rates
-- Per-page table: page name, visits, signups, conversions, revenue, Visit→Signup %, Signup→Conversion %, Overall %
+- Per-page table: page name, visits, **Cross-visits** (from other toolset pages), signups, conversions, revenue, Visit→Signup %, Signup→Conversion %, Overall %
 - Sortable columns
+- PromoPageDetailModal: "Visits from" breakdown (e.g. Milwaukee 12, DeWalt 8) when users navigated from another toolset page
 
 ## API Reference
 
@@ -148,8 +151,9 @@ When a user converts, `PaymentEvent.data` includes promo attribution from `User.
 Track a promotion page visit.
 
 - **Auth:** None
-- **Body:** `{ pageType, slug, utmSource?, utmMedium?, utmCampaign? }`
-- **Deduplication:** One visit per slug per anonymousId within 1 minute
+- **Body:** `{ pageType, slug, referrerSlug?, utmSource?, utmMedium?, utmCampaign? }`
+- **Deduplication:** One visit per slug per anonymousId within 1 minute (handles refresh)
+- **Aggregation:** Visits and cross-visits count **unique visitors** (by userId or anonymousId) per slug — each user recorded at most once per page
 
 ### GET /api/admin/promo-analytics
 
@@ -157,7 +161,7 @@ Aggregated metrics by promotion page.
 
 - **Auth:** Admin only
 - **Query:** `dateRange`, `startDate`, `endDate`
-- **Returns:** `{ totalVisits, totalSignups, totalConversions, totalRevenue, byPage[] }`
+- **Returns:** `{ totalVisits, totalSignups, totalConversions, totalRevenue, byPage[] }` (each page includes `crossVisits` when users came from another toolset)
 
 ## File Structure
 

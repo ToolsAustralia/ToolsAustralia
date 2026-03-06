@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
 import type { PrizeSlug } from "@/config/prizes";
 
@@ -35,6 +35,7 @@ export function StaticToolsetHighlight({
   const label = POWERSET_LABELS[toolset];
   const brandTextSrc = POWERSET_BRAND_TEXT[toolset];
   const scheme = getPackageColorScheme(getToolsetColorKey(toolset));
+  const badgeStyle = getToolsetBadgeStyle(toolset);
   const glowColor = getBrandGlowColor(prizeSlug);
 
   if (!imgSrc) return null;
@@ -93,14 +94,14 @@ export function StaticToolsetHighlight({
             />
           </div>
         </motion.div>
-        {label && scheme && (
+        {label && scheme && badgeStyle && (
           <div className="relative z-10 w-full max-w-[480px] sm:max-w-[560px] px-2">
             <div
               className="rounded-xl backdrop-blur-md px-3 py-2 sm:px-5 sm:py-2.5 shadow-xl"
               style={{
-                background: scheme.badgeStyle.background,
-                boxShadow: scheme.badgeStyle.boxShadow,
-                border: scheme.badgeStyle.border,
+                background: badgeStyle.background,
+                boxShadow: badgeStyle.boxShadow,
+                border: badgeStyle.border,
               }}
             >
               <p

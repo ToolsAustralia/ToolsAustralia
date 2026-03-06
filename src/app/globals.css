@@ -1110,6 +1110,22 @@
   overflow: hidden;
 }
 
+/* Other toolsets carousel - mobile touch scroll fix */
+.other-toolsets-swiper {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pan-x;
+  overflow: hidden;
+}
+
+/* Other toolsets carousel - we use custom icon (GripVertical), remove Swiper's default ::after arrow */
+.other-toolsets-swiper + button#other-toolsets-prev::after,
+.other-toolsets-swiper + button#other-toolsets-next::after,
+#other-toolsets-prev::after,
+#other-toolsets-next::after {
+  content: none !important;
+}
+
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }

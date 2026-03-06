@@ -22,6 +22,7 @@ export class PromoAnalyticsService {
   async recordVisit(data: {
     pageType: PromoPageType;
     slug: string;
+    referrerSlug?: string;
     anonymousId?: string;
     referrer?: string;
     utmSource?: string;
@@ -32,10 +33,15 @@ export class PromoAnalyticsService {
       return { success: false, error: "Invalid promotion slug" };
     }
     const pageType = getPageTypeFromSlug(data.slug);
+    const referrerSlug =
+      data.referrerSlug && isValidPromoSlug(data.referrerSlug)
+        ? data.referrerSlug.toLowerCase().trim()
+        : undefined;
     await PromoAnalyticsRepository.createVisit({
       ...data,
       pageType,
       slug: data.slug.toLowerCase().trim(),
+      referrerSlug,
     });
     return { success: true };
   }
