@@ -21,6 +21,9 @@ export interface IMiniDraw extends Document {
   configurationLocked: boolean;
   lockedAt?: Date; // When configuration was locked
 
+  // Tracks when 100% capacity notification email was sent (idempotency)
+  fullCapacityNotificationSentAt?: Date;
+
   winner?: {
     userId: mongoose.Types.ObjectId;
     entryNumber: number;
@@ -121,6 +124,9 @@ const MiniDrawSchema = new Schema<IMiniDraw>(
       default: false,
     },
     lockedAt: {
+      type: Date,
+    },
+    fullCapacityNotificationSentAt: {
       type: Date,
     },
     winner: {

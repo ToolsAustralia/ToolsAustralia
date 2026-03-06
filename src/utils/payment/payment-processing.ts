@@ -2133,6 +2133,7 @@ async function addToMiniDraw(
         // console.log(
         //   `🎲 Minimum entries reached (${totalEntries} >= ${updatedMiniDraw.minimumEntries}). Auto-closing mini draw...`
         // );
+        const nowForClose = new Date();
         await MiniDraw.updateOne(
           { _id: miniDraw._id },
           {
@@ -2140,11 +2141,37 @@ async function addToMiniDraw(
               status: "completed",
               isActive: false,
               configurationLocked: true,
-              lockedAt: new Date(),
+              lockedAt: nowForClose,
             },
           }
         );
         // console.log(`✅ Mini draw "${miniDraw.name}" automatically closed due to reaching minimum entries`);
+
+        // Send 100% capacity notification email (idempotent - only once per draw)
+        const { sendMiniDrawFullCapacityNotification } = await import("@/lib/email/");
+        const beforeNotify = await MiniDraw.findOneAndUpdate(
+          { _id: miniDraw._id, fullCapacityNotificationSentAt: { $exists: false } },
+          { $set: { fullCapacityNotificationSentAt: nowForClose } },
+          { new: false }
+        );
+        if (beforeNotify) {
+          const result = await sendMiniDrawFullCapacityNotification({
+            miniDrawName: updatedMiniDraw.name,
+            prizeName: updatedMiniDraw.prize?.name ?? "Prize",
+            totalEntries,
+            minimumEntries: updatedMiniDraw.minimumEntries,
+          });
+          if (!result.success) {
+            console.error(
+              `❌ Failed to send mini draw 100% notification for "${updatedMiniDraw.name}":`,
+              result.error
+            );
+            await MiniDraw.updateOne(
+              { _id: miniDraw._id },
+              { $unset: { fullCapacityNotificationSentAt: "" } }
+            );
+          }
+        }
       }
 
       // ✅ Update User.miniDrawParticipation array

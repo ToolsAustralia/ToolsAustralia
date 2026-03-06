@@ -8,6 +8,7 @@ import MiniDrawInteractions from "./components/MiniDrawInteractions";
 import MiniDrawTabs from "./components/MiniDrawTabs";
 import ShareButton from "./components/ShareButton";
 import MiniDrawViewTracking from "./components/MiniDrawViewTracking";
+import ScrollToTopOnMount from "./components/ScrollToTopOnMount";
 import { Trophy, ArrowLeft } from "lucide-react";
 import connectDB from "@/lib/mongodb";
 import MiniDraw, { IMiniDraw } from "@/models/MiniDraw";
@@ -140,8 +141,9 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
 
   const relatedMiniDrawsPromise = getRelatedMiniDraws(id);
   const latestWinnerDocPromise = Winner.findOne({ drawId: miniDraw._id, drawType: "mini" })
+    .populate("userId", "firstName lastName")
     .sort({ cycle: -1, createdAt: -1 })
-    .lean<IWinner | null>();
+    .lean<IWinner & { userId: { firstName?: string; lastName?: string } } | null>();
 
   const [session, relatedMiniDraws, latestWinnerDoc] = await Promise.all([
     sessionPromise,
@@ -162,17 +164,19 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const entriesRemaining = Math.max(minimumEntries - totalEntries, 0);
   const _capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
 
-  // Convert to JSON-serializable format
+  // Convert to JSON-serializable format (include winner name for Recent Winners display)
   const latestWinnerData = latestWinnerDoc
-    ? {
-        _id: (latestWinnerDoc._id as mongoose.Types.ObjectId).toString(),
-        userId: (latestWinnerDoc.userId as mongoose.Types.ObjectId).toString(),
-        entryNumber: latestWinnerDoc.entryNumber ?? 0,
-        selectedDate: latestWinnerDoc.selectedDate.toISOString(),
-        selectionMethod: latestWinnerDoc.selectionMethod,
-        imageUrl: latestWinnerDoc.imageUrl,
-        cycle: latestWinnerDoc.cycle,
-      }
+    ? (() => {
+        const uid = latestWinnerDoc.userId;
+        const userObj = typeof uid === "object" && uid !== null && "firstName" in uid ? (uid as { firstName?: string; lastName?: string }) : null;
+        return {
+          _id: (latestWinnerDoc._id as mongoose.Types.ObjectId).toString(),
+          winnerFirstName: userObj?.firstName ?? "",
+          winnerLastName: userObj?.lastName ?? "",
+          selectedDate: latestWinnerDoc.selectedDate.toISOString(),
+          imageUrl: latestWinnerDoc.imageUrl,
+        };
+      })()
     : undefined;
 
   const miniDrawData = {
@@ -230,6 +234,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
 
   return (
     <div className="min-h-screen-svh bg-white w-full overflow-x-hidden">
+      <ScrollToTopOnMount miniDrawId={miniDrawData._id} />
       {/* Track ViewContent event for Facebook Pixel */}
       <MiniDrawViewTracking miniDraw={miniDrawData} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">

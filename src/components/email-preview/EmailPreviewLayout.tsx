@@ -5,6 +5,7 @@ import InvoicePreview from "./InvoicePreview";
 import VerificationEmailPreview from "./VerificationEmailPreview";
 import PaymentFailedPreview from "./PaymentFailedPreview";
 import SubscriptionRenewalPreview from "./SubscriptionRenewalPreview";
+import MiniDrawFullCapacityPreview from "./MiniDrawFullCapacityPreview";
 
 /**
  * Email Preview Layout Component
@@ -13,7 +14,7 @@ import SubscriptionRenewalPreview from "./SubscriptionRenewalPreview";
  * different email template previews (Invoice and Verification).
  */
 const EmailPreviewLayout: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"invoice" | "verification" | "payment-failed" | "subscription-renewal">("invoice");
+  const [activeTab, setActiveTab] = useState<"invoice" | "verification" | "payment-failed" | "subscription-renewal" | "mini-draw-full">("invoice");
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8">
@@ -69,6 +70,16 @@ const EmailPreviewLayout: React.FC = () => {
             >
               Subscription Renewal Email
             </button>
+            <button
+              onClick={() => setActiveTab("mini-draw-full")}
+              className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
+                activeTab === "mini-draw-full"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+              }`}
+            >
+              Mini Draw 100% Capacity
+            </button>
           </nav>
         </div>
 
@@ -78,6 +89,7 @@ const EmailPreviewLayout: React.FC = () => {
           {activeTab === "verification" && <VerificationEmailPreview />}
           {activeTab === "payment-failed" && <PaymentFailedPreview />}
           {activeTab === "subscription-renewal" && <SubscriptionRenewalPreview />}
+          {activeTab === "mini-draw-full" && <MiniDrawFullCapacityPreview />}
         </div>
 
         {/* Footer Info */}

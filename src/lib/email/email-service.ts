@@ -21,7 +21,9 @@ import {
   createPartnerApplicationEmailTemplate,
   createLoginCodeEmailTemplate,
   createAdminReplyEmailTemplate,
+  createMiniDrawFullCapacityTemplate,
 } from './templates';
+import { getMiniDrawNotificationRecipients } from './mini-draw-notification-config';
 import { EmailCategory, getSenderIdentity } from './sender-identities';
 import { stripHtml } from './utils';
 
@@ -219,6 +221,53 @@ class EmailService {
       to,
       from: { email: sender.fromEmail, name: sender.fromName },
       subject,
+      html: htmlContent,
+      text: textContent,
+      replyTo: sender.replyTo,
+    });
+  }
+
+  /**
+   * Send mini draw 100% capacity notification to configured recipients.
+   * Called when a mini draw reaches totalEntries >= minimumEntries.
+   * Recipients are configurable via MINI_DRAW_FULL_CAPACITY_RECIPIENTS or MINI_DRAW_NOTIFICATION_RECIPIENTS env.
+   */
+  public async sendMiniDrawFullCapacityNotification(payload: {
+    miniDrawName: string;
+    prizeName: string;
+    totalEntries: number;
+    minimumEntries: number;
+  }): Promise<EmailResult> {
+    this.ensureInitialized();
+
+    const recipients = getMiniDrawNotificationRecipients();
+    if (recipients.length === 0) {
+      return {
+        success: false,
+        error: 'No recipients configured for mini draw notifications',
+        errorCode: EmailErrorCode.VALIDATION_ERROR,
+      };
+    }
+
+    const sender = getSenderIdentity(EmailCategory.TRANSACTIONAL);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const adminUrl = appUrl.replace(/\/$/, '');
+    const notifiedAt = new Date();
+
+    const htmlContent = createMiniDrawFullCapacityTemplate({
+      miniDrawName: payload.miniDrawName,
+      prizeName: payload.prizeName,
+      totalEntries: payload.totalEntries,
+      minimumEntries: payload.minimumEntries,
+      adminUrl,
+      notifiedAt,
+    });
+    const textContent = `Mini Draw 100% Full: ${payload.miniDrawName}\n\nPrize: ${payload.prizeName}\nEntries: ${payload.totalEntries} / ${payload.minimumEntries}\n\nThe draw has reached capacity and is ready for winner selection.\n\nAdmin: ${adminUrl}/admin/mini-draws\n\nNotified: ${notifiedAt.toLocaleString('en-AU')}`;
+
+    return this.client.sendEmail({
+      to: recipients,
+      from: { email: sender.fromEmail, name: sender.fromName },
+      subject: `[Tools Australia] Mini Draw 100% - ${payload.miniDrawName} ready for winner`,
       html: htmlContent,
       text: textContent,
       replyTo: sender.replyTo,

@@ -4,6 +4,15 @@ import { useState } from "react";
 import Image from "next/image";
 import { Trophy, FileText, CheckCircle, Sparkles, Crown } from "lucide-react";
 import { getBrandMeta } from "@/utils/brand-utils";
+import { formatWinnerName } from "@/utils/winner-name-formatter";
+
+interface WinnerDisplay {
+  _id?: string;
+  winnerFirstName: string;
+  winnerLastName: string;
+  selectedDate: string;
+  imageUrl?: string;
+}
 
 interface MiniDrawTabsProps {
   miniDraw: {
@@ -16,18 +25,8 @@ interface MiniDrawTabsProps {
     entriesRemaining?: number;
     cycle?: number;
     brandId?: string;
-    latestWinner?: {
-      entryNumber: number;
-      selectedDate: string;
-      imageUrl?: string;
-      cycle?: number;
-    };
-    winnerHistory?: Array<{
-      entryNumber: number;
-      selectedDate: string;
-      imageUrl?: string;
-      cycle?: number;
-    }>;
+    latestWinner?: WinnerDisplay;
+    winnerHistory?: WinnerDisplay[];
     prize: {
       name: string;
       description: string;
@@ -45,8 +44,6 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
   const totalEntries = miniDraw.totalEntries ?? 0;
   const computedRemaining = Math.max(minimumEntries - totalEntries, 0);
   const entriesRemaining = miniDraw.entriesRemaining ?? computedRemaining;
-  const _capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
-  const cycle = miniDraw.cycle ?? 1;
   const latestWinner = miniDraw.latestWinner;
   const winnerHistory = miniDraw.winnerHistory ?? [];
   const isCompleted = miniDraw.status === "completed";
@@ -124,8 +121,6 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                     </dd>
                   </div>
                 </dl>
-
-                <div className="mt-3 text-xs text-gray-500">Currently running cycle #{cycle}</div>
               </div>
               <div>
                 <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">Prize Description</h3>
@@ -142,13 +137,10 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
           {/* Winners Tab */}
           {activeTab === "winners" && (
             <div className="space-y-4 sm:space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 flex items-center gap-1 sm:gap-2">
-                  <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-[#ee0000]" />
-                  Recent Winners
-                </h3>
-                <span className="text-xs sm:text-sm text-gray-500">Cycle #{cycle}</span>
-              </div>
+              <h3 className="text-sm sm:text-lg font-semibold text-gray-900 flex items-center gap-1 sm:gap-2">
+                <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-[#ee0000]" />
+                Recent Winners
+              </h3>
 
               {winnerHistory.length > 0 || latestWinner ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -156,47 +148,40 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                     .filter((winner): winner is NonNullable<typeof winner> => Boolean(winner))
                     .slice(0, 4)
                     .map((winner, index) => {
-                      const winnerCycle = winner.cycle ?? Math.max(1, cycle - (index === 0 ? 1 : index));
+                      const winnerDisplayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
+                      const selectedDateText = new Date(winner.selectedDate).toLocaleDateString("en-AU", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      });
+                      const displayImage = winner.imageUrl || miniDraw.prize.images?.[0] || "/images/placeholders/prize-placeholder.png";
                       return (
                         <div
-                          key={`${winner.entryNumber}-${winner.selectedDate}-${index}`}
-                          className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm flex flex-col gap-3"
+                          key={`${winner._id ?? winner.selectedDate}-${index}`}
+                          className="relative aspect-[4/5] sm:aspect-[4/5] rounded-xl overflow-hidden border border-gray-200 shadow-sm"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center font-semibold">
-                                #{winner.entryNumber}
-                              </div>
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">Winning Entry</p>
-                                <p className="text-xs text-gray-500">
-                                  Selected{" "}
-                                  {new Date(winner.selectedDate).toLocaleDateString("en-AU", {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  })}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-xs font-semibold text-gray-500 uppercase">Cycle {winnerCycle}</span>
+                          <Image
+                            src={displayImage}
+                            alt={`Winner ${winnerDisplayName}`}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 100vw, 50vw"
+                            priority={index === 0}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                          <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-0.5">
+                            <p className="text-base sm:text-lg font-semibold text-white drop-shadow-md">
+                              {winnerDisplayName}
+                            </p>
+                            <p className="text-xs sm:text-sm text-white/90">
+                              Selected {selectedDateText}
+                            </p>
                           </div>
-
-                          {winner.imageUrl ? (
-                            <div className="relative w-full h-40 sm:h-48 rounded-lg overflow-hidden border border-gray-100">
-                              <Image
-                                src={winner.imageUrl}
-                                alt={`Winner cycle ${winnerCycle}`}
-                                fill
-                                className="object-cover"
-                                sizes="(max-width: 640px) 100vw, 50vw"
-                              />
-                            </div>
-                          ) : (
-                            <div className="w-full h-32 sm:h-40 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 text-sm border border-dashed border-gray-300">
-                              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-[#ee0000] mr-2" />
-                              Winner photo coming soon
-                            </div>
+                          {!winner.imageUrl && (
+                            <span className="absolute top-3 right-3 bg-black/60 text-white/90 text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" />
+                              Photo coming soon
+                            </span>
                           )}
                         </div>
                       );
@@ -284,10 +269,9 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                     </p>
                     {latestWinner && (
                       <p>
-                        <span className="font-semibold text-gray-900">Latest Winner:</span> Entry #
-                        {latestWinner.entryNumber} selected on{" "}
-                        {new Date(latestWinner.selectedDate).toLocaleDateString()} (Cycle #
-                        {latestWinner.cycle ?? cycle - 1}).
+                        <span className="font-semibold text-gray-900">Latest Winner:</span>{" "}
+                        {formatWinnerName(latestWinner.winnerFirstName, latestWinner.winnerLastName)} selected on{" "}
+                        {new Date(latestWinner.selectedDate).toLocaleDateString()}.
                       </p>
                     )}
                   </div>
@@ -305,7 +289,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                       />
                     </div>
                     <p className="text-xs sm:text-sm text-gray-500 mt-3">
-                      Captured from the most recent cycle #{latestWinner.cycle ?? cycle - 1}
+                      {formatWinnerName(latestWinner.winnerFirstName, latestWinner.winnerLastName)}
                     </p>
                   </div>
                 )}

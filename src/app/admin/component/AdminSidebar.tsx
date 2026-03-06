@@ -168,6 +168,7 @@ export default function AdminSidebar({
   const router = useRouter();
   const pathname = usePathname();
   const [unviewedCount, setUnviewedCount] = useState(0);
+  const [fullCapacityCount, setFullCapacityCount] = useState(0);
 
   useEffect(() => {
     const fetchUnviewed = async () => {
@@ -183,13 +184,34 @@ export default function AdminSidebar({
         // Ignore errors
       }
     };
+    const fetchFullCapacity = async () => {
+      try {
+        const res = await fetch("/api/admin/mini-draw/full-capacity-count");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data) {
+            setFullCapacityCount(data.data.count ?? 0);
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+
     fetchUnviewed();
-    const interval = setInterval(fetchUnviewed, 60000); // Refresh every minute
+    fetchFullCapacity();
+    const interval = setInterval(() => {
+      fetchUnviewed();
+      fetchFullCapacity();
+    }, 60000); // Refresh every minute
     const onSubmissionsUpdated = () => fetchUnviewed();
+    const onMiniDrawsUpdated = () => fetchFullCapacity();
     window.addEventListener("admin-submissions-updated", onSubmissionsUpdated);
+    window.addEventListener("admin-mini-draws-updated", onMiniDrawsUpdated);
     return () => {
       clearInterval(interval);
       window.removeEventListener("admin-submissions-updated", onSubmissionsUpdated);
+      window.removeEventListener("admin-mini-draws-updated", onMiniDrawsUpdated);
     };
   }, []);
 
@@ -289,6 +311,11 @@ export default function AdminSidebar({
                 {tab.id === "submissions" && unviewedCount > 0 && (
                   <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
                     {unviewedCount > 99 ? "99+" : unviewedCount}
+                  </span>
+                )}
+                {tab.id === "mini-draws" && fullCapacityCount > 0 && (
+                  <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold" title={`${fullCapacityCount} mini draw(s) at 100% - select winner`}>
+                    {fullCapacityCount > 99 ? "99+" : fullCapacityCount}
                   </span>
                 )}
               </button>
