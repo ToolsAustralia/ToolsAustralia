@@ -595,12 +595,13 @@ export default function MembershipSection({
                           </div>
                         )}
 
-                        {/* Card Background - Brand gradient */}
+                        {/* Card Background - Brand gradient (inline background ensures correct render on all pages) */}
                         <div
-                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative membership-card-gradient`}
+                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
                           style={
                             {
-                              "--membership-card-bg": colorScheme.bgGradient,
+                              backgroundImage: colorScheme.bgGradient,
+                              backgroundOrigin: "border-box",
                               ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
                             } as React.CSSProperties
                           }
@@ -975,12 +976,13 @@ export default function MembershipSection({
                     </div>
                   )}
 
-                  {/* Card Background - Brand gradient */}
+                  {/* Card Background - Brand gradient (inline background ensures correct render on all pages) */}
                   <div
-                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative membership-card-gradient`}
+                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
                     style={
                       {
-                        "--membership-card-bg": colorScheme.bgGradient,
+                        backgroundImage: colorScheme.bgGradient,
+                        backgroundOrigin: "border-box",
                         ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
                       } as React.CSSProperties
                     }

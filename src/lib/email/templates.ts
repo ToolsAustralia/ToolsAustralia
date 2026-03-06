@@ -30,7 +30,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Email Verification - Tools Australia</title>
+        <title>Email Verification - ${safeCode}</title>
         <style>
             body {
                 font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -218,7 +218,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                 <div class="header">
                     <div class="logo-container">
                         <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                        <h1 class="header-title">Email Verification</h1>
+                        <h1 class="header-title">Email Verification: ${safeCode}</h1>
                     </div>
                 </div>
                 
@@ -290,7 +290,7 @@ export function createPasswordResetEmailTemplate(
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Password Reset - Tools Australia</title>
+        <title>Password Reset</title>
         <style>
             body {
                 font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -536,7 +536,7 @@ export function createContactSubmissionEmailTemplate(data: {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>New Contact Form Submission - Tools Australia</title>
+        <title>New Contact Form Submission</title>
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -667,7 +667,7 @@ export function createPartnerApplicationEmailTemplate(data: {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>New Partner Application - Tools Australia</title>
+        <title>New Partner Application</title>
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -791,7 +791,7 @@ export function createLoginCodeEmailTemplate(userName: string, loginCode: string
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Login Code - Tools Australia</title>
+        <title>Login Code: ${safeCode}</title>
         <style>
             body {
                 font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -874,7 +874,7 @@ export function createLoginCodeEmailTemplate(userName: string, loginCode: string
                 <div class="header">
                     <div>
                         <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                        <h1 class="header-title">Sign-In Code</h1>
+                        <h1 class="header-title">Login Code: ${safeCode}</h1>
                     </div>
                 </div>
                 <div class="content">
@@ -1003,5 +1003,118 @@ export function createAdminReplyEmailTemplate(
         </div>
     </body>
     </html>
+  `;
+}
+
+/**
+ * Create HTML email template for mini draw 100% capacity notification
+ */
+export function createMiniDrawFullCapacityTemplate(data: {
+  miniDrawName: string;
+  prizeName: string;
+  totalEntries: number;
+  minimumEntries: number;
+  adminUrl: string;
+  notifiedAt: Date;
+}): string {
+  const safeName = escapeHtml(data.miniDrawName);
+  const safePrize = escapeHtml(data.prizeName);
+  const notifiedDate = new Date(data.notifiedAt).toLocaleString('en-AU', {
+    dateStyle: 'full',
+    timeStyle: 'long',
+    timeZone: 'Australia/Sydney',
+  });
+  const adminLink = `${data.adminUrl}/admin/mini-draws`;
+
+  const baseUrl = getBaseUrl();
+  const logoUrl = `${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png`;
+
+  return `
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Draw 100% Full</title>
+    <!--[if mso]>
+    <style type="text/css">
+        body, table, td { font-family: Arial, sans-serif !important; }
+    </style>
+    <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #1f2937; background-color: #f8fafc;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8fafc;">
+        <tr>
+            <td align="center" style="padding: 20px 16px;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; border: 1px solid #e5e7eb; overflow: hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td align="center" style="background-color: #0f172a; padding: 40px 30px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td align="center">
+                                        <img src="${logoUrl}" alt="Tools Australia" width="180" style="max-width: 200px; height: auto; display: block; margin-bottom: 16px; border: 0;" />
+                                        <h1 style="margin: 0; color: #ffffff; font-size: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Mini Draw At 100%</h1>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+                            <p style="margin: 0 0 24px 0; font-size: 18px; color: #1f2937; font-weight: 600;">The mini draw <strong>${safeName}</strong> has reached 100% capacity and is ready for winner selection.</p>
+                            <!-- Info rows -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td style="padding: 14px 18px; background-color: #f3f4f6; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Prize</td>
+                                                <td align="right" style="font-size: 15px; font-weight: 600; color: #111827;">${safePrize}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr><td height="12" style="font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                                <tr>
+                                    <td style="padding: 14px 18px; background-color: #f3f4f6; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Entries</td>
+                                                <td align="right" style="font-size: 15px; font-weight: 600; color: #111827;">${data.totalEntries.toLocaleString()} / ${data.minimumEntries.toLocaleString()}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr><td height="28" style="font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                            </table>
+                            <p style="margin: 0 0 24px 0; color: #4b5563; font-size: 15px;">Please select a winner in the admin panel to complete this draw and reopen for the next cycle.</p>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td align="center" style="padding: 8px 0;">
+                                        <a href="${adminLink}" style="display: inline-block; background-color: #dc2626; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 16px; padding: 14px 28px; border-radius: 10px;">Go to Mini Draws Admin</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td style="font-size: 13px; color: #6b7280; padding-top: 20px; margin-top: 30px; border-top: 1px solid #e5e7eb;"><strong>Notified:</strong> ${notifiedDate}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0; color: #6b7280; font-size: 13px;">This is an automated notification from Tools Australia Admin.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
   `;
 }

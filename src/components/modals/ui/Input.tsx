@@ -98,7 +98,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             maxLength={maxLength}
             autoComplete={autoComplete}
             className={`w-full ${sizeStyles[size]} border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
-              Icon && !onIconClick ? "pl-9 sm:pl-10" : ""
+              Icon && !onIconClick ? "pl-10 sm:pl-11 lg:pl-12" : ""
             } ${Icon && onIconClick ? "pr-9 sm:pr-10" : ""} ${error ? "border-red-500 bg-red-50" : "border-gray-300"} ${
               disabled ? "bg-gray-100 cursor-not-allowed" : "hover:border-red-400 hover:shadow-sm"
             } ${className}`}

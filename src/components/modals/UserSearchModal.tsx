@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Search, User, Mail, Phone, MapPin, Calendar, Trophy, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useDebounce } from "../../hooks/useDebounce";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
@@ -70,12 +70,14 @@ export default function UserSearchModal({
   description = "Search for users by name, email, mobile, or user ID",
   excludeUserId,
   majorDrawId,
+  miniDrawId,
 }: UserSearchModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -87,10 +89,13 @@ export default function UserSearchModal({
   // Debounce search query to avoid excessive API calls
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
+  const hasDrawFilter = Boolean(majorDrawId || miniDrawId);
+
   // Search users function
   const searchUsers = useCallback(
     async (query: string, page: number = 1) => {
-      if (!query.trim()) {
+      const trimmedQuery = query.trim();
+      if (!trimmedQuery && !hasDrawFilter) {
         setSearchResults([]);
         setPagination({
           currentPage: 1,
@@ -104,16 +109,20 @@ export default function UserSearchModal({
 
       setIsLoading(true);
       setError(null);
+      const hadFocus = document.activeElement === inputRef.current;
 
       try {
         const searchParams = new URLSearchParams({
-          q: query,
+          q: trimmedQuery,
           page: page.toString(),
           limit: "20",
         });
 
         if (majorDrawId) {
           searchParams.append("majorDrawId", majorDrawId);
+        }
+        if (miniDrawId) {
+          searchParams.append("miniDrawId", miniDrawId);
         }
 
         const response = await fetch(`/api/admin/users/search?${searchParams.toString()}`);
@@ -125,7 +134,6 @@ export default function UserSearchModal({
         const data: UserSearchResponse = await response.json();
 
         if (data.success) {
-          // Filter out excluded user if specified
           const filteredUsers = excludeUserId
             ? data.data.users.filter((user) => user._id !== excludeUserId)
             : data.data.users;
@@ -141,15 +149,21 @@ export default function UserSearchModal({
         setSearchResults([]);
       } finally {
         setIsLoading(false);
+        if (hadFocus && inputRef.current) {
+          inputRef.current.focus();
+        }
       }
     },
-    [excludeUserId, majorDrawId]
+    [excludeUserId, majorDrawId, miniDrawId, hasDrawFilter]
   );
 
-  // Effect to trigger search when debounced query changes
+  // Search when debounced query changes, or load participants when modal opens with draw filter
   useEffect(() => {
+    if (!isOpen) return;
     if (debouncedSearchQuery.trim()) {
       searchUsers(debouncedSearchQuery, 1);
+    } else if (hasDrawFilter) {
+      searchUsers("", 1);
     } else {
       setSearchResults([]);
       setPagination({
@@ -160,7 +174,7 @@ export default function UserSearchModal({
         hasPrevPage: false,
       });
     }
-  }, [debouncedSearchQuery, searchUsers]);
+  }, [debouncedSearchQuery, isOpen, hasDrawFilter, searchUsers]);
 
   // Handle user selection from search modal
   const handleUserSelect = (user: UserSearchResult) => {
@@ -214,17 +228,18 @@ export default function UserSearchModal({
       <ModalHeader title={title} subtitle={description} onClose={onClose} />
 
       {/* Search Input */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="relative p-6 border-b border-gray-200">
         <Input
+          ref={inputRef}
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by name, email, mobile, or user ID..."
           icon={Search}
-          disabled={isLoading}
+          autoComplete="off"
         />
         {isLoading && (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+          <div className="absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none">
             <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
           </div>
         )}
@@ -240,11 +255,19 @@ export default function UserSearchModal({
             </div>
           )}
 
-          {!searchQuery.trim() && (
+          {!searchQuery.trim() && !hasDrawFilter && !isLoading && (
             <div className="p-8 text-center text-gray-500">
               <Search className="w-12 h-12 mx-auto mb-4 text-gray-300" />
               <p className="text-lg font-medium">Start typing to search users</p>
               <p className="text-sm mt-1">Search by name, email, mobile, or user ID</p>
+            </div>
+          )}
+
+          {!searchQuery.trim() && hasDrawFilter && isLoading && searchResults.length === 0 && (
+            <div className="p-8 text-center text-gray-500">
+              <Loader2 className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-spin" />
+              <p className="text-lg font-medium">Loading participants...</p>
+              <p className="text-sm mt-1">Fetching users who entered this draw</p>
             </div>
           )}
 
@@ -380,9 +403,10 @@ export default function UserSearchModal({
       <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            {searchQuery.trim() && (
+            {(searchQuery.trim() || searchResults.length > 0) && (
               <span>
-                {pagination.totalCount} user{pagination.totalCount !== 1 ? "s" : ""} found
+                {pagination.totalCount} {hasDrawFilter ? "participant" : "user"}
+                {pagination.totalCount !== 1 ? "s" : ""} found
               </span>
             )}
           </div>

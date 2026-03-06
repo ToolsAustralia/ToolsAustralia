@@ -391,6 +391,7 @@ export default function WinnerSelectionModal({
         description="Search for the user who won the draw"
         excludeUserId={currentWinner?.userId}
         majorDrawId={drawType === "major" ? drawId : undefined}
+        miniDrawId={drawType === "mini" ? drawId : undefined}
       />
     </>
   );
