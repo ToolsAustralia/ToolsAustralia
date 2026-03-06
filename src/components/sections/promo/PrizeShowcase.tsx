@@ -24,10 +24,12 @@ import {
   ToolboxSelector,
   PowerToolsetCarousel,
   StaticToolsetHighlight,
+  OtherToolsetsCarousel,
   getToolboxTypeFromSlug,
   filterPrizesByToolboxType,
 } from "./prize-selection";
 import { getPrizesForToolsetSlug, isToolsetLandingSlug } from "@/config/promo-landing-slugs";
+import { isValidPromoSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getPrizeBySlug, listPrizes } from "@/config/prizes";
 
@@ -36,6 +38,8 @@ import "swiper/css/navigation";
 import "swiper/css/pagination";
 import "swiper/css/thumbs";
 import "swiper/css/free-mode";
+
+const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
 interface PrizeShowcaseProps {
   slug?: string;
@@ -284,6 +288,16 @@ export default function PrizeShowcase({
   const useParentContainer = pathname === "/" || pathname === "/my-account";
   const isPromotionsPage = pathname?.startsWith("/promotions") ?? false;
 
+  // Slug from URL for evergreen - ensures cross-visit referrer matches tracked page
+  const pathnameSlug = (() => {
+    if (!pathname?.startsWith("/promotions/")) return null;
+    const match = pathname.match(/^\/promotions\/([^/?#]+)/);
+    const slug = match?.[1]?.toLowerCase().trim();
+    return slug && isValidPromoSlug(slug) ? slug : null;
+  })();
+
+  const isEvergreenPromoPage = isPromotionsPage && pathnameSlug && !isToolsetLandingSlug(pathnameSlug);
+
   // Toolset mode: prize slugs for this toolset (Sidchrome first, Milwaukee second)
   const toolsetPrizeSlugs =
     toolsetMode && toolsetSlug && isToolsetLandingSlug(toolsetSlug)
@@ -364,9 +378,10 @@ export default function PrizeShowcase({
     }
   }, [activeSlug, activePrizeIndex]);
   
-  // On mobile, prevent scroll when slug changes (navigation)
+  // On mobile, prevent scroll when slug changes (navigation) — evergreen pages only.
+  // Toolset landing pages should always scroll to top so users see the hero.
   useEffect(() => {
-    if (typeof window === 'undefined' || window.innerWidth >= 640) return;
+    if (toolsetMode || typeof window === 'undefined' || window.innerWidth >= 640) return;
     
     // Save scroll position when slug changes
     const scrollY = window.scrollY;
@@ -389,7 +404,7 @@ export default function PrizeShowcase({
     return () => {
       timeouts.forEach(clearTimeout);
     };
-  }, [activeSlug]);
+  }, [activeSlug, toolsetMode]);
   
   // Navigation handlers for mobile prize selector (reserved for future mobile nav UI)
   const _handlePreviousPrize = () => {
@@ -485,36 +500,46 @@ export default function PrizeShowcase({
     const affiliateCode = searchParams.get("aff");
     const newUrl = affiliateCode ? `/promotions/${nextSlug}?aff=${affiliateCode}` : `/promotions/${nextSlug}`;
 
-    // On mobile, aggressively prevent scroll behavior
+    // Cross-visit tracking: store current slug as referrer before navigating so destination records it
+    const referrer = isEvergreenPromoPage && pathnameSlug
+      ? pathnameSlug
+      : toolsetMode && toolsetSlug
+        ? toolsetSlug
+        : null;
+    if (referrer && isValidPromoSlug(nextSlug) && referrer !== nextSlug) {
+      try {
+        sessionStorage.setItem(FROM_PROMO_SLUG_KEY, referrer);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+
+    // Toolset landing pages: always scroll to top so user sees the hero
+    // Evergreen pages: preserve scroll when switching prizes (PowerToolsetCarousel)
+    if (toolsetMode) {
+      router.push(newUrl, { scroll: true });
+      return;
+    }
+
+    // Evergreen only: on mobile, preserve scroll position when switching between prize slugs
     if (typeof window !== 'undefined' && window.innerWidth < 640) {
-      // Save current scroll position
       const scrollY = window.scrollY;
-      
-      // Disable smooth scrolling globally
       const originalHtmlScrollBehavior = document.documentElement.style.scrollBehavior;
       const originalBodyScrollBehavior = document.body.style.scrollBehavior;
       document.documentElement.style.scrollBehavior = 'auto';
       document.body.style.scrollBehavior = 'auto';
-      
-      // Navigate without scroll
       router.push(newUrl, { scroll: false });
-      
-      // Restore scroll position immediately and prevent any scroll changes
       const restoreScroll = () => {
         window.scrollTo({ top: scrollY, behavior: 'auto' });
-        // Prevent scroll for a longer period to ensure navigation completes
         setTimeout(() => {
           document.documentElement.style.scrollBehavior = originalHtmlScrollBehavior;
           document.body.style.scrollBehavior = originalBodyScrollBehavior;
         }, 300);
       };
-      
-      // Use multiple methods to ensure scroll position is maintained
       requestAnimationFrame(restoreScroll);
       setTimeout(restoreScroll, 0);
       setTimeout(restoreScroll, 50);
     } else {
-      // Desktop: normal navigation
       router.push(newUrl, { scroll: false });
     }
   };
@@ -557,7 +582,7 @@ export default function PrizeShowcase({
   return (
     <section 
       ref={prizeRef} 
-      className="pb-2 sm:pb-12 relative overflow-hidden"
+      className="pb-2 sm:pb-12 relative "
       style={{ 
         scrollMarginTop: 0,
         // On mobile, prevent scroll snapping during navigation (gated by isMounted to avoid hydration mismatch)
@@ -1018,6 +1043,10 @@ export default function PrizeShowcase({
             </div>
           </div>
         </div>
+
+        {toolsetMode && toolsetSlug && isToolsetLandingSlug(toolsetSlug) && (
+          <OtherToolsetsCarousel referrerSlug={toolsetSlug} currentToolsetSlug={toolsetSlug} />
+        )}
       </div>
 
       <PrizeSpecificationsModal

@@ -386,6 +386,18 @@ export function getLandingPageThemeFromSlug(slug: string): {
   };
 }
 
+/**
+ * Get badge style for a toolset slug (ryobi, milwaukee, dewalt, makita).
+ * Milwaukee uses Tools Australia red (#ee0000) to match Enter Now buttons and promo theme.
+ */
+export function getToolsetBadgeStyle(toolsetSlug: string): PackageColorScheme["badgeStyle"] {
+  if (toolsetSlug === "milwaukee") {
+    return getLandingPageThemeFromSlug("milwaukee-milwaukee").badgeStyle;
+  }
+  const colorKey = slugToPromoTierPlanId(`${toolsetSlug}-milwaukee`);
+  return getPackageColorScheme(colorKey).badgeStyle;
+}
+
 /** Parse hex (#RRGGBB) to [r, g, b]. Used for RGB/RGBA string generation. */
 export function hexToRgbaValues(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16);
