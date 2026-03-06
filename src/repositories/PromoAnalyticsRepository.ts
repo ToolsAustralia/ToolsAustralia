@@ -308,7 +308,8 @@ export class PromoAnalyticsRepository {
         },
       },
       { $match: { _utmKey: { $ne: "" } } },
-      { $group: { _id: "$_utmKey", visits: { $sum: 1 } } },
+      { $group: { _id: "$_utmKey", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
+      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
     ]).exec();
 
     const visitMap = new Map<string, number>();
@@ -446,7 +447,7 @@ export class PromoAnalyticsRepository {
 
     const normalizedSlug = slug.toLowerCase().trim();
 
-    // 1. Visits by (utmSource, utmMedium, utmCampaign)
+    // 1. Visits by (utmSource, utmMedium, utmCampaign) - unique visitors
     const visitAgg = await PromoAnalyticsVisit.aggregate<{
       _id: { src: string; med: string; cmp: string };
       visits: number;
@@ -459,9 +460,10 @@ export class PromoAnalyticsRepository {
             med: { $toLower: { $ifNull: ["$utmMedium", ""] } },
             cmp: { $toLower: { $ifNull: ["$utmCampaign", ""] } },
           },
-          visits: { $sum: 1 },
+          visitorIds: { $addToSet: VISITOR_ID_EXPR },
         },
       },
+      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
     ]).exec();
 
     // 2. Signups by (utmSource, utmMedium, utmCampaign) from User.signupAttribution
@@ -642,7 +644,8 @@ export class PromoAnalyticsRepository {
             : { utmSource: { $regex: new RegExp(`^${normalizedSource}$`, "i") } }),
         },
       },
-      { $group: { _id: { pageType: "$pageType", slug: "$slug" }, visits: { $sum: 1 } } },
+      { $group: { _id: { pageType: "$pageType", slug: "$slug" }, visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
+      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
     ]).exec();
 
     const signupByPageAgg = await User.aggregate<{
@@ -751,9 +754,10 @@ export class PromoAnalyticsRepository {
             cmp: { $toLower: { $ifNull: ["$utmCampaign", ""] } },
             med: { $toLower: { $ifNull: ["$utmMedium", ""] } },
           },
-          visits: { $sum: 1 },
+          visitorIds: { $addToSet: VISITOR_ID_EXPR },
         },
       },
+      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
     ]).exec();
 
     const signupByCampAgg = await User.aggregate<{
