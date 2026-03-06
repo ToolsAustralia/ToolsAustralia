@@ -51,6 +51,24 @@ export interface PromoAnalyticsByUTMSummary {
   byUTMSource: UTMSourceMetrics[];
 }
 
+/**
+ * Visitor identity for dedup: userId if set, else anonymousId.
+ * No-id visits get unique placeholder so each counts once (can't dedup unknown visitors).
+ */
+const VISITOR_ID_EXPR = {
+  $cond: [
+    { $and: [{ $ne: ["$userId", null] }, { $ne: [{ $type: "$userId" }, "missing"] }] },
+    { $toString: "$userId" },
+    {
+      $cond: [
+        { $and: [{ $ne: ["$anonymousId", null] }, { $ne: ["$anonymousId", ""] }] },
+        "$anonymousId",
+        { $concat: ["_noid:", { $toString: "$_id" }] },
+      ],
+    },
+  ],
+};
+
 /** All valid promotion slugs for aggregation (evergreen + toolset) */
 function getAllPromoSlugs(): { pageType: PromoPageType; slug: string }[] {
   const pages: { pageType: PromoPageType; slug: string }[] = [];
@@ -103,15 +121,13 @@ export class PromoAnalyticsRepository {
     const allPages = getAllPromoSlugs();
     const byPage: PromoPageMetrics[] = [];
 
-    // 1. Aggregate visits from PromoAnalyticsVisit
-    const visitAgg = await PromoAnalyticsVisit.aggregate<{ _id: { pageType: string; slug: string }; visits: number }>([
+    // 1. Aggregate visits - unique visitors per page (one per user per slug)
+    const visitAgg = await PromoAnalyticsVisit.aggregate<
+      { _id: { pageType: string; slug: string }; visits: number }
+    >([
       { $match: { timestamp: { $gte: startDate, $lte: endDate } } },
-      {
-        $group: {
-          _id: { pageType: "$pageType", slug: "$slug" },
-          visits: { $sum: 1 },
-        },
-      },
+      { $group: { _id: { pageType: "$pageType", slug: "$slug" }, visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
+      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
     ]).exec();
 
     const visitMap = new Map<string, number>();
@@ -119,17 +135,23 @@ export class PromoAnalyticsRepository {
       visitMap.set(`${r._id.pageType}:${r._id.slug}`, r.visits);
     }
 
-    // 1b. Aggregate cross-visits (visits with referrerSlug set)
+    // 1b. Aggregate cross-visits - unique visitors who came from another toolset
     const crossVisitAgg = await PromoAnalyticsVisit.aggregate<
       { _id: { pageType: string; slug: string }; crossVisits: number }
     >([
-      { $match: { timestamp: { $gte: startDate, $lte: endDate }, referrerSlug: { $exists: true, $ne: "" } } },
+      {
+        $match: {
+          timestamp: { $gte: startDate, $lte: endDate },
+          referrerSlug: { $exists: true, $ne: "" },
+        },
+      },
       {
         $group: {
           _id: { pageType: "$pageType", slug: "$slug" },
-          crossVisits: { $sum: 1 },
+          visitorIds: { $addToSet: VISITOR_ID_EXPR },
         },
       },
+      { $project: { _id: 1, crossVisits: { $size: "$visitorIds" } } },
     ]).exec();
 
     const crossVisitMap = new Map<string, number>();
@@ -550,7 +572,7 @@ export class PromoAnalyticsRepository {
 
     byCampaign.sort((a, b) => b.visits - a.visits);
 
-    // 4. Visits from other toolset pages (referrerSlug breakdown)
+    // 4. Visits from other toolset pages (referrerSlug breakdown) - unique visitors per referrer
     const visitsFromAgg = await PromoAnalyticsVisit.aggregate<
       { _id: string; visits: number }
     >([
@@ -562,7 +584,13 @@ export class PromoAnalyticsRepository {
           referrerSlug: { $exists: true, $ne: "" },
         },
       },
-      { $group: { _id: "$referrerSlug", visits: { $sum: 1 } } },
+      {
+        $group: {
+          _id: "$referrerSlug",
+          visitorIds: { $addToSet: VISITOR_ID_EXPR },
+        },
+      },
+      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
       { $sort: { visits: -1 } },
     ]).exec();
 

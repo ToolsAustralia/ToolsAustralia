@@ -152,7 +152,8 @@ Track a promotion page visit.
 
 - **Auth:** None
 - **Body:** `{ pageType, slug, referrerSlug?, utmSource?, utmMedium?, utmCampaign? }`
-- **Deduplication:** One visit per slug per anonymousId within 1 minute
+- **Deduplication:** One visit per slug per anonymousId within 1 minute (handles refresh)
+- **Aggregation:** Visits and cross-visits count **unique visitors** (by userId or anonymousId) per slug — each user recorded at most once per page
 
 ### GET /api/admin/promo-analytics
 
