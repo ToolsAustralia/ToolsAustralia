@@ -659,7 +659,6 @@ function MiniDrawCard({
   const overlayScale = brandMeta?.overlayScale ?? brandMeta?.imageScale ?? defaultBrandLogo.overlayScale ?? 1;
   const totalEntries = draw.totalEntries || 0;
   const minimumEntries = draw.minimumEntries || 0;
-  const entriesRemaining = Math.max(minimumEntries - totalEntries, 0);
   const capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
   const previewImage = draw.prize.images?.[0] || "/images/placeholder.jpg";
 

@@ -13,7 +13,6 @@ import {
   XCircle,
   Clock,
   AlertCircle,
-  RefreshCw,
   Edit,
   ChevronLeft,
   ChevronRight,

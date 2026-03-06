@@ -60,6 +60,7 @@ interface UserSearchModalProps {
   description?: string;
   excludeUserId?: string; // Exclude current winner if editing
   majorDrawId?: string; // Filter to only show participants of this draw
+  miniDrawId?: string; // Filter to only show participants of this mini draw
 }
 
 export default function UserSearchModal({
