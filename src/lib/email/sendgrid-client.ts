@@ -60,7 +60,7 @@ class SendGridClient {
    * The caller must provide a `from` sender for every email.
    */
   public async sendEmail(params: {
-    to: string;
+    to: string | string[];
     from: EmailSender;
     subject: string;
     templateId?: string;
@@ -97,7 +97,10 @@ class SendGridClient {
       };
     }
 
-    if (!params.to || !params.subject) {
+    if (
+      (!params.to || (Array.isArray(params.to) && params.to.length === 0)) ||
+      !params.subject
+    ) {
       return {
         success: false,
         error: 'Missing required email fields (to, subject)',
@@ -106,19 +109,23 @@ class SendGridClient {
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(params.to)) {
-      return {
-        success: false,
-        error: 'Invalid email address format',
-        errorCode: EmailErrorCode.VALIDATION_ERROR,
-      };
+    const toAddresses = Array.isArray(params.to) ? params.to : [params.to];
+    for (const addr of toAddresses) {
+      if (!addr || !emailRegex.test(addr)) {
+        return {
+          success: false,
+          error: `Invalid email address format: ${addr || '(empty)'}`,
+          errorCode: EmailErrorCode.VALIDATION_ERROR,
+        };
+      }
     }
+    const toParam = toAddresses.length === 1 ? toAddresses[0]! : toAddresses;
 
     let msg: Parameters<typeof sgMail.send>[0];
 
     if (params.templateId) {
       msg = {
-        to: params.to,
+        to: toParam,
         from: { email: params.from.email, name: params.from.name },
         subject: params.subject,
         templateId: params.templateId,
@@ -144,7 +151,7 @@ class SendGridClient {
       }
 
       msg = {
-        to: params.to,
+        to: toParam,
         from: { email: params.from.email, name: params.from.name },
         subject: params.subject,
         content,

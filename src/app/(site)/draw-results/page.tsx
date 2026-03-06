@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import MembershipSection from "@/components/sections/MembershipSection";
-import { Trophy, Bell, Users, Zap } from "lucide-react";
+import { Bell, Users, Zap } from "lucide-react";
 import CompletedDrawsSection from "./components/CompletedDrawsSection";
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import connectDB from "@/lib/mongodb";
@@ -108,24 +108,14 @@ export default async function DrawResultsPage() {
 
           {/* Draw Results - Only show if there are completed draws */}
           {recentWinners.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 sm:p-8">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-red-600 to-red-700 rounded-xl shadow-lg">
-                    <Trophy className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 font-['Poppins']">Completed Mini Draws</h2>
-                    <p className="text-gray-600">Browse through all finished competitions</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="bg-[#ee0000]/10 text-[#ee0000] px-4 py-2 rounded-full text-sm font-bold">
-                    {recentWinners.length} Winners
-                  </div>
-                </div>
+            <section className="relative">
+              {/* Header - matches Completed Major Draws styling */}
+              <div className="text-center sm:mb-12 mt-8 sm:mt-8 mb-6 sm:mb-8">
+                <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-gray-900 via-red-600 to-gray-900 bg-clip-text text-transparent font-['Poppins'] mb-2 sm:mb-4">
+                  Completed Mini Draws
+                </h2>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 mb-8">
                 {recentWinners.map((winner) => (
                   <DrawResultCard key={winner.id} winner={winner} />
                 ))}

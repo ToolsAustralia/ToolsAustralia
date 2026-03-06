@@ -13,11 +13,15 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
 
 // Validation schema for search parameters
 const searchSchema = z.object({
-  q: z.string().min(1, "Search query is required").max(100, "Search query too long"),
+  q: z
+    .string()
+    .max(100, "Search query too long")
+    .transform((s) => s?.trim() ?? ""),
   page: z
     .string()
     .optional()
@@ -27,6 +31,7 @@ const searchSchema = z.object({
     .optional()
     .transform((val) => (val ? parseInt(val, 10) : 20)),
   majorDrawId: z.string().optional(), // Optional major draw ID to filter participants
+  miniDrawId: z.string().optional(), // Optional mini draw ID to filter participants
 });
 
 // Response interface for user search results
@@ -41,7 +46,7 @@ interface UserSearchResult {
   isActive: boolean;
   createdAt: Date;
   lastLogin?: Date;
-  // Major draw entry information
+  // Major or mini draw entry information
   currentDrawEntries?: {
     totalEntries: number;
     entriesBySource: {
@@ -77,13 +82,20 @@ export async function GET(request: NextRequest) {
     const page = searchParams.get("page") || "1";
     const limit = searchParams.get("limit") || "20";
     const majorDrawId = searchParams.get("majorDrawId") || undefined;
+    const miniDrawId = searchParams.get("miniDrawId") || undefined;
 
     const validatedParams = searchSchema.parse({
       q: query,
       page,
       limit,
       majorDrawId,
+      miniDrawId,
     });
+
+    // Require search query unless filtering by draw participants
+    if (!validatedParams.q && !validatedParams.majorDrawId && !validatedParams.miniDrawId) {
+      return NextResponse.json({ error: "Search query or draw ID is required" }, { status: 400 });
+    }
 
     // Validate pagination limits
     if (validatedParams.page < 1) {
@@ -133,7 +145,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // If majorDrawId is provided, filter to only show participants
+    // If majorDrawId or miniDrawId is provided, filter to only show participants
     let participantUserIds: string[] = [];
     if (validatedParams.majorDrawId) {
       const majorDraw = await MajorDraw.findById(validatedParams.majorDrawId);
@@ -142,26 +154,46 @@ export async function GET(request: NextRequest) {
           entry.userId.toString()
         );
       }
-
-      // If no participants found, return empty result
-      if (participantUserIds.length === 0) {
-        return NextResponse.json({
-          success: true,
-          data: {
-            users: [],
-            pagination: {
-              currentPage: validatedParams.page,
-              totalPages: 0,
-              totalCount: 0,
-              hasNextPage: false,
-              hasPrevPage: false,
-            },
-          },
-        });
+    } else if (validatedParams.miniDrawId) {
+      const miniDraw = await MiniDraw.findById(validatedParams.miniDrawId);
+      if (miniDraw && miniDraw.entries) {
+        participantUserIds = miniDraw.entries
+          .filter((entry: { totalEntries: number }) => entry.totalEntries > 0)
+          .map((entry: { userId: { toString: () => string } }) => entry.userId.toString());
       }
+    }
 
-      // Add participant filter to search query
-      searchQuery._id = { $in: participantUserIds };
+    if (participantUserIds.length > 0) {
+      const participantFilter = { _id: { $in: participantUserIds } };
+      if (validatedParams.q) {
+        const textConditions = searchQuery.$or as unknown[] | undefined;
+        if (textConditions?.length) {
+          searchQuery.$and = [participantFilter, { $or: textConditions }];
+          delete searchQuery.$or;
+        } else if (searchQuery._id) {
+          // ObjectId search: ensure the matched user is a participant
+          const searchId = searchQuery._id as string;
+          searchQuery._id = participantUserIds.includes(searchId) ? searchId : "000000000000000000000000";
+        }
+      } else {
+        Object.keys(searchQuery).forEach((k) => delete searchQuery[k]);
+        Object.assign(searchQuery, participantFilter);
+      }
+    } else if (validatedParams.majorDrawId || validatedParams.miniDrawId) {
+      // No participants found for this draw
+      return NextResponse.json({
+        success: true,
+        data: {
+          users: [],
+          pagination: {
+            currentPage: validatedParams.page,
+            totalPages: 0,
+            totalCount: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        },
+      });
     }
 
     // Calculate pagination
@@ -178,33 +210,47 @@ export async function GET(request: NextRequest) {
       User.countDocuments(searchQuery),
     ]);
 
-    // Get major draw for entry information
+    // Get draw for entry information (major or mini)
     let targetMajorDraw = null;
+    let targetMiniDraw = null;
     if (validatedParams.majorDrawId) {
-      // Use the specific major draw if provided
       targetMajorDraw = await MajorDraw.findById(validatedParams.majorDrawId);
+    } else if (validatedParams.miniDrawId) {
+      targetMiniDraw = await MiniDraw.findById(validatedParams.miniDrawId);
     } else {
-      // Otherwise use current active/frozen major draw
       targetMajorDraw = await MajorDraw.findOne({
         status: { $in: ["active", "frozen"] },
       }).sort({ activationDate: -1 });
     }
 
-    // Enhance user data with major draw entry information
+    // Enhance user data with draw entry information
     const enhancedUsers: UserSearchResult[] = await Promise.all(
       users.map(async (user) => {
         let currentDrawEntries = null;
 
         if (targetMajorDraw) {
-          // Find user's entries in the target major draw
           const userEntry = targetMajorDraw.entries.find(
             (entry: { userId: { toString: () => string } }) => entry.userId.toString() === user._id.toString()
           );
-
           if (userEntry) {
             currentDrawEntries = {
               totalEntries: userEntry.totalEntries,
               entriesBySource: userEntry.entriesBySource,
+            };
+          }
+        } else if (targetMiniDraw) {
+          const userEntry = targetMiniDraw.entries.find(
+            (entry: { userId: { toString: () => string } }) => entry.userId.toString() === user._id.toString()
+          );
+          if (userEntry) {
+            currentDrawEntries = {
+              totalEntries: userEntry.totalEntries,
+              entriesBySource: {
+                membership: 0,
+                "one-time-package": 0,
+                upsell: 0,
+                "mini-draw": userEntry.totalEntries,
+              },
             };
           }
         }
@@ -251,7 +297,13 @@ export async function GET(request: NextRequest) {
                 name: targetMajorDraw.name,
                 status: targetMajorDraw.status,
               }
-            : null,
+            : targetMiniDraw
+              ? {
+                  id: targetMiniDraw._id.toString(),
+                  name: targetMiniDraw.name,
+                  status: targetMiniDraw.status,
+                }
+              : null,
         },
       },
     });
