@@ -703,7 +703,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             <div className="flex flex-col items-start">
               {/* Wrapper to match widths */}
               <div className="flex flex-col items-start w-fit gap-0 ">
-                {/* First Line - Badge (default: BONUS ENTRIES) - Matches width of second line */}
+                {/* First Line - Badge (default: FIRST 100 PEOPLE) - Matches width of second line */}
                 <div className="relative w-full">
                   {/* Outer glow effect - pulsing animation */}
                   {isContentReady && (
@@ -801,7 +801,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
                         style={{ fontSize: fontSize }}
                       >
-                        {badgeText || "BONUS ENTRIES"}
+                        {badgeText || "FIRST 100 PEOPLE"}
                       </span>
                     </div>
                   )}

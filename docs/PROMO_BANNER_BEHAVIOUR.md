@@ -10,7 +10,7 @@ The banner has three main areas:
 
 | Area | Description | Examples |
 |------|-------------|----------|
-| **Badge** (gold pill) | First line, inside the gold gradient pill | DRAWN TONIGHT, BIG BONUS, BONUS ENTRIES |
+| **Badge** (gold pill) | First line, inside the gold gradient pill | DRAWN TONIGHT, BIG BONUS, FIRST 100 PEOPLE |
 | **Main line** | Second line, below the badge | GET 10X ENTRIES, JOIN NOW |
 | **Right side** | Draw date, countdown, or static label | PROMO ENDING, 05 23 42 (HRS MINS SECS), DRAWN TOMORROW 5:30 PM |
 
@@ -44,7 +44,7 @@ The banner has three main areas:
 
 | Priority | Condition | Badge Text |
 |----------|-----------|------------|
-| 1 | No promo active | `BONUS ENTRIES` |
+| 1 | No promo active | `FIRST 100 PEOPLE` |
 | 2 | Draw is **today** | `DRAWN TONIGHT` |
 | 3 | Draw is **tomorrow** | `DRAWN TOMORROW` |
 | 4 | **Variant override** (split test) | `variantConfig.banner.badgeText` |
@@ -52,7 +52,7 @@ The banner has three main areas:
 | 6 | Scheduled promo active, **<24h** left | `ENDS TONIGHT` |
 | 7 | 10× multiplier | `BIGGEST BONUS` |
 | 8 | Active scheduled text | Admin-configured text |
-| 9 | Default | Alternating default (e.g. `BONUS ENTRIES`) |
+| 9 | Default | Alternating default (e.g. `FIRST 100 PEOPLE`) |
 
 Variant override runs before scheduled promo defaults so split tests can test different badge text for scheduled-promo users. **Variant does not override draw-based badges** (DRAWN TONIGHT, DRAWN TOMORROW).
 
@@ -163,7 +163,7 @@ Three countdown timers are used:
 
 | Scenario | Badge | Main Line | Right Side |
 |----------|-------|-----------|------------|
-| No promo | BONUS ENTRIES | JOIN NOW | NEXT DRAW |
+| No promo | FIRST 100 PEOPLE | JOIN NOW | NEXT DRAW |
 | Draw today | DRAWN TONIGHT | GET X ENTRIES | Countdown to freeze |
 | Draw today + scheduled promo &lt;24h | DRAWN TONIGHT | GET X ENTRIES | Countdown to freeze *(draw wins)* |
 | Draw tomorrow | DRAWN TOMORROW | GET X ENTRIES | DRAWN TOMORROW + time |

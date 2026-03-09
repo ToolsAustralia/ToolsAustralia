@@ -3,6 +3,11 @@
  * Color keys use readable names: kincrome-blue, ryobi-green, makita-teal, dewalt-yellow, milwaukee-red, black, mint-green
  */
 
+import type { CSSProperties } from "react";
+
+/** Elevated panel style (price badge + Enter Now). Reusable across components. */
+export type PanelStyle = CSSProperties;
+
 /** Color theme keys - readable names for easier codebase navigation */
 export type COLOR_KEYS =
   | "kincrome-blue"
@@ -60,12 +65,10 @@ export interface PackageColorScheme {
     boxShadow: string;
     border: string;
   };
-  /** Optional Enter Now button override - use contrasting style when button would blend with card */
-  enterNowButtonStyle?: {
-    background: string;
-    boxShadow: string;
-    border: string;
-  };
+  /** Optional elevated panel style (price badge + Enter Now) - use when button would blend with card */
+  enterNowButtonStyle?: PanelStyle;
+  /** Optional border class for the Enter Now gradient CTA - e.g. light border (white/30) or dark (border-black) */
+  ctaGradientButtonBorder?: string;
   /** Optional Enter Now button text class - e.g. "text-black" for light buttons */
   enterNowButtonTextClass?: string;
   /** Dominant hex for borders/glows */
@@ -430,22 +433,22 @@ export function getPromoPrimaryTheme() {
   };
 }
 
-/** Membership tab: tradie=kincrome-blue, foreman=ryobi-green, boss=black */
+/** Membership tab: apprentice=tradie=makita, foreman=dewalt, boss=power=milwaukee (split-test winner) */
 const MEMBERSHIP_TAB_COLOR_MAP: Record<string, COLOR_KEYS> = {
-  "apprentice-pack": "kincrome-blue",
-  "tradie-pack": "kincrome-blue",
-  "foreman-pack": "ryobi-green",
-  "boss-pack": "black",
-  "power-pack": "ryobi-green",
+  "apprentice-pack": "makita-teal",
+  "tradie-pack": "makita-teal",
+  "foreman-pack": "dewalt-yellow",
+  "boss-pack": "milwaukee-red",
+  "power-pack": "milwaukee-red",
 };
 
-/** One-time tab: apprentice=dewalt, tradie=kincrome, foreman=ryobi, boss=black, power=makita */
+/** One-time tab: kincrome, ryobi, makita, dewalt, milwaukee (split-test winner) */
 const ONE_TIME_TAB_COLOR_MAP: Record<string, COLOR_KEYS> = {
-  "apprentice-pack": "dewalt-yellow",
-  "tradie-pack": "kincrome-blue",
-  "foreman-pack": "ryobi-green",
-  "boss-pack": "black",
-  "power-pack": "makita-teal",
+  "apprentice-pack": "kincrome-blue",
+  "tradie-pack": "ryobi-green",
+  "foreman-pack": "makita-teal",
+  "boss-pack": "dewalt-yellow",
+  "power-pack": "milwaukee-red",
 };
 
 /**
@@ -504,7 +507,7 @@ export function getPackageColorSchemeForPromo(
 /**
  * Get MembershipSection-specific color scheme.
  * - Membership tab: uses MEMBERSHIP_TAB_COLOR_MAP
- * - One-time tab: uses ONE_TIME_TAB_COLOR_MAP (dewalt, kincrome, ryobi, black, makita)
+ * - One-time tab: uses ONE_TIME_TAB_COLOR_MAP (kincrome, ryobi, makita, dewalt, milwaukee)
  */
 export function getMembershipSectionColorScheme(planId: string, isMembershipTab: boolean): PackageColorScheme {
   const packKey =
@@ -663,6 +666,25 @@ export function getPackageGlowColor(planIdOrColorKey: string): string {
   }
 }
 
+/** RGB channel tuple for brand glow/border */
+type BrandRgb = { r: number; g: number; b: number };
+
+/**
+ * Glass panel style for price badge (neutral dark layer, not brand-tinted).
+ * Background is neutral dark glass so the panel reads as a distinct layer;
+ * brand color appears only on border + glow. Avoids "muddy overlay" on bright cards.
+ */
+function createPanelStyle(brandRgb: BrandRgb, borderOpacity = 0.5): PanelStyle {
+  const { r, g, b } = brandRgb;
+  return {
+    background: "rgba(0,0,0,0.55)",
+    border: `1px solid rgba(${r},${g},${b},${borderOpacity})`,
+    color: "#fff",
+    boxShadow: `0 0 16px rgba(${r},${g},${b},0.15), inset 0 1px 0 rgba(255,255,255,0.08)`,
+    backdropFilter: "blur(8px)",
+  };
+}
+
 /** Full color schemes keyed by COLOR_KEYS */
 const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
   "kincrome-blue": {
@@ -688,8 +710,10 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
       boxShadow: "0 0 35px rgba(58, 110, 197, 0.75), 0 4px 20px rgba(42, 98, 182, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.75)",
       border: "1px solid rgba(58, 110, 197, 0.95)",
     },
+    enterNowButtonStyle: createPanelStyle({ r: 42, g: 98, b: 182 }),
+    ctaGradientButtonBorder: "border border-white/30",
     accentHex: BRAND_GRADIENTS["kincrome-blue"].primary,
-    accentHexLight: "#4B9EFF",
+    accentHexLight: "#60A5FA",
     changeButtonTextWhite: true,
     entriesText: "text-white",
     cardBorderOpacity: "CC",
@@ -723,6 +747,8 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
       boxShadow: "0 0 28px rgba(212, 240, 0, 0.6), 0 4px 16px rgba(212, 240, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
       border: "1px solid rgba(212, 240, 0, 0.9)",
     },
+    enterNowButtonStyle: createPanelStyle({ r: 224, g: 255, b: 0 }, 0.45),
+    ctaGradientButtonBorder: "border border-gray-300",
     enterNowButtonTextClass: "text-black",
     accentHex: BRAND_GRADIENTS["ryobi-green"].primary,
     changeButtonTextWhite: true,
@@ -757,6 +783,8 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
       boxShadow: "0 0 40px rgba(0, 197, 207, 0.75), 0 0 60px rgba(0, 197, 207, 0.4), 0 4px 20px rgba(11, 126, 136, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4)",
       border: "1px solid rgba(255, 255, 255, 0.5)",
     },
+    enterNowButtonStyle: createPanelStyle({ r: 0, g: 197, b: 207 }),
+    ctaGradientButtonBorder: "border border-white/30",
     accentHex: BRAND_GRADIENTS["makita-teal"].primaryLight,
     entriesText: "text-white",
     cardBorderOpacity: "CC",
@@ -804,6 +832,8 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
       boxShadow: "0 0 35px rgba(255, 201, 51, 0.8), 0 4px 20px rgba(229, 160, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.8)",
       border: "1px solid rgba(255, 201, 51, 0.95)",
     },
+    enterNowButtonStyle: createPanelStyle({ r: 253, g: 184, b: 19 }),
+    ctaGradientButtonBorder: "border border-gray-300",
     accentHex: BRAND_GRADIENTS["dewalt-yellow"].primary,
     changeButtonTextWhite: true,
     enterNowButtonTextClass: "text-black",
@@ -838,7 +868,10 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
       boxShadow: "0 0 40px rgba(200, 16, 46, 0.85), 0 4px 20px rgba(200, 16, 46, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
       border: "1px solid rgba(200, 16, 46, 0.95)",
     },
+    enterNowButtonStyle: createPanelStyle({ r: 200, g: 16, b: 46 }),
+    ctaGradientButtonBorder: "border border-white/30",
     accentHex: BRAND_GRADIENTS["milwaukee-red"].primary,
+    accentHexLight: "#FF4757",
     entriesText: "text-white",
     cardBorderOpacity: "CC",
     barColor: "bg-gradient-to-r from-[#C8102E] via-[#E02D42] to-[#C8102E]",

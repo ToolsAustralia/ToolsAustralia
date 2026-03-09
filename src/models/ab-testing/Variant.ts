@@ -42,7 +42,7 @@ export interface VariantConfig {
     };
   };
   banner?: {
-    badgeText?: string; // Override badge text (default: BONUS ENTRIES)
+    badgeText?: string; // Override badge text (default: FIRST 100 PEOPLE)
     multiplier?: number; // Override multiplier display (2x, 3x, 5x, 10x)
     showCountdown?: boolean; // Toggle countdown visibility
     countdownMode?: CountdownMode;

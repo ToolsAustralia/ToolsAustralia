@@ -27,6 +27,12 @@ import {
 } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
+/** Uniform Enter Now CTA style: slate gradient, border, shadow, shimmer. Text is white; package color only on hover/active. */
+const UNIFORM_CTA_CLASS =
+  "group relative overflow-hidden membership-enter-cta-animation bg-gradient-to-r from-slate-700 via-slate-600 to-slate-700 text-white border border-slate-400/50 shadow-lg shadow-slate-900/40 hover:shadow-xl hover:shadow-slate-500/30 hover:scale-[1.02] hover:brightness-110 active:scale-[0.97] active:brightness-95 active:shadow-lg transition-all duration-200 ease-out";
+const UNIFORM_CTA_DISABLED_CLASS = "cursor-not-allowed opacity-90 hover:scale-100 hover:shadow-none hover:brightness-100";
+const CTA_TEXT_HOVER_ACTIVE = "text-white group-hover:[color:var(--cta-accent)] group-active:[color:var(--cta-accent)] transition-colors duration-200";
+
 interface MembershipSectionProps {
   title?: string;
   padding?: string;
@@ -633,7 +639,7 @@ export default function MembershipSection({
                             </div>
                           )}
 
-                          <div className="h-full flex flex-col pt-6 px-4 py-1.5">
+                          <div className="h-full flex flex-col pt-6 px-4 py-1.5 uppercase">
                             {/* Plan Header - Centered */}
                             <div className="text-center mb-0.5">
                               {(() => {
@@ -645,7 +651,7 @@ export default function MembershipSection({
 
                                 return (
                                   <h3
-                                    className={`font-poppins text-[19px] sm:text-[20px] font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
+                                    className={`font-poppins font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[15px] sm:text-[16px]" : "text-[19px] sm:text-[20px]"}`}
                                     style={colorScheme.textGradientStyle}
                                   >
                                     {isAdditionalPackage ? (
@@ -726,54 +732,46 @@ export default function MembershipSection({
                             {/* Horizontal Divider */}
                             <div className="w-full p-[0.25px] bg-white/80 dark:bg-neutral-600/50 mb-2"></div>
 
-                            {/* Price Badge - CTA style (distinct from prize badges) */}
-                            <div className="flex-1 min-h-0 overflow-visible flex justify-center my-2">
-                              <div className="pb-0.5">
-                                <div className="w-fit backdrop-blur-sm px-2.5 py-1 rounded-2xl overflow-hidden" style={colorScheme.badgeStyle}>
-                                  <div className="flex items-baseline gap-1 justify-center">
-                                    <div
-                                      className={`font-poppins font-bold text-[20px] sm:text-lg ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
-                                      style={colorScheme.textGradientStyle}
-                                    >
-                                      ${plan.price}
-                                    </div>
+                            {/* Price / Prize section - original Enter Now design (package gradient), clickable to open payment flow */}
+                            <div className="flex-1 min-h-0 overflow-visible flex justify-center mb-2">
+                              <div className="pb-0.5 w-full flex justify-center">
+                                <button
+                                  type="button"
+                                  className={`font-poppins w-fit px-2.5 py-1 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                                  onClick={() => {
+                                    if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
+                                    handlePlanSelect(plan);
+                                  }}
+                                  disabled={isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)}
+                                  aria-label={`Select ${plan.name} for $${plan.price}`}
+                                >
+                                  <div className={`flex items-baseline gap-1 justify-center ${colorScheme.buttonText}`}>
+                                    <span className="font-bold text-[20px] sm:text-lg">${plan.price}</span>
                                     {plan.period !== "one-time" ? (
-                                      <div
-                                        className={`font-poppins font-semibold text-[14px] sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                      >
-                                        Per Giveaway
-                                      </div>
+                                      <span className="font-semibold text-[14px] sm:text-[10px] opacity-90">Per Giveaway</span>
                                     ) : (
-                                      <div
-                                        className={`font-poppins font-semibold text-[14px] sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                      >
-                                        One Time Payment
-                                      </div>
+                                      <span className="font-semibold text-[14px] sm:text-[10px] opacity-90">One Time Payment</span>
                                     )}
                                   </div>
-                                </div>
+                                </button>
                               </div>
                             </div>
                             {/* Tickmarks hidden on mobile - see "Click here to see full package inclusion" below */}
 
-                            {/* Action Button - In flow, no overlay */}
-                            <div className="flex-shrink-0 mt-auto pt-1">
+                            {/* Action Button - In flow, no overlay (8px below price for grouped feel) */}
+                            <div className="flex-shrink-0 mt-auto pt-0">
                               {isCurrentSubscription(plan) ? (
                                 <button
                                   disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`}
-                                  style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
+                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`}
+                                  style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
                                 >
-                                  <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                                    Current Plan
-                                  </span>
+                                  <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>Current Plan</span>
                                 </button>
                               ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                                 <button
                                   disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[14px] sm:text-[18px] bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
+                                  className="font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[14px] sm:text-[18px] bg-gray-500 text-white cursor-not-allowed opacity-75 border border-gray-400/30"
                                 >
                                   Subscription or Entries Required
                                 </button>
@@ -785,54 +783,27 @@ export default function MembershipSection({
                                   let buttonText = "Enter Now";
                                   const buttonHeight = "h-[44px] sm:h-[48px]";
                                   const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] transition-all duration-300 transform`;
-                                  let buttonClass = `${baseLayout} ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
-                                  let buttonStyle: React.CSSProperties | undefined;
-                                  const isEnterNow = (t: string) => t === "Enter Now";
-                                  const usesBadgeStyle = (t: string) =>
-                                    t === "Enter Now" || t === "Current Plan" || t.startsWith("Downgrade to ");
+                                  const uniformClass = hierarchy.isCurrent
+                                    ? `${baseLayout} ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`
+                                    : `${baseLayout} ${UNIFORM_CTA_CLASS}`;
 
-                                  // past_due: show "Update payment" for subscription plans - route to my-account
                                   if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
                                     buttonText = "Update payment";
-                                    buttonClass += " bg-amber-600 text-white hover:bg-amber-700";
                                   } else if (hasActiveSubscription && activeTab === "membership") {
-                                    if (hierarchy.isCurrent) {
-                                      buttonText = "Current Plan";
-                                      const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                      buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`;
-                                      buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                                    } else if (hierarchy.isDowngrade) {
-                                      buttonText = `Downgrade to ${plan.name}`;
-                                      const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                      buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                                      buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                                    } else if (hierarchy.isUpgrade) {
-                                      buttonText = `Upgrade to ${plan.name}`;
-                                      buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
-                                    }
-                                  } else if (isEnterNow(buttonText)) {
-                                    const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                    buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                                    buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                                  } else {
-                                    buttonClass += ` ${colorScheme.borderGlow}`;
+                                    if (hierarchy.isCurrent) buttonText = "Current Plan";
+                                    else if (hierarchy.isDowngrade) buttonText = `Downgrade to ${plan.name}`;
+                                    else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${plan.name}`;
                                   }
 
                                   return (
                                     <button
-                                      className={buttonClass}
-                                      style={buttonStyle}
+                                      className={uniformClass}
+                                      style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={hasActiveSubscription && hierarchy.isCurrent}
                                       suppressHydrationWarning
                                     >
-                                      {usesBadgeStyle(buttonText) ? (
-                                        <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                                          {buttonText}
-                                        </span>
-                                      ) : (
-                                        buttonText
-                                      )}
+                                      <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>{buttonText}</span>
                                     </button>
                                   );
                                 })()
@@ -987,7 +958,7 @@ export default function MembershipSection({
                       } as React.CSSProperties
                     }
                   >
-                    <div className="h-full flex flex-col pt-10 relative px-4 py-2">
+                    <div className="h-full flex flex-col pt-10 relative px-4 py-2 uppercase">
                       {/* Inside Glow - Whole Card with Margin */}
                       <div
                         className={`absolute inset-0.5 bg-gradient-to-t ${getMembershipSectionGlowColor(
@@ -1006,7 +977,7 @@ export default function MembershipSection({
 
                           return (
                             <h3
-                              className={`font-poppins font-bold text-[16px] sm:text-[20px] mb-2 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
+                              className={`font-poppins font-bold mb-2 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[14px] sm:text-[16px]" : "text-[16px] sm:text-[20px]"}`}
                               style={colorScheme.textGradientStyle}
                             >
                               {isAdditionalPackage ? (
@@ -1098,53 +1069,45 @@ export default function MembershipSection({
 
                       {/* Features List - Tick marks hidden on desktop (see "View package inclusions" below) */}
                       <div className="flex-1 lg:flex-initial overflow-visible space-y-3 sm:space-y-3 mb-4 sm:mb-0 lg:mb-2">
-                        {/* Price Badge - Inside Features Section, CTA style (distinct from prize badges) */}
-                        <div className="pb-4 sm:pb-0 flex justify-center">
-                          <div className="font-poppins w-fit backdrop-blur-sm px-3 py-2 rounded-2xl overflow-hidden" style={colorScheme.badgeStyle}>
-                            <div className="flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0">
-                              <div
-                                className={`text-base sm:text-lg lg:text-xl font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
-                                style={colorScheme.textGradientStyle}
-                              >
-                                ${plan.price}
-                              </div>
+                        {/* Price / Prize section - original Enter Now design (package gradient), clickable to open payment flow */}
+                        <div className="pb-2 flex justify-center">
+                          <button
+                            type="button"
+                            className={`font-poppins w-fit px-3 py-2 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                            onClick={() => {
+                              if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
+                              handlePlanSelect(plan);
+                            }}
+                            disabled={isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)}
+                            aria-label={`Select ${plan.name} for $${plan.price}`}
+                          >
+                            <div className={`flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0 ${colorScheme.buttonText}`}>
+                              <span className="text-base sm:text-lg lg:text-xl font-bold">${plan.price}</span>
                               {plan.period !== "one-time" ? (
-                                <div
-                                  className={`text-xs lg:text-sm font-semibold ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                >
-                                  Per Giveaway
-                                </div>
+                                <span className="text-xs lg:text-sm font-semibold opacity-90">Per Giveaway</span>
                               ) : (
-                                <div
-                                  className={`text-xs lg:text-sm font-semibold ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                >
-                                  One Time Payment
-                                </div>
+                                <span className="text-xs lg:text-sm font-semibold opacity-90">One Time Payment</span>
                               )}
                             </div>
-                          </div>
+                          </button>
                         </div>
                         {/* Tick marks hidden on desktop - see "Click here to see full package inclusion" below */}
                       </div>
 
-                      {/* Action Button - Inside card at bottom */}
-                      <div className="flex-shrink-0 pt-2 lg:pt-0">
+                      {/* Action Button - Inside card at bottom (8px below price for grouped feel) */}
+                      <div className="flex-shrink-0 pt-0">
                         {isCurrentSubscription(plan) ? (
                           <button
                             disabled
-                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed hover:scale-100 hover:shadow-none opacity-90`}
-                            style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
+                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`}
+                            style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
                           >
-                            <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                              Current Plan
-                            </span>
+                            <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>Current Plan</span>
                           </button>
                         ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                           <button
                             disabled
-                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
+                            className="font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-gray-500 text-white cursor-not-allowed opacity-75 border border-gray-400/30"
                           >
                             Subscription or Entries Required
                           </button>
@@ -1156,53 +1119,27 @@ export default function MembershipSection({
                             let buttonText = "Enter Now";
                             const buttonHeight = "h-[44px] sm:h-[48px]";
                             const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform`;
-                            let buttonClass = `${baseLayout} ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
-                            let buttonStyle: React.CSSProperties | undefined;
-                            const isEnterNow = (t: string) => t === "Enter Now";
-                            const usesBadgeStyle = (t: string) =>
-                              t === "Enter Now" || t === "Current Plan" || t.startsWith("Downgrade to ");
+                            const uniformClass = hierarchy.isCurrent
+                              ? `${baseLayout} ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`
+                              : `${baseLayout} ${UNIFORM_CTA_CLASS}`;
 
                             if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
                               buttonText = "Update payment";
-                              buttonClass += " bg-amber-600 text-white hover:bg-amber-700";
                             } else if (hasActiveSubscription && activeTab === "membership") {
-                              if (hierarchy.isCurrent) {
-                                buttonText = "Current Plan";
-                                const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed hover:scale-100 hover:shadow-none opacity-90`;
-                                buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                              } else if (hierarchy.isDowngrade) {
-                                buttonText = `Downgrade to ${plan.name}`;
-                                const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                                buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                              } else if (hierarchy.isUpgrade) {
-                                buttonText = `Upgrade to ${plan.name}`;
-                                buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
-                              }
-                            } else if (isEnterNow(buttonText)) {
-                              const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                              buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                              buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                            } else {
-                              buttonClass += ` ${colorScheme.borderGlow}`;
+                              if (hierarchy.isCurrent) buttonText = "Current Plan";
+                              else if (hierarchy.isDowngrade) buttonText = `Downgrade to ${plan.name}`;
+                              else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${plan.name}`;
                             }
 
                             return (
                               <button
-                                className={buttonClass}
-                                style={buttonStyle}
+                                className={uniformClass}
+                                style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
                                 onClick={() => handlePlanSelect(plan)}
                                 disabled={hasActiveSubscription && hierarchy.isCurrent}
                                 suppressHydrationWarning
                               >
-                                {usesBadgeStyle(buttonText) ? (
-                                  <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                                    {buttonText}
-                                  </span>
-                                ) : (
-                                  buttonText
-                                )}
+                                <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>{buttonText}</span>
                               </button>
                             );
                           })()

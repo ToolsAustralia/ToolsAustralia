@@ -236,7 +236,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
               })
             }
             label="Badge Text (Optional)"
-            placeholder="BONUS ENTRIES"
+            placeholder="FIRST 100 PEOPLE"
           />
           <Input
             id="bannerMultiplier"
