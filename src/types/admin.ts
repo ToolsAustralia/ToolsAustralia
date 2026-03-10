@@ -784,7 +784,7 @@ export interface CurrentAlternatingMultipliersResponse {
 }
 
 /** Source of effective multiplier for banner display */
-export type EffectiveForBannerSource = "scheduled" | "toggle" | "alternating" | "none";
+export type EffectiveForBannerSource = "scheduled" | "toggle" | "alternating" | "derived-from-membership" | "none";
 
 /** Per-type entry for effective-for-banner API (includes scheduled meta when source is scheduled) */
 export interface EffectiveForBannerEntry {

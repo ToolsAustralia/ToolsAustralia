@@ -158,6 +158,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const effectivePromoTypeForBanner =
     activeTab === "one-time" && hasAccessToAdditionalPackages ? "membership-packages" : baseType;
   const effectiveEntry = effectiveForBanner?.[effectivePromoTypeForBanner];
+  // Right-side countdown: when one-time tab is selected, use membership's entry so it behaves the same (e.g. 24hr countdown)
+  const effectiveEntryForCountdown =
+    activeTab === "one-time"
+      ? (effectiveForBanner?.["membership-packages"] ?? effectiveEntry)
+      : effectiveEntry;
 
   // Promo "fully resolved" = we know for sure whether there is an active promo or no-promo state
   const isPromoResolved =
@@ -476,14 +481,15 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   };
 
   // Scheduled promo state: badge "LAST CHANCE"/"ENDS TONIGHT" + right "PROMO ENDING"/countdown (split-test winner default)
+  // Uses effectiveEntryForCountdown so one-time tab shows same as membership (e.g. 24hr countdown)
   const scheduledPromoState = useMemo(() => {
-    const hasScheduledPromo = effectiveEntry?.source === "scheduled" && effectiveEntry?.scheduledEndDate;
+    const hasScheduledPromo = effectiveEntryForCountdown?.source === "scheduled" && effectiveEntryForCountdown?.scheduledEndDate;
     if (!hasScheduledPromo) return { hasScheduledPromo: false as const, isUrgent: false };
-    const endMs = new Date(effectiveEntry!.scheduledEndDate!).getTime();
+    const endMs = new Date(effectiveEntryForCountdown!.scheduledEndDate!).getTime();
     const timeLeftMs = endMs - Date.now();
     const isUrgent = timeLeftMs > 0 && timeLeftMs <= MS_24H;
     return { hasScheduledPromo: true, isUrgent };
-  }, [effectiveEntry?.source, effectiveEntry?.scheduledEndDate]); // eslint-disable-line react-hooks/exhaustive-deps -- effectiveEntry object identity unstable; source/scheduledEndDate sufficient
+  }, [effectiveEntryForCountdown?.source, effectiveEntryForCountdown?.scheduledEndDate]); // eslint-disable-line react-hooks/exhaustive-deps -- effectiveEntryForCountdown object identity unstable; source/scheduledEndDate sufficient
 
   // Badge text (gold pill): gap period → no-promo → draw status → variant override → scheduled promo default → 10x → scheduled text → alternating default
   const badgeText = useMemo(() => {
@@ -496,11 +502,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     // Variant override (split test) — must run before scheduled promo default so split tests can override
     if (variantConfig?.banner?.badgeText?.trim()) {
       return variantConfig.banner.badgeText.trim();
-    }
-    // One-time: when there is no scheduled promo configured, keep the winning urgency copy
-    // instead of falling back to the alternating default text.
-    if (activeTab === "one-time" && !scheduledPromoState.hasScheduledPromo) {
-      return "LAST CHANCE";
     }
     // Scheduled promo default: LAST CHANCE (>=24h) or ENDS TONIGHT (<24h) — AB test winner
     if (scheduledPromoState.hasScheduledPromo) {
@@ -517,7 +518,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   }, [
     isGapPeriod,
     isNoPromo,
-    activeTab,
     scheduledPromoState,
     variantConfig?.banner?.badgeText,
     currentDraw?.drawDate,
@@ -527,36 +527,28 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   ]);
 
   // Countdown display: variant config drives behaviour; default is limited_time_only
+  // Uses effectiveEntryForCountdown so one-time tab shows same as membership (e.g. 24hr countdown)
   const countdownDisplay = useMemo(() => {
     const drawStatus = getDrawDateStatus();
-    const resolved = resolveCountdownDisplay({
+    return resolveCountdownDisplay({
       countdownMode: variantConfig?.banner?.countdownMode ?? "limited_time_only",
       showCountdown: variantConfig?.banner?.showCountdown !== false,
-      source: effectiveEntry?.source ?? "none",
-      scheduledEndDate: effectiveEntry?.scheduledEndDate ?? undefined,
-      durationMs: effectiveEntry?.durationMs ?? undefined,
+      source: effectiveEntryForCountdown?.source ?? "none",
+      scheduledEndDate: effectiveEntryForCountdown?.scheduledEndDate ?? undefined,
+      durationMs: effectiveEntryForCountdown?.durationMs ?? undefined,
       drawStatus,
       countdownLabel: variantConfig?.banner?.countdownLabel ?? undefined,
     });
-    
-    // One-time: when there is no scheduled promo configured, ensure the right-side label
-    // uses the winning copy instead of the legacy "LIMITED TIME ONLY" default.
-    if (activeTab === "one-time" && !scheduledPromoState.hasScheduledPromo && resolved.type === "static_urgency") {
-      return { ...resolved, label: "PROMO ENDING" };
-    }
-
-    return resolved;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getDrawDateStatus stable; effectiveEntry via source/dates
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getDrawDateStatus stable; effectiveEntryForCountdown via source/dates
   }, [
     variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
     variantConfig?.banner?.countdownLabel,
-    effectiveEntry?.source,
-    effectiveEntry?.scheduledEndDate,
-    effectiveEntry?.durationMs,
+    effectiveEntryForCountdown?.source,
+    effectiveEntryForCountdown?.scheduledEndDate,
+    effectiveEntryForCountdown?.durationMs,
     currentDraw?.drawDate,
     activeTab,
-    scheduledPromoState.hasScheduledPromo,
   ]);
 
   // Scheduled-end countdown ticker (when countdownDisplay.type === "scheduled_end")

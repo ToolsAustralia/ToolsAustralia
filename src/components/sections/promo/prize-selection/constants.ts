@@ -2,8 +2,6 @@
  * Prize selection constants - toolbox and power toolset image paths and sizing.
  * Modify these to change images or dimensions without touching component logic.
  */
-import { RYOBI_PRIZE_STRICT_NAME } from "@/config/prizes";
-
 export const TOOLBOX_IMAGES = {
   milwaukee: "/images/majordraws/toolbox/milwaukeeTB.webp",
   sidchrome: "/images/majordraws/toolbox/sidchromeTB.png",
@@ -25,12 +23,12 @@ export const POWERSET_BRAND_TEXT: Record<string, string> = {
   ryobi: "/images/brands/name/ryobiText.png",
 };
 
-/** Toolset display labels - shown as bottom overlay. Add label when adding new toolset. */
+/** Toolset display labels - short pc kit format for carousel badges (all caps). Add label when adding new toolset. */
 export const POWERSET_LABELS: Record<string, string> = {
-  makita: "Makita 18V Brushless 15 Piece Combo Kit (DLX1514TX1)",
-  dewalt: "DeWalt 18V XR 14 Piece Kit - 2X 5Ah & 2X FLEXVOLT® 9Ah",
-  milwaukee: "Milwaukee M18 FUEL™ 13 Piece Power Pack 13B4",
-  ryobi: RYOBI_PRIZE_STRICT_NAME,
+  makita: "MAKITA 15PC KIT",
+  dewalt: "DEWALT 14PC KIT",
+  milwaukee: "MILWAUKEE 13PC KIT",
+  ryobi: "RYOBI 12PC KIT",
 };
 
 /** Toolbox display labels - shown as bottom overlay */

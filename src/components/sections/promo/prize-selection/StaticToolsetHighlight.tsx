@@ -107,7 +107,7 @@ export function StaticToolsetHighlight({
               <p
                 className={`font-agency font-bold text-[10px] sm:text-xs lg:text-sm leading-tight text-center ${scheme.buttonText}`}
               >
-                {label} · $5000 Cash
+                {label} + $5000 CASH
               </p>
             </div>
           </div>

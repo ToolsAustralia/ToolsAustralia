@@ -43,7 +43,7 @@ export type CountdownMode = "default" | "limited_time_only" | "scheduled_end" | 
 export interface ResolveCountdownDisplayParams {
   countdownMode: CountdownMode;
   showCountdown: boolean;
-  source: "scheduled" | "toggle" | "alternating" | "none";
+  source: "scheduled" | "toggle" | "alternating" | "derived-from-membership" | "none";
   scheduledEndDate?: string | null;
   durationMs?: number | null;
   drawStatus: "today" | "tomorrow" | null;
