@@ -109,7 +109,7 @@ export default function PromoHero({
   // Show loading state only if major draw is loading (not variant - variant loads in background)
   if (isLoading) {
     return (
-      <section className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 h-[50vh] min-h-[430px] lg:h-[83vh] lg:min-h-0">
+      <section className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0">
         {/* Skeleton loader matching final layout */}
         <div className="main-banner-image absolute inset-0 z-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse" />
         <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30">
@@ -122,7 +122,7 @@ export default function PromoHero({
   return (
     <section
       ref={heroRef}
-      className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 h-[50vh] min-h-[430px] lg:h-[83vh] lg:min-h-0"
+      className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0"
     >
       {/* Background Banner Image with Ellipse Clip-Path - clickable, same action as Enter Now */}
       {/* Responsive images: separate mobile and desktop paths for optimal performance */}

@@ -13,25 +13,20 @@
 
 @layer utilities {
   /* Promo Hero Banner - Ellipse clip-path for rounded bottom effect */
-  /* Mobile: 50vh height, 135% ellipse width, min-height 430px */
-  /* Desktop: 83vh height, 126% ellipse width */
+  /* Height controlled by PromoHero section (aspect-ratio + clamp for mobile; 83vh at lg) */
   .main-banner-image {
     background-repeat: no-repeat;
     background-size: cover;
     background-position: 50%;
     width: 100%;
-    /* Mobile styles */
-    height: 50vh;
-    min-height: 430px;
+    /* Mobile: inset-0 fills parent; clip-path for rounded bottom */
     -webkit-clip-path: ellipse(135% 97% at 50% 0); /* Safari < 15.4 support */
     clip-path: ellipse(135% 97% at 50% 0);
   }
 
-  /* Desktop styles - override mobile at lg breakpoint */
+  /* Desktop: wider ellipse at lg breakpoint */
   @media (min-width: 1024px) {
     .main-banner-image {
-      height: 83vh !important;
-      min-height: unset !important;
       -webkit-clip-path: ellipse(126% 97% at 50% 0) !important; /* Safari < 15.4 support */
       clip-path: ellipse(126% 97% at 50% 0) !important;
     }
