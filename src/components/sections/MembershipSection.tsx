@@ -573,7 +573,7 @@ export default function MembershipSection({
                             {/* Popular Badge - Show only if not current plan - Theme matches package */}
                             {plan.isPopular && !isCurrentSubscription(plan) && (
                               <div
-                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[11px]"
+                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
                                 style={colorScheme.badgeStyle}
                               >
                                 {/* Subtle static highlight - no shimmer */}
@@ -586,7 +586,7 @@ export default function MembershipSection({
                                 {/* Content - white text for contrast on package-themed gradient */}
                                 <div className="relative z-10 flex items-center text-white">
                                   <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                                    POPULAR
+                                    MOST POPULAR
                                   </span>
                                 </div>
                                 <div
@@ -893,7 +893,7 @@ export default function MembershipSection({
                       {/* Popular Badge - Show only if not current plan - Theme matches package */}
                       {plan.isPopular && !isCurrentSubscription(plan) && (
                         <div
-                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-xs"
+                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
                           style={colorScheme.badgeStyle}
                         >
                           {/* Subtle static highlight - no shimmer */}
@@ -905,7 +905,7 @@ export default function MembershipSection({
                           />
                           <div className="relative z-10 flex items-center gap-1 text-white">
                             <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                              POPULAR
+                              MOST POPULAR
                             </span>
                           </div>
                           <div

@@ -641,10 +641,10 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                         )}
                         {plan.isPopular && !isCurrentPlan(plan) && (
                           <div
-                            className="text-white rounded-full px-2 py-1 text-[8px] font-bold shadow-lg"
+                            className="text-white rounded-full px-2 py-1 text-[10px] font-bold shadow-lg"
                             style={colorScheme.badgeStyle}
                           >
-                            POPULAR
+                            MOST POPULAR
                           </div>
                         )}
                       </>
