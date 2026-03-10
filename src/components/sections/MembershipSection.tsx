@@ -407,7 +407,7 @@ export default function MembershipSection({
   };
 
   return (
-    <section id="membership" className={`${padding} w-full overflow-visible relative z-10`}>
+    <section id="membership" className={`${padding} w-full px-4 sm:px-6 lg:px-8 overflow-visible relative z-10`}>
   
         {/* Section Header - Promo-based: only show title when active promo */}
         {(() => {

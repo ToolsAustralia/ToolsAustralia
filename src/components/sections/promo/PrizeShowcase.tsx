@@ -317,6 +317,8 @@ export default function PrizeShowcase({
   const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
   // Remember last non-cash toolbox so we can keep showing the power toolset options even when cash is selected
   const [lastNonCashToolboxType, setLastNonCashToolboxType] = useState<"sidchrome" | "milwaukee">("milwaukee");
+  // When true: PowerToolsetCarousel shows all toolsets (deactivated). Set when user clicks a toolbox; cleared on toolset select (navigation).
+  const [carouselDeactivated, setCarouselDeactivated] = useState(false);
 
   const effectiveSlugForCatalog = (() => {
     if (toolsetMode) return toolsetEffectiveSlug ?? toolsetPrizeSlugs?.[0] ?? slugProp;
@@ -489,6 +491,11 @@ export default function PrizeShowcase({
   const handleSelectPrize = (nextSlug: string) => {
     if (!nextSlug || nextSlug === activeSlug) return;
 
+    // Selecting a toolset reactivates the carousel (show focused state)
+    if (nextSlug !== "cash-prize") {
+      setCarouselDeactivated(false);
+    }
+
     // When NOT on promotions page: update prizes in place, no navigation
     if (!isPromotionsPage && !toolsetMode) {
       setLocalEffectiveSlug(nextSlug);
@@ -551,6 +558,7 @@ export default function PrizeShowcase({
     localStorage.setItem("prizeToolboxType", type);
 
     if (type === "cash") {
+      setCarouselDeactivated(false);
       if (toolsetMode) {
         setToolsetEffectiveSlug("cash-prize");
         setStoreSlug("cash-prize");
@@ -561,6 +569,8 @@ export default function PrizeShowcase({
     }
 
     setLastNonCashToolboxType(type);
+    // Deactivate carousel when user clicks a toolbox so all toolsets are shown
+    setCarouselDeactivated(true);
 
     if (toolsetMode && toolsetPrizeSlugs) {
       const newSlug = type === "sidchrome" ? toolsetPrizeSlugs[0] : toolsetPrizeSlugs[1];
@@ -710,11 +720,13 @@ export default function PrizeShowcase({
                 <PowerToolsetCarousel
                   prizes={toolsetPrizes}
                   activeSlug={
-                    toolboxType === "cash"
+                    carouselDeactivated
                       ? null
-                      : toolsetPrizes.some((p) => p.slug === activeSlug)
-                        ? activeSlug
-                        : null
+                      : toolboxType === "cash"
+                        ? null
+                        : toolsetPrizes.some((p) => p.slug === activeSlug)
+                          ? activeSlug
+                          : null
                   }
                   onSelect={handleSelectPrize}
                   className=""

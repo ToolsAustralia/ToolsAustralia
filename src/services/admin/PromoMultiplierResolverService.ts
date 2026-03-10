@@ -17,7 +17,7 @@ import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
 import { getAlternatingMultiplier } from "@/utils/promo-banner/alternating-multiplier-manager";
 import connectDB from "@/lib/mongodb";
 
-export type ResolverSource = "scheduled" | "toggle" | "alternating" | "none";
+export type ResolverSource = "scheduled" | "toggle" | "alternating" | "derived-from-membership" | "none";
 
 export interface ResolvedMultiplierWithSource {
   multiplier: number | null;
@@ -29,6 +29,24 @@ export interface ResolvedMultiplierWithSource {
 
 export type PackageType = "membership-packages" | "one-time-packages" | "mini-packages";
 export type PackageTypeShort = "membership" | "one-time" | "mini-draw";
+
+/**
+ * Derive one-time package multiplier from membership promo when one-time has no explicit promo.
+ * 10x membership → 5x one-time, 5x → 3x, 3x → 2x, 2x → 2x
+ */
+function deriveOneTimeFromMembership(membershipMultiplier: number): number {
+  switch (membershipMultiplier) {
+    case 10:
+      return 5;
+    case 5:
+      return 3;
+    case 3:
+    case 2:
+      return 2;
+    default:
+      return membershipMultiplier;
+  }
+}
 
 /**
  * Convert short package type to full type
@@ -150,6 +168,16 @@ export class PromoMultiplierResolverService {
       if (config) {
         const multiplier = getAlternatingMultiplier(config.multipliers);
         return { multiplier, source: "alternating" };
+      }
+
+      // One-time packages: derive from membership when one-time has no explicit promo
+      // Members buying member-only one-time packages use membership multiplier via getEffectivePromoType
+      if (fullType === "one-time-packages") {
+        const membershipResolved = await this.getResolvedMultiplierWithSource("membership");
+        if (membershipResolved.multiplier !== null && membershipResolved.multiplier > 1) {
+          const derived = deriveOneTimeFromMembership(membershipResolved.multiplier);
+          return { multiplier: derived, source: "derived-from-membership" };
+        }
       }
 
       return { multiplier: null, source: "none" };

@@ -119,31 +119,46 @@ export function PowerToolsetCarousel({
     const toolset = getToolsetFromSlug(prizeOption.slug);
     const imgSrc = toolset ? POWERSET_IMAGES[toolset] : null;
     const label = toolset ? POWERSET_LABELS[toolset] : null;
+    const brandLogo = toolset ? POWERSET_BRAND_TEXT[toolset] : null;
     if (!imgSrc) return null;
     const scheme = toolset ? getPackageColorScheme(getToolsetColorKey(toolset)) : null;
     const badgeStyle = toolset ? getToolsetBadgeStyle(toolset) : null;
     return (
-      <motion.button
+      <motion.div
         key={prizeOption.slug}
-        type="button"
-        onClick={() => onSelect(prizeOption.slug)}
         custom={{ i: index, fromLeft }}
         variants={sideItemVariants}
         initial="hidden"
         animate="visible"
         whileHover="hover"
-        className="relative w-20 h-24 sm:w-28 sm:h-36 flex-shrink-0 cursor-pointer rounded-xl overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
+        className="relative w-20 h-24 sm:w-28 sm:h-36 flex-shrink-0 overflow-visible"
       >
-        <div className="absolute inset-0">
-          <Image
-            src={imgSrc}
-            alt={prizeOption.label}
-            fill
-            className="object-contain"
-            sizes="112px"
-          />
-        </div>
-        {label && scheme && badgeStyle && (
+        {brandLogo && (
+          <div className={`absolute -top-2 sm:-top-2.5 left-1/2 -translate-x-1/2 z-20 h-4 w-14 sm:h-5 sm:w-16 pointer-events-none ${toolset === "milwaukee" ? "scale-125" : ""}`}>
+            <Image
+              src={brandLogo}
+              alt={toolset ?? ""}
+              fill
+              className="object-contain"
+              sizes="64px"
+            />
+          </div>
+        )}
+        <motion.button
+          type="button"
+          onClick={() => onSelect(prizeOption.slug)}
+          className="relative w-full h-full cursor-pointer rounded-xl overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
+        >
+          <div className="absolute inset-0">
+            <Image
+              src={imgSrc}
+              alt={prizeOption.label}
+              fill
+              className="object-contain"
+              sizes="112px"
+            />
+          </div>
+          {label && scheme && badgeStyle && (
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-10 w-[95%] pointer-events-none">
             <div
               className="rounded-xl backdrop-blur-md px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-lg"
@@ -154,12 +169,13 @@ export function PowerToolsetCarousel({
               }}
             >
               <p className={`font-agency font-bold text-[7px] sm:text-[8px] lg:text-[10px] leading-tight text-center truncate ${scheme.buttonText}`}>
-                {label} · $5000 Cash
+                {label} + $5000 CASH
               </p>
             </div>
           </div>
         )}
-      </motion.button>
+        </motion.button>
+      </motion.div>
     );
   };
 
@@ -203,13 +219,13 @@ export function PowerToolsetCarousel({
       >
       {/* When nothing selected (e.g. cash-prize): single row of all toolsets, no center gap */}
       {activeSlug == null ? (
-        <div className="flex items-center justify-center gap-1 sm:gap-2 md:gap-4 flex-wrap">
+        <div className="flex items-center justify-center gap-1 sm:gap-2 md:gap-4 flex-wrap pt-6 sm:pt-7">
           {prizes.map((prize, i) => renderSideImage(prize, i, true))}
         </div>
       ) : (
         <>
           {/* Left - non-focused toolsets */}
-          <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3 flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-hide flex-nowrap">
+          <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3 flex-1 min-w-0 overflow-x-auto overflow-y-visible scrollbar-hide flex-nowrap pt-6 sm:pt-7">
             {leftPrizes.map((prize, i) => renderSideImage(prize, i, true))}
           </div>
 
@@ -280,7 +296,7 @@ export function PowerToolsetCarousel({
                             }}
                           >
                             <p className={`font-agency font-bold text-[10px] sm:text-xs lg:text-sm leading-tight text-center line-clamp-2 ${scheme.buttonText}`}>
-                              {POWERSET_LABELS[activeToolset]} · $5000 Cash
+                              {POWERSET_LABELS[activeToolset]} + $5000 CASH
                             </p>
                           </div>
                         </div>
@@ -294,7 +310,7 @@ export function PowerToolsetCarousel({
           </div>
 
           {/* Right - non-focused toolsets */}
-          <div className="flex items-center justify-start gap-1 sm:gap-2 md:gap-3 flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-hide flex-nowrap">
+          <div className="flex items-center justify-start gap-1 sm:gap-2 md:gap-3 flex-1 min-w-0 overflow-x-auto overflow-y-visible scrollbar-hide flex-nowrap pt-6 sm:pt-7">
             {rightPrizes.map((prize, i) => renderSideImage(prize, i, false))}
           </div>
         </>
