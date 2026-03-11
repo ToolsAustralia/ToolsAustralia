@@ -6,10 +6,10 @@ import MetallicButton from "@/components/ui/MetallicButton";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import BrandScroller from "@/components/ui/BrandScroller";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
+import PartnerBenefitsPromoSectionClient from "@/components/sections/promo/PartnerBenefitsPromoSectionClient";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import MembershipSection from "@/components/sections/MembershipSection";
-import FlowChartSection from "@/components/sections/FlowChartSection";
 import MembershipPackagesChart from "@/components/sections/MembershipPackagesChart";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
@@ -219,11 +219,15 @@ export default function MembershipPageClient() {
         <MetallicDivider className="absolute bottom-10 left-0 right-0" />
       </section>
 
+      {/* Partner Benefits promo — shown to non-members, scrolls to #membership */}
+      <div className="px-4 sm:px-6 lg:px-8">
+        <PartnerBenefitsPromoSectionClient scrollToId="membership" />
+      </div>
+
       {/* Membership Sections */}
       <SectionContainer>
         <MembershipSection title="Ready to Join?" padding="py-16 sm:py-20" />
       </SectionContainer>
-      <FlowChartSection />
       <MembershipPackagesChart />
 
       {/* Unlock Discounts at the bottom */}

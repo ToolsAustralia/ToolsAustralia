@@ -11,6 +11,10 @@ const PartnerBenefitsPromoSection = dynamic(
   { ssr: false }
 );
 
-export default function PartnerBenefitsPromoSectionClient() {
-  return <PartnerBenefitsPromoSection />;
+interface PartnerBenefitsPromoSectionClientProps {
+  scrollToId?: "packages" | "membership";
+}
+
+export default function PartnerBenefitsPromoSectionClient({ scrollToId }: PartnerBenefitsPromoSectionClientProps) {
+  return <PartnerBenefitsPromoSection scrollToId={scrollToId} />;
 }
