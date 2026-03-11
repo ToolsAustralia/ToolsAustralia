@@ -601,12 +601,12 @@ export default function MembershipSection({
                           </div>
                         )}
 
-                        {/* Card Background - Brand gradient (inline background ensures correct render on all pages) */}
+                        {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                         <div
-                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
+                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
                           style={
                             {
-                              backgroundImage: colorScheme.bgGradient,
+                              background: colorScheme.bgGradient,
                               backgroundOrigin: "border-box",
                               ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
                             } as React.CSSProperties
@@ -947,12 +947,12 @@ export default function MembershipSection({
                     </div>
                   )}
 
-                  {/* Card Background - Brand gradient (inline background ensures correct render on all pages) */}
+                  {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                   <div
-                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative`}
+                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
                     style={
                       {
-                        backgroundImage: colorScheme.bgGradient,
+                        background: colorScheme.bgGradient,
                         backgroundOrigin: "border-box",
                         ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
                       } as React.CSSProperties
