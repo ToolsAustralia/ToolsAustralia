@@ -1823,6 +1823,19 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
     // If user has pending changes or recent upgrades, be extra cautious
     if (hasPendingChange || hasRecentUpgrade) {
+      // Still sync endDate even when skipping other updates — Stripe advanced the billing period
+      if (
+        subscription.id === user.stripeSubscriptionId &&
+        (subscription.status === "active" || subscription.status === "trialing")
+      ) {
+        const periodEnd = getSubscriptionPeriodEnd(subscription);
+        if (periodEnd != null) {
+          await User.findByIdAndUpdate(user._id, {
+            $set: { "subscription.endDate": new Date(periodEnd * 1000) },
+          });
+          webhookLog("info", `Synced endDate despite pending changes/recent upgrade for ${user.email}`);
+        }
+      }
       webhookLog("info", `Skipping update of ${subscription.id} - user has pending changes or recent upgrade activity`);
       return;
     }
@@ -1872,13 +1885,45 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         return;
       }
 
-      // Only process updates if this is the user's current subscription
+      // Only process updates if this is the user's current subscription.
+      // Exception: if the stored stripeSubscriptionId points to a dead subscription
+      // (incomplete/incomplete_expired/canceled), adopt the incoming active one instead.
       if (user.stripeSubscriptionId && user.stripeSubscriptionId !== subscription.id) {
-        webhookLog(
-          "info",
-          `Ignoring update of old subscription ${subscription.id} - user has newer subscription ${user.stripeSubscriptionId}`
-        );
-        return;
+        if (subscription.status === "active" || subscription.status === "trialing") {
+          try {
+            const storedSub = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+            const isStoredDead =
+              storedSub.status === "incomplete" ||
+              storedSub.status === "incomplete_expired" ||
+              storedSub.status === "canceled";
+            if (isStoredDead) {
+              webhookLog(
+                "info",
+                `Adopting subscription ${subscription.id} (${subscription.status}) — stored ${user.stripeSubscriptionId} is ${storedSub.status}`
+              );
+              user.stripeSubscriptionId = subscription.id;
+              // Fall through to process the update normally
+            } else {
+              webhookLog("info", `Ignoring update of subscription ${subscription.id} - user has active subscription ${user.stripeSubscriptionId}`);
+              return;
+            }
+          } catch (retrieveErr) {
+            const statusCode =
+              retrieveErr && typeof retrieveErr === "object" && "statusCode" in retrieveErr
+                ? (retrieveErr as { statusCode?: number }).statusCode
+                : undefined;
+            if (statusCode === 404) {
+              webhookLog("info", `Adopting subscription ${subscription.id} — stored ${user.stripeSubscriptionId} is 404/deleted`);
+              user.stripeSubscriptionId = subscription.id;
+            } else {
+              webhookLog("info", `Ignoring update of subscription ${subscription.id} - could not verify stored sub: ${retrieveErr}`);
+              return;
+            }
+          }
+        } else {
+          webhookLog("info", `Ignoring update of old subscription ${subscription.id} - user has newer subscription ${user.stripeSubscriptionId}`);
+          return;
+        }
       }
 
       // Only update status for specific cases to avoid conflicts
@@ -1936,8 +1981,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
         user.markModified("subscription");
       } else {
-        // For other statuses, let invoice.paid handle it
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
+        // Sync endDate for active/trialing even when DB had stale inactive state
+        if (subscription.status === "active" || subscription.status === "trialing") {
+          const periodEnd = getSubscriptionPeriodEnd(subscription);
+          if (periodEnd != null) {
+            user.subscription.endDate = new Date(periodEnd * 1000);
+            user.subscription.isActive = true;
+            user.subscription.status = subscription.status;
+          }
+        }
       }
     }
 
@@ -3037,6 +3090,53 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       throw stripeError;
     }
 
+    // Auto-correct stripeSubscriptionId when it points to a dead subscription.
+    // Race conditions during checkout can leave the DB pointing to an incomplete/expired sub
+    // while the actual active sub (which just paid) has a different ID.
+    if (
+      subscriptionId &&
+      user.stripeSubscriptionId &&
+      user.stripeSubscriptionId !== subscriptionId &&
+      (subscription.status === "active" || subscription.status === "trialing")
+    ) {
+      try {
+        const storedSub = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        const storedStatus = storedSub.status;
+        const isStoredDead =
+          storedStatus === "incomplete" ||
+          storedStatus === "incomplete_expired" ||
+          storedStatus === "canceled";
+        if (isStoredDead) {
+          await User.findByIdAndUpdate(user._id, {
+            $set: { stripeSubscriptionId: subscriptionId },
+          });
+          user.stripeSubscriptionId = subscriptionId;
+          webhookLog(
+            "info",
+            `Auto-corrected stripeSubscriptionId: ${storedSub.id} (${storedStatus}) → ${subscriptionId} (${subscription.status}) for ${user.email}`
+          );
+        }
+      } catch (correctErr) {
+        // If the stored sub is 404/deleted, it's definitely dead — correct it
+        const statusCode =
+          correctErr && typeof correctErr === "object" && "statusCode" in correctErr
+            ? (correctErr as { statusCode?: number }).statusCode
+            : undefined;
+        if (statusCode === 404) {
+          await User.findByIdAndUpdate(user._id, {
+            $set: { stripeSubscriptionId: subscriptionId },
+          });
+          user.stripeSubscriptionId = subscriptionId;
+          webhookLog(
+            "info",
+            `Auto-corrected stripeSubscriptionId (stored was 404/deleted) → ${subscriptionId} for ${user.email}`
+          );
+        } else {
+          webhookLog("warn", `Non-critical: could not verify stored stripeSubscriptionId: ${correctErr}`);
+        }
+      }
+    }
+
     // 🎯 NEW APPROACH: Simply use packageId from Stripe subscription metadata
     // previousSubscription handles benefit preservation automatically
     const packageId = subscription.metadata.packageId;
@@ -3373,25 +3473,6 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           }
         } catch (syncErr) {
           webhookLog("warn", `Non-critical: could not sync isActive for subscription_create: ${syncErr}`);
-        }
-      }
-
-      // ✅ Safety net: Sync subscription.endDate for renewals (covers missed subscription.updated)
-      if (expandedInvoice.billing_reason === "subscription_cycle") {
-        try {
-          const freshSubscription = await stripe.subscriptions.retrieve(subscriptionId);
-          const periodEnd = getSubscriptionPeriodEnd(freshSubscription);
-          if (periodEnd != null) {
-            await User.findByIdAndUpdate(user._id, {
-              $set: { "subscription.endDate": new Date(periodEnd * 1000) },
-            });
-            webhookLog("info", `Synced subscription.endDate from Stripe for renewal: ${user.email}`);
-          }
-        } catch (endDateSyncError) {
-          webhookLog(
-            "warn",
-            `Non-critical: could not sync subscription.endDate for renewal: ${endDateSyncError}`
-          );
         }
       }
 
@@ -3772,6 +3853,27 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       }
     } else {
       webhookLog("error", `Failed to process subscription benefits: ${result.error}`);
+    }
+
+    // Always sync endDate for renewals, regardless of processPaymentBenefits result.
+    // The user was charged — their access period must be updated even if benefit
+    // processing failed or the subscription.updated webhook was missed/skipped.
+    if (expandedInvoice.billing_reason === "subscription_cycle") {
+      try {
+        const freshSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const periodEnd = getSubscriptionPeriodEnd(freshSubscription);
+        if (periodEnd != null) {
+          await User.findByIdAndUpdate(user._id, {
+            $set: { "subscription.endDate": new Date(periodEnd * 1000) },
+          });
+          webhookLog("info", `Synced subscription.endDate from Stripe for renewal: ${user.email}`);
+        }
+      } catch (endDateSyncError) {
+        webhookLog(
+          "warn",
+          `Non-critical: could not sync subscription.endDate for renewal: ${endDateSyncError}`
+        );
+      }
     }
   } catch (error) {
     webhookLog("error", `Error processing invoice.payment_succeeded: ${error}`);

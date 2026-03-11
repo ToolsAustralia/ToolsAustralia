@@ -24,12 +24,13 @@
  * - Rate-limit handling with retries on 429.
  *
  * Usage:
- *   npx tsx scripts/repair-expired-enddates-from-stripe.ts [--dry-run] [--live] [--limit=N]
+ *   npx tsx scripts/repair-expired-enddates-from-stripe.ts [--dry-run] [--live] [--limit=N] [--offset=N]
  *
  * Options:
- *   --dry-run   Log what would be updated; no DB writes (default).
- *   --live      Perform DB updates.
- *   --limit=N   Max users to process (default 200).
+ *   --dry-run    Log what would be updated; no DB writes (default).
+ *   --live       Perform DB updates.
+ *   --limit=N    Max users to process (default 200).
+ *   --offset=N   Skip first N matching users (default 0). Use for manual pagination.
  *
  * Env: .env.local must have MONGODB_URI and STRIPE_SECRET_KEY.
  */
@@ -42,6 +43,8 @@ config({ path: path.resolve(process.cwd(), ".env.local") });
 const DRY_RUN = !process.argv.includes("--live");
 const LIMIT_ARG = process.argv.find((a) => a.startsWith("--limit="));
 const LIMIT = LIMIT_ARG ? Math.max(1, parseInt(LIMIT_ARG.split("=")[1] || "200", 10)) : 200;
+const OFFSET_ARG = process.argv.find((a) => a.startsWith("--offset="));
+const OFFSET = OFFSET_ARG ? Math.max(0, parseInt(OFFSET_ARG.split("=")[1] || "0", 10)) : 0;
 
 const DELAY_BETWEEN_STRIPE_MS = 150;
 const MAX_RETRIES_429 = 3;
@@ -83,6 +86,7 @@ async function main() {
   console.log("\n🔧 Repair subscription.endDate for users who renewed but DB shows expired");
   console.log(`   Mode: ${DRY_RUN ? "DRY RUN (no DB writes)" : "LIVE"}`);
   console.log(`   Limit: ${LIMIT}`);
+  console.log(`   Offset: ${OFFSET}`);
   console.log(`   Now (UTC): ${now.toISOString()}`);
   console.log("");
 
@@ -120,6 +124,8 @@ async function main() {
       "subscription.packageId": { $exists: true, $ne: null },
     })
       .select("_id email stripeSubscriptionId subscription")
+      .sort({ "subscription.endDate": 1 })
+      .skip(OFFSET)
       .limit(LIMIT)
       .lean();
 
