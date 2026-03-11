@@ -12,6 +12,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
+import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
 import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
@@ -531,74 +532,19 @@ export default function MembershipSection({
                             />
                           </div>
                         )}
-                        {/* Best Chance, Popular and Current Badges - Top Left (inside card) */}
-                        {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
+                        {/* Corner ribbon badges - Top Left (Best Chance, Popular, or Current) */}
                         {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                          <div className="absolute top-1.5 left-1.5 z-20">
-                            <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
-                          </div>
+                          <BestChanceBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                         )}
-
-                        {/* Popular and Current Plan Badges - Top Left - Only show if not boss/power */}
-                        {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                          <div className="absolute top-2 left-2 z-20 flex flex-col gap-1 items-start">
-                            {/* Current Plan Badge - Highest Priority - Same styling as Popular */}
-                            {isCurrentSubscription(plan) && (
-                              <div
-                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[11px]"
-                                style={colorScheme.badgeStyle}
-                              >
-                                {/* Subtle static highlight - no shimmer */}
-                                <div
-                                  className="absolute inset-0 pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                                  }}
-                                />
-                                {/* Content - white text for contrast */}
-                                <div className="relative z-10 flex items-center text-white">
-                                  <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                                    CURRENT
-                                  </span>
-                                </div>
-                                <div
-                                  className="absolute inset-0 rounded-full pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                                    border: "1px solid rgba(255, 255, 255, 0.4)",
-                                  }}
-                                />
-                              </div>
-                            )}
-                            {/* Popular Badge - Show only if not current plan - Theme matches package */}
-                            {plan.isPopular && !isCurrentSubscription(plan) && (
-                              <div
-                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
-                                style={colorScheme.badgeStyle}
-                              >
-                                {/* Subtle static highlight - no shimmer */}
-                                <div
-                                  className="absolute inset-0 pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                                  }}
-                                />
-                                {/* Content - white text for contrast on package-themed gradient */}
-                                <div className="relative z-10 flex items-center text-white">
-                                  <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                                    MOST POPULAR
-                                  </span>
-                                </div>
-                                <div
-                                  className="absolute inset-0 rounded-full pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                                    border: "1px solid rgba(255, 255, 255, 0.4)",
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </div>
+                        {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
+                          <CornerRibbonBadge
+                            position="top-left"
+                            size="medium"
+                            badgeStyle={colorScheme.badgeStyle}
+                            colorScheme={colorScheme}
+                          >
+                            {isCurrentSubscription(plan) ? "CURRENT" : "MOST POPULAR"}
+                          </CornerRibbonBadge>
                         )}
 
                         {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
@@ -837,7 +783,7 @@ export default function MembershipSection({
               return (
                 <div
                   key={plan.id}
-                  className={`relative ${isAdditionalPackage ? "h-[350px]" : "h-[320px]"} rounded-3xl transition-all duration-300 overflow-visible isolate ${
+                  className={`relative ${isAdditionalPackage ? "h-[350px]" : "h-[320px]"} rounded-3xl transition-all duration-300 overflow-visible ${
                     activeTab === "membership"
                       ? "w-full min-w-0"
                       : "w-full min-w-0 max-w-[320px] justify-self-center"
@@ -852,72 +798,19 @@ export default function MembershipSection({
                       : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
                   }
                 >
-                  {/* Best Chance, Popular and Current Badges - Top Left (inside card) */}
-                  {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
+                  {/* Corner ribbon badges - Top Left (Best Chance, Popular, or Current) */}
                   {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                    <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left">
-                      <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
-                    </div>
+                    <BestChanceBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                   )}
-
-                  {/* Popular and Current Plan Badges - Top Left - Only show if not boss/power */}
-                  {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                    <div className="absolute top-2 left-2 z-20 flex flex-col gap-1 items-start">
-                      {/* Current Plan Badge - Highest Priority - Same styling as Popular */}
-                      {isCurrentSubscription(plan) && (
-                        <div
-                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-xs"
-                          style={colorScheme.badgeStyle}
-                        >
-                          {/* Subtle static highlight - no shimmer */}
-                          <div
-                            className="absolute inset-0 pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                            }}
-                          />
-                          <div className="relative z-10 flex items-center gap-1 text-white">
-                            <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                              CURRENT
-                            </span>
-                          </div>
-                          <div
-                            className="absolute inset-0 rounded-full pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                              border: "1px solid rgba(255, 255, 255, 0.4)",
-                            }}
-                          />
-                        </div>
-                      )}
-                      {/* Popular Badge - Show only if not current plan - Theme matches package */}
-                      {plan.isPopular && !isCurrentSubscription(plan) && (
-                        <div
-                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[10px]"
-                          style={colorScheme.badgeStyle}
-                        >
-                          {/* Subtle static highlight - no shimmer */}
-                          <div
-                            className="absolute inset-0 pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                            }}
-                          />
-                          <div className="relative z-10 flex items-center gap-1 text-white">
-                            <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                              MOST POPULAR
-                            </span>
-                          </div>
-                          <div
-                            className="absolute inset-0 rounded-full pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                              border: "1px solid rgba(255, 255, 255, 0.4)",
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
+                  {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
+                    <CornerRibbonBadge
+                      position="top-left"
+                      size="medium"
+                      badgeStyle={colorScheme.badgeStyle}
+                      colorScheme={colorScheme}
+                    >
+                      {isCurrentSubscription(plan) ? "CURRENT" : "MOST POPULAR"}
+                    </CornerRibbonBadge>
                   )}
 
                   {/* Promo Badge - Pin overlay at top-right, outside card */}

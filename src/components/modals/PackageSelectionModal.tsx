@@ -12,6 +12,7 @@ import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
+import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
@@ -623,33 +624,20 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                   </div>
                 </div>
 
-                {/* Badges - Top Right (Best Chance or Popular/Current) */}
-                <div className="absolute top-1.5 right-1.5 z-20 flex flex-col gap-0.5 items-end">
-                    {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                      <BestChanceBadge size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
-                    )}
-                    {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                      <>
-                        {isCurrentPlan(plan) && (
-                          <div
-                            className="text-white rounded-full px-2 py-1 text-[8px] font-bold shadow-lg"
-                            style={colorScheme.badgeStyle}
-                          >
-                            <span className="sm:hidden">CURRENT</span>
-                            <span className="hidden sm:inline">CURRENT PLAN</span>
-                          </div>
-                        )}
-                        {plan.isPopular && !isCurrentPlan(plan) && (
-                          <div
-                            className="text-white rounded-full px-2 py-1 text-[10px] font-bold shadow-lg"
-                            style={colorScheme.badgeStyle}
-                          >
-                            MOST POPULAR
-                          </div>
-                        )}
-                      </>
-                    )}
-                </div>
+                {/* Corner ribbon badges - Top Right (Best Chance, Popular, or Current) */}
+                {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                  <BestChanceBadge position="top-right" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+                )}
+                {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentPlan(plan) || (plan.isPopular && !isCurrentPlan(plan))) && (
+                  <CornerRibbonBadge
+                    position="top-right"
+                    size="small"
+                    badgeStyle={colorScheme.badgeStyle}
+                    colorScheme={colorScheme}
+                  >
+                    {isCurrentPlan(plan) ? "CURRENT" : "MOST POPULAR"}
+                  </CornerRibbonBadge>
+                )}
 
                 {/* Current Selection Indicator */}
                 {isSelectedPlan(plan) && !isCurrentPlan(plan) && (

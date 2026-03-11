@@ -1,10 +1,15 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import FAQContent from "@/components/features/FAQContent";
-import MetallicButton from "@/components/ui/MetallicButton";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import { FaqEntry } from "@/data/faqs";
+
+const PartnerBenefitsPromoSectionClient = dynamic(
+  () => import("@/components/sections/promo/PartnerBenefitsPromoSectionClient"),
+  { ssr: false }
+);
 
 interface FAQPageClientProps {
   faqs: FaqEntry[];
@@ -49,78 +54,9 @@ export default function FAQPageClient({ faqs, categories }: FAQPageClientProps) 
         <FAQContent faqs={faqs} categories={categories} />
       </div>
 
-      {/* FAQ Promo Section - Metallic Industrial Design */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-16">
-        <div className="relative h-[400px] sm:h-[500px] rounded-2xl overflow-hidden">
-          {/* Background Image with Dark Overlay */}
-          <div className="absolute inset-0 z-0">
-            <Image
-              src="/images/faqImage.png"
-              alt="Tools Australia"
-              fill
-              className="object-cover"
-              priority
-              unoptimized
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-black/40" />
-          </div>
-
-          {/* Content */}
-          <div className="relative z-10 h-full flex items-center">
-            <div className="w-full">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-center">
-                {/* Left Content - Glass-morphism Card */}
-                <div className="lg:col-span-2 p-2 sm:p-8 lg:p-12">
-                  <div className="backdrop-blur-md bg-black/40 rounded-xl p-4 sm:p-8 border-0 sm:border border-[#ee0000]/30 shadow-2xl shadow-[#ee0000]/20">
-                    <h2 className="text-lg sm:text-xl lg:text-2xl font-bold mb-2 sm:mb-3 font-['Poppins'] uppercase tracking-wide text-white">
-                      PARTNER BENEFITS & ADDITIONAL PACKAGES
-                    </h2>
-
-                    <h3 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold mb-3 sm:mb-4 font-['Poppins'] leading-tight">
-                      <span className="text-white">Up to </span>
-                      <span className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">
-                        2×
-                      </span>
-                      <span className="text-white"> more entries for members</span>
-                    </h3>
-
-                    <p className="text-sm sm:text-base lg:text-lg mb-4 sm:mb-6 text-gray-200 font-['Poppins'] leading-relaxed">
-                      Subscribe to unlock partner discounts and member-exclusive Additional Packs — same price as
-                      one-time packs, but with up to double the entries. Stack your chances to win!
-                    </p>
-
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                      <MetallicButton
-                        href="/promotions/dewalt"
-                        variant="primary"
-                        size="md"
-                        borderRadius="lg"
-                      >
-                        JOIN NOW
-                      </MetallicButton>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Side - Image Position (Hidden on mobile and tablet) */}
-                <div className="relative h-full items-center justify-center hidden lg:flex">
-                  <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-[500px] h-[500px] z-20">
-                    <Image
-                      src="/images/faqImage.png"
-                      alt="Tools Australia Products"
-                      fill
-                      className="object-cover rounded-xl"
-                      priority
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Metallic Border Glow */}
-          <div className="absolute inset-0 rounded-2xl border border-[#ee0000]/30 pointer-events-none z-10"></div>
-        </div>
+      {/* Partner Benefits promo — reused component, scrolls to #membership */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <PartnerBenefitsPromoSectionClient scrollToId="membership" />
       </div>
     </>
   );
