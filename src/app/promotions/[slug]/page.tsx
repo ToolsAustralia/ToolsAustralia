@@ -27,6 +27,11 @@ const PromoFAQs = dynamic(() => import("@/components/sections/promo/PromoFAQs"),
   ssr: true, // Keep SSR for SEO
 });
 
+const PartnerBenefitsPromoSectionClient = dynamic(
+  () => import("@/components/sections/promo/PartnerBenefitsPromoSectionClient"),
+  { ssr: true }
+);
+
 const UnlockDiscounts = dynamic(() => import("@/components/sections/promo/UnlockDiscounts"), {
   ssr: true, // Keep SSR for SEO
 });
@@ -208,6 +213,10 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
 
           <Suspense fallback={<div className="min-h-[300px]" />}>
             <GiveawayDetails />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <PartnerBenefitsPromoSectionClient />
           </Suspense>
 
           <Suspense fallback={<div className="min-h-[400px]" />}>

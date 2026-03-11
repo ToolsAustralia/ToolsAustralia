@@ -38,6 +38,11 @@ const PromoFAQs = dynamic(() => import("@/components/sections/promo/PromoFAQs"),
   ssr: true,
 });
 
+const PartnerBenefitsPromoSectionClient = dynamic(
+  () => import("@/components/sections/promo/PartnerBenefitsPromoSectionClient"),
+  { ssr: true }
+);
+
 const UnlockDiscounts = dynamic(() => import("@/components/sections/promo/UnlockDiscounts"), {
   ssr: true,
 });
@@ -139,6 +144,10 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
 
             <Suspense fallback={<div className="min-h-[300px]" />}>
               <GiveawayDetails />
+            </Suspense>
+
+            <Suspense fallback={null}>
+              <PartnerBenefitsPromoSectionClient />
             </Suspense>
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
