@@ -20,6 +20,12 @@ export interface IPromoLink extends Document {
   isActive: boolean; // Whether the promo link is active
   appliesToMembership: boolean; // Whether this promo applies to membership/subscription packages
   appliesToOneTime: boolean; // Whether this promo applies to one-time packages
+  campaignType: "general" | "cancelled-membership-comeback"; // Campaign intent
+  eligibilityAudience: "all" | "cancelled-members"; // Audience gating
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
   description?: string; // Optional admin notes
   createdBy: mongoose.Types.ObjectId; // Admin who created it
   usageCount: number; // Total number of times this code has been used
@@ -64,6 +70,29 @@ const PromoLinkSchema = new Schema<IPromoLink>(
       type: Boolean,
       default: false,
     },
+    campaignType: {
+      type: String,
+      enum: ["general", "cancelled-membership-comeback"],
+      default: "general",
+      required: [true, "Campaign type is required"],
+    },
+    eligibilityAudience: {
+      type: String,
+      enum: ["all", "cancelled-members"],
+      default: "all",
+      required: [true, "Eligibility audience is required"],
+    },
+    eligibilityRules: {
+      requireInactiveSubscription: {
+        type: Boolean,
+        default: false,
+      },
+      cancelledWithinDays: {
+        type: Number,
+        required: false,
+        min: [1, "cancelledWithinDays must be at least 1"],
+      },
+    },
     description: {
       type: String,
       required: false,
@@ -96,6 +125,7 @@ const PromoLinkSchema = new Schema<IPromoLink>(
 // PromoLinkSchema.index({ code: 1 }, { unique: true }); // REMOVED - duplicate of unique: true in field definition
 PromoLinkSchema.index({ isActive: 1, expiresAt: 1 }); // For finding active, non-expired links
 PromoLinkSchema.index({ createdBy: 1 }); // For admin queries
+PromoLinkSchema.index({ campaignType: 1, eligibilityAudience: 1, isActive: 1 }); // For campaign filtering
 
 // Validation: At least one package type must be selected when active
 PromoLinkSchema.pre("save", function (next) {

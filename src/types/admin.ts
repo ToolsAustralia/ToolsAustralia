@@ -622,6 +622,12 @@ export interface PromoLink {
   isActive: boolean;
   appliesToMembership: boolean; // Whether this promo applies to membership/subscription packages
   appliesToOneTime: boolean; // Whether this promo applies to one-time packages
+  campaignType: "general" | "cancelled-membership-comeback";
+  eligibilityAudience: "all" | "cancelled-members";
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
   isExpired?: boolean;
   description?: string;
   usageCount: number;
@@ -643,6 +649,12 @@ export interface CreatePromoLinkPayload {
   isActive?: boolean;
   appliesToMembership?: boolean;
   appliesToOneTime?: boolean;
+  campaignType?: "general" | "cancelled-membership-comeback";
+  eligibilityAudience?: "all" | "cancelled-members";
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
 }
 
 export interface UpdatePromoLinkPayload {
@@ -652,6 +664,12 @@ export interface UpdatePromoLinkPayload {
   isActive?: boolean;
   appliesToMembership?: boolean;
   appliesToOneTime?: boolean;
+  campaignType?: "general" | "cancelled-membership-comeback";
+  eligibilityAudience?: "all" | "cancelled-members";
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
 }
 
 export interface PromoLinkListResponse {

@@ -4652,16 +4652,30 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period !== "one-time" &&
             promoLinkInfo.appliesToMembership && (
-              <p className="text-xs sm:text-sm font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse" style={{ color: promoTheme.primary }}>
-                🎁 Active promo: Get {promoLinkInfo.bonusEntries} extra entries when you join
+              <p
+                className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap"
+                style={{
+                  color: promoTheme.preferDarkBackground ? "#000000" : "#FFFFFF",
+                  backgroundColor: promoTheme.primary,
+                  borderColor: promoTheme.preferDarkBackground ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.45)",
+                }}
+              >
+                Active promo: Get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join
               </p>
             )}
           {promoLinkInfo?.isValid &&
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period === "one-time" &&
             promoLinkInfo.appliesToOneTime && (
-              <p className="text-xs sm:text-sm font-semibold px-2 py-1 rounded-md bg-red-50 border border-red-200/60 inline-block animate-pulse" style={{ color: promoTheme.primary }}>
-                🎁 Active promo: Get {promoLinkInfo.bonusEntries} extra entries with this purchase
+              <p
+                className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap"
+                style={{
+                  color: promoTheme.preferDarkBackground ? "#000000" : "#FFFFFF",
+                  backgroundColor: promoTheme.primary,
+                  borderColor: promoTheme.preferDarkBackground ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.45)",
+                }}
+              >
+                Active promo: Get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
               </p>
             )}
         </div>

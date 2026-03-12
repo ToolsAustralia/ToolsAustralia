@@ -12,9 +12,7 @@
 
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
-import { klaviyo } from "@/lib/klaviyo";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
-import { createSubscriptionCancelledEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import type { IUser } from "@/models/User";
@@ -130,18 +128,8 @@ export async function cancelSubscription(
     }, autoRenew: ${user.subscription?.autoRenew}`
   );
 
-  // Klaviyo (non-blocking)
-  try {
-    klaviyo.trackEventBackground(
-      createSubscriptionCancelledEvent(user, {
-        packageId: user.subscription?.packageId || "unknown",
-        packageName: "Subscription",
-        tier: user.subscription?.packageId || "unknown",
-      })
-    );
-  } catch (klaviyoError) {
-    console.error("❌ Klaviyo subscription cancellation event tracking failed:", klaviyoError);
-  }
+  // Cancellation event tracking is handled in Stripe webhook (customer.subscription.deleted)
+  // to avoid duplicate "Subscription Cancelled" events from both API + webhook paths.
 
   try {
     ensureUserProfileSynced(user);
