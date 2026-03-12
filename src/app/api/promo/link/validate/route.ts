@@ -8,7 +8,7 @@ const validatePromoRateLimiter = createRateLimiter("promo-link-validate", {
   maxRequests: 60,
 });
 
-const PROMO_CODE_REGEX = /^BONUS[A-Z0-9]{6}$/;
+const PROMO_CODE_REGEX = /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
 
 /**
  * GET /api/promo/link/validate

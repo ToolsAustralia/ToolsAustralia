@@ -643,6 +643,7 @@ export interface PromoLink {
 }
 
 export interface CreatePromoLinkPayload {
+  customCode?: string;
   bonusEntries?: number;
   expiresAt?: string | null;
   description?: string;
