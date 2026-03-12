@@ -18,6 +18,14 @@ const createPromoLinkSchema = z
     isActive: z.boolean().optional(),
     appliesToMembership: z.boolean().optional(),
     appliesToOneTime: z.boolean().optional(),
+    campaignType: z.enum(["general", "cancelled-membership-comeback"]).optional(),
+    eligibilityAudience: z.enum(["all", "cancelled-members"]).optional(),
+    eligibilityRules: z
+      .object({
+        requireInactiveSubscription: z.boolean().optional(),
+        cancelledWithinDays: z.number().int().min(1, "cancelledWithinDays must be at least 1").optional(),
+      })
+      .optional(),
   })
   .refine(
     (data) => {
@@ -70,6 +78,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Campaign defaults and safety rails
+    const campaignType = validatedData.campaignType || "general";
+    const eligibilityAudience =
+      validatedData.eligibilityAudience ||
+      (campaignType === "cancelled-membership-comeback" ? "cancelled-members" : "all");
+    const eligibilityRules =
+      validatedData.eligibilityRules ||
+      (campaignType === "cancelled-membership-comeback"
+        ? { requireInactiveSubscription: true }
+        : undefined);
+
+    if (campaignType === "cancelled-membership-comeback" && eligibilityAudience !== "cancelled-members") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Comeback campaign must target cancelled-members audience",
+        },
+        { status: 400 }
+      );
+    }
+
     // Create promo link
     const isActive = validatedData.isActive !== undefined ? validatedData.isActive : true;
     const newPromoLink = new PromoLink({
@@ -79,6 +108,9 @@ export async function POST(request: NextRequest) {
       isActive,
       appliesToMembership: validatedData.appliesToMembership || false,
       appliesToOneTime: validatedData.appliesToOneTime || false,
+      campaignType,
+      eligibilityAudience,
+      eligibilityRules,
       createdBy: user._id,
       description: validatedData.description || undefined,
       usageCount: 0,
@@ -100,6 +132,8 @@ export async function POST(request: NextRequest) {
       bonusEntries: newPromoLink.bonusEntries,
       appliesToMembership: newPromoLink.appliesToMembership,
       appliesToOneTime: newPromoLink.appliesToOneTime,
+      campaignType: newPromoLink.campaignType,
+      eligibilityAudience: newPromoLink.eligibilityAudience,
       createdBy: user.email,
     });
 
@@ -115,6 +149,9 @@ export async function POST(request: NextRequest) {
           isActive: newPromoLink.isActive,
           appliesToMembership: newPromoLink.appliesToMembership,
           appliesToOneTime: newPromoLink.appliesToOneTime,
+          campaignType: newPromoLink.campaignType,
+          eligibilityAudience: newPromoLink.eligibilityAudience,
+          eligibilityRules: newPromoLink.eligibilityRules,
           description: newPromoLink.description,
           usageCount: newPromoLink.usageCount,
           promoUrl,

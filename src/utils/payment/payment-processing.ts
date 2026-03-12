@@ -26,6 +26,7 @@ import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
 import type { AttributionParams } from "@/types/tracking";
+import { PromoRedemptionService } from "@/services/promo/PromoRedemptionService";
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
@@ -755,43 +756,12 @@ async function checkAndApplyPromoLink(
   packageId?: string
 ): Promise<number> {
   try {
-    // Get promo link code from payment metadata
     if (!paymentMetadata?.promoLinkCode) {
-      // No promo link code - this is normal, no logging needed
       return 0;
     }
 
-    // Normalize the code - handle empty strings and whitespace
     const rawCode = paymentMetadata.promoLinkCode;
     if (!rawCode || typeof rawCode !== "string" || !rawCode.trim()) {
-      return 0;
-    }
-
-    const code = rawCode.trim().toUpperCase();
-
-    // Import PromoLink model dynamically to avoid circular dependencies
-    const PromoLink = (await import("@/models/PromoLink")).default;
-
-    // Find active promo link by code
-    const promoLink = await PromoLink.findActiveByCode(code);
-
-    if (!promoLink) {
-      console.log(`ℹ️ [PROMO LINK] Code not found or inactive: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-      });
-      return 0;
-    }
-
-    // Check if expired
-    if (promoLink.isExpired()) {
-      console.log(`ℹ️ [PROMO LINK] Code expired: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-        expiresAt: promoLink.expiresAt,
-      });
       return 0;
     }
 
@@ -805,110 +775,46 @@ async function checkAndApplyPromoLink(
     const isMembershipPurchase = packageType === "membership" || memberOnlyOneTime;
     const isOneTimePurchase = packageType === "one-time" && !memberOnlyOneTime;
 
-    // Promo links don't apply to mini-draw or upsell packages
     if (packageType === "mini-draw" || packageType === "upsell") {
-      console.log(`ℹ️ [PROMO LINK] Code does not apply to ${packageType} packages: ${code}`, {
+      return 0;
+    }
+
+    const redemption = await PromoRedemptionService.redeem({
+      user: {
+        _id: user._id.toString(),
+        subscription: user.subscription,
+      },
+      promoCode: rawCode,
+      isMembershipPurchase,
+      isOneTimePurchase,
+    });
+
+    if (!redemption.redeemed) {
+      console.log(`ℹ️ [PROMO LINK] Redemption skipped: ${redemption.reason}`, {
         userId: user._id?.toString(),
         userEmail: user.email,
         packageType,
-        promoLinkCode: code,
-        appliesToMembership: promoLink.appliesToMembership,
-        appliesToOneTime: promoLink.appliesToOneTime,
+        promoLinkCode: rawCode.trim().toUpperCase(),
       });
       return 0;
     }
 
-    // Check package type match
-    if (isMembershipPurchase && !promoLink.appliesToMembership) {
-      console.log(`ℹ️ [PROMO LINK] Code does not apply to membership packages: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-        promoLinkCode: code,
-        appliesToMembership: promoLink.appliesToMembership,
-        appliesToOneTime: promoLink.appliesToOneTime,
-      });
-      return 0;
-    }
+    console.log(`🎁 [PROMO LINK] Promo link redeemed successfully:`, {
+      promoLinkId: redemption.promoLink?._id?.toString(),
+      code: redemption.promoLink?.code,
+      bonusEntries: redemption.bonusEntries,
+      packageType,
+      appliesToMembership: redemption.promoLink?.appliesToMembership,
+      appliesToOneTime: redemption.promoLink?.appliesToOneTime,
+      campaignType: redemption.promoLink?.campaignType,
+      eligibilityAudience: redemption.promoLink?.eligibilityAudience,
+      userId: user._id?.toString(),
+      userEmail: user.email,
+      newUsageCount: redemption.promoLink?.usageCount,
+    });
 
-    if (isOneTimePurchase && !promoLink.appliesToOneTime) {
-      console.log(`ℹ️ [PROMO LINK] Code does not apply to one-time packages: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-        promoLinkCode: code,
-        appliesToMembership: promoLink.appliesToMembership,
-        appliesToOneTime: promoLink.appliesToOneTime,
-      });
-      return 0;
-    }
-
-    // Check if user has already used this code (one-time use enforcement)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userId = (user._id as any).toString();
-    if (promoLink.isUsedByUser(userId)) {
-      console.log(`ℹ️ [PROMO LINK] User already used this code: ${code}`, {
-        userId: userId,
-        userEmail: user.email,
-        packageType,
-        promoLinkCode: code,
-      });
-      return 0;
-    }
-
-    // ✅ CRITICAL: Mark as used IMMEDIATELY to prevent race conditions
-    // Use atomic operation to mark as used and increment count in one operation
-    // This prevents two concurrent payments from both getting bonus entries
-    try {
-      const updatedPromoLink = await PromoLink.findOneAndUpdate(
-        { _id: promoLink._id, usedBy: { $ne: userId } }, // Only update if user not already in usedBy
-        {
-          $addToSet: { usedBy: userId }, // Add user ID to usedBy array (idempotent)
-          $inc: { usageCount: 1 }, // Increment usage count
-        },
-        { new: true } // Return updated document
-      );
-
-      if (!updatedPromoLink) {
-        // Another process already marked this user as used (race condition detected)
-        console.log(`ℹ️ [PROMO LINK] Code already used by this user (race condition detected): ${code}`, {
-          userId: userId,
-          userEmail: user.email,
-          packageType,
-          promoLinkCode: code,
-        });
-        return 0;
-      }
-
-      // Log successful promo link match and usage marking
-      console.log(`🎁 [PROMO LINK] Valid promo link matched, marked as used, and applies to purchase:`, {
-        promoLinkId: updatedPromoLink._id?.toString(),
-        code: updatedPromoLink.code,
-        bonusEntries: updatedPromoLink.bonusEntries,
-        packageType,
-        appliesToMembership: updatedPromoLink.appliesToMembership,
-        appliesToOneTime: updatedPromoLink.appliesToOneTime,
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        newUsageCount: updatedPromoLink.usageCount,
-      });
-
-      // Return the bonus entries amount - will be granted in grantBenefits
-      return updatedPromoLink.bonusEntries;
-    } catch (markUsedError) {
-      // If marking as used fails, log but still grant entries (non-critical)
-      console.error(`❌ [PROMO LINK] Failed to mark promo link as used (non-critical):`, {
-        error: markUsedError instanceof Error ? markUsedError.message : String(markUsedError),
-        promoLinkId: promoLink._id?.toString(),
-        code: promoLink.code,
-        userId: userId,
-        userEmail: user.email,
-      });
-      // Still return bonus entries - marking as used is non-critical
-      return promoLink.bonusEntries;
-    }
+    return redemption.bonusEntries;
   } catch (error) {
-    // Log error but don't throw - promo links are non-critical
     console.error("❌ [PROMO LINK] Error checking promo link:", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,

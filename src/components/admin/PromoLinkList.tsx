@@ -200,6 +200,22 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                       <div>
                         {promoLink.usageCount} {promoLink.usageCount === 1 ? "use" : "uses"}
                       </div>
+                      <div className="flex items-center gap-2 flex-wrap pt-1">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
+                            promoLink.campaignType === "cancelled-membership-comeback"
+                              ? "bg-orange-100 text-orange-800"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {promoLink.campaignType === "cancelled-membership-comeback" ? "Comeback" : "General"}
+                        </span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
+                          {promoLink.eligibilityAudience === "cancelled-members"
+                            ? "Cancelled Members"
+                            : "All Users"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -224,6 +240,9 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Usage
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Campaign
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
@@ -297,6 +316,29 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                           <div className="text-sm text-gray-900">
                             <span className="font-medium">{promoLink.usageCount}</span>
                             <span className="text-gray-500 ml-1">{promoLink.usageCount === 1 ? "use" : "uses"}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                promoLink.campaignType === "cancelled-membership-comeback"
+                                  ? "bg-orange-100 text-orange-800"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}
+                            >
+                              {promoLink.campaignType === "cancelled-membership-comeback" ? "Comeback" : "General"}
+                            </span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                              {promoLink.eligibilityAudience === "cancelled-members"
+                                ? "Cancelled Members"
+                                : "All Users"}
+                            </span>
+                            {promoLink.eligibilityRules?.cancelledWithinDays ? (
+                              <span className="text-xs text-gray-500">
+                                {promoLink.eligibilityRules.cancelledWithinDays}d window
+                              </span>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(promoLink)}</td>

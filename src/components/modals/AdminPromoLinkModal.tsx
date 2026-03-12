@@ -26,6 +26,10 @@ interface PromoLinkFormData {
   isActive: boolean;
   appliesToMembership: boolean;
   appliesToOneTime: boolean;
+  campaignType: "general" | "cancelled-membership-comeback";
+  eligibilityAudience: "all" | "cancelled-members";
+  requireInactiveSubscription: boolean;
+  cancelledWithinDays: string;
 }
 
 const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClose, onSuccess, editingPromoLink }) => {
@@ -40,6 +44,10 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
     isActive: true,
     appliesToMembership: false,
     appliesToOneTime: false,
+    campaignType: "general",
+    eligibilityAudience: "all",
+    requireInactiveSubscription: false,
+    cancelledWithinDays: "",
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof PromoLinkFormData, string>>>({});
@@ -61,6 +69,12 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
           isActive: editingPromoLink.isActive,
           appliesToMembership: editingPromoLink.appliesToMembership || false,
           appliesToOneTime: editingPromoLink.appliesToOneTime || false,
+          campaignType: editingPromoLink.campaignType || "general",
+          eligibilityAudience: editingPromoLink.eligibilityAudience || "all",
+          requireInactiveSubscription: editingPromoLink.eligibilityRules?.requireInactiveSubscription || false,
+          cancelledWithinDays: editingPromoLink.eligibilityRules?.cancelledWithinDays
+            ? String(editingPromoLink.eligibilityRules.cancelledWithinDays)
+            : "",
         });
         setGeneratedCode(editingPromoLink.code);
         setGeneratedUrl(editingPromoLink.promoUrl);
@@ -82,6 +96,10 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
           isActive: true,
           appliesToMembership: false,
           appliesToOneTime: false,
+          campaignType: "general",
+          eligibilityAudience: "all",
+          requireInactiveSubscription: false,
+          cancelledWithinDays: "",
         });
         setGeneratedCode(null);
         setGeneratedUrl(null);
@@ -105,6 +123,10 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
       if (expiration <= new Date()) {
         newErrors.expiresAt = "Expiration date must be in the future";
       }
+    }
+
+    if (formData.campaignType === "cancelled-membership-comeback" && formData.eligibilityAudience !== "cancelled-members") {
+      newErrors.eligibilityAudience = "Comeback campaigns must target cancelled members";
     }
 
     // Validate that at least one package type is selected if active
@@ -133,6 +155,9 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
     try {
       if (editingPromoLink) {
         // Update existing promo link
+        const cancelledWithinDaysValue =
+          formData.cancelledWithinDays.trim().length > 0 ? parseInt(formData.cancelledWithinDays, 10) : undefined;
+
         const updateData: UpdatePromoLinkPayload = {
           bonusEntries: formData.bonusEntries,
           expiresAt: formData.expiresAt || null,
@@ -140,6 +165,12 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
           isActive: formData.isActive,
           appliesToMembership: formData.appliesToMembership,
           appliesToOneTime: formData.appliesToOneTime,
+          campaignType: formData.campaignType,
+          eligibilityAudience: formData.eligibilityAudience,
+          eligibilityRules: {
+            requireInactiveSubscription: formData.requireInactiveSubscription,
+            ...(cancelledWithinDaysValue ? { cancelledWithinDays: cancelledWithinDaysValue } : {}),
+          },
         };
 
         const updated = await updateMutation.mutateAsync({
@@ -151,6 +182,9 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
         setGeneratedUrl(updated.promoUrl);
       } else {
         // Create new promo link
+        const cancelledWithinDaysValue =
+          formData.cancelledWithinDays.trim().length > 0 ? parseInt(formData.cancelledWithinDays, 10) : undefined;
+
         const createData: CreatePromoLinkPayload = {
           bonusEntries: formData.bonusEntries,
           expiresAt: formData.expiresAt || null,
@@ -158,6 +192,12 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
           isActive: formData.isActive,
           appliesToMembership: formData.appliesToMembership,
           appliesToOneTime: formData.appliesToOneTime,
+          campaignType: formData.campaignType,
+          eligibilityAudience: formData.eligibilityAudience,
+          eligibilityRules: {
+            requireInactiveSubscription: formData.requireInactiveSubscription,
+            ...(cancelledWithinDaysValue ? { cancelledWithinDays: cancelledWithinDaysValue } : {}),
+          },
         };
 
         const created = await createMutation.mutateAsync(createData);
@@ -309,6 +349,96 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
             <p className="mt-1 text-sm text-gray-500">
               Select which package types this promo link should apply to. At least one must be selected for active promo
               links.
+            </p>
+          </FormSection>
+
+          {/* Campaign Targeting */}
+          <FormSection title="Campaign Targeting">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Type</label>
+                <select
+                  value={formData.campaignType}
+                  onChange={(e) => {
+                    const nextType = e.target.value as "general" | "cancelled-membership-comeback";
+                    if (nextType === "cancelled-membership-comeback") {
+                      setFormData((prev) => ({
+                        ...prev,
+                        campaignType: nextType,
+                        eligibilityAudience: "cancelled-members",
+                        requireInactiveSubscription: true,
+                      }));
+                    } else {
+                      setFormData((prev) => ({
+                        ...prev,
+                        campaignType: nextType,
+                        eligibilityAudience: "all",
+                      }));
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="general">General Promo</option>
+                  <option value="cancelled-membership-comeback">Cancelled Membership Comeback</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Eligibility Audience</label>
+                <select
+                  value={formData.eligibilityAudience}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      eligibilityAudience: e.target.value as "all" | "cancelled-members",
+                    }))
+                  }
+                  disabled={isSubmitting || formData.campaignType === "cancelled-membership-comeback"}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100"
+                >
+                  <option value="all">All Users</option>
+                  <option value="cancelled-members">Cancelled Members Only</option>
+                </select>
+                {errors.eligibilityAudience && <p className="mt-1 text-sm text-red-600">{errors.eligibilityAudience}</p>}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="requireInactiveSubscription"
+                  checked={formData.requireInactiveSubscription}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      requireInactiveSubscription: e.target.checked,
+                    }))
+                  }
+                  disabled={isSubmitting}
+                  className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                />
+                <label htmlFor="requireInactiveSubscription" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Require no active subscription at redemption
+                </label>
+              </div>
+
+              <Input
+                type="number"
+                value={formData.cancelledWithinDays}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    cancelledWithinDays: e.target.value,
+                  }))
+                }
+                min={1}
+                placeholder="Optional (e.g. 90)"
+                disabled={isSubmitting}
+              />
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Use “Cancelled Membership Comeback” for Klaviyo win-back campaigns. Optional days restricts eligibility to
+              users cancelled within that period.
             </p>
           </FormSection>
 
