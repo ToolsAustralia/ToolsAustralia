@@ -20,6 +20,8 @@ interface AdminPromoLinkModalProps {
 }
 
 interface PromoLinkFormData {
+  useCustomCode: boolean;
+  customCode: string;
   bonusEntries: number;
   expiresAt: string; // ISO date string (optional)
   description: string;
@@ -38,6 +40,8 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
   const { refetch: refetchPromoLinks } = usePromoLinks();
 
   const [formData, setFormData] = useState<PromoLinkFormData>({
+    useCustomCode: false,
+    customCode: "",
     bonusEntries: 100,
     expiresAt: "",
     description: "",
@@ -63,6 +67,8 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
       if (editingPromoLink) {
         // Edit mode: populate form with existing promo link data
         setFormData({
+          useCustomCode: false,
+          customCode: "",
           bonusEntries: editingPromoLink.bonusEntries,
           expiresAt: editingPromoLink.expiresAt ? new Date(editingPromoLink.expiresAt).toISOString() : "",
           description: editingPromoLink.description || "",
@@ -90,6 +96,8 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
         const expirationUTC = convertLocalToUTC(expirationLocal, localTimeZone);
 
         setFormData({
+          useCustomCode: false,
+          customCode: "",
           bonusEntries: 100,
           expiresAt: expirationUTC.toISOString(),
           description: "",
@@ -127,6 +135,16 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
 
     if (formData.campaignType === "cancelled-membership-comeback" && formData.eligibilityAudience !== "cancelled-members") {
       newErrors.eligibilityAudience = "Comeback campaigns must target cancelled members";
+    }
+
+    if (formData.useCustomCode) {
+      const normalized = formData.customCode.trim().toUpperCase();
+      const codeRegex = /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
+      if (!normalized) {
+        newErrors.customCode = "Custom promo code is required";
+      } else if (!codeRegex.test(normalized)) {
+        newErrors.customCode = "Use 6-32 chars with letters, numbers, and optional hyphens";
+      }
     }
 
     // Validate that at least one package type is selected if active
@@ -186,6 +204,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
           formData.cancelledWithinDays.trim().length > 0 ? parseInt(formData.cancelledWithinDays, 10) : undefined;
 
         const createData: CreatePromoLinkPayload = {
+          customCode: formData.useCustomCode ? formData.customCode.trim().toUpperCase() : undefined,
           bonusEntries: formData.bonusEntries,
           expiresAt: formData.expiresAt || null,
           description: formData.description || undefined,
@@ -282,6 +301,71 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Bonus Entries */}
+          {!editingPromoLink && (
+            <FormSection title="Promo Code">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    id="codeModeAuto"
+                    name="codeMode"
+                    checked={!formData.useCustomCode}
+                    onChange={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        useCustomCode: false,
+                        customCode: "",
+                      }))
+                    }
+                    disabled={isSubmitting}
+                    className="w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500"
+                  />
+                  <label htmlFor="codeModeAuto" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Auto-generate code
+                  </label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    id="codeModeCustom"
+                    name="codeMode"
+                    checked={formData.useCustomCode}
+                    onChange={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        useCustomCode: true,
+                      }))
+                    }
+                    disabled={isSubmitting}
+                    className="w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500"
+                  />
+                  <label htmlFor="codeModeCustom" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Use custom code
+                  </label>
+                </div>
+                {formData.useCustomCode && (
+                  <Input
+                    value={formData.customCode}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        customCode: e.target.value.toUpperCase(),
+                      }))
+                    }
+                    placeholder="COMEBACK-2026"
+                    maxLength={32}
+                    error={errors.customCode}
+                    disabled={isSubmitting}
+                  />
+                )}
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Custom codes support 6-32 characters using letters, numbers, and hyphens.
+              </p>
+            </FormSection>
           )}
 
           {/* Bonus Entries */}

@@ -4653,14 +4653,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             activePlan.period !== "one-time" &&
             promoLinkInfo.appliesToMembership && (
               <p
-                className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap"
+                className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap mb-2"
                 style={{
                   color: promoTheme.preferDarkBackground ? "#000000" : "#FFFFFF",
                   backgroundColor: promoTheme.primary,
                   borderColor: promoTheme.preferDarkBackground ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.45)",
                 }}
               >
-                Active promo: Get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join
+                Welcome back - get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join again
               </p>
             )}
           {promoLinkInfo?.isValid &&
@@ -4675,7 +4675,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   borderColor: promoTheme.preferDarkBackground ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.45)",
                 }}
               >
-                Active promo: Get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
+                Welcome back - get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
               </p>
             )}
         </div>
