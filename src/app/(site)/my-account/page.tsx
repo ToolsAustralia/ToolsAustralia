@@ -32,9 +32,9 @@ import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/member
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { hasSeenExplainer } from "@/utils/subscription-explainer-storage";
 import { formatRenewalDate, getFallbackRenewalDate } from "@/utils/dates/month-helpers";
-import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Zap, History } from "lucide-react";
+import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Zap, History, Trophy, ChevronRight, Ticket } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
-import ProductCard from "@/components/ui/ProductCard";
+import MiniDrawCard, { type MiniDrawCardData } from "@/components/features/MiniDrawCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import PackageDetailModal, {
@@ -454,7 +454,7 @@ export default function MyAccountPage() {
 
   const { user } = accountData;
 
-  // Map mini draws to include fields required by ProductCard (must be after user is extracted)
+  // Mini draw data mapping (must be after user is extracted)
   const hasActiveMembership = user?.subscription?.isActive === true;
 
   // Check if user has access to additional packages (subscription OR current draw entries)
@@ -1158,6 +1158,160 @@ export default function MyAccountPage() {
             <PrizeShowcase />
           </div>
 
+          {/* Mini Draw Section */}
+          <div className="relative mb-12">
+            {/* Section Header */}
+            <div className="flex items-center justify-between mb-6 sm:mb-8">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center shadow-lg shadow-[#ee0000]/20">
+                  <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+                    Mini Draws
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                    Win premium tools &amp; gear from $1 per entry
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/mini-draws"
+                className="hidden sm:flex items-center gap-1 text-sm font-semibold text-[#ee0000] hover:text-[#cc0000] transition-colors"
+              >
+                View All
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* Status Banner */}
+            {!miniDrawsLoading && activeMiniDraws.length > 0 && (
+              <div className="mb-6 sm:mb-8">
+                {hasMiniPackEntries ? (
+                  <div className="flex items-center gap-3 sm:gap-4 bg-green-50 border border-green-100 rounded-xl p-3 sm:p-4">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm sm:text-base font-semibold text-green-800">
+                        You&apos;re entered in active mini draws
+                      </p>
+                      <p className="text-xs sm:text-sm text-green-600 mt-0.5">
+                        Mini pack entries count toward mini draws only — membership entries apply to the Major Giveaway.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-xl p-4 sm:p-5 border border-gray-800">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                          <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm sm:text-base font-semibold text-white">
+                            Get your name in the draw
+                          </p>
+                          <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                            Purchase a mini pack to enter — from just $1
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href="/mini-draws"
+                        className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#ee0000] to-[#cc0000] hover:from-[#dd0000] hover:to-[#bb0000] text-white text-sm font-bold py-2.5 px-5 rounded-lg transition-all duration-200 shadow-lg shadow-[#ee0000]/25 flex-shrink-0"
+                      >
+                        Browse Mini Packs
+                        <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Draw Grid */}
+            {miniDrawsLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-2xl shadow-sm overflow-hidden animate-pulse">
+                    <div className="aspect-[4/3] bg-gray-200" />
+                    <div className="p-3 sm:p-4 space-y-2">
+                      <div className="h-3 bg-gray-200 rounded w-16" />
+                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      <div className="h-1.5 bg-gray-200 rounded-full w-full" />
+                      <div className="h-9 bg-gray-200 rounded-full w-full mt-2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : activeMiniDraws.length === 0 ? (
+              <div className="text-center py-12 sm:py-16 bg-gray-50 rounded-2xl border border-gray-100">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+                  <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />
+                </div>
+                <p className="text-base sm:text-lg font-semibold text-gray-700 mb-1">No active mini draws right now</p>
+                <p className="text-sm text-gray-500">Check back soon for new draws!</p>
+              </div>
+            ) : (
+              <>
+                {/* Participant draws header */}
+                {participantMiniDraws.length > 0 && otherMiniDraws.length > 0 && (
+                  <div className="mb-3 sm:mb-4">
+                    <h3 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
+                      <Ticket className="w-4 h-4 text-green-600" />
+                      Your Active Draws
+                    </h3>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+                  {participantMiniDraws.map((miniDraw, i) => (
+                    <MiniDrawCard
+                      key={miniDraw._id}
+                      miniDraw={miniDraw as MiniDrawCardData}
+                      index={i}
+                    />
+                  ))}
+                </div>
+
+                {/* Other draws */}
+                {otherMiniDraws.length > 0 && (
+                  <>
+                    {participantMiniDraws.length > 0 && (
+                      <div className="mt-6 sm:mt-8 mb-3 sm:mb-4">
+                        <h3 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-[#ee0000]" />
+                          {hasMiniPackEntries ? "Enter More Draws" : "Explore Mini Draws"}
+                        </h3>
+                      </div>
+                    )}
+                    <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5 ${participantMiniDraws.length > 0 ? "" : ""}`}>
+                      {otherMiniDraws.map((miniDraw, i) => (
+                        <MiniDrawCard
+                          key={miniDraw._id}
+                          miniDraw={miniDraw as MiniDrawCardData}
+                          index={i}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Mobile: View All link */}
+                <div className="mt-4 sm:hidden text-center">
+                  <Link
+                    href="/mini-draws"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#ee0000]"
+                  >
+                    View All Mini Draws
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Latest Winner Hero Section */}
           <LatestWinnerHero className="mb-12" />
 
@@ -1165,112 +1319,6 @@ export default function MyAccountPage() {
           {!winnersLoading && winners.length > 0 && (
             <WinnerTestimonySection winners={winners} className="mb-12" />
           )}
-
-          {/* Mini Draw Section */}
-          <div className="">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent font-['Poppins'] mb-6">
-                Mini Draw
-              </h2>
-            </div>
-
-            {/* Membership Info Banner */}
-            {!miniDrawsLoading && activeMiniDraws.length > 0 && (
-              <div className="mb-8">
-                {hasMiniPackEntries ? (
-                  // Success Banner - User has purchased mini pack entries
-                  <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border-2 border-gray-700 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-md border-2 border-green-400/30">
-                          <CheckCircle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-base sm:text-xl font-bold text-white mb-1">
-                          You&apos;re Entered!
-                        </h3>
-                        <p className="text-xs sm:text-base text-gray-300">
-                          You have entries in active mini draws from your mini pack purchases. Only purchased mini pack
-                          entries count toward mini draws—membership entries apply to the Major Giveaway only.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  // CTA Banner - User has no mini pack entries yet
-                  <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border-2 border-gray-700 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
-                    <div className="flex items-start gap-3 sm:gap-4 mb-4">
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-red-600 via-red-700 to-red-800 flex items-center justify-center shadow-md border-2 border-red-400/30">
-                          <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-base sm:text-xl font-bold text-white mb-1">Get Your Name in the Draw</h3>
-                        <p className="text-xs sm:text-base text-gray-300">
-                          Purchase a mini pack to enter active mini draws. Only mini pack purchases count toward mini
-                          draw entries—membership applies to the Major Giveaway only.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                      <Link
-                        href="/mini-draws"
-                        className="inline-block flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl text-center"
-                      >
-                        Browse Mini Packs
-                      </Link>
-                      <button
-                        onClick={() => membershipModal.openModalWithPackageSelectionFirst()}
-                        className="flex-1 bg-white border-2 border-blue-600 text-blue-700 hover:bg-blue-50 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
-                      >
-                        Subscribe for Major Giveaway
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {miniDrawsLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent"></div>
-              </div>
-            ) : activeMiniDraws.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-600">No active mini-draws available at the moment.</p>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2">
-                      {hasMiniPackEntries ? "Increase Your Chances of Winning" : "Explore Mini Draws"}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {hasMiniPackEntries
-                        ? "Purchase more mini packs to boost your odds!"
-                        : "Purchase a mini pack to enter these draws"}
-                    </p>
-                  </div>
-                  <Link
-                    href="/mini-draws"
-                    className="text-red-600 hover:text-red-700 font-medium flex items-center gap-1 text-sm sm:text-base"
-                  >
-                    <span className="hidden sm:inline">View All Mini Draws</span>
-                    <span className="sm:hidden">View All</span>
-                    <ArrowLeft className="w-4 h-4 rotate-180" />
-                  </Link>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                  {activeMiniDraws.map((miniDraw) => (
-                    <ProductCard key={miniDraw._id} product={miniDraw} viewMode="grid" />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Partner Discounts Section */}

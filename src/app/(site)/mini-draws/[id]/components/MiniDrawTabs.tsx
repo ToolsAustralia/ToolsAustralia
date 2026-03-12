@@ -2,8 +2,18 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Trophy, FileText, CheckCircle, Sparkles, Crown } from "lucide-react";
-import { getBrandMeta } from "@/utils/brand-utils";
+import {
+  Trophy,
+  FileText,
+  CheckCircle,
+  Sparkles,
+  Crown,
+  Shield,
+  Clock,
+  Users,
+  ChevronRight,
+} from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 
 interface WinnerDisplay {
@@ -37,266 +47,332 @@ interface MiniDrawTabsProps {
   };
 }
 
-export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
-  const [activeTab, setActiveTab] = useState<"details" | "winners" | "rules">("details");
+const tabs = [
+  { id: "winners" as const, label: "Recent Winners", icon: Crown },
+  { id: "rules" as const, label: "Draw Rules", icon: Shield },
+] as const;
 
-  const minimumEntries = miniDraw.minimumEntries ?? 0;
-  const totalEntries = miniDraw.totalEntries ?? 0;
-  const computedRemaining = Math.max(minimumEntries - totalEntries, 0);
-  const entriesRemaining = miniDraw.entriesRemaining ?? computedRemaining;
+type TabId = (typeof tabs)[number]["id"];
+
+export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
+  const [activeTab, setActiveTab] = useState<TabId>("winners");
+  const prefersReduced = useReducedMotion();
+
   const latestWinner = miniDraw.latestWinner;
   const winnerHistory = miniDraw.winnerHistory ?? [];
-  const isCompleted = miniDraw.status === "completed";
-  const isCancelled = miniDraw.status === "cancelled";
-  const isSoldOut = !isCancelled && entriesRemaining <= 0;
-  const _brandLabel = getBrandMeta(miniDraw.brandId)?.name ?? "Mini Draw";
+
+  const contentVariants = {
+    enter: prefersReduced ? {} : { opacity: 0, y: 12 },
+    center: { opacity: 1, y: 0 },
+    exit: prefersReduced ? {} : { opacity: 0, y: -12 },
+  };
+
+  const rules = [
+    {
+      icon: Users,
+      title: "Eligibility",
+      desc: "Must be 18+ years old and an Australian resident",
+    },
+    {
+      icon: Trophy,
+      title: "Entry Methods",
+      desc: "Purchase entry packages (membership required)",
+    },
+    {
+      icon: Sparkles,
+      title: "Winner Selection",
+      desc: "Random selection using a secure random number generator",
+    },
+    {
+      icon: Clock,
+      title: "Prize Claim",
+      desc: "Winner has 30 days to claim prize after notification",
+    },
+  ];
+
+  const flowSteps = [
+    {
+      label: "Open",
+      text: "Once the draw is live, entries can be purchased until capacity is reached.",
+    },
+    {
+      label: "Capacity Reached",
+      text: "As soon as we hit the minimum required entries, the draw closes to lock in the prize.",
+    },
+    {
+      label: "Winner Selection",
+      text: "Winners are drawn shortly after closing using our verified random selection process.",
+    },
+  ];
 
   return (
-    <div className="mt-8 sm:mt-16 bg-gray-50 w-full">
-      <div className="w-full px-2 sm:px-4 lg:px-8">
-        <div className="border-b border-gray-200">
-          <nav className="flex justify-between w-full">
-            <button
-              onClick={() => setActiveTab("details")}
-              className={`flex-1 py-2 sm:py-4 px-2 sm:px-4 border-b-2 font-medium transition-colors text-center text-xs sm:text-base ${
-                activeTab === "details"
-                  ? "border-[#ee0000] text-[#ee0000]"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-              suppressHydrationWarning
-            >
-              Prize Details
-            </button>
-            <button
-              onClick={() => setActiveTab("winners")}
-              className={`flex-1 py-2 sm:py-4 px-2 sm:px-4 border-b-2 font-medium transition-colors text-center text-xs sm:text-base ${
-                activeTab === "winners"
-                  ? "border-[#ee0000] text-[#ee0000]"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-              suppressHydrationWarning
-            >
-              Recent Winners
-            </button>
-            <button
-              onClick={() => setActiveTab("rules")}
-              className={`flex-1 py-2 sm:py-4 px-2 sm:px-4 border-b-2 font-medium transition-colors text-center text-xs sm:text-base ${
-                activeTab === "rules"
-                  ? "border-[#ee0000] text-[#ee0000]"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-              suppressHydrationWarning
-            >
-              Draw Rules
-            </button>
-          </nav>
-        </div>
-        <div className="py-4 sm:py-8">
-          {/* Prize Details Tab */}
-          {activeTab === "details" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
-              <div>
-                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4 flex items-center gap-1 sm:gap-2">
-                  <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-[#ee0000]" />
-                  Prize Information
-                </h3>
-                <dl className="space-y-2 sm:space-y-3">
-                  <div className="flex justify-between">
-                    <dt className="text-xs sm:text-sm text-gray-600">Prize Name</dt>
-                    <dd className="text-xs sm:text-sm font-medium text-gray-900">{miniDraw.prize.name}</dd>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <dt className="text-xs sm:text-sm text-gray-600">Entries Sold</dt>
-                    <dd className="text-xs sm:text-sm font-medium text-gray-900">
-                      {totalEntries.toLocaleString()} / {minimumEntries.toLocaleString()}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-xs sm:text-sm text-gray-600">
-                      {isSoldOut || isCompleted ? "Capacity Status" : "Entries Remaining"}
-                    </dt>
-                    <dd className="text-xs sm:text-sm font-medium text-gray-900">
-                      {isSoldOut || isCompleted ? "Closed" : entriesRemaining.toLocaleString()}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-              <div>
-                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">Prize Description</h3>
-                <div className="prose prose-sm sm:prose-base max-w-none">
-                  <div
-                    className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-4"
-                    dangerouslySetInnerHTML={{ __html: miniDraw.prize.description }}
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-100">
+        <nav className="flex">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex-1 py-3.5 sm:py-4 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium transition-colors ${
+                  isActive
+                    ? "text-[#ee0000]"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+                suppressHydrationWarning
+              >
+                <Icon
+                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors ${
+                    isActive ? "text-[#ee0000]" : "text-gray-400"
+                  }`}
+                />
+                <span>{tab.label}</span>
+                {isActive && (
+                  <motion.div
+                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-[#ee0000] to-[#cc0000]"
+                    layoutId="tab-indicator"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
-                </div>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      <div className="p-4 sm:p-6 lg:p-8">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            variants={contentVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: prefersReduced ? 0 : 0.2 }}
+          >
+            {/* Winners Tab */}
+            {activeTab === "winners" && (
+              <div className="space-y-5 sm:space-y-6">
+                {winnerHistory.length > 0 || latestWinner ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[latestWinner, ...winnerHistory]
+                      .filter(
+                        (winner): winner is NonNullable<typeof winner> =>
+                          Boolean(winner)
+                      )
+                      .slice(0, 4)
+                      .map((winner, index) => {
+                        const winnerDisplayName = formatWinnerName(
+                          winner.winnerFirstName,
+                          winner.winnerLastName
+                        );
+                        const selectedDateText = new Date(
+                          winner.selectedDate
+                        ).toLocaleDateString("en-AU", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        });
+                        const displayImage =
+                          winner.imageUrl ||
+                          miniDraw.prize.images?.[0] ||
+                          "/images/placeholders/prize-placeholder.png";
+                        const isLatest = index === 0;
+
+                        return (
+                          <motion.div
+                            key={`${winner._id ?? winner.selectedDate}-${index}`}
+                            className="relative rounded-xl overflow-hidden border border-gray-100 shadow-sm group"
+                            initial={
+                              prefersReduced
+                                ? {}
+                                : { opacity: 0, scale: 0.97 }
+                            }
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: index * 0.1, duration: 0.4 }}
+                          >
+                            <div className="relative aspect-[4/5]">
+                              <Image
+                                src={displayImage}
+                                alt={`Winner ${winnerDisplayName}`}
+                                fill
+                                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                                sizes="(max-width: 640px) 100vw, 50vw"
+                                priority={index === 0}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+
+                              {/* Latest winner badge */}
+                              {isLatest && (
+                                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-gradient-to-r from-[#ee0000] to-[#cc0000] text-white text-[10px] sm:text-xs font-semibold px-2.5 py-1 rounded-full shadow-lg">
+                                  <Crown className="w-3 h-3" />
+                                  Latest Winner
+                                </div>
+                              )}
+
+                              {!winner.imageUrl && (
+                                <span className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white/90 text-[10px] sm:text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  Photo coming soon
+                                </span>
+                              )}
+
+                              <div className="absolute bottom-0 left-0 right-0 p-4">
+                                <p className="text-base sm:text-lg font-bold text-white drop-shadow-md">
+                                  {winnerDisplayName}
+                                </p>
+                                <p className="text-xs sm:text-sm text-white/80 mt-0.5">
+                                  Selected {selectedDateText}
+                                </p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 sm:py-16">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#ee0000]/10 to-[#cc0000]/5 flex items-center justify-center">
+                      <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-[#ee0000]" />
+                    </div>
+                    <h4 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+                      Are You Our Next Lucky Winner?
+                    </h4>
+                    <p className="text-sm sm:text-base text-gray-500 max-w-sm mx-auto leading-relaxed">
+                      Secure your entries now and you could be the next name on
+                      our winners board.
+                    </p>
+                    <div className="mt-6 inline-flex items-center gap-1.5 text-[#ee0000] text-sm font-semibold">
+                      <span>Get your entries</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Winners Tab */}
-          {activeTab === "winners" && (
-            <div className="space-y-4 sm:space-y-6">
-              <h3 className="text-sm sm:text-lg font-semibold text-gray-900 flex items-center gap-1 sm:gap-2">
-                <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-[#ee0000]" />
-                Recent Winners
-              </h3>
-
-              {winnerHistory.length > 0 || latestWinner ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[latestWinner, ...winnerHistory]
-                    .filter((winner): winner is NonNullable<typeof winner> => Boolean(winner))
-                    .slice(0, 4)
-                    .map((winner, index) => {
-                      const winnerDisplayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-                      const selectedDateText = new Date(winner.selectedDate).toLocaleDateString("en-AU", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      });
-                      const displayImage = winner.imageUrl || miniDraw.prize.images?.[0] || "/images/placeholders/prize-placeholder.png";
-                      return (
-                        <div
-                          key={`${winner._id ?? winner.selectedDate}-${index}`}
-                          className="relative aspect-[4/5] sm:aspect-[4/5] rounded-xl overflow-hidden border border-gray-200 shadow-sm"
-                        >
-                          <Image
-                            src={displayImage}
-                            alt={`Winner ${winnerDisplayName}`}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 640px) 100vw, 50vw"
-                            priority={index === 0}
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                          <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-0.5">
-                            <p className="text-base sm:text-lg font-semibold text-white drop-shadow-md">
-                              {winnerDisplayName}
-                            </p>
-                            <p className="text-xs sm:text-sm text-white/90">
-                              Selected {selectedDateText}
-                            </p>
+            {/* Draw Rules Tab */}
+            {activeTab === "rules" && (
+              <div className="space-y-6 sm:space-y-8">
+                {/* Rules grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  {rules.map((rule, i) => {
+                    const RuleIcon = rule.icon;
+                    return (
+                      <motion.div
+                        key={i}
+                        className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-gray-50/80 border border-gray-100 hover:border-gray-200 transition-colors"
+                        initial={prefersReduced ? {} : { opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.08, duration: 0.3 }}
+                      >
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white border border-gray-100 flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <RuleIcon className="w-4 h-4 text-[#ee0000]" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                            {rule.title}
                           </div>
-                          {!winner.imageUrl && (
-                            <span className="absolute top-3 right-3 bg-black/60 text-white/90 text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
-                              <Sparkles className="w-3 h-3" />
-                              Photo coming soon
+                          <div className="text-xs sm:text-sm text-gray-500 mt-0.5 leading-relaxed">
+                            {rule.desc}
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* Draw Flow */}
+                <div className="bg-gradient-to-br from-gray-50 to-gray-50/50 rounded-xl p-4 sm:p-6 border border-gray-100">
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#ee0000]" />
+                    How the Draw Works
+                  </h3>
+                  <div className="space-y-0">
+                    {flowSteps.map((step, i) => (
+                      <div key={i} className="flex gap-3 sm:gap-4">
+                        {/* Timeline */}
+                        <div className="flex flex-col items-center">
+                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white border-2 border-[#ee0000]/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] sm:text-xs font-bold text-[#ee0000]">
+                              {i + 1}
                             </span>
+                          </div>
+                          {i < flowSteps.length - 1 && (
+                            <div className="w-px h-full bg-gradient-to-b from-[#ee0000]/20 to-transparent min-h-[24px]" />
                           )}
                         </div>
-                      );
-                    })}
-                </div>
-              ) : (
-                <div className="text-center py-10 sm:py-14 bg-white rounded-xl border border-gray-200 shadow-sm">
-                  <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-[#ee0000] mx-auto mb-4" />
-                  <h4 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
-                    Are You Our Next Lucky Winner?
-                  </h4>
-                  <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto">
-                    Secure your entries now and you could be the next name on our winners board. Every entry gets you
-                    closer to the prize.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+                        <div className="pb-4 sm:pb-5 min-w-0">
+                          <span className="text-xs sm:text-sm font-semibold text-gray-900">
+                            {step.label}
+                          </span>
+                          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 leading-relaxed">
+                            {step.text}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-          {/* Draw Rules Tab */}
-          {activeTab === "rules" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
-              <div className="space-y-4 sm:space-y-6">
-                <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border">
-                  <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4 flex items-center gap-1 sm:gap-2">
-                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-[#ee0000]" />
-                    Mini Draw Rules & Terms
-                  </h3>
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="flex items-start gap-2 sm:gap-3">
-                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">Eligibility</div>
-                        <div className="text-xs sm:text-sm text-gray-600">
-                          Must be 18+ years old and Australian resident
-                        </div>
+                  {latestWinner && (
+                    <div className="mt-2 pt-4 border-t border-gray-200/60 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center flex-shrink-0">
+                        <Crown className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="text-xs sm:text-sm text-gray-600">
+                        <span className="font-semibold text-gray-900">
+                          Latest Winner:
+                        </span>{" "}
+                        {formatWinnerName(
+                          latestWinner.winnerFirstName,
+                          latestWinner.winnerLastName
+                        )}{" "}
+                        — selected{" "}
+                        {new Date(latestWinner.selectedDate).toLocaleDateString(
+                          "en-AU",
+                          { month: "short", day: "numeric", year: "numeric" }
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-start gap-2 sm:gap-3">
-                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">Entry Methods</div>
-                        <div className="text-xs sm:text-sm text-gray-600">
-                          Purchase entry packages (membership required)
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 sm:gap-3">
-                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">Winner Selection</div>
-                        <div className="text-xs sm:text-sm text-gray-600">
-                          Random selection using secure random number generator
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 sm:gap-3">
-                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">Prize Claim</div>
-                        <div className="text-xs sm:text-sm text-gray-600">
-                          Winner has 30 days to claim prize after notification
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              </div>
-              <div className="space-y-4 sm:space-y-6">
-                <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border">
-                  <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">Mini Draw Flow</h3>
-                  <div className="space-y-3 sm:space-y-4 text-xs sm:text-sm text-gray-600 leading-relaxed">
-                    <p>
-                      <span className="font-semibold text-gray-900">Open:</span> Once the draw is live, entries can be
-                      purchased until the capacity is reached.
-                    </p>
-                    <p>
-                      <span className="font-semibold text-gray-900">Capacity Reached:</span> As soon as we hit the
-                      minimum required entries, we close the draw to lock in the prize.
-                    </p>
-                    <p>
-                      <span className="font-semibold text-gray-900">Winner Selection:</span> Winners are drawn shortly
-                      after closing using our verified random selection process.
-                    </p>
-                    {latestWinner && (
-                      <p>
-                        <span className="font-semibold text-gray-900">Latest Winner:</span>{" "}
-                        {formatWinnerName(latestWinner.winnerFirstName, latestWinner.winnerLastName)} selected on{" "}
-                        {new Date(latestWinner.selectedDate).toLocaleDateString()}.
-                      </p>
-                    )}
-                  </div>
-                </div>
+
+                {/* Winner Spotlight */}
                 {latestWinner?.imageUrl && (
-                  <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border flex flex-col items-center text-center">
-                    <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-3">Winner Spotlight</h3>
-                    <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-xl overflow-hidden border border-gray-200">
+                  <div className="flex items-center gap-4 sm:gap-5 p-4 sm:p-5 rounded-xl bg-gradient-to-r from-gray-50 to-white border border-gray-100">
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
                       <Image
                         src={latestWinner.imageUrl}
                         alt="Winner"
                         fill
                         className="object-cover"
-                        sizes="(max-width: 640px) 128px, 160px"
+                        sizes="(max-width: 640px) 80px, 96px"
                       />
                     </div>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-3">
-                      {formatWinnerName(latestWinner.winnerFirstName, latestWinner.winnerLastName)}
-                    </p>
+                    <div>
+                      <div className="text-[10px] sm:text-xs font-semibold text-[#ee0000] uppercase tracking-wider mb-1">
+                        Winner Spotlight
+                      </div>
+                      <p className="text-sm sm:text-base font-bold text-gray-900">
+                        {formatWinnerName(
+                          latestWinner.winnerFirstName,
+                          latestWinner.winnerLastName
+                        )}
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                        Won {miniDraw.prize.name}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
