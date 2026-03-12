@@ -6,7 +6,6 @@ import { ModalContainer, ModalHeader, ModalContent, Input, Textarea, Button, Dat
 import { useCreatePromoLink, useUpdatePromoLink, usePromoLinks } from "@/hooks/queries/usePromoQueries";
 import type { PromoLink, CreatePromoLinkPayload, UpdatePromoLinkPayload } from "@/types/admin";
 import {
-  convertLocalToUTC,
   convertUTCToLocal,
   createAESTDateAsUTC,
   resolveLocalDisplayTimeZone,
@@ -86,20 +85,11 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
         setGeneratedUrl(editingPromoLink.promoUrl);
       } else {
         // Create mode: set defaults
-        const now = new Date();
-        const localTimeZone = resolveLocalDisplayTimeZone();
-
-        // Default expiration: 30 days from now at 11:59 PM in user's local timezone
-        const expirationLocal = new Date(now);
-        expirationLocal.setDate(expirationLocal.getDate() + 30);
-        expirationLocal.setHours(23, 59, 59, 999);
-        const expirationUTC = convertLocalToUTC(expirationLocal, localTimeZone);
-
         setFormData({
           useCustomCode: false,
           customCode: "",
           bonusEntries: 100,
-          expiresAt: expirationUTC.toISOString(),
+          expiresAt: "",
           description: "",
           isActive: true,
           appliesToMembership: false,
@@ -577,7 +567,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
               disabled={isSubmitting}
             />
             <p className="mt-1 text-sm text-gray-500">
-              Optional: Set an expiration date for this promo link. Leave empty for no expiration.
+              Default is no expiration. Set a date only if you want this promo link to expire.
             </p>
           </FormSection>
 
