@@ -7,14 +7,14 @@ import mongoose, { Document, Schema } from "mongoose";
  * when users make purchases. Similar to affiliate/referral codes but for bonus entries.
  *
  * Features:
- * - Auto-generated unique codes (format: BONUS + 6 alphanumeric)
+ * - Auto-generated or admin-defined unique codes
  * - Expiration dates (optional)
  * - One-time use per user (tracked in usedBy array)
  * - Fixed bonus entries amount (default: 100)
  * - Package type selection (membership and/or one-time packages)
  */
 export interface IPromoLink extends Document {
-  code: string; // Unique promo code (e.g., "BONUS1A2B3C")
+  code: string; // Unique promo code (e.g., "BONUS1A2B3C" or "COMEBACK-2026")
   bonusEntries: number; // Number of bonus entries to grant (default: 100)
   expiresAt?: Date; // Optional expiration date
   isActive: boolean; // Whether the promo link is active
@@ -46,7 +46,10 @@ const PromoLinkSchema = new Schema<IPromoLink>(
       unique: true,
       uppercase: true,
       trim: true,
-      match: [/^BONUS[A-Z0-9]{6}$/, "Promo code must be in format BONUS followed by 6 alphanumeric characters"],
+      match: [
+        /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/,
+        "Promo code must be 6-32 chars and contain only A-Z, 0-9, and optional hyphen separators",
+      ],
     },
     bonusEntries: {
       type: Number,

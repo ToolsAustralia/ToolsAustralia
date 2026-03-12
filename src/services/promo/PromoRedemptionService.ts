@@ -31,7 +31,7 @@ interface UserSnapshot {
   };
 }
 
-const PROMO_CODE_REGEX = /^BONUS[A-Z0-9]{6}$/;
+const PROMO_CODE_REGEX = /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
 
 function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
