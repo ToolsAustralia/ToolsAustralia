@@ -238,10 +238,13 @@ export default function RevenueDetailModal({
     }
   };
 
+  const escapeCSVCell = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
+
   const handleExportCSV = () => {
     if (!revenueData) return;
 
-    // Create CSV content
+    // Create CSV content (UTF-8 BOM for Excel/Windows compatibility)
+    const BOM = "\uFEFF";
     const headers = ["Name", "Email", "Mobile", "Purchase Count", "Total Contributed", "First Purchase", "Last Purchase"];
     const rows = filteredAndSortedUsers.map((user) => {
       const purchases = user.purchases.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -251,17 +254,17 @@ export default function RevenueDetailModal({
         : "";
 
       return [
-        `"${user.userInfo.firstName} ${user.userInfo.lastName}"`,
-        user.userInfo.email,
-        user.userInfo.mobile || "",
-        user.purchaseCount.toString(),
-        user.totalContributed.toFixed(2),
-        firstPurchase,
-        lastPurchase,
+        escapeCSVCell(`${user.userInfo.firstName} ${user.userInfo.lastName}`),
+        escapeCSVCell(user.userInfo.email),
+        escapeCSVCell(user.userInfo.mobile || ""),
+        escapeCSVCell(user.purchaseCount.toString()),
+        escapeCSVCell(user.totalContributed.toFixed(2)),
+        escapeCSVCell(firstPurchase),
+        escapeCSVCell(lastPurchase),
       ];
     });
 
-    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const csvContent = BOM + [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -296,9 +299,9 @@ export default function RevenueDetailModal({
       ];
     });
 
-    // Excel-compatible format: UTF-8 BOM + tab-separated values
+    // Excel-compatible format: UTF-8 BOM + tab-separated values + CRLF
     const BOM = "\uFEFF";
-    const excelContent = BOM + [headers.join("\t"), ...rows.map((row) => row.join("\t"))].join("\n");
+    const excelContent = BOM + [headers.join("\t"), ...rows.map((row) => row.join("\t"))].join("\r\n");
     const blob = new Blob([excelContent], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
