@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import PromoLink, { IPromoLink } from "@/models/PromoLink";
-import { PromoEligibilityService, type PromoEligibilityReason } from "./PromoEligibilityService";
+import { PromoEligibilityService } from "./PromoEligibilityService";
 
 export type PromoRedemptionReason =
   | "redeemed"
@@ -75,7 +75,7 @@ export class PromoRedemptionService {
     if (!eligibility.eligible) {
       return {
         redeemed: false,
-        reason: eligibility.reason as PromoEligibilityReason,
+        reason: eligibility.reason,
         bonusEntries: 0,
       };
     }

@@ -7,10 +7,15 @@ export type PromoEligibilityReason =
   | "missing_cancelled_at"
   | "cancelled_window_exceeded";
 
-export interface PromoEligibilityResult {
-  eligible: boolean;
-  reason: PromoEligibilityReason;
-}
+export type PromoEligibilityResult =
+  | {
+      eligible: true;
+      reason: "eligible";
+    }
+  | {
+      eligible: false;
+      reason: Exclude<PromoEligibilityReason, "eligible">;
+    };
 
 interface UserSubscriptionSnapshot {
   cancelledAt?: Date;
