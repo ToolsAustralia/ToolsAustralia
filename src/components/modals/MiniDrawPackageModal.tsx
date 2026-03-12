@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { MiniDrawPackage } from "@/data/miniDrawPackages";
 
@@ -13,11 +14,6 @@ interface MiniDrawPackageModalProps {
   disabled?: boolean;
 }
 
-/**
- * MiniDrawPackageModal Component
- * Modal component styled like tooltip (dark background, gold/yellow accents)
- * Shows package details with purchase button
- */
 const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
   isOpen,
   onClose,
@@ -28,24 +24,17 @@ const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
       />
 
-      {/* Modal Content - styled like tooltip */}
+      {/* Modal Content */}
       <div
-        className="relative bg-gray-900 text-white text-sm sm:text-base rounded-xl p-4 sm:p-6 shadow-2xl w-[360px] sm:w-96 max-w-[calc(100vw-2rem)] z-[101]"
+        className="relative bg-gray-900 text-white text-sm sm:text-base rounded-xl p-4 sm:p-6 shadow-2xl w-[360px] sm:w-96 max-w-[calc(100vw-2rem)]"
         style={{
           maxHeight: "calc(100vh - 3rem)",
           minHeight: "280px",
@@ -117,6 +106,9 @@ const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(modalContent, document.body);
 };
 
 export default MiniDrawPackageModal;
