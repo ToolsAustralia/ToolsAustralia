@@ -530,121 +530,146 @@ export default function MiniDrawPackages({
     }
   };
 
+  const isExceedsCapacity = (entries: number) =>
+    entriesRemaining !== undefined && entries > entriesRemaining;
+
   return (
-    <div className="bg-white rounded-xl shadow-lg p-2 sm:p-4">
-      <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-4">
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <Package className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-red-600" />
-          <h3 className="text-sm sm:text-lg font-bold text-gray-900">Purchase Entries</h3>
+          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center">
+            <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+          </div>
+          <h3 className="text-sm sm:text-base font-bold text-gray-900">Choose Your Pack</h3>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
-          <span className="text-gray-600">Your Entries:</span>
-          <span className="font-semibold text-[#ee0000]">
-            {calculatedUserEntryCount.toLocaleString()} {calculatedUserEntryCount === 1 ? "entry" : "entries"}
-          </span>
-        </div>
+        {calculatedUserEntryCount > 0 && (
+          <div className="flex items-center gap-1 bg-green-50 border border-green-100 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1">
+            <span className="text-[10px] sm:text-xs font-bold text-green-700">
+              {calculatedUserEntryCount.toLocaleString()} {calculatedUserEntryCount === 1 ? "entry" : "entries"}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Remaining / Sold Out */}
       {entriesRemaining !== undefined && (
         <div
-          className={`mb-2 sm:mb-4 text-[10px] sm:text-sm font-semibold ${
-            isSoldOut ? "text-red-600" : "text-gray-700"
-          } text-center`}
+          className={`mb-3 sm:mb-4 text-center text-[10px] sm:text-xs font-medium px-3 py-1.5 rounded-lg ${
+            isSoldOut
+              ? "bg-red-50 text-red-600 border border-red-100"
+              : "bg-gray-50 text-gray-600 border border-gray-100"
+          }`}
         >
-          {isSoldOut ? "Sold out — no more entries available." : `Only ${entriesRemaining} entries remaining.`}
+          {isSoldOut ? "Sold out — no more entries available." : `Only ${entriesRemaining.toLocaleString()} entries remaining`}
         </div>
       )}
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
-        {miniDrawPackages.map((pkg) => (
-          <div key={pkg._id} className="relative group" data-package-id={pkg._id}>
-            {/* Compact Button with Info Icon */}
-            <div className="relative z-0">
-              <button
-                onMouseEnter={() => {
-                  // On desktop: hover shows quick tooltip
-                  setHoveredPackageId(pkg._id);
-                }}
-                onMouseLeave={() => {
-                  // On desktop: hide tooltip when mouse leaves (but not if modal is open)
-                  if (selectedPackageId !== pkg._id) {
-                    setHoveredPackageId(null);
-                  }
-                }}
-                onClick={() => {
-                  // On click (desktop & mobile): open modal
-                  setSelectedPackageId(pkg._id);
-                }}
-                disabled={
-                  purchasingPackageId === pkg._id ||
-                  isSoldOut ||
-                  (entriesRemaining !== undefined && pkg.entries > entriesRemaining)
-                }
-                className="w-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-black py-2 sm:py-3 px-2 sm:px-3 rounded-md sm:rounded-lg font-bold text-xs sm:text-sm hover:from-yellow-500 hover:via-orange-500 hover:to-red-500 transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                suppressHydrationWarning
-              >
-                {purchasingPackageId === pkg._id ? (
-                  <div className="flex items-center justify-center gap-1">
-                    <div className="animate-spin rounded-full h-2.5 w-2.5 sm:h-4 sm:w-4 border-2 border-black border-t-transparent"></div>
-                    <span className="text-[9px] sm:text-xs">Processing...</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                    <div className="text-xs sm:text-base font-semibold leading-tight">${pkg.price}</div>
-                    <div className="text-[10px] sm:text-sm font-medium opacity-90 leading-tight">
-                      {pkg.entries} Entries
-                    </div>
-                    {entriesRemaining !== undefined && pkg.entries > entriesRemaining && (
-                      <span className="text-[9px] sm:text-xs font-semibold text-red-700 leading-tight">
-                        Only {entriesRemaining} left
-                      </span>
+
+      {/* Package Grid */}
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+        {miniDrawPackages.map((pkg) => {
+          const disabled =
+            purchasingPackageId === pkg._id || isSoldOut || isExceedsCapacity(pkg.entries);
+          const isProcessing = purchasingPackageId === pkg._id;
+          const isHighValue = pkg.price >= 100;
+
+          return (
+            <div key={pkg._id} className="relative" data-package-id={pkg._id}>
+              <div className="relative">
+                <button
+                  onMouseEnter={() => setHoveredPackageId(pkg._id)}
+                  onMouseLeave={() => {
+                    if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
+                  }}
+                  onClick={() => setSelectedPackageId(pkg._id)}
+                  disabled={disabled}
+                  className={`
+                    w-full relative overflow-hidden rounded-lg sm:rounded-xl transition-all duration-300
+                    ${disabled
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:scale-105 hover:shadow-lg active:scale-[0.97]"
+                    }
+                    ${isHighValue
+                      ? "bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-600 shadow-md shadow-amber-500/20"
+                      : "bg-gradient-to-br from-yellow-300 via-yellow-400 to-amber-500 shadow-sm shadow-yellow-400/15"
+                    }
+                  `}
+                  suppressHydrationWarning
+                >
+                  <div className="py-2 sm:py-3 px-1 sm:px-2">
+                    {isProcessing ? (
+                      <div className="flex flex-col items-center justify-center gap-1 py-1">
+                        <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-black/20 border-t-black" />
+                        <span className="text-[8px] sm:text-[10px] text-black/60 font-medium">
+                          Processing
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                        {/* Price */}
+                        <span className="text-sm sm:text-lg font-extrabold leading-none tracking-tight text-black">
+                          ${pkg.price}
+                        </span>
+
+                        {/* Entries */}
+                        <span className="text-[9px] sm:text-xs font-bold leading-tight text-black/70">
+                          {pkg.entries} {pkg.entries === 1 ? "Entry" : "Entries"}
+                        </span>
+
+                        {/* Capacity warning */}
+                        {isExceedsCapacity(pkg.entries) && (
+                          <span className="text-[8px] sm:text-[10px] font-bold text-red-800 leading-tight mt-0.5">
+                            {entriesRemaining} left
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </button>
 
-              {/* Info Icon Button */}
-              <button
-                onMouseEnter={() => {
-                  // On desktop: hover shows quick tooltip
-                  setHoveredPackageId(pkg._id);
-                }}
-                onMouseLeave={() => {
-                  // On desktop: hide tooltip when mouse leaves (but not if modal is open)
-                  if (selectedPackageId !== pkg._id) {
-                    setHoveredPackageId(null);
-                  }
-                }}
-                className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 w-4 h-4 sm:w-5 sm:h-5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110 z-20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Open modal on click
-                  setSelectedPackageId(pkg._id);
-                }}
-                suppressHydrationWarning
-              >
-                <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[10px] sm:text-sm" />
-              </button>
-
-              {/* Small hover tooltip - appears on hover for quick info (desktop only) */}
-              {hoveredPackageId === pkg._id && selectedPackageId !== pkg._id && (
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 w-[200px] sm:w-64 bg-gray-900 text-white text-xs sm:text-sm rounded-lg p-2 sm:p-3 shadow-xl pointer-events-none">
-                  <div className="font-semibold text-yellow-400 mb-1">{pkg.name}</div>
-                  <div className="text-gray-300">
-                    ${pkg.price} • {pkg.entries} Entries
-                  </div>
-                  {pkg.partnerDiscountDays > 0 && (
-                    <div className="text-green-400 text-[10px] sm:text-xs mt-1">
-                      {pkg.partnerDiscountDays >= 1
-                        ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"} discounts`
-                        : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} discounts`}
-                    </div>
+                  {/* Shine overlay for high-value */}
+                  {isHighValue && !disabled && (
+                    <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 pointer-events-none" />
                   )}
-                  {/* Arrow pointing down */}
-                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
-                </div>
-              )}
+                </button>
+
+                {/* Info dot */}
+                <button
+                  onMouseEnter={() => setHoveredPackageId(pkg._id)}
+                  onMouseLeave={() => {
+                    if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
+                  }}
+                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full flex items-center justify-center shadow-md transition-all duration-200 hover:scale-110 z-20 bg-[#ee0000] text-white hover:bg-[#cc0000]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedPackageId(pkg._id);
+                  }}
+                  suppressHydrationWarning
+                >
+                  <Info className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+                </button>
+
+                {/* Hover tooltip (desktop) */}
+                {hoveredPackageId === pkg._id && selectedPackageId !== pkg._id && (
+                  <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 w-56 bg-gray-900 text-white text-sm rounded-xl p-3 shadow-2xl pointer-events-none">
+                    <div className="font-bold text-yellow-400 mb-1">{pkg.name}</div>
+                    <div className="text-gray-300 text-xs">
+                      ${pkg.price} &middot; {pkg.entries} Entries
+                    </div>
+                    {pkg.partnerDiscountDays > 0 && (
+                      <div className="text-green-400 text-xs mt-1.5 flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-green-400 inline-block" />
+                        {pkg.partnerDiscountDays >= 1
+                          ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"} partner discounts`
+                          : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} partner discounts`}
+                      </div>
+                    )}
+                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Package Details Modal */}
