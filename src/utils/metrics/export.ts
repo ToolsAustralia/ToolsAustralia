@@ -49,11 +49,15 @@ export function exportDailyMetricsToCSV(
     metric.cpc.toFixed(2),
   ]);
 
-  // Combine headers and rows
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) => row.join(",")),
-  ].join("\n");
+  // Combine headers and rows (UTF-8 BOM + proper escaping for Excel/Windows)
+  const escapeCSVCell = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
+  const BOM = "\uFEFF";
+  const csvContent =
+    BOM +
+    [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => escapeCSVCell(String(cell))).join(",")),
+    ].join("\r\n");
 
   // Create blob and download
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
