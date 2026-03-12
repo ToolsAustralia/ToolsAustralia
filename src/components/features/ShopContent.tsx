@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductFilters from "@/components/features/ProductFilters";
 import MetallicButton from "@/components/ui/MetallicButton";
-import { Grid, List, Filter, X, Search, Clock } from "lucide-react";
+import { Grid, List, Filter, X, Search, Clock, ArrowUpDown } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
 import { SectionContainer } from "@/components/ui";
+import Dropdown from "@/components/modals/ui/Dropdown";
 
 // Filter state interface
 interface FilterState {
@@ -21,12 +22,12 @@ interface FilterState {
 
 // Sort options - Updated to match API
 const sortOptions = [
-  { value: "createdAt-desc", label: "Newest" },
+  { value: "createdAt-desc", label: "Newest Arrivals" },
   { value: "createdAt-asc", label: "Oldest" },
   { value: "price-asc", label: "Price: Low to High" },
   { value: "price-desc", label: "Price: High to Low" },
-  { value: "rating-desc", label: "Best Rating" },
-  { value: "name-asc", label: "Name: A to Z" },
+  { value: "rating-desc", label: "Top Rated" },
+  { value: "name-asc", label: "Name (A-Z)" },
 ];
 
 interface ShopContentProps {
@@ -144,18 +145,38 @@ export default function ShopContent({
     setCurrentPage(1); // Reset to first page when sort changes
   };
 
+  const handleClearAll = () => {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setFilters({
+      category: [],
+      priceRange: [0, 500],
+      brands: defaultBrand ? [defaultBrand] : [],
+      styles: [],
+    });
+    setSortBy("createdAt-desc");
+    setCurrentPage(1);
+  };
+
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const activeFilterCount =
+    filters.category.length +
+    filters.brands.length +
+    filters.styles.length +
+    (filters.priceRange[0] > 0 || filters.priceRange[1] < 500 ? 1 : 0);
+  const hasControlsApplied = activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== "createdAt-desc";
+
   return (
     <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters - Desktop */}
         <div className="hidden lg:block w-80 flex-shrink-0">
-          <ProductFilters onFilterChange={handleFilterChange} isMobile={false} />
+          <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile={false} />
         </div>
 
         {/* Mobile/Tablet Filter Overlay */}
@@ -182,7 +203,7 @@ export default function ShopContent({
                 </div>
               </div>
               <div className="p-4">
-                <ProductFilters onFilterChange={handleFilterChange} isMobile={true} onClose={handleCloseFilters} />
+                <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile={true} />
               </div>
             </div>
           </div>
@@ -190,17 +211,147 @@ export default function ShopContent({
 
         {/* Main Content */}
         <div className="flex-1">
-          {/* Search Bar */}
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
-              />
+          <div className="mb-6 rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-gray-50 p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-gray-900 sm:text-lg">Browse Products</h2>
+                <p className="text-xs text-gray-500 sm:text-sm">Fine-tune results with filters, sorting, and view mode.</p>
+              </div>
+              {hasControlsApplied && (
+                <button
+                  onClick={handleClearAll}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Reset controls
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3 md:hidden">
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                  />
+                </div>
+
+                <button
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-[#ee0000]/10 px-1.5 py-0.5 text-xs font-semibold text-[#ee0000]">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="inline-flex shrink-0 items-center rounded-xl border border-gray-300 bg-white p-1">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                      viewMode === "grid" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                    aria-label="Grid view"
+                  >
+                    <Grid className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                      viewMode === "list" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                    aria-label="List view"
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="relative min-w-0 flex-1">
+                  <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                  <Dropdown
+                    options={sortOptions}
+                    value={sortBy}
+                    onChange={handleSortChange}
+                    placeholder="Sort by"
+                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 [&>button]:focus:ring-[#ee0000]/10"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden gap-3 md:grid md:grid-cols-[minmax(240px,1fr)_auto_auto_auto]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                />
+              </div>
+
+              <div className="lg:hidden">
+                <button
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-[#ee0000]/10 px-1.5 py-0.5 text-xs font-semibold text-[#ee0000]">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="inline-flex items-center rounded-xl border border-gray-300 bg-white p-1">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === "grid" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                  aria-label="Grid view"
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === "list" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                  aria-label="List view"
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="relative min-w-[190px]">
+                <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
+                  <ArrowUpDown className="h-4 w-4" />
+                </div>
+                <Dropdown
+                  options={sortOptions}
+                  value={sortBy}
+                  onChange={handleSortChange}
+                  placeholder="Sort by"
+                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 [&>button]:focus:ring-[#ee0000]/10"
+                />
+              </div>
             </div>
           </div>
 
@@ -234,67 +385,6 @@ export default function ShopContent({
               </div>
             )}
 
-            {/* Controls row - All in one compact row: Filters > Toggles > Sort */}
-            <div className="flex items-center justify-between">
-              {/* Filters Button - Compact, Mobile/Tablet only */}
-              <div className="lg:hidden">
-                <button
-                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  <span className="text-xs">Filters</span>
-                  <span className="text-xs text-gray-500">
-                    {(() => {
-                      const activeFiltersCount =
-                        filters.category.length +
-                        filters.brands.length +
-                        filters.styles.length +
-                        (filters.priceRange[0] > 0 || filters.priceRange[1] < 500 ? 1 : 0);
-                      return activeFiltersCount > 0 ? `(${activeFiltersCount})` : "";
-                    })()}
-                  </span>
-                </button>
-              </div>
-
-              {/* View Mode Toggle - Compact */}
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "grid" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                  aria-label="Grid view"
-                >
-                  <Grid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "list" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                  aria-label="List view"
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Sort Dropdown - Compact */}
-              <div className="flex items-center gap-1">
-                <span className="text-gray-600 text-xs">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => handleSortChange(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200 min-w-[100px]"
-                >
-                  {sortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
           </div>
 
           {/* Products Grid/List */}
