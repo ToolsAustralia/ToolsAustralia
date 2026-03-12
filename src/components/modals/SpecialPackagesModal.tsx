@@ -615,8 +615,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
             {packagesWithPromo.map((pkg) => {
               const colorScheme = getPackageColorSchemeForPromo(pkg._id || "", false, variantConfig);
               const isSelected = selectedPackage?._id === pkg._id;
+              const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
               // Use solid accent color for card text - textGradientStyle with backgroundClip can make nested text invisible on dark cards
-              const cardTextStyle = { color: colorScheme.accentHex };
+              const cardTextStyle = { color: accentHex };
               const selectTextClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
               const cardInnerBg = "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)";
               return (
@@ -627,8 +628,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                     ...getCardBorderStyle(colorScheme, cardInnerBg),
                     ...(!colorScheme.cardBorderGradient && { background: cardInnerBg }),
                     boxShadow: isSelected
-                      ? `0 0 0 2px rgba(255,255,255,0.5), 0 0 24px ${hexToRgba(colorScheme.accentHex, 0.5)}, 0 8px 32px ${hexToRgba(colorScheme.accentHex, 0.2)}`
-                      : `0 0 15px ${hexToRgba(colorScheme.accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
+                      ? `0 0 0 2px rgba(255,255,255,0.5), 0 0 24px ${hexToRgba(accentHex, 0.5)}, 0 8px 32px ${hexToRgba(accentHex, 0.2)}`
+                      : `0 0 15px ${hexToRgba(accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
                   }}
                   onClick={() => handlePackageSelect(pkg)}
                 >
@@ -748,6 +749,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
             {/* Buy Button - uses package badgeStyle when package selected (same as Enter Now) */}
             {selectedPackage ? (() => {
               const colorScheme = getPackageColorSchemeForPromo(selectedPackage._id || "", false, variantConfig);
+              const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
               const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
               const buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
               return (
@@ -762,12 +764,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                     <span className="relative z-10">Processing...</span>
                   ) : defaultPaymentMethod ? (
                     <>
-                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 relative z-10" style={colorScheme.textGradientStyle ? { color: colorScheme.accentHex } : undefined} />
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 relative z-10" style={colorScheme.textGradientStyle ? { color: accentHex } : undefined} />
                       <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
                         Buy Now - ${selectedPackage.price}
                       </span>
                       <div className="flex items-center gap-1.5 bg-white/20 rounded px-2 sm:px-3 py-1 sm:py-1.5 relative z-10">
-                        <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" style={colorScheme.textGradientStyle ? { color: colorScheme.accentHex } : { color: "inherit" }} />
+                        <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" style={colorScheme.textGradientStyle ? { color: accentHex } : { color: "inherit" }} />
                         <span className="text-xs" style={colorScheme.textGradientStyle ?? undefined}>
                           •••• {defaultPaymentMethod.card?.last4}
                         </span>
@@ -798,15 +800,16 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
           {/* Additional Benefits - Only shown when package is selected (uses package color scheme) */}
           {selectedPackage && (() => {
             const colorScheme = getPackageColorSchemeForPromo(selectedPackage._id || "", false, variantConfig);
+            const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
             // Use solid accent color - gradient styles (packageInclusionTextStyle/textGradientStyle) can make text invisible on dark card backgrounds
-            const benefitsTextStyle = { color: colorScheme.accentHex };
+            const benefitsTextStyle = { color: accentHex };
             return (
               <div
                 className="rounded-2xl p-3 sm:p-4 my-3 sm:my-4"
                 style={{
                   ...getCardBorderStyle(colorScheme, "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)"),
                   ...(!colorScheme.cardBorderGradient && { background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)" }),
-                  boxShadow: `0 0 15px ${hexToRgba(colorScheme.accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
+                  boxShadow: `0 0 15px ${hexToRgba(accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
                 }}
               >
                 <h4 className="text-xs sm:text-sm font-bold mb-2 sm:mb-3" style={benefitsTextStyle}>
