@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import FullscreenImageViewer, {
+  FullscreenTriggerButton,
+  type FullscreenImageItem,
+} from "@/components/ui/FullscreenImageViewer";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -21,7 +25,36 @@ interface MiniDrawImageGalleryProps {
 export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImageGalleryProps) {
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+  const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const prefersReduced = useReducedMotion();
+  const fullscreenImages: FullscreenImageItem[] = images.map((image, index) => ({
+    src: image,
+    alt: `${prizeName} view ${index + 1}`,
+  }));
+
+  const openFullscreenAtIndex = (index: number) => {
+    setFullscreenStartIndex(index);
+    setIsFullscreenOpen(true);
+  };
+
+  const handleImagePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleImagePointerUp = (event: React.PointerEvent<HTMLElement>, index: number) => {
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start) return;
+
+    const deltaX = Math.abs(event.clientX - start.x);
+    const deltaY = Math.abs(event.clientY - start.y);
+    const isTap = deltaX < 8 && deltaY < 8;
+    if (isTap) {
+      openFullscreenAtIndex(index);
+    }
+  };
 
   if (!images || images.length === 0) {
     return (
@@ -61,10 +94,12 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`slide-${index}`}
-                  className="relative aspect-square lg:aspect-[4/3] bg-gray-50"
+                  className="relative aspect-square lg:aspect-[4/3] bg-gray-50 cursor-zoom-in"
                   initial={prefersReduced ? {} : { opacity: 0.7 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3 }}
+                  onPointerDown={handleImagePointerDown}
+                  onPointerUp={(event) => handleImagePointerUp(event, index)}
                 >
                   <Image
                     src={image}
@@ -74,6 +109,12 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
                     priority={index === 0}
                     sizes="(max-width: 1024px) 100vw, 50vw"
                   />
+                  <div className="absolute right-3 top-3 z-20">
+                    <FullscreenTriggerButton
+                      onClick={() => openFullscreenAtIndex(index)}
+                      label={`View ${prizeName} image ${index + 1} in fullscreen`}
+                    />
+                  </div>
                 </motion.div>
               </AnimatePresence>
             </SwiperSlide>
@@ -120,6 +161,14 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
           ))}
         </Swiper>
       )}
+
+      <FullscreenImageViewer
+        isOpen={isFullscreenOpen}
+        images={fullscreenImages}
+        initialIndex={fullscreenStartIndex}
+        onClose={() => setIsFullscreenOpen(false)}
+        title={prizeName}
+      />
     </div>
   );
 }

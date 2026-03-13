@@ -4,23 +4,25 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import MiniDrawCard, { type MiniDrawCardData } from "./MiniDrawCard";
 import MiniDrawsFilters from "./MiniDrawsFilters";
-import { Grid, List, Filter, X, Search, Sparkles } from "lucide-react";
+import { Grid, List, Filter, X, Search, Sparkles, ArrowUpDown } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import { type MiniDrawType as ReactQueryMiniDraw } from "@/types/mini-draw";
 import { SectionContainer } from "@/components/ui";
 import { AnimatePresence, motion } from "framer-motion";
+import { brandLogos } from "@/data/brandLogos";
+import Dropdown from "@/components/modals/ui/Dropdown";
 
 interface MiniDrawFilterState {
   brands: string[];
 }
 
 const sortOptions = [
-  { value: "totalEntries-desc", label: "Most Sold" },
+  { value: "totalEntries-desc", label: "Most Entries" },
   { value: "name-asc", label: "Name (A-Z)" },
   { value: "name-desc", label: "Name (Z-A)" },
-  { value: "totalEntries-asc", label: "Entry Size (Low to High)" },
-  { value: "minimumEntries-asc", label: "Minimum Entries (Low to High)" },
-  { value: "minimumEntries-desc", label: "Minimum Entries (High to Low)" },
+  { value: "totalEntries-asc", label: "Fewest Entries" },
+  { value: "minimumEntries-asc", label: "Lowest Entry Target" },
+  { value: "minimumEntries-desc", label: "Highest Entry Target" },
 ];
 
 interface MiniDrawsContentProps {
@@ -125,17 +127,32 @@ export default function MiniDrawsContent({
     setCurrentPage(1);
   };
 
+  const handleClearAll = () => {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setFilters({ brands: [] });
+    setSortBy("totalEntries-desc");
+    setCurrentPage(1);
+  };
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const activeFilterCount = filters.brands.length;
+  const hasControlsApplied = activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== "totalEntries-desc";
 
   return (
     <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters - Desktop */}
         <div className="hidden lg:block w-80 flex-shrink-0">
-          <MiniDrawsFilters onFilterChangeAction={handleFilterChange} isMobile={false} />
+          <MiniDrawsFilters
+            selectedBrands={filters.brands}
+            onFilterChangeAction={handleFilterChange}
+            isMobile={false}
+          />
         </div>
 
         {/* Mobile/Tablet Filter Overlay */}
@@ -170,9 +187,9 @@ export default function MiniDrawsContent({
                 </div>
                 <div className="p-4">
                   <MiniDrawsFilters
+                    selectedBrands={filters.brands}
                     onFilterChangeAction={handleFilterChange}
                     isMobile={true}
-                    onClose={handleCloseFilters}
                   />
                 </div>
               </motion.div>
@@ -182,18 +199,177 @@ export default function MiniDrawsContent({
 
         {/* Main Content */}
         <div className="flex-1">
-          {/* Search Bar */}
-          <div className="mb-6 flex flex-wrap items-center gap-3">
-            <div className="relative w-full sm:w-auto">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search mini draws..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="w-full sm:w-[260px] lg:w-[320px] pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000]/15 focus:border-[#ee0000] transition-all duration-200"
-              />
+          <div className="mb-6 rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-gray-50 p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-gray-900 sm:text-lg">Browse Active Mini Draws</h2>
+                <p className="text-xs text-gray-500 sm:text-sm">
+                  Fine-tune results by brand, sort order, and view mode.
+                </p>
+              </div>
+              {hasControlsApplied && (
+                <button
+                  onClick={handleClearAll}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Reset controls
+                </button>
+              )}
             </div>
+
+            <div className="space-y-3 md:hidden">
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search mini draws or prize names..."
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                  />
+                </div>
+
+                <button
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-[#ee0000]/10 px-1.5 py-0.5 text-xs font-semibold text-[#ee0000]">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="inline-flex shrink-0 items-center rounded-xl border border-gray-300 bg-white p-1">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                      viewMode === "grid" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                    aria-label="Grid view"
+                  >
+                    <Grid className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                      viewMode === "list" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                    aria-label="List view"
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="relative min-w-0 flex-1">
+                  <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                  <Dropdown
+                    options={sortOptions}
+                    value={sortBy}
+                    onChange={handleSortChange}
+                    placeholder="Sort by"
+                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 [&>button]:focus:ring-[#ee0000]/10"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden gap-3 md:grid md:grid-cols-[minmax(240px,1fr)_auto_auto_auto]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search mini draws or prize names..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                />
+              </div>
+
+              <div className="lg:hidden">
+                <button
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-[#ee0000]/10 px-1.5 py-0.5 text-xs font-semibold text-[#ee0000]">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="inline-flex items-center rounded-xl border border-gray-300 bg-white p-1">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === "grid" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                  aria-label="Grid view"
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === "list" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                  aria-label="List view"
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="relative min-w-[190px]">
+                <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
+                  <ArrowUpDown className="h-4 w-4" />
+                </div>
+                <Dropdown
+                  options={sortOptions}
+                  value={sortBy}
+                  onChange={handleSortChange}
+                  placeholder="Sort by"
+                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 [&>button]:focus:ring-[#ee0000]/10"
+                />
+              </div>
+            </div>
+
+            {(activeFilterCount > 0 || debouncedSearch.trim().length > 0) && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {debouncedSearch.trim().length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                    Search: &quot;{debouncedSearch}&quot;
+                  </span>
+                )}
+                {filters.brands.map((brandId) => {
+                  const brandName = brandLogos.find((brand) => brand.id === brandId)?.name ?? brandId;
+                  return (
+                    <button
+                      key={brandId}
+                      onClick={() =>
+                        handleFilterChange({
+                          brands: filters.brands.filter((id) => id !== brandId),
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#ee0000]/25 bg-[#ee0000]/5 px-3 py-1 text-xs font-semibold text-[#c70000] transition-colors hover:bg-[#ee0000]/10"
+                    >
+                      {brandName}
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Results Header */}
@@ -224,60 +400,6 @@ export default function MiniDrawsContent({
               </div>
             )}
 
-            {/* Controls row */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              {/* Filters Button - Mobile/Tablet only */}
-              <div className="lg:hidden flex-shrink-0">
-                <button
-                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap text-sm"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  Filters
-                  {filters.brands.length > 0 && (
-                    <span className="text-xs text-gray-500">({filters.brands.length})</span>
-                  )}
-                </button>
-              </div>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden flex-shrink-0">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "grid" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                  aria-label="Grid view"
-                >
-                  <Grid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "list" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                  aria-label="List view"
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Sort Dropdown */}
-              <div className="flex items-center gap-1.5 text-sm flex-shrink-0">
-                <span className="text-gray-500 whitespace-nowrap">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => handleSortChange(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-2.5 py-1 text-xs sm:text-sm font-medium text-gray-800 bg-white focus:ring-2 focus:ring-[#ee0000]/15 focus:border-[#ee0000] transition-all duration-200 w-auto"
-                >
-                  {sortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
           </div>
 
           {/* Mini Draws Grid/List */}
