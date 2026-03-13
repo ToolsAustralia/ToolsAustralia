@@ -627,6 +627,7 @@ export default function PrizeShowcase({
   const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-milwaukee");
   const activeBrandBorderColor = getBrandBorderColor(activeSlug || "milwaukee-milwaukee");
   const activeBrandGlowColor = getBrandGlowColor(activeSlug || "milwaukee-milwaukee");
+  const isRyobiOrDewaltTheme = (activeSlug || "").startsWith("ryobi-") || (activeSlug || "").startsWith("dewalt-");
   const highlights = activePrize.highlights ?? [];
   const fullscreenImages: FullscreenImageItem[] = activePrize.gallery.map((image, index) => ({
     src: image.src,
@@ -1136,8 +1137,8 @@ export default function PrizeShowcase({
               style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className={`font-agency font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
+                <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRyobiOrDewaltTheme ? "text-black" : "text-white"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </div>
@@ -1214,8 +1215,8 @@ export default function PrizeShowcase({
               style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className="font-agency font-bold text-base sm:text-lg text-white drop-shadow-lg">ENTER NOW</span>
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className={`font-agency font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
+                <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRyobiOrDewaltTheme ? "text-black" : "text-white"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </div>
