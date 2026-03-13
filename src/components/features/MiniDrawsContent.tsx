@@ -348,7 +348,7 @@ export default function MiniDrawsContent({
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {debouncedSearch.trim().length > 0 && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                    Search: "{debouncedSearch}"
+                    Search: &quot;{debouncedSearch}&quot;
                   </span>
                 )}
                 {filters.brands.map((brandId) => {
