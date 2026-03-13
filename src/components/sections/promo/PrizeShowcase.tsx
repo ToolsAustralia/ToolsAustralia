@@ -848,8 +848,7 @@ export default function PrizeShowcase({
                     const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
                     const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
                     const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-                    const isRyobiSetTb = src.includes("ryobiset-milwaukeetb") || src.includes("ryobiset-sidchrometb");
-                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set") || isRyobiSetTb) && src.endsWith(".webp")) ? "scale-150" : "";
+                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp")) ? "scale-150" : "";
                     const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[5%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                     const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                     return (
@@ -879,8 +878,7 @@ export default function PrizeShowcase({
                   const isDewaltSetSidchrome = firstSrc.includes("dewaltset-sidchrome");
                   const isMakitaUpward = isMakitaSetHero || firstSrc.includes("makita.webp");
                   const isMilwaukeeUpward = (isMilwaukeeSetHero || firstSrc.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-                  const isRyobiSetTbFirst = firstSrc.includes("ryobiset-milwaukeetb") || firstSrc.includes("ryobiset-sidchrometb");
-                  const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set") || isRyobiSetTbFirst) && firstSrc.endsWith(".webp")) ? "scale-150" : "";
+                  const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set")) && firstSrc.endsWith(".webp")) ? "scale-150" : "";
                   const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                   return (
@@ -1002,8 +1000,7 @@ export default function PrizeShowcase({
                     const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
                     const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
                     const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-                    const isRyobiSetTbThumb = src.includes("ryobiset-milwaukeetb") || src.includes("ryobiset-sidchrometb");
-                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set") || isRyobiSetTbThumb) && src.endsWith(".webp")) ? "scale-150" : "";
+                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp")) ? "scale-150" : "";
                     const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                     const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                     return (
