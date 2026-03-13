@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Thumbs, Grid } from "swiper/modules";
+import { Grid, EffectFade } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -40,6 +40,7 @@ import FullscreenImageViewer, {
 import "swiper/css";
 import "swiper/css/thumbs";
 import "swiper/css/grid";
+import "swiper/css/effect-fade";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
@@ -288,7 +289,6 @@ export default function PrizeShowcase({
   const [isNavigating, _setIsNavigating] = useState(false);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
-  const imagePointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
@@ -394,6 +394,14 @@ export default function PrizeShowcase({
   useEffect(() => {
     setActiveGalleryIndex(0);
   }, [activeSlug]);
+
+  useEffect(() => {
+    if (!thumbsSwiper || thumbsSwiper.destroyed) return;
+    const slidesPerGroup = Number(thumbsSwiper.params.slidesPerGroup) || 1;
+    const pageStartIndex = Math.floor(activeGalleryIndex / slidesPerGroup) * slidesPerGroup;
+    thumbsSwiper.slideTo(pageStartIndex);
+    updateThumbNavigationState(thumbsSwiper);
+  }, [activeGalleryIndex, thumbsSwiper]);
   
   // On mobile, prevent scroll when slug changes (navigation) — evergreen pages only.
   // Toolset landing pages should always scroll to top so users see the hero.
@@ -506,23 +514,6 @@ export default function PrizeShowcase({
   const openFullscreenAtIndex = (index: number) => {
     setFullscreenStartIndex(index);
     setIsFullscreenOpen(true);
-  };
-
-  const handleImagePointerDown = (event: React.PointerEvent<HTMLElement>) => {
-    imagePointerStartRef.current = { x: event.clientX, y: event.clientY };
-  };
-
-  const handleImagePointerUp = (event: React.PointerEvent<HTMLElement>, index: number) => {
-    const start = imagePointerStartRef.current;
-    imagePointerStartRef.current = null;
-    if (!start) return;
-
-    const deltaX = Math.abs(event.clientX - start.x);
-    const deltaY = Math.abs(event.clientY - start.y);
-    const isTap = deltaX < 8 && deltaY < 8;
-    if (isTap) {
-      openFullscreenAtIndex(index);
-    }
   };
 
   const updateThumbNavigationState = (swiper: SwiperType) => {
@@ -830,7 +821,7 @@ export default function PrizeShowcase({
             >
               {activePrize.gallery.length > 1 ? (
                 <Swiper
-                  modules={[Thumbs]}
+                  modules={[EffectFade]}
                   onSwiper={(swiper) => {
                     mainSwiperRef.current = swiper;
                     setActiveGalleryIndex(swiper.activeIndex ?? 0);
@@ -841,11 +832,13 @@ export default function PrizeShowcase({
                     updateMainNavigationState(swiper);
                   }}
                   onResize={updateMainNavigationState}
-                  thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }}
                   className="main-swiper"
                   data-brand-slug={activeSlug}
                   spaceBetween={0}
                   slidesPerView={1}
+                  speed={420}
+                  effect="fade"
+                  fadeEffect={{ crossFade: true }}
                 >
                   {activePrize.gallery.map((image, index) => {
                     const src = image.src.toLowerCase();
@@ -863,8 +856,6 @@ export default function PrizeShowcase({
                     <SwiperSlide key={`${image.src}-${index}`}>
                       <div
                         className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
-                        onPointerDown={handleImagePointerDown}
-                        onPointerUp={(event) => handleImagePointerUp(event, index)}
                       >
                         <Image
                           src={image.src}
@@ -875,12 +866,6 @@ export default function PrizeShowcase({
                           priority={index === 0}
                           sizes="(max-width: 1024px) 100vw, 50vw"
                         />
-                        <div className="absolute right-3 top-3 z-20">
-                          <FullscreenTriggerButton
-                            onClick={() => openFullscreenAtIndex(index)}
-                            label={`View prize image ${index + 1} in fullscreen`}
-                          />
-                        </div>
                       </div>
                     </SwiperSlide>
                   );})}
@@ -901,8 +886,6 @@ export default function PrizeShowcase({
                   return (
                 <div
                   className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
-                  onPointerDown={handleImagePointerDown}
-                  onPointerUp={(event) => handleImagePointerUp(event, 0)}
                 >
                   <Image
                     src={activePrize.gallery[0]?.src || "/images/grand-draw.jpg"}
@@ -913,15 +896,16 @@ export default function PrizeShowcase({
                     priority
                     sizes="(max-width: 1024px) 100vw, 50vw"
                   />
-                  <div className="absolute right-3 top-3 z-20">
-                    <FullscreenTriggerButton
-                      onClick={() => openFullscreenAtIndex(0)}
-                      label="View prize image in fullscreen"
-                    />
-                  </div>
                 </div>
               );})()
               )}
+
+              <div className="absolute right-3 top-3 z-30">
+                <FullscreenTriggerButton
+                  onClick={() => openFullscreenAtIndex(activePrize.gallery.length > 1 ? activeGalleryIndex : 0)}
+                  label={`View prize image ${activeGalleryIndex + 1} in fullscreen`}
+                />
+              </div>
 
               {activePrize.gallery.length > 1 && mainCanSlidePrev && (
                 <button
@@ -981,7 +965,7 @@ export default function PrizeShowcase({
             {activePrize.gallery.length > 1 && (
               <div className="relative">
                 <Swiper
-                  modules={[Grid, Thumbs]}
+                  modules={[Grid]}
                   onSwiper={(swiper) => {
                     setThumbsSwiper(swiper);
                     updateThumbNavigationState(swiper);
@@ -1026,14 +1010,9 @@ export default function PrizeShowcase({
                     <SwiperSlide key={`thumb-${image.src}-${index}`}>
                       <button
                         type="button"
-                      onClick={() => {
-                        setActiveGalleryIndex(index);
-                        mainSwiperRef.current?.slideTo(index);
-                      }}
-                      onTouchEnd={() => {
-                        setActiveGalleryIndex(index);
-                        mainSwiperRef.current?.slideTo(index);
-                      }}
+                        onClick={() => {
+                          mainSwiperRef.current?.slideTo(index);
+                        }}
                         aria-label={`View prize image ${index + 1}`}
                       aria-current={activeGalleryIndex === index ? "true" : "false"}
                       className={`relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer touch-manipulation ${
