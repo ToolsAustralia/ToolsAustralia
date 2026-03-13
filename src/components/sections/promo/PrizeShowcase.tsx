@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
+import { Thumbs, Grid } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -38,10 +38,8 @@ import FullscreenImageViewer, {
 } from "@/components/ui/FullscreenImageViewer";
 
 import "swiper/css";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
 import "swiper/css/thumbs";
-import "swiper/css/free-mode";
+import "swiper/css/grid";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
@@ -279,6 +277,12 @@ export default function PrizeShowcase({
   const theme = usePromoTheme();
   const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
+  const mainSwiperRef = useRef<SwiperType | null>(null);
+  const [thumbCanSlidePrev, setThumbCanSlidePrev] = useState(false);
+  const [thumbCanSlideNext, setThumbCanSlideNext] = useState(false);
+  const [mainCanSlidePrev, setMainCanSlidePrev] = useState(false);
+  const [mainCanSlideNext, setMainCanSlideNext] = useState(false);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [isNavigating, _setIsNavigating] = useState(false);
@@ -386,6 +390,10 @@ export default function PrizeShowcase({
       setMobilePrizeIndex(activePrizeIndex);
     }
   }, [activeSlug, activePrizeIndex]);
+
+  useEffect(() => {
+    setActiveGalleryIndex(0);
+  }, [activeSlug]);
   
   // On mobile, prevent scroll when slug changes (navigation) — evergreen pages only.
   // Toolset landing pages should always scroll to top so users see the hero.
@@ -517,6 +525,16 @@ export default function PrizeShowcase({
     }
   };
 
+  const updateThumbNavigationState = (swiper: SwiperType) => {
+    setThumbCanSlidePrev(!swiper.isBeginning);
+    setThumbCanSlideNext(!swiper.isEnd);
+  };
+
+  const updateMainNavigationState = (swiper: SwiperType) => {
+    setMainCanSlidePrev(!swiper.isBeginning);
+    setMainCanSlideNext(!swiper.isEnd);
+  };
+
   const handleSelectPrize = (nextSlug: string) => {
     if (!nextSlug || nextSlug === activeSlug) return;
 
@@ -616,6 +634,8 @@ export default function PrizeShowcase({
 
   // Get brand colors for active prize to match View Specs button and prize header
   const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-milwaukee");
+  const activeBrandBorderColor = getBrandBorderColor(activeSlug || "milwaukee-milwaukee");
+  const activeBrandGlowColor = getBrandGlowColor(activeSlug || "milwaukee-milwaukee");
   const highlights = activePrize.highlights ?? [];
   const fullscreenImages: FullscreenImageItem[] = activePrize.gallery.map((image, index) => ({
     src: image.src,
@@ -802,7 +822,7 @@ export default function PrizeShowcase({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
           <div className="relative order-1 space-y-3 sm:space-y-4">
             <div 
-              className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden bg-[#EEEEEC] dark:bg-neutral-800"
+              className="relative rounded-2xl border-2 backdrop-blur-sm overflow-hidden bg-[#EEEEEC]"
               style={{
                 borderColor: getBrandBorderColor(activeSlug || "milwaukee-milwaukee"),
                 boxShadow: `0 0 20px ${getBrandGlowColor(activeSlug || "milwaukee-milwaukee")}, 0 8px 32px rgba(0,0,0,0.4)`,
@@ -810,10 +830,18 @@ export default function PrizeShowcase({
             >
               {activePrize.gallery.length > 1 ? (
                 <Swiper
-                  modules={[Navigation, Pagination, Thumbs]}
+                  modules={[Thumbs]}
+                  onSwiper={(swiper) => {
+                    mainSwiperRef.current = swiper;
+                    setActiveGalleryIndex(swiper.activeIndex ?? 0);
+                    updateMainNavigationState(swiper);
+                  }}
+                  onSlideChange={(swiper) => {
+                    setActiveGalleryIndex(swiper.activeIndex);
+                    updateMainNavigationState(swiper);
+                  }}
+                  onResize={updateMainNavigationState}
                   thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }}
-                  navigation
-                  pagination={{ clickable: true }}
                   className="main-swiper"
                   data-brand-slug={activeSlug}
                   spaceBetween={0}
@@ -834,7 +862,7 @@ export default function PrizeShowcase({
                     return (
                     <SwiperSlide key={`${image.src}-${index}`}>
                       <div
-                        className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden cursor-zoom-in"
+                        className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
                         onPointerDown={handleImagePointerDown}
                         onPointerUp={(event) => handleImagePointerUp(event, index)}
                       >
@@ -872,7 +900,7 @@ export default function PrizeShowcase({
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                   return (
                 <div
-                  className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden cursor-zoom-in"
+                  className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
                   onPointerDown={handleImagePointerDown}
                   onPointerUp={(event) => handleImagePointerUp(event, 0)}
                 >
@@ -895,6 +923,42 @@ export default function PrizeShowcase({
               );})()
               )}
 
+              {activePrize.gallery.length > 1 && mainCanSlidePrev && (
+                <button
+                  type="button"
+                  onClick={() => mainSwiperRef.current?.slidePrev()}
+                  aria-label="Show previous prize image"
+                  className="absolute left-2 sm:left-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
+                  style={{
+                    borderColor: activeBrandBorderColor,
+                    color: activeBrandBorderColor,
+                    boxShadow: `0 0 14px ${activeBrandGlowColor}, 0 4px 14px rgba(0,0,0,0.45)`,
+                  }}
+                >
+                  <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              )}
+
+              {activePrize.gallery.length > 1 && mainCanSlideNext && (
+                <button
+                  type="button"
+                  onClick={() => mainSwiperRef.current?.slideNext()}
+                  aria-label="Show next prize image"
+                  className="absolute right-2 sm:right-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
+                  style={{
+                    borderColor: activeBrandBorderColor,
+                    color: activeBrandBorderColor,
+                    boxShadow: `0 0 14px ${activeBrandGlowColor}, 0 4px 14px rgba(0,0,0,0.45)`,
+                  }}
+                >
+                  <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
+
               {/* <div className="absolute top-4 right-4 z-20">
                 <button
                   onClick={() => setIsSpecsModalOpen(true)}
@@ -915,49 +979,133 @@ export default function PrizeShowcase({
             </div>
 
             {activePrize.gallery.length > 1 && (
-              <Swiper
-                modules={[FreeMode, Thumbs]}
-                onSwiper={setThumbsSwiper}
-                spaceBetween={8}
-                slidesPerView="auto"
-                freeMode
-                watchSlidesProgress
-                className="thumbs-swiper"
-                data-brand-slug={activeSlug}
-              >
-                {activePrize.gallery.map((image, index) => {
-                  const src = image.src.toLowerCase();
-                  const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
-                  const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
-                  const isMilwaukeeSetMilwaukeeTb = src.includes("milwaukeeset-milwaukeetb");
-                  const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
-                  const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
-                  const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-                  const isRyobiSetTbThumb = src.includes("ryobiset-milwaukeetb") || src.includes("ryobiset-sidchrometb");
-                  const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set") || isRyobiSetTbThumb) && src.endsWith(".webp")) ? "scale-150" : "";
-                  const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
-                  const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
-                  return (
-                  <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-16 !h-[42px] sm:!w-24 sm:!h-16">
-                    <div 
-                      className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer"
-                      style={{
-                        backgroundColor: "#EEEEEC",
-                        borderColor: getBrandGlowColor(activeSlug || "milwaukee-milwaukee"),
+              <div className="relative">
+                <Swiper
+                  modules={[Grid, Thumbs]}
+                  onSwiper={(swiper) => {
+                    setThumbsSwiper(swiper);
+                    updateThumbNavigationState(swiper);
+                  }}
+                  onSlideChange={updateThumbNavigationState}
+                  onResize={updateThumbNavigationState}
+                  spaceBetween={8}
+                  slidesPerView={4}
+                  slidesPerGroup={8}
+                  grid={{
+                    rows: 2,
+                    fill: "column",
+                  }}
+                  breakpoints={{
+                    640: {
+                      slidesPerView: 5,
+                      slidesPerGroup: 10,
+                    },
+                    1024: {
+                      slidesPerView: 6,
+                      slidesPerGroup: 12,
+                    },
+                  }}
+                  watchSlidesProgress
+                  slideToClickedSlide
+                  className="thumbs-swiper h-[120px] sm:h-[140px] lg:h-[156px]"
+                  data-brand-slug={activeSlug}
+                >
+                  {activePrize.gallery.map((image, index) => {
+                    const src = image.src.toLowerCase();
+                    const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
+                    const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
+                    const isMilwaukeeSetMilwaukeeTb = src.includes("milwaukeeset-milwaukeetb");
+                    const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
+                    const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
+                    const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
+                    const isRyobiSetTbThumb = src.includes("ryobiset-milwaukeetb") || src.includes("ryobiset-sidchrometb");
+                    const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set") || isRyobiSetTbThumb) && src.endsWith(".webp")) ? "scale-150" : "";
+                    const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
+                    const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
+                    return (
+                    <SwiperSlide key={`thumb-${image.src}-${index}`}>
+                      <button
+                        type="button"
+                      onClick={() => {
+                        setActiveGalleryIndex(index);
+                        mainSwiperRef.current?.slideTo(index);
                       }}
-                    >
-                      <Image
-                        src={image.src}
-                        alt={image.alt || `Prize thumbnail ${index + 1}`}
-                        fill
-                        className={`object-contain ${scaleClass} ${translateClass}`}
-                        style={objectPosition}
-                        sizes="64px"
-                      />
-                    </div>
-                  </SwiperSlide>
-                );})}
-              </Swiper>
+                      onTouchEnd={() => {
+                        setActiveGalleryIndex(index);
+                        mainSwiperRef.current?.slideTo(index);
+                      }}
+                        aria-label={`View prize image ${index + 1}`}
+                      aria-current={activeGalleryIndex === index ? "true" : "false"}
+                      className={`relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer touch-manipulation ${
+                        activeGalleryIndex === index ? "ring-2 ring-offset-1 ring-offset-transparent" : ""
+                      }`}
+                        style={{
+                          backgroundColor: "#EEEEEC",
+                          borderColor: getBrandGlowColor(activeSlug || "milwaukee-milwaukee"),
+                        ...(activeGalleryIndex === index
+                          ? { boxShadow: `0 0 0 2px ${activeBrandBorderColor}, 0 0 16px ${activeBrandGlowColor}` }
+                          : {}),
+                        }}
+                      >
+                        <Image
+                          src={image.src}
+                          alt={image.alt || `Prize thumbnail ${index + 1}`}
+                          fill
+                          className={`object-contain ${scaleClass} ${translateClass}`}
+                          style={objectPosition}
+                          sizes="64px"
+                        />
+                        {activeGalleryIndex === index && (
+                          <span
+                            className="absolute right-1.5 top-1.5 z-10 h-2.5 w-2.5 rounded-full border border-black/25"
+                            style={{
+                              backgroundColor: activeBrandBorderColor,
+                              boxShadow: `0 0 10px ${activeBrandGlowColor}`,
+                            }}
+                            aria-hidden="true"
+                          />
+                        )}
+                      </button>
+                    </SwiperSlide>
+                  );})}
+                </Swiper>
+
+                {thumbCanSlidePrev && (
+                  <button
+                    type="button"
+                    onClick={() => thumbsSwiper?.slidePrev()}
+                    aria-label="Show previous thumbnails"
+                    className="absolute left-2 sm:left-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
+                    style={{
+                      borderColor: activeBrandBorderColor,
+                      color: activeBrandBorderColor,
+                      boxShadow: `0 0 14px ${activeBrandGlowColor}, 0 4px 14px rgba(0,0,0,0.45)`,
+                    }}
+                  >
+                    <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                )}
+
+                {thumbCanSlideNext && (
+                  <button
+                    type="button"
+                    onClick={() => thumbsSwiper?.slideNext()}
+                    aria-label="Show next thumbnails"
+                    className="absolute right-2 sm:right-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
+                    style={{
+                      borderColor: activeBrandBorderColor,
+                      color: activeBrandBorderColor,
+                      boxShadow: `0 0 14px ${activeBrandGlowColor}, 0 4px 14px rgba(0,0,0,0.45)`,
+                    }}
+                  >
+                    <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             )}
 
           </div>
