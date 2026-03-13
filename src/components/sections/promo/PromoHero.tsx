@@ -105,6 +105,8 @@ export default function PromoHero({
   const ctaStyle = variantConfig?.hero?.ctaStyle;
   const theme = usePromoTheme();
   const preferDark = theme.preferDarkBackground ?? false;
+  const isDewaltTheme = (currentSlug ?? "").startsWith("dewalt-");
+  const shouldUseBlackText = preferDark || isDewaltTheme;
 
   // Show loading state only if major draw is loading (not variant - variant loads in background)
   if (isLoading) {
@@ -183,10 +185,10 @@ export default function PromoHero({
       <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30 overflow-visible">
         <button
           onClick={handleEnterNow}
-          className={`promo-hero-cta-button font-agency inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide backdrop-blur-lg ${preferDark ? "text-black" : "text-white"}`}
+          className={`promo-hero-cta-button font-agency inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide backdrop-blur-lg ${shouldUseBlackText ? "text-black" : "text-white"}`}
           style={{
             background: ctaStyle?.backgroundColor ?? theme.gradient,
-            ...(ctaStyle?.textColor && { color: ctaStyle.textColor }),
+            ...(isDewaltTheme ? { color: "#000000" } : ctaStyle?.textColor ? { color: ctaStyle.textColor } : {}),
           }}
           suppressHydrationWarning
         >

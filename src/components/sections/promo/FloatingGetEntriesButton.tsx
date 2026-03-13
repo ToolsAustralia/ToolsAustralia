@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 
 export default function FloatingGetEntriesButton() {
   const [isVisible, setIsVisible] = useState(false);
@@ -51,7 +51,9 @@ export default function FloatingGetEntriesButton() {
   }, []);
 
   const theme = usePromoTheme();
+  const currentSlug = usePromoThemeStore((s) => s.slug);
   const preferDark = theme.preferDarkBackground ?? false;
+  const shouldUseBlackText = preferDark || (currentSlug ?? "").startsWith("dewalt-");
   const handleGetEntries = () => {
     const packagesSection = document.getElementById("packages");
     if (packagesSection) {
@@ -78,7 +80,7 @@ export default function FloatingGetEntriesButton() {
             onClick={handleGetEntries}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`group relative inline-flex items-center justify-center px-6 py-2 sm:px-10 sm:py-2.5 rounded-full font-extrabold text-sm sm:text-lg tracking-wide ${preferDark ? "text-black" : "text-white"} 
+            className={`group relative inline-flex items-center justify-center px-6 py-2 sm:px-10 sm:py-2.5 rounded-full font-extrabold text-sm sm:text-lg tracking-wide ${shouldUseBlackText ? "text-black" : "text-white"} 
                        border border-white/20 backdrop-blur-lg transition-all duration-300
                        ${isInWinnersOrHowItWorks ? "promo-hero-cta-button shimmer-once overflow-hidden" : ""}`}
             style={
