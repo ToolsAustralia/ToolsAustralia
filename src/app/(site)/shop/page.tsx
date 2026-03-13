@@ -75,8 +75,8 @@ export default function ShopPage() {
       </Suspense>
 
       {/* Membership Section */}
-      <div className="bg-gradient-to-b from-black via-slate-900 to-black">
-        <MembershipSection title="UPGRADE YOUR TOOL GAME" padding="pt-8 pb-32" titleColor="text-white" />
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-0">
+        <MembershipSection title="UPGRADE YOUR TOOL GAME" padding="pt-8 pb-32" titleColor="" />
       </div>
     </div>
   );

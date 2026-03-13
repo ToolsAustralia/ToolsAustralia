@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -32,6 +32,10 @@ import { getPrizesForToolsetSlug, isToolsetLandingSlug } from "@/config/promo-la
 import { isValidPromoSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getPrizeBySlug, listPrizes } from "@/config/prizes";
+import FullscreenImageViewer, {
+  FullscreenTriggerButton,
+  type FullscreenImageItem,
+} from "@/components/ui/FullscreenImageViewer";
 
 import "swiper/css";
 import "swiper/css/navigation";
@@ -278,6 +282,9 @@ export default function PrizeShowcase({
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [isNavigating, _setIsNavigating] = useState(false);
+  const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+  const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
+  const imagePointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
@@ -488,6 +495,28 @@ export default function PrizeShowcase({
 
   const handleEnterNow = () => openEntryFlow({ openLocalModal: false });
 
+  const openFullscreenAtIndex = (index: number) => {
+    setFullscreenStartIndex(index);
+    setIsFullscreenOpen(true);
+  };
+
+  const handleImagePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    imagePointerStartRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleImagePointerUp = (event: React.PointerEvent<HTMLElement>, index: number) => {
+    const start = imagePointerStartRef.current;
+    imagePointerStartRef.current = null;
+    if (!start) return;
+
+    const deltaX = Math.abs(event.clientX - start.x);
+    const deltaY = Math.abs(event.clientY - start.y);
+    const isTap = deltaX < 8 && deltaY < 8;
+    if (isTap) {
+      openFullscreenAtIndex(index);
+    }
+  };
+
   const handleSelectPrize = (nextSlug: string) => {
     if (!nextSlug || nextSlug === activeSlug) return;
 
@@ -588,6 +617,10 @@ export default function PrizeShowcase({
   // Get brand colors for active prize to match View Specs button and prize header
   const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-milwaukee");
   const highlights = activePrize.highlights ?? [];
+  const fullscreenImages: FullscreenImageItem[] = activePrize.gallery.map((image, index) => ({
+    src: image.src,
+    alt: image.alt || `Prize view ${index + 1}`,
+  }));
 
   return (
     <section 
@@ -800,7 +833,11 @@ export default function PrizeShowcase({
                     const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                     return (
                     <SwiperSlide key={`${image.src}-${index}`}>
-                      <div className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden">
+                      <div
+                        className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden cursor-zoom-in"
+                        onPointerDown={handleImagePointerDown}
+                        onPointerUp={(event) => handleImagePointerUp(event, index)}
+                      >
                         <Image
                           src={image.src}
                           alt={image.alt || `Prize view ${index + 1}`}
@@ -810,6 +847,12 @@ export default function PrizeShowcase({
                           priority={index === 0}
                           sizes="(max-width: 1024px) 100vw, 50vw"
                         />
+                        <div className="absolute right-3 top-3 z-20">
+                          <FullscreenTriggerButton
+                            onClick={() => openFullscreenAtIndex(index)}
+                            label={`View prize image ${index + 1} in fullscreen`}
+                          />
+                        </div>
                       </div>
                     </SwiperSlide>
                   );})}
@@ -828,7 +871,11 @@ export default function PrizeShowcase({
                   const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
                   return (
-                <div className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden">
+                <div
+                  className="relative aspect-[3/2] lg:aspect-[3/2] overflow-hidden cursor-zoom-in"
+                  onPointerDown={handleImagePointerDown}
+                  onPointerUp={(event) => handleImagePointerUp(event, 0)}
+                >
                   <Image
                     src={activePrize.gallery[0]?.src || "/images/grand-draw.jpg"}
                     alt={activePrize.gallery[0]?.alt || "Prize view"}
@@ -838,6 +885,12 @@ export default function PrizeShowcase({
                     priority
                     sizes="(max-width: 1024px) 100vw, 50vw"
                   />
+                  <div className="absolute right-3 top-3 z-20">
+                    <FullscreenTriggerButton
+                      onClick={() => openFullscreenAtIndex(0)}
+                      label="View prize image in fullscreen"
+                    />
+                  </div>
                 </div>
               );})()
               )}
@@ -1065,6 +1118,14 @@ export default function PrizeShowcase({
         isOpen={isSpecsModalOpen}
         onClose={() => setIsSpecsModalOpen(false)}
         prize={activePrize}
+      />
+
+      <FullscreenImageViewer
+        isOpen={isFullscreenOpen}
+        images={fullscreenImages}
+        initialIndex={fullscreenStartIndex}
+        onClose={() => setIsFullscreenOpen(false)}
+        title={activePrize.heroHeading}
       />
     </section>
   );
