@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     const filters = monthKey ? { monthKey } : {};
     const campaigns = await MonthlyEntryCampaign.find(filters)
       .sort({ monthKey: -1, createdAt: -1 })
-      .select("monthKey name displayLabel entriesAmount campaignMode targetingMode startsAt endsAt neverExpires isActive code requiresPurchase createdAt updatedAt")
+      .select("monthKey name displayLabel entriesAmount campaignMode targetingMode startsAt endsAt neverExpires isActive code requiresPurchase purchaseRequirement createdAt updatedAt")
       .lean();
     const campaignIds = campaigns.map((campaign) => campaign._id);
     const redemptionCounts = await RedeemableIssuance.aggregate<{ _id: string; redeemedCount: number }>([

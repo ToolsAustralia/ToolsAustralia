@@ -63,7 +63,7 @@ function getCurrentMonthKey() {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function normalizeCampaignCode(value: string) {
+function normalizeCouponCode(value: string) {
   return value
     .toUpperCase()
     .replace(/[\s_]+/g, "-")
@@ -152,7 +152,7 @@ export default function AdminMonthlyRedeemablesModal({
           startsAt: formData.startsAt,
           endsAt: formData.neverExpires ? undefined : formData.endsAt,
           neverExpires: formData.neverExpires,
-          code: normalizeCampaignCode(formData.code),
+          code: normalizeCouponCode(formData.code),
           purchaseRequirement,
           segmentConfig:
             targetingMode === "dynamic-segment"
@@ -172,7 +172,7 @@ export default function AdminMonthlyRedeemablesModal({
           Array.isArray(data?.details) && data.details.length > 0
             ? data.details[0]?.message || data.error
             : data?.error;
-        throw new Error(detailedMessage || "Failed to create campaign");
+        throw new Error(detailedMessage || "Failed to create coupon");
       }
 
       onSuccess?.();
@@ -181,7 +181,7 @@ export default function AdminMonthlyRedeemablesModal({
       }
       onClose();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Failed to create campaign");
+      setError(submitError instanceof Error ? submitError.message : "Failed to create coupon");
     } finally {
       setIsSubmitting(false);
     }
@@ -196,7 +196,7 @@ export default function AdminMonthlyRedeemablesModal({
     setCampaignMode(editingCampaign.campaignMode);
     setTargetingMode(editingCampaign.targetingMode);
     setPurchaseRequirement(
-      editingCampaign.purchaseRequirement ?? 
+      editingCampaign.purchaseRequirement ??
       (editingCampaign.requiresPurchase ? "membership" : "none")
     );
     setFormData({
@@ -219,10 +219,10 @@ export default function AdminMonthlyRedeemablesModal({
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
-      <ModalHeader title={editingCampaign ? "Edit Monthly Redeemables Campaign" : "Create Monthly Redeemables Campaign"} onClose={onClose} showLogo={false} />
+      <ModalHeader title={editingCampaign ? "Edit Monthly Redeemables Coupon" : "Create Monthly Redeemables Coupon"} onClose={onClose} showLogo={false} />
       <ModalContent>
         <form onSubmit={handleSubmit} className="space-y-5">
-          <FormSection title="Campaign Basics">
+          <FormSection title="Coupon Basics">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input
                 value={formData.monthKey}
@@ -239,7 +239,7 @@ export default function AdminMonthlyRedeemablesModal({
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Campaign name"
+                placeholder="Coupon name"
               />
               <Input
                 value={formData.displayLabel}
@@ -269,10 +269,10 @@ export default function AdminMonthlyRedeemablesModal({
                 onChange={(e) =>
                   setFormData((prev) => ({
                     ...prev,
-                    code: normalizeCampaignCode(e.target.value),
+                    code: normalizeCouponCode(e.target.value),
                   }))
                 }
-                placeholder="Campaign code (required, e.g. TOOLBOX-APR26)"
+                placeholder="Coupon code (required, e.g. TOOLBOX-APR26)"
               />
               <Dropdown
                 options={purchaseRequirementOptions}
@@ -282,7 +282,7 @@ export default function AdminMonthlyRedeemablesModal({
             </div>
           </FormSection>
 
-          <FormSection title="Campaign Window">
+          <FormSection title="Coupon Window">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -384,7 +384,7 @@ export default function AdminMonthlyRedeemablesModal({
               ) : (
                 <>
                   <Gift className="w-4 h-4 mr-2" />
-                  {editingCampaign ? "Save Campaign" : "Create Campaign"}
+                  {editingCampaign ? "Save Coupon" : "Create Coupon"}
                 </>
               )}
             </Button>
