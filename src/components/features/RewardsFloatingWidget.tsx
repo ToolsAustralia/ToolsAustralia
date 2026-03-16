@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Gift, History, Loader2, Sparkles, Tag, X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { useRedeemableRedemption, useRedeemablesWallet } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import {
+  hasSeenRewardsSpotlight,
+  markRewardsSpotlightSeen,
+} from "@/utils/rewards-widget-spotlight-storage";
 
 interface RewardsFloatingWidgetProps {
   userId: string;
@@ -102,17 +106,150 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
   const hasUnclaimed = claimableCount > 0;
   const isReady = claimableQuery.isSuccess;
 
+  const fabRef = useRef<HTMLButtonElement>(null);
+  const [fabRect, setFabRect] = useState<{ x: number; y: number } | null>(null);
+  const showSpotlight =
+    hasUnclaimed && isReady && !isOpen && !hasSeenRewardsSpotlight(userId);
+
+  const [spotlightDismissed, setSpotlightDismissed] = useState(false);
+  const showSpotlightActive =
+    showSpotlight && !spotlightDismissed;
+
+  const dismissSpotlight = useCallback(() => {
+    markRewardsSpotlightSeen(userId);
+    setSpotlightDismissed(true);
+  }, [userId]);
+
+  const handleFabClick = useCallback(() => {
+    if (showSpotlightActive) dismissSpotlight();
+    setIsOpen(true);
+  }, [showSpotlightActive, dismissSpotlight]);
+
+  // Compute FAB center from known fixed CSS values (avoids measuring during animation).
+  // FAB: left-4 sm:left-6, bottom-20 sm:bottom-6, w-14 h-14 (56px).
+  useLayoutEffect(() => {
+    if (!showSpotlightActive) return;
+    const computePosition = () => {
+      if (typeof window === "undefined") return;
+      const isMobile = window.innerWidth < 640;
+      const left = isMobile ? 16 : 24; // left-4 = 16px, sm:left-6 = 24px
+      const bottom = isMobile ? 80 : 24; // bottom-20 = 80px, sm:bottom-6 = 24px
+      const size = 56; // w-14 h-14
+      setFabRect({
+        x: left + size / 2,
+        y: window.innerHeight - bottom - size / 2,
+      });
+    };
+    computePosition();
+    window.addEventListener("resize", computePosition);
+    return () => window.removeEventListener("resize", computePosition);
+  }, [showSpotlightActive]);
+
+  useEffect(() => {
+    if (!showSpotlight) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") dismissSpotlight();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showSpotlight, dismissSpotlight]);
+
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReducedMotion(mq.matches);
+    const handler = () => setPrefersReducedMotion(mq.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
   return (
     <>
+      {/* Screen reader announcement when spotlight is active */}
+      {showSpotlightActive && (
+        <div
+          className="sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          You have claimable rewards. Tap the gift icon to view or claim them.
+        </div>
+      )}
+
+      {/* Spotlight overlay: dark blurred background with radial cutout */}
+      <AnimatePresence>
+        {showSpotlightActive && fabRect && (
+          <motion.div
+            key="rewards-spotlight"
+            className="fixed inset-0 z-[68] bg-black/80 backdrop-blur-md cursor-pointer"
+            style={{
+              maskImage: `radial-gradient(circle 72px at ${fabRect.x}px ${fabRect.y}px, transparent 0%, transparent 72px, black 72px)`,
+              WebkitMaskImage: `radial-gradient(circle 72px at ${fabRect.x}px ${fabRect.y}px, transparent 0%, transparent 72px, black 72px)`,
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            onClick={dismissSpotlight}
+            aria-hidden="true"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Tooltip callout above FAB */}
+      <AnimatePresence>
+        {showSpotlightActive && fabRect && (
+          <motion.div
+            key="rewards-spotlight-tooltip"
+            className="fixed z-[69] max-w-[280px] px-4 py-3 rounded-2xl bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 shadow-2xl"
+            style={{
+              left: Math.max(16, Math.min(fabRect.x - 140, typeof window !== "undefined" ? window.innerWidth - 296 : 0)),
+              bottom: typeof window !== "undefined" ? window.innerHeight - fabRect.y + 56 + 16 : 80,
+            }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.3, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <p className="text-base font-bold text-white mb-1">Claim your rewards</p>
+            <p className="text-sm text-gray-300">
+              View or claim coupons here for additional entries to the draw.
+            </p>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissSpotlight();
+                }}
+                className="px-3 py-1.5 text-sm font-semibold text-red-400 hover:text-red-300 transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+            {/* Arrow pointing down */}
+            <div
+              className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900/95"
+              style={{ filter: "drop-shadow(0 1px 0 rgba(55,65,81,0.5))" }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {!isOpen && isReady && (
           <motion.button
+            ref={fabRef}
             key="rewards-fab"
-            onClick={() => setIsOpen(true)}
-            className={`fixed bottom-20 sm:bottom-6 left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${buttonShadowClass}`}
-            aria-label="Open claimable rewards"
+            onClick={handleFabClick}
+            className={`fixed bottom-20 sm:bottom-6 left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${buttonShadowClass} ${showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : ""}`}
+            aria-label={showSpotlightActive ? "You have claimable rewards. Tap the gift icon to view them." : "Open claimable rewards"}
             initial={{ opacity: 0, scale: 0.92, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+            animate={{
+              opacity: 1,
+              scale: showSpotlightActive && !prefersReducedMotion ? 1.15 : 1,
+              y: 0,
+            }}
             exit={{ opacity: 0, scale: 0.94, y: 4 }}
             transition={{
               duration: 0.45,
@@ -122,9 +259,9 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
         <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/22 via-transparent to-transparent" />
         <span className="relative flex items-center justify-center w-full h-full">
           <motion.span
-            animate={hasUnclaimed ? { rotate: [0, 4, -4, 0] } : { rotate: 0 }}
+            animate={hasUnclaimed && !prefersReducedMotion ? { rotate: [0, 4, -4, 0] } : { rotate: 0 }}
             transition={
-              hasUnclaimed
+              hasUnclaimed && !prefersReducedMotion
                 ? { duration: 2.5, repeat: Infinity, repeatDelay: 2, ease: [0.25, 0.1, 0.25, 1] }
                 : { duration: 0.2 }
             }
@@ -135,8 +272,12 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
           {hasUnclaimed && (
             <motion.span
               className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-amber-300 text-[10px] leading-5 font-black text-gray-900 shadow-[0_6px_14px_rgba(0,0,0,0.35)] ring-2 ring-white/75"
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 1.5, ease: [0.25, 0.1, 0.25, 1] }}
+              animate={prefersReducedMotion ? { scale: 1 } : { scale: [1, 1.1, 1] }}
+              transition={
+                prefersReducedMotion
+                  ? { duration: 0.2 }
+                  : { duration: 1.5, repeat: Infinity, repeatDelay: 1.5, ease: [0.25, 0.1, 0.25, 1] }
+              }
             >
               {claimableCount > 99 ? "99+" : claimableCount}
             </motion.span>
