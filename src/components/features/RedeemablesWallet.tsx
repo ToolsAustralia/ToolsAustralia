@@ -13,6 +13,19 @@ interface RedeemablesWalletProps {
   onRequirePurchase?: (item: { issuanceId: string; campaignName?: string; displayLabel?: string }) => void;
 }
 
+function formatStatus(status: string): string {
+  switch (status) {
+    case "expired":
+      return "Expired";
+    case "claimable":
+      return "Claimable";
+    case "pending":
+      return "Pending";
+    default:
+      return status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
+  }
+}
+
 export default function RedeemablesWallet({ userId, variant = "dashboard", onRequirePurchase }: RedeemablesWalletProps) {
   const { data: walletData, isLoading: isWalletLoading } = useRedeemablesWallet(userId, { page: 1, limit: 30 });
   const { data: status, isLoading: isStatusLoading } = useRedeemablesStatus(userId);

@@ -18,7 +18,8 @@
 
  */
 
-import { getSession, signOut, type Session } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
+import type { Session } from "next-auth";
 import { ErrorContext } from "@/types/error-reporting";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 
@@ -177,8 +178,8 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
               url: `${API_BASE_URL}${endpoint}`,
               method: options.method as string,
               status: response.status,
-              userId: session?.user?.id,
-              userEmail: session?.user?.email,
+              userId: session?.user?.id ?? undefined,
+              userEmail: session?.user?.email ?? undefined,
               isAuthenticated: !!session?.user,
             }
           );
@@ -213,8 +214,8 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
             {
               url: `${API_BASE_URL}${endpoint}`,
               method: options.method as string,
-              userId: session?.user?.id,
-              userEmail: session?.user?.email,
+              userId: session?.user?.id ?? undefined,
+              userEmail: session?.user?.email ?? undefined,
               isAuthenticated: !!session?.user,
             }
           );
@@ -248,8 +249,8 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
         errorContext = await collectErrorContext(error, {
           url: `${API_BASE_URL}${endpoint}`,
           method: options.method as string,
-          userId: session?.user?.id,
-          userEmail: session?.user?.email,
+          userId: session?.user?.id ?? undefined,
+          userEmail: session?.user?.email ?? undefined,
           isAuthenticated: !!session?.user,
         });
       } catch (contextError) {
