@@ -63,13 +63,13 @@ export default function MonthlyRedeemablesCampaignPanel() {
       const response = await fetch("/api/admin/monthly-coupon/campaign");
       const data = await response.json();
       if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to fetch campaigns");
+        throw new Error(data?.error || "Failed to fetch coupons");
       }
       setCampaigns(data.data || []);
     } catch (error) {
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to load campaigns",
+        message: error instanceof Error ? error.message : "Failed to load coupons",
       });
     } finally {
       setIsLoading(false);
@@ -95,13 +95,13 @@ export default function MonthlyRedeemablesCampaignPanel() {
       }
       setFeedback({
         type: "success",
-        message: isActive ? "Campaign activated." : "Campaign deactivated.",
+        message: isActive ? "Coupon activated." : "Coupon deactivated.",
       });
       await loadCampaigns();
     } catch (error) {
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to toggle campaign",
+        message: error instanceof Error ? error.message : "Failed to toggle coupon",
       });
     } finally {
       setBusyCampaignId(null);
@@ -109,24 +109,24 @@ export default function MonthlyRedeemablesCampaignPanel() {
   };
 
   const handleDelete = async (campaignId: string) => {
-    if (!window.confirm("Delete this campaign? If issuances exist, it will be deactivated instead.")) return;
+    if (!window.confirm("Delete this coupon? If issuances exist, it will be deactivated instead.")) return;
     setBusyCampaignId(campaignId);
     setFeedback(null);
     try {
       const response = await fetch(`/api/admin/monthly-coupon/campaign/${campaignId}`, { method: "DELETE" });
       const data = await response.json();
       if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to delete campaign");
+        throw new Error(data?.error || "Failed to delete coupon");
       }
       setFeedback({
         type: "success",
-        message: data?.message || "Campaign deleted.",
+        message: data?.message || "Coupon deleted.",
       });
       await loadCampaigns();
     } catch (error) {
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to delete campaign",
+        message: error instanceof Error ? error.message : "Failed to delete coupon",
       });
     } finally {
       setBusyCampaignId(null);
@@ -162,10 +162,10 @@ export default function MonthlyRedeemablesCampaignPanel() {
             <div>
               <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                 <Gift className="w-5 h-5 text-red-600" />
-                Monthly Redeemables Campaigns
+                Redeemable Coupons
               </h3>
               <p className="text-gray-600 mt-1 text-xs sm:text-sm">
-                Create campaigns via modal. Eligible users now receive rewards automatically.
+                Create coupons via modal. Eligible users now receive rewards automatically.
               </p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -177,7 +177,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                 className="inline-flex items-center justify-center gap-2 h-10 px-4 w-full sm:w-auto rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold hover:from-red-700 hover:to-red-800"
               >
                 <Plus className="w-4 h-4" />
-                Create Campaign
+                Create Coupon
               </button>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
           ) : campaigns.length === 0 ? (
             <div className="text-center py-10">
               <Gift className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-600">No monthly redeemables campaigns yet.</p>
+              <p className="text-gray-600">No redeemable coupons yet.</p>
               <p className="text-sm text-gray-500 mt-1">Create one with the modal to make rewards available automatically.</p>
             </div>
           ) : (
@@ -306,7 +306,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Month</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Campaign</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Coupon</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Code</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Mode</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Targeting</th>
@@ -413,7 +413,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
         }}
         onSuccess={() => {
           loadCampaigns();
-          setFeedback({ type: "success", message: editingCampaign ? "Campaign updated successfully." : "Campaign created successfully." });
+          setFeedback({ type: "success", message: editingCampaign ? "Coupon updated successfully." : "Coupon created successfully." });
           setEditingCampaign(null);
         }}
       />
@@ -440,7 +440,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                   Loading redemptions...
                 </div>
               ) : redemptions.length === 0 ? (
-                <div className="py-8 text-center text-sm text-gray-600">No users have redeemed this campaign yet.</div>
+                <div className="py-8 text-center text-sm text-gray-600">No users have redeemed this coupon yet.</div>
               ) : (
                 <>
                   <div className="overflow-x-auto">

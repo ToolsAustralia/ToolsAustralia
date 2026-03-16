@@ -84,6 +84,7 @@ export class CampaignService {
   static async updateCampaign(
     campaignId: string,
     updates: Partial<{
+      monthKey: string;
       name: string;
       displayLabel: string;
       entriesAmount: number;
@@ -104,7 +105,10 @@ export class CampaignService {
       throw new Error("Invalid campaign ID");
     }
 
-    const normalizedUpdates = { ...updates };
+    const normalizedUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) normalizedUpdates[key] = value;
+    }
     if (updates.code) {
       const normalizedCode = updates.code.trim().toUpperCase();
       const existingCode = await MonthlyEntryCampaign.findOne({
@@ -114,23 +118,23 @@ export class CampaignService {
         .select("_id")
         .lean();
       if (existingCode) {
-        throw new Error("Campaign code already exists. Please choose a unique code.");
+        throw new Error("Coupon code already exists. Please choose a unique code.");
       }
       normalizedUpdates.code = normalizedCode;
     }
 
     if (typeof updates.displayLabel === "string") {
-      normalizedUpdates.displayLabel = updates.displayLabel.trim() || undefined;
+      const trimmed = updates.displayLabel.trim() || undefined;
+      if (trimmed !== undefined) normalizedUpdates.displayLabel = trimmed;
+      else delete normalizedUpdates.displayLabel;
     }
 
-    const updateOperation: {
-      $set: Partial<typeof normalizedUpdates>;
-      $unset?: { endsAt: "" };
-    } = { $set: normalizedUpdates };
+    const updateOperation: { $set: Record<string, unknown> } = { $set: normalizedUpdates };
 
+    // When neverExpires is true, set endsAt to far-future instead of unsetting.
+    // $unset triggers Mongoose validation before neverExpires is applied, causing "endsAt is required".
     if (updates.neverExpires === true) {
-      delete normalizedUpdates.endsAt;
-      updateOperation.$unset = { endsAt: "" };
+      normalizedUpdates.endsAt = NEVER_EXPIRES_ISSUANCE_DATE;
     }
 
     return MonthlyEntryCampaign.findByIdAndUpdate(campaignId, updateOperation, {
