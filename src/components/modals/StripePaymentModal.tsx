@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { loadStripe, Stripe } from "@stripe/stripe-js";
+import { Stripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "@/components/modals/ui";
 import { useToast } from "@/components/ui/Toast";
@@ -7,9 +7,9 @@ import { CreditCard, Loader2, CheckCircle } from "lucide-react";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
 import { type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
+import { getStripePromise } from "@/lib/stripe-client";
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const stripePromise = getStripePromise();
 
 // Debug: Log Stripe configuration
 // console.log("Stripe publishable key:", process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? "✅ Set" : "❌ Missing");

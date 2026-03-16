@@ -6,12 +6,11 @@ import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSave
 import { useUpdateSubscriptionPaymentMethod } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { loadStripe } from "@stripe/stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
 import { Button } from "./ui";
 import ConfirmationModal from "./ConfirmationModal";
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const stripePromise = getStripePromise();
 
 interface PaymentMethodsTabProps {
   user: {

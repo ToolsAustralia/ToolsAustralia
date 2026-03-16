@@ -14,6 +14,7 @@
     "type-check": "tsc --noEmit",
     "test": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
     "test:anchor-billing": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
+    "test:redeemables": "tsx src/services/redeemables/__tests__/redeemables.test.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "backfill:subscription-end-dates": "tsx scripts/backfill-subscription-end-dates.ts",

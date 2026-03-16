@@ -32,7 +32,7 @@ import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/member
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { hasSeenExplainer } from "@/utils/subscription-explainer-storage";
 import { formatRenewalDate, getFallbackRenewalDate } from "@/utils/dates/month-helpers";
-import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, ArrowLeft, Zap, History, Trophy, ChevronRight, Ticket } from "lucide-react";
+import { AlertTriangle, Clock, Share2, Info, CheckCircle, Sparkles, Zap, History, Trophy, ChevronRight, Ticket } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import MiniDrawCard, { type MiniDrawCardData } from "@/components/features/MiniDrawCard";
 import MembershipBadge from "@/components/ui/MembershipBadge";
@@ -41,9 +41,9 @@ import PackageDetailModal, {
   type PackageDetailModalPackageData,
   type SubscriptionAccumulationData,
 } from "@/components/modals/PackageDetailModal";
-import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";
 /** Pending entries display data when user has active/failed-renewal but 0 entries in draw */
 type PendingEntriesData = {
   expectedEntries: number;
@@ -1327,6 +1327,8 @@ export default function MyAccountPage() {
         </div>
       </div>
 
+      <RewardsFloatingWidget userId={user._id} />
+
       {/* Modals */}
       <MembershipModal
         isOpen={membershipModal.isModalOpen}
@@ -1398,8 +1400,6 @@ export default function MyAccountPage() {
         <div className="fixed inset-0 z-[9998]" onClick={() => setShowAccumulationTooltip(false)} />
       )}
 
-      {/* Floating countdown banner - links back to promotions page */}
-      <FloatingCountdownBanner />
     </div>
   );
 }

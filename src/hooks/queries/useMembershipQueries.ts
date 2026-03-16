@@ -78,6 +78,7 @@ export interface MembershipPurchaseData {
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  campaignCode?: string;
   userId: string; // Add userId parameter
 }
 
@@ -161,6 +162,7 @@ export const usePurchaseMembership = () => {
       referralCode,
       affiliateCode,
       promoLinkCode,
+      campaignCode,
     }: MembershipPurchaseData) => {
       const response = await apiPost<MembershipResponse>("/api/stripe/create-one-time-purchase-existing-user", {
         packageId,
@@ -168,6 +170,7 @@ export const usePurchaseMembership = () => {
         referralCode,
         affiliateCode,
         promoLinkCode,
+        campaignCode,
         ...(attribution && { attribution }),
       });
       return response;

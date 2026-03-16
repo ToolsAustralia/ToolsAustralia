@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -22,6 +22,8 @@ import {
   FlaskConical,
   Bug,
   ScrollText,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -37,124 +39,55 @@ interface AdminSidebarProps {
   onClose?: () => void;
 }
 
-const adminTabs = [
+type AdminTab = {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+const adminTabGroups: Array<{ id: string; label: string; tabs: AdminTab[] }> = [
   {
-    id: "overview",
-    label: "Overview",
-    icon: BarChart3,
+    id: "core",
+    label: "Core",
+    tabs: [
+      { id: "overview", label: "Overview", icon: BarChart3 },
+      { id: "users", label: "Users", icon: Users },
+      { id: "affiliates", label: "Affiliates", icon: UserCheck },
+    ],
   },
   {
-    id: "ab-testing",
-    label: "A/B Testing",
-    icon: FlaskConical,
-  },
-  {
-    id: "facebook-ads",
-    label: "Facebook Ads",
-    icon: TrendingUp,
-  },
-  {
-    id: "promo-analytics",
-    label: "Page Analytics",
-    icon: BarChart3,
-  },
-  // Temporarily hidden - no content yet
-  // {
-  //   id: "analytics",
-  //   label: "Analytics",
-  //   icon: TrendingUp,
-  // },
-  {
-    id: "users",
-    label: "Users",
-    icon: Users,
-  },
-  {
-    id: "mini-draws",
-    label: "Mini Draws",
-    icon: Trophy,
-  },
-  {
-    id: "major-draw",
-    label: "Current Draw",
-    icon: Gift,
-  },
-  {
-    id: "draw-results",
-    label: "Draw Results",
-    icon: Trophy,
-  },
-  {
-    id: "upcoming-draws",
-    label: "Upcoming Draws",
-    icon: Activity,
-  },
-  // Temporarily hidden - no content yet
-  // {
-  //   id: "products",
-  //   label: "Products",
-  //   icon: Package,
-  // },
-  // {
-  //   id: "orders",
-  //   label: "Orders",
-  //   icon: ShoppingCart,
-  // },
-  // {
-  //   id: "content",
-  //   label: "Content",
-  //   icon: FileText,
-  // },
-  // {
-  //   id: "communications",
-  //   label: "Communications",
-  //   icon: MessageSquare,
-  // },
-  {
-    id: "submissions",
-    label: "Submissions",
-    icon: FileTextIcon,
+    id: "analytics",
+    label: "Analytics",
+    tabs: [
+      { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp },
+      { id: "promo-analytics", label: "Page Analytics", icon: BarChart3 },
+      { id: "ab-testing", label: "A/B Testing", icon: FlaskConical },
+    ],
   },
   {
     id: "promos",
     label: "Promos",
-    icon: Zap,
+    tabs: [{ id: "promos", label: "Promos", icon: Zap }],
   },
   {
-    id: "affiliates",
-    label: "Affiliates",
-    icon: UserCheck,
+    id: "draws",
+    label: "Draws",
+    tabs: [
+      { id: "major-draw", label: "Major Draw", icon: Gift },
+      { id: "mini-draws", label: "Mini Draws", icon: Trophy },
+      { id: "draw-results", label: "Draw Results", icon: Trophy },
+      { id: "upcoming-draws", label: "Upcoming Draws", icon: Activity },
+    ],
   },
   {
-    id: "error-reports",
-    label: "Error Reports",
-    icon: Bug,
-  },
-  {
-    id: "activity-log",
-    label: "Activity Log",
-    icon: ScrollText,
-  },
-  // Temporarily hidden - no content yet
-  // {
-  //   id: "system",
-  //   label: "System",
-  //   icon: Cpu,
-  // },
-  // {
-  //   id: "database",
-  //   label: "Database",
-  //   icon: Database,
-  // },
-  // {
-  //   id: "notifications",
-  //   label: "Notifications",
-  //   icon: Bell,
-  // },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: Settings,
+    id: "operations",
+    label: "Operations",
+    tabs: [
+      { id: "submissions", label: "Submissions", icon: FileTextIcon },
+      { id: "error-reports", label: "Error Reports", icon: Bug },
+      { id: "activity-log", label: "Activity Log", icon: ScrollText },
+      { id: "settings", label: "Settings", icon: Settings },
+    ],
   },
 ];
 
@@ -169,6 +102,76 @@ export default function AdminSidebar({
   const pathname = usePathname();
   const [unviewedCount, setUnviewedCount] = useState(0);
   const [fullCapacityCount, setFullCapacityCount] = useState(0);
+  const navScrollRef = useRef<HTMLDivElement>(null);
+  const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const activeTabId =
+    pathname === "/admin" || pathname === "/admin/"
+      ? "overview"
+      : pathname.replace("/admin/", "").split("?")[0].split("/")[0];
+  const activeGroupId = adminTabGroups.find((g) => g.tabs.some((t) => t.id === activeTabId))?.id ?? "core";
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set([activeGroupId]);
+    try {
+      const saved = sessionStorage.getItem("admin-sidebar-expanded");
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        return new Set(parsed.length > 0 ? parsed : [activeGroupId]);
+      }
+    } catch {
+      /* ignore */
+    }
+    return new Set([activeGroupId]);
+  });
+
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (!next.has(activeGroupId)) next.add(activeGroupId);
+      return next;
+    });
+  }, [activeGroupId]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      try {
+        sessionStorage.setItem("admin-sidebar-expanded", JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const scrollContainer = navScrollRef.current;
+    if (!scrollContainer) return;
+
+    const savedScrollTop = sessionStorage.getItem("admin-sidebar-scroll-top");
+    if (savedScrollTop) {
+      scrollContainer.scrollTop = Number(savedScrollTop);
+    }
+
+    const handleScroll = () => {
+      sessionStorage.setItem("admin-sidebar-scroll-top", String(scrollContainer.scrollTop));
+    };
+
+    scrollContainer.addEventListener("scroll", handleScroll);
+    return () => scrollContainer.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const tabId =
+      pathname === "/admin" || pathname === "/admin/"
+        ? "overview"
+        : pathname.replace("/admin/", "").split("?")[0].split("/")[0];
+    const activeTabButton = tabButtonRefs.current[tabId];
+    activeTabButton?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [pathname]);
 
   useEffect(() => {
     const fetchUnviewed = async () => {
@@ -285,41 +288,71 @@ export default function AdminSidebar({
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto">
-        <nav className="p-4 space-y-1">
-          {adminTabs.map((tab) => {
-            const Icon = tab.icon;
-            // Check if this tab is active based on current pathname
-            const isActive =
-              (tab.id === "overview" && (pathname === "/admin" || pathname === "/admin/")) ||
-              (tab.id !== "overview" && pathname === `/admin/${tab.id}`);
-
+      <div ref={navScrollRef} className="flex-1 overflow-y-auto">
+        <nav className="p-4 space-y-4">
+          {adminTabGroups.map((group) => {
+            const isExpanded = expandedGroups.has(group.id);
             return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-lg"
-                    : "text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white"
-                }`}
-              >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? "text-white" : "text-gray-500"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className={`font-medium ${isActive ? "text-white" : "text-gray-900"}`}>{tab.label}</div>
-                </div>
-                {tab.id === "submissions" && unviewedCount > 0 && (
-                  <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
-                    {unviewedCount > 99 ? "99+" : unviewedCount}
+              <div key={group.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.id)}
+                  className="w-full flex items-center justify-between gap-2 px-2 py-2 text-left rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                    {group.label}
                   </span>
-                )}
-                {tab.id === "mini-draws" && fullCapacityCount > 0 && (
-                  <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold" title={`${fullCapacityCount} mini draw(s) at 100% - select winner`}>
-                    {fullCapacityCount > 99 ? "99+" : fullCapacityCount}
-                  </span>
-                )}
-              </button>
-            );
+                  {isExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                  )}
+                </button>
+                {isExpanded && (
+                  <div className="space-y-1 pl-1">
+                    {group.tabs.map((tab) => {
+                      const Icon = tab.icon;
+                      const isActive =
+                        (tab.id === "overview" && (pathname === "/admin" || pathname === "/admin/")) ||
+                        (tab.id !== "overview" && (pathname === `/admin/${tab.id}` || pathname.startsWith(`/admin/${tab.id}?`)));
+
+                      return (
+                    <button
+                      key={tab.id}
+                      ref={(element) => {
+                        tabButtonRefs.current[tab.id] = element;
+                      }}
+                      onClick={() => handleTabChange(tab.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-lg"
+                          : "text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white"
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? "text-white" : "text-gray-500"}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className={`font-medium ${isActive ? "text-white" : "text-gray-900"}`}>{tab.label}</div>
+                      </div>
+                      {tab.id === "submissions" && unviewedCount > 0 && (
+                        <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
+                          {unviewedCount > 99 ? "99+" : unviewedCount}
+                        </span>
+                      )}
+                      {tab.id === "mini-draws" && fullCapacityCount > 0 && (
+                        <span
+                          className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold"
+                          title={`${fullCapacityCount} mini draw(s) at 100% - select winner`}
+                        >
+                          {fullCapacityCount > 99 ? "99+" : fullCapacityCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            </div>
+          );
           })}
         </nav>
       </div>

@@ -11,13 +11,8 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { loadStripe } from "@stripe/stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
 import type { PaymentIntent } from "@stripe/stripe-js";
-
-function getStripePromise() {
-  const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-  return key ? loadStripe(key) : null;
-}
 
 export type PaymentStatus = "idle" | "loading" | "succeeded" | "failed" | "processing" | "requires_action";
 
@@ -55,18 +50,11 @@ export function use3DSRedirectHandler(): Use3DSRedirectHandlerResult {
         return;
       }
 
-      const promise = getStripePromise();
-      if (!promise) {
-        setError("Stripe not configured");
-        setPaymentStatus("failed");
-        return;
-      }
-
       setIsLoading(true);
       setError(null);
 
       try {
-        const stripe = await promise;
+        const stripe = await getStripePromise();
         if (!stripe) {
           setError("Stripe not loaded");
           setPaymentStatus("failed");

@@ -951,6 +951,7 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
       }),
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,
+      campaignCode: paymentIntent.metadata.campaignCode,
       // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
       ...(experimentId && variantId && {
         experimentId,
@@ -1101,6 +1102,7 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
       packageType: "one-time",
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,
+      campaignCode: paymentIntent.metadata.campaignCode,
       // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
       ...(experimentId && variantId && {
         experimentId,
@@ -1252,6 +1254,7 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
       miniDrawId: miniDrawId, // Pass MiniDraw ID to payment processing
       affiliateCode: paymentIntent.metadata.affiliateCode,
       promoLinkCode: paymentIntent.metadata.promoLinkCode,
+      campaignCode: paymentIntent.metadata.campaignCode,
       // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
       ...(experimentId && variantId && {
         experimentId,
@@ -3305,6 +3308,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // For subscriptions, check subscription metadata FIRST (most reliable)
     // Then fall back to payment_intent metadata
     let promoLinkCode: string | undefined;
+    let campaignCode: string | undefined;
     let affiliateCode: string | undefined;
     let experimentId: string | undefined;
     let variantId: string | undefined;
@@ -3323,6 +3327,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           promoLinkCode = subscription.metadata.promoLinkCode;
           affiliateCode = subscription.metadata.affiliateCode;
           webhookLog("info", `✅ Retrieved promoLinkCode from subscription metadata: ${promoLinkCode}`);
+        }
+        if (subscription.metadata.campaignCode) {
+          campaignCode = subscription.metadata.campaignCode;
         }
         // ✅ A/B Testing: Extract experiment assignment from subscription metadata
         if (subscription.metadata.experimentId && subscription.metadata.variantId) {
@@ -3351,6 +3358,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
             webhookLog("info", `✅ Retrieved promoLinkCode from invoice payment_intent: ${promoLinkCode}`);
           }
         }
+        if (!campaignCode && paymentIntent.metadata.campaignCode) {
+          campaignCode = paymentIntent.metadata.campaignCode;
+        }
         // ✅ A/B Testing: Extract experiment assignment from payment intent metadata (if not in subscription)
         if (!experimentId && paymentIntent.metadata.experimentId && paymentIntent.metadata.variantId) {
           experimentId = paymentIntent.metadata.experimentId;
@@ -3374,6 +3384,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           if (promoLinkCode) {
             webhookLog("info", `✅ Retrieved promoLinkCode from charge payment_intent: ${promoLinkCode}`);
           }
+          if (!campaignCode && paymentIntent.metadata.campaignCode) {
+            campaignCode = paymentIntent.metadata.campaignCode;
+          }
         }
       }
 
@@ -3384,6 +3397,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         if (promoLinkCode) {
           webhookLog("info", `✅ Retrieved promoLinkCode from invoice metadata: ${promoLinkCode}`);
         }
+      }
+      if (!campaignCode && expandedInvoice.metadata?.campaignCode) {
+        campaignCode = expandedInvoice.metadata.campaignCode;
       }
 
       // Final check: If still no promoLinkCode, log warning for debugging
@@ -3430,7 +3446,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         created: Math.floor(paymentTimestamp * 1000), // Use paid_at timestamp, not invoice creation time
         type: "subscription",
         packageType: "membership",
-        promoLinkCode: promoLinkCode || undefined, // Ensure undefined instead of empty string
+        promoLinkCode: promoLinkCode || undefined,
+        campaignCode: campaignCode || undefined,
         affiliateCode: affiliateCode || undefined,
         // ✅ A/B Testing: Include experiment assignment from metadata (most reliable source)
         ...(experimentId && variantId && {

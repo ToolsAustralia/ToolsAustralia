@@ -80,7 +80,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ErrorBoundary>
-      <SessionProvider>
+      <SessionProvider refetchOnWindowFocus={false} refetchInterval={5 * 60}>
         <QueryClientProvider client={queryClient}>
           <ApiErrorBoundary>
             <UserProvider>

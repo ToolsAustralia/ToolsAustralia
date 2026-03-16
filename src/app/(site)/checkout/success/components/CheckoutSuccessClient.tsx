@@ -91,10 +91,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
               Order ID: {orderId}
             </div>
           </div>
-        </PaymentSuccessHandler>
 
-        {/* Main Content - Only show when payment is successful */}
-        <PaymentSuccessHandler paymentType="subscription">
           {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Order Details */}
@@ -237,8 +234,8 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link
             href="/my-account"
             className="inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-all duration-200"
@@ -258,10 +255,10 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             <Download className="w-4 h-4 mr-2" />
             Download Receipt
           </button>
-        </div>
+          </div>
 
-        {/* Support Information */}
-        <div className="text-center mt-8 p-6 bg-gray-100 rounded-2xl">
+          {/* Support Information */}
+          <div className="text-center mt-8 p-6 bg-gray-100 rounded-2xl">
           <h3 className="font-semibold text-gray-900 mb-2">Need Help?</h3>
           <p className="text-gray-600 mb-4">
             If you have any questions about your order, our support team is here to help.
@@ -282,7 +279,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
               hello@toolsaustralia.com.au
             </a>
           </div>
-        </div>
+          </div>
         </PaymentSuccessHandler>
       </div>
     </div>

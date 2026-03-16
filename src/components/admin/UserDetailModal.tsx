@@ -86,7 +86,17 @@ interface MajorDrawParticipationItem {
   drawId?: string;
   title?: string;
   endDate?: string;
-  entries?: number;
+  entries?: Array<{
+    totalEntries?: number;
+    entriesBySource?: {
+      membership?: number;
+      "one-time-package"?: number;
+      upsell?: number;
+      "mini-draw"?: number;
+      referral?: number;
+      "bonus-entry-promo"?: number;
+    };
+  }>;
   totalEntries?: number;
   status?: string;
 }
@@ -1212,6 +1222,48 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     );
                   })}
                 </div>
+
+                {/* Current Draw Entries by Source - when user has entries */}
+                {user.statistics.currentDrawEntries > 0 && (() => {
+                  const activeDraw = user.majorDrawParticipation?.find((d) => d.status === "active");
+                  const entriesBySource = (activeDraw?.entries ?? []).reduce(
+                    (acc, e) => {
+                      const src = (e as { entriesBySource?: Record<string, number> }).entriesBySource ?? {};
+                      Object.entries(src).forEach(([k, v]) => {
+                        if (typeof v === "number" && v > 0) acc[k] = (acc[k] ?? 0) + v;
+                      });
+                      return acc;
+                    },
+                    {} as Record<string, number>
+                  );
+                  const hasBreakdown = Object.keys(entriesBySource).length > 0;
+                  return hasBreakdown ? (
+                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Current draw entries by source</h3>
+                      <p className="text-xs text-gray-500 mb-2">Breakdown of how entries were earned (referral, codes, promos, etc.)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {entriesBySource.membership != null && entriesBySource.membership > 0 && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Membership: {entriesBySource.membership}</span>
+                        )}
+                        {entriesBySource["one-time-package"] != null && entriesBySource["one-time-package"] > 0 && (
+                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">One-time: {entriesBySource["one-time-package"]}</span>
+                        )}
+                        {entriesBySource.upsell != null && entriesBySource.upsell > 0 && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">Upsell: {entriesBySource.upsell}</span>
+                        )}
+                        {entriesBySource["mini-draw"] != null && entriesBySource["mini-draw"] > 0 && (
+                          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">Mini-draw: {entriesBySource["mini-draw"]}</span>
+                        )}
+                        {entriesBySource.referral != null && entriesBySource.referral > 0 && (
+                          <span className="px-2 py-1 bg-pink-100 text-pink-800 rounded text-xs">Referral: {entriesBySource.referral}</span>
+                        )}
+                        {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">Campaign/Promo: {entriesBySource["bonus-entry-promo"]}</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
 
                 {/* Basic Information - Minimized on mobile */}
                 <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
@@ -2858,34 +2910,86 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Major Draw Participation</h3>
                     <div className="space-y-2">
-                      {user.majorDrawParticipation.map((draw: MajorDrawParticipationItem, index: number) => (
-                        <div
-                          key={draw.drawId || `draw-${index}`}
-                          className="flex items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm truncate">{draw.title || draw.drawId || "Major draw"}</p>
-                            <p className="text-xs text-gray-600 mt-0.5">
-                              {draw.endDate ? formatDate(draw.endDate) : "End date not set"}
-                            </p>
+                      {user.majorDrawParticipation.map((draw: MajorDrawParticipationItem, index: number) => {
+                        const entriesBySource = (draw.entries ?? []).reduce(
+                          (acc, e) => {
+                            const src = e.entriesBySource ?? {};
+                            Object.entries(src).forEach(([k, v]) => {
+                              if (typeof v === "number" && v > 0) acc[k] = (acc[k] ?? 0) + v;
+                            });
+                            return acc;
+                          },
+                          {} as Record<string, number>
+                        );
+                        const hasBreakdown = Object.keys(entriesBySource).length > 0;
+                        return (
+                          <div
+                            key={draw.drawId || `draw-${index}`}
+                            className="p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-sm truncate">{draw.title || draw.drawId || "Major draw"}</p>
+                                <p className="text-xs text-gray-600 mt-0.5">
+                                  {draw.endDate ? formatDate(draw.endDate) : "End date not set"}
+                                </p>
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-3">
+                                <p className="font-semibold text-sm sm:text-base">{draw.totalEntries || 0}</p>
+                                <p className="text-xs text-gray-500">entries</p>
+                                <span
+                                  className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    draw.status === "completed"
+                                      ? "bg-green-100 text-green-800"
+                                      : draw.status === "active"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-gray-100 text-gray-800"
+                                  }`}
+                                >
+                                  {draw.status || "Unspecified"}
+                                </span>
+                              </div>
+                            </div>
+                            {hasBreakdown && (
+                              <div className="mt-2 pt-2 border-t border-gray-100">
+                                <p className="text-xs font-medium text-gray-500 mb-1.5">Entries by source</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {entriesBySource.membership != null && entriesBySource.membership > 0 && (
+                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                                      Membership: {entriesBySource.membership}
+                                    </span>
+                                  )}
+                                  {entriesBySource["one-time-package"] != null && entriesBySource["one-time-package"] > 0 && (
+                                    <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">
+                                      One-time: {entriesBySource["one-time-package"]}
+                                    </span>
+                                  )}
+                                  {entriesBySource.upsell != null && entriesBySource.upsell > 0 && (
+                                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs">
+                                      Upsell: {entriesBySource.upsell}
+                                    </span>
+                                  )}
+                                  {entriesBySource["mini-draw"] != null && entriesBySource["mini-draw"] > 0 && (
+                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs">
+                                      Mini-draw: {entriesBySource["mini-draw"]}
+                                    </span>
+                                  )}
+                                  {entriesBySource.referral != null && entriesBySource.referral > 0 && (
+                                    <span className="px-2 py-0.5 bg-pink-100 text-pink-800 rounded text-xs">
+                                      Referral: {entriesBySource.referral}
+                                    </span>
+                                  )}
+                                  {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
+                                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs">
+                                      Campaign/Promo: {entriesBySource["bonus-entry-promo"]}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right flex-shrink-0 ml-3">
-                            <p className="font-semibold text-sm sm:text-base">{draw.totalEntries || 0}</p>
-                            <p className="text-xs text-gray-500">entries</p>
-                            <span
-                              className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                draw.status === "completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : draw.status === "active"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-gray-100 text-gray-800"
-                              }`}
-                            >
-                              {draw.status || "Unspecified"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

@@ -6,7 +6,8 @@ import SuccessScreen from "@/components/loading/SuccessScreen";
 
 interface Benefit {
   text: string;
-  icon?: "gift" | "star" | "zap";
+  icon?: "gift" | "star" | "zap" | "ticket" | "tag";
+  highlight?: boolean;
 }
 
 interface LoadingState {
@@ -14,6 +15,7 @@ interface LoadingState {
   title: string;
   subtitle: string;
   steps: string[];
+  isCompleting: boolean;
 }
 
 interface SuccessState {
@@ -51,6 +53,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
     title: "",
     subtitle: "",
     steps: [],
+    isCompleting: false,
   });
 
   const [successState, setSuccessState] = useState<SuccessState>({
@@ -58,7 +61,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
     title: "",
     subtitle: "",
     benefits: [],
-    autoCloseDelay: 3000,
+    autoCloseDelay: 4500,
   });
 
   const showLoading = (title: string, subtitle: string, steps: string[]) => {
@@ -67,14 +70,25 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
       title,
       subtitle,
       steps,
+      isCompleting: false,
     });
   };
 
   const hideLoading = () => {
+    // Show completing animation briefly before hiding
     setLoadingState((prev) => ({
       ...prev,
-      isVisible: false,
+      isCompleting: true,
     }));
+
+    // Hide after brief completing animation
+    setTimeout(() => {
+      setLoadingState((prev) => ({
+        ...prev,
+        isVisible: false,
+        isCompleting: false,
+      }));
+    }, 600);
   };
 
   const showSuccess = (title: string, subtitle: string, benefits: Benefit[], autoCloseDelay?: number) => {
@@ -83,7 +97,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
       title,
       subtitle,
       benefits,
-      autoCloseDelay: autoCloseDelay || 3000,
+      autoCloseDelay: autoCloseDelay ?? 4500,
     });
   };
 
@@ -111,6 +125,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
         subtitle={loadingState.subtitle}
         steps={loadingState.steps}
         isVisible={loadingState.isVisible}
+        isCompleting={loadingState.isCompleting}
       />
 
       {/* Global Success Screen */}
