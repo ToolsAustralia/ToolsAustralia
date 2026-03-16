@@ -216,7 +216,7 @@ export async function collectErrorContext(
   // Get session information (prefer from requestInfo to avoid redundant fetch)
   let userId: string | undefined = requestInfo?.userId;
   let userEmail: string | undefined = requestInfo?.userEmail;
-  let guestEmail: string | undefined = requestInfo?.guestEmail;
+  const guestEmail: string | undefined = requestInfo?.guestEmail;
   let isAuthenticated = requestInfo?.isAuthenticated ?? false;
 
   // Only fetch session if not provided in requestInfo

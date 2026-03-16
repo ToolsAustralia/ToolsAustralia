@@ -18,7 +18,7 @@
 
  */
 
-import { getSession, signOut } from "next-auth/react";
+import { getSession, signOut, type Session } from "next-auth/react";
 import { ErrorContext } from "@/types/error-reporting";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 
@@ -29,7 +29,7 @@ import { collectErrorContext } from "@/utils/error-reporting/collect-error-conte
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 // In-memory session cache to reduce redundant /api/auth/session calls
-let cachedSession: { session: any; timestamp: number } | null = null;
+let cachedSession: { session: Session | null; timestamp: number } | null = null;
 const SESSION_CACHE_TTL = 30_000; // 30 seconds
 
 async function getCachedSession() {

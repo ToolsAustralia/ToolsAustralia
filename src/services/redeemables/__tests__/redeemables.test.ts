@@ -28,7 +28,6 @@ function run() {
   testCsvParsing();
   testMonthKey();
   testUniqueCode();
-  // eslint-disable-next-line no-console
   console.log("Redeemables tests passed");
 }
 

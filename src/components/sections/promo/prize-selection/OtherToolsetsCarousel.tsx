@@ -106,7 +106,7 @@ export function OtherToolsetsCarousel({
           : Date.now();
     }
     setShuffledToolsets(shuffleWithSeed([...otherToolsets], shuffleSeedRef.current));
-  }, [isMobile, currentToolsetSlug]);
+  }, [isMobile, currentToolsetSlug, otherToolsets]);
 
   const handleClick = useCallback(
     (targetSlug: ToolsetLandingSlug) => {

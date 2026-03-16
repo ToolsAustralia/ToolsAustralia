@@ -355,7 +355,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     if (!isOpen) {
       stepDeterminedRef.current = false;
     }
-  }, [isOpen, initialStep, onClose, restoreStateFromStorage, userData, userDataLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, initialStep, onClose, restoreStateFromStorage, userData, userDataLoading]);
 
   // Auto-save state when critical fields change
   useEffect(() => {
