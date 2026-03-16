@@ -42,21 +42,25 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const body = await request.json();
     const payload = updateCampaignSchema.parse(body);
 
-    const updates = {
+    const rawUpdates = {
       ...payload,
       startsAt: payload.startsAt ? new Date(payload.startsAt) : undefined,
-      endsAt: payload.endsAt ? new Date(payload.endsAt) : undefined,
+      endsAt: payload.neverExpires ? undefined : payload.endsAt ? new Date(payload.endsAt) : undefined,
     };
+    // Strip undefined to avoid MongoDB update issues
+    const updates = Object.fromEntries(
+      Object.entries(rawUpdates).filter(([, v]) => v !== undefined)
+    ) as Record<string, unknown>;
 
     const campaign = await CampaignService.updateCampaign(id, updates);
     if (!campaign) {
-      return NextResponse.json({ success: false, error: "Campaign not found" }, { status: 404 });
+      return NextResponse.json({ success: false, error: "Coupon not found" }, { status: 404 });
     }
 
     return NextResponse.json({
       success: true,
       data: campaign,
-      message: "Campaign updated successfully",
+      message: "Coupon updated successfully",
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -69,8 +73,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         { status: 400 }
       );
     }
-    console.error("Error updating campaign:", error);
-    return NextResponse.json({ success: false, error: "Failed to update campaign" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to update coupon";
+    console.error("Error updating coupon:", error);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
