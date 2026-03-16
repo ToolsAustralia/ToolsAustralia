@@ -182,7 +182,7 @@ export const useCartSummary = (userId?: string) => {
 };
 
 // Mutations
-export const useAddToCart = () => {
+export const useAddToCart = (userId: string | undefined) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -195,9 +195,6 @@ export const useAddToCart = () => {
       return response;
     },
     onMutate: async ({ productId, quantity, price }) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Cancel outgoing refetches
@@ -302,18 +299,12 @@ export const useAddToCart = () => {
       return { previousCart };
     },
     onSuccess: async (data) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Update with server response for accuracy
       queryClient.setQueryData(queryKeys.cart.all(userId), data);
     },
     onError: async (err, variables, context) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Rollback on error
@@ -322,9 +313,6 @@ export const useAddToCart = () => {
       }
     },
     onSettled: async () => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Always invalidate all cart-related queries to ensure consistency
@@ -333,7 +321,7 @@ export const useAddToCart = () => {
   });
 };
 
-export const useUpdateCartItem = () => {
+export const useUpdateCartItem = (userId: string | undefined) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -345,9 +333,6 @@ export const useUpdateCartItem = () => {
       return response;
     },
     onMutate: async ({ productId, quantity }) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Cancel outgoing refetches
@@ -383,9 +368,6 @@ export const useUpdateCartItem = () => {
       return { previousCart };
     },
     onError: async (err, variables, context) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Rollback on error
@@ -394,18 +376,12 @@ export const useUpdateCartItem = () => {
       }
     },
     onSuccess: async (data) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Update cache with real data
       queryClient.setQueryData(queryKeys.cart.all(userId), data);
     },
     onSettled: async () => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Invalidate all cart-related queries to ensure consistency
@@ -414,7 +390,7 @@ export const useUpdateCartItem = () => {
   });
 };
 
-export const useRemoveFromCart = () => {
+export const useRemoveFromCart = (userId: string | undefined) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -423,9 +399,6 @@ export const useRemoveFromCart = () => {
       return response;
     },
     onMutate: async (productId) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Cancel outgoing refetches
@@ -463,9 +436,6 @@ export const useRemoveFromCart = () => {
       return { previousCart };
     },
     onError: async (err, variables, context) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Rollback on error
@@ -474,18 +444,12 @@ export const useRemoveFromCart = () => {
       }
     },
     onSuccess: async (data) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Update cache with real data
       queryClient.setQueryData(queryKeys.cart.all(userId), data);
     },
     onSettled: async () => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Invalidate all cart-related queries to ensure consistency
@@ -494,7 +458,7 @@ export const useRemoveFromCart = () => {
   });
 };
 
-export const useClearCart = () => {
+export const useClearCart = (userId: string | undefined) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -503,18 +467,12 @@ export const useClearCart = () => {
       return response;
     },
     onSuccess: async (data) => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Update cache with real data
       queryClient.setQueryData(queryKeys.cart.all(userId), data);
     },
     onSettled: async () => {
-      // Get the current user ID from the session
-      const session = await import("next-auth/react").then((m) => m.getSession());
-      const userId = session?.user?.id;
       if (!userId) return;
 
       // Invalidate all cart-related queries to ensure consistency

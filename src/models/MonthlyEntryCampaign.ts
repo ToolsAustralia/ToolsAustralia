@@ -1,0 +1,173 @@
+import mongoose, { Document, Schema } from "mongoose";
+
+export type CampaignMode = "global" | "unique" | "both";
+export type TargetingMode = "all-active-subscribers" | "manual-users" | "csv-users" | "dynamic-segment";
+export type PurchaseRequirement = "none" | "membership" | "one-time" | "any";
+
+export interface IMonthlyEntryCampaign extends Document {
+  monthKey: string;
+  name: string;
+  displayLabel?: string;
+  entriesAmount: number;
+  campaignMode: CampaignMode;
+  targetingMode: TargetingMode;
+  startsAt: Date;
+  endsAt?: Date;
+  neverExpires: boolean;
+  isActive: boolean;
+  code: string;
+  requiresPurchase: boolean;
+  purchaseRequirement: PurchaseRequirement;
+  segmentConfig?: {
+    minInactiveDays?: number;
+    maxInactiveDays?: number;
+    requiresEmailVerified?: boolean;
+    requiresRecentPurchaseDays?: number;
+    includeUserIds?: string[];
+    excludeUserIds?: string[];
+  };
+  createdBy?: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const MonthlyEntryCampaignSchema = new Schema<IMonthlyEntryCampaign>(
+  {
+    monthKey: {
+      type: String,
+      required: [true, "monthKey is required"],
+      match: [/^\d{4}-\d{2}$/, "monthKey must be in YYYY-MM format"],
+      trim: true,
+    },
+    name: {
+      type: String,
+      required: [true, "Campaign name is required"],
+      trim: true,
+      maxlength: [120, "Campaign name cannot exceed 120 characters"],
+    },
+    displayLabel: {
+      type: String,
+      trim: true,
+      maxlength: [60, "Display label cannot exceed 60 characters"],
+    },
+    entriesAmount: {
+      type: Number,
+      required: [true, "entriesAmount is required"],
+      min: [1, "entriesAmount must be at least 1"],
+    },
+    campaignMode: {
+      type: String,
+      enum: ["global", "unique", "both"],
+      required: [true, "campaignMode is required"],
+      default: "both",
+    },
+    targetingMode: {
+      type: String,
+      enum: ["all-active-subscribers", "manual-users", "csv-users", "dynamic-segment"],
+      required: [true, "targetingMode is required"],
+      default: "all-active-subscribers",
+    },
+    startsAt: {
+      type: Date,
+      required: [true, "startsAt is required"],
+    },
+    endsAt: {
+      type: Date,
+      required: function (this: IMonthlyEntryCampaign) {
+        return !this.neverExpires;
+      },
+    },
+    neverExpires: {
+      type: Boolean,
+      default: false,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    code: {
+      type: String,
+      required: [true, "Campaign code is required"],
+      trim: true,
+      uppercase: true,
+      match: [
+        /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/,
+        "Campaign code must be 6-32 chars with A-Z, 0-9 and optional hyphen separators",
+      ],
+    },
+    requiresPurchase: {
+      type: Boolean,
+      default: false,
+    },
+    purchaseRequirement: {
+      type: String,
+      enum: ["none", "membership", "one-time", "any"],
+      default: "none",
+    },
+    segmentConfig: {
+      minInactiveDays: { type: Number, min: 0 },
+      maxInactiveDays: { type: Number, min: 0 },
+      requiresEmailVerified: { type: Boolean, default: true },
+      requiresRecentPurchaseDays: { type: Number, min: 1 },
+      includeUserIds: [{ type: String, trim: true }],
+      excludeUserIds: [{ type: String, trim: true }],
+    },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+MonthlyEntryCampaignSchema.index({ monthKey: 1 });
+MonthlyEntryCampaignSchema.index({ isActive: 1, startsAt: 1, endsAt: 1 });
+MonthlyEntryCampaignSchema.index({ monthKey: 1, isActive: 1 });
+MonthlyEntryCampaignSchema.index({ code: 1 }, { unique: true });
+
+MonthlyEntryCampaignSchema.pre("save", function (next) {
+  if (!this.startsAt) {
+    return next(new Error("Campaign start date is required"));
+  }
+
+  if (!this.neverExpires && !this.endsAt) {
+    return next(new Error("Campaign end date is required unless neverExpires is enabled"));
+  }
+
+  if (!this.neverExpires && this.endsAt && this.startsAt >= this.endsAt) {
+    return next(new Error("Campaign start must be before end"));
+  }
+
+  if (!this.code) {
+    return next(new Error("code is required"));
+  }
+
+  next();
+});
+
+const existingMonthlyEntryCampaignModel = mongoose.models.MonthlyEntryCampaign as
+  | mongoose.Model<IMonthlyEntryCampaign>
+  | undefined;
+
+if (existingMonthlyEntryCampaignModel) {
+  const codePathExists = Boolean(existingMonthlyEntryCampaignModel.schema.path("code"));
+  const neverExpiresPathExists = Boolean(existingMonthlyEntryCampaignModel.schema.path("neverExpires"));
+  const purchaseRequirementPathExists = Boolean(existingMonthlyEntryCampaignModel.schema.path("purchaseRequirement"));
+  const endsAtPath = existingMonthlyEntryCampaignModel.schema.path("endsAt") as
+    | (mongoose.SchemaType & { isRequired?: boolean | ((this: IMonthlyEntryCampaign) => boolean) })
+    | undefined;
+  const endsAtIsStaticallyRequired = endsAtPath?.isRequired === true;
+
+  // In dev/hot-reload, clear cached model when schema shape is stale.
+  if (!codePathExists || !neverExpiresPathExists || !purchaseRequirementPathExists || endsAtIsStaticallyRequired) {
+    delete mongoose.models.MonthlyEntryCampaign;
+  }
+}
+
+const MonthlyEntryCampaign =
+  (mongoose.models.MonthlyEntryCampaign as mongoose.Model<IMonthlyEntryCampaign>) ||
+  mongoose.model<IMonthlyEntryCampaign>("MonthlyEntryCampaign", MonthlyEntryCampaignSchema);
+
+export default MonthlyEntryCampaign;

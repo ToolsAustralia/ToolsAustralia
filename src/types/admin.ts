@@ -311,6 +311,17 @@ export interface AdminUserDetail {
     status?: string;
     endDate?: string;
     totalEntries?: number;
+    entries?: Array<{
+      totalEntries?: number;
+      entriesBySource?: {
+        membership?: number;
+        "one-time-package"?: number;
+        upsell?: number;
+        "mini-draw"?: number;
+        referral?: number;
+        "bonus-entry-promo"?: number;
+      };
+    }>;
   }>;
   miniDrawParticipation: Array<{
     miniDrawId?: string;

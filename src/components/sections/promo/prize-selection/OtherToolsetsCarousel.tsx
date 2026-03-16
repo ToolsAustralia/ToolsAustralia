@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
@@ -67,9 +67,13 @@ export function OtherToolsetsCarousel({
   const router = useRouter();
   const searchParams = useSearchParams();
   const theme = usePromoTheme();
-  const otherToolsets = currentToolsetSlug
-    ? (ALL_TOOLSETS.filter((s) => s !== currentToolsetSlug) as ToolsetLandingSlug[])
-    : ([...ALL_TOOLSETS] as ToolsetLandingSlug[]);
+  const otherToolsets = useMemo(
+    () =>
+      currentToolsetSlug
+        ? (ALL_TOOLSETS.filter((s) => s !== currentToolsetSlug) as ToolsetLandingSlug[])
+        : ([...ALL_TOOLSETS] as ToolsetLandingSlug[]),
+    [currentToolsetSlug]
+  );
 
   const [shuffledToolsets, setShuffledToolsets] = useState<ToolsetLandingSlug[]>(otherToolsets);
   const [isMobile, setIsMobile] = useState(false);
@@ -106,7 +110,7 @@ export function OtherToolsetsCarousel({
           : Date.now();
     }
     setShuffledToolsets(shuffleWithSeed([...otherToolsets], shuffleSeedRef.current));
-  }, [isMobile, currentToolsetSlug]);
+  }, [isMobile, currentToolsetSlug, otherToolsets]);
 
   const handleClick = useCallback(
     (targetSlug: ToolsetLandingSlug) => {

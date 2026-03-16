@@ -84,22 +84,24 @@ export default function MembershipSection({
   useEffect(() => {
     const handleOpenMembershipModal = (event: CustomEvent) => {
       console.log("🎯 MembershipSection received openMembershipModal event:", event.detail);
-      const { plan } = event.detail;
-      if (plan) {
-        // Check if gates are closed (freeze period or gap period)
-        const gatesClosed = currentMajorDraw?.status !== "active";
-        if (gatesClosed) {
-          // Show gate-closed modal instead of opening payment modals
-          requestModal("gate-closed", true, {
-            nextActivationDate: nextDraw?.activationDate ?? null,
-            nextDrawName: nextDraw?.name,
-          });
-          return;
-        }
+      const detail = event.detail ?? {};
+      const plan = detail.plan as LocalMembershipPlan | undefined;
 
-        membershipModal.setSelectedPlan(plan);
-        membershipModal.openModal();
+      // Check if gates are closed (freeze period or gap period)
+      const gatesClosed = currentMajorDraw?.status !== "active";
+      if (gatesClosed) {
+        // Show gate-closed modal instead of opening payment modals
+        requestModal("gate-closed", true, {
+          nextActivationDate: nextDraw?.activationDate ?? null,
+          nextDrawName: nextDraw?.name,
+        });
+        return;
       }
+
+      if (plan) {
+        membershipModal.setSelectedPlan(plan);
+      }
+      membershipModal.openModal();
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);

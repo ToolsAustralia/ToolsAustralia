@@ -147,11 +147,9 @@ const Dropdown: React.FC<DropdownProps> = ({
       
       // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
       // Use same max-height as Select (400px) for longer dropdown
-      const maxHeight = Math.min(
-        spaceBelow - 20, // 20px padding from bottom/footer
-        spaceAbove - 20, // 20px padding from top (if we need to open upward)
-        400
-      );
+      const primarySpace = spaceBelow - 20; // Dropdown opens downward in this component.
+      const fallbackSpace = spaceAbove - 20; // Safety fallback for constrained layouts.
+      const maxHeight = Math.min(Math.max(primarySpace, fallbackSpace), 400);
 
       if (optionsRef.current) {
         optionsRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px

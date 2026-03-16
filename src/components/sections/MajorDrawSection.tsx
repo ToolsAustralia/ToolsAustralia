@@ -257,11 +257,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   useEffect(() => {
     const handleOpenMembershipModal = (event: CustomEvent) => {
       // console.log("🎯 Received openMembershipModal event:", event.detail);
-      const { plan } = event.detail;
+      const detail = event.detail ?? {};
+      const plan = detail.plan;
+
       if (plan) {
         membershipModal.setSelectedPlan(plan);
-        membershipModal.openModal();
       }
+      membershipModal.openModal();
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);

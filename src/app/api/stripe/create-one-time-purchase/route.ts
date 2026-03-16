@@ -38,6 +38,7 @@ const createOneTimePurchaseSchema = z.object({
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  campaignCode: z.string().optional(),
   attribution: attributionSchema,
 });
 
@@ -498,6 +499,7 @@ export async function POST(request: NextRequest) {
         ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+        ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
         // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,
@@ -630,6 +632,7 @@ export async function POST(request: NextRequest) {
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
           ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
           ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+          ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
           // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
           ...(experimentAssignment && {
             experimentId: experimentAssignment.experimentId,

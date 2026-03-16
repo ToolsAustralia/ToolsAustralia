@@ -5,7 +5,7 @@ import { CreditCard, Plus, ChevronRight, Cog } from "lucide-react";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import SavedPaymentMethodsModal from "./SavedPaymentMethodsModal";
 import { PaymentElement, useStripe, useElements, Elements } from "@stripe/react-stripe-js";
-import { loadStripe } from "@stripe/stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
 import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -15,8 +15,7 @@ import { formatPaymentError } from "@/utils/payment/stripe/payment-error-message
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 import { getReturnUrlForPaymentTypeClient } from "@/utils/payment/stripe/payment-intent-config";
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const stripePromise = getStripePromise();
 
 // CARD_ELEMENT_OPTIONS removed - PaymentElement handles styling automatically
 
