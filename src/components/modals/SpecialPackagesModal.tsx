@@ -95,7 +95,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponType, setCouponType] = useState<"referral" | "promo" | "campaign" | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
-  const [campaignPurchaseRequirement, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
+  const [, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
   const [upsellTriggered, setUpsellTriggered] = useState(false);
   const lastAutoAppliedCodeRef = useRef<string | null>(null);
 
@@ -187,21 +187,6 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     }
   }, [isOpen, initialCouponCode]);
 
-  // CRITICAL: Verify user has access (subscription OR current draw entries) before showing modal
-  if (!isOpen) return null;
-
-  // Verify user is authenticated and has access to additional packages
-  if (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
-    // console.log("🚫 SpecialPackagesModal: User not authenticated or doesn't have access to additional packages");
-    return null;
-  }
-
-  const handlePackageSelect = (pkg: StaticMembershipPackage) => {
-    // Single selection - unselect current and select new
-    setSelectedPackage(pkg);
-    onPackageSelect(pkg);
-  };
-
   const handleCouponApply = useCallback(async (codeOverride?: string) => {
     const normalizedCode = (codeOverride ?? couponCode).trim().toUpperCase();
     if (!normalizedCode) {
@@ -252,7 +237,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
 
       if (data.type === "campaign") {
         const purchaseReq = data.data.purchaseRequirement;
-        
+
         if (purchaseReq === "membership") {
           setCouponError("This code is for membership packs only.");
           setCouponApplied(false);
@@ -260,7 +245,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           setCampaignPurchaseRequirement(null);
           return;
         }
-        
+
         setCouponApplied(true);
         setCouponType("campaign");
         setCampaignPurchaseRequirement(purchaseReq);
@@ -287,6 +272,21 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     lastAutoAppliedCodeRef.current = normalizedInitialCode;
     handleCouponApply(normalizedInitialCode);
   }, [isOpen, initialCouponCode, handleCouponApply]);
+
+  // CRITICAL: Verify user has access (subscription OR current draw entries) before showing modal
+  if (!isOpen) return null;
+
+  // Verify user is authenticated and has access to additional packages
+  if (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
+    // console.log("🚫 SpecialPackagesModal: User not authenticated or doesn't have access to additional packages");
+    return null;
+  }
+
+  const handlePackageSelect = (pkg: StaticMembershipPackage) => {
+    // Single selection - unselect current and select new
+    setSelectedPackage(pkg);
+    onPackageSelect(pkg);
+  };
 
   const handlePurchase = async (pkg: StaticMembershipPackage) => {
     if (isProcessing) return;
