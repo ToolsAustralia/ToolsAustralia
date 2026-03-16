@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { Gift, Zap, CheckCircle, CreditCard, Sparkles, Check } from "lucide-react";
 import { useUserContext } from "@/contexts/UserContext";
@@ -23,6 +23,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { usePromoLink } from "@/hooks/usePromoLink";
+import { useReferralCode } from "@/hooks/useReferralCode";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -35,6 +36,14 @@ const hexToRgba = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+const darkenHex = (hex: string, amount: number) => {
+  const clamp = (value: number) => Math.max(0, Math.min(255, value));
+  const r = clamp(parseInt(hex.slice(1, 3), 16) - amount);
+  const g = clamp(parseInt(hex.slice(3, 5), 16) - amount);
+  const b = clamp(parseInt(hex.slice(5, 7), 16) - amount);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+};
+
 /**
  * SpecialPackagesModalProps Interface
  * Props for the SpecialPackagesModal component
@@ -43,6 +52,7 @@ export interface SpecialPackagesModalProps {
   isOpen: boolean;
   onClose: () => void;
   packages: StaticMembershipPackage[];
+  initialCouponCode?: string;
   onPackageSelect: (pkg: StaticMembershipPackage) => void;
 }
 
@@ -71,13 +81,23 @@ const SpecialPackages50OffText: React.FC = () => {
   );
 };
 
-const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onClose, packages, onPackageSelect }) => {
+const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
+  isOpen,
+  onClose,
+  packages,
+  initialCouponCode,
+  onPackageSelect,
+}) => {
   const { variantConfig } = useVariantContext();
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<StaticMembershipPackage | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
-  const [upsellTriggered, setUpsellTriggered] = useState(false); // Guard against duplicate upsell calls
+  const [couponType, setCouponType] = useState<"referral" | "promo" | "campaign" | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [campaignPurchaseRequirement, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
+  const [upsellTriggered, setUpsellTriggered] = useState(false);
+  const lastAutoAppliedCodeRef = useRef<string | null>(null);
 
   // Payment processing state
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
@@ -91,7 +111,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   const { paymentMethods } = useSavedPaymentMethods();
 
   // Get promo link code from URL/sessionStorage (for bonus entries)
-  const { promoCode: promoLinkCode } = usePromoLink();
+  const { promoCode: promoLinkCode, setPromoCode, clearPromoCode } = usePromoLink();
+  const { setReferralCode, clearReferralCode } = useReferralCode();
 
   // Member-only packages use membership promo multiplier (modal is for users with access)
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
@@ -154,8 +175,17 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       setProcessingPackageName("");
       setOriginalPurchaseContext(null);
       setUpsellTriggered(false);
+      lastAutoAppliedCodeRef.current = null;
+
+      const normalizedInitialCode = initialCouponCode?.trim().toUpperCase();
+      if (normalizedInitialCode) {
+        setCouponCode(normalizedInitialCode);
+        setCouponApplied(false);
+        setCouponType(null);
+        setCouponError(null);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialCouponCode]);
 
   // CRITICAL: Verify user has access (subscription OR current draw entries) before showing modal
   if (!isOpen) return null;
@@ -172,11 +202,91 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
     onPackageSelect(pkg);
   };
 
-  const handleCouponApply = () => {
-    if (couponCode === "5x") {
-      setCouponApplied(true);
+  const handleCouponApply = useCallback(async (codeOverride?: string) => {
+    const normalizedCode = (codeOverride ?? couponCode).trim().toUpperCase();
+    if (!normalizedCode) {
+      setCouponError("Enter a code before applying.");
+      setCouponApplied(false);
+      setCouponType(null);
+      return;
     }
-  };
+
+    if (codeOverride) {
+      setCouponCode(normalizedCode);
+    }
+
+    setCouponError(null);
+    try {
+      const response = await fetch("/api/codes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: normalizedCode,
+          inviteeUserId: userData?._id,
+          inviteeEmail: userData?.email,
+          preferType: "auto",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.valid) {
+        throw new Error(data.message || data.error || "This code is not valid right now.");
+      }
+
+      if (data.type === "referral") {
+        setCouponApplied(true);
+        setCouponType("referral");
+        setCouponError(null);
+        setReferralCode(normalizedCode);
+        clearPromoCode();
+        return;
+      }
+
+      if (data.type === "promo") {
+        setCouponApplied(true);
+        setCouponType("promo");
+        setCouponError(null);
+        setPromoCode(normalizedCode);
+        clearReferralCode();
+        return;
+      }
+
+      if (data.type === "campaign") {
+        const purchaseReq = data.data.purchaseRequirement;
+        
+        if (purchaseReq === "membership") {
+          setCouponError("This code is for membership packs only.");
+          setCouponApplied(false);
+          setCouponType(null);
+          setCampaignPurchaseRequirement(null);
+          return;
+        }
+        
+        setCouponApplied(true);
+        setCouponType("campaign");
+        setCampaignPurchaseRequirement(purchaseReq);
+        setCouponError(null);
+        clearReferralCode();
+        clearPromoCode();
+        return;
+      }
+
+      throw new Error("This code is not valid right now.");
+    } catch (error) {
+      setCouponApplied(false);
+      setCouponType(null);
+      setCouponError(error instanceof Error ? error.message : "Could not validate this code.");
+    }
+  }, [couponCode, userData?._id, userData?.email, setReferralCode, clearPromoCode, setPromoCode, clearReferralCode]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const normalizedInitialCode = initialCouponCode?.trim().toUpperCase();
+    if (!normalizedInitialCode) return;
+    if (lastAutoAppliedCodeRef.current === normalizedInitialCode) return;
+
+    lastAutoAppliedCodeRef.current = normalizedInitialCode;
+    handleCouponApply(normalizedInitialCode);
+  }, [isOpen, initialCouponCode, handleCouponApply]);
 
   const handlePurchase = async (pkg: StaticMembershipPackage) => {
     if (isProcessing) return;
@@ -185,9 +295,11 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
     // Show global loading screen
     showLoading("Processing Purchase", "", [
-      "Verifying payment method",
-      "Processing transaction",
-      "Adding entries to your account",
+      "Authorizing payment method",
+      "Confirming transaction with Stripe",
+      "Granting package benefits",
+      "Adding entries to major draw",
+      "Updating your account",
     ]);
 
     try {
@@ -208,7 +320,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
         {
           packageId: pkg._id,
           userId: userData?._id || "",
-          promoLinkCode: promoLinkCode || undefined,
+          referralCode: couponApplied && couponType === "referral" ? couponCode.trim().toUpperCase() : undefined,
+          promoLinkCode:
+            couponApplied && couponType === "promo"
+              ? couponCode.trim().toUpperCase()
+              : promoLinkCode || undefined,
+          campaignCode: couponApplied && couponType === "campaign" ? couponCode.trim().toUpperCase() : undefined,
         },
         {
           onSuccess: (result) => {
@@ -232,10 +349,21 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
                 // Don't close modal yet - let PaymentProcessingScreen handle it
               } else {
                 // Fallback to old success screen if no paymentIntentId
+                const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [
+                  { text: `${pkg.totalEntries || 0} entries added to your wallet`, icon: "gift" },
+                ];
+                if (couponApplied && couponCode) {
+                  const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
+                  fallbackBenefits.push({
+                    text: `${label} code ${couponCode.trim().toUpperCase()} applied`,
+                    icon: "tag",
+                    highlight: true,
+                  });
+                }
                 showSuccess(
                   "Purchase Successful!",
                   `${pkg.totalEntries || 0} entries added to your account`,
-                  [{ text: `${pkg.totalEntries || 0} entries added to your wallet`, icon: "gift" }],
+                  fallbackBenefits,
                   3000
                 );
                 // Close modal for fallback case
@@ -244,6 +372,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
 
               // Note: Upsell will be triggered after payment processing completes
               // This prevents duplicate upsell triggers
+              
             } else {
               throw new Error("Package purchase failed");
             }
@@ -340,8 +469,18 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
       });
     }
 
+    // Add code redemption info
+    if (couponApplied && couponCode) {
+      const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
+      benefits.push({
+        text: `${label} code ${couponCode.trim().toUpperCase()} applied`,
+        icon: "tag" as const,
+        highlight: true,
+      });
+    }
+
     // Show success modal with entry information
-    showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits, 3000);
+    showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits);
 
     // ✅ CRITICAL FIX: Capture contextToPass in closure to ensure it's available when setTimeout executes
     // This matches the pattern used in MembershipModal to avoid React state closure issues
@@ -388,7 +527,6 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
   const handlePaymentTimeout = () => {
     // console.warn("⏰ Special package payment processing timed out");
     setShowPaymentProcessing(false);
-    // Could show timeout message to user here
   };
 
   /**
@@ -723,7 +861,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
               <input
                 type="text"
                 value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value)}
+                onChange={(e) => {
+                  setCouponCode(e.target.value);
+                  setCouponApplied(false);
+                  setCouponType(null);
+                  setCouponError(null);
+                }}
                 placeholder="Enter coupon code"
                 className="flex-1 min-w-0 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base"
               />
@@ -735,13 +878,14 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
               ) : (
                 <button
                   type="button"
-                  onClick={handleCouponApply}
+                  onClick={() => handleCouponApply()}
                   className="h-11 bg-gray-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl hover:bg-gray-600 transition-colors text-xs sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
                 >
                   Apply
                 </button>
               )}
             </div>
+            {couponError && <p className="mt-2 text-xs text-red-600">{couponError}</p>}
           </div>
 
           {/* Action Buttons */}
@@ -750,27 +894,33 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({ isOpen, onC
             {selectedPackage ? (() => {
               const colorScheme = getPackageColorSchemeForPromo(selectedPackage._id || "", false, variantConfig);
               const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
-              const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-              const buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
+              const accentDark = darkenHex(accentHex, 34);
+              const textClass = colorScheme.enterNowButtonTextClass ?? "text-white";
+              const buttonStyle = {
+                ...(colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle),
+                background: `linear-gradient(135deg, ${accentHex} 0%, ${accentDark} 100%)`,
+                border: `1px solid ${hexToRgba(accentHex, 0.55)}`,
+                boxShadow: `0 10px 24px ${hexToRgba(accentHex, 0.35)}, inset 0 1px 0 ${hexToRgba("#ffffff", 0.22)}`,
+              };
               return (
                 <button
                   type="button"
                   onClick={() => defaultPaymentMethod && handlePurchase(selectedPackage)}
                   disabled={isProcessing || !defaultPaymentMethod}
-                  className={`font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden`}
+                  className={`font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation disabled:cursor-not-allowed relative overflow-hidden`}
                   style={buttonStyle}
                 >
                   {isProcessing ? (
                     <span className="relative z-10">Processing...</span>
                   ) : defaultPaymentMethod ? (
                     <>
-                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 relative z-10" style={colorScheme.textGradientStyle ? { color: accentHex } : undefined} />
-                      <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 relative z-10" />
+                      <span className="relative z-10">
                         Buy Now - ${selectedPackage.price}
                       </span>
                       <div className="flex items-center gap-1.5 bg-white/20 rounded px-2 sm:px-3 py-1 sm:py-1.5 relative z-10">
-                        <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" style={colorScheme.textGradientStyle ? { color: accentHex } : { color: "inherit" }} />
-                        <span className="text-xs" style={colorScheme.textGradientStyle ?? undefined}>
+                        <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                        <span className="text-xs">
                           •••• {defaultPaymentMethod.card?.last4}
                         </span>
                       </div>

@@ -9,6 +9,7 @@ import RewardsOverview from "./RewardsOverview";
 import PartnerDiscounts from "./PartnerDiscounts";
 import RewardsHistory from "./RewardsHistory";
 import RewardsRedemption from "./RewardsRedemption";
+import RedeemablesWallet from "@/components/features/RedeemablesWallet";
 
 interface RewardsPageClientProps {
   user: UserData;
@@ -83,6 +84,9 @@ export default function RewardsPageClient({ user }: RewardsPageClientProps) {
             <div className="lg:col-span-2 space-y-6 sm:space-y-8">
               {/* Rewards Overview */}
               <RewardsOverview user={updatedUser} />
+
+              {/* Redeemables Wallet */}
+              <RedeemablesWallet userId={updatedUser._id} variant="rewards" />
 
               {/* Package Redemption */}
               <RewardsRedemption user={updatedUser} onPointsUpdate={handlePointsUpdate} />

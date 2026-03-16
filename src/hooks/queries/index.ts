@@ -178,6 +178,15 @@ export { useMajorDrawWinners, type MajorDrawWinner } from "./useWinnersQueries";
 
 // Note: useMiniDrawPackages, usePurchaseMiniDraw and related types are not yet implemented
 
+// Redeemables hooks
+export {
+  useRedeemablesWallet,
+  useRedeemablesStatus,
+  useRedeemableRedemption,
+  type RedeemableWalletItem,
+  type RedeemablesStatusResponse,
+} from "./useRedeemablesQueries";
+
 // Subscription management hooks
 export {
   useUpgradeSubscription,

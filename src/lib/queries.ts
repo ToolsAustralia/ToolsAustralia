@@ -28,6 +28,24 @@ import { collectErrorContext } from "@/utils/error-reporting/collect-error-conte
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
+// In-memory session cache to reduce redundant /api/auth/session calls
+let cachedSession: { session: any; timestamp: number } | null = null;
+const SESSION_CACHE_TTL = 30_000; // 30 seconds
+
+async function getCachedSession() {
+  const now = Date.now();
+  if (cachedSession && now - cachedSession.timestamp < SESSION_CACHE_TTL) {
+    return cachedSession.session;
+  }
+  const session = await getSession();
+  cachedSession = { session, timestamp: now };
+  return session;
+}
+
+export function invalidateSessionCache() {
+  cachedSession = null;
+}
+
 // Custom error class for API errors
 
 export class ApiError extends Error {
@@ -47,9 +65,9 @@ export class ApiError extends Error {
 
 export async function apiRequest<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
   try {
-    // Get session for authentication
+    // Get session for authentication (cached to reduce network calls)
 
-    const session = await getSession();
+    const session = await getCachedSession();
 
     // Prepare headers
 
@@ -159,6 +177,9 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
               url: `${API_BASE_URL}${endpoint}`,
               method: options.method as string,
               status: response.status,
+              userId: session?.user?.id,
+              userEmail: session?.user?.email,
+              isAuthenticated: !!session?.user,
             }
           );
         } catch (contextError) {
@@ -175,6 +196,14 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
     // Handle network errors
 
     if (error instanceof TypeError && error.message.includes("fetch")) {
+      // Get session for error context (use cached version)
+      let session;
+      try {
+        session = await getCachedSession();
+      } catch {
+        // Ignore session errors during error handling
+      }
+      
       // Collect error context for network errors (client-side only)
       let errorContext: ErrorContext | undefined;
       if (typeof window !== "undefined") {
@@ -184,6 +213,9 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
             {
               url: `${API_BASE_URL}${endpoint}`,
               method: options.method as string,
+              userId: session?.user?.id,
+              userEmail: session?.user?.email,
+              isAuthenticated: !!session?.user,
             }
           );
         } catch (contextError) {
@@ -201,6 +233,14 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
     }
 
     // Handle other errors
+    // Get session for error context (use cached version)
+    let session;
+    try {
+      session = await getCachedSession();
+    } catch {
+      // Ignore session errors during error handling
+    }
+    
     // Collect error context for unknown errors (client-side only)
     let errorContext: ErrorContext | undefined;
     if (typeof window !== "undefined") {
@@ -208,6 +248,9 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
         errorContext = await collectErrorContext(error, {
           url: `${API_BASE_URL}${endpoint}`,
           method: options.method as string,
+          userId: session?.user?.id,
+          userEmail: session?.user?.email,
+          isAuthenticated: !!session?.user,
         });
       } catch (contextError) {
         // Silently fail if context collection fails

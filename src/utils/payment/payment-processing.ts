@@ -27,6 +27,8 @@ import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
 import type { AttributionParams } from "@/types/tracking";
 import { PromoRedemptionService } from "@/services/promo/PromoRedemptionService";
+import { RedemptionService } from "@/services/redeemables/RedemptionService";
+import { MilestoneService } from "@/services/milestones";
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
@@ -39,6 +41,7 @@ type PaymentMetadata = {
   miniDrawId?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  campaignCode?: string;
   // ✅ A/B Testing: Experiment assignment stored in payment metadata
   experimentId?: string;
   variantId?: string;
@@ -537,6 +540,12 @@ async function processPaymentBenefitsInternal(
         console.error("Klaviyo profile sync error (non-critical):", _klaviyoError);
       }
 
+      try {
+        await MilestoneService.checkAndIssueMilestones(userId);
+      } catch (milestoneError) {
+        console.error("Milestone evaluation failed after payment processing:", milestoneError);
+      }
+
       return { success: true, alreadyProcessed: false };
     } catch (error) {
       // console.error(`❌ Error processing payment ${paymentIntentId} (attempt ${retryCount + 1}):`, error);
@@ -828,6 +837,45 @@ async function checkAndApplyPromoLink(
 }
 
 
+async function checkAndRedeemCampaign(
+  user: UserDocument,
+  paymentMetadata?: PaymentMetadata
+): Promise<{ entriesGranted: number; code: string } | null> {
+  const code = paymentMetadata?.campaignCode;
+  if (!code) return null;
+
+  try {
+    const result = await RedemptionService.redeem({
+      userId: user._id.toString(),
+      code,
+    });
+
+    if (result.success && result.entriesGranted) {
+      console.log(`✅ [CAMPAIGN] Server-side campaign redemption successful:`, {
+        userId: user._id.toString(),
+        code,
+        entriesGranted: result.entriesGranted,
+      });
+      return { entriesGranted: result.entriesGranted, code };
+    }
+
+    console.warn(`⚠️ [CAMPAIGN] Campaign redemption did not grant entries:`, {
+      userId: user._id.toString(),
+      code,
+      success: result.success,
+      reason: result.reason,
+    });
+    return null;
+  } catch (error) {
+    console.error(`❌ [CAMPAIGN] Campaign redemption error (non-blocking):`, {
+      error: error instanceof Error ? error.message : String(error),
+      userId: user._id.toString(),
+      code,
+    });
+    return null;
+  }
+}
+
 async function grantBenefits(
   user: UserDocument,
   packageData: {
@@ -1090,6 +1138,25 @@ async function grantBenefits(
       userEmail: user.email,
       packageType: packageData.packageType,
       paymentMetadata,
+    });
+  }
+
+  // ✅ Campaign code redemption (MonthlyEntryCampaign bonus entries)
+  try {
+    const campaignResult = await checkAndRedeemCampaign(user, paymentMetadata);
+    if (campaignResult) {
+      console.log(`✅ [CAMPAIGN] Campaign bonus entries granted via webhook:`, {
+        userId: user._id?.toString(),
+        code: campaignResult.code,
+        entriesGranted: campaignResult.entriesGranted,
+        packageType: packageData.packageType,
+      });
+    }
+  } catch (campaignError) {
+    console.error("❌ [CAMPAIGN] Campaign processing error (non-blocking):", {
+      error: campaignError instanceof Error ? campaignError.message : String(campaignError),
+      userId: user._id?.toString(),
+      campaignCode: paymentMetadata?.campaignCode,
     });
   }
 

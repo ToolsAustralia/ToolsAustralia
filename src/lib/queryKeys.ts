@@ -110,6 +110,15 @@ export const queryKeys = {
     redeem: (userId: string) => ["rewards", userId, "redeem"] as const,
   },
 
+  // Redeemables wallet queries
+  redeemables: {
+    wallet: (
+      userId: string,
+      params?: { page?: number; limit?: number; status?: "claimable" | "past" }
+    ) => ["redeemables", userId, "wallet", params?.page || 1, params?.limit || 10, params?.status || "all"] as const,
+    status: (userId: string) => ["redeemables", userId, "status"] as const,
+  },
+
   // Referral queries
   referrals: {
     profile: (userId: string) => ["referrals", "profile", userId] as const,
@@ -149,4 +158,5 @@ export type UpsellQueryKey = QueryKey["upsell"];
 
 export type GiveawayQueryKey = QueryKey["giveaways"];
 export type RewardsQueryKey = QueryKey["rewards"];
+export type RedeemablesQueryKey = QueryKey["redeemables"];
 export type AdminQueryKey = QueryKey["admin"];

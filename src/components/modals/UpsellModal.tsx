@@ -429,9 +429,11 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
     // Show immediate loading feedback
     showLoading("Processing Purchase", "", [
-      "Verifying payment method",
-      "Processing transaction",
-      "Adding entries to your account",
+      "Authorizing payment method",
+      "Confirming transaction with Stripe",
+      "Granting bonus entries",
+      "Adding entries to major draw",
+      "Updating your account",
     ]);
 
     try {
@@ -557,7 +559,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
 
     // Show success modal with entry information
-    showSuccess("Upsell Successful!", `${offer.title} activated`, benefits, 3000);
+    showSuccess("Upsell Successful!", `${offer.title} activated`, benefits);
 
     // ✅ CRITICAL: Always finalize invoice with both original purchase and upsell
     // Use paymentIntentId from status.data if available, otherwise fall back to state

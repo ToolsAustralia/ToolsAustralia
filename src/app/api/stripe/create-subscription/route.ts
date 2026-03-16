@@ -49,6 +49,7 @@ const createSubscriptionSchema = z.object({
   cancelPreviousSubscriptionId: z.string().optional(), // When user switches package: cancel this incomplete subscription before creating new one (guest: must match request email)
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  campaignCode: z.string().optional(),
   attribution: attributionSchema,
 });
 
@@ -433,6 +434,7 @@ export async function POST(request: NextRequest) {
       ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+      ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
       ...(experimentAssignment && {
         experimentId: experimentAssignment.experimentId,
         variantId: experimentAssignment.variantId,

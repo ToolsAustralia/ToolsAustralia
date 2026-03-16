@@ -32,6 +32,7 @@ interface Participant {
     upsell?: number;
     "mini-draw"?: number;
     referral?: number;
+    "bonus-entry-promo"?: number;
   };
   firstAddedDate: Date | string;
   lastUpdatedDate: Date | string;
@@ -367,6 +368,11 @@ export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorD
                           {participant.entriesBySource.referral && (
                             <span className="px-2 py-1 bg-pink-100 text-pink-800 rounded text-xs font-medium">
                               Referral: {participant.entriesBySource.referral}
+                            </span>
+                          )}
+                          {(participant.entriesBySource["bonus-entry-promo"] ?? 0) > 0 && (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                              Campaign/Promo: {participant.entriesBySource["bonus-entry-promo"]}
                             </span>
                           )}
                         </div>

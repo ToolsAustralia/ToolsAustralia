@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
 import { Check, Loader2, MapPin } from "lucide-react";
 import PackageSelectionModal from "./PackageSelectionModal";
@@ -11,12 +11,10 @@ import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
 import { useLoading } from "@/contexts/LoadingContext";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
-import { loadStripe } from "@stripe/stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
 import { useMemberships } from "@/hooks/useMemberships";
 
-// ✅ CRITICAL FIX: Initialize Stripe at module level (outside component) to prevent endless API calls
-// This ensures Stripe is only loaded once, not on every render
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const stripePromise = getStripePromise();
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
@@ -140,13 +138,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [upsellTriggered, setUpsellTriggered] = useState(false); // Guard against duplicate upsell calls
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
+  const [couponType, setCouponType] = useState<"referral" | "promo" | "campaign" | null>(null);
+  const [campaignPurchaseRequirement, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
   const {
     referralCode: storedReferralCode,
     setReferralCode: persistReferralCode,
     clearReferralCode,
   } = useReferralCode();
   const { affiliateCode } = useAffiliateLink();
-  const { promoCode: promoLinkCode } = usePromoLink();
+  const { promoCode: promoLinkCode, setPromoCode, clearPromoCode } = usePromoLink();
   const [isValidatingReferral, setIsValidatingReferral] = useState(false);
   const [referralInfo, setReferralInfo] = useState<{ referrerName: string } | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
@@ -163,6 +163,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   } | null>(null);
 
   const normalizedCouponCode = couponCode.trim().toUpperCase();
+  const appliedCouponPayload = useMemo(
+    () => ({
+      referralCode:
+        couponApplied && couponType === "referral" ? normalizedCouponCode : undefined,
+      promoLinkCode:
+        couponApplied && couponType === "promo"
+          ? normalizedCouponCode
+          : promoLinkCode || undefined,
+      campaignCode:
+        couponApplied && couponType === "campaign" ? normalizedCouponCode : undefined,
+    }),
+    [couponApplied, couponType, normalizedCouponCode, promoLinkCode]
+  );
   const showApplyingIndicator = !couponApplied && isValidatingReferral;
   const isApplyDisabled = normalizedCouponCode.length === 0 || isValidatingReferral;
 
@@ -509,8 +522,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   // Step 2 is only available when step 1 is complete (registered or authenticated)
   const hasCompletedRegistration = isAuthenticated || guestUserData !== null;
 
-  // Validate promo link when code is detected
-  // This fetches bonus entries information to display encouraging text to users
+  // Validate promo link when code is detected.
+  // Uses the unified code validator, preferring promo semantics.
   useEffect(() => {
     const validatePromoLink = async () => {
       // Only validate if we have a promo code and modal is open
@@ -535,10 +548,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           code: "",
         });
 
-        const response = await fetch(`/api/promo/link/validate?code=${encodeURIComponent(promoLinkCode)}`);
+        const response = await fetch("/api/codes/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: promoLinkCode,
+            preferType: "promo",
+          }),
+        });
         const data = await response.json();
 
-        if (data.success && data.valid && data.data) {
+        if (data.success && data.valid && data.type === "promo" && data.data) {
           setPromoLinkInfo({
             bonusEntries: data.data.bonusEntries,
             isValid: true,
@@ -743,6 +763,26 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     };
   }, [onPlanChange]);
 
+  // Allow external triggers (e.g. rewards unlock button) to prefill coupon codes.
+  useEffect(() => {
+    const handleOpenMembershipModalPrefill = (event: CustomEvent) => {
+      const detail = event.detail as { referralCode?: string } | undefined;
+      const incomingCode = detail?.referralCode?.trim().toUpperCase();
+      if (!incomingCode) return;
+
+      setCouponCode(incomingCode);
+      setCouponApplied(false);
+      setCouponType(null);
+      setReferralInfo(null);
+      setReferralError(null);
+    };
+
+    window.addEventListener("openMembershipModal", handleOpenMembershipModalPrefill as EventListener);
+    return () => {
+      window.removeEventListener("openMembershipModal", handleOpenMembershipModalPrefill as EventListener);
+    };
+  }, []);
+
   // Debug logging for amount calculation before passing to PaymentMethodSelector
   useEffect(() => {
     const promoEnhancedPlanPrice = promoEnhancedPlan?.price;
@@ -946,9 +986,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               packageId: packageId || "",
               subscriptionRequestId,
               cancelPreviousSubscriptionId,
-              referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+              referralCode: appliedCouponPayload.referralCode,
               affiliateCode: affiliateCode || undefined,
-              promoLinkCode: promoLinkCode || undefined,
+              promoLinkCode: appliedCouponPayload.promoLinkCode,
+              campaignCode: appliedCouponPayload.campaignCode,
             })
               .then((result) => result && onSuccess(result as never))
               .catch(onError);
@@ -962,9 +1003,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             packageId,
             subscriptionRequestId,
             cancelPreviousSubscriptionId,
-            referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            referralCode: appliedCouponPayload.referralCode,
             affiliateCode: affiliateCode || undefined,
-            promoLinkCode: promoLinkCode || undefined,
+            promoLinkCode: appliedCouponPayload.promoLinkCode,
+            campaignCode: appliedCouponPayload.campaignCode,
           })
             .then((result) => result && onSuccess(result as never))
             .catch(onError);
@@ -1641,8 +1683,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     async (source: "manual" | "auto" = "manual") => {
       const normalizedCode = couponCode.trim().toUpperCase();
       if (!normalizedCode) {
-        setReferralError("Enter a referral code before applying.");
+        setReferralError("Enter a code before applying.");
         setCouponApplied(false);
+        setCouponType(null);
         setReferralInfo(null);
         return;
       }
@@ -1655,44 +1698,68 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         const rawEmail = isAuthenticated ? userData?.email : guestUserData?.email ?? formData.email ?? undefined;
         const inviteeEmail = rawEmail?.trim() ? rawEmail.trim() : undefined;
 
-        const payload: Record<string, unknown> = {
-          referralCode: normalizedCode,
-        };
-
-        if (inviteeUserId) {
-          payload.inviteeUserId = inviteeUserId;
-        }
-        if (inviteeEmail) {
-          payload.inviteeEmail = inviteeEmail;
-        }
-
-        const response = await fetch("/api/referrals/validate", {
+        const response = await fetch("/api/codes/validate", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            code: normalizedCode,
+            inviteeUserId,
+            inviteeEmail,
+            preferType: "auto",
+          }),
         });
-
         const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "This referral code is not valid right now.");
+        if (!response.ok || !data.success || !data.valid) {
+          throw new Error(data.message || data.error || "This code is not valid right now.");
         }
 
-        setCouponCode(normalizedCode);
-        setCouponApplied(true);
-        setReferralInfo({ referrerName: data.data.referrerName });
-        setReferralError(null);
-        persistReferralCode(normalizedCode);
+        if (data.type === "referral") {
+          setCouponCode(normalizedCode);
+          setCouponApplied(true);
+          setCouponType("referral");
+          setReferralInfo({ referrerName: data.data.referrerName });
+          setReferralError(null);
+          persistReferralCode(normalizedCode);
+          clearPromoCode();
+          return;
+        }
+
+        if (data.type === "promo") {
+          setCouponCode(normalizedCode);
+          setCouponApplied(true);
+          setCouponType("promo");
+          setReferralInfo(null);
+          setReferralError(null);
+          setPromoCode(normalizedCode);
+          clearReferralCode();
+          return;
+        }
+
+        if (data.type === "campaign") {
+          setCouponCode(normalizedCode);
+          setCouponApplied(true);
+          setCouponType("campaign");
+          setCampaignPurchaseRequirement(data.data.purchaseRequirement);
+          setReferralInfo(null);
+          setReferralError(null);
+          clearReferralCode();
+          clearPromoCode();
+          return;
+        }
+
+        throw new Error("This code is not valid right now.");
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "We couldn't validate that referral code. Please try again.";
+          error instanceof Error ? error.message : "We couldn't validate that code. Please try again.";
         setReferralError(message);
         setCouponApplied(false);
+        setCouponType(null);
         setReferralInfo(null);
         if (source === "auto") {
           clearReferralCode();
+          clearPromoCode();
         }
       } finally {
         setIsValidatingReferral(false);
@@ -1707,6 +1774,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       guestUserData?.email,
       formData.email,
       persistReferralCode,
+      setPromoCode,
+      clearPromoCode,
       clearReferralCode,
     ]
   );
@@ -2109,6 +2178,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     handlePaymentRecovery,
   ]);
 
+  const appendCodeBenefits = useCallback(
+    (benefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[]) => {
+      if (couponApplied && couponCode) {
+        const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
+        benefits.push({
+          text: `${label} code ${normalizedCouponCode} applied`,
+          icon: "tag",
+          highlight: true,
+        });
+      }
+    },
+    [couponApplied, couponCode, couponType, normalizedCouponCode]
+  );
+
   // Payment processing handlers
   const handlePaymentProcessingSuccess = async (status: PaymentStatusResponse) => {
     // console.log("🎉 Payment processing completed:", status);
@@ -2143,8 +2226,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       });
     }
 
+    appendCodeBenefits(benefits);
+
     // Show success modal with entry information
-    showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits, 3000);
+    showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits);
 
     // ✅ Store original purchase context for combined invoice (if needed for upsells)
     // CRITICAL FIX: Create local variable to avoid React state closure issue
@@ -2275,6 +2360,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       ],
       5000
     );
+
   };
 
   // Payment confirmation handlers
@@ -2345,8 +2431,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
               3000
             );
-
-            // Success is now handled by global success screen above
 
             // Store original purchase context for combined invoice (if paymentIntentId is available)
             // CRITICAL FIX: Create local variable to avoid React state closure issue
@@ -2515,7 +2599,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         }
       }
 
-      showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
+      appendCodeBenefits(benefits);
+      showSuccess("Successful!", `${activePlan.name} activated`, benefits);
 
       // Store original purchase context for combined invoice (if needed for upsells)
       // CRITICAL FIX: Create local variable to avoid React state closure issue
@@ -2656,7 +2741,31 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       });
       return;
     }
-    
+
+    if (couponType === "campaign" && campaignPurchaseRequirement) {
+      const isSubscription = activePlan?.period === "mo";
+      
+      if (campaignPurchaseRequirement === "membership" && !isSubscription) {
+        showToast({
+          type: "error",
+          title: "Code not applicable",
+          message: "This code is for membership packs only.",
+          duration: 5000,
+        });
+        return;
+      }
+      
+      if (campaignPurchaseRequirement === "one-time" && isSubscription) {
+        showToast({
+          type: "error",
+          title: "Code not applicable",
+          message: "This code is for one-time packages only.",
+          duration: 5000,
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     // Track button click before processing purchase
@@ -2680,9 +2789,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
     // Show global loading screen
     showLoading("Processing Purchase", "", [
-      "Verifying payment method",
-      "Processing transaction",
-      isAuthenticated ? "Activating your membership" : "Creating your account",
+      "Authorizing payment method",
+      "Confirming transaction with Stripe",
+      isAuthenticated ? "Activating your membership benefits" : "Creating your account",
+      "Granting entries to major draw",
+      "Updating your dashboard",
     ]);
 
     // Declare variables in outer scope for error handling
@@ -3266,9 +3377,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           packageId: packageId,
           userId: userData?._id || "",
           paymentMethodId,
-          referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+          referralCode: appliedCouponPayload.referralCode,
           affiliateCode: affiliateCode || undefined,
-          promoLinkCode: promoLinkCode || undefined,
+          promoLinkCode: appliedCouponPayload.promoLinkCode,
+          campaignCode: appliedCouponPayload.campaignCode,
         });
 
         if (miniDrawResult) {
@@ -3342,7 +3454,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               }
             }
 
-            showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
+            appendCodeBenefits(benefits);
+            showSuccess("Successful!", `${activePlan.name} activated`, benefits);
 
             // Trigger upsell modal after a delay with duplicate prevention
             setTimeout(() => {
@@ -3407,7 +3520,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             // ✅ Always call API when paying with saved method; or create when no subscription exists yet
             const userEmail = userData?.email || "unknown";
             const idempotencyKey = `sub_${packageId}_${userEmail}_${Date.now()}`;
-            const promoLinkCodeToSend = promoLinkCode || undefined;
+            const promoLinkCodeToSend = appliedCouponPayload.promoLinkCode;
             const cancelPreviousSubscriptionId = previousSubscriptionToCancelRef.current ?? undefined;
             if (previousSubscriptionToCancelRef.current) previousSubscriptionToCancelRef.current = null;
 
@@ -3416,9 +3529,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               paymentMethodId,
               idempotencyKey,
               cancelPreviousSubscriptionId,
-              referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+              referralCode: appliedCouponPayload.referralCode,
               affiliateCode: affiliateCode || undefined,
               promoLinkCode: promoLinkCodeToSend,
+              campaignCode: appliedCouponPayload.campaignCode,
             });
 
             if (result?.success && result.subscription?.id) {
@@ -3432,9 +3546,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             packageId,
             userId: userData?._id || "",
             paymentMethodId,
-            referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            referralCode: appliedCouponPayload.referralCode,
             affiliateCode: affiliateCode || undefined,
-            promoLinkCode: promoLinkCode || undefined,
+            promoLinkCode: appliedCouponPayload.promoLinkCode,
+            campaignCode: appliedCouponPayload.campaignCode,
           });
         }
 
@@ -3582,7 +3697,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               }
             }
 
-            showSuccess("Successful!", `${activePlan.name} activated`, benefits, 3000);
+            appendCodeBenefits(benefits);
+            showSuccess("Successful!", `${activePlan.name} activated`, benefits);
 
             // Attempt to recover paymentIntentId even in fallback path
             let fallbackPaymentIntentId: string | null = null;
@@ -3753,9 +3869,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             ...(activePlan.period !== "mo" && confirmedPaymentIntentId
               ? { paymentIntentId: confirmedPaymentIntentId }
               : {}),
-            referralCode: couponApplied ? couponCode.trim().toUpperCase() : undefined,
+            referralCode: appliedCouponPayload.referralCode,
             affiliateCode: affiliateCode || undefined,
-            promoLinkCode: promoLinkCode || undefined,
+            promoLinkCode: appliedCouponPayload.promoLinkCode,
+            campaignCode: appliedCouponPayload.campaignCode,
           };
 
           console.log(
@@ -4029,7 +4146,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       }
                     }
 
-                    showSuccess("Welcome!", `${activePlan.name} activated`, benefits, 3000);
+                    appendCodeBenefits(benefits);
+                    showSuccess("Welcome!", `${activePlan.name} activated`, benefits);
 
                     // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
                     const oneTimePaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
@@ -4941,6 +5059,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                 const value = e.target.value.toUpperCase();
                                 setCouponCode(value);
                                 setCouponApplied(false);
+                                setCouponType(null);
                                 setReferralInfo(null);
                                 setReferralError(null);
                                 if (!value.trim()) {

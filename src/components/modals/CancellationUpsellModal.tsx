@@ -49,9 +49,10 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
     setIsProcessing(true);
 
     // Show loading feedback
-    showLoading("Processing Purchase", "", [
-      "Processing your reward",
-      "Adding entries to your account",
+    showLoading("Processing Reward", "", [
+      "Verifying eligibility",
+      "Granting free entries",
+      "Adding entries to major draw",
       "Updating your dashboard",
     ]);
 
@@ -110,8 +111,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
             text: "Please try again",
             icon: "star" as const,
           },
-        ],
-        3000
+        ]
       );
     } finally {
       setIsProcessing(false);

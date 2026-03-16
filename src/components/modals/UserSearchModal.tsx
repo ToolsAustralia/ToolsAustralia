@@ -24,6 +24,8 @@ interface UserSearchResult {
       "one-time-package"?: number;
       upsell?: number;
       "mini-draw"?: number;
+      referral?: number;
+      "bonus-entry-promo"?: number;
     };
   };
 }
@@ -360,6 +362,16 @@ export default function UserSearchModal({
                               {user.currentDrawEntries.entriesBySource["mini-draw"] && (
                                 <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
                                   Mini-draw: {user.currentDrawEntries.entriesBySource["mini-draw"]}
+                                </span>
+                              )}
+                              {user.currentDrawEntries.entriesBySource.referral && (
+                                <span className="px-2 py-1 bg-pink-100 text-pink-800 rounded text-xs">
+                                  Referral: {user.currentDrawEntries.entriesBySource.referral}
+                                </span>
+                              )}
+                              {user.currentDrawEntries.entriesBySource["bonus-entry-promo"] && (
+                                <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">
+                                  Campaign/Promo: {user.currentDrawEntries.entriesBySource["bonus-entry-promo"]}
                                 </span>
                               )}
                             </div>

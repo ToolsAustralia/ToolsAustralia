@@ -181,13 +181,15 @@ export interface CollectErrorContextRequest {
   status?: number;
   userEmail?: string;
   guestEmail?: string;
+  userId?: string;
+  isAuthenticated?: boolean;
 }
 
 /**
  * Collect comprehensive error context
  * 
  * @param error - The error object that occurred
- * @param requestInfo - Optional request information (URL, method, status, guestEmail)
+ * @param requestInfo - Optional request information (URL, method, status, guestEmail, userId, isAuthenticated)
  * @returns ErrorContext object with all collected information
  */
 export async function collectErrorContext(
@@ -211,31 +213,24 @@ export async function collectErrorContext(
     errorMessage = String((error as { message: unknown }).message);
   }
 
-  // Get session information
-  let userId: string | undefined;
-  let userEmail: string | undefined;
-  let guestEmail: string | undefined;
-  let isAuthenticated = false;
+  // Get session information (prefer from requestInfo to avoid redundant fetch)
+  let userId: string | undefined = requestInfo?.userId;
+  let userEmail: string | undefined = requestInfo?.userEmail;
+  let guestEmail: string | undefined = requestInfo?.guestEmail;
+  let isAuthenticated = requestInfo?.isAuthenticated ?? false;
 
-  try {
-    const session = await getSession();
-    if (session?.user) {
-      isAuthenticated = true;
-      userId = session.user.id;
-      userEmail = session.user.email || undefined;
-    } else {
-      // ✅ NEW: Extract guest email from requestInfo if available
-      // Guest email can come from:
-      // 1. Request body (passed via requestInfo)
-      // 2. PaymentIntent metadata (extracted elsewhere)
-      // 3. Stripe customer billing details (extracted elsewhere)
-      guestEmail = requestInfo?.guestEmail;
+  // Only fetch session if not provided in requestInfo
+  if (!userId && !isAuthenticated) {
+    try {
+      const session = await getSession();
+      if (session?.user) {
+        isAuthenticated = true;
+        userId = session.user.id;
+        userEmail = session.user.email || undefined;
+      }
+    } catch (sessionError) {
+      console.warn("Failed to get session for error context:", sessionError);
     }
-  } catch (sessionError) {
-    // Silently fail if session retrieval fails
-    console.warn("Failed to get session for error context:", sessionError);
-    // Still try to capture guest email if available
-    guestEmail = requestInfo?.guestEmail;
   }
 
   // Get browser and environment information

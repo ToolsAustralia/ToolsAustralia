@@ -141,11 +141,13 @@ const UnifiedModalManager: React.FC = () => {
         );
 
       case "special-packages":
+        const specialPackagesData = activeModalData as { initialCouponCode?: string } | null;
         return (
           <SpecialPackagesModal
             isOpen={isSpecialPackagesOpen}
             onClose={() => handleModalClose("special-packages")}
             packages={specialPackages}
+            initialCouponCode={specialPackagesData?.initialCouponCode}
             onPackageSelect={(_pkg) => {
               // Handle package selection - this would typically trigger purchase flow
               // console.log("Special package selected:", pkg);

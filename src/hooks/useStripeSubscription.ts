@@ -1,14 +1,7 @@
 import { useState } from "react";
-import { loadStripe, StripeCardElement } from "@stripe/stripe-js";
+import { StripeCardElement } from "@stripe/stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
 import { useAttribution } from "@/hooks/useAttribution";
-
-// Validate Stripe publishable key before initializing
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-if (!stripePublishableKey) {
-  console.error("❌ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set in environment variables");
-}
-
-const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
 
 /**
  * Subscription creation data for new users
@@ -32,6 +25,7 @@ export interface SubscriptionData {
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  campaignCode?: string;
 }
 
 export interface OneTimePurchaseData {
@@ -46,6 +40,7 @@ export interface OneTimePurchaseData {
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  campaignCode?: string;
 }
 
 /**
@@ -65,6 +60,7 @@ export interface ExistingUserSubscriptionData {
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  campaignCode?: string;
 }
 
 export interface ExistingUserOneTimePurchaseData {
@@ -73,6 +69,7 @@ export interface ExistingUserOneTimePurchaseData {
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  campaignCode?: string;
 }
 
 export interface SubscriptionResult {
@@ -308,11 +305,7 @@ export function useStripeSubscription() {
 
   const confirmPayment = async (clientSecret: string, paymentMethod: string) => {
     try {
-      if (!stripePromise) {
-        throw new Error("Stripe publishable key not configured");
-      }
-
-      const stripe = await stripePromise;
+      const stripe = await getStripePromise();
       if (!stripe) {
         throw new Error("Stripe not loaded");
       }
@@ -343,11 +336,7 @@ export function useStripeSubscription() {
 
   const createPaymentMethod = async (cardElement: StripeCardElement) => {
     try {
-      if (!stripePromise) {
-        throw new Error("Stripe publishable key not configured");
-      }
-
-      const stripe = await stripePromise;
+      const stripe = await getStripePromise();
       if (!stripe) {
         throw new Error("Stripe not loaded");
       }
