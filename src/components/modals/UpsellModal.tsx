@@ -504,7 +504,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     } catch (error) {
       console.error("Upsell purchase failed:", error);
       console.error(`Purchase failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-      hideLoading(); // Hide loading screen on error
+      hideLoading(); // Hide loading screen on error (skip success animation)
 
       // Show error toast to user with the error message
       const errorMessage = error instanceof Error ? error.message : "Upsell purchase failed";

@@ -4354,7 +4354,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       const subscriptionError = handleSubscriptionError(error);
       console.error(`❌ Purchase failed: ${subscriptionError.message}`, subscriptionError.originalError);
 
-      // Hide loading screen immediately
+      // Hide loading screen immediately (skip success animation on error)
       hideLoading();
 
       // #region agent log

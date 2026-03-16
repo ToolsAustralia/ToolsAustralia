@@ -6,6 +6,7 @@ import { ArrowUpRight, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Gift, 
 import { useToast } from "@/components/ui/Toast";
 import { useRedeemableRedemption, useRedeemablesWallet } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { useSidebar } from "@/contexts/SidebarContext";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import {
   hasSeenRewardsSpotlight,
@@ -35,6 +36,7 @@ const DEFAULT_TRADIE_PLAN: LocalMembershipPlan = {
 
 export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetProps) {
   const { showToast } = useToast();
+  const { isAnySidebarOpen } = useSidebar();
   const requestModal = useModalPriorityStore((state) => state.requestModal);
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"claimable" | "past">("claimable");
@@ -109,7 +111,7 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
   const fabRef = useRef<HTMLButtonElement>(null);
   const [fabRect, setFabRect] = useState<{ x: number; y: number } | null>(null);
   const showSpotlight =
-    hasUnclaimed && isReady && !isOpen && !hasSeenRewardsSpotlight(userId);
+    hasUnclaimed && isReady && !isOpen && !hasSeenRewardsSpotlight(userId) && !isAnySidebarOpen;
 
   const [spotlightDismissed, setSpotlightDismissed] = useState(false);
   const showSpotlightActive =
@@ -126,14 +128,14 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
   }, [showSpotlightActive, dismissSpotlight]);
 
   // Compute FAB center from known fixed CSS values (avoids measuring during animation).
-  // FAB: left-4 sm:left-6, bottom-20 sm:bottom-6, w-14 h-14 (56px).
+  // FAB: left-4 sm:left-6, bottom-10 sm:bottom-6, w-14 h-14 (56px).
   useLayoutEffect(() => {
     if (!showSpotlightActive) return;
     const computePosition = () => {
       if (typeof window === "undefined") return;
       const isMobile = window.innerWidth < 640;
       const left = isMobile ? 16 : 24; // left-4 = 16px, sm:left-6 = 24px
-      const bottom = isMobile ? 80 : 24; // bottom-20 = 80px, sm:bottom-6 = 24px
+      const bottom = isMobile ? 40 : 24; // bottom-10 = 40px, sm:bottom-6 = 24px
       const size = 56; // w-14 h-14
       setFabRect({
         x: left + size / 2,
@@ -237,12 +239,12 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
       </AnimatePresence>
 
       <AnimatePresence>
-        {!isOpen && isReady && (
+        {!isOpen && isReady && !isAnySidebarOpen && (
           <motion.button
             ref={fabRef}
             key="rewards-fab"
             onClick={handleFabClick}
-            className={`fixed bottom-20 sm:bottom-6 left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${buttonShadowClass} ${showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : ""}`}
+            className={`fixed bottom-10 sm:bottom-6 left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${buttonShadowClass} ${showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : ""}`}
             aria-label={showSpotlightActive ? "You have claimable rewards. Tap the gift icon to view them." : "Open claimable rewards"}
             initial={{ opacity: 0, scale: 0.92, y: 10 }}
             animate={{

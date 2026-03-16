@@ -15,7 +15,6 @@ interface LoadingState {
   title: string;
   subtitle: string;
   steps: string[];
-  isCompleting: boolean;
 }
 
 interface SuccessState {
@@ -53,7 +52,6 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
     title: "",
     subtitle: "",
     steps: [],
-    isCompleting: false,
   });
 
   const [successState, setSuccessState] = useState<SuccessState>({
@@ -70,25 +68,11 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
       title,
       subtitle,
       steps,
-      isCompleting: false,
     });
   };
 
   const hideLoading = () => {
-    // Show completing animation briefly before hiding
-    setLoadingState((prev) => ({
-      ...prev,
-      isCompleting: true,
-    }));
-
-    // Hide after brief completing animation
-    setTimeout(() => {
-      setLoadingState((prev) => ({
-        ...prev,
-        isVisible: false,
-        isCompleting: false,
-      }));
-    }, 600);
+    setLoadingState((prev) => ({ ...prev, isVisible: false }));
   };
 
   const showSuccess = (title: string, subtitle: string, benefits: Benefit[], autoCloseDelay?: number) => {
@@ -125,7 +109,6 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
         subtitle={loadingState.subtitle}
         steps={loadingState.steps}
         isVisible={loadingState.isVisible}
-        isCompleting={loadingState.isCompleting}
       />
 
       {/* Global Success Screen */}
