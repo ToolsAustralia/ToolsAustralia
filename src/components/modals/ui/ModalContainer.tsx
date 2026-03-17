@@ -519,7 +519,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       <div
         ref={modalContentRef}
         className={`
-        relative bg-white rounded-2xl shadow-2xl w-full mx-auto overflow-hidden flex flex-col
+        relative bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full mx-auto overflow-hidden flex flex-col
         ${sizeStyles[size]}
         ${heightStyles[height]}
         ${className}

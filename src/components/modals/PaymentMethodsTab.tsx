@@ -107,7 +107,7 @@ const AddPaymentMethodForm: React.FC<{
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-      <div className="rounded-lg border border-gray-300 p-2 sm:p-3 [&_iframe]:!min-h-[200px] sm:[&_iframe]:!min-h-[auto]">
+      <div className="rounded-lg border border-gray-300 dark:border-neutral-600 p-2 sm:p-3 [&_iframe]:!min-h-[200px] sm:[&_iframe]:!min-h-[auto]">
         <PaymentElement
           options={{
             layout: "tabs",
@@ -136,7 +136,7 @@ const AddPaymentMethodForm: React.FC<{
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
           {error}
         </div>
       )}
@@ -160,7 +160,7 @@ const AddPaymentMethodForm: React.FC<{
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="w-full sm:w-auto border border-gray-300 text-gray-700 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold hover:bg-gray-50 disabled:opacity-60"
+          className="w-full sm:w-auto border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-60"
         >
           Cancel
         </Button>
@@ -382,19 +382,19 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
   return (
     <div className="space-y-3 sm:space-y-4">
       <div>
-        <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-1 sm:mb-2">Payment Methods</h3>
-        <p className="text-xs sm:text-sm text-gray-600">
+        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2">Payment Methods</h3>
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
           Manage your saved payment methods and update your subscription payment method.
         </p>
       </div>
 
       {hasActiveSubscription && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 sm:p-4">
+        <div className="bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-800 border-l-4 border-l-blue-500 dark:border-l-blue-400 rounded-lg p-2 sm:p-4 shadow-sm">
           <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-semibold text-blue-900">Active Subscription</p>
-              <p className="text-xs text-blue-700 mt-1">
+              <p className="text-xs sm:text-sm font-semibold text-blue-900 dark:text-blue-200">Active Subscription</p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
                 Your subscription is {subscriptionStatus === "active" ? "active" : subscriptionStatus}. Update the
                 payment method below to change how future payments are processed.
               </p>
@@ -404,25 +404,27 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">{error}</div>
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">{error}</div>
       )}
 
       {loading && (
         <div className="text-center py-6 sm:py-8">
           <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 border-b-2 border-[#ee0000] mx-auto mb-2 animate-spin" />
-          <p className="text-xs sm:text-sm text-gray-600">Loading payment methods...</p>
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Loading payment methods...</p>
         </div>
       )}
 
       {!loading && !showAddForm && paymentMethods.length === 0 && (
-        <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 rounded-lg px-4">
-          <CreditCard className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">No Payment Methods</h3>
-          <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">You haven&apos;t saved any payment methods yet.</p>
+        <div className="text-center py-8 sm:py-12 border-2 border-dashed border-gray-300 dark:border-neutral-600 rounded-xl px-4 bg-gradient-to-br from-gray-50/50 to-transparent dark:from-neutral-900/50 dark:to-transparent">
+          <div className="w-16 h-16 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-neutral-700 dark:to-neutral-800 rounded-full flex items-center justify-center shadow-sm">
+            <CreditCard className="w-8 h-8 text-gray-400 dark:text-neutral-500" />
+          </div>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2">No Payment Methods</h3>
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-4 sm:mb-6">You haven&apos;t saved any payment methods yet.</p>
           <Button
             onClick={handleAddNewPaymentMethod}
             disabled={isCreatingSetupIntent}
-            className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60"
+            className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 shadow-md hover:shadow-lg transition-all"
           >
             {isCreatingSetupIntent ? (
               <>
@@ -440,16 +442,16 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
       )}
 
       {!loading && showAddForm && setupIntentClientSecret && (
-        <div className="border border-gray-200 rounded-lg p-2 sm:p-4 bg-gray-50">
+        <div className="border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 rounded-lg p-2 sm:p-4 bg-gray-50 dark:bg-neutral-800 shadow-sm">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h4 className="text-xs sm:text-sm font-semibold text-gray-900">Add New Payment Method</h4>
+            <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Add New Payment Method</h4>
             <Button
               type="button"
               onClick={() => {
                 setShowAddForm(false);
                 setSetupIntentClientSecret(null);
               }}
-              className="text-xs sm:text-sm text-gray-600 hover:text-gray-800 px-2 py-1"
+              className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded transition-colors"
             >
               Cancel
             </Button>
@@ -505,39 +507,39 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
             return (
               <div
                 key={paymentMethod.paymentMethodId}
-                className={`border-2 rounded-lg sm:rounded-xl p-2.5 sm:p-4 transition-all ${
+                className={`border-2 rounded-lg sm:rounded-xl p-2.5 sm:p-4 transition-all shadow-sm hover:shadow-md ${
                   paymentMethod.isDefault
-                    ? "border-blue-500 bg-blue-50"
+                    ? "border-blue-500 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30"
                     : isSubscriptionPaymentMethod
-                    ? "border-green-500 bg-green-50"
-                    : "border-gray-200 bg-white hover:border-gray-300"
+                    ? "border-green-500 dark:border-green-600 bg-green-50 dark:bg-green-900/30"
+                    : "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 hover:border-gray-300 dark:hover:border-neutral-600"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2 sm:gap-4">
                   <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
-                    <div className="flex items-center justify-center w-10 h-7 sm:w-12 sm:h-8 bg-gray-100 rounded-lg flex-shrink-0">
+                    <div className="flex items-center justify-center w-10 h-7 sm:w-12 sm:h-8 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-neutral-700 dark:to-neutral-800 rounded-lg flex-shrink-0 shadow-sm">
                       <span className="text-lg sm:text-xl">{getCardBrandIcon(paymentMethod.card?.brand || "")}</span>
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                        <h3 className="font-semibold text-gray-900 text-xs sm:text-sm truncate">
+                        <h3 className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm truncate">
                           {paymentMethod.card?.brand?.toUpperCase() || "CARD"} •••• {paymentMethod.card?.last4}
                         </h3>
                         {paymentMethod.isDefault && (
-                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] sm:text-xs font-medium flex-shrink-0">
+                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 shadow-sm">
                             <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-current" />
                             DEFAULT
                           </span>
                         )}
                         {isSubscriptionPaymentMethod && hasActiveSubscription && (
-                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-green-100 text-green-700 rounded text-[10px] sm:text-xs font-medium flex-shrink-0">
+                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/60 text-green-700 dark:text-green-300 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 shadow-sm">
                             <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                             SUBSCRIPTION
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
+                      <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
                         Expires {formatExpiryDate(paymentMethod.card?.expMonth || 0, paymentMethod.card?.expYear || 0)}
                       </p>
                     </div>
@@ -587,11 +589,11 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
           });
           })()}
 
-          <div className="pt-3 sm:pt-4 border-t border-gray-200">
+          <div className="pt-3 sm:pt-4 border-t border-gray-200 dark:border-neutral-600">
             <Button
               onClick={handleAddNewPaymentMethod}
               disabled={isCreatingSetupIntent || showAddForm}
-              className="w-full bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 flex items-center justify-center gap-1.5 sm:gap-2"
+              className="w-full bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 flex items-center justify-center gap-1.5 sm:gap-2 shadow-md hover:shadow-lg transition-all"
             >
               {isCreatingSetupIntent ? (
                 <>

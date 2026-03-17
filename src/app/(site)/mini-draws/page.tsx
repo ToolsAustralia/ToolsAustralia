@@ -4,7 +4,6 @@ import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
 import MembershipSection from "@/components/sections/MembershipSection";
 import MiniDrawsContent from "@/components/features/MiniDrawsContent";
-import MetallicDivider from "@/components/ui/MetallicDivider";
 import { ProductCardSkeleton, Skeleton } from "@/components/loading/SkeletonLoader";
 import MiniDrawsHero from "./components/MiniDrawsHero";
 import HowMiniDrawsWork from "./components/HowMiniDrawsWork";

@@ -57,8 +57,8 @@ const FloatingPromoBanner: React.FC = () => {
   // Check if we're on a competition terms page
   const isCompetitionTermsPage = pathname === "/competition-term-majordraw";
 
-  // On my-account page: hide at top and bottom, only show when user has scrolled
-  const isMyAccountPage = pathname === "/my-account";
+  // On my-account: hide entirely (dashboard has its own layout and bottom nav)
+  const isMyAccountPage = pathname?.startsWith("/my-account");
 
   // Listen for tab changes from MembershipSection
   useEffect(() => {
@@ -140,6 +140,7 @@ const FloatingPromoBanner: React.FC = () => {
   // Don't render at all if:
   // - On 404 page
   // - Sidebar is open
+  // - On my-account (dashboard has its own layout and bottom nav - avoids conflict)
   // - On promotions page (landing has its own banner and CTA)
   // - On shop page (hide banner on all shop pages)
   // - On admin page (hide banner on all admin pages)
@@ -153,6 +154,7 @@ const FloatingPromoBanner: React.FC = () => {
   if (
     pathname === "/not-found" ||
     isAnySidebarOpen ||
+    isMyAccountPage ||
     isPromotionsPage ||
     isShopPage ||
     isAdminPage ||

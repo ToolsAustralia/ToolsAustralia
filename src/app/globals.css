@@ -240,19 +240,26 @@
   color-scheme: light;
 }
 
-/* Always stay in light mode even if device prefers dark */
+/* Dark mode theme tokens - only active when .dark class is present */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
+}
+
+/* Always stay in light mode even if device prefers dark (unless .dark class is present) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.dark) {
     --background: #ffffff;
     --foreground: #171717;
     color-scheme: light;
   }
 
-  html {
+  html:not(.dark) {
     color-scheme: light;
   }
 
-  body {
+  body:not(.dark *) {
     background: #ffffff !important;
     color: #171717 !important;
   }
@@ -388,7 +395,7 @@
 @layer components {
   /* Form input utility class for consistent styling */
   .form-input {
-    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-[#ee0000] bg-transparent text-black font-['Poppins'] transition-all duration-300;
+    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-[#ee0000] bg-transparent text-black dark:text-white font-['Poppins'] transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400;
   }
 
   .btn-primary {
@@ -1372,6 +1379,15 @@
   animation: border-glow-milwaukee 2s ease-in-out infinite;
 }
 
+@keyframes border-glow-boss-red {
+  /* Pure red glow for Boss badge - Tools Australia brand #ee0000 */
+  0%, 100% { box-shadow: 0 0 14px rgba(238, 0, 0, 0.55); }
+  50% { box-shadow: 0 0 28px rgba(238, 0, 0, 0.95); }
+}
+.animate-border-glow-boss-red {
+  animation: border-glow-boss-red 2s ease-in-out infinite;
+}
+
 /* Metallic silver Enter Now button - same prominent glow for all packs */
 @keyframes border-glow-metallic {
   0%, 100% {
@@ -1485,6 +1501,40 @@
   }
 }
 
+/* Refer a Friend – shimmer effect, clipped to button only */
+.refer-friend-cta {
+  position: relative;
+  overflow: visible;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.refer-friend-shimmer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.refer-friend-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  opacity: 0.6;
+  transform: translateX(-130%);
+  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.refer-friend-cta > *:not([class*="absolute"]):not(.refer-friend-shimmer) {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) {
+  .refer-friend-cta:hover {
+    transform: translateY(-2px) scale(1.02);
+  }
+}
+
 /* Get More Entries – shimmer like Enter Now, clipped to button only (badge stays visible) */
 .get-more-entries-cta {
   position: relative;
@@ -1518,6 +1568,40 @@
   .get-more-entries-cta:hover {
     transform: translateY(-2px) scale(1.03);
     box-shadow: 0 6px 28px rgba(0, 0, 0, 0.3), 0 0 40px rgba(234, 179, 8, 0.5);
+  }
+}
+
+/* Refer a Friend – quick action with subtle shimmer */
+.refer-friend-cta {
+  position: relative;
+  overflow: visible;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.refer-friend-shimmer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.refer-friend-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  opacity: 0.6;
+  transform: translateX(-130%);
+  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.refer-friend-cta > *:not([class*="absolute"]):not(.refer-friend-shimmer) {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) {
+  .refer-friend-cta:hover {
+    transform: translateY(-2px) scale(1.02);
   }
 }
 

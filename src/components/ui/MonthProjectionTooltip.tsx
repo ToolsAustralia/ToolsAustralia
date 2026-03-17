@@ -7,6 +7,8 @@ export interface MonthProjectionTooltipProps {
   isVisible: boolean;
   /** Position of the tooltip (top and left in pixels relative to container) */
   position: { top: number; left: number } | null;
+  /** Placement: "top" = above anchor (avoids overlap), "right" = to the right (default) */
+  placement?: "top" | "right";
   /** Current accumulated entries */
   current: number;
   /** Next month's projected entries */
@@ -40,6 +42,7 @@ export interface MonthProjectionTooltipProps {
 export default function MonthProjectionTooltip({
   isVisible,
   position,
+  placement = "right",
   current,
   nextMonth,
   month3,
@@ -48,6 +51,11 @@ export default function MonthProjectionTooltip({
 }: MonthProjectionTooltipProps) {
   if (!isVisible || !position) return null;
 
+  const transform =
+    placement === "top"
+      ? "translate(-50%, -100%)"
+      : "translateY(-50%)";
+
   return (
     <div
       className={`absolute px-3 py-2 sm:px-4 sm:py-3 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white text-[11px] sm:text-sm rounded-xl shadow-2xl border border-slate-500/50 pointer-events-none w-[180px] sm:w-auto sm:min-w-[220px] backdrop-blur-sm ${className}`}
@@ -55,7 +63,7 @@ export default function MonthProjectionTooltip({
         zIndex: 10000,
         left: `${position.left}px`,
         top: `${position.top}px`,
-        transform: "translateY(-50%)",
+        transform,
       }}
     >
       <div className="font-bold mb-2 sm:mb-3 text-[12px] sm:text-base bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
