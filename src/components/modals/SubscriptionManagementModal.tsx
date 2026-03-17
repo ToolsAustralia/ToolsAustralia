@@ -786,6 +786,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 </div>
               </div>
             </div>
+            </div>
 
             <div 
               className="relative bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 sm:p-4 border-l-4 shadow-sm"
