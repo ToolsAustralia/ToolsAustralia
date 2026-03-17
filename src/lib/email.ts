@@ -1242,7 +1242,7 @@ export async function sendContactSubmissionEmail(data: {
     }
 
     const htmlContent = createContactSubmissionEmailTemplate(data);
-    const recipientEmail = process.env.CONTACT_EMAIL || "hello@toolsaustralia.com.au";
+    const recipientEmail = process.env.CONTACT_EMAIL || "support@toolsaustralia.com.au";
 
     const mailOptions = {
       from: {
@@ -1305,7 +1305,7 @@ export async function sendPartnerApplicationEmail(data: {
     }
 
     const htmlContent = createPartnerApplicationEmailTemplate(data);
-    const recipientEmail = process.env.CONTACT_EMAIL || "hello@toolsaustralia.com.au";
+    const recipientEmail = process.env.CONTACT_EMAIL || "support@toolsaustralia.com.au";
 
     const mailOptions = {
       from: {

@@ -244,7 +244,7 @@ const Select: React.FC<SelectProps> = ({
     <div className={`space-y-1.5 sm:space-y-2 ${className}`} ref={selectRef}>
       {/* Label */}
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {label} {required && <span className="text-red-500 ml-1">*</span>}
         </label>
       )}
@@ -275,18 +275,18 @@ const Select: React.FC<SelectProps> = ({
           onClick={toggleDropdown}
           disabled={disabled}
           className={`w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm border rounded-lg text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
-            error ? "border-red-500 bg-red-50" : "border-gray-300"
+            error ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-500" : "border-gray-300 dark:border-neutral-600"
           } ${
             disabled
-              ? "bg-gray-100 cursor-not-allowed text-gray-500"
-              : "hover:border-red-400 hover:shadow-sm cursor-pointer bg-white"
+              ? "bg-gray-100 dark:bg-neutral-800 cursor-not-allowed text-gray-500 dark:text-gray-400"
+              : "hover:border-red-400 dark:hover:border-neutral-500 hover:shadow-sm cursor-pointer bg-white dark:bg-neutral-900"
           } ${isOpen ? "border-red-500 ring-2 ring-red-500/20" : ""}`}
         >
-          <span className={selectedOption ? "text-gray-900" : "text-gray-500"}>
+          <span className={selectedOption ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
           <ChevronDown
-            className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 transition-transform duration-200"
+            className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200"
             style={{ transform: `translateY(-50%) ${isOpen ? "rotate(180deg)" : "rotate(0deg)"}` }}
           />
         </button>
@@ -296,7 +296,7 @@ const Select: React.FC<SelectProps> = ({
           <div
             ref={optionsListRef}
             data-dropdown-list
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+            className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
             style={{
               touchAction: "pan-y",
               WebkitOverflowScrolling: "touch",
@@ -308,7 +308,7 @@ const Select: React.FC<SelectProps> = ({
           >
             {/* Search Input */}
             {searchable && (
-              <div className="p-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div className="p-3 border-b border-gray-100 dark:border-neutral-700 sticky top-0 bg-white dark:bg-neutral-900 z-10">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -320,7 +320,7 @@ const Select: React.FC<SelectProps> = ({
                       setSearchTerm(e.target.value);
                       setHighlightedIndex(-1);
                     }}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200"
                   />
                 </div>
               </div>
@@ -334,25 +334,25 @@ const Select: React.FC<SelectProps> = ({
                   type="button"
                   onClick={() => handleOptionSelect(option)}
                   style={{ touchAction: "pan-y" }}
-                  className={`w-full px-4 py-3 text-sm text-left hover:bg-red-50 focus:bg-red-50 focus:outline-none transition-colors duration-150 ${
+                  className={`w-full px-4 py-3 text-sm text-left hover:bg-red-50 dark:hover:bg-red-950/30 focus:bg-red-50 dark:focus:bg-red-950/30 focus:outline-none transition-colors duration-150 ${
                     value === option.value
-                      ? "bg-red-100 text-red-900"
+                      ? "bg-red-100 dark:bg-red-950/40 text-red-900 dark:text-red-400"
                       : highlightedIndex === index
-                      ? "bg-red-50"
-                      : "text-gray-900"
+                      ? "bg-red-50 dark:bg-red-950/30"
+                      : "text-gray-900 dark:text-white"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="font-medium">{option.label}</div>
-                      {option.description && <div className="text-xs text-gray-500 mt-1">{option.description}</div>}
+                      {option.description && <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{option.description}</div>}
                     </div>
-                    {value === option.value && <Check className="w-4 h-4 text-red-600 ml-2" />}
+                    {value === option.value && <Check className="w-4 h-4 text-red-600 dark:text-red-400 ml-2" />}
                   </div>
                 </button>
               ))
             ) : (
-              <div className="px-4 py-6 text-center text-gray-500 text-sm">
+              <div className="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
                 {searchTerm ? "No options match your search" : "No options available"}
               </div>
             )}

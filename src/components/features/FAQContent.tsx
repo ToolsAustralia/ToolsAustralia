@@ -1,6 +1,6 @@
 "use client";
 
-import { FAQSection, FAQItem } from "@/components/ui";
+import { FAQSection } from "@/components/ui";
 import { FaqEntry } from "@/data/faqs";
 
 interface FAQContentProps {

@@ -787,13 +787,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             </div>
 
             {/* Plan Features */}
-            <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-              <h3 className="font-semibold text-gray-900 mb-2 sm:mb-3 text-sm sm:text-base">Plan Benefits</h3>
+            <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 sm:p-4">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3 text-sm sm:text-base">Plan Benefits</h3>
               <div className="space-y-1.5 sm:space-y-2">
                 {packagesLoading ? (
-                  <div className="text-sm text-gray-500">Loading benefits...</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Loading benefits...</div>
                 ) : membershipPackage?.features ? (
-                  membershipPackage.features.map((feature, index) => {
+                  membershipPackage.features.map((feature: unknown, index: number) => {
                     // Get feature text (handle both string and object formats)
                     let featureText: string;
                     if (typeof feature === "string") {
@@ -830,25 +830,25 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     
                     return (
                       <div key={index} className="flex items-center gap-2">
-                        <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 flex-shrink-0" />
-                        <span className="text-xs sm:text-sm text-gray-700">{displayText}</span>
+                        <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 dark:text-green-500 flex-shrink-0" />
+                        <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-300">{displayText}</span>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="text-sm text-gray-500">No benefits information available</div>
+                  <div className="text-sm text-gray-500 dark:text-neutral-400">No benefits information available</div>
                 )}
               </div>
             </div>
 
             {/* Failed Renewal Alert - Informational, not blocking */}
             {hasFailed && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3 sm:p-4">
+              <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
                 <div className="flex items-start gap-2 sm:gap-3">
-                  <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-sm sm:text-base font-semibold text-red-900 mb-1.5 sm:mb-2">Subscription Renewal Failed</h4>
-                    <p className="text-xs sm:text-sm text-red-700 mb-3 sm:mb-4">
+                    <h4 className="text-sm sm:text-base font-semibold text-red-900 dark:text-red-100 mb-1.5 sm:mb-2">Subscription Renewal Failed</h4>
+                    <p className="text-xs sm:text-sm text-red-700 dark:text-red-300 mb-3 sm:mb-4">
                       Renew your subscription now to keep your benefits active. Don&apos;t lose your accumulated entries and access to exclusive features.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
@@ -863,7 +863,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       <Button
                         onClick={() => setShowCancelConfirm(true)}
                         variant="outline"
-                        className="border-red-300 text-red-600 hover:bg-red-50 text-sm sm:text-base"
+                        className="border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 text-sm sm:text-base"
                         size="sm"
                       >
                         Cancel Subscription
@@ -914,7 +914,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             {/* Management Actions - Hidden for past_due subscriptions (only for active subscriptions) */}
             {!hasFailed && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-gray-900">Subscription Management</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Subscription Management</h3>
 
               {/* Upgrade Options - Hidden for past_due subscriptions (must pay invoice first) */}
               {!hasFailed &&
@@ -922,7 +922,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 subscriptionBenefits?.availableUpgrades &&
                 subscriptionBenefits.availableUpgrades.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                    <h4 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
                       <ArrowUp className="w-4 h-4 text-green-600" />
                       Available Upgrades
                     </h4>
@@ -946,16 +946,16 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       return (
                         <div
                           key={upgrade.packageId}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-white border border-green-200 rounded-lg gap-3 sm:gap-4"
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-white dark:bg-neutral-800 border border-green-200 dark:border-green-800 rounded-lg gap-3 sm:gap-4"
                         >
                           <div className="flex-1 w-full sm:w-auto">
                             <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
                               <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-green-500 rounded-full flex-shrink-0"></div>
-                              <h5 className="font-medium text-gray-900 text-sm sm:text-base">{upgrade.name}</h5>
-                              <span className="text-base sm:text-lg font-bold text-green-600">${upgrade.price}/month</span>
+                              <h5 className="font-medium text-gray-900 dark:text-white text-sm sm:text-base">{upgrade.name}</h5>
+                              <span className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">${upgrade.price}/month</span>
                             </div>
-                            <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">{upgrade.description}</p>
-                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500">
+                            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-1.5 sm:mb-2">{upgrade.description}</p>
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400">
                               <span>{totalEntriesAfterUpgrade} Free Accumulated Entries</span>
                               <span>{upgrade.partnerDiscountDays} days partner access</span>
                             </div>
@@ -984,8 +984,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 subscriptionBenefits?.availableDowngrades &&
                 subscriptionBenefits.availableDowngrades.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                      <ArrowDown className="w-4 h-4 text-orange-600" />
+                    <h4 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                      <ArrowDown className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                       Available Downgrades
                     </h4>
                     {subscriptionBenefits.availableDowngrades.map((downgrade) => {
@@ -1007,16 +1007,16 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       return (
                         <div
                           key={downgrade.packageId}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-white border border-orange-200 rounded-lg gap-3 sm:gap-4"
+                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-white dark:bg-neutral-800 border border-orange-200 dark:border-orange-800 rounded-lg gap-3 sm:gap-4"
                         >
                           <div className="flex-1 w-full sm:w-auto">
                             <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
                               <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: colorScheme.accentHex }}></div>
-                              <h5 className="font-medium text-gray-900 text-sm sm:text-base">{downgrade.name}</h5>
+                              <h5 className="font-medium text-gray-900 dark:text-white text-sm sm:text-base">{downgrade.name}</h5>
                               <span className="text-base sm:text-lg font-bold" style={{ color: colorScheme.accentHex }}>${downgrade.price}/month</span>
                             </div>
-                            <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">{downgrade.description}</p>
-                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500">
+                            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-1.5 sm:mb-2">{downgrade.description}</p>
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400">
                               <span>{downgradeEntries} Free Accumulated Entries</span>
                               <span>{downgrade.partnerDiscountDays} days partner access</span>
                             </div>
@@ -1045,19 +1045,19 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               <div
                 className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 rounded-lg gap-3 sm:gap-4 ${
                   subscriptionBenefits?.isCancelled
-                    ? "bg-yellow-50 border border-yellow-200"
-                    : "bg-white border border-red-200"
+                    ? "bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800"
+                    : "bg-white dark:bg-neutral-800 border border-red-200 dark:border-red-800"
                 }`}
               >
                 <div className="flex items-start sm:items-center gap-2 sm:gap-3 flex-1 min-w-0">
                   <XCircle
-                    className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0 ${subscriptionBenefits?.isCancelled ? "text-yellow-600" : "text-red-600"}`}
+                    className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0 ${subscriptionBenefits?.isCancelled ? "text-yellow-600 dark:text-yellow-500" : "text-red-600 dark:text-red-400"}`}
                   />
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900 text-sm sm:text-base">
+                    <p className="font-medium text-gray-900 dark:text-white text-sm sm:text-base">
                       {subscriptionBenefits?.isCancelled ? "Subscription Cancelled" : "Cancel Subscription"}
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-600">
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300">
                       {subscriptionBenefits?.isCancelled
                         ? `Beneftis ends on ${formatDate(subscriptionBenefits.endDate) ?? "end of billing period"}`
                         : "You'll retain access until the end of your billing period"}
@@ -1090,11 +1090,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             )}
           </div>
           );
-        })() : activeOneTimePackage ? (
+        })(        ) : activeOneTimePackage ? (
           <div className="text-center py-8">
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">One-Time Package</h2>
-              <p className="text-gray-600 mb-4">
+            <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">One-Time Package</h2>
+              <p className="text-gray-600 dark:text-neutral-300 mb-4">
                 You have an active one-time package:{" "}
                 <strong>
                   {typeof activeOneTimePackage.packageId === "string"
@@ -1102,7 +1102,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     : activeOneTimePackage.packageId.name}
                 </strong>
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-neutral-400">
                 One-time packages don&apos;t require subscription management. You can purchase additional packages
                 anytime.
               </p>
@@ -1122,11 +1122,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           // User has a subscription but it's not active and not past_due (e.g., cancelled, incomplete, etc.)
           // past_due subscriptions are handled above in the activeSubscription section
           <div className="text-center py-8">
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
+            <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                 {user.subscription.status === "canceled" ? "Subscription Cancelled" : "Subscription Inactive"}
               </h2>
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-600 dark:text-neutral-300 mb-4">
                 {user.subscription.status === "canceled"
                   ? "Your subscription has been cancelled. You can reactivate it anytime."
                   : "Your subscription is currently inactive."}
@@ -1146,9 +1146,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         ) : (
           // No subscription at all
           <div className="text-center py-8">
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">No Active Subscription</h2>
-              <p className="text-gray-600 mb-4">You don&apos;t have an active subscription to manage.</p>
+            <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No Active Subscription</h2>
+              <p className="text-gray-600 dark:text-neutral-300 mb-4">You don&apos;t have an active subscription to manage.</p>
               <Button
                 onClick={() => {
                   onClose(); // Close SubscriptionManagementModal

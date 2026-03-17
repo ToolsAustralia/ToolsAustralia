@@ -240,19 +240,26 @@
   color-scheme: light;
 }
 
-/* Always stay in light mode even if device prefers dark */
+/* Dark mode theme tokens - only active when .dark class is present */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
+}
+
+/* Always stay in light mode even if device prefers dark (unless .dark class is present) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.dark) {
     --background: #ffffff;
     --foreground: #171717;
     color-scheme: light;
   }
 
-  html {
+  html:not(.dark) {
     color-scheme: light;
   }
 
-  body {
+  body:not(.dark *) {
     background: #ffffff !important;
     color: #171717 !important;
   }
@@ -388,7 +395,7 @@
 @layer components {
   /* Form input utility class for consistent styling */
   .form-input {
-    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-[#ee0000] bg-transparent text-black font-['Poppins'] transition-all duration-300;
+    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-[#ee0000] bg-transparent text-black dark:text-white font-['Poppins'] transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400;
   }
 
   .btn-primary {

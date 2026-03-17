@@ -382,7 +382,7 @@ export default function EmailVerificationModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={isMandatory ? undefined : handleClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+      <div className="relative bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
         {/* Header with Logo */}
         <div className={isMandatory && !success ? "[&_button]:hidden" : ""}>
           <ModalHeader
@@ -398,12 +398,12 @@ export default function EmailVerificationModal({
         <ModalContent padding="lg">
           {success ? (
             <div className="text-center py-8">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2 font-['Poppins']">Email Verified!</h3>
-              <p className="text-gray-600 font-['Poppins']">Your email address has been successfully verified.</p>
-              <p className="mt-3 text-sm text-green-600 font-['Poppins']">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2 font-['Poppins']">Email Verified!</h3>
+              <p className="text-gray-600 dark:text-gray-400 font-['Poppins']">Your email address has been successfully verified.</p>
+              <p className="mt-3 text-sm text-green-600 dark:text-green-400 font-['Poppins']">
                 If you used a friend&apos;s referral code, 100 bonus entries have just been added to both of your
                 accounts.
               </p>
@@ -412,22 +412,22 @@ export default function EmailVerificationModal({
             <div className="space-y-6">
               {/* Instructions */}
               <div className="text-center">
-                <p className="text-gray-600 font-['Poppins'] mb-2">
+                <p className="text-gray-600 dark:text-gray-400 font-['Poppins'] mb-2">
                   We&apos;ve sent a 6-character verification code to:
                 </p>
-                <p className="font-semibold text-gray-900 font-['Poppins']">{email}</p>
-                {userName && <p className="text-sm text-gray-500 mt-1">Hi {userName}!</p>}
+                <p className="font-semibold text-gray-900 dark:text-white font-['Poppins']">{email}</p>
+                {userName && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Hi {userName}!</p>}
               </div>
 
               {/* Verification Code Input - 6 Card Inputs */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700 font-['Poppins']">Verification Code</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 font-['Poppins']">Verification Code</label>
                   <button
                     type="button"
                     onClick={handlePasteButtonClick}
                     disabled={isVerifying}
-                    className="flex items-center space-x-1 text-xs text-red-600 hover:text-red-700 font-medium font-['Poppins'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center space-x-1 text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium font-['Poppins'] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     title="Paste code from clipboard"
                   >
                     {isPasteClicked ? (
@@ -454,7 +454,7 @@ export default function EmailVerificationModal({
                       onChange={(e) => handleDigitChange(index, e.target.value)}
                       onPaste={handlePaste}
                       onKeyDown={(e) => handleKeyDown(index, e)}
-                      className="w-12 h-14 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono text-2xl font-bold text-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-12 h-14 border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono text-2xl font-bold text-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       maxLength={1}
                       disabled={isVerifying}
                       autoComplete="off"
@@ -462,23 +462,23 @@ export default function EmailVerificationModal({
                     />
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 font-['Poppins'] text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-['Poppins'] text-center">
                   Enter the code exactly as shown in your email
                 </p>
               </div>
 
               {/* Error Message */}
               {error && (
-                <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                  <p className="text-sm text-red-600 font-['Poppins']">{error}</p>
+                <div className="flex items-center space-x-2 p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                  <p className="text-sm text-red-600 dark:text-red-400 font-['Poppins']">{error}</p>
                 </div>
               )}
 
               {/* Attempts Remaining */}
               {remainingAttempts < 5 && remainingAttempts > 0 && !error && (
                 <div className="text-center">
-                  <p className="text-sm text-orange-600 font-['Poppins']">
+                  <p className="text-sm text-orange-600 dark:text-orange-400 font-['Poppins']">
                     {remainingAttempts} attempt{remainingAttempts !== 1 ? "s" : ""} remaining
                   </p>
                 </div>
@@ -510,8 +510,8 @@ export default function EmailVerificationModal({
                       disabled={!canResend || isSending}
                       className={`font-medium font-['Poppins'] transition-all duration-200 ${
                         canResend && !isSending
-                          ? "text-red-600 hover:text-red-700 cursor-pointer"
-                          : "text-gray-400 cursor-not-allowed opacity-60"
+                          ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 cursor-pointer"
+                          : "text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60"
                       }`}
                     >
                       {isSending ? (
@@ -526,7 +526,7 @@ export default function EmailVerificationModal({
 
                     {/* Show timer when button is disabled */}
                     {!canResend && timeLeft > 0 && (
-                      <p className="text-xs text-gray-400 font-['Poppins']">Available in {formatTime(timeLeft)}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 font-['Poppins']">Available in {formatTime(timeLeft)}</p>
                     )}
                   </div>
 
@@ -538,7 +538,7 @@ export default function EmailVerificationModal({
                           clearStateFromStorage();
                           onWrongEmailAction();
                         }}
-                        className="text-sm text-gray-600 hover:text-gray-800 font-medium font-['Poppins'] underline transition-colors"
+                        className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 font-medium font-['Poppins'] underline transition-colors"
                       >
                         Wrong email?
                       </button>
@@ -551,15 +551,15 @@ export default function EmailVerificationModal({
                   <>
                     <div className="relative">
                       <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-gray-300" />
+                        <div className="w-full border-t border-gray-300 dark:border-neutral-600" />
                       </div>
                       <div className="relative flex justify-center text-sm">
-                        <span className="px-2 bg-white text-gray-500 font-['Poppins']">or</span>
+                        <span className="px-2 bg-white dark:bg-neutral-900 text-gray-500 dark:text-gray-400 font-['Poppins']">or</span>
                       </div>
                     </div>
                     <button
                       onClick={onSkipAction}
-                      className="w-full text-gray-600 hover:text-gray-800 py-2 px-4 rounded-lg font-medium font-['Poppins'] transition-colors"
+                      className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 py-2 px-4 rounded-lg font-medium font-['Poppins'] transition-colors"
                     >
                       Skip for now
                     </button>

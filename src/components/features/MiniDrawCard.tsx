@@ -73,7 +73,7 @@ export default function MiniDrawCard({
       ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100))
       : 0;
 
-  const isActive = miniDraw.status === "active" && entriesRemaining > 0;
+  const _isActive = miniDraw.status === "active" && entriesRemaining > 0;
   const isClosed =
     miniDraw.status === "completed" ||
     (miniDraw.status === "active" && entriesRemaining <= 0);
@@ -127,7 +127,7 @@ export default function MiniDrawCard({
     return (
       <motion.div variants={cardVariants} initial="hidden" animate="visible">
         <Link href={detailHref} className="block">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group">
             <div className="flex">
               <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0 overflow-hidden">
                 <Image
@@ -165,7 +165,7 @@ export default function MiniDrawCard({
                           : "bg-green-500"
                       }`}
                     />
-                    <span className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                    <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
                       {isCancelled ? "Cancelled" : isClosed ? "Closed" : "Active"}
                     </span>
                     {urgencyBadge && (
@@ -176,7 +176,7 @@ export default function MiniDrawCard({
                       </span>
                     )}
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-gray-900 line-clamp-2 group-hover:text-[#ee0000] transition-colors">
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-[#ee0000] dark:group-hover:text-red-500 transition-colors">
                     {miniDraw.name}
                   </h3>
                   <EntryProgressBar
@@ -187,7 +187,7 @@ export default function MiniDrawCard({
                 </div>
                 <div className="flex items-center justify-between mt-2">
                   {userEntries > 0 && (
-                    <span className="text-[10px] sm:text-xs font-medium text-green-600 flex items-center gap-0.5">
+                    <span className="text-[10px] sm:text-xs font-medium text-green-600 dark:text-green-500 flex items-center gap-0.5">
                       <Ticket className="w-3 h-3" /> {userEntries}{" "}
                       {userEntries === 1 ? "entry" : "entries"}
                     </span>
@@ -215,7 +215,7 @@ export default function MiniDrawCard({
       className="h-full"
     >
       <Link href={detailHref} className="block h-full">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group h-full flex flex-col">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group h-full flex flex-col">
           {/* Image Section */}
           <div className="relative">
             <div className="relative w-full aspect-[4/3] overflow-hidden">
@@ -293,13 +293,13 @@ export default function MiniDrawCard({
                       : "bg-green-500"
                   }`}
                 />
-                <span className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
                   {isCancelled ? "Cancelled" : isClosed ? "Closed" : "Active"}
                 </span>
               </div>
 
               {/* Draw name */}
-              <h3 className="text-[13px] sm:text-sm lg:text-base font-bold text-gray-900 line-clamp-2 min-h-[2.2rem] sm:min-h-[2.5rem] group-hover:text-[#ee0000] transition-colors duration-200">
+              <h3 className="text-[13px] sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white line-clamp-2 min-h-[2.2rem] sm:min-h-[2.5rem] group-hover:text-[#ee0000] dark:group-hover:text-red-500 transition-colors duration-200">
                 {miniDraw.name}
               </h3>
 
