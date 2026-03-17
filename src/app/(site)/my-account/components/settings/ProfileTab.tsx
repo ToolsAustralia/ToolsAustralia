@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Lock } from "lucide-react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { useToast } from "@/components/ui/Toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -105,129 +106,141 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-4">Profile Details</h3>
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white pb-3 border-b border-gray-200 dark:border-neutral-700">
+          Personal Information
+        </h3>
+      </div>
 
-      <div className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
-            <div className="rounded-lg border border-gray-200 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-900 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 cursor-default">
-              {user.firstName} {user.lastName}
-            </div>
+      <div className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+            Name
+          </label>
+          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50/50 dark:bg-neutral-900/50 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-400 cursor-not-allowed">
+            {user.firstName} {user.lastName}
           </div>
+        </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-            <div className="rounded-lg border border-gray-200 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-900 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 cursor-default">
-              {user.email}
-            </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+            Email
+          </label>
+          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50/50 dark:bg-neutral-900/50 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-400 cursor-not-allowed">
+            {user.email}
           </div>
+        </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email verification</label>
-            <div className="flex flex-col gap-2">
-              <div
-                className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                  user.isEmailVerified
-                    ? "border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400"
-                    : "border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400"
-                }`}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email verification</label>
+          <div className="flex flex-col gap-2">
+            <div
+              className={`rounded-lg border px-3 py-2.5 text-sm font-semibold ${
+                user.isEmailVerified
+                  ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400"
+                  : "border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400"
+              }`}
+            >
+              {user.isEmailVerified ? "Verified" : "Not verified"}
+            </div>
+            {!user.isEmailVerified && (
+              <button
+                type="button"
+                onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
+                className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md"
               >
-                {user.isEmailVerified ? "Verified" : "Not verified"}
-              </div>
-              {!user.isEmailVerified && (
-                <button
-                  type="button"
-                  onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
-                  className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000]"
-                >
-                  Verify Email
-                </button>
-              )}
-            </div>
+                Verify Email
+              </button>
+            )}
           </div>
+        </div>
+      </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone number</label>
-            <div className="flex flex-col gap-2">
-              <input
-                className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:border-red-500 dark:focus:border-red-500 focus:outline-none"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                placeholder="Enter phone number"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveMobile}
-                  disabled={isSavingMobile}
-                  className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSavingMobile ? "Saving..." : "Save phone"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMobile(user.mobile || "")}
-                  className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          </div>
+      <div className="pt-6 border-t border-gray-200 dark:border-neutral-700">
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white pb-3 border-b border-gray-200 dark:border-neutral-700">
+          Contact & Details
+        </h3>
+      </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
-            <div className="flex flex-col gap-2">
-              <select
-                className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:border-red-500 dark:focus:border-red-500 focus:outline-none"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-              >
-                <option value="">Select state</option>
-                {AUSTRALIAN_STATES.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.name} ({s.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Profession</label>
-            <div className="flex flex-col gap-2">
-              <input
-                className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2 text-sm focus:border-red-500 dark:focus:border-red-500 focus:outline-none"
-                value={profession}
-                onChange={(e) => setProfession(e.target.value)}
-                placeholder="Enter profession"
-                maxLength={100}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2 sm:col-span-2 sm:justify-end">
+      <div className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone number</label>
+          <input
+            className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
+            value={mobile}
+            onChange={(e) => setMobile(e.target.value)}
+            placeholder="Enter phone number"
+          />
+          <div className="flex gap-2 pt-1">
             <button
               type="button"
-              onClick={handleSaveProfile}
-              disabled={isSavingProfile}
-              className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleSaveMobile}
+              disabled={isSavingMobile}
+              className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSavingProfile ? "Saving..." : "Save profile"}
+              {isSavingMobile ? "Saving..." : "Save phone"}
             </button>
             <button
               type="button"
-              onClick={() => {
-                setState(user.state || "");
-                setProfession(user.profession || "");
-              }}
-              className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700"
+              onClick={() => setMobile(user.mobile || "")}
+              className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
             >
               Reset
             </button>
           </div>
         </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
+          <select
+            className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+          >
+            <option value="">Select state</option>
+            {AUSTRALIAN_STATES.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.name} ({s.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Profession</label>
+          <input
+            className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
+            value={profession}
+            onChange={(e) => setProfession(e.target.value)}
+            placeholder="Enter profession"
+            maxLength={100}
+          />
+        </div>
+
+        <div className="flex gap-2 justify-end pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              setState(user.state || "");
+              setProfession(user.profession || "");
+            }}
+            className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveProfile}
+            disabled={isSavingProfile}
+            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSavingProfile ? "Saving..." : "Save profile"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

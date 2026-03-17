@@ -129,19 +129,40 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         try {
           const packageIdStr = String(oneTimePackage.packageId);
           const packageData = getPackageById(packageIdStr);
-          if (packageData) {
-            oneTimePackageData.push({
-              ...oneTimePackage,
-              packageData: packageData, // Include full package details
-            });
-          } else {
-            // console.log(`⚠️ One-time package ID not found in static data: ${packageIdStr}`);
-          }
+          // Include package even when not found in static data - show minimal info so user sees their data
+          oneTimePackageData.push({
+            ...oneTimePackage,
+            packageId: packageIdStr,
+            packageData: packageData ?? {
+              _id: packageIdStr,
+              name: "One-Time Package",
+              type: "one-time",
+              price: 0,
+              description: "",
+              features: [],
+              isActive: true,
+            },
+          });
         } catch (error) {
           console.log(
             `⚠️ Could not find one-time package ${oneTimePackage.packageId} (${typeof oneTimePackage.packageId}):`,
             error
           );
+          // Still include package so user can see their data
+          const packageIdStr = String(oneTimePackage?.packageId ?? "unknown");
+          oneTimePackageData.push({
+            ...oneTimePackage,
+            packageId: packageIdStr,
+            packageData: {
+              _id: packageIdStr,
+              name: "One-Time Package",
+              type: "one-time",
+              price: 0,
+              description: "",
+              features: [],
+              isActive: true,
+            },
+          });
         }
       }
     }
