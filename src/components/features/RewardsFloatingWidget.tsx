@@ -15,6 +15,8 @@ import {
 
 interface RewardsFloatingWidgetProps {
   userId: string;
+  /** When true, positions the FAB above the bottom nav (e.g. on my-account dashboard) */
+  positionAboveBottomNav?: boolean;
 }
 
 /** Default Tradie subscription plan for membership-only campaign unlocks */
@@ -34,7 +36,7 @@ const DEFAULT_TRADIE_PLAN: LocalMembershipPlan = {
   metadata: { entriesCount: 15 },
 };
 
-export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetProps) {
+export default function RewardsFloatingWidget({ userId, positionAboveBottomNav = false }: RewardsFloatingWidgetProps) {
   const { showToast } = useToast();
   const { isAnySidebarOpen } = useSidebar();
   const requestModal = useModalPriorityStore((state) => state.requestModal);
@@ -128,14 +130,15 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
   }, [showSpotlightActive, dismissSpotlight]);
 
   // Compute FAB center from known fixed CSS values (avoids measuring during animation).
-  // FAB: left-4 sm:left-6, bottom-10 sm:bottom-6, w-14 h-14 (56px).
+  // FAB: left-4 sm:left-6, w-14 h-14 (56px). bottom varies by positionAboveBottomNav.
   useLayoutEffect(() => {
     if (!showSpotlightActive) return;
     const computePosition = () => {
       if (typeof window === "undefined") return;
       const isMobile = window.innerWidth < 640;
+      const hasBottomNav = positionAboveBottomNav && window.innerWidth < 1024;
       const left = isMobile ? 16 : 24; // left-4 = 16px, sm:left-6 = 24px
-      const bottom = isMobile ? 40 : 24; // bottom-10 = 40px, sm:bottom-6 = 24px
+      const bottom = hasBottomNav ? 88 : isMobile ? 40 : 24; // above nav: 88px, else bottom-10/bottom-6
       const size = 56; // w-14 h-14
       setFabRect({
         x: left + size / 2,
@@ -145,7 +148,7 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
     computePosition();
     window.addEventListener("resize", computePosition);
     return () => window.removeEventListener("resize", computePosition);
-  }, [showSpotlightActive]);
+  }, [showSpotlightActive, positionAboveBottomNav]);
 
   useEffect(() => {
     if (!showSpotlight) return;
@@ -244,7 +247,7 @@ export default function RewardsFloatingWidget({ userId }: RewardsFloatingWidgetP
             ref={fabRef}
             key="rewards-fab"
             onClick={handleFabClick}
-            className={`fixed bottom-10 sm:bottom-6 left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${buttonShadowClass} ${showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : ""}`}
+            className={`fixed left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${positionAboveBottomNav ? "bottom-24 lg:bottom-6" : "bottom-10 sm:bottom-6"} ${buttonShadowClass} ${showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : ""}`}
             aria-label={showSpotlightActive ? "You have claimable rewards. Tap the gift icon to view them." : "Open claimable rewards"}
             initial={{ opacity: 0, scale: 0.92, y: 10 }}
             animate={{

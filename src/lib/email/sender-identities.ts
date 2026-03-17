@@ -26,8 +26,13 @@ export interface SenderIdentity {
   replyTo?: string;
 }
 
-/** Support email for replies - always use root domain for customer-facing support */
-const SUPPORT_EMAIL = 'support@toolsaustralia.com.au';
+/** Support email for replies - always use root domain for customer-facing support. Source of truth for SendGrid. */
+export const SUPPORT_EMAIL = 'support@toolsaustralia.com.au';
+
+/** Resolve contact/support email - CONTACT_EMAIL env overrides, else SUPPORT_EMAIL */
+export function getContactEmail(): string {
+  return process.env.CONTACT_EMAIL?.trim() || SUPPORT_EMAIL;
+}
 
 const SENDER_IDENTITIES: Record<EmailCategory, SenderIdentity> = (() => {
   const domain = EMAIL_DOMAIN;

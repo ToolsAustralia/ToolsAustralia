@@ -12,6 +12,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Beaker, ChevronDown, ChevronUp, ArrowLeft, RotateCcw } from "lucide-react";
 
 interface DrawPair {
@@ -22,6 +23,7 @@ interface DrawPair {
 }
 
 export default function MajorDrawTestControls() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string>("");
@@ -145,7 +147,8 @@ export default function MajorDrawTestControls() {
   };
 
   // Only show in development (check after all hooks are called)
-  if (process.env.NODE_ENV !== "development") {
+  // Hide on my-account pages to avoid cluttering the user dashboard
+  if (process.env.NODE_ENV !== "development" || pathname?.startsWith("/my-account")) {
     return null;
   }
 

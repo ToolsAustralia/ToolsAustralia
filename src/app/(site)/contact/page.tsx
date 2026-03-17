@@ -4,6 +4,7 @@ import Image from "next/image";
 import ContactForm from "@/components/features/ContactForm";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import { Facebook, Instagram, Mail } from "lucide-react";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 // SEO Metadata for Contact Page
 export const metadata: Metadata = {
@@ -110,10 +111,10 @@ export default function ContactPage() {
                         Email
                       </p>
                       <a
-                        href="mailto:hello@toolsaustralia.com.au"
+                        href={`mailto:${getContactEmail()}`}
                         className="font-normal text-[14px] sm:text-[16px] lg:text-[18px] font-['Poppins'] text-white hover:text-red-400 transition-colors"
                       >
-                        hello@toolsaustralia.com.au
+                        {getContactEmail()}
                       </a>
                     </div>
                   </div>

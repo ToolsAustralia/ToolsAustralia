@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import { clsx } from "clsx";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
@@ -189,6 +190,8 @@ interface UnlockDiscountsProps {
   hasAccess?: boolean; // Whether user has access to partner discounts
   /** Optional package theme to use when user has active package (Partner Discounts section on my-account) */
   packageTheme?: PromoLandingTheme;
+  /** Optional className for the section wrapper (padding, margin, etc.) */
+  className?: string;
 }
 
 export default function UnlockDiscounts({
@@ -197,6 +200,7 @@ export default function UnlockDiscounts({
   description = "Get instant access to exclusive discounts from Australia's top tool brands",
   hasAccess = false, // Default to false for public pages
   packageTheme,
+  className,
 }: UnlockDiscountsProps = {}) {
   const discountsRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
@@ -205,7 +209,7 @@ export default function UnlockDiscounts({
   const preferDark = theme.preferDarkBackground ?? false;
 
   return (
-    <section ref={discountsRef} className="py-8 sm:py-12 lg:py-16 mb-12 relative">
+    <section ref={discountsRef} className={clsx("py-8 sm:py-12 lg:py-16 mb-12 relative", className)}>
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-12">

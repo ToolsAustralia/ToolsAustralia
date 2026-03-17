@@ -225,7 +225,7 @@ export default function PromoAnalyticsManagement() {
     return undefined;
   }, [apiDateRange, startDate, endDate]);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch: _refetch } = useQuery({
     queryKey: queryKeys.admin.promoAnalytics({
       dateRange: apiDateRange,
       startDate: apiStartDate ?? "",

@@ -922,15 +922,15 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         <ModalContent padding="lg" className="overflow-y-auto">
           {success ? (
             <div className="text-center space-y-3">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">Profile Setup Complete!</h3>
-              <p className="text-gray-600">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Profile Setup Complete!</h3>
+              <p className="text-gray-600 dark:text-gray-400">
                 You can now log in with your email and password, and we&apos;ve recorded your state for better service.
               </p>
               {hasReferralCode && (
-                <p className="text-sm text-green-600">
+                <p className="text-sm text-green-600 dark:text-green-400">
                   Next up, we&apos;ll walk you through sharing your referral code so you can lock in 100 bonus entries
                   with your mates.
                 </p>
@@ -1020,28 +1020,28 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
               {activeStep === 3 && (
                 <div className="space-y-6 text-center">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2 font-['Poppins']">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 font-['Poppins']">
                       Verify Your Email {environmentFlags.emailVerificationMandatory() ? "" : "(Optional)"}
                     </h3>
-                    <p className="text-gray-600 font-['Poppins'] mb-4">
+                    <p className="text-gray-600 dark:text-gray-400 font-['Poppins'] mb-4">
                       {environmentFlags.emailVerificationMandatory()
                         ? "Email verification is required to complete your account setup and ensure account security."
                         : "Verify your email address to enhance account security and receive important updates."}
                     </p>
                     {hasReferralCode && (
-                      <p className="text-xs text-green-600 font-['Poppins']">
+                      <p className="text-xs text-green-600 dark:text-green-400 font-['Poppins']">
                         Your referral bonus of 100 entries has been granted with your first purchase.
                       </p>
                     )}
 
                     {currentEmail && !isEditingEmail && (
                       <div className="space-y-2">
-                        <p className="text-sm text-gray-500 font-['Poppins']">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 font-['Poppins']">
                           We&apos;ll send a verification code to: <span className="font-semibold">{currentEmail}</span>
                         </p>
                         <button
                           onClick={() => setIsEditingEmail(true)}
-                          className="text-sm text-blue-600 hover:text-blue-700 font-medium font-['Poppins'] underline"
+                          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium font-['Poppins'] underline"
                         >
                           Wrong email?
                         </button>
@@ -1074,7 +1074,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                               setNewEmail("");
                               setError(null);
                             }}
-                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                            className="px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors font-medium"
                           >
                             Cancel
                           </button>
@@ -1085,7 +1085,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
                   {/* Verification Status */}
                   {isEmailVerified ? (
-                    <div className="flex items-center justify-center space-x-2 text-green-600">
+                    <div className="flex items-center justify-center space-x-2 text-green-600 dark:text-green-400">
                       <CheckCircle className="w-5 h-5" />
                       <span className="font-medium font-['Poppins']">Email verified!</span>
                     </div>
@@ -1106,7 +1106,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                         )}
                       </button>
                       {!environmentFlags.emailVerificationMandatory() && (
-                        <p className="text-xs text-gray-500 font-['Poppins']">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-['Poppins']">
                           You can skip this step and verify later from your account settings.
                         </p>
                       )}
@@ -1117,8 +1117,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
               {/* Error Message */}
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-sm text-red-700">{error}</p>
+                <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-lg p-4">
+                  <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
                 </div>
               )}
             </>
@@ -1127,7 +1127,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
         {/* Action Buttons Section */}
         {!success && (
-            <div className="border-t border-gray-200 p-6">
+            <div className="border-t border-gray-200 dark:border-neutral-700 p-6">
             <div className="flex gap-3">
               {currentStepIndex > 0 && environmentFlags.userSetupModalClosable() && (
                 <Button onClick={handleBack} variant="secondary" size="md" className="flex-1">

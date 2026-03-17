@@ -23,7 +23,7 @@ interface DetailHeroBannerProps {
 }
 
 export default function DetailHeroBanner({
-  prizeName,
+  prizeName: _prizeName,
   drawName,
   prizeImage,
   brandLabel,

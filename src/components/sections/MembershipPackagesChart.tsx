@@ -131,6 +131,9 @@ export default function MembershipPackagesChart() {
   const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
   const oneTimePromoMultiplier = resolvedOneTimeMultiplier ?? 1;
 
+  // Member-only one-time packs use membership multiplier (per getEffectivePromoType); standard one-time packs use one-time multiplier
+  const oneTimeEffectiveMultiplier = showMemberExclusive ? membershipPromoMultiplier : oneTimePromoMultiplier;
+
   const getCurrentPackages = (): PackageData[] => {
     if (activeTab === "membership") return subscriptionPackages;
     return showMemberExclusive ? oneTimeMemberPackages : oneTimeNonMemberPackages;
@@ -156,7 +159,7 @@ export default function MembershipPackagesChart() {
           ];
         }
       }
-      return [pkg.entries * (activeTab === "one-time" ? oneTimePromoMultiplier : 1)];
+      return [pkg.entries * (activeTab === "one-time" ? oneTimeEffectiveMultiplier : 1)];
     })
   );
 
@@ -259,7 +262,7 @@ export default function MembershipPackagesChart() {
               displayEntries = accumulation.monthlyActiveEntries[accumulation.monthlyActiveEntries.length - 1];
               totalAccumulated = accumulation.totalAccumulatedEntries[accumulation.totalAccumulatedEntries.length - 1];
             } else {
-              displayEntries = pkg.entries * (activeTab === "one-time" ? oneTimePromoMultiplier : 1);
+              displayEntries = pkg.entries * (activeTab === "one-time" ? oneTimeEffectiveMultiplier : 1);
             }
 
             const monthlyBarWidth = Math.max(4, maxEntries > 0 ? (displayEntries / maxEntries) * 100 : 0);
@@ -356,7 +359,7 @@ export default function MembershipPackagesChart() {
                     const isEntries = b.text.toLowerCase().includes("entries");
                     const promoActive =
                       (activeTab === "membership" && membershipPromoMultiplier > 1) ||
-                      (activeTab === "one-time" && oneTimePromoMultiplier > 1);
+                      (activeTab === "one-time" && oneTimeEffectiveMultiplier > 1);
                     const showPromo = isEntries && promoActive;
 
                     let promoText = b.text;
@@ -364,7 +367,7 @@ export default function MembershipPackagesChart() {
                       const m = b.text.match(/(\d[\d,]*)/);
                       if (m) {
                         const orig = parseInt(m[1].replace(/,/g, ""));
-                        const mult = activeTab === "membership" ? membershipPromoMultiplier : oneTimePromoMultiplier;
+                        const mult = activeTab === "membership" ? membershipPromoMultiplier : oneTimeEffectiveMultiplier;
                         promoText = b.text.replace(m[1], (orig * mult).toLocaleString());
                       }
                     }

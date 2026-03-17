@@ -5,7 +5,6 @@ import Image from "next/image";
 import {
   Trophy,
   FileText,
-  CheckCircle,
   Sparkles,
   Crown,
   Shield,

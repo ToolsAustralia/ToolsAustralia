@@ -208,9 +208,9 @@ const Dropdown: React.FC<DropdownProps> = ({
     <div className={`relative ${isOpen ? "z-[100]" : ""} ${className}`} ref={dropdownRef}>
       {/* Label */}
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-500 dark:text-red-400 ml-1">*</span>}
         </label>
       )}
 
@@ -230,12 +230,12 @@ const Dropdown: React.FC<DropdownProps> = ({
           }
           ${
             error
-              ? "border-red-300 bg-red-50"
+              ? "border-red-300 dark:border-red-500 bg-red-50 dark:bg-red-950/30"
               : active
-              ? "border-red-500 bg-red-50/50 shadow-md"
-              : "border-gray-300 bg-white hover:border-gray-400"
+              ? "border-red-500 dark:border-red-500 bg-red-50/50 dark:bg-red-950/30 shadow-md"
+              : "border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 hover:border-gray-400 dark:hover:border-neutral-500"
           }
-          ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "cursor-pointer"}
+          ${disabled ? "bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-gray-500 cursor-not-allowed" : "cursor-pointer"}
           ${isOpen ? "ring-2 ring-red-500 border-transparent" : ""}
         `}
         aria-expanded={isOpen}
@@ -246,7 +246,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         <div className="flex items-center justify-between gap-1 sm:gap-2">
           <span
             className={`truncate flex-1 flex items-center gap-1 sm:gap-1.5 ${
-              selectedOption ? "text-gray-900" : "text-gray-500"
+              selectedOption ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"
             }`}
           >
             {selectedOption?.icon && (
@@ -259,7 +259,7 @@ const Dropdown: React.FC<DropdownProps> = ({
             <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
           </span>
           <ChevronDown
-            className="flex-shrink-0 w-4 h-4 text-gray-400 transition-transform duration-200"
+            className="flex-shrink-0 w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200"
             style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
           />
         </div>
@@ -271,7 +271,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           id="dropdown-options"
           ref={optionsRef}
           data-dropdown-list
-          className="absolute z-50 w-full min-w-[220px] mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+          className="absolute z-50 w-full min-w-[220px] mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
           style={{
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",
@@ -282,7 +282,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           onWheel={(e) => e.stopPropagation()}
         >
           {options.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
+            <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">No options available</div>
           ) : (
             options.map((option) => {
               const IconComponent = option.icon;
@@ -298,10 +298,10 @@ const Dropdown: React.FC<DropdownProps> = ({
                     flex items-center justify-between gap-2
                     ${
                       option.disabled
-                        ? "text-gray-400 cursor-not-allowed bg-gray-50"
-                        : "text-gray-900 hover:bg-red-50 cursor-pointer"
+                        ? "text-gray-400 dark:text-gray-500 cursor-not-allowed bg-gray-50 dark:bg-neutral-800"
+                        : "text-gray-900 dark:text-white hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer"
                     }
-                    ${option.value === value ? "bg-red-50 text-red-700" : ""}
+                    ${option.value === value ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : ""}
                     first:rounded-t-lg last:rounded-b-lg
                   `}
                   role="option"
@@ -311,7 +311,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                     {IconComponent && <IconComponent className="w-4 h-4 flex-shrink-0" />}
                     <span className="whitespace-nowrap">{option.label}</span>
                   </span>
-                  {option.value === value && <Check className="w-4 h-4 text-red-600 flex-shrink-0" />}
+                  {option.value === value && <Check className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />}
                 </button>
               );
             })
@@ -335,7 +335,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       )}
 
       {/* Error Message */}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 };

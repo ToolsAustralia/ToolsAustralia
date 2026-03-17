@@ -45,17 +45,19 @@ export default function EntryProgressBar({
     <div className={`w-full ${className}`}>
       {showLabel && (
         <div className={`flex items-center justify-between ${isCompact ? "mb-1" : "mb-2"}`}>
-          <span className={`font-medium ${isCompact ? "text-[10px] sm:text-xs" : "text-xs sm:text-sm"} text-gray-600`}>
+          <span
+            className={`font-medium ${isCompact ? "text-[10px] sm:text-xs" : "text-xs sm:text-sm"} text-gray-700 dark:text-white`}
+          >
             {isClosed ? (
-              <span className="text-[#ee0000] font-semibold">Entries Closed</span>
+              <span className="text-[#ee0000] dark:text-red-400 font-semibold">Entries Closed</span>
             ) : (
               <>
-                <span className="text-gray-900 font-semibold">{remaining.toLocaleString()}</span> remaining
+                <span className="font-semibold">{remaining.toLocaleString()}</span> remaining
               </>
             )}
           </span>
           {!isCompact && (
-            <span className={`text-xs font-semibold ${percentage >= 85 ? "text-[#ee0000]" : "text-gray-500"}`}>
+            <span className={`text-xs font-semibold ${percentage >= 85 ? "text-[#ee0000] dark:text-red-500" : "text-gray-500 dark:text-gray-400"}`}>
               {percentage}%
             </span>
           )}
@@ -65,7 +67,7 @@ export default function EntryProgressBar({
         </div>
       )}
 
-      <div className={`w-full bg-gray-200 ${trackRounding} ${trackHeight} overflow-hidden`}>
+      <div className={`w-full bg-gray-200 dark:bg-neutral-700 ${trackRounding} ${trackHeight} overflow-hidden`}>
         <motion.div
           className={`${trackHeight} ${trackRounding} bg-gradient-to-r ${colorGradient}`}
           initial={{ width: 0 }}

@@ -24,10 +24,10 @@ import {
   createMiniDrawFullCapacityTemplate,
 } from './templates';
 import { getMiniDrawNotificationRecipients } from './mini-draw-notification-config';
-import { EmailCategory, getSenderIdentity } from './sender-identities';
+import { EmailCategory, getSenderIdentity, getContactEmail } from './sender-identities';
 import { stripHtml } from './utils';
 
-const CONTACT_RECIPIENT = process.env.CONTACT_EMAIL || 'support@toolsaustralia.com.au';
+const CONTACT_RECIPIENT = getContactEmail();
 
 class EmailService {
   private client: SendGridClient;

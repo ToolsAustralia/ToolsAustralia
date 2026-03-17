@@ -17,8 +17,13 @@ export async function sendMiniDrawFullCapacityNotification(payload: {
   return emailService.sendMiniDrawFullCapacityNotification(payload);
 }
 
-// Sender identities
-export { EmailCategory, getSenderIdentity } from './sender-identities';
+// Sender identities - SendGrid source of truth for support/contact email
+export {
+  EmailCategory,
+  getSenderIdentity,
+  SUPPORT_EMAIL,
+  getContactEmail,
+} from './sender-identities';
 export type { SenderIdentity } from './sender-identities';
 
 // Rate limiting
