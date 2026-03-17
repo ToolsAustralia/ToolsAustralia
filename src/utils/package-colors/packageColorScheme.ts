@@ -15,6 +15,7 @@ export type COLOR_KEYS =
   | "makita-teal"
   | "dewalt-yellow"
   | "milwaukee-red"
+  | "boss-red"
   | "black"
   | "mint-green"
   | "cash-green";
@@ -105,6 +106,7 @@ const PLAN_ID_TO_COLOR_KEY: Record<string, COLOR_KEYS> = {
   "foreman-pack": "makita-teal",
   "boss-pack": "dewalt-yellow",
   "power-pack": "milwaukee-red",
+  "boss-red": "boss-red",
   "black-pack": "black",
   "mint-pack": "mint-green",
   "cash-prize": "cash-green",
@@ -169,6 +171,13 @@ const BRAND_GRADIENTS: Record<COLOR_KEYS, { bg: string; primary: string; primary
     primary: "#C8102E",
     primaryLight: "#E02D42",
     primaryDark: "#9a0c24",
+    accent: "#000000",
+  },
+  "boss-red": {
+    bg: "linear-gradient(135deg, #ee0000 0%, #ff4444 50%, #ee0000 100%)",
+    primary: "#ee0000",
+    primaryLight: "#ff4444",
+    primaryDark: "#d40000",
     accent: "#000000",
   },
   black: {
@@ -239,6 +248,15 @@ const MEMBERSHIP_SECTION_GRADIENTS: Record<COLOR_KEYS, { bgGradient: string; gra
       background: "#C8102E",
       boxShadow: "0 0 40px rgba(200, 16, 46, 0.85), 0 4px 20px rgba(200, 16, 46, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
       border: "1px solid rgba(200, 16, 46, 0.95)",
+    },
+  },
+  "boss-red": {
+    bgGradient: "linear-gradient(135deg, #d40000 0%, #ee0000 40%, #ff4444 50%, #ee0000 60%, #d40000 100%)",
+    gradient: "from-[#d40000] via-[#ff4444] to-[#d40000]",
+    badgeStyle: {
+      background: "#ee0000",
+      boxShadow: "0 0 40px rgba(238, 0, 0, 0.85), 0 4px 20px rgba(238, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
+      border: "1px solid rgba(238, 0, 0, 0.95)",
     },
   },
   black: {
@@ -317,6 +335,7 @@ const LANDING_PAGE_BRAND: Record<COLOR_KEYS, { primary: string; primaryLight: st
   "makita-teal": { primary: "#00A0AA", primaryLight: "#00C5CF", primaryDark: "#0B7E88" },
   "dewalt-yellow": { primary: "#FDB813", primaryLight: "#FFC933", primaryDark: "#E5A000" },
   "milwaukee-red": { primary: "#C8102E", primaryLight: "#E02D42", primaryDark: "#9a0c24" },
+  "boss-red": { primary: "#ee0000", primaryLight: "#ff4444", primaryDark: "#d40000" },
   black: { primary: "#D4AF37", primaryLight: "#E8C547", primaryDark: "#B8860B" },
   "mint-green": { primary: "#66DD99", primaryLight: "#88E8B3", primaryDark: "#22AA55" },
   "cash-green": { primary: "#22c55e", primaryLight: "#4ade80", primaryDark: "#16a34a" },
@@ -433,12 +452,12 @@ export function getPromoPrimaryTheme() {
   };
 }
 
-/** Membership tab: apprentice=tradie=makita, foreman=dewalt, boss=power=milwaukee (split-test winner) */
+/** Membership tab: apprentice=tradie=makita, foreman=dewalt, boss=Tools Australia red, power=milwaukee (split-test winner) */
 const MEMBERSHIP_TAB_COLOR_MAP: Record<string, COLOR_KEYS> = {
   "apprentice-pack": "makita-teal",
   "tradie-pack": "makita-teal",
   "foreman-pack": "dewalt-yellow",
-  "boss-pack": "milwaukee-red",
+  "boss-pack": "boss-red",
   "power-pack": "milwaukee-red",
 };
 
@@ -659,6 +678,7 @@ export function getPackageGlowColor(planIdOrColorKey: string): string {
     case "makita-teal": return "from-[#00A0AA]/22 via-[#000000]/8 to-transparent";
     case "dewalt-yellow": return "from-[#FDB813]/20 via-[#000000]/8 to-transparent";
     case "milwaukee-red": return "from-[#C8102E]/20 via-[#000000]/8 to-transparent";
+    case "boss-red": return "from-[#ee0000]/20 via-[#000000]/8 to-transparent";
     case "black": return "from-[#D4AF37]/15 via-[#000000]/8 to-transparent";
     case "mint-green": return "from-[#66DD99]/20 via-[#000000]/8 to-transparent";
     case "cash-green": return "from-[#22c55e]/20 via-[#000000]/8 to-transparent";
@@ -879,6 +899,41 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     barColorVertical: "bg-gradient-to-t from-[#C8102E] via-[#E02D42] to-[#C8102E]",
     barColorLightVertical: "bg-gradient-to-t from-[#E02D42] via-[#C8102E] to-[#E02D42]",
     barGradientCss: "linear-gradient(to top, #C8102E 0%, #E02D42 50%, #C8102E 100%)",
+  },
+  "boss-red": {
+    bgGradient: BRAND_GRADIENTS["boss-red"].bg,
+    gradient: "from-[#ee0000] via-[#ff4444] to-[#ee0000]",
+    text: "text-white",
+    textMuted: "text-white/90",
+    textOnLight: "text-[#6a0a0a]",
+    featureOnLight: "text-gray-700",
+    priceText: "text-white",
+    priceBadgeBg: "bg-white/25 backdrop-blur-sm",
+    buttonBg: "bg-[#000000] hover:bg-[#ee0000] active:scale-[0.98] border border-white/10",
+    buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+    buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,0,0,0.25)]",
+    buttonText: "text-white",
+    glow: "drop-shadow-[0_0_20px_rgba(238,0,0,0.85)]",
+    border: "border-[#ee0000]/55",
+    shadow: "shadow-[#ee0000]/50",
+    hoverShadow: "hover:shadow-[#ee0000]/70",
+    borderGlow: "animate-border-glow-boss-red",
+    badgeStyle: {
+      background: "#ee0000",
+      boxShadow: "0 0 40px rgba(238, 0, 0, 0.85), 0 4px 20px rgba(238, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
+      border: "1px solid rgba(238, 0, 0, 0.95)",
+    },
+    enterNowButtonStyle: createPanelStyle({ r: 238, g: 0, b: 0 }),
+    ctaGradientButtonBorder: "border border-white/30",
+    accentHex: BRAND_GRADIENTS["boss-red"].primary,
+    accentHexLight: "#ff4444",
+    entriesText: "text-white",
+    cardBorderOpacity: "CC",
+    barColor: "bg-gradient-to-r from-[#ee0000] via-[#ff4444] to-[#ee0000]",
+    barColorLight: "bg-gradient-to-r from-[#ff4444] via-[#ee0000] to-[#ff4444]",
+    barColorVertical: "bg-gradient-to-t from-[#ee0000] via-[#ff4444] to-[#ee0000]",
+    barColorLightVertical: "bg-gradient-to-t from-[#ff4444] via-[#ee0000] to-[#ff4444]",
+    barGradientCss: "linear-gradient(to top, #ee0000 0%, #ff4444 50%, #ee0000 100%)",
   },
   black: {
     bgGradient: BRAND_GRADIENTS.black.bg,

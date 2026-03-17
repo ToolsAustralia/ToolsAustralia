@@ -339,8 +339,21 @@ export default function MyAccountPage() {
       .map((item) => String(item.packageId))
   );
 
-  const visibleOneTimePackages = (user.enrichedOneTimePackages ?? [])
-    .filter((pkg) => pkg.isActive && pkg.packageData && activeOneTimePackageIds.has(String(pkg.packageId)));
+  // Show all active one-time packages (not just those in partner discount queue)
+  // Prefer enrichedOneTimePackages from API; fallback to legacy oneTimePackages with minimal packageData
+  const enrichedOneTime = (user.enrichedOneTimePackages ?? []).filter((pkg) => pkg.isActive);
+  const legacyOneTime = (user.oneTimePackages ?? []).filter((pkg) => pkg.isActive);
+  const visibleOneTimePackages = (
+    enrichedOneTime.length > 0 ? enrichedOneTime : legacyOneTime.map((pkg) => ({
+      ...pkg,
+      packageId: String(pkg.packageId),
+      packageData: { _id: String(pkg.packageId), name: "One-Time Package", type: "one-time" as const },
+    }))
+  ).map((pkg) =>
+    pkg.packageData
+      ? pkg
+      : { ...pkg, packageData: { _id: String(pkg.packageId), name: "One-Time Package", type: "one-time" as const } }
+  );
 
   return (
     <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-gray-50 dark:bg-neutral-950">
