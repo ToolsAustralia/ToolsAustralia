@@ -46,6 +46,28 @@ export interface PackageDetailModalProps {
   onOpenSpecialPackages?: () => void;
 }
 
+/** Filter out features that duplicate the entries (ticket) or partner days (handshake) rows */
+function filterRedundantFeatures(
+  features: string[],
+  showEntries: boolean,
+  showPartnerDays: boolean
+): string[] {
+  if (!showEntries && !showPartnerDays) return features;
+  return features.filter((f) => {
+    const lower = String(f).toLowerCase().trim();
+    if (!lower) return true;
+    // "3 Free Entries", "15 Free Accumulated Entries" – already shown by ticket row
+    const isEntriesDuplicate =
+      showEntries &&
+      (/\d+\s*free\s+(accumulated\s+)?entries?$/.test(lower) || /^\d+\s*(free\s+)?(accumulated\s+)?entries?\.?\s*$/.test(lower));
+    // "1 Days Access to Partner Discounts" – already shown by handshake row (exclude "100% of Partner Discounts")
+    const isPartnerDaysDuplicate =
+      showPartnerDays &&
+      /^\d+\s*days?\s+access\s+to\s+partner\s+discounts\.?\s*$/.test(lower);
+    return !isEntriesDuplicate && !isPartnerDaysDuplicate;
+  });
+}
+
 /** Map package name or _id to VerticalAccumulationChart package id */
 function toChartPackageId(name: string, _id?: string): string {
   const id = (_id ?? name).toString().toLowerCase();
@@ -82,7 +104,10 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
   const totalEntries = packageData.totalEntries ?? 0;
   const partnerDays = packageData.partnerDiscountDays ?? 0;
   const _shopDiscount = packageData.shopDiscountPercent ?? 0;
-  const features = packageData.features ?? [];
+  const rawFeatures = (packageData.features ?? []).map((f) => (typeof f === "string" ? f : (f as { text?: string }).text ?? String(f)));
+  const showEntries = (isSubscription && entriesPerMonth > 0) || (!isSubscription && totalEntries > 0);
+  const showPartnerDays = partnerDays > 0;
+  const features = filterRedundantFeatures(rawFeatures, showEntries, showPartnerDays);
 
   const chartPackageId = toChartPackageId(packageData.name, packageData._id);
 
@@ -101,8 +126,8 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
       <ModalContent className="p-4 sm:p-6 space-y-5">
         {/* Package name */}
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-gray-900">{packageData.name}</span>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <span className="text-lg font-bold text-gray-900 dark:text-white">{packageData.name}</span>
+          <span className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wide">
             {isSubscription ? "Membership" : "One-time"}
           </span>
         </div>
@@ -110,7 +135,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
         {/* Subscription: how entries work + chart */}
         {isSubscription && (
           <>
-            <p className="text-gray-700 text-sm sm:text-base">
+            <p className="text-gray-700 dark:text-neutral-300 text-sm sm:text-base">
               You receive{" "}
               <strong>
                 {entriesPerMonth.toLocaleString()}
@@ -135,10 +160,10 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
               />
             )}
             {/* Billing note – same as SubscriptionExplainerModal */}
-            <div className="rounded-xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 sm:px-5 sm:py-4 shadow-sm">
-              <p className="text-amber-900 text-sm sm:text-base font-semibold leading-snug">
-                If you joined on the <strong className="text-amber-700">25th, 26th, or 27th</strong>, you&apos;ll be
-                billed on the <strong className="text-amber-700">24th of the following month</strong>.
+            <div className="rounded-xl border-2 border-amber-400/60 dark:border-amber-600/60 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 sm:px-5 sm:py-4 shadow-sm">
+              <p className="text-amber-900 dark:text-amber-200 text-sm sm:text-base font-semibold leading-snug">
+                If you joined on the <strong className="text-amber-700 dark:text-amber-300">25th, 26th, or 27th</strong>, you&apos;ll be
+                billed on the <strong className="text-amber-700 dark:text-amber-300">24th of the following month</strong>.
               </p>
             </div>
           </>
@@ -146,17 +171,17 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
 
         {/* One-time: entries summary */}
         {!isSubscription && totalEntries > 0 && (
-          <p className="text-gray-700 text-sm sm:text-base">
+          <p className="text-gray-700 dark:text-neutral-300 text-sm sm:text-base">
             This package includes <strong>{totalEntries.toLocaleString()} entries</strong> to the major draw.
           </p>
         )}
 
         {/* Benefits block */}
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-gray-800">Benefits</h4>
+        <div className="rounded-xl border border-gray-200 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800 p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-gray-800 dark:text-white">Benefits</h4>
           <ul className="space-y-2">
             {isSubscription && entriesPerMonth > 0 && (
-              <li className="flex items-center gap-2 text-sm text-gray-700">
+              <li className="flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-300">
                 <Ticket className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <span>
                   <strong>{entriesPerMonth.toLocaleString()}</strong> entries per month (membership)
@@ -164,7 +189,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
               </li>
             )}
             {!isSubscription && totalEntries > 0 && (
-              <li className="flex items-center gap-2 text-sm text-gray-700">
+              <li className="flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-300">
                 <Ticket className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <span>
                   <strong>{totalEntries.toLocaleString()}</strong> entries (one-time)
@@ -172,7 +197,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
               </li>
             )}
             {partnerDays > 0 && (
-              <li className="flex items-center gap-2 text-sm text-gray-700">
+              <li className="flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-300">
                 <Handshake className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <span>
                   Partner discounts for <strong>{partnerDays} days</strong>
@@ -188,7 +213,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
               </li>
             )} */}
             {features.map((feature, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-300">
                 <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
                 <span>{feature}</span>
               </li>
@@ -229,7 +254,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
                 onOpenSpecialPackages();
               }}
               variant="outline"
-              className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"
+              className="w-full border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700 font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"
             >
               Add more packages
               <ChevronRight className="w-4 h-4" />
@@ -249,7 +274,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="text-sm text-gray-500 hover:text-gray-700 py-1"
+              className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-white py-1"
             >
               Close
             </button>

@@ -13,6 +13,7 @@ import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
+import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import MembershipModal from "@/components/modals/MembershipModal";
@@ -97,9 +98,8 @@ export default function MyAccountPage() {
   const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
   const { data: currentMajorDraw, isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
-  const membershipModal = useMembershipModal();
   const { requestModal, activeModal, closeModal } = useModalPriorityStore();
-  const { openEntryFlow } = useMajorDrawEntryCta();
+  const { openEntryFlow, openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
 
   useMemberships();
   useResolvedMultiplier("membership-packages", "display");
@@ -199,6 +199,24 @@ export default function MyAccountPage() {
       selectedPackageId,
     });
   }, [userId, profileSetupCompleted, status, loading, activeModal, accountData, requestModal]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleOpenMembershipModal = (event: CustomEvent<{ plan?: LocalMembershipPlan }>) => {
+      const plan = event.detail?.plan;
+      if (plan) {
+        membershipModal.setSelectedPlan(plan);
+      }
+      membershipModal.openModal();
+    };
+
+    window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
+
+    return () => {
+      window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
+    };
+  }, [membershipModal]);
 
   if (status === "loading" || loading || majorDrawStatsLoading || currentMajorDrawLoading) {
     return (
@@ -314,10 +332,10 @@ export default function MyAccountPage() {
 
     const sub = user.subscription as { endDate?: Date | string; startDate?: Date | string } | undefined;
     let renewalDate: Date | null = null;
-    if (!isEligibleFailedRenewal && sub) {
+    if (sub) {
       if (sub.endDate) {
         renewalDate = new Date(sub.endDate);
-      } else if (sub.startDate) {
+      } else if (!isEligibleFailedRenewal && sub.startDate) {
         renewalDate = getFallbackRenewalDate(new Date(sub.startDate));
       }
     }
@@ -391,6 +409,7 @@ export default function MyAccountPage() {
           setPackageDetailModalData(data);
           setPackageDetailModalOpen(true);
         }}
+        onOneTimeCardClick={openWithOneTimePlan}
         projectionData={projectionData}
         pendingEntriesData={pendingEntriesData}
         onResolvePayment={() => router.push("/my-account/settings?tab=subscription")}

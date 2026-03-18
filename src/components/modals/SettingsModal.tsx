@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ModalContainer, ModalHeader, ModalContent } from "./ui";
+import Dropdown from "./ui/Dropdown";
 import { useToast } from "@/components/ui/Toast";
 import SubscriptionManagementModal from "./SubscriptionManagementModal";
 import PaymentMethodsTab from "./PaymentMethodsTab";
@@ -292,21 +293,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs sm:text-sm font-medium text-gray-700">State</label>
-              <div className="flex flex-col gap-1.5 sm:gap-2">
-                <select
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                >
-                  <option value="">Select state</option>
-                  {AUSTRALIAN_STATES.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name} ({s.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Dropdown
+                options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
+                value={state}
+                onChange={setState}
+                placeholder="Select state"
+                label="State"
+              />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="text-xs sm:text-sm font-medium text-gray-700">Profession</label>

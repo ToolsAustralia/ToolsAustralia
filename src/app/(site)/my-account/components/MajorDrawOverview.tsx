@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { History, Info, Shield, Gift } from "lucide-react";
+import { History, Info, Shield, Gift, Clock } from "lucide-react";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import type { PackageDetailModalPackageData, SubscriptionAccumulationData } from "@/components/modals/PackageDetailModal";
+import { formatRenewalDate } from "@/utils/dates/month-helpers";
 
 interface MajorDrawOverviewProps {
   drawName: string;
@@ -38,6 +39,7 @@ interface MajorDrawOverviewProps {
     isPending: true;
   } | null;
   onResolvePayment?: () => void;
+  onOneTimeCardClick?: () => void;
   userSubscription?: { lastMonthAccumulatedEntries?: number };
   activeOneTimePackageIds?: Set<string>;
   className?: string;
@@ -136,6 +138,7 @@ export default function MajorDrawOverview({
   projectionData,
   pendingEntriesData,
   onResolvePayment,
+  onOneTimeCardClick,
   userSubscription,
   activeOneTimePackageIds,
   className = "",
@@ -173,7 +176,7 @@ export default function MajorDrawOverview({
             </div>
 
             {/* Main content panel - elevated glass */}
-            <div className="relative bg-white/[0.06] backdrop-blur-md rounded-2xl p-4 sm:p-6 border border-white/[0.12] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(0,0,0,0.2),0_8px_32px_rgba(0,0,0,0.25)]">
+           
 
               {/* Total entries hero - stronger presence */}
               <div className="text-center mb-5 sm:mb-6">
@@ -206,7 +209,7 @@ export default function MajorDrawOverview({
 
                     {/* Membership entries card */}
                     <div
-                      className={`group relative flex flex-col items-center justify-center rounded-xl overflow-hidden py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02] shadow-lg ${
+                      className={`group relative flex flex-col items-center justify-between rounded-xl py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02] shadow-lg min-h-[theme(spacing.28)] ${
                         pendingEntriesData?.isFailedRenewal
                           ? "bg-gradient-to-br from-amber-600/40 via-orange-500/30 to-amber-700/40"
                           : pendingEntriesData
@@ -217,6 +220,7 @@ export default function MajorDrawOverview({
                       <div className="absolute inset-0 rounded-xl border border-white/[0.12] group-hover:border-white/[0.2] transition-colors duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03]" />
 
+                      {/* Info button - direct child of card, anchored to top-right corner */}
                       {hasActiveSubscription && membershipPackage && projectionData && (
                         <button
                           onClick={(e) => {
@@ -232,81 +236,121 @@ export default function MajorDrawOverview({
                               setShowAccumulationTooltip(true);
                             }
                           }}
-                          className="absolute top-2 right-2 z-20 w-6 h-6 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-sm text-white/70 hover:text-white transition-all duration-200 hover:scale-110"
+                          className="absolute -top-2 -right-2 left-auto z-20 w-6 h-6 flex items-center justify-center bg-sky-600 hover:bg-sky-500 rounded-full text-white shadow-md border border-sky-500/50 transition-all duration-200 hover:scale-110"
                           aria-label="View accumulation info"
                         >
                           <Info className="w-3 h-3" />
                         </button>
                       )}
 
-                      <div className="relative flex items-center gap-1.5 text-red-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] mb-1.5">
-                        <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-300/70" />
-                        <span>Membership</span>
+                      <div className="relative flex flex-col items-center flex-1 justify-center w-full">
+                        <div className="relative flex items-center justify-center gap-1.5 text-red-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] mb-1.5">
+                          <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-300/70" />
+                          <span>Membership</span>
+                        </div>
+                        <div className="relative flex items-center justify-center gap-1.5">
+                          <div
+                            className={`text-2xl xs:text-3xl sm:text-4xl font-bold tabular-nums ${
+                              pendingEntriesData?.isFailedRenewal
+                                ? "text-amber-100"
+                                : pendingEntriesData
+                                  ? "text-red-50"
+                                  : "text-white"
+                            }`}
+                          >
+                            {displayMembershipEntries.toLocaleString()}
+                          </div>
+                          {pendingEntriesData?.isFailedRenewal && (
+                            <Clock
+                              className="w-5 h-5 sm:w-6 sm:h-6 text-amber-200/90 flex-shrink-0"
+                              aria-label="Entries pending until payment resolved"
+                            />
+                          )}
+                        </div>
+                        {displayMembershipEntries === 0 && (
+                          <div className="absolute inset-0 bg-slate-900/20 rounded-xl pointer-events-none" />
+                        )}
                       </div>
-                      <div
-                        className={`relative text-2xl xs:text-3xl sm:text-4xl font-bold tabular-nums ${
-                          pendingEntriesData?.isFailedRenewal
-                            ? "text-amber-100"
-                            : pendingEntriesData
-                              ? "text-red-50"
-                              : "text-white"
-                        }`}
-                      >
-                        {displayMembershipEntries.toLocaleString()}
-                      </div>
-                      {displayMembershipEntries === 0 && (
-                        <div className="absolute inset-0 bg-slate-900/20 rounded-xl pointer-events-none" />
+
+                      {/* Pending renewal notice - bottom of membership card only */}
+                      {pendingEntriesData && (
+                        <div className="relative w-full text-center mt-2 pt-2 border-t border-white/10">
+                          <span
+                            className={`text-[10px] sm:text-xs font-semibold ${
+                              pendingEntriesData.isFailedRenewal ? "text-amber-300/80" : "text-red-300/70"
+                            }`}
+                          >
+                            {pendingEntriesData.isFailedRenewal ? (
+                              <>
+                               
+                                {onResolvePayment && (
+                                  <>
+                                    {" "}
+                                    <button
+                                      type="button"
+                                      onClick={onResolvePayment}
+                                      className="underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-1 focus:ring-offset-transparent rounded"
+                                      aria-label="Resolve payment – open Settings subscription tab"
+                                    >
+                                      Resolve payment issue
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                Added on renewal
+                                {pendingEntriesData.renewalDate && ` — ${formatRenewalDate(pendingEntriesData.renewalDate)}`}
+                              </>
+                            )}
+                          </span>
+                        </div>
                       )}
                     </div>
 
                     {/* One-time entries card */}
-                    <div className="group relative flex flex-col items-center justify-center rounded-xl overflow-hidden bg-gradient-to-br from-emerald-600/30 via-teal-500/25 to-emerald-700/30 py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02]">
-                      <div className="absolute inset-0 rounded-xl border border-white/[0.08] group-hover:border-white/[0.14] transition-colors duration-300" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03]" />
-
-                      <div className="relative flex items-center gap-1.5 text-emerald-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] mb-1.5">
-                        <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300/70" />
-                        <span>One-time</span>
-                      </div>
-                      <div className="relative text-2xl xs:text-3xl sm:text-4xl font-bold text-white tabular-nums">
-                        {oneTimeEntries.toLocaleString()}
-                      </div>
-                      {oneTimeEntries === 0 && (
-                        <div className="absolute inset-0 bg-slate-900/20 rounded-xl pointer-events-none" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Pending entries notice */}
-                  {pendingEntriesData && (
-                    <div className="text-center">
-                      <span
-                        className={`text-[10px] sm:text-xs font-semibold ${
-                          pendingEntriesData.isFailedRenewal ? "text-amber-300/80" : "text-red-300/70"
-                        }`}
+                    {onOneTimeCardClick ? (
+                      <button
+                        type="button"
+                        onClick={() => onOneTimeCardClick()}
+                        className="group relative flex flex-col items-center justify-center rounded-xl overflow-hidden bg-gradient-to-br from-emerald-600/30 via-teal-500/25 to-emerald-700/30 py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02] w-full min-w-0 text-left cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-transparent select-none"
                       >
-                        {pendingEntriesData.isFailedRenewal ? (
-                          <>
-                            Update payment to add entries.{" "}
-                            {onResolvePayment && (
-                              <button
-                                type="button"
-                                onClick={onResolvePayment}
-                                className="underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-1 focus:ring-offset-transparent rounded"
-                                aria-label="Resolve payment – open Settings subscription tab"
-                              >
-                                Resolve payment
-                              </button>
-                            )}
-                          </>
-                        ) : pendingEntriesData.renewalDate ? (
-                          `Added on renewal`
-                        ) : (
-                          "Added on renewal"
+                        <div className="absolute inset-0 rounded-xl border border-white/[0.08] group-hover:border-white/[0.14] transition-colors duration-300 pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03] pointer-events-none" />
+
+                        <div className="relative flex flex-col items-center gap-1.5 z-[1]">
+                          <div className="flex items-center gap-1.5 text-emerald-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em]">
+                            <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300/70" />
+                            <span>One-time</span>
+                          </div>
+                          <div className="text-2xl xs:text-3xl sm:text-4xl font-bold text-white tabular-nums">
+                            {oneTimeEntries.toLocaleString()}
+                          </div>
+                        </div>
+                        {oneTimeEntries === 0 && (
+                          <div className="absolute inset-0 bg-slate-900/20 rounded-xl pointer-events-none" />
                         )}
-                      </span>
-                    </div>
-                  )}
+                      </button>
+                    ) : (
+                      <div className="group relative flex flex-col items-center justify-center rounded-xl overflow-hidden bg-gradient-to-br from-emerald-600/30 via-teal-500/25 to-emerald-700/30 py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02]">
+                        <div className="absolute inset-0 rounded-xl border border-white/[0.08] group-hover:border-white/[0.14] transition-colors duration-300 pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03] pointer-events-none" />
+
+                        <div className="relative flex flex-col items-center gap-1.5 z-[1]">
+                          <div className="flex items-center gap-1.5 text-emerald-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em]">
+                            <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300/70" />
+                            <span>One-time</span>
+                          </div>
+                          <div className="text-2xl xs:text-3xl sm:text-4xl font-bold text-white tabular-nums">
+                            {oneTimeEntries.toLocaleString()}
+                          </div>
+                        </div>
+                        {oneTimeEntries === 0 && (
+                          <div className="absolute inset-0 bg-slate-900/20 rounded-xl pointer-events-none" />
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Badges row */}
                   <div className="flex items-center justify-between gap-3 pt-1">
@@ -341,14 +385,17 @@ export default function MajorDrawOverview({
                       {oneTimePackages && oneTimePackages.length > 0 && (
                         <>
                           {oneTimePackages
-                            .filter((pkg) => pkg.isActive)
+                            .filter((pkg) => {
+                              if (!pkg.isActive) return false;
+                              if (!activeOneTimePackageIds) return false;
+                              return activeOneTimePackageIds.has(String(pkg.packageId));
+                            })
                             .map((pkg, index) => (
                               <MembershipBadge
                                 key={`${String(pkg.packageId)}-${index}`}
                                 packageData={pkg.packageData}
                                 isActive={true}
                                 membershipType="one-time"
-                                iconOnly
                                 onClick={() => {
                                   if (onBadgeClick) {
                                     onBadgeClick({
@@ -366,7 +413,7 @@ export default function MajorDrawOverview({
                   </div>
                 </div>
               </div>
-            </div>
+          
           </div>
 
           {/* View Past Draws button */}

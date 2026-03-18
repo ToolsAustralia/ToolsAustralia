@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Lock } from "lucide-react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import Dropdown from "@/components/modals/ui/Dropdown";
 import { useToast } from "@/components/ui/Toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
@@ -194,19 +195,13 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
-          <select
-            className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
+          <Dropdown
+            options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
             value={state}
-            onChange={(e) => setState(e.target.value)}
-          >
-            <option value="">Select state</option>
-            {AUSTRALIAN_STATES.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.name} ({s.code})
-              </option>
-            ))}
-          </select>
+            onChange={setState}
+            placeholder="Select state"
+            label="State"
+          />
         </div>
 
         <div className="space-y-1.5">
