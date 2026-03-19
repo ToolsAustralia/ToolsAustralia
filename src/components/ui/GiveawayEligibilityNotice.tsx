@@ -4,7 +4,7 @@ import React from "react";
 import { Info } from "lucide-react";
 
 const MESSAGE =
-  "You are not eligible to win but you can still enjoy the benefits. You cannot participate in our giveaways.";
+  "You are not eligible to win but you can still enjoy the member benefits. You cannot participate in our giveaways.";
 
 interface GiveawayEligibilityNoticeProps {
   show: boolean;
