@@ -736,7 +736,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                                 className="text-xs sm:text-sm"
                                 style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: accentHex }}
                               >
-                                Free Entries
+                                Free Entries Major Giveaway
                               </div>
                             </div>
                           );

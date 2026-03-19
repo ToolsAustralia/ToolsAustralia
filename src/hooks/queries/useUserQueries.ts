@@ -18,6 +18,7 @@ export interface UserData {
   mobile?: string;
   state?: string;
   profession?: string;
+  birthdate?: string; // ISO date string
   profileSetupCompleted?: boolean;
   subscription?: {
     packageId: string;
@@ -117,6 +118,7 @@ export interface UpdateUserProfileData {
   mobile?: string;
   state?: string;
   profession?: string;
+  birthdate?: string;
   profileSetupCompleted?: boolean;
 }
 

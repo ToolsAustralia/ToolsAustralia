@@ -42,6 +42,7 @@ export interface PixelPurchaseParams {
   userState?: string;
   userZipCode?: string;
   userCountry?: string;
+  userBirthdate?: string | Date;
   entriesAdded?: number;
   pointsEarned?: number;
   subscriptionId?: string;
@@ -104,6 +105,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       userState,
       userZipCode: _userZipCode,
       userCountry,
+      userBirthdate,
       entriesAdded,
       pointsEarned,
       subscriptionId,
@@ -165,6 +167,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
         state: userState,
         country: userCountry || "AU",
         ...(userId && { externalId: userId }),
+        ...(userBirthdate && { birthdate: userBirthdate }),
       });
 
       // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract

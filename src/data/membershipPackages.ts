@@ -72,7 +72,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     price: 20,
     description: "Perfect for tradies getting started",
     features: [
-      "15 Free Accumulated Entries",
+      "15 Free Accumulated Entries Major Giveaway",
       // "5% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
     ],
@@ -93,7 +93,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     price: 40,
     description: "The most popular choice for serious tool enthusiasts",
     features: [
-      "40 Free Accumulated Entries",
+      "40 Free Accumulated Entries Major Giveaway",
       // "10% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
     ],
@@ -114,7 +114,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     price: 80,
     description: "Premium membership for the ultimate tool professionals",
     features: [
-      "100 Free Accumulated Entries",
+      "100 Free Accumulated Entries Major Giveaway",
       // "20% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
     ],
@@ -136,7 +136,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 25,
     description: "Quick boost for your entry wallet",
-    features: ["3 Free Entries", "1 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["3 Free Entries Major Giveaway", "1 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 3,
     shopDiscountPercent: 0,
     partnerDiscountDays: 1,
@@ -151,7 +151,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 50,
     description: "Great value entry boost",
-    features: ["15 Free Entries", "2 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["15 Free Entries Major Giveaway", "2 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 15,
     shopDiscountPercent: 0,
     partnerDiscountDays: 2,
@@ -166,7 +166,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 100,
     description: "Maximum entries for serious players",
-    features: ["30 Free Entries", "4 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["30 Free Entries Major Giveaway", "4 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 30,
     shopDiscountPercent: 0,
     partnerDiscountDays: 4,
@@ -181,7 +181,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 250,
     description: "The ultimate entry package",
-    features: ["150 Free Entries", "10 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["150 Free Entries Major Giveaway", "10 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 150,
     shopDiscountPercent: 0,
     partnerDiscountDays: 10,
@@ -196,7 +196,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 500,
     description: "Elite package for the ultimate professionals",
-    features: ["600 Free Entries", "20 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["600 Free Entries Major Giveaway", "20 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
     totalEntries: 600,
     shopDiscountPercent: 0,
     partnerDiscountDays: 20,
