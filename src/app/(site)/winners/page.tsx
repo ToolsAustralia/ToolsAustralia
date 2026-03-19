@@ -6,7 +6,7 @@ import WinnersPageClient from "./components/WinnersPageClient";
 export const metadata: Metadata = {
   title: "Winners | Tools Australia",
   description:
-    "Celebrate our incredible winners and their amazing achievements. See who has won tools and equipment from Tools Australia.",
+    "Celebrate our incredible winners and their amazing achiev ements. See who has won tools and equipment from Tools Australia.",
 };
 
 export default function WinnersPage() {

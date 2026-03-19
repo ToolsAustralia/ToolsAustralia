@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Input from "./Input";
@@ -55,6 +55,7 @@ const Dropdown: React.FC<DropdownProps> = ({
   compact = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
 
@@ -93,27 +94,24 @@ const Dropdown: React.FC<DropdownProps> = ({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
-  // Calculate available space and constrain dropdown height
-  useEffect(() => {
+  // Calculate available space, open direction (up/down), and constrain dropdown height
+  useLayoutEffect(() => {
     if (!isOpen || !dropdownRef.current || !optionsRef.current) return;
 
-    const calculateMaxHeight = () => {
+    const calculatePositionAndHeight = () => {
       const dropdownElement = dropdownRef.current;
       if (!dropdownElement) return;
 
       const rect = dropdownElement.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
       
-      // Find the modal container and footer to calculate available space
-      let modalContentBottom = viewportHeight;
+      let contentBottom = window.innerHeight;
+      let contentTop = 0;
       
-      // Find the modal container (look for flex container with modal structure)
       let parent = dropdownElement.parentElement;
       let modalContainer: HTMLElement | null = null;
       
       while (parent && parent !== document.body) {
         const styles = window.getComputedStyle(parent);
-        // Check if this is a flex container (modal structure)
         if (styles.display === "flex" && styles.flexDirection === "column") {
           modalContainer = parent;
           break;
@@ -121,59 +119,53 @@ const Dropdown: React.FC<DropdownProps> = ({
         parent = parent.parentElement;
       }
       
-      // If we found the modal container, look for the footer within it
+      const isInsideModal = !!modalContainer;
+      
       if (modalContainer) {
-        // Find footer - look for element with border-t (footer border) in the same container
         const footer = Array.from(modalContainer.children).find((child) => {
           const childStyles = window.getComputedStyle(child);
           return childStyles.borderTopWidth !== "0px" || 
                  child.classList.toString().includes("border-t") ||
-                 child.querySelector('button, [role="button"]'); // Has buttons (action buttons)
+                 child.querySelector('button, [role="button"]');
         }) as HTMLElement | undefined;
         
         if (footer) {
-          const footerRect = footer.getBoundingClientRect();
-          // Use footer top as the bottom boundary (with some padding)
-          modalContentBottom = footerRect.top - 10; // 10px padding above footer
+          contentBottom = footer.getBoundingClientRect().top - 10;
         } else {
-          // Fallback: use modal container bottom
-          const containerRect = modalContainer.getBoundingClientRect();
-          modalContentBottom = containerRect.bottom;
+          contentBottom = modalContainer.getBoundingClientRect().bottom;
         }
+        contentTop = modalContainer.getBoundingClientRect().top;
       }
       
-      const spaceBelow = modalContentBottom - rect.bottom;
-      const spaceAbove = rect.top;
+      const spaceBelow = contentBottom - rect.bottom - 20;
+      const spaceAbove = rect.top - contentTop - 20;
       
-      // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
-      // Use same max-height as Select (400px) for longer dropdown
-      const primarySpace = spaceBelow - 20; // Dropdown opens downward in this component.
-      const fallbackSpace = spaceAbove - 20; // Safety fallback for constrained layouts.
-      const maxHeight = Math.min(Math.max(primarySpace, fallbackSpace), 400);
+      // Only open upward when NOT inside a modal (e.g. on a page). Inside modals, always open downward
+      // so the modal height/layout stays predictable and we don't draw into the header.
+      const shouldOpenUpward = !isInsideModal && spaceBelow < spaceAbove;
+      setOpenUpward(shouldOpenUpward);
+      
+      const availableSpace = shouldOpenUpward ? Math.min(spaceAbove, 400) : spaceBelow;
+      const maxHeight = Math.min(Math.max(availableSpace, 180), 400);
 
       if (optionsRef.current) {
-        optionsRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px
+        optionsRef.current.style.maxHeight = `${maxHeight}px`;
       }
     };
 
-    // Calculate on open
-    calculateMaxHeight();
+    calculatePositionAndHeight();
 
-    // Use a more efficient scroll handler with throttling
     let scrollTimeout: NodeJS.Timeout;
     const handleScroll = () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(calculateMaxHeight, 50);
+      scrollTimeout = setTimeout(calculatePositionAndHeight, 50);
     };
     
-    // Listen to scroll on document and modal containers
     document.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", calculateMaxHeight);
+    window.addEventListener("resize", calculatePositionAndHeight);
 
-    // Ensure wheel events work for desktop scrolling
     const handleWheel = (e: WheelEvent) => {
       if (optionsRef.current && optionsRef.current.contains(e.target as Node)) {
-        // Allow scrolling within dropdown, prevent modal scroll
         e.stopPropagation();
       }
     };
@@ -181,7 +173,7 @@ const Dropdown: React.FC<DropdownProps> = ({
     document.addEventListener("wheel", handleWheel, { passive: false, capture: true });
 
     return () => {
-      window.removeEventListener("resize", calculateMaxHeight);
+      window.removeEventListener("resize", calculatePositionAndHeight);
       document.removeEventListener("scroll", handleScroll, true);
       document.removeEventListener("wheel", handleWheel, { capture: true });
       if (scrollTimeout) clearTimeout(scrollTimeout);
@@ -271,7 +263,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           id="dropdown-options"
           ref={optionsRef}
           data-dropdown-list
-          className="absolute z-50 w-full min-w-[220px] mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+          className={`absolute z-50 w-full min-w-[220px] ${openUpward ? "bottom-full mb-1" : "top-full mt-1"} bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden`}
           style={{
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",

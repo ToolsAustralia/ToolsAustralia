@@ -1,8 +1,11 @@
+import { formatNamePart } from "@/utils/display-name";
+
 /**
  * Winner Name Formatter Utility
  * 
  * Provides privacy-compliant name formatting for winner displays.
  * Formats names as "First Name + First Letter of Last Name" (e.g., "John D.")
+ * Name parts are displayed with first letter uppercase, rest lowercase.
  */
 
 /**
@@ -17,13 +20,14 @@ export function formatWinnerName(firstName: string, lastName?: string): string {
   if (!firstName || firstName.trim().length === 0) {
     return "Anonymous";
   }
-  
+
+  const formattedFirst = formatNamePart(firstName);
   if (!lastName || lastName.trim().length === 0) {
-    return firstName.trim();
+    return formattedFirst;
   }
-  
+
   const firstLetter = lastName.trim().charAt(0).toUpperCase();
-  return `${firstName.trim()} ${firstLetter}.`;
+  return `${formattedFirst} ${firstLetter}.`;
 }
 
 /**
@@ -37,16 +41,15 @@ export function formatWinnerNameFromString(fullName: string): string {
   if (!fullName || fullName.trim().length === 0) {
     return "Anonymous";
   }
-  
+
   const parts = fullName.trim().split(/\s+/);
   if (parts.length === 1) {
-    return parts[0];
+    return formatNamePart(parts[0]);
   }
-  
-  const firstName = parts[0];
+
+  const firstName = formatNamePart(parts[0]);
   const lastName = parts[parts.length - 1];
   const firstLetter = lastName.charAt(0).toUpperCase();
-  
   return `${firstName} ${firstLetter}.`;
 }
 

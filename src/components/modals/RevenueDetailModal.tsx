@@ -24,6 +24,7 @@ import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import Dropdown from "./ui/Dropdown";
 import { useRevenueDetails, type RevenueCategory } from "@/hooks/queries/useAdminQueries";
 import { format } from "date-fns";
+import { formatDisplayName } from "@/utils/display-name";
 
 interface RevenueDetailModalProps {
   isOpen: boolean;
@@ -254,7 +255,7 @@ export default function RevenueDetailModal({
         : "";
 
       return [
-        escapeCSVCell(`${user.userInfo.firstName} ${user.userInfo.lastName}`),
+        escapeCSVCell(formatDisplayName(user.userInfo.firstName, user.userInfo.lastName)),
         escapeCSVCell(user.userInfo.email),
         escapeCSVCell(user.userInfo.mobile || ""),
         escapeCSVCell(user.purchaseCount.toString()),
@@ -289,7 +290,7 @@ export default function RevenueDetailModal({
         : "";
 
       return [
-        `${user.userInfo.firstName} ${user.userInfo.lastName}`,
+        formatDisplayName(user.userInfo.firstName, user.userInfo.lastName),
         user.userInfo.email,
         user.userInfo.mobile || "",
         user.purchaseCount.toString(),
@@ -556,7 +557,7 @@ export default function RevenueDetailModal({
                               <User className="w-5 h-5 text-gray-400" />
                               <div>
                                 <p className="font-semibold text-gray-900">
-                                  {user.userInfo.firstName} {user.userInfo.lastName}
+                                  {formatDisplayName(user.userInfo.firstName, user.userInfo.lastName)}
                                 </p>
                                 <p className="text-sm text-gray-600">{user.userInfo.email}</p>
                               </div>
@@ -579,7 +580,7 @@ export default function RevenueDetailModal({
                         <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-center">
                           <div className="col-span-3">
                             <p className="font-semibold text-gray-900">
-                              {user.userInfo.firstName} {user.userInfo.lastName}
+                              {formatDisplayName(user.userInfo.firstName, user.userInfo.lastName)}
                             </p>
                             {user.userInfo.mobile && <p className="text-xs text-gray-500">{user.userInfo.mobile}</p>}
                           </div>

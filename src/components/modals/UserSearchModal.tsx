@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Search, User, Mail, Phone, MapPin, Calendar, Trophy, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useDebounce } from "../../hooks/useDebounce";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
+import { formatDisplayName } from "@/utils/display-name";
 
 // Types for user search
 interface UserSearchResult {
@@ -303,7 +304,7 @@ export default function UserSearchModal({
                         </div>
                         <div>
                           <h3 className="font-semibold text-gray-900">
-                            {user.firstName} {user.lastName}
+                            {formatDisplayName(user.firstName, user.lastName)}
                           </h3>
                           <p className="text-sm text-gray-600">ID: {user._id}</p>
                         </div>

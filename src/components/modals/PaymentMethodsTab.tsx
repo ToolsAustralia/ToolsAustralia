@@ -9,6 +9,7 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 import { getStripePromise } from "@/lib/stripe-client";
 import { Button } from "./ui";
 import ConfirmationModal from "./ConfirmationModal";
+import { formatDisplayName } from "@/utils/display-name";
 
 const stripePromise = getStripePromise();
 
@@ -480,7 +481,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                 setSetupIntentClientSecret(null);
               }}
               userEmail={user.email}
-              userName={`${user.firstName} ${user.lastName}`.trim() || undefined}
+              userName={formatDisplayName(user.firstName, user.lastName) || undefined}
               userPhone={user.mobile || undefined}
             />
           </Elements>

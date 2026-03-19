@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Trophy, User, CheckCircle, AlertCircle, Image as ImageIcon, MessageSquare, Gift } from "lucide-react";
 import UserSearchModal from "./UserSearchModal";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
+import { formatDisplayName } from "@/utils/display-name";
 import ImageUpload from "./ui/ImageUpload";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 
@@ -241,7 +242,7 @@ export default function WinnerSelectionModal({
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">
-                          {selectedUser.firstName} {selectedUser.lastName}
+                          {formatDisplayName(selectedUser.firstName, selectedUser.lastName)}
                         </h3>
                         <p className="text-sm text-gray-600">{selectedUser.email}</p>
                         {selectedUser.mobile && <p className="text-sm text-gray-600">{selectedUser.mobile}</p>}

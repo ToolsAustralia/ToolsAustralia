@@ -9,6 +9,7 @@ import {
 import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatingMultiplierModal";
 import type { AlternatingPromoMultiplier } from "@/types/admin";
 import { getAlternatingMultiplier } from "@/utils/promo-banner/alternating-multiplier-manager";
+import { formatDisplayName } from "@/utils/display-name";
 
 export default function AlternatingMultiplierList() {
   const { data, isLoading, error } = useAlternatingMultiplierConfigs();
@@ -151,7 +152,7 @@ export default function AlternatingMultiplierList() {
 
                     {config.createdBy && (
                       <p className="text-xs text-gray-400 mt-2">
-                        Created by: {config.createdBy.firstName} {config.createdBy.lastName}
+                        Created by: {formatDisplayName(config.createdBy.firstName, config.createdBy.lastName)}
                       </p>
                     )}
                   </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { X, Copy, Check, Edit2, Trash2, Save, AlertTriangle } from "lucide-react";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import ClickableUserDisplay from "./ClickableUserDisplay";
+import { formatDisplayName } from "@/utils/display-name";
 
 interface AffiliateDetail {
   affiliate: {
@@ -619,7 +620,7 @@ export default function AffiliateDetailModal({
                           >
                             <td className="px-4 py-3 whitespace-nowrap">
                               <div className="font-medium text-gray-900">
-                                {user.firstName} {user.lastName}
+                                {formatDisplayName(user.firstName, user.lastName)}
                               </div>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-600">{user.email}</td>

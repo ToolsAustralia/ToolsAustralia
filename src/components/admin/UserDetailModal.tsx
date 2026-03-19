@@ -32,6 +32,7 @@ import { format } from "date-fns";
 import Image from "next/image";
 import { StaticImageData } from "next/image";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { formatDisplayName } from "@/utils/display-name";
 import { membershipPackages, getPackageById } from "@/data/membershipPackages";
 import { AdminUserUpdatePayload, UserActionType } from "@/types/admin";
 import {
@@ -1103,7 +1104,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               )}
               <div className="min-w-0 flex-1">
                 <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 truncate">
-                  {user?.firstName} {user?.lastName}
+                  {formatDisplayName(user?.firstName, user?.lastName)}
                 </h2>
                 <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 truncate">{user?.email}</p>
               </div>

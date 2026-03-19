@@ -7,6 +7,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 
 interface UseMajorDrawEntryCtaResult {
   membershipModal: ReturnType<typeof useMembershipModal>;
@@ -15,7 +16,9 @@ interface UseMajorDrawEntryCtaResult {
   membershipPromoMultiplier: number;
   oneTimePromoMultiplier: number;
   getHeavyDutyPack: () => LocalMembershipPlan;
+  getOneTimePlan: () => LocalMembershipPlan | null;
   openEntryFlow: (options?: { openLocalModal?: boolean }) => void;
+  openWithOneTimePlan: () => void;
 }
 
 /**
@@ -48,10 +51,14 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
     // For users without access: Use Tradie subscription package
-    // For users with access: Use additional-apprentice-pack (member-only one-time) — use membership promo
+    // For users with access: Use additional-apprentice-pack (member-only one-time)
+    // Membership multiplier only for active members; one-time multiplier for non-members with entries
     if (hasAccess) {
-      const promoMultiplier = membershipPromoMultiplier;
-      // Member path: Use additional-apprentice-pack one-time package (lowest price/entry option)
+      const promoMultiplier =
+        getEffectivePromoType("additional-apprentice-pack", "one-time", hasActiveSubscription) === "membership-packages"
+          ? membershipPromoMultiplier
+          : oneTimePromoMultiplier;
+      // Use additional-apprentice-pack one-time package (lowest price/entry option)
       const targetPackageId = "additional-apprentice-pack";
 
       if (safeOneTimePackages.length === 0) {
@@ -250,6 +257,55 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     userMajorDrawStats,
   ]);
 
+  const getOneTimePlan = useCallback((): LocalMembershipPlan | null => {
+    const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+    if (hasAccess) {
+      return getHeavyDutyPack();
+    }
+    const promoMultiplier = oneTimePromoMultiplier;
+    const nonMemberOneTime = safeOneTimePackages.find(
+      (pkg) => (pkg.period === "one-time" || pkg.period === "once") && !pkg.isMemberOnly
+    );
+    if (!nonMemberOneTime) return null;
+    const localPlan = convertToLocalPlan(nonMemberOneTime);
+    if (promoMultiplier <= 1) return localPlan;
+    const originalEntries = localPlan.metadata?.entriesCount ?? 0;
+    const promoEntries = originalEntries * promoMultiplier;
+    return {
+      ...localPlan,
+      features: localPlan.features.map((feature) => {
+        if (feature.text.toLowerCase().includes("entries")) {
+          return { ...feature, text: feature.text.replace(/\d+/, promoEntries.toString()) };
+        }
+        return feature;
+      }),
+      metadata: {
+        ...localPlan.metadata,
+        entriesCount: promoEntries,
+        originalEntries,
+        promoMultiplier,
+        isPromoActive: true,
+      },
+    };
+  }, [
+    userData,
+    userMajorDrawStats,
+    getHeavyDutyPack,
+    safeOneTimePackages,
+    oneTimePromoMultiplier,
+  ]);
+
+  const openWithOneTimePlan = useCallback(() => {
+    // Always open MembershipModal (don't gate by draw status) so One-time card click reliably opens it
+    const oneTimePlan = getOneTimePlan();
+    if (oneTimePlan) {
+      membershipModal.setSelectedPlan(oneTimePlan);
+      membershipModal.openModal();
+    } else {
+      membershipModal.openModalWithPackageSelectionFirst();
+    }
+  }, [getOneTimePlan, membershipModal]);
+
   const openEntryFlow = useCallback(
     ({ openLocalModal = true }: { openLocalModal?: boolean } = {}) => {
       // Check if gates are closed (freeze period or gap period)
@@ -311,7 +367,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
+      getOneTimePlan,
       openEntryFlow,
+      openWithOneTimePlan,
     }),
     [
       membershipModal,
@@ -320,7 +378,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
+      getOneTimePlan,
       openEntryFlow,
+      openWithOneTimePlan,
     ]
   );
 }

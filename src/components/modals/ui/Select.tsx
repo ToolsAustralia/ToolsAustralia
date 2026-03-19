@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { AlertCircle, ChevronDown, Search, Check } from "lucide-react";
 
 interface SelectOption {
@@ -41,6 +41,7 @@ const Select: React.FC<SelectProps> = ({
   onOpenChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const selectRef = useRef<HTMLDivElement>(null);
@@ -133,27 +134,24 @@ const Select: React.FC<SelectProps> = ({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
-  // Calculate available space and constrain dropdown height
-  useEffect(() => {
+  // Calculate available space, open direction (up/down), and constrain dropdown height
+  useLayoutEffect(() => {
     if (!isOpen || !selectRef.current || !optionsListRef.current) return;
 
-    const calculateMaxHeight = () => {
+    const calculatePositionAndHeight = () => {
       const selectElement = selectRef.current;
       if (!selectElement) return;
 
       const rect = selectElement.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
       
-      // Find the modal container and footer to calculate available space
-      let modalContentBottom = viewportHeight;
+      let contentBottom = window.innerHeight;
+      let contentTop = 0;
       
-      // Find the modal container (look for flex container with modal structure)
       let parent = selectElement.parentElement;
       let modalContainer: HTMLElement | null = null;
       
       while (parent && parent !== document.body) {
         const styles = window.getComputedStyle(parent);
-        // Check if this is a flex container (modal structure)
         if (styles.display === "flex" && styles.flexDirection === "column") {
           modalContainer = parent;
           break;
@@ -161,61 +159,51 @@ const Select: React.FC<SelectProps> = ({
         parent = parent.parentElement;
       }
       
-      // If we found the modal container, look for the footer within it
+      const isInsideModal = !!modalContainer;
+      
       if (modalContainer) {
-        // Find footer - look for element with border-t (footer border) in the same container
         const footer = Array.from(modalContainer.children).find((child) => {
           const childStyles = window.getComputedStyle(child);
           return childStyles.borderTopWidth !== "0px" || 
                  child.classList.toString().includes("border-t") ||
-                 child.querySelector('button, [role="button"]'); // Has buttons (action buttons)
+                 child.querySelector('button, [role="button"]');
         }) as HTMLElement | undefined;
         
         if (footer) {
-          const footerRect = footer.getBoundingClientRect();
-          // Use footer top as the bottom boundary (with some padding)
-          modalContentBottom = footerRect.top - 10; // 10px padding above footer
+          contentBottom = footer.getBoundingClientRect().top - 10;
         } else {
-          // Fallback: use modal container bottom
-          const containerRect = modalContainer.getBoundingClientRect();
-          modalContentBottom = containerRect.bottom;
+          contentBottom = modalContainer.getBoundingClientRect().bottom;
         }
+        contentTop = modalContainer.getBoundingClientRect().top;
       }
       
-      const spaceBelow = modalContentBottom - rect.bottom;
-      const spaceAbove = rect.top;
+      const spaceBelow = contentBottom - rect.bottom - 20;
+      const spaceAbove = rect.top - contentTop - 20;
       
-      // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
-      // Use same max-height as Dropdown (400px) for longer dropdown
-      const maxHeight = Math.min(
-        spaceBelow - 20, // 20px padding from bottom/footer
-        spaceAbove - 20, // 20px padding from top
-        400
-      );
+      const shouldOpenUpward = !isInsideModal && spaceBelow < spaceAbove;
+      setOpenUpward(shouldOpenUpward);
+      
+      const availableSpace = shouldOpenUpward ? Math.min(spaceAbove, 400) : spaceBelow;
+      const maxHeight = Math.min(Math.max(availableSpace, 180), 400);
 
       if (optionsListRef.current) {
-        optionsListRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px
+        optionsListRef.current.style.maxHeight = `${maxHeight}px`;
       }
     };
 
-    // Calculate on open
-    calculateMaxHeight();
+    calculatePositionAndHeight();
 
-    // Use a more efficient scroll handler with throttling
     let scrollTimeout: NodeJS.Timeout;
     const handleScroll = () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(calculateMaxHeight, 50);
+      scrollTimeout = setTimeout(calculatePositionAndHeight, 50);
     };
     
-    // Listen to scroll on document and modal containers
     document.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", calculateMaxHeight);
+    window.addEventListener("resize", calculatePositionAndHeight);
 
-    // Ensure wheel events work for desktop scrolling
     const handleWheel = (e: WheelEvent) => {
       if (optionsListRef.current && optionsListRef.current.contains(e.target as Node)) {
-        // Allow scrolling within dropdown, prevent modal scroll
         e.stopPropagation();
       }
     };
@@ -223,7 +211,7 @@ const Select: React.FC<SelectProps> = ({
     document.addEventListener("wheel", handleWheel, { passive: false, capture: true });
 
     return () => {
-      window.removeEventListener("resize", calculateMaxHeight);
+      window.removeEventListener("resize", calculatePositionAndHeight);
       document.removeEventListener("scroll", handleScroll, true);
       document.removeEventListener("wheel", handleWheel, { capture: true });
       if (scrollTimeout) clearTimeout(scrollTimeout);
@@ -296,7 +284,7 @@ const Select: React.FC<SelectProps> = ({
           <div
             ref={optionsListRef}
             data-dropdown-list
-            className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+            className={`absolute z-50 w-full ${openUpward ? "bottom-full mb-1" : "mt-1"} bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden`}
             style={{
               touchAction: "pan-y",
               WebkitOverflowScrolling: "touch",

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Check, Loader2, MapPin } from "lucide-react";
 import PackageSelectionModal from "./PackageSelectionModal";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { formatNamePart } from "@/utils/display-name";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import ExistingAccountModal from "./ExistingAccountModal";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
@@ -1519,7 +1520,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         showToast({
           type: "success",
           title: "Step 1 Completed!",
-          message: `Welcome ${formData.firstName}! Now let's set up your payment method to complete your membership.`,
+          message: `Welcome ${formatNamePart(formData.firstName)}! Now let's set up your payment method to complete your membership.`,
           duration: 8000,
         });
 
@@ -4746,7 +4747,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     : null;
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false}>
+    <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false} className="dark:!bg-white">
       <ModalHeader
         title=""
         titleNode={
@@ -4773,9 +4774,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               <p
                 className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap mb-2"
                 style={{
-                  color: promoTheme.preferDarkBackground ? "#000000" : "#FFFFFF",
+                  color: "#FFFFFF",
                   backgroundColor: promoTheme.primary,
-                  borderColor: promoTheme.preferDarkBackground ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.45)",
+                  borderColor: "rgba(255, 255, 255, 0.45)",
                 }}
               >
                 Welcome back - get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join again
@@ -4788,9 +4789,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               <p
                 className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap"
                 style={{
-                  color: promoTheme.preferDarkBackground ? "#000000" : "#FFFFFF",
+                  color: "#FFFFFF",
                   backgroundColor: promoTheme.primary,
-                  borderColor: promoTheme.preferDarkBackground ? "rgba(0, 0, 0, 0.25)" : "rgba(255, 255, 255, 0.45)",
+                  borderColor: "rgba(255, 255, 255, 0.45)",
                 }}
               >
                 Welcome back - get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
@@ -4824,13 +4825,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   onClick={() => handleStepClick(1)}
                   style={currentStep === 1 ? { backgroundColor: promoTheme.primary } : undefined}
                   className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
-                    currentStep === 1 ? (promoTheme.preferDarkBackground ? "text-black font-bold" : "text-white font-bold") : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
+                    currentStep === 1 ? "text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
                   }`}
                   aria-current={currentStep === 1 ? "step" : undefined}
                 >
                   <span
                     className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 1 ? (promoTheme.preferDarkBackground ? "bg-black" : "bg-white") : "bg-gray-400 text-white"
+                      currentStep === 1 ? "bg-white" : "bg-gray-400 text-white"
                     }`}
                     style={currentStep === 1 ? { color: promoTheme.primary } : undefined}
                   >
@@ -4847,7 +4848,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     !hasCompletedRegistration
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-80"
                       : currentStep === 2
-                        ? (promoTheme.preferDarkBackground ? "text-black font-bold cursor-pointer" : "text-white font-bold cursor-pointer")
+                        ? "text-white font-bold cursor-pointer"
                         : "bg-gray-100 text-gray-500 font-medium cursor-pointer hover:bg-gray-200"
                   }`}
                   aria-current={currentStep === 2 ? "step" : undefined}
@@ -4856,7 +4857,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 >
                   <span
                     className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 2 ? (promoTheme.preferDarkBackground ? "bg-black" : "bg-white") : "bg-gray-400 text-white"
+                      currentStep === 2 ? "bg-white" : "bg-gray-400 text-white"
                     }`}
                     style={currentStep === 2 ? { color: promoTheme.primary } : undefined}
                   >

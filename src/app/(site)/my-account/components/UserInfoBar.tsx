@@ -2,6 +2,7 @@
 
 import React from "react";
 import MembershipBadge from "@/components/ui/MembershipBadge";
+import { formatDisplayName } from "@/utils/display-name";
 
 interface UserInfoBarProps {
   firstName: string;
@@ -30,7 +31,7 @@ export default function UserInfoBar({
         <div className="flex flex-row items-start justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
             <h2 className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white truncate">
-              {firstName} {lastName}
+              {formatDisplayName(firstName, lastName)}
             </h2>
             <p className="text-xs xs:text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 truncate">
               {email}

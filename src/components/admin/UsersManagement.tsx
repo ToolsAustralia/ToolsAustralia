@@ -43,6 +43,7 @@ import { UserMetricsView } from "./metrics/UserMetricsView";
 import { membershipPackages } from "@/data/membershipPackages";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import { getPackageColorScheme, getGradientColor } from "@/features/admin/users/utils/userHelpers";
+import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 import Dropdown from "@/components/modals/ui/Dropdown";
 
@@ -700,7 +701,7 @@ export default function UsersManagement() {
                             )}
                             <div className="ml-2 sm:ml-3 lg:ml-4 min-w-0 flex-1">
                               <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 truncate">
-                                {user.firstName} {user.lastName}
+                                {formatDisplayName(user.firstName, user.lastName)}
                               </div>
                               <div className="text-[9px] sm:text-xs lg:text-sm text-gray-500 truncate">
                                 {user.email}
