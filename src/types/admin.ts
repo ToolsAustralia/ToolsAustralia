@@ -183,6 +183,8 @@ export interface AdminUserDetail {
   mobile?: string;
   state?: string;
   profession?: string;
+  /** ISO date string (YYYY-MM-DD) when set */
+  birthdate?: string;
   role: "user" | "admin";
   isActive: boolean;
   isEmailVerified: boolean;
@@ -422,6 +424,8 @@ export interface AdminUserUpdatePayload {
     mobile?: string;
     state?: string;
     profession?: string;
+    /** YYYY-MM-DD or empty string to clear */
+    birthdate?: string;
     role?: "user" | "admin";
     isActive?: boolean;
     isEmailVerified?: boolean;
