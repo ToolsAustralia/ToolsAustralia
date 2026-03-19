@@ -128,6 +128,16 @@ const overviewFormSchema = z.object({
   mobile: z.string().min(8, "Mobile number is too short").optional().or(z.literal("")),
   state: z.string().optional(),
   profession: z.string().max(100, "Profession cannot exceed 100 characters").optional().or(z.literal("")),
+  birthdate: z
+    .union([z.string(), z.literal("")])
+    .optional()
+    .refine(
+      (val) =>
+        val === undefined ||
+        val === "" ||
+        (!Number.isNaN(new Date(val).getTime()) && new Date(val).getTime() <= Date.now()),
+      { message: "Enter a valid date of birth (cannot be in the future)" }
+    ),
   role: z.enum(["user", "admin"]),
   isActive: z.boolean(),
   isEmailVerified: z.boolean(),
@@ -335,6 +345,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       mobile: user?.mobile ?? "",
       state: user?.state ?? "",
       profession: user?.profession ?? "",
+      birthdate: user?.birthdate ? String(user.birthdate).slice(0, 10) : "",
       role: user?.role ?? "user",
       isActive: user?.isActive ?? false,
       isEmailVerified: user?.isEmailVerified ?? false,
@@ -838,6 +849,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         mobile: values.mobile?.replace(/\s+/g, "") || undefined,
         state: values.state ? values.state.toUpperCase() : undefined,
         profession: values.profession?.trim() || undefined,
+        birthdate: values.birthdate?.trim() ?? "",
         role: values.role,
         isActive: values.isActive,
         isEmailVerified: values.isEmailVerified,
@@ -1002,6 +1014,17 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+    });
+  };
+
+  const formatBirthdateDisplay = (isoDate?: string) => {
+    if (!isoDate || !String(isoDate).trim()) return "Not provided";
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) return "Not provided";
+    return d.toLocaleDateString("en-AU", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -1389,6 +1412,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           )}
                         />
                         <Controller
+                          name="birthdate"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Date of birth"
+                              type="date"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              error={fieldState.error?.message}
+                            />
+                          )}
+                        />
+                        <Controller
                           name="role"
                           control={overviewForm.control}
                           render={({ field }) => (
@@ -1575,6 +1611,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 mb-1">Profession</p>
                             <p className="font-medium text-sm">{user.profession || "Not provided"}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 mb-1">Date of birth</p>
+                            <p className="font-medium text-sm">{formatBirthdateDisplay(user.birthdate)}</p>
                           </div>
                         </div>
 
