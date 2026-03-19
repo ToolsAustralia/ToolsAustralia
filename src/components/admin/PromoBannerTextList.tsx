@@ -6,6 +6,7 @@ import { usePromoBannerTexts, useDeletePromoBannerText } from "@/hooks/queries/u
 import AdminPromoBannerTextModal from "@/components/modals/AdminPromoBannerTextModal";
 import type { PromoBannerText } from "@/types/admin";
 import { format } from "date-fns";
+import { formatDisplayName } from "@/utils/display-name";
 
 export default function PromoBannerTextList() {
   const { data, isLoading, error } = usePromoBannerTexts();
@@ -165,7 +166,7 @@ export default function PromoBannerTextList() {
                           )}
                           {text.createdBy && (
                             <p className="text-xs text-gray-400 mt-2">
-                              Created by {text.createdBy.firstName} {text.createdBy.lastName}
+                              Created by {formatDisplayName(text.createdBy.firstName, text.createdBy.lastName)}
                             </p>
                           )}
                         </div>

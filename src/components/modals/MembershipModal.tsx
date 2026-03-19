@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Check, Loader2, MapPin } from "lucide-react";
 import PackageSelectionModal from "./PackageSelectionModal";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { formatNamePart } from "@/utils/display-name";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import ExistingAccountModal from "./ExistingAccountModal";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
@@ -1519,7 +1520,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         showToast({
           type: "success",
           title: "Step 1 Completed!",
-          message: `Welcome ${formData.firstName}! Now let's set up your payment method to complete your membership.`,
+          message: `Welcome ${formatNamePart(formData.firstName)}! Now let's set up your payment method to complete your membership.`,
           duration: 8000,
         });
 

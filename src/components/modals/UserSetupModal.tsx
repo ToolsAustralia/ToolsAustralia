@@ -12,6 +12,7 @@ import Dropdown from "./ui/Dropdown";
 import { ModalContainer, ModalHeader, ModalContent, Button, Input, Select } from "./ui";
 import EmailVerificationModal from "@/components/auth/EmailVerificationModal";
 import { environmentFlags } from "@/lib/environment";
+import { formatNamePart } from "@/utils/display-name";
 
 interface UserSetupModalProps {
   isOpen: boolean;
@@ -1171,7 +1172,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           isOpen={showEmailVerification}
           onCloseAction={() => setShowEmailVerification(false)}
           email={currentEmail}
-          userName={userData?.firstName}
+          userName={formatNamePart(userData?.firstName)}
           onVerificationSuccessAction={handleEmailVerificationSuccess}
           onSkipAction={environmentFlags.emailVerificationMandatory() ? undefined : handleSkipEmailVerification}
           onWrongEmailAction={() => {

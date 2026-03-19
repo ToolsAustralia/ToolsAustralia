@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { formatDisplayName } from "@/utils/display-name";
 
 interface ProfileTabProps {
   user: {
@@ -121,7 +122,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             Name
           </label>
           <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50/50 dark:bg-neutral-900/50 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-400 cursor-not-allowed">
-            {user.firstName} {user.lastName}
+            {formatDisplayName(user.firstName, user.lastName)}
           </div>
         </div>
 

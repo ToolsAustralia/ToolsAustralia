@@ -12,6 +12,7 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
+import { formatDisplayName } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -666,7 +667,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 hover:text-red-600 transition-colors">
-                            {userData?.firstName} {userData?.lastName}
+                            {formatDisplayName(userData?.firstName, userData?.lastName)}
                           </span>
                           {(() => {
                             // Prioritize subscription over one-time packages
@@ -744,7 +745,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-[75] animate-fade-in">
                       <div className="px-4 py-2 border-b border-gray-100">
                         <p className="text-sm font-medium text-gray-900">
-                          {userData?.firstName} {userData?.lastName}
+                          {formatDisplayName(userData?.firstName, userData?.lastName)}
                         </p>
                         <p className="text-xs text-gray-500">{userData?.email}</p>
                       </div>
@@ -934,7 +935,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-[75] animate-fade-in">
                     <div className="px-4 py-2 border-b border-gray-100">
                       <p className="text-sm font-medium text-gray-900">
-                        {userData?.firstName} {userData?.lastName}
+                        {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
                       <p className="text-xs text-gray-500">{userData?.email}</p>
                     </div>
@@ -1146,7 +1147,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-gray-900">
-                        {userData?.firstName} {userData?.lastName}
+                        {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
                       {(() => {
                         // Prioritize subscription over one-time packages using enriched data

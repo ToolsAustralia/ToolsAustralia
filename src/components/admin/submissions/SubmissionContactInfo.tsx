@@ -3,6 +3,7 @@
 import React from "react";
 import { Mail, Phone, Calendar } from "lucide-react";
 import { formatDateInLocal } from "@/utils/common/timezone";
+import { formatDisplayName } from "@/utils/display-name";
 
 interface SubmissionContactInfoProps {
   firstName: string;
@@ -27,7 +28,7 @@ export default function SubmissionContactInfo({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium text-gray-900">
-            {firstName} {lastName}
+            {formatDisplayName(firstName, lastName)}
           </span>
         </div>
         <a

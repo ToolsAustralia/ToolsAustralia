@@ -144,8 +144,8 @@ const Select: React.FC<SelectProps> = ({
 
       const rect = selectElement.getBoundingClientRect();
       
-      let modalContentBottom = window.innerHeight;
-      let modalContentTop = 0;
+      let contentBottom = window.innerHeight;
+      let contentTop = 0;
       
       let parent = selectElement.parentElement;
       let modalContainer: HTMLElement | null = null;
@@ -159,6 +159,8 @@ const Select: React.FC<SelectProps> = ({
         parent = parent.parentElement;
       }
       
+      const isInsideModal = !!modalContainer;
+      
       if (modalContainer) {
         const footer = Array.from(modalContainer.children).find((child) => {
           const childStyles = window.getComputedStyle(child);
@@ -168,24 +170,20 @@ const Select: React.FC<SelectProps> = ({
         }) as HTMLElement | undefined;
         
         if (footer) {
-          const footerRect = footer.getBoundingClientRect();
-          modalContentBottom = footerRect.top - 10;
+          contentBottom = footer.getBoundingClientRect().top - 10;
         } else {
-          const containerRect = modalContainer.getBoundingClientRect();
-          modalContentBottom = containerRect.bottom;
+          contentBottom = modalContainer.getBoundingClientRect().bottom;
         }
-        const containerRect = modalContainer.getBoundingClientRect();
-        modalContentTop = containerRect.top;
+        contentTop = modalContainer.getBoundingClientRect().top;
       }
       
-      const spaceBelow = modalContentBottom - rect.bottom - 20;
-      const spaceAbove = rect.top - modalContentTop - 20;
+      const spaceBelow = contentBottom - rect.bottom - 20;
+      const spaceAbove = rect.top - contentTop - 20;
       
-      // Open upward when there's more space above than below (avoids content being cut off at bottom)
-      const shouldOpenUpward = spaceBelow < spaceAbove;
+      const shouldOpenUpward = !isInsideModal && spaceBelow < spaceAbove;
       setOpenUpward(shouldOpenUpward);
       
-      const availableSpace = shouldOpenUpward ? spaceAbove : spaceBelow;
+      const availableSpace = shouldOpenUpward ? Math.min(spaceAbove, 400) : spaceBelow;
       const maxHeight = Math.min(Math.max(availableSpace, 180), 400);
 
       if (optionsListRef.current) {

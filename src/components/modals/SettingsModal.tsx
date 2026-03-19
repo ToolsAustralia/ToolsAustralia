@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { formatDisplayName } from "@/utils/display-name";
 
 type SettingsSection = "profile" | "subscription" | "password" | "payment";
 type SubscriptionUser = React.ComponentProps<typeof SubscriptionManagementModal>["user"];
@@ -243,7 +244,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="text-xs sm:text-sm font-medium text-gray-700">Name</label>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 cursor-default">
-                {user.firstName} {user.lastName}
+                {formatDisplayName(user.firstName, user.lastName)}
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">

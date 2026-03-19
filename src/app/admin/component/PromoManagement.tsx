@@ -19,6 +19,7 @@ import MilestoneRewardsPanel from "@/components/admin/MilestoneRewardsPanel";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import type { ScheduledPromo } from "@/types/admin";
 import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat, Medal } from "lucide-react";
+import { formatDisplayName } from "@/utils/display-name";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
@@ -163,7 +164,7 @@ export default function PromoManagement() {
                               </div>
                               {promo.createdBy && (
                                 <div className="text-xs text-gray-600 truncate">
-                                  Created by: {promo.createdBy.firstName} {promo.createdBy.lastName}
+                                  Created by: {formatDisplayName(promo.createdBy.firstName, promo.createdBy.lastName)}
                                 </div>
                               )}
                             </div>

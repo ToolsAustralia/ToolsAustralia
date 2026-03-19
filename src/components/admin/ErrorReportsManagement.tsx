@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from "react";
+import { formatDisplayName } from "@/utils/display-name";
 import {
   Search,
   ChevronLeft,
@@ -176,7 +177,7 @@ function ErrorReportDetailModal({
                   <ClickableUserDisplay
                     displayText={
                       typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                        ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                        ? formatDisplayName((report.userId as { firstName?: string; lastName?: string }).firstName, (report.userId as { firstName?: string; lastName?: string }).lastName) || report.userEmail || "Unknown"
                         : report.userEmail || "Unknown"
                     }
                     userId={typeof report.userId === "string" ? report.userId : null}
@@ -1086,7 +1087,7 @@ export default function ErrorReportsManagement() {
                                   <ClickableUserDisplay
                                     displayText={
                                       typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                                        ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                        ? formatDisplayName((report.userId as { firstName?: string; lastName?: string }).firstName, (report.userId as { firstName?: string; lastName?: string }).lastName) || report.userEmail || "Unknown"
                                         : report.userEmail || "Unknown"
                                     }
                                     userId={typeof report.userId === "string" ? report.userId : null}
@@ -1193,7 +1194,7 @@ export default function ErrorReportsManagement() {
                               <ClickableUserDisplay
                                 displayText={
                                   typeof report.userId === "object" && report.userId && report.userId !== null && "firstName" in report.userId && "lastName" in report.userId
-                                    ? `${String((report.userId as { firstName?: string; lastName?: string }).firstName || "")} ${String((report.userId as { firstName?: string; lastName?: string }).lastName || "")}`.trim() || report.userEmail || "Unknown"
+                                    ? formatDisplayName((report.userId as { firstName?: string; lastName?: string }).firstName, (report.userId as { firstName?: string; lastName?: string }).lastName) || report.userEmail || "Unknown"
                                     : report.userEmail || "Unknown"
                                 }
                                 userId={typeof report.userId === "string" ? report.userId : null}

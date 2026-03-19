@@ -9,6 +9,7 @@ import ShippingForm from "./ShippingForm";
 import PaymentMethod from "./PaymentMethod";
 import SecurityFeatures from "./SecurityFeatures";
 import { SectionContainer } from "@/components/ui";
+import { formatDisplayName } from "@/utils/display-name";
 
 // Mock cart data - matches the header cart items
 const mockCartItems = [
@@ -378,7 +379,7 @@ export default function CheckoutPageClient() {
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Shipping Address</h3>
                     <div className="bg-gray-50 rounded-lg p-4">
                       <p className="font-medium text-gray-900">
-                        {shippingInfo.firstName} {shippingInfo.lastName}
+                        {formatDisplayName(shippingInfo.firstName, shippingInfo.lastName)}
                       </p>
                       <p className="text-gray-600">{shippingInfo.address}</p>
                       {shippingInfo.apartment && <p className="text-gray-600">Apt {shippingInfo.apartment}</p>}

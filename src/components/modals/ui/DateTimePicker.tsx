@@ -116,7 +116,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  // Open upward when near bottom of viewport so content isn't cut off
+  // Open upward only when NOT inside a modal (e.g. on a page). Inside modals, always open downward.
   useLayoutEffect(() => {
     if (!isOpen || !containerRef.current) return;
 
@@ -127,11 +127,13 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
       const rect = el.getBoundingClientRect();
       let contentBottom = window.innerHeight;
       let contentTop = 0;
+      let isInsideModal = false;
       let parent: HTMLElement | null = el.parentElement;
 
       while (parent && parent !== document.body) {
         const styles = window.getComputedStyle(parent);
         if (styles.display === "flex" && styles.flexDirection === "column") {
+          isInsideModal = true;
           const footer = Array.from(parent.children).find((child) => {
             const s = window.getComputedStyle(child);
             return s.borderTopWidth !== "0px" || child.querySelector('button, [role="button"]');
@@ -149,7 +151,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
       const spaceBelow = contentBottom - rect.bottom - 20;
       const spaceAbove = rect.top - contentTop - 20;
-      setOpenUpward(spaceBelow < spaceAbove);
+      setOpenUpward(!isInsideModal && spaceBelow < spaceAbove);
     };
 
     updatePosition();
