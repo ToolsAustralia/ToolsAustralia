@@ -55,6 +55,7 @@ interface UserDocument {
   lastName?: string;
   mobile?: string;
   state?: string;
+  birthdate?: Date;
   stripeSubscriptionId?: string;
   accumulatedEntries?: number;
   rewardsPoints?: number;
@@ -1240,6 +1241,7 @@ async function grantBenefits(
         userLastName: user.lastName,
         userState: user.state,
         userCountry: "AU",
+        userBirthdate: user.birthdate ?? undefined,
         entriesAdded: packageData.entries,
         pointsEarned: packageData.points,
         paymentIntentId: paymentIntentId,

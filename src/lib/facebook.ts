@@ -12,6 +12,7 @@ export interface FacebookEvent {
     st?: string; // state hash
     zp?: string; // zip code hash
     country?: string; // country code
+    db?: string; // date of birth hash (YYYYMMDD, hashed - for Event Match Quality)
     external_id?: string; // hashed external ID (recommended for matching)
     client_ip_address?: string;
     client_user_agent?: string;
@@ -116,6 +117,7 @@ export interface BuildFacebookPurchaseEventParams {
     fn?: string;
     ln?: string;
     st?: string;
+    db?: string;
     external_id?: string;
     client_ip_address?: string;
     client_user_agent?: string;
@@ -171,6 +173,7 @@ export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEvent
     ...(userData.ln && { ln: userData.ln }),
     ...(userData.st && { st: userData.st }),
     ...(userData.country && { country: userData.country }),
+    ...(userData.db && { db: userData.db }),
     ...(userData.client_ip_address && { client_ip_address: userData.client_ip_address }),
     ...(userData.client_user_agent && { client_user_agent: userData.client_user_agent }),
     ...(userData.fbc && { fbc: userData.fbc }),

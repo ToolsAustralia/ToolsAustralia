@@ -167,7 +167,7 @@ export default function MyAccountPage() {
     if (pendingUpsellFlag === "true" && upsellData) {
       requestModal("upsell", true, upsellData);
       modalTriggeredRef.current = true;
-    } else if (!accountData.user.profileSetupCompleted) {
+    } else if (!accountData.user.profileSetupCompleted || !accountData.user.birthdate) {
       requestModal("user-setup", true);
       modalTriggeredRef.current = true;
     }
