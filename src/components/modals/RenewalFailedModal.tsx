@@ -26,6 +26,7 @@ import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSave
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { useUserContext } from "@/contexts/UserContext";
+import { formatDisplayName } from "@/utils/display-name";
 
 const stripePromise = getStripePromise();
 
@@ -57,9 +58,7 @@ const PaymentForm: React.FC<{
   // Build billing details - MUST include name (Stripe requirement when billingDetails: "never")
   // This matches the pattern used in PaymentMethodSelector
   const buildBillingDetails = () => {
-    const firstName = userData?.firstName?.trim() || "";
-    const lastName = userData?.lastName?.trim() || "";
-    const fullName = [firstName, lastName].filter(Boolean).join(" ") || userData?.email || "Customer";
+    const fullName = formatDisplayName(userData?.firstName, userData?.lastName) || userData?.email || "Customer";
     
     return {
       name: fullName,

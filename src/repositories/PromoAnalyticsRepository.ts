@@ -183,7 +183,9 @@ export class PromoAnalyticsRepository {
     const signupMap = new Map<string, number>();
     for (const r of signupAgg) {
       const pageType = (r._id.promotionPageType || getPageTypeFromSlug(r._id.promotionSlug)) as PromoPageType;
-      signupMap.set(`${pageType}:${r._id.promotionSlug}`, r.signups);
+      const normalizedSlug = (r._id.promotionSlug ?? "").toLowerCase().trim();
+      const key = `${pageType}:${normalizedSlug}`;
+      signupMap.set(key, (signupMap.get(key) ?? 0) + r.signups);
     }
 
     // 3. Aggregate conversions and revenue from PaymentEvent (data.promotionSlug)
@@ -213,9 +215,12 @@ export class PromoAnalyticsRepository {
     const conversionMap = new Map<string, { conversions: number; revenue: number }>();
     for (const r of conversionAgg) {
       const pageType = (r._id.pageType || getPageTypeFromSlug(r._id.slug)) as PromoPageType;
-      conversionMap.set(`${pageType}:${r._id.slug}`, {
-        conversions: r.conversions,
-        revenue: r.revenue ?? 0,
+      const normalizedSlug = (r._id.slug ?? "").toLowerCase().trim();
+      const key = `${pageType}:${normalizedSlug}`;
+      const existing = conversionMap.get(key);
+      conversionMap.set(key, {
+        conversions: (existing?.conversions ?? 0) + r.conversions,
+        revenue: (existing?.revenue ?? 0) + (r.revenue ?? 0),
       });
     }
 

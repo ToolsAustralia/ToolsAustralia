@@ -7,6 +7,7 @@ import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useAdminUsers } from "@/hooks/queries/useAdminQueries";
 import type { UserFilters } from "@/types/admin";
 import { format } from "date-fns";
+import { formatDisplayName } from "@/utils/display-name";
 
 type StatusFilter = "active" | "cancelled" | "past_due";
 
@@ -190,7 +191,7 @@ export default function MembershipByPackageDetailModal({
                     <div className="p-4 flex flex-col sm:grid sm:grid-cols-12 gap-4 items-start sm:items-center">
                       <div className="col-span-3 min-w-0">
                         <p className="font-semibold text-gray-900">
-                          {user.firstName} {user.lastName}
+                          {formatDisplayName(user.firstName, user.lastName)}
                         </p>
                         {user.mobile && <p className="text-xs text-gray-500 sm:hidden">{user.mobile}</p>}
                       </div>

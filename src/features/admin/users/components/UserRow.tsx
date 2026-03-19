@@ -16,6 +16,7 @@ import {
   getSubscriptionBadgeConfig,
   getUserStatusBadgeConfig,
 } from "../utils/userHelpers";
+import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 
 interface UserRowProps {
@@ -83,7 +84,7 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
           )}
           <div className="ml-2 sm:ml-3 lg:ml-4 min-w-0 flex-1">
             <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 truncate">
-              {user.firstName} {user.lastName}
+              {formatDisplayName(user.firstName, user.lastName)}
             </div>
             <div className="text-[9px] sm:text-xs lg:text-sm text-gray-500 truncate">{user.email}</div>
             <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 mt-0.5 sm:mt-1">

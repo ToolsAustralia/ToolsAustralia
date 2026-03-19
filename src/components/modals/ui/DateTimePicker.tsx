@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { AlertCircle, Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   resolveLocalDisplayTimeZone,
@@ -43,6 +43,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const localTimeZone = resolveLocalDisplayTimeZone();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [selectedUtcDate, setSelectedUtcDate] = useState<Date | null>(null);
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [timeValue, setTimeValue] = useState({ hours: "8", minutes: "30", period: "PM" });
@@ -113,6 +114,49 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
     }
 
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  // Open upward only when NOT inside a modal (e.g. on a page). Inside modals, always open downward.
+  useLayoutEffect(() => {
+    if (!isOpen || !containerRef.current) return;
+
+    const updatePosition = () => {
+      const el = containerRef.current;
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      let contentBottom = window.innerHeight;
+      let contentTop = 0;
+      let isInsideModal = false;
+      let parent: HTMLElement | null = el.parentElement;
+
+      while (parent && parent !== document.body) {
+        const styles = window.getComputedStyle(parent);
+        if (styles.display === "flex" && styles.flexDirection === "column") {
+          isInsideModal = true;
+          const footer = Array.from(parent.children).find((child) => {
+            const s = window.getComputedStyle(child);
+            return s.borderTopWidth !== "0px" || child.querySelector('button, [role="button"]');
+          }) as HTMLElement | undefined;
+          if (footer) {
+            contentBottom = footer.getBoundingClientRect().top - 10;
+          } else {
+            contentBottom = parent.getBoundingClientRect().bottom;
+          }
+          contentTop = parent.getBoundingClientRect().top;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+
+      const spaceBelow = contentBottom - rect.bottom - 20;
+      const spaceAbove = rect.top - contentTop - 20;
+      setOpenUpward(!isInsideModal && spaceBelow < spaceAbove);
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
   }, [isOpen]);
 
   const getIcon = () => {
@@ -392,7 +436,9 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
         {/* Custom Picker Dropdown */}
         {isOpen && !disabled && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden">
+          <div
+            className={`absolute z-50 w-full ${openUpward ? "bottom-full mb-1" : "mt-1"} bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden`}
+          >
             {/* Calendar Section */}
             {(type === "date" || type === "datetime-local") && (
               <div className="p-4">

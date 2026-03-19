@@ -21,6 +21,7 @@ import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useReferralCode } from "@/hooks/useReferralCode";
@@ -114,27 +115,32 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const { promoCode: promoLinkCode, setPromoCode, clearPromoCode } = usePromoLink();
   const { setReferralCode, clearReferralCode } = useReferralCode();
 
-  // Member-only packages use membership promo multiplier (modal is for users with access)
+  // Membership multiplier only for active members; one-time multiplier for non-members with access
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
-  // Get packages with promo applied - use membership multiplier for member-only packages
+  // Get packages with promo applied - use membership multiplier only when user has active subscription
   const packagesWithPromo = React.useMemo(() => {
     return packages.map((pkg) => {
-      if (pkg.type === "one-time" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1) {
-        const originalEntries = pkg.totalEntries || 0;
-        const promoEntries = originalEntries * resolvedMembershipMultiplier;
-
-        return {
-          ...pkg,
-          totalEntries: promoEntries,
-          originalEntries,
-          promoMultiplier: resolvedMembershipMultiplier,
-          isPromoActive: (resolvedMembershipMultiplier ?? 1) > 1,
-        };
+      if (pkg.type === "one-time") {
+        const effectiveType = getEffectivePromoType(pkg._id, "one-time", hasActiveSubscription);
+        const resolvedMultiplier =
+          effectiveType === "membership-packages" ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
+        if (resolvedMultiplier !== null && resolvedMultiplier > 1) {
+          const originalEntries = pkg.totalEntries || 0;
+          const promoEntries = originalEntries * resolvedMultiplier;
+          return {
+            ...pkg,
+            totalEntries: promoEntries,
+            originalEntries,
+            promoMultiplier: resolvedMultiplier,
+            isPromoActive: (resolvedMultiplier ?? 1) > 1,
+          };
+        }
       }
       return pkg;
     });
-  }, [packages, resolvedMembershipMultiplier]);
+  }, [packages, resolvedMembershipMultiplier, resolvedOneTimeMultiplier, hasActiveSubscription]);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();
@@ -416,7 +422,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       // ✅ FIX: Get the multiplier that was actually applied during the original purchase
       // Find the package in packagesWithPromo to get the promoMultiplier that was applied
       const packageWithPromo = packagesWithPromo.find((p) => p._id === selectedPackage._id);
-      const appliedMultiplier = packageWithPromo?.promoMultiplier ?? resolvedMembershipMultiplier ?? 1;
+      const appliedMultiplier =
+        packageWithPromo?.promoMultiplier ??
+        (getEffectivePromoType(selectedPackage._id, "one-time", hasActiveSubscription) === "membership-packages"
+          ? resolvedMembershipMultiplier
+          : resolvedOneTimeMultiplier) ??
+        1;
 
       // Create context object in local variable to pass directly (avoids closure issue)
       contextToPass = {
@@ -710,7 +721,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         height="fixed"
         fixedHeight="max-h-[90dvh]"
         closeOnBackdrop={false}
-        className="flex flex-col sm:max-w-xl "
+        className="flex flex-col sm:max-w-xl dark:!bg-white"
       >
         <ModalHeader title="" onClose={handleClose} showLogo={true} logoSize="sm" accent="none" />
 

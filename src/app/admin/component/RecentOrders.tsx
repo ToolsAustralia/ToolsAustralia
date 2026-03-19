@@ -1,5 +1,6 @@
 import { Clock, Package, User } from "lucide-react";
 import { formatDateInAEST } from "@/utils/common/timezone";
+import { formatDisplayName } from "@/utils/display-name";
 
 interface Order {
   _id: string;
@@ -83,7 +84,7 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
                     <div className="flex items-center space-x-1">
                       <User className="h-3 w-3" />
                       <span>
-                        {order.user.firstName} {order.user.lastName}
+                        {formatDisplayName(order.user.firstName, order.user.lastName)}
                       </span>
                     </div>
                     <div className="flex items-center space-x-1">

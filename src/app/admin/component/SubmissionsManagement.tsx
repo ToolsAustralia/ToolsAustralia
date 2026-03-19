@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Search, Building, MessageSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { formatDateInAEST } from "@/utils/common/timezone";
+import { formatDisplayName } from "@/utils/display-name";
 import {
   SubmissionDetailModal,
   getStatusColor,
@@ -271,7 +272,7 @@ export default function SubmissionsManagement() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {app.firstName} {app.lastName}
+                          {formatDisplayName(app.firstName, app.lastName)}
                         </div>
                         <div className="text-sm text-gray-500">{app.email}</div>
                         <div className="text-sm text-gray-500">{app.phone}</div>
@@ -390,7 +391,7 @@ export default function SubmissionsManagement() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {submission.firstName} {submission.lastName}
+                          {formatDisplayName(submission.firstName, submission.lastName)}
                         </div>
                         <div className="text-sm text-gray-500">{submission.email}</div>
                         <div className="text-sm text-gray-500">{submission.phone}</div>

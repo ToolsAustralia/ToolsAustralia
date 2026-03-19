@@ -8,6 +8,7 @@
  */
 
 import React from "react";
+import { formatDisplayName } from "@/utils/display-name";
 
 interface InvoiceItem {
   description: string;
@@ -167,7 +168,7 @@ const InvoiceCustomer: React.FC<{ customerData: CustomerData }> = ({ customerDat
     <h3 style={styles.sectionTitle}>Bill To:</h3>
     <div style={styles.customerInfo}>
       <p style={styles.customerName}>
-        {customerData.first_name} {customerData.last_name}
+        {formatDisplayName(customerData.first_name, customerData.last_name)}
       </p>
       <p style={styles.customerDetail}>{customerData.email}</p>
       {customerData.phone_number && <p style={styles.customerDetail}>{customerData.phone_number}</p>}

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "./ui";
+import { formatDisplayName } from "@/utils/display-name";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 
 // Types for participant data
@@ -265,7 +266,7 @@ export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorD
                         </div>
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">
-                            {participant.firstName} {participant.lastName}
+                            {formatDisplayName(participant.firstName, participant.lastName)}
                           </h3>
                           <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
                             <Mail className="w-4 h-4" />
@@ -301,7 +302,7 @@ export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorD
                           </div>
                           <div>
                             <h3 className="font-semibold text-gray-900">
-                              {participant.firstName} {participant.lastName}
+                              {formatDisplayName(participant.firstName, participant.lastName)}
                             </h3>
                             <p className="text-xs text-gray-500">ID: {participant.userId.slice(-8)}</p>
                           </div>
