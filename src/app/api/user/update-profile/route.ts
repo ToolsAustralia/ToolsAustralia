@@ -25,6 +25,14 @@ const updateProfileSchema = z.object({
     .max(100, "Profession cannot exceed 100 characters")
     .optional()
     .transform((val) => (val?.trim() || undefined)),
+  birthdate: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || (new Date(val).getTime() <= Date.now() && !isNaN(new Date(val).getTime())),
+      "Birthdate cannot be in the future"
+    )
+    .transform((val) => (val?.trim() || undefined)),
 });
 
 export async function POST(request: NextRequest) {
@@ -77,6 +85,10 @@ export async function POST(request: NextRequest) {
       user.profession = parsed.data.profession;
     }
 
+    if (parsed.data.birthdate !== undefined) {
+      user.birthdate = parsed.data.birthdate ? new Date(parsed.data.birthdate) : undefined;
+    }
+
     await user.save();
 
     return NextResponse.json({
@@ -87,6 +99,7 @@ export async function POST(request: NextRequest) {
         mobile: user.mobile,
         state: user.state,
         profession: user.profession,
+        birthdate: user.birthdate?.toISOString?.()?.split("T")[0],
       },
     });
   } catch (error) {

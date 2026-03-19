@@ -113,9 +113,14 @@ export default function Header({ isFixed = true }: HeaderProps) {
     },
     [userData?.subscription]
   );
-  // Setup requirement check now handled through user data
-  const checkSetupRequired = (userData: unknown) =>
-    !(userData as { profileSetupCompleted?: boolean })?.profileSetupCompleted;
+  // Setup requirement check - includes birthdate for existing users who haven't set it
+  const checkSetupRequired = (userData: unknown) => {
+    const u = userData as { profileSetupCompleted?: boolean; birthdate?: string | Date } | null;
+    if (!u) return true;
+    if (!u.profileSetupCompleted) return true;
+    const hasBirthdate = !!(u.birthdate && String(u.birthdate).trim().length > 0);
+    return !hasBirthdate;
+  };
 
   // Check if user needs setup
   const isSetupRequired = checkSetupRequired(userData);

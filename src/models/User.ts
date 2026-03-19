@@ -9,6 +9,7 @@ export interface IUser extends Document {
   mobile?: string;
   state?: string; // Australian state/territory code (e.g., "NSW", "VIC", "ACT")
   profession?: string; // User's profession (e.g., "Builder", "Electrician", "Other", or custom value)
+  birthdate?: Date; // User's date of birth (required for setup; used for age-based eligibility)
   profileSetupCompleted?: boolean; // Flag to track if user has completed profile setup
   role: "user" | "admin";
 
@@ -327,6 +328,18 @@ const UserSchema = new Schema<IUser>(
       type: String,
       trim: true,
       maxlength: [100, "Profession cannot be more than 100 characters"],
+    },
+    birthdate: {
+      type: Date,
+      required: false,
+      validate: {
+        validator: function (v: Date) {
+          if (!v) return true; // Optional for backward compatibility
+          const d = new Date(v);
+          return d.getTime() <= Date.now() && !isNaN(d.getTime());
+        },
+        message: "Birthdate cannot be in the future",
+      },
     },
     profileSetupCompleted: {
       type: Boolean,

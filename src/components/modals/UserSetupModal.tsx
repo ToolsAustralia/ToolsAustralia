@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, Info } from "lucide-react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { PROFESSIONS } from "@/data/professions";
 import { useUserContext } from "@/contexts/UserContext";
@@ -13,6 +13,9 @@ import { ModalContainer, ModalHeader, ModalContent, Button, Input, Select } from
 import EmailVerificationModal from "@/components/auth/EmailVerificationModal";
 import { environmentFlags } from "@/lib/environment";
 import { formatNamePart } from "@/utils/display-name";
+import GiveawayEligibilityNotice from "@/components/ui/GiveawayEligibilityNotice";
+import BirthdatePicker from "@/components/ui/BirthdatePicker";
+import { isGiveawayIneligible, getGiveawayIneligibilityReasons } from "@/utils/giveaway-eligibility";
 
 interface UserSetupModalProps {
   isOpen: boolean;
@@ -32,6 +35,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     confirmPassword?: string;
     profession?: string;
     customProfession?: string;
+    birthdate?: string;
   }>({});
 
   // Email verification state
@@ -53,6 +57,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const [selectedState, setSelectedState] = useState("");
   const [selectedProfession, setSelectedProfession] = useState("");
   const [customProfession, setCustomProfession] = useState("");
+  const [selectedBirthdate, setSelectedBirthdate] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -101,7 +106,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     if (!userData.hasPassword) steps.push(1);
     const hasState = !!(userData.state && typeof userData.state === "string" && userData.state.trim().length > 0);
     const hasProfession = !!(userData.profession && typeof userData.profession === "string" && userData.profession.trim().length > 0);
-    if (!hasState || !hasProfession) steps.push(2);
+    const hasBirthdate = !!(userData.birthdate && (typeof userData.birthdate === "string" ? userData.birthdate.trim() : String(userData.birthdate).trim()).length > 0);
+    if (!hasState || !hasProfession || !hasBirthdate) steps.push(2);
     if (!userData.isEmailVerified) steps.push(3);
     return steps;
   }, [userData]);
@@ -188,6 +194,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       selectedState,
       selectedProfession,
       customProfession,
+      selectedBirthdate,
       isEmailVerified,
       currentEmail,
       showEmailVerification,
@@ -207,6 +214,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     selectedState,
     selectedProfession,
     customProfession,
+    selectedBirthdate,
     isEmailVerified,
     currentEmail,
     showEmailVerification,
@@ -237,11 +245,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     }
   }, []);
 
-  // Convert Australian states to dropdown options (excludes SA, ACT)
-  const EXCLUDED_STATES = ["SA", "ACT"];
-  const stateOptions: DropdownOption[] = AUSTRALIAN_STATES.filter(
-    (state) => !EXCLUDED_STATES.includes(state.code)
-  ).map((state) => ({
+  // Convert Australian states to dropdown options (SA and ACT included; ineligibility notice shown when selected)
+  const stateOptions: DropdownOption[] = AUSTRALIAN_STATES.map((state) => ({
     value: state.code,
     label: state.name,
   }));
@@ -295,12 +300,13 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       if (userData) {
         const hasState = !!(userData.state && typeof userData.state === "string" && userData.state.trim().length > 0);
         const hasProfession = !!(userData.profession && typeof userData.profession === "string" && userData.profession.trim().length > 0);
+        const hasBirthdate = !!(userData.birthdate && String(userData.birthdate).trim().length > 0);
         const isEmailVerified = !!userData.isEmailVerified;
 
         // Compute steps needed based on what user has
         const steps: number[] = [];
         if (!userData.hasPassword) steps.push(1);
-        if (!hasState || !hasProfession) steps.push(2);
+        if (!hasState || !hasProfession || !hasBirthdate) steps.push(2);
         if (!isEmailVerified) steps.push(3);
 
         // If user has everything, close modal
@@ -322,6 +328,10 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           setSelectedState(savedState.selectedState || userData.state || "");
           setSelectedProfession(savedState.selectedProfession || userData.profession || "");
           setCustomProfession(savedState.customProfession || "");
+          setSelectedBirthdate(
+            savedState.selectedBirthdate ||
+              (userData.birthdate ? String(userData.birthdate).slice(0, 10) : "")
+          );
           setIsEmailVerified(savedState.isEmailVerified || userData.isEmailVerified || false);
           setCurrentEmail(savedState.currentEmail || userData.email || "");
           setShowEmailVerification(savedState.showEmailVerification || false);
@@ -337,6 +347,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           setSelectedState(userData.state || "");
           setSelectedProfession(userData.profession || "");
           setCustomProfession("");
+          setSelectedBirthdate(userData.birthdate ? String(userData.birthdate).slice(0, 10) : "");
           setIsEmailVerified(userData.isEmailVerified || false);
           setCurrentEmail(userData.email || "");
           setShowEmailVerification(false);
@@ -369,6 +380,9 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     password,
     confirmPassword,
     selectedState,
+    selectedProfession,
+    customProfession,
+    selectedBirthdate,
     isEmailVerified,
     currentEmail,
     showEmailVerification,
@@ -482,6 +496,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         body: JSON.stringify({
           state: selectedState,
           profession: professionValue,
+          birthdate: selectedBirthdate || undefined,
           saveStateProfessionOnly: true,
         }),
       });
@@ -494,7 +509,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save state and profession. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to save state, profession, and birthdate. Please try again.");
       return false;
     } finally {
       setIsSavingStateProfession(false);
@@ -569,7 +584,20 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         }
       }
 
-      // Save state and profession before proceeding to step 3
+      // Validate birthdate
+      if (!selectedBirthdate || !selectedBirthdate.trim()) {
+        setInlineErrors({ birthdate: "Please enter your date of birth" });
+        setError("Please enter your date of birth");
+        return;
+      }
+      const birthdate = new Date(selectedBirthdate);
+      if (isNaN(birthdate.getTime()) || birthdate.getTime() > Date.now()) {
+        setInlineErrors({ birthdate: "Please enter a valid date of birth (cannot be in the future)" });
+        setError("Please enter a valid date of birth");
+        return;
+      }
+
+      // Save state, profession, and birthdate before proceeding to step 3
       const saved = await saveStateAndProfession();
       if (!saved) {
         return; // Don't proceed if save failed
@@ -973,18 +1001,28 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
               )}
 
               {/* Step 2: State and Profession Selection */}
-              {activeStep === 2 && (
+              {activeStep === 2 && (() => {
+                const ineligibilityReasons = getGiveawayIneligibilityReasons(selectedState, selectedBirthdate || undefined);
+                return (
                 <div className={`space-y-4 ${isAnyDropdownOpen ? "pb-48" : ""}`}>
-                  <Select
-                    options={stateOptions}
-                    value={selectedState}
-                    onChange={(e) => setSelectedState(e.target.value)}
-                    placeholder="Select your state or territory"
-                    label="Australian State or Territory"
-                    required
-                    error={error && !selectedState ? "Please select your state" : undefined}
-                    onOpenChange={handleStateDropdownChange}
-                  />
+                  <div>
+                    <Select
+                      options={stateOptions}
+                      value={selectedState}
+                      onChange={(e) => setSelectedState(e.target.value)}
+                      placeholder="Select your state or territory"
+                      label="Australian State or Territory"
+                      required
+                      error={error && !selectedState ? "Please select your state" : undefined}
+                      onOpenChange={handleStateDropdownChange}
+                    />
+                    {ineligibilityReasons.state && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300" role="status">
+                        <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                        SA and ACT residents cannot participate in giveaways.
+                      </p>
+                    )}
+                  </div>
                   <Dropdown
                     options={professionOptions}
                     value={selectedProfession}
@@ -1014,8 +1052,34 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                     customInputPlaceholder="Enter your profession"
                     customInputError={inlineErrors.customProfession}
                   />
+                  <div>
+                    <BirthdatePicker
+                      value={selectedBirthdate}
+                      onChange={(val) => {
+                        setSelectedBirthdate(val);
+                        setError(null);
+                        setInlineErrors((prev) => ({ ...prev, birthdate: undefined }));
+                      }}
+                      label="Date of Birth"
+                      required
+                      error={inlineErrors.birthdate}
+                      maxDate={new Date()}
+                      placeholder="Select date of birth"
+                      aria-invalid={!!inlineErrors.birthdate}
+                    />
+                    {ineligibilityReasons.under18 && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300" role="status">
+                        <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                        You must be 18 or over to participate in giveaways.
+                      </p>
+                    )}
+                  </div>
+                  <GiveawayEligibilityNotice
+                    show={isGiveawayIneligible(selectedState, selectedBirthdate || undefined)}
+                  />
                 </div>
-              )}
+                );
+              })()}
 
               {/* Step 3: Email Verification */}
               {activeStep === 3 && (
@@ -1144,7 +1208,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                   (activeStep === 2 &&
                     (!selectedState ||
                       !selectedProfession ||
-                      (selectedProfession === "Other" && !customProfession.trim()))) ||
+                      (selectedProfession === "Other" && !customProfession.trim()) ||
+                      !selectedBirthdate?.trim())) ||
                   (activeStep === 3 && environmentFlags.emailVerificationMandatory() && !isEmailVerified)
                 }
                 variant="metallic"

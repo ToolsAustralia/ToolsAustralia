@@ -90,6 +90,33 @@ export function generateEventID(eventType: string, identifier: string, timestamp
 }
 
 /**
+ * Normalize birthdate to YYYYMMDD for Meta CAPI (db parameter).
+ * Meta requires date of birth hashed as YYYYMMDD (e.g. 19900615).
+ */
+function toYYYYMMDD(birthdate: string | Date): string | null {
+  let d: Date;
+  if (birthdate instanceof Date) {
+    if (Number.isNaN(birthdate.getTime())) return null;
+    d = birthdate;
+  } else {
+    const trimmed = String(birthdate).trim();
+    if (!trimmed) return null;
+    // Already YYYYMMDD (8 digits)
+    if (/^\d{8}$/.test(trimmed)) return trimmed;
+    d = new Date(trimmed);
+    if (Number.isNaN(d.getTime())) return null;
+  }
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(day)) return null;
+  const yy = String(y);
+  const mm = String(m).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${yy}${mm}${dd}`;
+}
+
+/**
  * Prepare user data for Facebook Conversions API
  * Hashes PII data according to Facebook requirements
  *
@@ -106,6 +133,7 @@ export function prepareUserData(userData?: {
   zipCode?: string;
   country?: string;
   externalId?: string;
+  birthdate?: string | Date;
 }): Record<string, string> {
   const hashedData: Record<string, string> = {};
 
@@ -159,6 +187,14 @@ export function prepareUserData(userData?: {
   if (userData.country) {
     const countryCode = userData.country.toUpperCase().replace(/^([A-Z]{2}).*/, "$1");
     if (countryCode) hashedData.country = hashData(countryCode.toLowerCase());
+  }
+
+  // Date of birth (Meta db parameter - YYYYMMDD, hashed for Event Match Quality)
+  if (userData.birthdate) {
+    const yyyymmdd = toYYYYMMDD(userData.birthdate);
+    if (yyyymmdd) {
+      hashedData.db = hashData(yyyymmdd);
+    }
   }
 
   return hashedData;

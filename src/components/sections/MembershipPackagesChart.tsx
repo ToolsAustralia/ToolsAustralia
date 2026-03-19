@@ -39,7 +39,7 @@ const subscriptionPackages: PackageData[] = [
     icon: tradie,
     description: "For tradies getting started",
     benefits: [
-      { text: "15 entries/month that accumulate" },
+      { text: "15 Free Entries Major Giveaway/month that accumulate" },
       { text: "100% access to partner discounts" },
     ],
   },
@@ -53,7 +53,7 @@ const subscriptionPackages: PackageData[] = [
     icon: foreman,
     description: "Popular with serious tool enthusiasts",
     benefits: [
-      { text: "40 entries/month that accumulate" },
+      { text: "40 Free Entries Major Giveaway/month that accumulate" },
       { text: "100% access to partner discounts" },
     ],
   },
@@ -67,26 +67,26 @@ const subscriptionPackages: PackageData[] = [
     icon: boss,
     description: "Maximum entries, maximum chances",
     benefits: [
-      { text: "100 entries/month that accumulate" },
+      { text: "100 Free Entries Major Giveaway/month that accumulate" },
       { text: "100% access to partner discounts" },
     ],
   },
 ];
 
 const oneTimeNonMemberPackages: PackageData[] = [
-  { id: "apprentice-pack", name: "Apprentice Pack", price: 25, entries: 3, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "3 free entries" }, { text: "1 day partner discounts" }] },
-  { id: "tradie-pack", name: "Tradie Pack", price: 50, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "15 free entries" }, { text: "2 days partner discounts" }] },
-  { id: "foreman-pack", name: "Foreman Pack", price: 100, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "30 free entries" }, { text: "4 days partner discounts" }] },
-  { id: "boss-pack", name: "Boss Pack", price: 250, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "150 free entries" }, { text: "10 days partner discounts" }] },
-  { id: "power-pack", name: "Power Pack", price: 500, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "600 free entries" }, { text: "20 days partner discounts" }] },
+  { id: "apprentice-pack", name: "Apprentice Pack", price: 25, entries: 3, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "3 Free Entries Major Giveaway" }, { text: "1 day partner discounts" }] },
+  { id: "tradie-pack", name: "Tradie Pack", price: 50, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "15 Free Entries Major Giveaway" }, { text: "2 days partner discounts" }] },
+  { id: "foreman-pack", name: "Foreman Pack", price: 100, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "30 Free Entries Major Giveaway" }, { text: "4 days partner discounts" }] },
+  { id: "boss-pack", name: "Boss Pack", price: 250, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "150 Free Entries Major Giveaway" }, { text: "10 days partner discounts" }] },
+  { id: "power-pack", name: "Power Pack", price: 500, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "600 Free Entries Major Giveaway" }, { text: "20 days partner discounts" }] },
 ];
 
 const oneTimeMemberPackages: PackageData[] = [
-  { id: "additional-apprentice-pack-member", name: "Additional Apprentice", price: 25, entries: 10, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "10 free entries" }, { text: "1 day partner discounts" }] },
-  { id: "additional-tradie-pack-member", name: "Additional Tradie", price: 50, entries: 30, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "30 free entries" }, { text: "2 days partner discounts" }] },
-  { id: "additional-foreman-pack-member", name: "Additional Foreman", price: 100, entries: 100, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "100 free entries" }, { text: "4 days partner discounts" }] },
-  { id: "additional-boss-pack-member", name: "Additional Boss", price: 250, entries: 400, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "400 free entries" }, { text: "10 days partner discounts" }] },
-  { id: "additional-power-pack-member", name: "Additional Power", price: 500, entries: 1200, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "1,200 free entries" }, { text: "20 days partner discounts" }] },
+  { id: "additional-apprentice-pack-member", name: "Additional Apprentice", price: 25, entries: 10, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "10 Free Entries Major Giveaway" }, { text: "1 day partner discounts" }] },
+  { id: "additional-tradie-pack-member", name: "Additional Tradie", price: 50, entries: 30, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "30 Free Entries Major Giveaway" }, { text: "2 days partner discounts" }] },
+  { id: "additional-foreman-pack-member", name: "Additional Foreman", price: 100, entries: 100, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "100 Free Entries Major Giveaway" }, { text: "4 days partner discounts" }] },
+  { id: "additional-boss-pack-member", name: "Additional Boss", price: 250, entries: 400, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "400 Free Entries Major Giveaway" }, { text: "10 days partner discounts" }] },
+  { id: "additional-power-pack-member", name: "Additional Power", price: 500, entries: 1200, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "1,200 Free Entries Major Giveaway" }, { text: "20 days partner discounts" }] },
 ];
 
 type TimePeriod = 3 | 6 | 12;
@@ -265,8 +265,9 @@ export default function MembershipPackagesChart() {
               displayEntries = pkg.entries * (activeTab === "one-time" ? oneTimeEffectiveMultiplier : 1);
             }
 
-            const monthlyBarWidth = Math.max(4, maxEntries > 0 ? (displayEntries / maxEntries) * 100 : 0);
-            const totalBarWidth = totalAccumulated !== null && maxEntries > 0 ? Math.max(4, (totalAccumulated / maxEntries) * 100) : 0;
+            // Use 1% minimum so small values (15, 75, 150) scale visibly different; no pixel min so bars are proportional
+            const monthlyBarWidth = maxEntries > 0 ? Math.max(1, (displayEntries / maxEntries) * 100) : 0;
+            const totalBarWidth = totalAccumulated !== null && maxEntries > 0 ? Math.max(1, (totalAccumulated / maxEntries) * 100) : 0;
 
             return (
               <div
@@ -274,8 +275,8 @@ export default function MembershipPackagesChart() {
                 className="bg-slate-800/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-700/20 hover:border-slate-600/40 transition-all duration-300 group"
               >
                 <div className="flex items-center gap-3 sm:gap-4">
-                  {/* Package icon + info */}
-                  <div className="flex items-center gap-2 sm:gap-3 min-w-[90px] sm:min-w-[160px] lg:min-w-[200px]">
+                  {/* Package icon + info: fixed width on mobile so bar column aligns for all rows */}
+                  <div className="flex items-center gap-2 sm:gap-3 w-[90px] flex-shrink-0 sm:w-auto sm:min-w-[160px] lg:min-w-[200px]">
                     <div className={`w-9 h-9 sm:w-12 sm:h-12 relative flex-shrink-0 ${pkg.id.includes("boss") ? "scale-110" : ""}`}>
                       <Image
                         src={pkg.icon}
@@ -305,7 +306,7 @@ export default function MembershipPackagesChart() {
                       {/* Active entries bar */}
                       <div className="relative h-6 sm:h-8 flex items-center gap-2">
                         <div
-                          className="h-full rounded-md sm:rounded-lg transition-all duration-500 ease-out flex items-center justify-end pr-2 sm:pr-3 relative overflow-hidden flex-shrink min-w-[60px] sm:min-w-[80px]"
+                          className="h-full rounded-md sm:rounded-lg transition-all duration-500 ease-out flex items-center justify-end pr-2 sm:pr-3 relative overflow-hidden flex-shrink-0"
                           style={{
                             width: `${monthlyBarWidth}%`,
                             background: colorScheme.barGradientCss ?? `linear-gradient(90deg, ${colorScheme.accentHex}cc, ${colorScheme.accentHex})`,
@@ -338,7 +339,7 @@ export default function MembershipPackagesChart() {
                       {isSubscription && totalAccumulated !== null && (
                         <div className="relative h-5 sm:h-6 flex items-center gap-2">
                           <div
-                            className="h-full rounded-md sm:rounded-lg transition-all duration-500 ease-out flex items-center justify-end pr-2 sm:pr-3 border border-white/10 flex-shrink min-w-[60px] sm:min-w-[80px]"
+                            className="h-full rounded-md sm:rounded-lg transition-all duration-500 ease-out flex items-center justify-end pr-2 sm:pr-3 border border-white/10 flex-shrink-0"
                             style={{
                               width: `${totalBarWidth}%`,
                               background: `${colorScheme.accentHex}33`,

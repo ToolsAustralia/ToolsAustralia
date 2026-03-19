@@ -10,6 +10,10 @@ import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { formatDisplayName } from "@/utils/display-name";
+import GiveawayEligibilityNotice from "@/components/ui/GiveawayEligibilityNotice";
+import BirthdatePicker from "@/components/ui/BirthdatePicker";
+import { isGiveawayIneligible, getGiveawayIneligibilityReasons } from "@/utils/giveaway-eligibility";
+import { Info } from "lucide-react";
 
 interface ProfileTabProps {
   user: {
@@ -21,6 +25,7 @@ interface ProfileTabProps {
     mobile?: string;
     state?: string;
     profession?: string;
+    birthdate?: string;
   };
 }
 
@@ -33,6 +38,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   const [mobile, setMobile] = useState(user.mobile || "");
   const [state, setState] = useState(user.state || "");
   const [profession, setProfession] = useState(user.profession || "");
+  const [birthdate, setBirthdate] = useState(
+    user.birthdate ? String(user.birthdate).slice(0, 10) : ""
+  );
   const [isSavingMobile, setIsSavingMobile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
@@ -82,6 +90,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         body: JSON.stringify({
           state: state ? state.toUpperCase() : undefined,
           profession: profession?.trim() || undefined,
+          birthdate: birthdate?.trim() || undefined,
         }),
       });
 
@@ -106,6 +115,8 @@ export default function ProfileTab({ user }: ProfileTabProps) {
       setIsSavingProfile(false);
     }
   };
+
+  const ineligibilityReasons = getGiveawayIneligibilityReasons(state, birthdate || user.birthdate);
 
   return (
     <div className="space-y-6">
@@ -196,13 +207,39 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Dropdown
-            options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
-            value={state}
-            onChange={setState}
-            placeholder="Select state"
-            label="State"
-          />
+          <div>
+            <Dropdown
+              options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
+              value={state}
+              onChange={setState}
+              placeholder="Select state"
+              label="State"
+            />
+            {ineligibilityReasons.state && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300" role="status">
+                <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                SA and ACT residents cannot participate in giveaways.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div>
+            <BirthdatePicker
+              value={birthdate}
+              onChange={setBirthdate}
+              label="Date of birth"
+              maxDate={new Date()}
+              placeholder="Select date of birth"
+            />
+            {ineligibilityReasons.under18 && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300" role="status">
+                <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                You must be 18 or over to participate in giveaways.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -216,12 +253,18 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           />
         </div>
 
+        <GiveawayEligibilityNotice
+          show={isGiveawayIneligible(state, birthdate || user.birthdate)}
+          className="pt-1"
+        />
+
         <div className="flex gap-2 justify-end pt-2">
           <button
             type="button"
             onClick={() => {
               setState(user.state || "");
               setProfession(user.profession || "");
+              setBirthdate(user.birthdate ? String(user.birthdate).slice(0, 10) : "");
             }}
             className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
           >
