@@ -282,6 +282,13 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
     mobile: user.mobile,
     state: user.state,
     profession: user.profession,
+    birthdate: (() => {
+      if (!user.birthdate) return undefined;
+      const d =
+        user.birthdate instanceof Date ? user.birthdate : new Date(user.birthdate as string | number);
+      if (Number.isNaN(d.getTime())) return undefined;
+      return d.toISOString().split("T")[0];
+    })(),
     role: user.role,
     isActive: user.isActive,
     isEmailVerified: user.isEmailVerified,

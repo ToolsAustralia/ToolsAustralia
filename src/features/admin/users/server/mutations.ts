@@ -48,6 +48,22 @@ function applyBasicInfoUpdate(user: IUser, basicInfo?: AdminUserUpdatePayload["b
     user.profession = trimmedProfession || undefined;
   }
 
+  if (basicInfo.birthdate !== undefined) {
+    const trimmed = (basicInfo.birthdate || "").trim();
+    if (!trimmed) {
+      user.birthdate = undefined;
+    } else {
+      const d = new Date(trimmed);
+      if (Number.isNaN(d.getTime())) {
+        throw new Error("Invalid birthdate");
+      }
+      if (d.getTime() > Date.now()) {
+        throw new Error("Birthdate cannot be in the future");
+      }
+      user.birthdate = d;
+    }
+  }
+
   if (basicInfo.role !== undefined) {
     user.role = basicInfo.role;
   }

@@ -6,7 +6,7 @@ import { AlertCircle, LucideIcon } from "lucide-react";
 interface InputProps {
   id?: string;
   name?: string;
-  type?: "text" | "email" | "password" | "number" | "tel" | "url";
+  type?: "text" | "email" | "password" | "number" | "tel" | "url" | "date";
   value: string | number;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
