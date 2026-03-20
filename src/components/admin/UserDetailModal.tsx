@@ -24,6 +24,7 @@ import {
   Key,
   Gift,
   Trash2,
+  Cake,
 } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1615,7 +1616,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         </div>
 
                         <div className="flex items-start gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <Cake className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 mb-1">Date of birth</p>
                             <p className="font-medium text-sm">{formatBirthdateDisplay(user.birthdate)}</p>

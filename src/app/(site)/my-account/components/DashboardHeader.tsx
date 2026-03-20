@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Settings, Sun, Moon, ArrowLeft, AlertTriangle, User, Ticket, MessageCircle, CreditCard } from "lucide-react";
+import { Settings, Sun, Moon, ArrowLeft, AlertTriangle, Home, User, Ticket, MessageCircle, CreditCard } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 
 interface DashboardHeaderProps {
@@ -15,6 +15,7 @@ interface DashboardHeaderProps {
 }
 
 const NAV_ITEMS = [
+  { id: "home", label: "Home", icon: Home, href: "/", isActive: (path: string | null) => path === "/" || path === "" },
   { id: "profile", label: "Profile", icon: User, href: "/my-account", isActive: (path: string | null) => path === "/my-account" || path === "/my-account/" },
   { id: "draws", label: "Draws", icon: Ticket, href: "/my-account/draws", isActive: (path: string | null) => path?.startsWith("/my-account/draws") },
   { id: "membership", label: "Membership", icon: CreditCard, href: "/my-account/membership", isActive: (path: string | null) => path?.startsWith("/my-account/membership") },

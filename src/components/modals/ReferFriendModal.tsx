@@ -73,7 +73,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
     <ModalContainer isOpen={isOpen} onClose={onCloseAction} size="lg">
       <ModalHeader
         title="Refer a Friend & Both Score 100 Bonus Entries"
-        subtitle="Share your code. When your friend subscribes or buys a one-time package, you both pocket 100 bonus entries."
+        
         onClose={onCloseAction}
         showLogo
       />
@@ -85,9 +85,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
             <Award className="h-32 w-32 text-white" />
           </div>
           <div className="relative z-10 flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-              <Sparkles className="h-6 w-6 text-white" />
-            </div>
+           
             <div className="flex-1">
               <h3 className="text-lg font-bold text-white">Double the Rewards!</h3>
               <p className="mt-1 text-sm text-white/90 leading-relaxed">
