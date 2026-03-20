@@ -717,7 +717,8 @@ export type PromoBannerTextRecurrencePattern =
 
 export interface PromoBannerText {
   id: string;
-  text: string;
+  imageUrl: string;
+  altText?: string;
   scheduleType: PromoBannerTextScheduleType;
   startDate?: string; // ISO date string in AEST
   endDate?: string; // ISO date string in AEST
@@ -735,7 +736,8 @@ export interface PromoBannerText {
 }
 
 export interface CreatePromoBannerTextPayload {
-  text: string;
+  imageUrl: string;
+  altText?: string;
   scheduleType: PromoBannerTextScheduleType;
   startDate?: string; // ISO date string in AEST (required for one-time)
   endDate?: string; // ISO date string in AEST (required for one-time)
@@ -745,7 +747,8 @@ export interface CreatePromoBannerTextPayload {
 }
 
 export interface UpdatePromoBannerTextPayload {
-  text?: string;
+  imageUrl?: string;
+  altText?: string;
   scheduleType?: PromoBannerTextScheduleType;
   startDate?: string; // ISO date string in AEST
   endDate?: string; // ISO date string in AEST

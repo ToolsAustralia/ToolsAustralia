@@ -26,7 +26,8 @@ export async function GET(_request: NextRequest) {
     // Convert dates from UTC to AEST for response
     const response: PromoBannerText = {
       id: (activeText._id as { toString(): string }).toString(),
-      text: activeText.text,
+      imageUrl: activeText.imageUrl,
+      altText: activeText.altText,
       scheduleType: activeText.scheduleType,
       startDate: activeText.startDate ? convertUTCToAEST(activeText.startDate).toISOString() : undefined,
       endDate: activeText.endDate ? convertUTCToAEST(activeText.endDate).toISOString() : undefined,

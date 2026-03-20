@@ -42,7 +42,8 @@ export interface VariantConfig {
     };
   };
   banner?: {
-    badgeText?: string; // Override badge text (default: FIRST 100 PEOPLE)
+    /** Override promo banner left image (full URL, e.g. Cloudinary) */
+    leftImageUrl?: string;
     multiplier?: number; // Override multiplier display (2x, 3x, 5x, 10x)
     showCountdown?: boolean; // Toggle countdown visibility
     countdownMode?: CountdownMode;

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Save, X, Image, Type, Package, ShoppingCart, Palette } from "lucide-react";
 import { Input, Textarea, Checkbox, Button, FormSection, Select } from "@/components/modals/ui";
+import ImageUpload from "@/components/modals/ui/ImageUpload";
 import { Variant, CreateVariantPayload } from "@/hooks/queries/useABTestingQueries";
 import type { CountdownMode } from "@/utils/promo-banner/countdown-mode";
 import { STATIC_URGENCY_LABEL_PRESETS } from "@/utils/promo-banner/countdown-mode";
@@ -40,10 +41,31 @@ const MEMBERSHIP_SLOTS: { key: MembershipPackageSlot; label: string }[] = [
   { key: "power-pack", label: "Power" },
 ];
 
+const VARIANT_BANNER_CLOUDINARY_FOLDER = "promo-banner";
+
+async function uploadVariantBannerLeftImage(file: File): Promise<string> {
+  const uploadFormData = new FormData();
+  uploadFormData.append("file", file);
+  uploadFormData.append("folder", VARIANT_BANNER_CLOUDINARY_FOLDER);
+
+  const response = await fetch("/api/upload/cloudinary", {
+    method: "POST",
+    body: uploadFormData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to upload banner image");
+  }
+
+  const data = await response.json();
+  return data.url as string;
+}
+
 interface VariantConfigEditorProps {
   variant?: Variant;
   experimentId: string;
-  onSave: (variant: CreateVariantPayload) => void;
+  onSave: (variant: CreateVariantPayload) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -67,11 +89,20 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
 
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [bannerLeftImages, setBannerLeftImages] = useState<(File | string)[]>(() => {
+    const u = variant?.config?.banner?.leftImageUrl?.trim();
+    return u ? [u] : [];
+  });
+
+  useEffect(() => {
+    const u = variant?.config?.banner?.leftImageUrl?.trim();
+    setBannerLeftImages(u ? [u] : []);
+  }, [variant?._id]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
-    // Validation
     if (!formData.name.trim()) {
       setErrors({ name: "Variant name is required" });
       return;
@@ -82,7 +113,6 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       return;
     }
 
-    // Require countdownLabel when static_urgency mode is selected
     const countdownMode = formData.config.banner?.countdownMode || "default";
     if (countdownMode === "static_urgency") {
       const label = formData.config.banner?.countdownLabel?.trim();
@@ -96,7 +126,35 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       }
     }
 
-    onSave(formData);
+    try {
+      let leftImageUrl: string | undefined = formData.config.banner?.leftImageUrl?.trim() || undefined;
+      const first = bannerLeftImages[0];
+      if (first instanceof File) {
+        leftImageUrl = await uploadVariantBannerLeftImage(first);
+      } else if (typeof first === "string" && first.trim()) {
+        leftImageUrl = first.trim();
+      }
+
+      const banner = { ...(formData.config.banner ?? {}) };
+      delete (banner as { badgeText?: string }).badgeText;
+
+      const payload: CreateVariantPayload = {
+        ...formData,
+        config: {
+          ...formData.config,
+          banner: {
+            ...banner,
+            leftImageUrl: leftImageUrl || undefined,
+          },
+        },
+      };
+
+      await Promise.resolve(onSave(payload));
+    } catch (err) {
+      setErrors({
+        leftImageUrl: err instanceof Error ? err.message : "Failed to upload banner image",
+      });
+    }
   };
 
   return (
@@ -221,22 +279,70 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       {/* Banner Config */}
       <FormSection title="Banner Configuration" icon={Type}>
         <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">Promo banner left image</p>
+            <p className="text-xs text-gray-500">
+              Upload is sent to Cloudinary only when you save the variant. You can also paste an image URL.
+            </p>
+            <ImageUpload
+              images={bannerLeftImages}
+              onImagesChange={(imgs) => {
+                setBannerLeftImages(imgs);
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.leftImageUrl;
+                  return next;
+                });
+                const v = imgs[0];
+                if (v == null) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    config: {
+                      ...prev.config,
+                      banner: { ...prev.config.banner, leftImageUrl: undefined },
+                    },
+                  }));
+                  return;
+                }
+                if (typeof v === "string") {
+                  setFormData((prev) => ({
+                    ...prev,
+                    config: {
+                      ...prev.config,
+                      banner: { ...prev.config.banner, leftImageUrl: v.trim() || undefined },
+                    },
+                  }));
+                }
+              }}
+              maxImages={1}
+              maxFileSize={10}
+              label=""
+              uploadToCloudinary={false}
+            />
+            {errors.leftImageUrl && <p className="text-sm text-red-600">{errors.leftImageUrl}</p>}
+          </div>
           <Input
-            id="bannerBadgeText"
-            name="bannerBadgeText"
+            id="bannerLeftImageUrl"
+            name="bannerLeftImageUrl"
             type="text"
-            value={formData.config.banner?.badgeText || ""}
-            onChange={(e) =>
+            value={formData.config.banner?.leftImageUrl || ""}
+            onChange={(e) => {
+              const v = e.target.value;
               setFormData({
                 ...formData,
                 config: {
                   ...formData.config,
-                  banner: { ...formData.config.banner, badgeText: e.target.value },
+                  banner: { ...formData.config.banner, leftImageUrl: v || undefined },
                 },
-              })
-            }
-            label="Badge Text (Optional)"
-            placeholder="FIRST 100 PEOPLE"
+              });
+              if (v.trim()) {
+                setBannerLeftImages([v.trim()]);
+              } else {
+                setBannerLeftImages([]);
+              }
+            }}
+            label="Left image URL (optional)"
+            placeholder="https://res.cloudinary.com/... or leave empty for default / scheduled / static"
           />
           <Input
             id="bannerMultiplier"
@@ -308,7 +414,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
               {
                 value: "default",
                 label: "Draw/midnight countdown",
-                description: "Draw tonight, draw tomorrow, or midnight countdown",
+                description: "Draw tonight or midnight-style countdown when applicable",
               },
               {
                 value: "scheduled_end",
