@@ -18,10 +18,16 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import MembershipModal from "@/components/modals/MembershipModal";
 import ReferFriendModal from "@/components/modals/ReferFriendModal";
-import RenewalFailedModal from "@/components/modals/RenewalFailedModal";
 import PastDrawsModal from "@/components/modals/PastDrawsModal";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { hasSeenExplainer } from "@/utils/subscription-explainer-storage";
+import {
+  markPostPurchaseLanding,
+  setDeferSubscriptionExplainerThisSession,
+  shouldDeferSubscriptionExplainerThisSession,
+  isLandingCooldownActive,
+} from "@/utils/dashboard-landing-session";
+import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrchestration";
 import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
 import PackageDetailModal, {
   type PackageDetailModalPackageData,
@@ -98,14 +104,16 @@ export default function MyAccountPage() {
   const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
   const { data: currentMajorDraw, isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
-  const { requestModal, activeModal, closeModal } = useModalPriorityStore();
+  const { requestModal } = useModalPriorityStore();
+  const { allowSecondaryModals, suppressRewardsSpotlight } = useDashboardLandingOrchestration(
+    status === "authenticated"
+  );
   const { openEntryFlow, openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
 
   useMemberships();
   useResolvedMultiplier("membership-packages", "display");
 
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
-  const [isRenewalFailedModalOpen, setIsRenewalFailedModalOpen] = useState(false);
   const [isPastDrawsModalOpen, setIsPastDrawsModalOpen] = useState(false);
 
   const [packageDetailModalOpen, setPackageDetailModalOpen] = useState(false);
@@ -123,17 +131,30 @@ export default function MyAccountPage() {
   }, [session, status, router]);
 
   const modalTriggeredRef = React.useRef(false);
+  const referFriendPendingRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!session || !accountData) return;
     if (typeof window === "undefined") return;
-
-    const shouldShowReferFriend = sessionStorage.getItem("showReferFriendAfterSetup");
-    if (shouldShowReferFriend === "true") {
-      sessionStorage.removeItem("showReferFriendAfterSetup");
-      setTimeout(() => setIsReferFriendModalOpen(true), 600);
+    if (sessionStorage.getItem("showReferFriendAfterSetup") === "true") {
+      referFriendPendingRef.current = true;
     }
   }, [session, accountData]);
+
+  React.useEffect(() => {
+    if (!referFriendPendingRef.current) return;
+    if (!allowSecondaryModals) return;
+
+    const t = window.setTimeout(() => {
+      referFriendPendingRef.current = false;
+      if (sessionStorage.getItem("showReferFriendAfterSetup") === "true") {
+        sessionStorage.removeItem("showReferFriendAfterSetup");
+      }
+      setIsReferFriendModalOpen(true);
+    }, 10_000);
+
+    return () => clearTimeout(t);
+  }, [allowSecondaryModals]);
 
   React.useEffect(() => {
     if (modalTriggeredRef.current) {
@@ -165,9 +186,12 @@ export default function MyAccountPage() {
     }
 
     if (pendingUpsellFlag === "true" && upsellData) {
+      markPostPurchaseLanding();
+      setDeferSubscriptionExplainerThisSession();
       requestModal("upsell", true, upsellData);
       modalTriggeredRef.current = true;
     } else if (!accountData.user.profileSetupCompleted || !accountData.user.birthdate) {
+      markPostPurchaseLanding();
       requestModal("user-setup", true);
       modalTriggeredRef.current = true;
     }
@@ -177,12 +201,14 @@ export default function MyAccountPage() {
   const profileSetupCompleted = accountData?.user?.profileSetupCompleted;
   React.useEffect(() => {
     if (typeof window === "undefined" || !userId || !accountData) return;
-    if (status === "loading" || loading || activeModal) return;
+    if (status === "loading" || loading) return;
+    if (!allowSecondaryModals) return;
     if (accountData.user?.subscription?.isActive !== true) return;
     if (hasFailedRenewal(accountData.user as unknown as import("@/models/User").IUser)) return;
     if (hasSeenExplainer(userId)) return;
     if (!profileSetupCompleted) return;
     if (sessionStorage.getItem("pendingUpsellFlag") === "true") return;
+    if (shouldDeferSubscriptionExplainerThisSession()) return;
 
     const pkg = accountData.user?.subscriptionPackageData || accountData.user?.enrichedOneTimePackages?.find((p: { isActive: boolean }) => p.isActive)?.packageData;
     const entriesPerMonth = (pkg && "entriesPerMonth" in pkg && pkg.entriesPerMonth) || 0;
@@ -191,14 +217,22 @@ export default function MyAccountPage() {
     const lastMonthAccumulatedEntries = sub?.lastMonthAccumulatedEntries ?? entriesPerMonth;
     const selectedPackageId = sub?.packageId != null ? String(sub.packageId) : undefined;
 
-    requestModal("subscription-explainer", false, {
-      entriesPerMonth,
-      packageName,
-      userId,
-      lastMonthAccumulatedEntries,
-      selectedPackageId,
-    });
-  }, [userId, profileSetupCompleted, status, loading, activeModal, accountData, requestModal]);
+    const t = window.setTimeout(() => {
+      const { activeModal: modalNow, modalQueue } = useModalPriorityStore.getState();
+      if (modalNow || modalQueue.length > 0 || isLandingCooldownActive()) return;
+      if (shouldDeferSubscriptionExplainerThisSession()) return;
+      if (hasSeenExplainer(userId)) return;
+      requestModal("subscription-explainer", false, {
+        entriesPerMonth,
+        packageName,
+        userId,
+        lastMonthAccumulatedEntries,
+        selectedPackageId,
+      });
+    }, 2500);
+
+    return () => clearTimeout(t);
+  }, [userId, profileSetupCompleted, status, loading, allowSecondaryModals, accountData, requestModal]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -430,7 +464,7 @@ export default function MyAccountPage() {
 
       <SocialLinksSection className="mt-6 sm:mt-8 mb-6 sm:mb-8" />
 
-      <RewardsFloatingWidget userId={user._id} positionAboveBottomNav />
+      <RewardsFloatingWidget userId={user._id} positionAboveBottomNav suppressSpotlight={suppressRewardsSpotlight} />
 
       <MembershipModal
         isOpen={membershipModal.isModalOpen}
@@ -465,14 +499,6 @@ export default function MyAccountPage() {
         onCloseAction={() => setIsReferFriendModalOpen(false)}
         userId={user._id}
         userFirstName={user.firstName}
-      />
-
-      <RenewalFailedModal
-        isOpen={isRenewalFailedModalOpen && activeModal === "renewal-failed"}
-        onClose={() => {
-          setIsRenewalFailedModalOpen(false);
-          closeModal();
-        }}
       />
 
       <PastDrawsModal

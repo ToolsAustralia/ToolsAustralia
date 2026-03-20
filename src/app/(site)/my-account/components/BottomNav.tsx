@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, Ticket, MessageCircle, CreditCard } from "lucide-react";
+import { Home, User, Ticket, MessageCircle, CreditCard } from "lucide-react";
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -16,6 +16,13 @@ export default function BottomNav() {
     isActive: boolean;
     badge?: number | string;
   }> = [
+    {
+      id: "home",
+      label: "Home",
+      icon: Home,
+      href: "/",
+      isActive: pathname === "/" || pathname === "",
+    },
     {
       id: "profile",
       label: "Profile",
@@ -48,7 +55,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 w-full max-w-[100vw] z-40 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800 lg:hidden">
-      <div className="grid grid-cols-4 h-16">
+      <div className="grid grid-cols-5 h-16">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (

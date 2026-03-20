@@ -17,6 +17,8 @@ interface RewardsFloatingWidgetProps {
   userId: string;
   /** When true, positions the FAB above the bottom nav (e.g. on my-account dashboard) */
   positionAboveBottomNav?: boolean;
+  /** When true, hides the first-time spotlight overlay (e.g. while dashboard landing modals run). */
+  suppressSpotlight?: boolean;
 }
 
 /** Default Tradie subscription plan for membership-only campaign unlocks */
@@ -36,7 +38,11 @@ const DEFAULT_TRADIE_PLAN: LocalMembershipPlan = {
   metadata: { entriesCount: 15 },
 };
 
-export default function RewardsFloatingWidget({ userId, positionAboveBottomNav = false }: RewardsFloatingWidgetProps) {
+export default function RewardsFloatingWidget({
+  userId,
+  positionAboveBottomNav = false,
+  suppressSpotlight = false,
+}: RewardsFloatingWidgetProps) {
   const { showToast } = useToast();
   const { isAnySidebarOpen } = useSidebar();
   const requestModal = useModalPriorityStore((state) => state.requestModal);
@@ -113,7 +119,12 @@ export default function RewardsFloatingWidget({ userId, positionAboveBottomNav =
   const fabRef = useRef<HTMLButtonElement>(null);
   const [fabRect, setFabRect] = useState<{ x: number; y: number } | null>(null);
   const showSpotlight =
-    hasUnclaimed && isReady && !isOpen && !hasSeenRewardsSpotlight(userId) && !isAnySidebarOpen;
+    hasUnclaimed &&
+    isReady &&
+    !isOpen &&
+    !hasSeenRewardsSpotlight(userId) &&
+    !isAnySidebarOpen &&
+    !suppressSpotlight;
 
   const [spotlightDismissed, setSpotlightDismissed] = useState(false);
   const showSpotlightActive =

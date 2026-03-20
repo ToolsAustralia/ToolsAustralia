@@ -46,6 +46,11 @@ export interface PackageDetailModalProps {
   onOpenSpecialPackages?: () => void;
 }
 
+/** e.g. "15 Free Accumulated Entries Major Giveaway" — shown as the single ticket line instead of "X entries per month" */
+function isAccumulatedEntriesMarketingFeature(text: string): boolean {
+  return /\d+\s*free\s+accumulated\s+entries/i.test(String(text));
+}
+
 /** Filter out features that duplicate the entries (ticket) or partner days (handshake) rows */
 function filterRedundantFeatures(
   features: string[],
@@ -56,7 +61,9 @@ function filterRedundantFeatures(
   return features.filter((f) => {
     const lower = String(f).toLowerCase().trim();
     if (!lower) return true;
-    // "3 Free Entries", "15 Free Accumulated Entries" – already shown by ticket row
+    // Keep accumulated major-giveaway copy; it replaces the synthetic "entries per month" row (ticket icon).
+    if (isAccumulatedEntriesMarketingFeature(f)) return true;
+    // "3 Free Entries", "15 Free Accumulated Entries" (end of string) – already shown by ticket row
     const isEntriesDuplicate =
       showEntries &&
       (/\d+\s*free\s+(accumulated\s+)?entries?$/.test(lower) || /^\d+\s*(free\s+)?(accumulated\s+)?entries?\.?\s*$/.test(lower));
@@ -108,6 +115,9 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
   const showEntries = (isSubscription && entriesPerMonth > 0) || (!isSubscription && totalEntries > 0);
   const showPartnerDays = partnerDays > 0;
   const features = filterRedundantFeatures(rawFeatures, showEntries, showPartnerDays);
+  const hasAccumulatedEntriesFeature = isSubscription && rawFeatures.some(isAccumulatedEntriesMarketingFeature);
+  const showSubscriptionEntriesPerMonthRow =
+    isSubscription && entriesPerMonth > 0 && !hasAccumulatedEntriesFeature;
 
   const chartPackageId = toChartPackageId(packageData.name, packageData._id);
 
@@ -180,7 +190,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
         <div className="rounded-xl border border-gray-200 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800 p-4 space-y-3">
           <h4 className="text-sm font-semibold text-gray-800 dark:text-white">Benefits</h4>
           <ul className="space-y-2">
-            {isSubscription && entriesPerMonth > 0 && (
+            {showSubscriptionEntriesPerMonthRow && (
               <li className="flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-300">
                 <Ticket className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <span>
@@ -212,12 +222,19 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
                 </span>
               </li>
             )} */}
-            {features.map((feature, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-300">
-                <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                <span>{feature}</span>
-              </li>
-            ))}
+            {features.map((feature, i) => {
+              const useTicketIcon = isSubscription && isAccumulatedEntriesMarketingFeature(feature);
+              const Icon = useTicketIcon ? Ticket : Check;
+              const iconClass = useTicketIcon
+                ? "w-4 h-4 text-red-500 flex-shrink-0 mt-0.5"
+                : "w-4 h-4 text-green-500 flex-shrink-0 mt-0.5";
+              return (
+                <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-neutral-300">
+                  <Icon className={iconClass} />
+                  <span>{feature}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
 

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Z_INDEX } from "@/constants/z-index";
+import { useThemeStore } from "@/stores/useThemeStore";
 
 interface ModalContainerProps {
   isOpen: boolean;
@@ -37,6 +38,9 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   preventBackButton = true,
   nested = false,
 }) => {
+  const theme = useThemeStore((s) => s.theme);
+  const isDarkMode = theme === "dark";
+
   // Track if we've pushed a history state for this modal instance
   const historyStatePushed = useRef(false);
   // Track if back button was pressed (to avoid cleanup issues)
@@ -519,7 +523,8 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       <div
         ref={modalContentRef}
         className={`
-        relative bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full mx-auto overflow-hidden flex flex-col
+        relative rounded-2xl shadow-2xl w-full mx-auto overflow-hidden flex flex-col
+        ${isDarkMode ? "dark bg-neutral-900" : "bg-white"}
         ${sizeStyles[size]}
         ${heightStyles[height]}
         ${className}

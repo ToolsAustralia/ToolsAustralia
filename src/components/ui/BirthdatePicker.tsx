@@ -38,6 +38,8 @@ export interface BirthdatePickerProps {
   className?: string;
   id?: string;
   "aria-invalid"?: boolean;
+  /** Fires when the calendar popover opens or closes (e.g. for modal scroll/padding). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 const DEFAULT_MAX = new Date();
@@ -59,6 +61,7 @@ export default function BirthdatePicker({
   className = "",
   id,
   "aria-invalid": ariaInvalid,
+  onOpenChange,
 }: BirthdatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<"month" | "year" | null>(null);
@@ -84,6 +87,10 @@ export default function BirthdatePicker({
     const d = new Date(value + "T12:00:00");
     if (!isNaN(d.getTime())) setViewDate(d);
   }, [value]);
+
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
