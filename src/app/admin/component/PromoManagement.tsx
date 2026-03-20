@@ -40,7 +40,7 @@ export default function PromoManagement() {
     { id: "scheduled" as const, label: "Scheduled", icon: Calendar },
     { id: "alternating" as const, label: "Alternating", icon: Repeat },
     { id: "promo-links" as const, label: "Promo Links", icon: Link2 },
-    { id: "banner-text" as const, label: "Banner Text", icon: Calendar },
+    { id: "banner-text" as const, label: "Banner Image", icon: Calendar },
     { id: "bonus-entry" as const, label: "Bonus Entry", icon: Gift },
     { id: "redeemables" as const, label: "Redeemables", icon: Gift },
     { id: "milestones" as const, label: "Milestones", icon: Medal },
@@ -239,10 +239,10 @@ export default function PromoManagement() {
                 <div className="min-w-0">
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-red-600" />
-                    Promo Banner Text Schedule
+                    Promo Banner Image Schedule
                   </h3>
                   <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
-                    Custom banner text for holidays. One-time or recurring (weekdays/weekends). AEST timezone.
+                    Scheduled left banner image for campaigns. One-time or recurring (weekdays/weekends). AEST timezone.
                   </p>
                 </div>
                 <button
@@ -250,7 +250,7 @@ export default function PromoManagement() {
                   className={primaryActionButtonClass}
                 >
                   <Plus className="w-4 h-4" />
-                  Create Scheduled Text
+                  Create scheduled image
                 </button>
               </div>
               <PromoBannerTextList />
@@ -320,7 +320,7 @@ export default function PromoManagement() {
         }}
       />
 
-      {/* Banner Text Modal */}
+      {/* Banner image schedule modal */}
       <AdminPromoBannerTextModal
         isOpen={isBannerTextModalOpen}
         onClose={() => setIsBannerTextModalOpen(false)}

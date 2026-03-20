@@ -23,7 +23,7 @@ export default function PromoBannerTextList() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this scheduled banner text?")) {
+    if (!confirm("Are you sure you want to delete this scheduled banner image?")) {
       return;
     }
 
@@ -115,8 +115,8 @@ export default function PromoBannerTextList() {
         {texts.length === 0 ? (
           <div className="p-8 text-center">
             <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No scheduled banner texts</p>
-            <p className="text-sm text-gray-400 mt-1">Create a new scheduled text to display custom messages</p>
+            <p className="text-gray-500">No scheduled banner images</p>
+            <p className="text-sm text-gray-400 mt-1">Create a schedule to show a custom left banner image on matching dates</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
@@ -155,7 +155,15 @@ export default function PromoBannerTextList() {
                             {text.scheduleType === "one-time" ? "One-time" : "Recurring"}
                           </span>
                         </div>
-                        <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">{text.text}</h4>
+                        <div className="flex flex-col sm:flex-row gap-3 mb-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={text.imageUrl}
+                            alt={text.altText || "Scheduled banner"}
+                            className="h-16 w-auto max-w-[200px] object-contain rounded border border-gray-200 bg-gray-50"
+                          />
+                          <p className="text-xs text-gray-500 break-all sm:max-w-md">{text.imageUrl}</p>
+                        </div>
                         <div className="text-sm text-gray-600 space-y-1">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />

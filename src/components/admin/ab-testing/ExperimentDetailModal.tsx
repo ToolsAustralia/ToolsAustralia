@@ -306,14 +306,14 @@ export default function ExperimentDetailModal({
 
                     {/* Variant Config Preview */}
                     {(variant.config?.hero?.ctaText ||
-                      variant.config?.banner?.badgeText ||
+                      variant.config?.banner?.leftImageUrl ||
                       variant.config?.packages?.highlightPackage) && (
                       <div className="text-xs text-gray-500 space-y-1">
                         {variant.config?.hero?.ctaText && (
                           <div>Hero CTA: {variant.config.hero.ctaText}</div>
                         )}
-                        {variant.config?.banner?.badgeText && (
-                          <div>Banner: {variant.config.banner.badgeText}</div>
+                        {variant.config?.banner?.leftImageUrl && (
+                          <div className="break-all">Banner left image: {variant.config.banner.leftImageUrl}</div>
                         )}
                         {variant.config?.packages?.highlightPackage && (
                           <div>Highlight Package: {variant.config.packages.highlightPackage}</div>

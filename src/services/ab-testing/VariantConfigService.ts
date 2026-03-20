@@ -114,8 +114,14 @@ export class VariantConfigService {
         errors.push("Banner config must be an object");
       } else {
         const banner = cfg.banner as Record<string, unknown>;
-        if (banner.badgeText && typeof banner.badgeText !== "string") {
-          errors.push("Banner badgeText must be a string");
+        if (banner.leftImageUrl !== undefined && typeof banner.leftImageUrl !== "string") {
+          errors.push("Banner leftImageUrl must be a string");
+        }
+        if (
+          typeof banner.leftImageUrl === "string" &&
+          banner.leftImageUrl.length > 2048
+        ) {
+          errors.push("Banner leftImageUrl must be at most 2048 characters");
         }
         if (banner.multiplier !== undefined && typeof banner.multiplier !== "number") {
           errors.push("Banner multiplier must be a number");
