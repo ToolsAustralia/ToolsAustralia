@@ -5067,7 +5067,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                   clearReferralCode();
                                 }
                               }}
-                              className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:border-transparent transition-all duration-300 text-sm sm:text-base"
+                              className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:border-transparent transition-all duration-300 text-sm sm:text-base bg-white text-gray-900 placeholder:text-gray-500 dark:bg-slate-800 dark:border-slate-600 dark:text-gray-100 dark:placeholder:text-gray-400"
                               style={{ ["--tw-ring-color" as string]: promoTheme.primary }}
                               placeholder="Enter coupon code"
                             />

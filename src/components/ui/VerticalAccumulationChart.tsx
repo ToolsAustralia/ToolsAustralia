@@ -115,35 +115,32 @@ export default function VerticalAccumulationChart({
     <div className="w-full">
       {/* Chart Title - Outside Chart Container */}
       <div className="text-center mb-4 sm:mb-6">
-        <h3 className="text-base sm:text-lg lg:text-xl font-bold text-black font-['Poppins']">
+        <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white font-['Poppins']">
           Entry Accumulation Over Time
         </h3>
-        <p className="text-xs sm:text-sm text-gray-400 font-['Poppins'] mt-1">
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 font-['Poppins'] mt-1">
           See how entries accumulate month by month
         </p>
       </div>
 
-      {/* Chart Container - Matching modal background */}
+      {/* Chart surface: light card in light mode, slate panel in dark (matches my-account modals) */}
       <div
-        className="relative rounded-xl p-3 sm:p-4 pt-8 sm:pt-10 border border-slate-700/30 shadow-[0_0_15px_rgba(0,0,0,0.4)]"
-        style={{
-          background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
-        }}
+        className="relative rounded-xl p-3 sm:p-4 pt-8 sm:pt-10 border border-slate-200 dark:border-slate-700/30 shadow-md dark:shadow-[0_0_15px_rgba(0,0,0,0.4)] bg-gradient-to-br from-slate-100 via-white to-slate-50 dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#0f172a]"
       >
         {/* Month Titles - Inside Chart Container */}
         <div className="absolute top-2 sm:top-3 left-8 sm:left-10 right-0 flex items-center justify-center gap-4 sm:gap-8 z-20">
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
-            <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
+            <div className="text-[10px] sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
               Current Month
             </div>
           </div>
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
-            <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
+            <div className="text-[10px] sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
               Next Month
             </div>
           </div>
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
-            <div className="text-[10px] sm:text-[12px] font-semibold text-white font-['Poppins'] whitespace-nowrap">
+            <div className="text-[10px] sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
               Following Month
             </div>
           </div>
@@ -152,7 +149,7 @@ export default function VerticalAccumulationChart({
         {/* Chart Area */}
         <div className="relative h-[200px] sm:h-[250px] lg:h-[300px] mt-2 sm:mt-3">
           {/* Y-Axis Labels */}
-          <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[8px] sm:text-[10px] text-gray-500 font-['Poppins'] pr-2 z-10">
+          <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[8px] sm:text-[10px] text-slate-500 dark:text-gray-500 font-['Poppins'] pr-2 z-10">
             <span>{maxValue.toLocaleString()}</span>
             <span>{Math.round(maxValue * 0.75).toLocaleString()}</span>
             <span>{Math.round(maxValue * 0.5).toLocaleString()}</span>
@@ -161,7 +158,7 @@ export default function VerticalAccumulationChart({
           </div>
 
           {/* Y-Axis Line */}
-          <div className="absolute left-8 sm:left-10 top-0 bottom-0 w-px bg-slate-600/20"></div>
+          <div className="absolute left-8 sm:left-10 top-0 bottom-0 w-px bg-slate-300/60 dark:bg-slate-600/20"></div>
 
           {/* Chart Columns */}
           <div className="absolute left-8 sm:left-10 right-0 bottom-0 flex items-end justify-center gap-4 sm:gap-8 h-full">
@@ -175,7 +172,7 @@ export default function VerticalAccumulationChart({
                       <div
                         className={`w-full rounded-t relative border-2 ${
                           pkg.isSelected
-                            ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
+                            ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
                             : ""
                         }`}
                         style={{
@@ -206,7 +203,7 @@ export default function VerticalAccumulationChart({
                       <div
                         className={`w-full rounded-t relative border-2 ${
                           pkg.isSelected
-                            ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
+                            ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
                             : ""
                         }`}
                         style={{
@@ -237,7 +234,7 @@ export default function VerticalAccumulationChart({
                       <div
                         className={`w-full rounded-t relative border-2 ${
                           pkg.isSelected
-                            ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
+                            ? "ring-2 ring-yellow-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 shadow-[0_0_20px_rgba(251,191,36,0.8)] scale-105"
                             : ""
                         }`}
                         style={{
@@ -261,7 +258,7 @@ export default function VerticalAccumulationChart({
         </div>
 
         {/* X-Axis Base Line */}
-        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-600/20">
+        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-200 dark:border-slate-600/20">
           {/* Package Legend */}
           <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
             {packageData.map((pkg) => (

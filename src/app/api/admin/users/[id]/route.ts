@@ -501,6 +501,14 @@ async function buildAdminUserProfile(userId: string) {
     savedPaymentMethodsSummary = summaries;
   }
 
+  const birthdateIso = (() => {
+    if (!user.birthdate) return undefined;
+    const d =
+      user.birthdate instanceof Date ? user.birthdate : new Date(user.birthdate as string | number);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return d.toISOString().split("T")[0];
+  })();
+
   return {
     id: user._id,
     firstName: user.firstName,
@@ -509,6 +517,7 @@ async function buildAdminUserProfile(userId: string) {
     mobile: user.mobile,
     state: user.state,
     profession: user.profession,
+    birthdate: birthdateIso,
     role: user.role,
     isActive: user.isActive,
     isEmailVerified: user.isEmailVerified,
@@ -614,6 +623,22 @@ function applyBasicInfoUpdate(user: IUser, basicInfo?: AdminUserUpdatePayload["b
       throw new Error("Profession cannot exceed 100 characters");
     }
     user.profession = trimmedProfession || undefined;
+  }
+
+  if (basicInfo.birthdate !== undefined) {
+    const trimmed = (basicInfo.birthdate || "").trim();
+    if (!trimmed) {
+      user.birthdate = undefined;
+    } else {
+      const d = new Date(trimmed);
+      if (Number.isNaN(d.getTime())) {
+        throw new Error("Invalid birthdate");
+      }
+      if (d.getTime() > Date.now()) {
+        throw new Error("Birthdate cannot be in the future");
+      }
+      user.birthdate = d;
+    }
   }
 
   if (basicInfo.role !== undefined) {

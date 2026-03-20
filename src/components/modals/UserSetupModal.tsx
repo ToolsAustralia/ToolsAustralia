@@ -64,6 +64,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   // Dropdown open state tracking
   const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
   const [isProfessionDropdownOpen, setIsProfessionDropdownOpen] = useState(false);
+  const [isBirthdatePickerOpen, setIsBirthdatePickerOpen] = useState(false);
 
   // Handlers for dropdown open state changes
   const handleStateDropdownChange = useCallback((isOpen: boolean) => {
@@ -74,8 +75,12 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     setIsProfessionDropdownOpen(isOpen);
   }, []);
 
-  // Determine if any dropdown is open
-  const isAnyDropdownOpen = isStateDropdownOpen || isProfessionDropdownOpen;
+  const handleBirthdateOpenChange = useCallback((open: boolean) => {
+    setIsBirthdatePickerOpen(open);
+  }, []);
+
+  // Step 2: extra scrollable room when a dropdown or the birthdate calendar is open
+  const isStep2OverlayOpen = isStateDropdownOpen || isProfessionDropdownOpen || isBirthdatePickerOpen;
 
   // Refs for focusing on error fields
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -86,6 +91,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
   // Ref to prevent double submission of email verification (handles double-click before setState flushes)
   const isSendingEmailRef = useRef(false);
+
+  const birthdateSectionRef = useRef<HTMLDivElement>(null);
 
   // Ref to store handleComplete function for use in useEffect
   const handleCompleteRef = useRef<((bypassEmailCheck?: boolean) => Promise<void>) | null>(null);
@@ -409,6 +416,25 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   useEffect(() => {
     if (!isOpen || activeStep !== 3) {
       hasAutoCompletedRef.current = false;
+    }
+  }, [isOpen, activeStep]);
+
+  // Birthdate calendar sits below the field; match dropdown behavior: pad content + scroll into view
+  useEffect(() => {
+    if (!isOpen || activeStep !== 2 || !isBirthdatePickerOpen) return;
+    const t = window.setTimeout(() => {
+      birthdateSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [isOpen, activeStep, isBirthdatePickerOpen]);
+
+  useEffect(() => {
+    if (!isOpen || activeStep !== 2) {
+      setIsBirthdatePickerOpen(false);
     }
   }, [isOpen, activeStep]);
 
@@ -1004,7 +1030,11 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
               {activeStep === 2 && (() => {
                 const ineligibilityReasons = getGiveawayIneligibilityReasons(selectedState, selectedBirthdate || undefined);
                 return (
-                <div className={`space-y-4 ${isAnyDropdownOpen ? "pb-48" : ""}`}>
+                <div
+                  className={`space-y-4 ${
+                    !isStep2OverlayOpen ? "" : isBirthdatePickerOpen ? "pb-96" : "pb-48"
+                  }`}
+                >
                   <div>
                     <Select
                       options={stateOptions}
@@ -1052,7 +1082,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                     customInputPlaceholder="Enter your profession"
                     customInputError={inlineErrors.customProfession}
                   />
-                  <div>
+                  <div ref={birthdateSectionRef}>
                     <BirthdatePicker
                       value={selectedBirthdate}
                       onChange={(val) => {
@@ -1060,6 +1090,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                         setError(null);
                         setInlineErrors((prev) => ({ ...prev, birthdate: undefined }));
                       }}
+                      onOpenChange={handleBirthdateOpenChange}
                       label="Date of Birth"
                       required
                       error={inlineErrors.birthdate}
