@@ -9,16 +9,16 @@
       "schedule": "0 15 * * *"
     },
     {
-      "path": "/api/cron/aggregate-daily-metrics",
-      "schedule": "0 2 * * *"
-    },
-    {
       "path": "/api/cron/ab-testing-experiments",
       "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/ab-testing-aggregate-metrics",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-meta-spend-by-url",
+      "schedule": "30 2 * * *"
     }
   ]
 }

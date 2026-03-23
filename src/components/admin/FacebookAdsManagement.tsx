@@ -34,7 +34,7 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
-import { DailyMetricsView } from "./metrics/DailyMetricsView";
+import SpendByUrlSection from "./SpendByUrlSection";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -52,6 +52,7 @@ const AEST_TIMEZONE = "Australia/Sydney";
  * - Date range selection (Today / Custom Range)
  * - Granularity levels (Account / Campaign / Ad Set)
  * - Summary cards with key metrics
+ * - Spend by URL (Meta sync + spend/revenue tabs)
  * - Data table for breakdown views
  * - Loading states and error handling
  * - Cached data indicators
@@ -70,18 +71,26 @@ export default function FacebookAdsManagement() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   // View mode with URL persistence
-  const urlViewMode = (searchParams.get("viewMode") as "ads" | "metrics") || "ads";
-  const [viewMode, setViewMode] = useState<"ads" | "metrics">(urlViewMode);
+  const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "metrics") || "ads";
+  const [viewMode, setViewMode] = useState<"ads" | "spend-by-url">(
+    urlViewMode === "metrics" ? "ads" : (urlViewMode as "ads" | "spend-by-url")
+  );
 
-  // Sync viewMode with URL params on mount and when URL changes
-  // Use a stable value from searchParams to avoid dependency array issues
+  // Sync viewMode with URL params; legacy "metrics" view removed — redirect to ads
   const urlViewModeValue = searchParams.get("viewMode") || "ads";
   useEffect(() => {
-    setViewMode(urlViewModeValue as "ads" | "metrics");
-  }, [urlViewModeValue]);
+    if (urlViewModeValue === "metrics") {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("viewMode", "ads");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      setViewMode("ads");
+      return;
+    }
+    setViewMode(urlViewModeValue as "ads" | "spend-by-url");
+  }, [urlViewModeValue, pathname, router, searchParams]);
 
   // Update URL when viewMode changes
-  const handleViewModeChange = (mode: "ads" | "metrics") => {
+  const handleViewModeChange = (mode: "ads" | "spend-by-url") => {
     setViewMode(mode);
     const params = new URLSearchParams(searchParams.toString());
     params.set("viewMode", mode);
@@ -1252,18 +1261,18 @@ export default function FacebookAdsManagement() {
               Ads
             </button>
             <button
-              onClick={() => handleViewModeChange("metrics")}
+              onClick={() => handleViewModeChange("spend-by-url")}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                viewMode === "metrics"
+                viewMode === "spend-by-url"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
               }`}
             >
-              Metrics
+              Spend by URL
             </button>
           </div>
-          {/* Date Range Toggle - Only show for Ads view */}
-          {viewMode === "ads" && (
+          {/* Date Range Toggle - Ads + Spend by URL */}
+          {(viewMode === "ads" || viewMode === "spend-by-url") && (
             <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
               <DateRangeToggle
                 selectedRange={dateRange}
@@ -1278,61 +1287,72 @@ export default function FacebookAdsManagement() {
         </div>
       </div>
 
-      {/* Content based on view mode */}
-      {viewMode === "metrics" ? (
-        <DailyMetricsView />
+      {/* Account-level summary (same Insights API date range) — Ads + Spend by URL for comparison */}
+      {(viewMode === "ads" || viewMode === "spend-by-url") && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <MetricCard
+              title="Ad Spend"
+              value={formatCurrency(summary.spend)}
+              subtitle="Total advertising cost"
+              icon={DollarSign}
+              color="red"
+            />
+            <MetricCard
+              title="Revenue"
+              value={formatCurrency(summary.revenue)}
+              subtitle="From Facebook conversions"
+              icon={TrendingUp}
+              color="emerald"
+            />
+            <MetricCard
+              title="Profit"
+              value={formatCurrency(summary.profit)}
+              subtitle="Revenue - Spend"
+              icon={BarChart3}
+              color={summary.profit >= 0 ? "emerald" : "red"}
+            />
+            <MetricCard
+              title="ROAS"
+              value={formatROAS(summary.roas)}
+              subtitle="Return on Ad Spend"
+              icon={Target}
+              color="purple"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <MetricCard title="Impressions" value={formatNumber(summary.impressions)} icon={Eye} color="blue" />
+            <MetricCard
+              title="Landing Page Views"
+              value={formatNumber(summary.landingPageView ?? 0)}
+              icon={ExternalLink}
+              color="indigo"
+              subtitle="Viewed landing page after click"
+            />
+            <MetricCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
+            <MetricCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
+          </div>
+
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
+            <div className="flex items-center justify-between mb-2 sm:mb-4">
+              <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Conversions</h3>
+              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatNumber(displayConversions)}</div>
+            <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">Facebook-attributed purchases only</p>
+          </div>
+        </>
+      )}
+
+      {viewMode === "spend-by-url" ? (
+        <SpendByUrlSection
+          startDate={startDate}
+          endDate={endDate}
+          dateReady={Boolean(startDate && endDate)}
+        />
       ) : (
         <>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <MetricCard
-          title="Ad Spend"
-          value={formatCurrency(summary.spend)}
-          subtitle="Total advertising cost"
-          icon={DollarSign}
-          color="red"
-        />
-        <MetricCard
-          title="Revenue"
-          value={formatCurrency(summary.revenue)}
-          subtitle="From Facebook conversions"
-          icon={TrendingUp}
-          color="emerald"
-        />
-        <MetricCard
-          title="Profit"
-          value={formatCurrency(summary.profit)}
-          subtitle="Revenue - Spend"
-          icon={BarChart3}
-          color={summary.profit >= 0 ? "emerald" : "red"}
-        />
-        <MetricCard
-          title="ROAS"
-          value={formatROAS(summary.roas)}
-          subtitle="Return on Ad Spend"
-          icon={Target}
-          color="purple"
-        />
-      </div>
-
-      {/* Additional Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <MetricCard title="Impressions" value={formatNumber(summary.impressions)} icon={Eye} color="blue" />
-        <MetricCard title="Landing Page Views" value={formatNumber(summary.landingPageView ?? 0)} icon={ExternalLink} color="indigo" subtitle="Viewed landing page after click" />
-        <MetricCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
-        <MetricCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
-      </div>
-
-      {/* Conversions - Facebook-attributed only (not all site purchases) */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
-        <div className="flex items-center justify-between mb-2 sm:mb-4">
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Conversions</h3>
-          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-        </div>
-        <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatNumber(displayConversions)}</div>
-        <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">Facebook-attributed purchases only</p>
-      </div>
 
       {/* Hourly Breakdown - Show when date range is available (Account level shows account totals) */}
       {startDate && endDate && (
@@ -1660,18 +1680,20 @@ export default function FacebookAdsManagement() {
         </div>
       )}
 
-      {/* Custom Date Range Modal */}
-      <CustomDateRangeModal
-        isOpen={isCustomDateModalOpen}
-        onClose={() => setIsCustomDateModalOpen(false)}
-        onApply={(startDateStr, endDateStr) => {
-          updateDateFilter("custom", startDateStr, endDateStr);
-        }}
-        currentStartDate={startDate}
-        currentEndDate={endDate}
-        majorDraws={majorDraws}
-      />
         </>
+      )}
+
+      {(viewMode === "ads" || viewMode === "spend-by-url") && (
+        <CustomDateRangeModal
+          isOpen={isCustomDateModalOpen}
+          onClose={() => setIsCustomDateModalOpen(false)}
+          onApply={(startDateStr, endDateStr) => {
+            updateDateFilter("custom", startDateStr, endDateStr);
+          }}
+          currentStartDate={startDate}
+          currentEndDate={endDate}
+          majorDraws={majorDraws}
+        />
       )}
 
     </div>
