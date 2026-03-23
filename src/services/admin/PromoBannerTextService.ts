@@ -166,7 +166,8 @@ export class PromoBannerTextService {
    */
   async createBannerText(
     data: {
-      text: string;
+      imageUrl: string;
+      altText?: string;
       scheduleType: "one-time" | "recurring";
       startDate?: Date;
       endDate?: Date;
@@ -196,7 +197,8 @@ export class PromoBannerTextService {
   async updateBannerText(
     id: string,
     data: {
-      text?: string;
+      imageUrl?: string;
+      altText?: string;
       scheduleType?: "one-time" | "recurring";
       startDate?: Date;
       endDate?: Date;

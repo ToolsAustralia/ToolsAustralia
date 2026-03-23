@@ -17,16 +17,19 @@ export type RecurrencePattern =
   | "sunday";
 
 /**
- * Promo Banner Text Model
+ * Promo Banner scheduled image model
  *
- * This model represents scheduled banner text that can be displayed
- * on the promo banner. Supports both one-time date ranges and recurring
- * schedules (weekdays, weekends, or specific days of the week).
+ * Schedules a left-column banner image (URL) on the promo banner. Supports
+ * one-time date ranges and recurring schedules (weekdays, weekends, or
+ * specific days of the week).
  *
  * All dates are stored in UTC but represent AEST/AEDT times.
  */
 export interface IPromoBannerText extends Document {
-  text: string; // The banner text to display
+  /** Image URL (Cloudinary or site path) shown on promo banner left when this schedule is active */
+  imageUrl: string;
+  /** Optional alt text for accessibility */
+  altText?: string;
   scheduleType: ScheduleType; // "one-time" | "recurring"
   
   // For one-time schedules (required when scheduleType is "one-time")
@@ -48,11 +51,17 @@ export interface IPromoBannerText extends Document {
 
 const PromoBannerTextSchema = new Schema<IPromoBannerText>(
   {
-    text: {
+    imageUrl: {
       type: String,
-      required: [true, "Text is required"],
+      required: [true, "Image URL is required"],
       trim: true,
-      maxlength: [100, "Text cannot exceed 100 characters"],
+      maxlength: [2048, "Image URL cannot exceed 2048 characters"],
+    },
+    altText: {
+      type: String,
+      required: false,
+      trim: true,
+      maxlength: [200, "Alt text cannot exceed 200 characters"],
     },
     scheduleType: {
       type: String,

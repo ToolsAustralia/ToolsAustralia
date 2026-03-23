@@ -9,7 +9,8 @@ import type { PromoBannerText, UpdatePromoBannerTextPayload } from "@/types/admi
 
 // Validation schema
 const updateBannerTextSchema = z.object({
-  text: z.string().min(1).max(100).optional(),
+  imageUrl: z.string().min(1).max(2048).optional(),
+  altText: z.string().max(200).optional(),
   scheduleType: z.enum(["one-time", "recurring"]).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -70,7 +71,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const service = new PromoBannerTextService();
     const updatedText = await service.updateBannerText(id, {
-      text: data.text,
+      imageUrl: data.imageUrl,
+      altText: data.altText,
       scheduleType: data.scheduleType,
       startDate: startDateUTC,
       endDate: endDateUTC,
@@ -92,7 +94,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Convert dates from UTC to AEST for response
     const response: PromoBannerText = {
       id: (updatedText._id as { toString(): string }).toString(),
-      text: updatedText.text,
+      imageUrl: updatedText.imageUrl,
+      altText: updatedText.altText,
       scheduleType: updatedText.scheduleType,
       startDate: updatedText.startDate ? convertUTCToAEST(updatedText.startDate).toISOString() : undefined,
       endDate: updatedText.endDate ? convertUTCToAEST(updatedText.endDate).toISOString() : undefined,

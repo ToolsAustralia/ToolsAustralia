@@ -8,7 +8,8 @@ import type { PromoBannerText, CreatePromoBannerTextPayload } from "@/types/admi
 
 // Validation schema
 const createBannerTextSchema = z.object({
-  text: z.string().min(1).max(100),
+  imageUrl: z.string().min(1).max(2048),
+  altText: z.string().max(200).optional(),
   scheduleType: z.enum(["one-time", "recurring"]),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -36,7 +37,8 @@ export async function GET(_request: NextRequest) {
     // Convert dates from UTC to AEST for response
     const response: PromoBannerText[] = texts.map((text) => ({
       id: (text._id as { toString(): string }).toString(),
-      text: text.text,
+      imageUrl: text.imageUrl,
+      altText: text.altText,
       scheduleType: text.scheduleType,
       startDate: text.startDate ? convertUTCToAEST(text.startDate).toISOString() : undefined,
       endDate: text.endDate ? convertUTCToAEST(text.endDate).toISOString() : undefined,
@@ -135,7 +137,8 @@ export async function POST(request: NextRequest) {
     const service = new PromoBannerTextService();
     const createdText = await service.createBannerText(
       {
-        text: data.text,
+        imageUrl: data.imageUrl,
+        altText: data.altText,
         scheduleType: data.scheduleType,
         startDate: startDateUTC,
         endDate: endDateUTC,
@@ -149,7 +152,8 @@ export async function POST(request: NextRequest) {
     // Convert dates from UTC to AEST for response
     const response: PromoBannerText = {
       id: (createdText._id as { toString(): string }).toString(),
-      text: createdText.text,
+      imageUrl: createdText.imageUrl,
+      altText: createdText.altText,
       scheduleType: createdText.scheduleType,
       startDate: createdText.startDate ? convertUTCToAEST(createdText.startDate).toISOString() : undefined,
       endDate: createdText.endDate ? convertUTCToAEST(createdText.endDate).toISOString() : undefined,
