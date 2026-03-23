@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { motion, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
@@ -37,6 +37,32 @@ const PROMO_BANNER_MULTIPLIER_BADGE = {
   layoutBar: "-right-2 -top-2 h-7 w-7 sm:-top-4 sm:-right-4 sm:h-9 sm:w-9 lg:h-10 lg:w-10",
   dropShadow: "drop-shadow(0 2px 6px rgba(0,0,0,0.5))",
 } as const;
+
+/** Easing for bar ↔ floating pill morph (scroll state). */
+const SCROLL_STATE_TRANSITION = { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
+
+/** FLIP: match Tailwind `top-4` + responsive horizontal insets (`left-2` / `sm:left-8` / `lg:left-16`). */
+function getFloatTargetRects() {
+  if (typeof window === "undefined") {
+    return { top: 16, left: 8, width: 400 };
+  }
+  const fs = parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+  const rem = (n: number) => n * fs;
+  const vw = window.innerWidth;
+  let leftInset = rem(0.5);
+  if (vw >= 1024) leftInset = rem(4);
+  else if (vw >= 640) leftInset = rem(2);
+  return {
+    top: rem(1),
+    left: leftInset,
+    width: Math.max(0, vw - leftInset * 2),
+  };
+}
+
+const BANNER_SHADOW_REST =
+  "0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.3)";
+const BANNER_SHADOW_FLOAT =
+  "0 14px 44px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.32)";
 
 /**
  * PromoBanner Component
@@ -105,6 +131,14 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   });
 
   const [isScrolled, setIsScrolled] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
+  /** Pixel layout for fixed pill (FLIP enter/resize); unused when not scrolled. */
+  const floatTop = useMotionValue(0);
+  const floatLeft = useMotionValue(0);
+  const floatWidth = useMotionValue(0);
+  const shouldAnimateFloatEnter = useRef(false);
+  /** Active FLIP / resize animations — must stop when leaving fixed mode or Motion can leave stale inline geometry. */
+  const floatLayoutAnimRef = useRef<Array<{ stop: () => void }>>([]);
   const bannerRef = useRef<HTMLDivElement>(null);
   const [bannerHeight, setBannerHeight] = useState<number | null>(null);
   const [isContentReady, setIsContentReady] = useState(false);
@@ -309,12 +343,21 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       if (!ticking) {
         window.requestAnimationFrame(() => {
           const scrollY = window.scrollY;
-          // Trigger fixed position with minimal scroll on mobile, more on desktop
           const isMobile = window.innerWidth < 1024;
           const scrollThreshold = isMobile ? 100 : 200;
+          const nextScrolled = scrollY > scrollThreshold;
 
-          // Toggle based on scroll position - can go back and forth
-          setIsScrolled(scrollY > scrollThreshold);
+          setIsScrolled((prev) => {
+            // FLIP: capture in-flow rect before switching to fixed so we can animate (no teleport to top-4).
+            if (nextScrolled && !prev && bannerRef.current) {
+              const r = bannerRef.current.getBoundingClientRect();
+              floatTop.set(r.top);
+              floatLeft.set(r.left);
+              floatWidth.set(r.width);
+              shouldAnimateFloatEnter.current = true;
+            }
+            return nextScrolled;
+          });
 
           ticking = false;
         });
@@ -328,7 +371,78 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, []);
+  }, [floatTop, floatLeft, floatWidth]);
+
+  // Leaving fixed mode: stop all FLIP/resize animations and reset motion values so nothing stays "inset" on the bar.
+  useLayoutEffect(() => {
+    if (isScrolled) return;
+    floatLayoutAnimRef.current.forEach((a) => a.stop());
+    floatLayoutAnimRef.current = [];
+    floatTop.set(0);
+    floatLeft.set(0);
+    floatWidth.set(0);
+  }, [isScrolled, floatTop, floatLeft, floatWidth]);
+
+  // After switching to fixed, animate top/left/width from measured rect → floating pill (FLIP).
+  // useLayoutEffect avoids one frame at wrong position; handles prefers-reduced-motion + fallback snap.
+  useLayoutEffect(() => {
+    if (!isScrolled) return;
+
+    const tgt = getFloatTargetRects();
+
+    if (prefersReducedMotion) {
+      floatTop.set(tgt.top);
+      floatLeft.set(tgt.left);
+      floatWidth.set(tgt.width);
+      return;
+    }
+
+    if (floatWidth.get() < 8) {
+      floatTop.set(tgt.top);
+      floatLeft.set(tgt.left);
+      floatWidth.set(tgt.width);
+      return;
+    }
+
+    if (!shouldAnimateFloatEnter.current) return;
+    shouldAnimateFloatEnter.current = false;
+
+    const transition = { duration: 0.55, ease: [0.16, 1, 0.3, 1] as const };
+    const c1 = animate(floatTop, tgt.top, transition);
+    const c2 = animate(floatLeft, tgt.left, transition);
+    const c3 = animate(floatWidth, tgt.width, transition);
+    floatLayoutAnimRef.current = [c1, c2, c3];
+    return () => {
+      c1.stop();
+      c2.stop();
+      c3.stop();
+      floatLayoutAnimRef.current = [];
+    };
+  }, [isScrolled, prefersReducedMotion, floatTop, floatLeft, floatWidth]);
+
+  // Keep pill aligned with viewport when resized while floating.
+  useEffect(() => {
+    if (!isScrolled) return;
+
+    const syncFloatLayout = () => {
+      const tgt = getFloatTargetRects();
+      floatLayoutAnimRef.current.forEach((a) => a.stop());
+      floatLayoutAnimRef.current = [];
+      if (prefersReducedMotion) {
+        floatTop.set(tgt.top);
+        floatLeft.set(tgt.left);
+        floatWidth.set(tgt.width);
+        return;
+      }
+      const c1 = animate(floatTop, tgt.top, { duration: 0.2, ease: "easeOut" });
+      const c2 = animate(floatLeft, tgt.left, { duration: 0.2, ease: "easeOut" });
+      const c3 = animate(floatWidth, tgt.width, { duration: 0.2, ease: "easeOut" });
+      floatLayoutAnimRef.current = [c1, c2, c3];
+    };
+
+    window.addEventListener("resize", syncFloatLayout);
+    return () => window.removeEventListener("resize", syncFloatLayout);
+  }, [isScrolled, prefersReducedMotion, floatTop, floatLeft, floatWidth]);
 
   // Resolve multiplier: Variant config > Effective-for-banner for current tab
   const multiplier = useMemo(() => {
@@ -533,37 +647,56 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
         onClick={handleBannerClick}
         onKeyDown={handleBannerKeyDown}
         initial={{ opacity: 0 }}
+        // When flow mode, pass explicit geometry (not `undefined`) so Framer never keeps fixed-era inline top/left/width.
+        style={
+          isScrolled
+            ? {
+                position: "fixed",
+                top: floatTop,
+                left: floatLeft,
+                width: floatWidth,
+                maxWidth: "100vw",
+              }
+            : {
+                position: "relative",
+                top: "auto",
+                left: "auto",
+                right: "auto",
+                width: "100%",
+                maxWidth: "none",
+              }
+        }
         animate={{
           opacity: 1,
         }}
         className={`cursor-pointer select-none ${
-          isScrolled
-            ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
-            : "relative w-full mt-0 z-30"
+          isScrolled ? "fixed z-50" : "relative z-30 mt-0 w-full max-w-none shrink-0"
         }`}
         transition={{
-          duration: 0.5,
-          ease: "easeInOut",
           opacity: { duration: 0.35, ease: "easeOut" },
         }}
       >
-        {/* Surface carries bg + border + shadow with real CSS border-radius so the shadow matches the pill (avoids rectangular shadow when fixed). */}
+        {/* Surface: CSS transitions (not layout motion) so the resting bar stays full-bleed; overflow only when pill clips corners. */}
         <div
-          className={`${bgColorClass} w-full ${isScrolled ? "rounded-full overflow-hidden" : ""}`}
+          className={`${bgColorClass} w-full min-w-0 ${isScrolled ? "overflow-hidden" : "overflow-visible"}`}
           style={
             {
-              boxShadow: `
-            0 10px 40px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.3)
-          `,
+              borderRadius: isScrolled ? 9999 : 0,
+              boxShadow: isScrolled ? BANNER_SHADOW_FLOAT : BANNER_SHADOW_REST,
+              ...(prefersReducedMotion
+                ? {}
+                : {
+                    transitionProperty: "border-radius, box-shadow",
+                    transitionDuration: `${SCROLL_STATE_TRANSITION.duration}s`,
+                    transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+                  }),
               ...(isScrolled
                 ? { border: `2px solid ${theme.borderRgba}` }
                 : { borderBottom: `2px solid ${theme.borderRgba}` }),
             } as React.CSSProperties
           }
         >
-          <motion.div
+          <div
             className={`relative w-full overflow-visible ${
               isScrolled
                 ? "min-h-[4rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem] max-[360px]:py-0.5"
@@ -897,7 +1030,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         </div>
       </motion.div>
     </>
