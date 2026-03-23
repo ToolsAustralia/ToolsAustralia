@@ -30,6 +30,10 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import {
+  pauseAfterRenewalFailure,
+  resumeAfterSuccessfulRenewalPayment,
+} from "@/services/subscription/SubscriptionCollectionPauseService";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
@@ -2527,6 +2531,22 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       );
     }
 
+    // Prevent stacking multiple finalized renewal invoices while past_due (Stripe pause_collection)
+    if (isRenewal && subscriptionId) {
+      try {
+        await pauseAfterRenewalFailure(subscriptionId);
+        webhookLog(
+          "info",
+          `pause_collection(keep_as_draft) after renewal failure for subscription ${subscriptionId}`
+        );
+      } catch (pauseErr) {
+        webhookLog(
+          "error",
+          `Failed to pause subscription collection after renewal failure (non-blocking): ${pauseErr}`
+        );
+      }
+    }
+
     // Track failure in Klaviyo (for both initial and renewal failures)
     webhookLog("info", `Checking Klaviyo tracking conditions: hasSubscription: ${!!user.subscription}, subscriptionId: ${subscriptionId || 'none'}`);
     if (user.subscription && subscriptionId) {
@@ -3478,6 +3498,19 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (result.success) {
+      // Resume normal recurring invoices after a successful renewal (clears pause from failed renewal)
+      if (expandedInvoice.billing_reason === "subscription_cycle") {
+        try {
+          await resumeAfterSuccessfulRenewalPayment(subscription.id);
+          webhookLog("info", `Cleared pause_collection after successful renewal for subscription ${subscription.id}`);
+        } catch (resumeErr) {
+          webhookLog(
+            "warn",
+            `Non-critical: could not resume subscription collection after renewal payment: ${resumeErr}`
+          );
+        }
+      }
+
       // ✅ Safety net: Sync isActive for subscription_create (covers renew-subscription "payment requires confirmation" flow)
       // When user completes payment for trialing subscription, ensure isActive = true
       if (expandedInvoice.billing_reason === "subscription_create") {
