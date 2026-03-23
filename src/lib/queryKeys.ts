@@ -137,8 +137,6 @@ export const queryKeys = {
     products: ["admin", "products"] as const,
     miniDraws: ["admin", "mini-draws"] as const,
     metrics: {
-      daily: (params: Record<string, unknown>) => ["admin", "metrics", "daily", params] as const,
-      monthlyComparison: (month: string) => ["admin", "metrics", "monthly-comparison", month] as const,
       userMetrics: (startDate?: Date, endDate?: Date) => ["admin", "metrics", "users", startDate, endDate] as const,
     },
   },

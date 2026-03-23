@@ -19,7 +19,8 @@
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "backfill:subscription-end-dates": "tsx scripts/backfill-subscription-end-dates.ts",
-    "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts"
+    "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
+    "sync:meta-spend-by-url": "tsx scripts/sync-meta-spend-by-url.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
