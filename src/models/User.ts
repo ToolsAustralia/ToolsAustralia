@@ -31,6 +31,8 @@ export interface IUser extends Document {
     startDate: Date;
     endDate?: Date;
     cancelledAt?: Date; // Track when user actually triggered the cancellation (not the endDate which is future)
+    /** Set when subscription first enters past_due (failed renewal); used for admin activity log */
+    pastDueAt?: Date;
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;
@@ -395,6 +397,10 @@ const UserSchema = new Schema<IUser>(
       cancelledAt: {
         type: Date,
         required: false, // Track when user actually triggered the cancellation (not the endDate which is future)
+      },
+      pastDueAt: {
+        type: Date,
+        required: false,
       },
       isActive: {
         type: Boolean,
@@ -1071,6 +1077,7 @@ UserSchema.index({
   "subscription.lastDowngradeDate": -1,
   "subscription.cancelledAt": -1,
 });
+UserSchema.index({ isActive: 1, "subscription.pastDueAt": -1 });
 // MongoDB Atlas recommended: compound index for active users sorted by creation date
 UserSchema.index({ isActive: 1, createdAt: -1 });
 // Performance Advisor: mobile lookups (register, update-profile duplicate checks)
