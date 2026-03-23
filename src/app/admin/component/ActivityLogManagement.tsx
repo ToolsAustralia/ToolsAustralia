@@ -24,7 +24,8 @@ interface ActivityLogItem {
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
-    | "membership_upgrade";
+    | "membership_upgrade"
+    | "subscription_past_due";
   user: string;
   userId?: string;
   action: string;
@@ -91,6 +92,8 @@ export default function ActivityLogManagement() {
         return <AlertTriangle className="w-4 h-4" />;
       case "membership_upgrade":
         return <Crown className="w-4 h-4" />;
+      case "subscription_past_due":
+        return <AlertTriangle className="w-4 h-4" />;
       default:
         return <Activity className="w-4 h-4" />;
     }
@@ -145,6 +148,7 @@ export default function ActivityLogManagement() {
               <option value="membership_purchase">Membership Purchases</option>
               <option value="one_time_purchase">One-Time Purchases</option>
               <option value="membership_upgrade">Subscription Changes</option>
+              <option value="subscription_past_due">Past Due (Failed Renewal)</option>
               <option value="draw_complete">Draw Completions</option>
               <option value="high_value_order">High-Value Orders</option>
             </select>

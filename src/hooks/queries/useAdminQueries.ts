@@ -20,7 +20,8 @@ export interface RecentActivity {
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
-    | "membership_upgrade";
+    | "membership_upgrade"
+    | "subscription_past_due";
   user: string;
   userId?: string;
   action: string;

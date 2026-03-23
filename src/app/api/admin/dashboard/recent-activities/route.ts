@@ -20,7 +20,8 @@ export interface RecentActivity {
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
-    | "membership_upgrade";
+    | "membership_upgrade"
+    | "subscription_past_due";
   user: string;
   userId?: string;
   action: string;
@@ -269,11 +270,17 @@ export async function GET() {
         { "subscription.lastUpgradeDate": { $gte: oneWeekAgo } },
         { "subscription.lastDowngradeDate": { $gte: oneWeekAgo } },
         { "subscription.cancelledAt": { $gte: oneWeekAgo } },
+        { "subscription.pastDueAt": { $gte: oneWeekAgo } },
       ],
       isActive: true,
     })
-      .sort({ "subscription.lastUpgradeDate": -1, "subscription.lastDowngradeDate": -1, "subscription.cancelledAt": -1 })
-      .limit(10)
+      .sort({
+        "subscription.lastUpgradeDate": -1,
+        "subscription.lastDowngradeDate": -1,
+        "subscription.cancelledAt": -1,
+        "subscription.pastDueAt": -1,
+      })
+      .limit(30)
       .select("firstName lastName email subscription");
 
     usersWithSubscriptionChanges.forEach((user) => {
@@ -343,6 +350,22 @@ export async function GET() {
           time: timeAgo,
           status: "warning",
           timestamp: user.subscription.cancelledAt,
+        });
+      }
+
+      if (user.subscription.pastDueAt && user.subscription.pastDueAt >= oneWeekAgo) {
+        const timeAgo = getTimeAgo(user.subscription.pastDueAt);
+        const packageName = getPackageName(user.subscription.packageId || "Unknown");
+
+        activities.push({
+          id: `past-due-${user._id}-${user.subscription.pastDueAt.getTime()}`,
+          type: "subscription_past_due",
+          user: `${user.firstName} ${user.lastName}`,
+          userId: user._id.toString(),
+          action: `Membership renewal failed — ${packageName} account past due`,
+          time: timeAgo,
+          status: "error",
+          timestamp: user.subscription.pastDueAt,
         });
       }
     });
