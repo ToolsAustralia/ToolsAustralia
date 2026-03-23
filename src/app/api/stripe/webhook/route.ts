@@ -1953,27 +1953,53 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           const periodEnd = getSubscriptionPeriodEnd(subscription);
           if (periodEnd != null) user.subscription.endDate = new Date(periodEnd * 1000);
         }
-      } else if (subscription.status === "canceled" || subscription.status === "past_due") {
-        // Only update for explicit cancellations or past due
-        console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: ${subscription.status} for user ${user.email}`);
+      } else if (subscription.status === "past_due") {
+        // Past due = failed renewal payment — NOT a user cancellation; do not set cancelledAt
+        console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: past_due for user ${user.email}`);
 
-        // ✅ Set endDate consistently - use subscription period end (Basil: items; legacy: sub) or current date
         const periodEnd = getSubscriptionPeriodEnd(subscription);
-        const endDate = periodEnd != null ? new Date(periodEnd * 1000) : new Date(); // Fallback to now
+        const endDate = periodEnd != null ? new Date(periodEnd * 1000) : new Date();
 
-        // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved when subscription is canceled
         const preservedAccumulatedEntries = user.subscription.lastMonthAccumulatedEntries;
 
         user.subscription.isActive = false;
-        user.subscription.status = subscription.status;
+        user.subscription.status = "past_due";
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
-        user.subscription.endDate = endDate; // ✅ Set endDate consistently
-        // Set cancelledAt if not already set (to track when cancellation was triggered)
+        user.subscription.endDate = endDate;
+
+        if (wasStatus !== "past_due") {
+          user.subscription.pastDueAt = new Date();
+        }
+
+        if (preservedAccumulatedEntries !== undefined) {
+          user.subscription.lastMonthAccumulatedEntries = preservedAccumulatedEntries;
+          console.log(
+            `✅ [SUBSCRIPTION UPDATED] Preserved lastMonthAccumulatedEntries: ${preservedAccumulatedEntries}`
+          );
+          webhookLog(
+            "info",
+            `✅ Preserved lastMonthAccumulatedEntries: ${preservedAccumulatedEntries} for user ${user.email} (subscription past_due)`
+          );
+        }
+
+        user.markModified("subscription");
+      } else if (subscription.status === "canceled") {
+        // Explicit cancellation — set cancelledAt for activity log / product rules
+        console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: canceled for user ${user.email}`);
+
+        const periodEnd = getSubscriptionPeriodEnd(subscription);
+        const endDate = periodEnd != null ? new Date(periodEnd * 1000) : new Date();
+
+        const preservedAccumulatedEntries = user.subscription.lastMonthAccumulatedEntries;
+
+        user.subscription.isActive = false;
+        user.subscription.status = "canceled";
+        user.subscription.autoRenew = !subscription.cancel_at_period_end;
+        user.subscription.endDate = endDate;
         if (!user.subscription.cancelledAt) {
           user.subscription.cancelledAt = new Date();
         }
 
-        // Explicitly preserve lastMonthAccumulatedEntries
         if (preservedAccumulatedEntries !== undefined) {
           user.subscription.lastMonthAccumulatedEntries = preservedAccumulatedEntries;
           console.log(
@@ -1985,7 +2011,6 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           );
         }
 
-        // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
         user.markModified("subscription");
       } else {
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
@@ -1996,6 +2021,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
             user.subscription.endDate = new Date(periodEnd * 1000);
             user.subscription.isActive = true;
             user.subscription.status = subscription.status;
+            // Stripe is active — clear stale cancellation timestamp (e.g. mis-set during past_due)
+            user.subscription.cancelledAt = undefined;
           }
         }
       }
@@ -2412,9 +2439,13 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
           // Renewal payment failed - this IS a past_due situation
           // The subscription was active but payment for renewal failed
           webhookLog("info", `Renewal payment failed - setting status to past_due`);
-          
+
+          const wasAlreadyPastDue = user.subscription.status === "past_due";
           user.subscription.status = "past_due";
           user.subscription.isActive = false;
+          if (!wasAlreadyPastDue) {
+            user.subscription.pastDueAt = new Date();
+          }
 
           // ✅ If subscription will be canceled after max retries, set endDate
           // Only check for renewal failures - initial failures don't have a period to end
@@ -2435,8 +2466,12 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         } else {
           // Unknown billing reason - default to past_due for safety (conservative approach)
           webhookLog("warn", `Unknown billing_reason: ${billingReason}, defaulting to past_due`);
+          const wasAlreadyPastDueUnknown = user.subscription.status === "past_due";
           user.subscription.status = "past_due";
           user.subscription.isActive = false;
+          if (!wasAlreadyPastDueUnknown) {
+            user.subscription.pastDueAt = new Date();
+          }
         }
 
         // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
@@ -3025,6 +3060,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       webhookLog("warn", `User not found for customer: ${expandedInvoice.customer}`);
       return;
     }
+
+    /** DB subscription status before this payment (e.g. past_due recovery vs regular renewal) */
+    const previousSubscriptionDbStatus = user.subscription?.status;
 
     // ✅ PRORATION DETECTION: Check if this invoice contains proration items
     const hasProrationItems =
@@ -3787,7 +3825,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
             tier: membershipPackage.name,
             price: membershipPackage.price,
             renewalType: "subscription_cycle",
-            previousStatus: "active", // Regular renewal from active subscription
+            previousStatus: previousSubscriptionDbStatus === "past_due" ? "past_due" : "active",
             paymentIntentId: invoicePaymentId,
             entriesGranted: entriesToGrant,
           })

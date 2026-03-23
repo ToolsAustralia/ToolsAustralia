@@ -99,6 +99,7 @@ interface UserDocument {
     packageId: string;
     startDate: Date;
     endDate?: Date;
+    cancelledAt?: Date;
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;
@@ -1566,6 +1567,7 @@ async function handleSubscriptionPackage(
     // This overrides any incorrect Stripe status that might still show "incomplete"
     user.subscription.isActive = true;
     user.subscription.status = "active";
+    user.subscription.cancelledAt = undefined;
 
     // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved here and only updated in webhook handler
 
@@ -1607,12 +1609,12 @@ async function handleSubscriptionPackage(
 
   // Add subscription to partner discount queue (subscriptions always have 30 days recurring access)
   const packageInfo = getPackageById(packageData.packageId);
-  if (packageInfo && user.subscription.endDate) {
+  if (packageInfo && user.subscription?.endDate) {
     // console.log(`🎁 Adding subscription to partner discount queue: 30 days recurring access`);
     await handleSubscriptionQueueUpdate(user as unknown as IUser, "start", {
       packageId: packageData.packageId,
       packageName: packageData.packageName || packageInfo.name,
-      endDate: user.subscription.endDate,
+      endDate: user.subscription!.endDate,
     });
 
     // Dispatch purchase event for optimistic updates

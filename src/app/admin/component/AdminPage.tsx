@@ -546,6 +546,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         return <AlertTriangle className="w-4 h-4" />;
       case "membership_upgrade":
         return <Crown className="w-4 h-4" />;
+      case "subscription_past_due":
+        return <AlertTriangle className="w-4 h-4" />;
       default:
         return <Activity className="w-4 h-4" />;
     }

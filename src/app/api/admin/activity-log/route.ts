@@ -19,7 +19,8 @@ export interface ActivityLogItem {
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
-    | "membership_upgrade";
+    | "membership_upgrade"
+    | "subscription_past_due";
   user: string;
   userId?: string;
   action: string;
@@ -300,10 +301,16 @@ export async function GET(request: NextRequest) {
         { "subscription.lastUpgradeDate": { $gte: startDate } },
         { "subscription.lastDowngradeDate": { $gte: startDate } },
         { "subscription.cancelledAt": { $gte: startDate } },
+        { "subscription.pastDueAt": { $gte: startDate } },
       ],
       isActive: true,
     })
-      .sort({ "subscription.lastUpgradeDate": -1, "subscription.lastDowngradeDate": -1, "subscription.cancelledAt": -1 })
+      .sort({
+        "subscription.lastUpgradeDate": -1,
+        "subscription.lastDowngradeDate": -1,
+        "subscription.cancelledAt": -1,
+        "subscription.pastDueAt": -1,
+      })
       .select("firstName lastName email subscription");
 
     usersWithChanges.forEach((user) => {
@@ -368,6 +375,23 @@ export async function GET(request: NextRequest) {
           time: timeAgo,
           status: "warning",
           timestamp: user.subscription.cancelledAt,
+        });
+      }
+
+      // Past due — failed renewal (subscription.status past_due); pastDueAt set on first transition into past_due
+      if (user.subscription.pastDueAt && user.subscription.pastDueAt >= startDate) {
+        const timeAgo = getTimeAgo(user.subscription.pastDueAt);
+        const packageName = getPackageName(user.subscription.packageId || "Unknown");
+
+        activities.push({
+          id: `past-due-${user._id}-${user.subscription.pastDueAt.getTime()}`,
+          type: "subscription_past_due",
+          user: `${user.firstName} ${user.lastName}`,
+          userId: user._id.toString(),
+          action: `Membership renewal failed — ${packageName}`,
+          time: timeAgo,
+          status: "error",
+          timestamp: user.subscription.pastDueAt,
         });
       }
     });
