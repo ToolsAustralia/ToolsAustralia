@@ -216,16 +216,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <div className="bg-blue-50 border border-blue-100 rounded-lg sm:rounded-xl p-3 sm:p-4 text-blue-900">
-        <p className="text-xs sm:text-sm font-semibold mb-1">Spend by destination URL</p>
-        <p className="text-[11px] sm:text-sm text-blue-800/90 mb-2 leading-snug">
-          <code className="bg-blue-100/80 px-0.5 rounded text-[10px] sm:text-xs">unknown://…</code> — hidden by
-          default. <strong className="font-semibold">Sync from Meta</strong> after creative changes.
-        </p>
-        <p className="text-[10px] sm:text-xs text-blue-800/80 font-mono break-all leading-relaxed">
-          UTM: {META_ADS_UTM_TEMPLATE}
-        </p>
-      </div>
+      
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
@@ -258,10 +249,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
           </button>
       </div>
 
-      <p className="text-[11px] sm:text-xs text-gray-600 leading-snug">
-        <strong>Rev</strong>, <strong>conv</strong>, <strong>ROAS</strong>: Meta 7-day click — compare to account
-        cards, not finance.
-      </p>
+      
 
       {syncMutation.isError && (
         <div className="text-xs sm:text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5 sm:px-3 sm:py-2 leading-snug">
