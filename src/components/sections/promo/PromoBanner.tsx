@@ -29,12 +29,13 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
  * Tweak size/offset here; Tailwind must see full class strings (no dynamic assembly).
  */
 const PROMO_BANNER_MULTIPLIER_BADGE = {
-  root: "absolute z-30 pointer-events-none select-none object-contain origin-top-right",
+  root: "absolute z-30 pointer-events-none select-none object-contain origin-top-right max-w-none",
   /** Floating pill after scroll */
   layoutScrolled:
-    "-top-3 -right-2.5 h-8 w-8 sm:-top-4 sm:-right-4 sm:h-10 sm:w-10 lg:h-11 lg:w-11",
+    "-top-5 -right-5 h-10 w-10 sm:-top-5 sm:-right-5 sm:h-12 sm:w-12 lg:-top-6 lg:-right-6 lg:h-14 lg:w-14",
   /** Full-width bar (not yet sticky) */
-  layoutBar: "-right-2 -top-2 h-7 w-7 sm:-top-4 sm:-right-4 sm:h-9 sm:w-9 lg:h-10 lg:w-10",
+  layoutBar:
+    "-right-4 -top-4 h-9 w-9 sm:-top-5 sm:-right-5 sm:h-11 sm:w-11 lg:-top-6 lg:-right-6 lg:h-12 lg:w-12",
   dropShadow: "drop-shadow(0 2px 6px rgba(0,0,0,0.5))",
 } as const;
 
@@ -676,35 +677,39 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
           opacity: { duration: 0.35, ease: "easeOut" },
         }}
       >
-        {/* Surface: CSS transitions (not layout motion) so the resting bar stays full-bleed; overflow only when pill clips corners. */}
-        <div
-          className={`${bgColorClass} w-full min-w-0 ${isScrolled ? "overflow-hidden" : "overflow-visible"}`}
-          style={
-            {
-              borderRadius: isScrolled ? 9999 : 0,
-              boxShadow: isScrolled ? BANNER_SHADOW_FLOAT : BANNER_SHADOW_REST,
-              ...(prefersReducedMotion
-                ? {}
-                : {
-                    transitionProperty: "border-radius, box-shadow",
-                    transitionDuration: `${SCROLL_STATE_TRANSITION.duration}s`,
-                    transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-                  }),
-              ...(isScrolled
-                ? { border: `2px solid ${theme.borderRgba}` }
-                : { borderBottom: `2px solid ${theme.borderRgba}` }),
-            } as React.CSSProperties
-          }
-        >
+        {/* Outer stays overflow-visible so the multiplier badge (absolute) is not clipped; pill rounding + clip only on the bg/flame layer. */}
+        <div className="relative w-full min-w-0 overflow-visible">
           <div
-            className={`relative w-full overflow-visible ${
+            className={`pointer-events-none absolute inset-0 z-0 min-h-full ${
+              isScrolled ? "overflow-hidden rounded-[9999px]" : ""
+            } ${bgColorClass}`}
+            style={
+              {
+                borderRadius: isScrolled ? 9999 : 0,
+                boxShadow: isScrolled ? BANNER_SHADOW_FLOAT : BANNER_SHADOW_REST,
+                ...(prefersReducedMotion
+                  ? {}
+                  : {
+                      transitionProperty: "border-radius, box-shadow",
+                      transitionDuration: `${SCROLL_STATE_TRANSITION.duration}s`,
+                      transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+                    }),
+                ...(isScrolled
+                  ? { border: `2px solid ${theme.borderRgba}` }
+                  : { borderBottom: `2px solid ${theme.borderRgba}` }),
+              } as React.CSSProperties
+            }
+            aria-hidden
+          >
+            <div className="fire pointer-events-none absolute inset-0 min-h-full w-full" />
+          </div>
+          <div
+            className={`relative z-10 w-full overflow-visible ${
               isScrolled
                 ? "min-h-[4rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem] max-[360px]:py-0.5"
                 : "min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]"
             }`}
           >
-            {/* Full-bleed flame layer */}
-            <div className="fire pointer-events-none absolute inset-0 z-0 min-h-full w-full" aria-hidden />
             <div
               className={`relative z-10 flex w-full flex-row items-center justify-between gap-2.5 sm:gap-4 py-0 sm:py-0.5 pl-1.5 pr-3 sm:pl-4 sm:pr-5 lg:pl-3 lg:pr-7 ${
                 isScrolled
