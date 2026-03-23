@@ -15,6 +15,7 @@ import {
   ArrowUp,
   ArrowDown,
   Hash,
+  HelpCircle,
 } from "lucide-react";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
@@ -289,6 +290,22 @@ export default function PromoAnalyticsManagement() {
     );
   };
 
+  /** Accessible label + native tooltip for metric definitions */
+  function MetricLabelWithHint({ label, hint }: { label: string; hint: string }) {
+    return (
+      <span className="inline-flex items-center gap-1 max-w-[min(100%,11rem)]">
+        <span>{label}</span>
+        <span
+          className="inline-flex shrink-0 text-gray-400 hover:text-gray-600 cursor-help"
+          title={hint}
+          aria-label={hint}
+        >
+          <HelpCircle className="w-3.5 h-3.5" aria-hidden />
+        </span>
+      </span>
+    );
+  }
+
   const _visitToSignupPct = data?.totalVisits ? (data.totalSignups / data.totalVisits) * 100 : 0;
   const _signupToConversionPct = data?.totalSignups ? (data.totalConversions / data.totalSignups) * 100 : 0;
   const _overallPct = data?.totalVisits ? (data.totalConversions / data.totalVisits) * 100 : 0;
@@ -337,18 +354,28 @@ export default function PromoAnalyticsManagement() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
-          title="Visits"
+          title={
+            <MetricLabelWithHint
+              label="Unique visitors"
+              hint="Sum of unique visitors per promotion page in this period. The same person browsing two different pages is counted twice here—not one global site visitor count."
+            />
+          }
           value={isLoading ? "—" : formatNumber(data?.totalVisits ?? 0)}
           icon={BarChart3}
           color="blue"
-          subtitle="Promo page visits"
+          subtitle="Summed across pages (not deduplicated globally)"
         />
         <MetricCard
-          title="Signups"
+          title={
+            <MetricLabelWithHint
+              label="New registrations"
+              hint="Count of new user accounts that stored promo attribution at signup (one row per account)."
+            />
+          }
           value={isLoading ? "—" : formatNumber(data?.totalSignups ?? 0)}
           icon={Users}
           color="purple"
-          subtitle="Registrations from promo pages"
+          subtitle="Accounts with promo page attribution"
         />
         <MetricCard
           title="Conversions"
@@ -366,6 +393,13 @@ export default function PromoAnalyticsManagement() {
         />
       </div>
 
+      <p className="text-xs text-gray-600 leading-relaxed max-w-4xl">
+        Each table row compares <strong>unique visitors to that page</strong> with{" "}
+        <strong>new accounts</strong> attributed to that page. V→S % can exceed 100% when several
+        accounts are created from the same browser session, or when a visit was not recorded but
+        signup still carried the promo slug.
+      </p>
+
       {/* Channel Attribution (UTM Source: Klaviyo, Facebook, etc.) */}
       <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
         <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200 flex items-center gap-2">
@@ -373,8 +407,8 @@ export default function PromoAnalyticsManagement() {
           Channel Attribution (UTM Source)
         </h3>
         <p className="text-sm text-gray-500 px-4 pt-2 pb-1">
-          Visitors, signups, and conversions by marketing channel (e.g. Klaviyo, Facebook). Add{" "}
-          <code className="bg-gray-100 px-1 rounded">utm_source=klaviyo</code> or{" "}
+          Unique visitors, new registrations, and conversions by marketing channel (e.g. Klaviyo,
+          Facebook). Add <code className="bg-gray-100 px-1 rounded">utm_source=klaviyo</code> or{" "}
           <code className="bg-gray-100 px-1 rounded">utm_source=facebook</code> to campaign URLs.
         </p>
         <div className="overflow-x-auto">
@@ -394,8 +428,18 @@ export default function PromoAnalyticsManagement() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="text-left p-3 font-semibold text-gray-700">Channel</th>
-                    <th className="text-right p-3 font-semibold">Visits</th>
-                    <th className="text-right p-3 font-semibold">Signups</th>
+                    <th
+                      className="text-right p-3 font-semibold"
+                      title="Unique visitors (deduped per channel)"
+                    >
+                      Unique visitors
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold"
+                      title="New accounts with promo attribution"
+                    >
+                      Registrations
+                    </th>
                     <th className="text-right p-3 font-semibold">Conversions</th>
                     <th className="text-right p-3 font-semibold">Revenue</th>
                     <th className="hidden md:table-cell text-right p-3 font-semibold">V→S %</th>
@@ -447,6 +491,10 @@ export default function PromoAnalyticsManagement() {
         <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200">
           Performance by Promotion Page
         </h3>
+        <p className="text-xs text-gray-500 px-4 pt-2 pb-1">
+          Per page: unique visitors vs new accounts; headline totals above sum visitors across all
+          pages.
+        </p>
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="p-8 text-center text-gray-500">Loading…</div>
@@ -455,12 +503,15 @@ export default function PromoAnalyticsManagement() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="text-left p-3 font-semibold text-gray-700">Page</th>
-                  <th className="text-right p-3 font-semibold">
+                  <th
+                    className="text-right p-3 font-semibold"
+                    title="Unique visitors to this page (deduped by browser / user)"
+                  >
                     <button
                       onClick={() => handleSort("visits")}
                       className="flex items-center justify-end gap-1 w-full hover:text-red-600"
                     >
-                      Visits {getSortIcon("visits")}
+                      Unique visitors {getSortIcon("visits")}
                     </button>
                   </th>
                   <th className="text-right p-3 font-semibold">
@@ -472,12 +523,15 @@ export default function PromoAnalyticsManagement() {
                       Cross-visits {getSortIcon("crossVisits")}
                     </button>
                   </th>
-                  <th className="text-right p-3 font-semibold">
+                  <th
+                    className="text-right p-3 font-semibold"
+                    title="New user accounts with this promo attribution"
+                  >
                     <button
                       onClick={() => handleSort("signups")}
                       className="flex items-center justify-end gap-1 w-full hover:text-red-600"
                     >
-                      Signups {getSortIcon("signups")}
+                      Registrations {getSortIcon("signups")}
                     </button>
                   </th>
                   <th className="text-right p-3 font-semibold">
