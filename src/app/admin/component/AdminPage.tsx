@@ -485,6 +485,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
         await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
         await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
+        await queryClient.invalidateQueries({ queryKey: ["admin", "analytics", "spend-by-url"] });
       } else if (selectedTab === "promo-analytics") {
         await queryClient.invalidateQueries({ queryKey: ["admin", "promo-analytics"] });
         await queryClient.refetchQueries({ queryKey: ["admin", "promo-analytics"] });

@@ -156,7 +156,7 @@ export async function fetchFacebookInsights(
  * @param insight - Raw insight data from Facebook API
  * @returns Processed metrics
  */
-function processInsightData(insight: FacebookInsightData): ProcessedInsightMetrics {
+export function processInsightData(insight: FacebookInsightData): ProcessedInsightMetrics {
   // Parse spend (Facebook returns as string, in dollars)
   // We convert to cents for consistent storage (matching PaymentEvent model)
   const spend = parseFloat(insight.spend || "0") * 100; // Convert dollars to cents
@@ -268,6 +268,74 @@ export function getTodayDateRange(): { since: string; until: string } {
     since: dateStr,
     until: dateStr,
   };
+}
+
+/**
+ * Fetch ad-level insights with one row per ad per calendar day (time_increment=1).
+ * Used for spend-by-destination-URL attribution (sync to Mongo).
+ */
+export async function fetchFacebookAdInsightsDaily(
+  adAccountId: string,
+  accessToken: string,
+  dateRange: { since: string; until: string }
+): Promise<FacebookInsightData[]> {
+  const apiVersion = "v21.0";
+  const baseUrl = `https://graph.facebook.com/${apiVersion}/${adAccountId}/insights`;
+
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    fields:
+      "spend,impressions,clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
+    time_range: JSON.stringify({
+      since: dateRange.since,
+      until: dateRange.until,
+    }),
+    level: "ad",
+    time_increment: "1",
+    action_attribution_windows: JSON.stringify(["7d_click"]),
+  });
+
+  const url = `${baseUrl}?${params.toString()}`;
+  const allInsights: FacebookInsightData[] = [];
+  let nextUrl: string | null = url;
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      const errorData: FacebookApiError = await response.json().catch(() => ({
+        error: {
+          message: `HTTP ${response.status}: ${response.statusText}`,
+          type: "HTTPError",
+          code: response.status,
+        },
+      }));
+
+      if (response.status === 401) {
+        throw new Error("Facebook access token expired or invalid. Please update the token.");
+      }
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After");
+        throw new Error(
+          `Rate limit exceeded. ${retryAfter ? `Retry after ${retryAfter} seconds.` : "Please try again later."}`
+        );
+      }
+
+      throw new Error(errorData.error?.message || `Facebook API error: ${response.statusText}`);
+    }
+
+    const data: FacebookInsightsResponse = await response.json();
+    if (data.data?.length) {
+      allInsights.push(...data.data);
+    }
+    nextUrl = data.paging?.next ?? null;
+  }
+
+  return allInsights;
 }
 
 /**
